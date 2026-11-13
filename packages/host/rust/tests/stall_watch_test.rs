@@ -10,12 +10,17 @@ use std::time::Duration;
 
 use soksak_host::event_log::Level;
 use soksak_host::stall_watch::{
-    AwaitAwake, Clock, Heartbeat, StallWatchOptions, Wait, start_stall_watch,
+    AwaitAwake, Clock, Heartbeat, Schedule, StallWatchOptions, Wait, start_stall_watch,
 };
 
 /// The run loop of a main thread that always handles an event.
 fn never_waits() -> AwaitAwake {
     Box::new(|| Ok(()))
+}
+
+/// The schedule of a process that the system runs in the foreground and that used no CPU time.
+fn foreground() -> Schedule {
+    Box::new(|| Ok((31, 0)))
 }
 
 /// Blocks the thread of a watch whose test ended, so that the watch neither spins nor records after its test.
@@ -262,6 +267,7 @@ fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
     let stop = start_stall_watch(StallWatchOptions {
         heartbeat: run_loop.heartbeat(),
         await_awake: run_loop.await_awake(&time),
+        schedule: foreground(),
         sample: Arc::new(move |path| {
             samples.lock().unwrap().push(path.to_path_buf());
             Ok(())
@@ -320,6 +326,7 @@ fn first_stall(extra: Duration) -> serde_json::Value {
             Box::new(move || Ok((clock(), Duration::ZERO)))
         },
         await_awake: never_waits(),
+        schedule: foreground(),
         sample: Arc::new(|_path| Ok(())),
         folder: folder.path().to_path_buf(),
         emit_host: records.emit(),
@@ -373,6 +380,7 @@ fn a_sample_of_the_threads_does_not_stop_the_watch() {
     let stop = start_stall_watch(StallWatchOptions {
         heartbeat: run_loop.heartbeat(),
         await_awake: run_loop.await_awake(&time),
+        schedule: foreground(),
         sample: Arc::new(move |_path| released.lock().unwrap().recv().map_err(|e| e.to_string())),
         folder: folder.path().to_path_buf(),
         emit_host: records.emit(),
@@ -434,6 +442,7 @@ fn a_run_loop_that_waits_takes_no_heartbeat() {
     let stop = start_stall_watch(StallWatchOptions {
         heartbeat: run_loop.heartbeat(),
         await_awake: run_loop.await_awake(&time),
+        schedule: foreground(),
         sample: Arc::new(|_path| Ok(())),
         folder: folder.path().to_path_buf(),
         emit_host: records.emit(),
@@ -493,6 +502,7 @@ fn a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends() {
     let stop = start_stall_watch(StallWatchOptions {
         heartbeat: run_loop.heartbeat(),
         await_awake: run_loop.await_awake(&time),
+        schedule: foreground(),
         sample: Arc::new(move |_path| released.lock().unwrap().recv().map_err(|e| e.to_string())),
         folder: folder.path().to_path_buf(),
         emit_host: records.emit(),
@@ -542,6 +552,7 @@ fn stopping_the_watch_waits_for_the_running_sample() {
             Box::new(move || Ok((clock(), Duration::ZERO)))
         },
         await_awake: never_waits(),
+        schedule: foreground(),
         sample: Arc::new(move |_path| {
             counted.fetch_add(1, Ordering::SeqCst);
             started
@@ -593,4 +604,57 @@ fn stopping_the_watch_waits_for_the_running_sample() {
     );
     assert_eq!(records.names(), ["host.stall", "host.stall.sampled"]);
     assert_eq!(samples.load(Ordering::SeqCst), 1);
+}
+
+/// Runs the watch through one stall of a held main thread and its end with `schedule`, and returns the fields of
+/// `host.stall` and of `host.stall.resumed`.
+fn stall_and_resume(schedule: Schedule) -> (serde_json::Value, serde_json::Value) {
+    let time = SteppedTime::new();
+    let run_loop = FakeRunLoop::new(time.clock());
+    run_loop.wake(false);
+    let records = Records::new();
+    let folder = folder::Folder::new();
+    let stop = start_stall_watch(StallWatchOptions {
+        heartbeat: run_loop.heartbeat(),
+        await_awake: run_loop.await_awake(&time),
+        schedule,
+        sample: Arc::new(|_path| Ok(())),
+        folder: folder.path().to_path_buf(),
+        emit_host: records.emit(),
+        clock: Some(time.clock()),
+        wait: Some(time.wait()),
+        stop_waits: None,
+    });
+    time.require_park("beat");
+    time.beats(2);
+    run_loop.wake(true);
+    time.beats(4);
+    records.wait_for(&["host.stall", "host.stall.sampled"]);
+    run_loop.wake(false);
+    time.beats(1);
+    records.require(&["host.stall", "host.stall.sampled", "host.stall.resumed"]);
+    stop();
+    (records.fields(0), records.fields(2))
+}
+
+/// A stall of a process that the system runs in the background, which used 30 ms of CPU time while it lasted.
+// contract: host.stall.carries-priority, host.stall.resumed-carries-cpu
+#[test]
+fn a_stall_carries_the_priority_and_its_end_the_cpu_time_of_the_stall() {
+    let readings = Arc::new(Mutex::new(vec![100_000_000u64, 130_000_000]));
+    let (stall, resumed) = stall_and_resume(Box::new(move || {
+        let mut readings = readings.lock().unwrap();
+        Ok((4, readings.remove(0)))
+    }));
+    assert_eq!(stall["priority"], 4);
+    assert_eq!(resumed["cpu_ms"], 30);
+}
+
+// contract: host.stall.carries-priority
+#[test]
+fn a_stall_whose_schedule_cannot_be_read_leaves_the_fields_out() {
+    let (stall, resumed) =
+        stall_and_resume(Box::new(|| Err("process schedule: errno 3".to_string())));
+    assert!(stall.get("priority").is_none(), "{stall}");
+    assert!(resumed.get("cpu_ms").is_none(), "{resumed}");
 }

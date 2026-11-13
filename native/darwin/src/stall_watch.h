@@ -14,6 +14,11 @@
 // times are the time at which the wait started, so a stall that ended in that wait has its end and no lateness is read.
 void sp_stall_heartbeat(uint64_t *now, uint64_t *answered);
 
+// Reads the scheduling priority of the process and the CPU time that its threads used, in nanoseconds, for the records of a stall
+// (docs/spec/logging.md, stalls): the priority is 4 while the system runs the process in the background, and the CPU time tells a
+// process that ran from one that the system did not run. It returns 0, or the errno of the read that failed.
+int sp_stall_schedule(int32_t *priority, uint64_t *cpu_ns);
+
 // Blocks the calling thread while the main run loop waits for an event, and returns at once while it does not. It takes no timer.
 // A wake that ends in the next wait before this thread runs keeps it blocked, because nothing of that turn was late.
 void sp_stall_await_awake(void);

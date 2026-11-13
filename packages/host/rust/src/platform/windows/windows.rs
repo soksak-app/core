@@ -251,6 +251,10 @@ impl Platform for Windows {
     fn stall_await_awake(&self) -> Result<(), String> {
         unsupported::stall_await_awake()
     }
+
+    fn stall_schedule(&self) -> Result<(i32, u64), String> {
+        unsupported::stall_schedule()
+    }
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::collect_garbage(view)
     }

@@ -86,6 +86,7 @@ func stallCheck(t *testing.T, system platform.Platform, sendInWait bool) (sample
 			return host.StartStallWatch(host.StallWatchOptions{
 				Heartbeat:  heartbeat,
 				AwaitAwake: system.StallAwaitAwake,
+				Schedule:   system.StallSchedule,
 				Sample:     func(string) error { return nil },
 				Folder:     t.TempDir(),
 				EmitHost:   func(_ host.Level, name string, _ map[string]any) { emit(name) },

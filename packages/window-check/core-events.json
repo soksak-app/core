@@ -4130,6 +4130,9 @@
           },
           "watch_late_ms": {
             "type": "number"
+          },
+          "priority": {
+            "type": "number"
           }
         },
         "required": [
@@ -4137,7 +4140,7 @@
           "watch_late_ms"
         ]
       },
-      "description": "The heartbeat of the main thread of the host was late_ms milliseconds late, 1 s or more: the main thread ran nothing else in that time. watch_late_ms is the lateness of the watch's own wake beyond its 250 ms beat: at least half of late_ms means the process was not scheduled, and less than half means the main thread was blocked."
+      "description": "The heartbeat of the main thread of the host was late_ms milliseconds late, 1 s or more: the main thread ran nothing else in that time. watch_late_ms is the lateness of the watch's own wake beyond its 250 ms beat: at least half of late_ms means the process was not scheduled, and less than half means the main thread was blocked. priority is the scheduling priority of the process when the watch found the stall, 4 while the system runs it in the background; a read that fails leaves it out."
     },
     "host.stall.sampled": {
       "layer": "host",
@@ -4170,13 +4173,16 @@
         "properties": {
           "stalled_ms": {
             "type": "number"
+          },
+          "cpu_ms": {
+            "type": "number"
           }
         },
         "required": [
           "stalled_ms"
         ]
       },
-      "description": "The main thread of the host ran again after a stall of stalled_ms milliseconds."
+      "description": "The main thread of the host ran again after a stall of stalled_ms milliseconds. cpu_ms is the CPU time that the threads of the process used from the stall to its end; a read that fails leaves it out."
     },
     "host.stall.dump": {
       "layer": "host",

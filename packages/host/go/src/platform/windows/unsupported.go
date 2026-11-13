@@ -118,6 +118,10 @@ func (implementation) StallHeartbeat() (uint64, uint64) {
 	return 0, 0
 }
 
+func (implementation) StallSchedule() (int32, uint64, error) {
+	return 0, 0, unsupported("process schedule")
+}
+
 func (implementation) StallAwaitAwake() {
 	unreachable("stall await awake")
 }

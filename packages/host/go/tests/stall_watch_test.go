@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +13,9 @@ import (
 
 // neverWaits is the run loop of a main thread that always handles an event.
 func neverWaits() {}
+
+// foreground is the schedule of a process that the system runs in the foreground and that used no CPU time.
+func foreground() (int32, uint64, error) { return 31, 0, nil }
 
 // steppedTime is a clock that the test moves. The wait of each beat tells the test that the watch parked there, and the watch
 // takes the beat when the test lets it, late by an extra time that models a process that the system does not schedule for that
@@ -99,6 +103,7 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	stop := host.StartStallWatch(host.StallWatchOptions{
 		Heartbeat:  loop.heartbeat,
 		AwaitAwake: loop.awaitAwake,
+		Schedule:   foreground,
 		Sample:     func(path string) error { mu.Lock(); sampled = append(sampled, path); mu.Unlock(); return nil },
 		Folder:     t.TempDir(),
 		EmitHost:   records.emit,
@@ -154,6 +159,7 @@ func firstStall(t *testing.T, extra time.Duration) map[string]any {
 		// The main thread never answers, so the time of the answer stays the time of the first heartbeat, the start of the clock.
 		Heartbeat:  func() (time.Duration, time.Duration) { return clock.clock(), 0 },
 		AwaitAwake: neverWaits,
+		Schedule:   foreground,
 		Sample:     func(string) error { return nil },
 		Folder:     t.TempDir(),
 		EmitHost:   records.emit,
@@ -231,6 +237,7 @@ func TestASampleOfTheThreadsDoesNotStopTheWatch(t *testing.T) {
 	stop := host.StartStallWatch(host.StallWatchOptions{
 		Heartbeat:  loop.heartbeat,
 		AwaitAwake: loop.awaitAwake,
+		Schedule:   foreground,
 		Sample:     func(string) error { <-release; return nil },
 		Folder:     t.TempDir(),
 		EmitHost:   records.emit,
@@ -407,7 +414,7 @@ func TestARunLoopThatWaitsTakesNoHeartbeat(t *testing.T) {
 	loop := newFakeRunLoop(clock)
 	records := newStallRecords()
 	stop := host.StartStallWatch(host.StallWatchOptions{
-		Heartbeat: loop.heartbeat, AwaitAwake: loop.awaitAwake, Sample: func(string) error { return nil },
+		Heartbeat: loop.heartbeat, AwaitAwake: loop.awaitAwake, Schedule: foreground, Sample: func(string) error { return nil },
 		Folder: t.TempDir(), EmitHost: records.emit, Clock: clock.clock, Wait: clock.wait,
 	})
 	defer func() {
@@ -475,7 +482,7 @@ func TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds(t *testing.T) {
 	var releasing sync.Once
 	free := func() { releasing.Do(func() { close(release) }) }
 	stop := host.StartStallWatch(host.StallWatchOptions{
-		Heartbeat: loop.heartbeat, AwaitAwake: loop.awaitAwake, Sample: func(string) error { <-release; return nil },
+		Heartbeat: loop.heartbeat, AwaitAwake: loop.awaitAwake, Schedule: foreground, Sample: func(string) error { <-release; return nil },
 		Folder: t.TempDir(), EmitHost: records.emit, Clock: clock.clock, Wait: clock.wait,
 	})
 	defer func() {
@@ -517,6 +524,7 @@ func TestStoppingTheWatchWaitsForTheRunningSample(t *testing.T) {
 	stop := host.StartStallWatch(host.StallWatchOptions{
 		Heartbeat:  func() (time.Duration, time.Duration) { return clock.clock(), 0 },
 		AwaitAwake: neverWaits,
+		Schedule:   foreground,
 		Sample: func(string) error {
 			if samples.Add(1) == 1 {
 				close(started)
@@ -560,5 +568,80 @@ func TestStoppingTheWatchWaitsForTheRunningSample(t *testing.T) {
 	}
 	if got := samples.Load(); got != 1 {
 		t.Fatalf("%d samples, want the one of the stall", got)
+	}
+}
+
+// scheduleReads is a schedule that returns its readings in order, one for each read.
+type scheduleReads struct {
+	mu       sync.Mutex
+	readings []uint64
+	failure  error
+}
+
+func (r *scheduleReads) read() (int32, uint64, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.failure != nil {
+		return 0, 0, r.failure
+	}
+	cpu := r.readings[0]
+	r.readings = r.readings[1:]
+	return 4, cpu, nil
+}
+
+// stallAndResume runs the watch through one stall of a held main thread and its end with the schedule, and returns the fields of
+// host.stall and of host.stall.resumed.
+func stallAndResume(t *testing.T, schedule func() (int32, uint64, error)) (stall, resumed map[string]any) {
+	t.Helper()
+	clock := newSteppedTime(t)
+	loop := newFakeRunLoop(clock)
+	loop.wake(false)
+	records := newStallRecords()
+	stop := host.StartStallWatch(host.StallWatchOptions{
+		Heartbeat:  loop.heartbeat,
+		AwaitAwake: loop.awaitAwake,
+		Schedule:   schedule,
+		Sample:     func(string) error { return nil },
+		Folder:     t.TempDir(),
+		EmitHost:   records.emit,
+		Clock:      clock.clock,
+		Wait:       clock.wait,
+	})
+	defer stop()
+	clock.requirePark(t, "beat")
+	clock.beats(t, 2)
+	loop.wake(true)
+	clock.beats(t, 4)
+	records.await(t, "host.stall,host.stall.sampled")
+	loop.wake(false)
+	clock.beats(t, 1)
+	records.require(t, "host.stall,host.stall.sampled,host.stall.resumed")
+	records.mu.Lock()
+	defer records.mu.Unlock()
+	return records.fields[0], records.fields[2]
+}
+
+// A stall of a process that the system runs in the background, which used 30 ms of CPU time while it lasted.
+// contract: host.stall.carries-priority, host.stall.resumed-carries-cpu
+func TestAStallCarriesThePriorityAndItsEndTheCPUTimeOfTheStall(t *testing.T) {
+	schedule := &scheduleReads{readings: []uint64{uint64(100 * time.Millisecond), uint64(130 * time.Millisecond)}}
+	stall, resumed := stallAndResume(t, schedule.read)
+	if got := int64Field(t, stall, "priority"); got != 4 {
+		t.Fatalf("priority %d, want 4", got)
+	}
+	if got := int64Field(t, resumed, "cpu_ms"); got != 30 {
+		t.Fatalf("cpu_ms %d, want 30", got)
+	}
+}
+
+// contract: host.stall.carries-priority
+func TestAStallWhoseScheduleCannotBeReadLeavesTheFieldsOut(t *testing.T) {
+	schedule := &scheduleReads{failure: errors.New("process schedule: errno 3")}
+	stall, resumed := stallAndResume(t, schedule.read)
+	if _, has := stall["priority"]; has {
+		t.Fatalf("host.stall %v carries a priority that was not read", stall)
+	}
+	if _, has := resumed["cpu_ms"]; has {
+		t.Fatalf("host.stall.resumed %v carries a CPU time that was not read", resumed)
 	}
 }

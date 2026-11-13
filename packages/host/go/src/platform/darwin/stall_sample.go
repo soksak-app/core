@@ -29,6 +29,15 @@ func (implementation) StallHeartbeat() (uint64, uint64) {
 	return uint64(now), uint64(answered)
 }
 
+func (implementation) StallSchedule() (int32, uint64, error) {
+	var priority int32
+	var cpu uint64
+	if code := native.SpStallSchedule(&priority, &cpu); code != 0 {
+		return 0, 0, fmt.Errorf("process schedule: errno %d", code)
+	}
+	return priority, cpu, nil
+}
+
 func (implementation) StallAwaitAwake() {
 	native.SpStallAwaitAwake()
 }

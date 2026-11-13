@@ -204,6 +204,10 @@ pub fn stall_await_awake() -> Result<(), String> {
     missing("stall await awake")
 }
 
+pub fn stall_schedule() -> Result<(i32, u64), String> {
+    missing("process schedule")
+}
+
 pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
     missing("JavaScript garbage collection")
 }

@@ -33,7 +33,8 @@ const (
 // of the call and the time of the last answer on one clock, where the time of the answer is the time of the first heartbeat
 // while none was answered; the watched thread answers without Go code (docs/spec/hosts.md, main thread of the Wails host). While
 // the run loop of the watched thread waits for an event, Heartbeat sends nothing and returns the start of that wait as both times.
-// AwaitAwake blocks while that run loop waits and returns while it does not.
+// AwaitAwake blocks while that run loop waits and returns while it does not. Schedule reads the scheduling priority of the process and
+// the CPU time of its threads, which the stall and its end carry; a read that fails is the error record `stall watch`.
 // Sample writes the stacks of the threads of the process into a file, Folder is the logs folder and EmitHost stores an event of
 // the host. Clock is the time since the watch started, which measures the lateness of the watch's own wake, and Wait waits one
 // beat; nil takes the monotonic clock and time.Sleep. StopWaits is called by the stop when it begins to wait for a sample that
@@ -42,6 +43,7 @@ const (
 type StallWatchOptions struct {
 	Heartbeat  func() (now, answered time.Duration)
 	AwaitAwake func()
+	Schedule   func() (priority int32, cpuNanos uint64, err error)
 	Sample     func(path string) error
 	Folder     string
 	EmitHost   func(Level, string, map[string]any)
@@ -81,6 +83,17 @@ func StartStallWatch(options StallWatchOptions) func() {
 		// The first heartbeat is the reference of the answers until the watched thread answers one.
 		options.Heartbeat()
 		var stalledFrom int64 = -1
+		// The CPU time of the process when the open stall was recorded, when it was read.
+		var stallCPU uint64
+		var stallCPUKnown bool
+		schedule := func() (int32, uint64, bool) {
+			priority, cpu, err := options.Schedule()
+			if err != nil {
+				LogError("stall watch", err.Error())
+				return 0, 0, false
+			}
+			return priority, cpu, true
+		}
 		for !stopped.Load() {
 			before := clock()
 			wait(stallBeat)
@@ -102,7 +115,13 @@ func StartStallWatch(options StallWatchOptions) func() {
 					return
 				}
 				stalledFrom = last
-				options.EmitHost(LevelWarn, "host.stall", map[string]any{"late_ms": now - last, "watch_late_ms": watchLate.Milliseconds()})
+				fields := map[string]any{"late_ms": now - last, "watch_late_ms": watchLate.Milliseconds()}
+				var priority int32
+				priority, stallCPU, stallCPUKnown = schedule()
+				if stallCPUKnown {
+					fields["priority"] = int64(priority)
+				}
+				options.EmitHost(LevelWarn, "host.stall", fields)
 				path := filepath.Join(options.Folder, fmt.Sprintf("stall-host-%d-%d.txt", os.Getpid(), time.Now().UnixMilli()))
 				if !sampling.CompareAndSwap(false, true) {
 					ending.Unlock()
@@ -123,7 +142,11 @@ func StartStallWatch(options StallWatchOptions) func() {
 					}
 				})
 			case stalledFrom >= 0 && last > stalledFrom:
-				options.EmitHost(LevelInfo, "host.stall.resumed", map[string]any{"stalled_ms": last - stalledFrom})
+				fields := map[string]any{"stalled_ms": last - stalledFrom}
+				if _, cpu, known := schedule(); known && stallCPUKnown {
+					fields["cpu_ms"] = int64(time.Duration(cpu - stallCPU).Milliseconds())
+				}
+				options.EmitHost(LevelInfo, "host.stall.resumed", fields)
 				stalledFrom = -1
 			}
 			// An open stall keeps the beat: the heartbeat of this check was sent before the run loop could start to wait, so a

@@ -162,6 +162,7 @@
     "sp_observe_flush",
     "sp_stall_await_awake",
     "sp_stall_heartbeat",
+    "sp_stall_schedule",
     "sp_termination_signal_sender",
     "sp_termination_signals_record",
     "startMemoryPressure",

@@ -1,5 +1,9 @@
 #import <Foundation/Foundation.h>
+#include <errno.h>
+#include <libproc.h>
 #include <limits.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <stdatomic.h>
 #include "event_ring.h"
 #include "observe.h"
@@ -114,4 +118,17 @@ void sp_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered)
 void sp_stall_set_send_in_next_wait_for_test(bool send) {
     atomic_fetch_add(&sendInNextWaitSetting, 1);
     atomic_store(&sendInNextWait, send);
+}
+
+int sp_stall_schedule(int32_t *priority, uint64_t *cpu_ns) {
+    struct proc_taskinfo task;
+    errno = 0;
+    if (proc_pidinfo(getpid(), PROC_PIDTASKINFO, 0, &task, sizeof task) != (int)sizeof task) return errno != 0 ? errno : EIO;
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage) != 0) return errno;
+    uint64_t user = (uint64_t)usage.ru_utime.tv_sec * 1000000000ull + (uint64_t)usage.ru_utime.tv_usec * 1000ull;
+    uint64_t system = (uint64_t)usage.ru_stime.tv_sec * 1000000000ull + (uint64_t)usage.ru_stime.tv_usec * 1000ull;
+    *priority = task.pti_priority;
+    *cpu_ns = user + system;
+    return 0;
 }

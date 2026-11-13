@@ -5,6 +5,7 @@
 #import <Foundation/Foundation.h>
 #include <limits.h>
 #include <stdatomic.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #include "event_ring.h"
 #include "observe.h"
@@ -209,6 +210,25 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the injected send wakes the run loop and its block runs, got %llu blocks and %llu wakes",
             (unsigned long long)(faultAnswered - faultAnsweredBefore),
             (unsigned long long)(sp_observe_count("stall_watch.wakes") - faultWakesBefore)]);
+
+    // The scheduling priority of a process that the system runs in the background is 4, as for an application that is not active
+    // and whose windows are not shown; the check puts its own process in the background, which the system does the same way, and
+    // the CPU time grows by the work of its thread.
+    int32_t priority = 0, backgroundPriority = 0, restoredPriority = 0;
+    uint64_t cpuBefore = 0, cpuAfter = 0, unused = 0;
+    int read = sp_stall_schedule(&priority, &cpuBefore);
+    check(read == 0 && priority > 4, [NSString stringWithFormat:@"a process in the foreground reads a priority above 4, got %d with error %d", priority, read]);
+    check(setpriority(PRIO_DARWIN_PROCESS, 0, PRIO_DARWIN_BG) == 0, @"the check puts its process in the background");
+    read = sp_stall_schedule(&backgroundPriority, &unused);
+    check(read == 0 && backgroundPriority == 4, [NSString stringWithFormat:@"a process in the background reads the priority 4, got %d with error %d", backgroundPriority, read]);
+    check(setpriority(PRIO_DARWIN_PROCESS, 0, 0) == 0, @"the check returns its process to the foreground");
+    read = sp_stall_schedule(&restoredPriority, &unused);
+    check(read == 0 && restoredPriority == priority, [NSString stringWithFormat:@"the process reads its priority %d again, got %d", priority, restoredPriority]);
+    volatile uint64_t spin = 0;
+    for (uint64_t start = sp_mono_ns(); sp_mono_ns() - start < 50000000;) spin++;
+    read = sp_stall_schedule(&restoredPriority, &cpuAfter);
+    check(read == 0 && cpuAfter - cpuBefore >= 40000000, [NSString stringWithFormat:@"50 ms of work of the thread adds at least 40 ms of CPU time, got %.1f ms",
+        milliseconds(cpuAfter - cpuBefore)]);
 
     CFRunLoopRemoveTimer(CFRunLoopGetMain(), far, kCFRunLoopCommonModes);
     CFRelease(far);

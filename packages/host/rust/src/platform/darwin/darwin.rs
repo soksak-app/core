@@ -324,6 +324,10 @@ impl Platform for Darwin {
         Ok(())
     }
 
+    fn stall_schedule(&self) -> Result<(i32, u64), String> {
+        stall_sample::stall_schedule()
+    }
+
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         webview::collect_garbage(view)
     }

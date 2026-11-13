@@ -1632,6 +1632,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.SpStallHeartbeat, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "sp_stall_schedule")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_stall_schedule: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_stall_schedule: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpStallSchedule, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "sp_termination_signal_sender")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API sp_termination_signal_sender: %w", err)

@@ -447,6 +447,9 @@ type Platform interface {
 	// StallAwaitAwake blocks the calling goroutine and its thread while the main run loop waits for an event, and returns at once
 	// while it does not. The watch of the main thread calls it (docs/spec/logging.md, stalls).
 	StallAwaitAwake()
+	// StallSchedule returns the scheduling priority of this process, which is 4 while the system runs it in the background, and the
+	// CPU time that its threads used, in nanoseconds. The watch of the main thread records them with a stall (docs/spec/logging.md, stalls).
+	StallSchedule() (priority int32, cpuNanos uint64, err error)
 	// CollectGarbage makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
 	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error

@@ -718,6 +718,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Blocks the calling thread while the main run loop waits for an event, and returns at once while it does not. The
     /// watch of the main thread calls it (docs/spec/logging.md, stalls).
     fn stall_await_awake(&self) -> Result<(), String>;
+    /// The scheduling priority of this process, which is 4 while the system runs it in the background, and the CPU time that
+    /// its threads used, in nanoseconds. The watch of the main thread records them with a stall (docs/spec/logging.md, stalls).
+    fn stall_schedule(&self) -> Result<(i32, u64), String>;
     /// Makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
     /// uses it.
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String>;

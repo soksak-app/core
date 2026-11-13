@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F774: a `host.stall` of both hosts carries `priority`, the scheduling priority of the process, which is 4 while the system runs it in the background, and its `host.stall.resumed` carries `cpu_ms`, the CPU time of the process during the stall, so that the record of a stall tells a process that the system did not run from one that ran; the native function `sp_stall_schedule` reads both, and a read that fails is the error record `stall watch`.
 - F738: a check of the Rust host runs on the main thread of its own process and requires that the start of a page runs as a step of the main thread, as the start of the first page of a window must; a check of the Go host library requires the same of the window calls of the start of a page.
 - F773: the end of the microtask queue that the negative workbench checks wait for fails in a check that mocks `setImmediate`, and the verification specification states why it is the event of such a check and what it does not cover.
 - F767-3-2-4: the remaining workbench checks wait for a declared `idle`, the page log flush or the end of the microtask queue instead of a settle, and each negative and order check fails under the product fault that it rejects.

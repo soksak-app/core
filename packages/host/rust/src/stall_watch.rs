@@ -29,6 +29,9 @@ const STALL_SAMPLE_RUNNING: &str = "a sample of the threads is still running";
 pub type Heartbeat = Box<dyn Fn() -> Result<(Duration, Duration), String> + Send>;
 /// Blocks while the run loop of the watched thread waits for an event, and returns while it does not.
 pub type AwaitAwake = Box<dyn Fn() -> Result<(), String> + Send>;
+/// Reads the scheduling priority of the process and the CPU time of its threads in nanoseconds, which the stall and its end
+/// carry; a read that fails is the error record `stall watch`.
+pub type Schedule = Box<dyn Fn() -> Result<(i32, u64), String> + Send>;
 /// Writes the stacks of the threads of the process into a file.
 pub type Sample = Arc<dyn Fn(&Path) -> Result<(), String> + Send + Sync>;
 /// Stores an event.
@@ -48,6 +51,7 @@ pub type StopWaits = Box<dyn FnOnce() + Send>;
 pub struct StallWatchOptions {
     pub heartbeat: Heartbeat,
     pub await_awake: AwaitAwake,
+    pub schedule: Schedule,
     pub sample: Sample,
     pub folder: PathBuf,
     pub emit_host: Emit,
@@ -98,6 +102,15 @@ pub fn start_stall_watch(mut options: StallWatchOptions) -> impl FnOnce() {
             return refused(error);
         }
         let mut stalled_from: Option<u64> = None;
+        // The CPU time of the process when the open stall was recorded, when it was read.
+        let mut stall_cpu: Option<u64> = None;
+        let schedule = || match (options.schedule)() {
+            Ok(read) => Some(read),
+            Err(error) => {
+                crate::application_log::log_error("stall watch", error);
+                None
+            }
+        };
         while !stopped.load(Ordering::Acquire) {
             let before = clock();
             wait(STALL_BEAT);
@@ -123,11 +136,13 @@ pub fn start_stall_watch(mut options: StallWatchOptions) -> impl FnOnce() {
                         return;
                     }
                     stalled_from = Some(last);
-                    emit_host(
-                        Level::Warn,
-                        "host.stall",
-                        json!({"late_ms": now - last, "watch_late_ms": watch_late.as_millis() as u64}),
-                    );
+                    let mut fields = json!({"late_ms": now - last, "watch_late_ms": watch_late.as_millis() as u64});
+                    let read = schedule();
+                    stall_cpu = read.map(|(_, cpu)| cpu);
+                    if let Some((priority, _)) = read {
+                        fields["priority"] = json!(priority);
+                    }
+                    emit_host(Level::Warn, "host.stall", fields);
                     let path = dump_path(&options.folder);
                     if sampling.swap(true, Ordering::AcqRel) {
                         emit_host(
@@ -153,11 +168,11 @@ pub fn start_stall_watch(mut options: StallWatchOptions) -> impl FnOnce() {
                 }
                 Some(from) if last > from => {
                     stalled_from = None;
-                    emit_host(
-                        Level::Info,
-                        "host.stall.resumed",
-                        json!({"stalled_ms": last - from}),
-                    );
+                    let mut fields = json!({"stalled_ms": last - from});
+                    if let (Some((_, cpu)), Some(at_stall)) = (schedule(), stall_cpu) {
+                        fields["cpu_ms"] = json!(cpu.saturating_sub(at_stall) / 1_000_000);
+                    }
+                    emit_host(Level::Info, "host.stall.resumed", fields);
                 }
                 _ => {}
             }

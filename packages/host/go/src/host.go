@@ -368,7 +368,7 @@ func (s *Session) Started() []func() {
 				return
 			}
 			s.stall.stop = StartStallWatch(StallWatchOptions{Heartbeat: StallHeartbeat(system), AwaitAwake: system.StallAwaitAwake,
-				Sample: system.SampleThreads, Folder: filepath.Dir(host.events.Path()), EmitHost: EmitHost})
+				Schedule: system.StallSchedule, Sample: system.SampleThreads, Folder: filepath.Dir(host.events.Path()), EmitHost: EmitHost})
 		},
 	}
 }

@@ -403,6 +403,7 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
             ))
         }),
         await_awake: Box::new(|| platform::current()?.stall_await_awake()),
+        schedule: Box::new(|| platform::current()?.stall_schedule()),
         sample: Arc::new(|path| platform::current()?.sample_threads(path)),
         folder: directory.join("logs"),
         emit_host: Arc::new(event_record::emit_host),

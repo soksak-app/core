@@ -270,6 +270,7 @@ type NativeFunctions struct {
 	SpObserveFlush                         func()
 	SpStallAwaitAwake                      func()
 	SpStallHeartbeat                       func(*uint64, *uint64)
+	SpStallSchedule                        func(*int32, *uint64) int32
 	SpTerminationSignalSender              func(int32) int32
 	SpTerminationSignalsRecord             func() int32
 	StartMemoryPressure                    func() bool
@@ -769,6 +770,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpStallHeartbeat == nil {
 		return fmt.Errorf("native API function is missing: sp_stall_heartbeat")
+	}
+	if functions.SpStallSchedule == nil {
+		return fmt.Errorf("native API function is missing: sp_stall_schedule")
 	}
 	if functions.SpTerminationSignalSender == nil {
 		return fmt.Errorf("native API function is missing: sp_termination_signal_sender")

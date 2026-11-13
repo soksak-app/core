@@ -304,6 +304,9 @@ func Functions() abi.NativeFunctions {
 		SpStallHeartbeat: func(a0 *uint64, a1 *uint64) {
 			C.sp_stall_heartbeat((*C.uint64_t)(unsafe.Pointer(a0)), (*C.uint64_t)(unsafe.Pointer(a1)))
 		},
+		SpStallSchedule: func(a0 *int32, a1 *uint64) int32 {
+			return int32(C.sp_stall_schedule((*C.int32_t)(unsafe.Pointer(a0)), (*C.uint64_t)(unsafe.Pointer(a1))))
+		},
 		SpTerminationSignalSender:  func(a0 int32) int32 { return int32(C.sp_termination_signal_sender(C.int(a0))) },
 		SpTerminationSignalsRecord: func() int32 { return int32(C.sp_termination_signals_record()) },
 		StartMemoryPressure:        func() bool { return bool(C.startMemoryPressure()) },
