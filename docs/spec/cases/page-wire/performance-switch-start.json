@@ -1,0 +1,21 @@
+{
+  "name": "performance-switch-start",
+  "description": "The page reports the stored trace switch to the host at its start, and the stored switch is off: the host call performance answers null.",
+  "replay": true,
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "off"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

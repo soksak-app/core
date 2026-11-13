@@ -1,0 +1,7 @@
+{
+  "name": "tab-session-import",
+  "description": "The page imports the tab session and document region modules and sends no call while it does so.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

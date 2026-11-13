@@ -1,0 +1,27 @@
+{
+  "name": "tab-session-restart",
+  "description": "A tab whose regions are stored before a restart writes its session with the interactionState of each region, and the restarted page reads the stored session of the tab once, for the first attach of its region, and reads the session of a tab without a file as empty.",
+  "replay": false,
+  "reason": "The tab sessions read and write the tab-sessions files of the configuration directory and the document regions read the state of a window; the producer builds neither state (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "bytes": { "type": "integer", "example": 52 }
+  },
+  "steps": [
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-a", "document": "page" } } },
+    { "reply": { "result": "AAAA" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-a", "document": "side" } } },
+    { "reply": { "result": "" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-a", "regions": { "page": { "session": "AAAA" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSession", "tab": "tab-a" } } },
+    { "reply": { "result": { "format": 1, "regions": { "page": { "session": "AAAA" } } } } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSession", "tab": "tab-b" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-a", "document": "page" } } },
+    { "reply": { "result": "BBBB" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-a", "regions": { "page": { "session": "BBBB" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSession", "tab": "tab-a" } } },
+    { "reply": { "result": { "format": 1, "regions": { "page": { "session": "BBBB" } } } } }
+  ]
+}

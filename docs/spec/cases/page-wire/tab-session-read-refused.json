@@ -1,0 +1,221 @@
+{
+  "name": "tab-session-read-refused",
+  "description": "The host refuses to read the stored session of a tab with a format it does not know; the page writes the read failure to the application log with the place memory saver, and the region attaches without a session.",
+  "replay": false,
+  "reason": "The tab sessions read and write the tab-sessions files of the configuration directory and the document regions read the state of a window; the producer builds neither state (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "page-start": {
+      "type": "string",
+      "example": "9b2f6c1e-4d7a-4e8b-9f3a-2c5d8e1a7b60",
+      "source": "page"
+    },
+    "clock-trip-us": {
+      "type": "integer",
+      "example": 120,
+      "source": "page"
+    },
+    "clock-resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "gated-ts-us": {
+      "type": "integer",
+      "example": 1791000000000462,
+      "source": "page"
+    },
+    "gated-mono-ns": {
+      "type": "integer",
+      "example": 5000000795,
+      "source": "page"
+    },
+    "record-ts-us": {
+      "type": "integer",
+      "example": 1791000000000470,
+      "source": "page"
+    },
+    "record-mono-ns": {
+      "type": "integer",
+      "example": 5000000803,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSession",
+          "tab": "tab-a"
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "tab-sessions/tab-a.json: tab session format 2 is not 1"
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$clock-ts-us",
+              "mono_ns": "$clock-mono-ns",
+              "start": "$page-start",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$clock-trip-us",
+                "resolution_us": "$clock-resolution-us"
+              }
+            },
+            {
+              "ts_us": "$record-ts-us",
+              "mono_ns": "$record-mono-ns",
+              "start": "$page-start",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "memory saver",
+                "text": "tab tab-a: session read failed: tab-sessions/tab-a.json: tab session format 2 is not 1"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$gated-ts-us",
+              "mono_ns": "$gated-mono-ns",
+              "start": "$page-start",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "lifecycle",
+                "level": "debug",
+                "count": 4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

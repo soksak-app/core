@@ -1,0 +1,42 @@
+{
+  "name": "host-theme-placement-failure",
+  "description": "The host refuses the theme call, so the page reads the host clock five times, writes the failure to the log in one batch, and does not send the layout of the view surface; the next layout of the page without a view is sent after the batch.",
+  "replay": false,
+  "reason": "setTheme applies the theme of the native window, and only the native host with a window produces its refusal (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "ts-us": { "type": "integer", "example": 1791000000000456 },
+    "mono-ns": { "type": "integer", "example": 5000000789 },
+    "page-identity": { "type": "string", "example": "e3a1c7d2-5b9f-4e0a-8d2c-6f1b3a9e7c40", "source": "page" },
+    "trip-us": { "type": "integer", "example": 120, "source": "page" },
+    "resolution-us": { "type": "integer", "example": 1, "source": "page" },
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456, "source": "page" },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789, "source": "page" },
+    "record-ts-us": { "type": "integer", "example": 1791000000000470, "source": "page" },
+    "record-mono-ns": { "type": "integer", "example": 5000000803, "source": "page" },
+    "sync-request": { "type": "object", "example": { "surfaces": [] }, "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": { "scheme": "broken", "tokens": { "--bg": "#333" } } } },
+    { "reply": { "error": "theme setter refused" } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": {
+      "action": "batch",
+      "events": [
+        { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.log.clock", "fields": { "trip_us": "$trip-us", "resolution_us": "$resolution-us" } },
+        { "ts_us": "$record-ts-us", "mono_ns": "$record-mono-ns", "start": "$page-identity", "level": "error", "event": "workbench.record.error", "fields": { "where": "host setTheme failed", "text": "Error: theme setter refused" } }
+      ]
+    } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "syncSurfaces", "payload": "$sync-request" } },
+    { "reply": { "result": { "ticket": 1, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } }
+  ]
+}

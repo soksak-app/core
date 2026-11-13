@@ -1,0 +1,17 @@
+{
+  "name": "host-theme-placement-order",
+  "description": "The page sends the theme of the first scheme and, while that call is outstanding, the theme of the second scheme; after the host answers both, the page sends the layout of the view surface, whose request carries the placement of the view, and the host answers the layout with its ticket and the chrome row.",
+  "replay": false,
+  "reason": "setTheme and syncSurfaces apply the theme and the placement of the native window, and only the native host with a window produces their replies (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "sync-request": { "type": "object", "example": { "surfaces": [] }, "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": { "scheme": "first", "tokens": { "--bg": "#111" } } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "setTheme", "payload": { "scheme": "second", "tokens": { "--bg": "#222" } } } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "syncSurfaces", "payload": "$sync-request" } },
+    { "reply": { "result": { "ticket": 1, "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } }
+  ]
+}

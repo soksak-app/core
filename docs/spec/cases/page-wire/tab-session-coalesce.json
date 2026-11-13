@@ -1,0 +1,27 @@
+{
+  "name": "tab-session-coalesce",
+  "description": "The window save of a quit reads the interactionState of the one region of each of two tabs and writes the session of each tab, once for the flush and once again after the next flush; a navigation that changes only a title is not a read.",
+  "replay": false,
+  "reason": "The tab sessions read and write the tab-sessions files of the configuration directory and the document regions read the state of a window; the producer builds neither state (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "bytes": { "type": "integer", "example": 52 }
+  },
+  "steps": [
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-a", "document": "page" } } },
+    { "reply": { "result": "S-tab-a" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-b", "document": "page" } } },
+    { "reply": { "result": "S-tab-b" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-a", "regions": { "page": { "session": "S-tab-a" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-b", "regions": { "page": { "session": "S-tab-b" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-a", "document": "page" } } },
+    { "reply": { "result": "S-tab-a" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-b", "document": "page" } } },
+    { "reply": { "result": "S-tab-b" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-a", "regions": { "page": { "session": "S-tab-a" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-b", "regions": { "page": { "session": "S-tab-b" } } } } },
+    { "reply": { "result": "$bytes" } }
+  ]
+}

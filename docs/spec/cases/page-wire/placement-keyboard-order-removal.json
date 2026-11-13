@@ -1,0 +1,19 @@
+{
+  "name": "placement-keyboard-order-removal",
+  "description": "The page places two surfaces, holds the keyboard call to the first one behind a held clearShape answer, and then places the second surface alone: the page sends the second syncSurfaces after the keyboard call to the removed surface is answered, and the host answers that call with null and the placement with its frame.",
+  "replay": false,
+  "reason": "syncSurfaces lays out the surfaces of a window and surfaceFocus gives the keyboard of the window to a surface, and only the native host with a window produces their answers (the native tier of docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "ticket": { "type": "integer", "example": 1, "source": "host" }
+  },
+  "steps": [
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [ { "id": "tab-a", "dim": false, "plugin": "probe", "composition": { "kind": "dom" }, "visible": true, "x": 0, "y": 0, "w": 3, "h": 4 }, { "id": "tab-b", "dim": false, "plugin": "probe", "composition": { "kind": "dom" }, "visible": true, "x": 0, "y": 0, "w": 3, "h": 4 } ], "titlebar": 40, "declarations": [] } } },
+    { "reply": { "result": { "ticket": "$ticket", "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
+    { "call": { "name": "clearShape", "payload": "shape" } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "surfaceFocus", "payload": { "surface": "tab-a" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [], "surfaces": [ { "id": "tab-b", "dim": false, "plugin": "probe", "composition": { "kind": "dom" }, "visible": true, "x": 0, "y": 0, "w": 3, "h": 4 } ], "titlebar": 40, "declarations": [] } } },
+    { "reply": { "result": { "ticket": "$ticket", "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } }
+  ]
+}

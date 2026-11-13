@@ -1,0 +1,7 @@
+{
+  "name": "tab-session-cause",
+  "description": "A read of the sessions of a tab that names no cause is refused before the page sends any call.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

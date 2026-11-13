@@ -1,0 +1,76 @@
+{
+  "name": "host-theme-placement-microtask",
+  "description": "The page sends the theme of the first scheme, and the theme of the second scheme is requested in the continuation of that reply; the host answers both theme calls, and the page sends the layout of the view surface after the second theme call.",
+  "replay": false,
+  "reason": "setTheme and syncSurfaces apply the theme and the placement of the native window, and only the native host with a window produces their replies (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "sync-request": {
+      "type": "object",
+      "example": {
+        "surfaces": []
+      },
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "first",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [],
+          "chrome": {
+            "controls": {
+              "x": 13,
+              "y": 13,
+              "w": 54,
+              "h": 14
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "second",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    }
+  ]
+}

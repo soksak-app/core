@@ -1,0 +1,7 @@
+{
+  "name": "layout-failure-lines-placement-last",
+  "description": "The layouts of the test hold their preparation in the compositor and send no call to the host, so the page sends no call.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

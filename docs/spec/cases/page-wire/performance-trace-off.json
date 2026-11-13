@@ -1,0 +1,7 @@
+{
+  "name": "performance-trace-off",
+  "description": "A page with the trace off relays no event: a focus event that the page traces is neither formatted nor sent, so the page sends no host call.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

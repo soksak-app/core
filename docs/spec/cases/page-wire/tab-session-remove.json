@@ -1,0 +1,29 @@
+{
+  "name": "tab-session-remove",
+  "description": "Closing a tab writes its regions as removed after the layout write, a later state of the closed tab sends no call, and the reconcile writes the removal of each stored tab that no layout keeps.",
+  "replay": false,
+  "reason": "The tab sessions read and write the tab-sessions files of the configuration directory and the document regions read the state of a window; the producer builds neither state (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "bytes": { "type": "integer", "example": 52 }
+  },
+  "steps": [
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-a", "document": "page" } } },
+    { "reply": { "result": "AAAA" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-a", "regions": { "page": { "session": "AAAA" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-b", "document": "page" } } },
+    { "reply": { "result": "AAAA" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-b", "regions": { "page": { "session": "AAAA" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "documentInteractionState", "payload": { "surface": "tab-c", "document": "page" } } },
+    { "reply": { "result": "AAAA" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-c", "regions": { "page": { "session": "AAAA" } } } } },
+    { "reply": { "result": "$bytes" } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-a", "regions": null } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessions" } } },
+    { "reply": { "result": ["tab-b", "tab-c"] } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessionPut", "tab": "tab-c", "regions": null } } },
+    { "reply": { "result": null } }
+  ]
+}

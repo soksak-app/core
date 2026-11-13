@@ -1,0 +1,11 @@
+{
+  "name": "layout-failure-lines-presented",
+  "description": "A layout that presented sends one wait for the presentation of the window, which the host answers with null.",
+  "replay": false,
+  "reason": "The wait for the presentation of the window needs a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "waitPresented" } },
+    { "reply": { "result": null } }
+  ]
+}

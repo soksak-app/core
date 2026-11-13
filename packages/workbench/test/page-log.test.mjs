@@ -2,42 +2,36 @@
 // page are the events `workbench.record.error` and `workbench.record.info` with the fields `where` and `text`, queued without waiting
 // and relayed to the host in a batch through the call `log`.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { host, selectPageWire } from "@soksak/runtime";
 import { withoutClock } from "./support/records.mjs";
 
-const calls = [];
-let failing = null;
-mock.module("@soksak/runtime", { namedExports: { host: {
-  on: () => {},
-  page: (path) => path,
-  call: async (name, payload) => {
-    if (failing) throw failing;
-    // The request for the clocks of the host is answered here; the batches are what the tests assert.
-    if (name === "log" && payload.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-    calls.push({ name, payload: withoutClock(payload) });
-  },
-} } });
+// The batcher of the page is made when the page log is imported, and it is made only when a host exists. The case of the first test is
+// selected before the import; the next tests select their own case (docs/spec/cases/page-wire/README.md).
+let wire = selectPageWire("page-log-record-failure");
 const { reportRecord, flushEvents } = await import("../page-log.js");
 const { logGate } = await import("../log-gate.js");
 // The events below the level error are stored only in the debug state (docs/spec/settings.md, the section of core.settings.debug), which these tests
 // examine, so the state of every class at trace is set here.
 logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
 
-const events = () => calls.filter(({ name }) => name === "log").flatMap(({ payload }) => payload.events);
+// The events of the batches that the page sent, without the clock statement of the first batch.
+const events = () => wire.calls.filter(({ name, payload }) => name === "log" && payload.action === "batch")
+  .flatMap(({ payload }) => withoutClock(payload).events);
 
 test("a failure is the event workbench.record.error with the place and the text, and the wait ends when it was relayed", async () => {
-  calls.length = 0;
   await reportRecord("error", "surface probe mount failed: x");
-  assert.equal(calls.some(({ name }) => name === "report"), false, "the host call report is not used any more");
+  assert.equal(wire.calls.some(({ name }) => name === "report"), false, "the host call report is not used any more");
   const [event] = events();
   assert.equal(event.event, "workbench.record.error");
   assert.equal(event.level, "error");
   assert.deepEqual(event.fields, { where: "surface probe mount failed", text: "x" });
   assert.ok(Number.isInteger(event.ts_us) && event.ts_us > 1.7e15);
+  wire.finish();
 });
 
 test("a line without a place has the place workbench, an observation is the event workbench.record.info, and the order is kept", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-record-batch");
   reportRecord("info", "focus moved to probe");
   reportRecord("error", "second: failure\nsecond line");
   await reportRecord("info", "third");
@@ -46,30 +40,30 @@ test("a line without a place has the place workbench, an observation is the even
     ["workbench.record.error", "second", "failure\nsecond line"],
     ["workbench.record.info", "workbench", "third"],
   ]);
-  assert.equal(calls.filter(({ name }) => name === "log").length, 1, "the records of one turn travel in one call");
+  assert.equal(wire.calls.filter(({ name }) => name === "log").length, 1, "the records of one turn travel in one call");
+  wire.finish();
 });
 
 test("a relay that fails is reported on the console with the number of records, and the next record is still relayed", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-relay-failure");
   const errors = [];
   const original = console.error;
   console.error = (...args) => errors.push(args.join(" "));
   try {
-    failing = new Error("host closed");
     await reportRecord("error", "a: lost");
-    failing = null;
     await reportRecord("info", "b: kept");
   } finally {
     console.error = original;
   }
   assert.deepEqual(errors, ["page event batch of 1 events failed: host closed"]);
   assert.equal(events().at(-1).fields.text, "kept");
+  wire.finish();
 });
 
 const { captureConsole, emitEvent } = await import("../page-log.js");
 
 test("emitEvent queues an event of a plugin with its level, name and fields in the batch of the turn", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-emit-event");
   emitEvent("debug", "plugin.fixture.input", { key: "a", surface: "tab-1" });
   emitEvent("warn", "plugin.fixture.slow", { us: 9 });
   await flushEvents();
@@ -77,13 +71,14 @@ test("emitEvent queues an event of a plugin with its level, name and fields in t
     ["debug", "plugin.fixture.input", { key: "a", surface: "tab-1" }],
     ["warn", "plugin.fixture.slow", { us: 9 }],
   ]);
-  assert.equal(calls.filter(({ name }) => name === "log").length, 1);
+  assert.equal(wire.calls.filter(({ name }) => name === "log").length, 1);
+  wire.finish();
 });
 
 // A console is the output of code that does not use the entrance of the records: console.error is stored at the level warn, so
 // it is in the log and does not fail a window check, as it did not before it was recorded. The entrance `log.error` is for errors.
 test("captureConsole records what the page writes to its console and keeps the console working", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-capture-console");
   const written = [];
   const target = { error: (...a) => written.push(["error", a]), warn: (...a) => written.push(["warn", a]),
     info: (...a) => written.push(["info", a]), log: (...a) => written.push(["log", a]), debug: (...a) => written.push(["debug", a]) };
@@ -103,33 +98,36 @@ test("captureConsole records what the page writes to its console and keeps the c
     ["info", "workbench.console.log", "plain"],
     ["debug", "workbench.console.debug", "undefined null d"],
   ]);
+  wire.finish();
 });
 
 test("a failed relay is reported on the original console and does not become a console event again", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-failed-relay-console");
   const reported = [];
   const target = { error: (...a) => reported.push(a.join(" ")), warn() {}, info() {}, log() {}, debug() {} };
   const original = console.error;
   console.error = (...a) => reported.push(a.join(" "));
   try {
     captureConsole(target);
-    failing = new Error("host closed");
     emitEvent("info", "plugin.fixture.x", {});
     await flushEvents();
-    failing = null;
   } finally {
     console.error = original;
   }
   assert.equal(events().some((event) => event.event === "workbench.console.error"), false);
   assert.ok(reported.some((line) => line.includes("page event batch of 1 events failed: host closed")));
+  wire.finish();
 });
 
 test("every host call is the event workbench.call with its name, arguments, duration and outcome, except the calls of the log itself and the queries of the debug timeline", async () => {
+  wire = selectPageWire("page-log-host-call-events");
   const { settlingCalls } = await import("../host-calls.js");
-  calls.length = 0;
-  const wrapped = settlingCalls((name) => (name === "bad" ? Promise.reject(new Error("refused")) : Promise.resolve()));
+  // The transport of the calls is the host of the page. A flush after each call sends the events of that call in their own batch.
+  const wrapped = settlingCalls((name, payload, options) => host.call(name, payload, options));
   await wrapped.call("good", { a: 1 });
+  await flushEvents();
   await assert.rejects(wrapped.call("bad"), /refused/);
+  await flushEvents();
   await wrapped.call("log", { action: "batch", events: [] });
   await wrapped.call("logQuery", { order: "desc", limit: 500 });
   await wrapped.call("overlayUpdate", { id: "debug", html: "<p></p>" });
@@ -143,15 +141,16 @@ test("every host call is the event workbench.call with its name, arguments, dura
     ["debug", "big", JSON.stringify([{ text: "x".repeat(5000) }]).slice(0, 1024), true, undefined, true],
   ]);
   for (const { fields } of seen) assert.ok(Number.isInteger(fields.micros) && fields.micros >= 0);
+  wire.finish();
 });
 
 test("a host call that the policy does not store is not built into an event, and the page reports the count as workbench.log.gated", async () => {
+  wire = selectPageWire("page-log-gated-calls");
   const { settlingCalls } = await import("../host-calls.js");
   const { logGate } = await import("../log-gate.js");
   const policy = { lifecycle: "trace", input: "trace", call: "warn", io: "trace", frame: "trace" };
   logGate.set(policy);
   try {
-    calls.length = 0;
     const wrapped = settlingCalls((name) => (name === "bad" ? Promise.reject(new Error("refused")) : Promise.resolve()));
     // The arguments of a call are serialized for the event only for a call that the gate stores: a getter shows how often they were
     // read. The check of the wrapper that refuses a number JSON cannot carry reads them once for each call.
@@ -172,20 +171,22 @@ test("a host call that the policy does not store is not built into an event, and
   } finally {
     logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
   }
+  wire.finish();
 });
 
 test("the start of a document of the workbench is the event workbench.start with the origin of the document clock and its address", async () => {
+  wire = selectPageWire("page-log-start");
   const { recordWorkbenchStart } = await import("../page-log.js");
-  calls.length = 0;
   recordWorkbenchStart({ href: "app://workbench/index.html?window=w1" }, 1791500000000.5);
   await flushEvents();
   assert.deepEqual(events().map((event) => [event.level, event.event, event.fields]), [
     ["info", "workbench.start", { started_at: 1791500000000.5, url: "app://workbench/index.html?window=w1" }],
   ]);
+  wire.finish();
 });
 
 test("the text of a console call is cut at 8192 bytes while it is serialized, and the event says truncated", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-console-truncation");
   const target = { error() {}, warn() {}, info() {}, log() {}, debug() {} };
   captureConsole(target);
   const reads = { count: 0 };
@@ -206,10 +207,11 @@ test("the text of a console call is cut at 8192 bytes while it is serialized, an
   assert.ok(Buffer.byteLength(structure.text) <= 8192, `${Buffer.byteLength(structure.text)} bytes`);
   assert.ok(reads.count < 8192, `${reads.count} elements were read`);
   assert.deepEqual(short, { text: "short" });
+  wire.finish();
 });
 
 test("a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]", async () => {
-  calls.length = 0;
+  wire = selectPageWire("page-log-console-unserializable");
   const target = { error() {}, warn() {}, info() {}, log() {}, debug() {} };
   captureConsole(target);
   const cyclic = {};
@@ -218,4 +220,5 @@ test("a console argument that JSON cannot serialize is recorded as a marker with
   await flushEvents();
   // The reason is the message of the TypeError that the bounded serializer throws for a cycle.
   assert.deepEqual(events().map((event) => event.fields.text), ['state {"unserializable":"Converting circular structure to JSON"}']);
+  wire.finish();
 });

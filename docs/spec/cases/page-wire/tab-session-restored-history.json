@@ -1,0 +1,13 @@
+{
+  "name": "tab-session-restored-history",
+  "description": "The restore of a tab reads its stored session, which holds a session history for the tab with a file, and holds none for a tab without a file, and the store answers the file of the tab with null.",
+  "replay": false,
+  "reason": "The tab sessions read and write the tab-sessions files of the configuration directory and the document regions read the state of a window; the producer builds neither state (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "tabSession", "tab": "tab-a" } } },
+    { "reply": { "result": { "format": 1, "regions": { "page": { "session": "AAAA" } } } } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSession", "tab": "tab-b" } } },
+    { "reply": { "result": null } }
+  ]
+}
