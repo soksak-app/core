@@ -1493,22 +1493,19 @@ func TestEndpointRecordsAReplyToAClosedConnectionAsNotSent(t *testing.T) {
 	}
 }
 
-// brokenPipeListener accepts connections whose writes fail with a broken pipe, as a write to a socket that the peer closed
-// does before the read sees the end of the connection.
-type brokenPipeListener struct{ net.Listener }
+// shutWriteListener accepts connections and shuts their write side down, so each write of the server fails with EPIPE as a write
+// to a socket whose peer closed the connection does. The read side stays open.
+type shutWriteListener struct{ net.Listener }
 
-type brokenPipeConn struct{ net.Conn }
-
-func (l brokenPipeListener) Accept() (net.Conn, error) {
+func (l shutWriteListener) Accept() (net.Conn, error) {
 	conn, err := l.Listener.Accept()
 	if err != nil {
 		return nil, err
 	}
-	return brokenPipeConn{conn}, nil
-}
-
-func (brokenPipeConn) Write([]byte) (int, error) {
-	return 0, &net.OpError{Op: "write", Net: "tcp", Err: os.NewSyscallError("write", syscall.EPIPE)}
+	if err := conn.(*net.TCPConn).CloseWrite(); err != nil {
+		return nil, errors.Join(err, conn.Close())
+	}
+	return conn, nil
 }
 
 // A write that fails because the peer closed the connection closes it as a peer close and records the frame as not sent.
@@ -1522,7 +1519,7 @@ func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
 		Application: "fixture", Version: "0.0.2", Started: time.Now()}
-	if err := endpoint.Serve(brokenPipeListener{listener}, info, t.TempDir()); err != nil {
+	if err := endpoint.Serve(shutWriteListener{listener}, info, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = endpoint.Close() })
@@ -1535,15 +1532,8 @@ func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
 	}
 }
 
-// acceptFault is a listener whose Accept fails with err, as a listener of the operating system does when it cannot accept.
-type acceptFault struct {
-	net.Listener
-	err error
-}
-
-func (l acceptFault) Accept() (net.Conn, error) { return nil, l.err }
-
-// An accept that fails while the endpoint serves ends the accept loop and writes the reason to the application log.
+// An accept that fails while the endpoint serves ends the accept loop and writes the reason to the application log. The deadline
+// of the listener in the past makes the operating system fail its accept with a timeout, which is a real accept error.
 // contract: endpoint.accept.error-is-recorded
 func TestEndpointRecordsAnAcceptError(t *testing.T) {
 	_, await := support.CaptureLogAwait(t)
@@ -1551,15 +1541,21 @@ func TestEndpointRecordsAnAcceptError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := listener.(*net.TCPListener).SetDeadline(time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	endpoint := host.NewEndpoint(newFakeBackend())
 	info := host.EndpointInfo{Transport: "unix", Address: listener.Addr().String(), PID: os.Getpid(),
 		Application: "fixture", Version: "0.0.2", Started: time.Now()}
-	if err := endpoint.Serve(acceptFault{Listener: listener, err: errors.New("accept fault")}, info, t.TempDir()); err != nil {
+	if err := endpoint.Serve(listener, info, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = endpoint.Close() })
 	// The record is written by the accept goroutine after Accept returns, and the wait ends at the batch that holds it.
-	await(" error host endpoint accept: accept fault")
+	log := await(" error host endpoint accept: accept tcp ")
+	if !strings.Contains(log, "i/o timeout") {
+		t.Fatalf("the accept error was not the timeout of the listener deadline:\n%s", log)
+	}
 }
 
 // A request that ends without its result, the error 1005, writes the method and the reason to the application log before

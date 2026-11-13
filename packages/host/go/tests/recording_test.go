@@ -1,10 +1,10 @@
 //go:build diagnostics
 
-// Diagnostic recording state tests. A fake replaces the recording device. They are compiled only in a diagnostic build.
+// Diagnostic recording state tests. The recording device records its calls and succeeds; the fault points inject its failures.
+// They are compiled only in a diagnostic build.
 package host_test
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,15 +15,20 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
-// fakeCapture records the calls and fails at the specified stage. A failed start, as the native start does, leaves no recording,
-// and a stop ends the recording also when it fails.
+// The fault injection points of the recording (packages/host/go/src/recording.go). A failure of the device call is set with the
+// variable of its point, whose value is the error text.
+const (
+	faultOpen  = "SOKSAK_FAULT_CAPTURE_OPEN"
+	faultStart = "SOKSAK_FAULT_CAPTURE_START"
+	faultStop  = "SOKSAK_FAULT_CAPTURE_STOP"
+)
+
+// fakeCapture records the calls of the recording device and writes the records of a start into its folder, as the native device
+// does before the start answers. Its failures come from the fault points, and it removes no folder itself. A file of blockDirectory
+// stops the removal of its folder by the real filesystem.
 type fakeCapture struct {
 	calls                []string
 	plans                []host.CapturePlan
-	failOpen             bool
-	failStart            bool
-	failFirstStill       bool
-	stopErr              bool
 	blockDirectoryOnOpen string
 	blockDirectoryOnStop string
 }
@@ -46,26 +51,16 @@ func (f *fakeCapture) Open(target host.CaptureTarget) error {
 			return err
 		}
 	}
-	if f.failOpen {
-		return errors.New("open failed")
-	}
 	return nil
 }
 
 func (f *fakeCapture) Start(directory string, plan host.CapturePlan) error {
 	f.calls = append(f.calls, "start")
 	f.plans = append(f.plans, plan)
-	if f.failStart {
-		return errors.New("the first still was not written before the window closed")
-	}
-	if f.failFirstStill {
-		// The native start ends its recording when still 0 fails and writes its records into the folder before it answers.
-		for _, name := range []string{"stills.jsonl", "display-link.json"} {
-			if err := os.WriteFile(filepath.Join(directory, name), []byte("{}\n"), 0o600); err != nil {
-				return err
-			}
+	for _, name := range []string{"stills.jsonl", "display-link.json"} {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte("{}\n"), 0o600); err != nil {
+			return err
 		}
-		return errors.New("window 7 is not on screen")
 	}
 	return nil
 }
@@ -76,9 +71,6 @@ func (f *fakeCapture) Stop() (int, error) {
 		if err := blockDirectory(f.blockDirectoryOnStop); err != nil {
 			return 0, err
 		}
-	}
-	if f.stopErr {
-		return 0, errors.New("stop failed")
 	}
 	return 3, nil
 }
@@ -128,7 +120,8 @@ func TestFinishedRecordingKeepsItsFolderAndReportsFrames(t *testing.T) {
 func TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder(t *testing.T) {
 	parent := t.TempDir()
 	folder := filepath.Join(parent, "frames")
-	fake := &fakeCapture{stopErr: true}
+	t.Setenv(faultStop, "stop failed")
+	fake := &fakeCapture{}
 	var recording host.Recording
 	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
@@ -150,7 +143,8 @@ func TestFinishRetiredStopFailureReleasesOwnerAndPreservesFolder(t *testing.T) {
 func TestFailedOpenRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
-	fake := &fakeCapture{failOpen: true}
+	t.Setenv(faultOpen, "open failed")
+	fake := &fakeCapture{}
 	err := recording.Start(fake, window, folder, plan)
 	if err == nil || err.Error() != "open failed" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v", err, exists(folder))
@@ -162,13 +156,15 @@ func TestFailedOpenRemovesTheFolder(t *testing.T) {
 func TestFailedStartRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
-	fake := &fakeCapture{failStart: true}
+	t.Setenv(faultStart, "the first still was not written before the window closed")
+	fake := &fakeCapture{}
 	err := recording.Start(fake, window, folder, plan)
 	if err == nil || err.Error() != "the first still was not written before the window closed" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v", err, exists(folder))
 	}
 	// The native start ends its recording when still 0 fails, so the recording asks for no stop.
 	expectCalls(t, fake, "open 7", "start")
+	t.Setenv(faultStart, "")
 	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan); err != nil {
 		t.Fatalf("next start after a failed start: %v", err)
 	}
@@ -178,13 +174,15 @@ func TestFailedStartRemovesTheFolder(t *testing.T) {
 func TestFailedFirstStillRemovesTheFolder(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
-	fake := &fakeCapture{failFirstStill: true}
+	t.Setenv(faultStart, "window 7 is not on screen")
+	fake := &fakeCapture{}
 	err := recording.Start(fake, window, folder, plan)
 	if err == nil || err.Error() != "window 7 is not on screen" || exists(folder) || recording.Running() != "" {
 		t.Fatalf("start %v, folder kept %v, running %q", err, exists(folder), recording.Running())
 	}
 	// The native start ended its recording with still 0, so the recording asks for no stop.
 	expectCalls(t, fake, "open 7", "start")
+	t.Setenv(faultStart, "")
 	if err := recording.Start(&fakeCapture{}, window, filepath.Join(t.TempDir(), "next"), plan); err != nil {
 		t.Fatalf("next start after a failed first still: %v", err)
 	}
@@ -213,7 +211,8 @@ func TestStartMakeFailurePreservesUnownedPath(t *testing.T) {
 func TestFailedStartCleanupRetainsFolderOwner(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
-	fake := &fakeCapture{failOpen: true, blockDirectoryOnOpen: folder}
+	t.Setenv(faultOpen, "open failed")
+	fake := &fakeCapture{blockDirectoryOnOpen: folder}
 	err := recording.Start(fake, window, folder, plan)
 	defer os.Chmod(folder, 0o700)
 	if err == nil || !strings.Contains(err.Error(), "remove failed capture directory") {
@@ -265,10 +264,11 @@ func TestAbortedRecordingIsStoppedAndRemovedAndAllowsTheNext(t *testing.T) {
 func TestAbortRetiredStopFailureRemovesFolderAndReportsStopError(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
-	fake := &fakeCapture{stopErr: true}
+	fake := &fakeCapture{}
 	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv(faultStop, "stop failed")
 	err := recording.Abort(fake)
 	if err == nil || !strings.Contains(err.Error(), "stop capture: stop failed") {
 		t.Fatalf("abort error %v", err)
@@ -286,10 +286,11 @@ func TestAbortRetiredStopFailureRemovesFolderAndReportsStopError(t *testing.T) {
 func TestAbortRetiredStopFailureCleanupRetrySkipsStop(t *testing.T) {
 	folder := filepath.Join(t.TempDir(), "frames")
 	var recording host.Recording
-	fake := &fakeCapture{stopErr: true, blockDirectoryOnStop: folder}
+	fake := &fakeCapture{blockDirectoryOnStop: folder}
 	if err := recording.Start(fake, window, folder, plan); err != nil {
 		t.Fatal(err)
 	}
+	t.Setenv(faultStop, "stop failed")
 	err := recording.Abort(fake)
 	defer os.Chmod(folder, 0o700)
 	if err == nil || !strings.Contains(err.Error(), "stop failed") || !strings.Contains(err.Error(), "remove capture directory") {

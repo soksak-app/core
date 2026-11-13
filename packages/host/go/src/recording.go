@@ -216,6 +216,23 @@ func (r *Recording) removeFailedStartDirectory(directory string, cause error) er
 	return cause
 }
 
+// Fault injection points of the recording. A non-empty variable makes its point fail after the device call it names, and the
+// value is the exact error text. The device call runs first, so the device records the call as the native device does.
+// docs/operations/examples.md#test-kinds
+const (
+	captureOpenFault  = "SOKSAK_FAULT_CAPTURE_OPEN"
+	captureStartFault = "SOKSAK_FAULT_CAPTURE_START"
+	captureStopFault  = "SOKSAK_FAULT_CAPTURE_STOP"
+)
+
+// faultError returns the error that the fault point named by variable injects, or nil when the variable is empty.
+func faultError(variable string) error {
+	if message := os.Getenv(variable); message != "" {
+		return errors.New(message)
+	}
+	return nil
+}
+
 // begin opens target and starts its recording with plan in directory. It returns once still 0 is written; a failure leaves no
 // native recording.
 func begin(capture Capture, target CaptureTarget, directory string, plan CapturePlan) error {
@@ -223,7 +240,22 @@ func begin(capture Capture, target CaptureTarget, directory string, plan Capture
 	if err := capture.Open(target); err != nil {
 		return err
 	}
-	return capture.Start(directory, plan)
+	if err := faultError(captureOpenFault); err != nil {
+		return err
+	}
+	if err := capture.Start(directory, plan); err != nil {
+		return err
+	}
+	return faultError(captureStartFault)
+}
+
+// stopCapture ends the native recording and returns the number of frames it wrote. The recording ends also when the stop fails.
+func stopCapture(capture Capture) (int, error) {
+	count, err := capture.Stop()
+	if err == nil {
+		err = faultError(captureStopFault)
+	}
+	return count, err
 }
 
 // Abort stops the recording in progress and deletes the folder. It reports a stop error, after which the native recording has
@@ -239,7 +271,7 @@ func (r *Recording) Abort(capture Capture) error {
 		stopErr = err
 	}
 	if !r.captureStopped {
-		if _, err := capture.Stop(); err != nil {
+		if _, err := stopCapture(capture); err != nil {
 			stopErr = fmt.Errorf("stop capture: %w", err)
 		}
 		r.captureStopped = true
@@ -279,7 +311,7 @@ func (r *Recording) Finish(capture Capture) (string, int, *int, error) {
 		return directory, 0, nil, err
 	}
 	window := r.window
-	count, err := capture.Stop()
+	count, err := stopCapture(capture)
 	r.directory = ""
 	r.captureStopped = false
 	r.window = nil

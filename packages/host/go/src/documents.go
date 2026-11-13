@@ -481,10 +481,16 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		})
 	}
 	if err == nil {
+		err = viewStepFault("message")
+	}
+	if err == nil {
 		err = system.SetViewEnded(handle, func() {
 			LogError("view channel", surfaceID+": the view process ended")
 			s.viewFailed(surfaceID, handle, generation)
 		})
+	}
+	if err == nil {
+		err = viewStepFault("ended")
 	}
 	if err == nil {
 		err = system.SetViewResponsiveness(handle, func(responsive bool) {
@@ -496,12 +502,18 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		})
 	}
 	if err == nil {
+		err = viewStepFault("responsiveness")
+	}
+	if err == nil {
 		err = s.addThemeScript(handle)
+	}
+	if err == nil {
+		err = viewStepFault("script")
 	}
 	if err == nil {
 		err = s.addStartScript(handle, surfaceID, start)
 	}
-	if err == nil && !system.LoadDocument(handle, "soksak://"+plugin+"/"+page) {
+	if err == nil && (!system.LoadDocument(handle, "soksak://"+plugin+"/"+page) || viewLoadFault()) {
 		err = fmt.Errorf("view of surface %q cannot load soksak://%s/%s", surfaceID, plugin, page)
 	}
 	if err != nil {
