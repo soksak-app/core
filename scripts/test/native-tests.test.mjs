@@ -129,6 +129,24 @@ test("a successful native child keeps its stdout in the requested run record", a
   assert.match(readFileSync(join(runFolder, manifest.tests[0].output), "utf8"), /checkpoint=outer-restored source=ABC/);
 });
 
+test("a native test of a run over its limit leaves the stacks of its processes in the folder of the run", { timeout: 60000 }, async (t) => {
+  const { dir, script } = build();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const runFolder = join(dir, "run");
+  script("slow_test", "sleep 30");
+  const lines = [];
+  const code = await runNativeTests({ dir, list: ["slow_test"], run: { id: "run", folder: runFolder }, timeoutMs: 300,
+    write: (line) => lines.push(line) });
+  assert.equal(code, 1);
+  const line = lines.find((entry) => entry.startsWith("TIME slow_test"));
+  const match = /^TIME slow_test [0-9.]+s exceeded 0\.300s and was killed; samples: ([^;]+); services: [^;]+(?:; left running: .*)?$/.exec(line ?? "");
+  assert.ok(match, JSON.stringify(lines));
+  for (const path of match[1].split(", ")) {
+    assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);
+    assert.match(readFileSync(path, "utf8"), /Call graph:/, `${path} holds no thread stacks`);
+  }
+});
+
 test("a native test over its limit is killed and fails the run", async (t) => {
   const { dir, script } = build();
   t.after(() => rmSync(dir, { recursive: true, force: true }));

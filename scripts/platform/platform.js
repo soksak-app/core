@@ -101,6 +101,11 @@ export async function crashReports(app, since, { platform = process.platform, ..
   return (await implementation('crashReports', platform))(app, since, options);
 }
 
+/** The running services that the system started for the process `pid`, as `{pid, label}`; a failed listing rejects with the reason. */
+export async function processServices(pid, { platform = process.platform } = {}) {
+  return (await implementation('processServices', platform))(pid);
+}
+
 /** Writes the thread stacks of the live process `pid` to `file` and resolves with `file`; a failed record rejects with the reason. */
 export async function processStacks(pid, file, { platform = process.platform } = {}) {
   return (await implementation('processStacks', platform))(pid, file);

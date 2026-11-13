@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F769-1: folder가 있는 run의 native 시험이 한도에 닿으면 그 process와 system이 그 process를 위해 시작한 web content 등 service의 stack을 각 service의 state와 함께 run의 folder에 남긴다.
 - F767-2-1: command supervisor 는 limit 에서 SIGKILL 로 command 를 끝내고, grace, drain, signal timer 대신 output 의 close 와 group 의 끝을 기다리며, output 을 열어 두는 group 밖의 process 를 지목한다.
 - F767-3-1: workbench check 15 개는 state 가 따르는 기록된 call, reply, registration 변경 또는 promise 를 기다리고, timeline check 는 경과 시간 대신 view 의 timer 를 센다.
 - F767-1: runner 와 adapter check 는 경과 시간 대신 status, detail, event 순서로 판정하므로, 부하가 있는 machine 이 그 부하로 이 check 를 통과하거나 실패하지 않는다.

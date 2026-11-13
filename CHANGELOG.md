@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F769-1: a native test of a run with a folder that reaches its limit leaves the stacks of its processes and of the web content and other services that the system started for them, with the state of each service, in the folder of the run.
 - F767-2-1: the command supervisor ends a command with SIGKILL at its limit and waits for the close of its output and the end of its group instead of grace, drain and signal timers, and it names a process outside the group that keeps the output open.
 - F767-3-1: fifteen workbench checks wait for the recorded call, reply, registration change or promise that their state follows, and the timeline check counts the timers of the view instead of its elapsed time.
 - F767-1: the runner and adapter checks decide by status, detail and the order of events instead of elapsed time, so a loaded machine no longer passes or fails them by its load.

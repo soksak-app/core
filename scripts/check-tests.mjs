@@ -589,6 +589,21 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F769-1",
+    implementation: [
+      { file: "scripts/test-runner.mjs", symbol: "const sampleAtLimit = async () => {" },
+      { file: "scripts/native-tests.mjs", symbol: "const samples = run === undefined ? {} : { samplesAtLimit: true };" },
+      { file: "scripts/platform/platform.js", symbol: "export async function processServices(pid" },
+    ],
+    tests: [
+      { file: "scripts/test/test-runner.test.mjs", id: "a test with samplesAtLimit leaves the stacks of its processes and of their services at its limit" },
+      { file: "scripts/test/native-tests.test.mjs", id: "a native test of a run over its limit leaves the stacks of its processes in the folder of the run" },
+    ],
+    expected: "A native test of a run with a folder that reaches its limit leaves the stacks of its processes and of their services, with the state of each service, in the folder of the run.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F767-2-1",
     implementation: [
       { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid) {" },

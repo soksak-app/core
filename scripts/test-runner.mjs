@@ -14,7 +14,7 @@ import { hasEnded, killGroup, processTable, runningMembers, stopGroup } from './
 import { EVENT_PREFIX } from './test-event-reporter.mjs';
 import { createNodeTestEvidence } from './node-test-evidence.mjs';
 import { linkerWarnings } from './macos-minimum.mjs';
-import { processFolderRoot, processStacks } from './platform/platform.js';
+import { processFolderRoot, processServices, processStacks } from './platform/platform.js';
 import { processWarnings } from './node-warnings.mjs';
 import { temporaryFolder } from './temporary-folder.mjs';
 
@@ -100,6 +100,14 @@ function validate(options) {
     // A process that writes its stacks and exits at its own limit (runOne), such as a Go test binary with -test.timeout of the limit.
     if (item.stacksAtLimit !== undefined && (item.stacksAtLimit !== true || item.timeoutMs === undefined)) {
       throw new TypeError(`${item.name}: stacksAtLimit must be true and needs timeoutMs`);
+    }
+    // A process whose stacks and the stacks of its services are kept at its limit (runOne), such as a native check that waits for a web
+    // content process. The samples are kept in the folder of the run.
+    if (item.samplesAtLimit !== undefined) {
+      if (item.samplesAtLimit !== true || item.timeoutMs === undefined || item.stacksAtLimit !== undefined) {
+        throw new TypeError(`${item.name}: samplesAtLimit must be true, needs timeoutMs and excludes stacksAtLimit`);
+      }
+      if (!options.run) throw new TypeError(`${item.name}: samplesAtLimit needs the folder of a run, which keeps the samples of the process`);
     }
     // The event watchdog of a process that reports its test events (runOne). A process without the field has no watchdog.
     if (item.eventLimitMs !== undefined && (!Number.isInteger(item.eventLimitMs) || item.eventLimitMs < 1 || item.eventLimitMs > MAX_TEST_TIMEOUT_MS)) {
@@ -210,7 +218,7 @@ function endGroup(pgid, leader) {
  * ended and the test fails with the names of the leftovers. When the item declares a limit, the group is ended at that limit, and the
  * timeout names the leftovers other than the test process.
  */
-function runOne(item, limitMs, env, outputPath, stacks, temporary) {
+function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary) {
   return new Promise((resolve) => {
     const started = performance.now();
     const chunks = [];
@@ -250,6 +258,38 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
       if (limit !== null) return;
       limit = { elapsedMs: performance.now() - started, reason, leftovers: [] };
       clearLimit(watchdog);
+      if (item.samplesAtLimit) ending = sampleAtLimit();
+      else {
+        try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+      }
+    };
+    // A process with `samplesAtLimit` waits at its limit for another process, such as a native check for the reply of its web content
+    // process, which the system starts outside the group in a service of the process. The group is stopped, the stacks of each member
+    // and of each service of a member are kept with sample, and the state of each service is read, so the failure names where the
+    // check and the process it waits for stand; the group is ended after that.
+    const sampleAtLimit = async () => {
+      const samples = [];
+      const found = [];
+      const errors = [];
+      const keep = async (pid, name) => {
+        const file = join(dirname(outputPath), `${basename(outputPath, '.log')}.limit-${name}.sample.txt`);
+        try { samples.push(await stacks(pid, file)); } catch (error) { errors.push(error.message); }
+      };
+      try {
+        stopGroup(child.pid);
+        for (const member of runningMembers(child.pid)) {
+          await keep(member.pid, String(member.pid));
+          let listed = [];
+          try { listed = await services(member.pid); } catch (error) { errors.push(error.message); }
+          const table = listed.length > 0 ? new Map(processTable().map((row) => [row.pid, row.state])) : new Map();
+          for (const service of listed) {
+            found.push(`pid ${service.pid} ${service.label} state ${table.get(service.pid) ?? 'absent'}`);
+            await keep(service.pid, `${member.pid}-${service.pid}`);
+          }
+        }
+      } catch (error) { errors.push(`the process group ${child.pid} could not be read: ${error.message}`); }
+      const failed = errors.length > 0 ? `; sample errors: ${errors.join('; ')}` : '';
+      limit.reason = `${limit.reason}; samples: ${samples.length > 0 ? samples.join(', ') : 'none'}; services: ${found.length > 0 ? found.join(', ') : 'none'}${failed}`;
       try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
     };
     const arm = () => {
@@ -422,7 +462,7 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
 }
 
 /**
- * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, build?, stacksAtLimit?, eventLimitMs?, exitLimitMs?}`) with at most
+ * Runs `tests` (`{name, command, args, cwd?, env?, timeoutMs?, build?, stacksAtLimit?, samplesAtLimit?, eventLimitMs?, exitLimitMs?}`) with at most
  * `concurrency` processes at once. `build` (`{command, args, timeoutMs}`) runs before the test in the same folder and environment, in a
  * process of its own under its own limit, between the lines `BUILD <name>` and `BUILT <name>`; a build that fails or exceeds its limit
  * is the result of the test, whose detail says that the test did not run. `stacksAtLimit` declares a process that writes its stacks and exits at its own limit of `timeoutMs`; its exit
@@ -442,15 +482,16 @@ function runOne(item, limitMs, env, outputPath, stacks, temporary) {
  * Each process, a build too, runs with a folder of its own as `TMPDIR`, which the runner removes when the group of the process ended,
  * also when the process failed or was killed; a process that passed and left an entry there fails with `left in its temporary folder:`
  * and the names of the entries.
- * `stacks(pid, file)`, when given, records the thread stacks of a process that did not exit at its exit limit; the default is the
- * operation of the platform (scripts/platform/platform.js).
+ * `stacks(pid, file)`, when given, records the thread stacks of a process that did not exit at its exit limit or that reached its
+ * limit with `samplesAtLimit`, and `services(pid)`, when given, lists the running services of a process as `{pid, label}`; the
+ * defaults are the operations of the platform (scripts/platform/platform.js).
  */
 export async function runTests(options) {
   validate(options);
   const { tests, concurrency, write } = options;
   const heartbeatMs = options.heartbeatMs ?? 10_000;
   const slowCount = options.slowCount ?? 10;
-  const stacks = options.stacks ?? processStacks;
+  const recorders = { stacks: options.stacks ?? processStacks, services: options.services ?? processServices };
   const begun = performance.now();
   const running = new Map();
   const results = new Map();
@@ -499,7 +540,7 @@ export async function runTests(options) {
       if (item.build) {
         write(`BUILD ${item.name} (limit ${seconds(item.build.timeoutMs)}s)`);
         const built = await runOne({ name: item.name, command: item.build.command, args: item.build.args, cwd: item.cwd, env: item.env },
-          item.build.timeoutMs, env, outputPath, stacks, processFolder());
+          item.build.timeoutMs, env, outputPath, recorders, processFolder());
         const ended = `${seconds(built.elapsedMs)}s${built.detail ? ` ${built.detail}` : ''}`;
         if (entry) {
           entry.build = { status: built.status, elapsed_ms: Math.round(built.elapsedMs), detail: built.detail };
@@ -514,7 +555,7 @@ export async function runTests(options) {
       }
       if (result === null) {
         write(`RUN  ${item.name} (${running.size} running, ${limit === undefined ? 'no runner limit' : `limit ${seconds(limit)}s`})`);
-        result = await runOne(item, limit, env, outputPath, stacks, processFolder());
+        result = await runOne(item, limit, env, outputPath, recorders, processFolder());
       }
       running.delete(item.name);
       if (entry) {

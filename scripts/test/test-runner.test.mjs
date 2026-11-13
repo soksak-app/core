@@ -493,6 +493,38 @@ test("a test file that does not exit after its tests ended fails at the exit lim
   }
 });
 
+test("a test with samplesAtLimit leaves the stacks of its processes and of their services at its limit", { timeout: 60000 }, async (t) => {
+  // The test process writes a line and then waits. The service of the platform (scripts/platform/platform.js) is replaced by a process
+  // of this check outside the group of the test, as the system starts a web content process outside it.
+  const folder = mkdtempSync(join(tmpdir(), "runner-samples-"));
+  const runFolder = join(folder, "run");
+  const service = spawn("/bin/sleep", ["60"], { stdio: "ignore" });
+  const sampled = [];
+  const stacks = async (pid, path) => { sampled.push(pid); writeFileSync(path, `Call graph:\n    stacks of process ${pid}\n`); return path; };
+  const services = async (pid) => [{ pid: service.pid, label: `service.of.${pid}` }];
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const outcome = run([node("waits", `console.log("waiting"); ${sleeping(60000)}`, { timeoutMs: 2000, samplesAtLimit: true })],
+      { concurrency: 1, run: { id: "samples", folder: runFolder }, stacks, services });
+    await untilOutput(join(runFolder, "001-waits.log"), "waiting");
+    t.mock.timers.tick(2000);
+    const result = (await outcome).results.get("waits");
+    assert.equal(result.status, "timeout", `${result.status}: ${result.detail}`);
+    const match = /^exceeded 2\.000s and was killed; samples: ([^;]+); services: pid (\d+) service\.of\.(\d+) state (\S+)$/.exec(result.detail);
+    assert.ok(match, result.detail);
+    assert.equal(Number(match[2]), service.pid, result.detail);
+    assert.match(match[4], /^S/, result.detail);
+    for (const path of match[1].split(", ")) {
+      assert.ok(path.startsWith(`${runFolder}/`), `${path} is not in the folder of the run`);
+      assert.match(readFileSync(path, "utf8"), /Call graph:/, `${path} holds no thread stacks`);
+    }
+    assert.deepEqual(sampled, [Number(match[3]), service.pid], "the test process and its service are sampled");
+  } finally {
+    service.kill("SIGKILL");
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test("a test file whose test events keep arriving is not ended at the event limit, though it runs longer than the limit", async (t) => {
   // The process writes the event of step n and then reads the FIFO `go`, which blocks until the test opens it for writing and closes it;
   // it exits after step 5. The clock moves by 299 ms after each event, 1495 ms in all, so the events of the process do not stop for the

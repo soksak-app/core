@@ -23,7 +23,10 @@ export function nativeTests(dir, list) {
 
 /** Runs the tests one at a time and returns the exit status: 0 when every test passed. */
 export async function runNativeTests({ dir, list, timeoutMs = TEST_TIMEOUT_MS, write, run, env }) {
-  const { results } = await runTests({ tests: nativeTests(dir, list).map((item) => ({ ...item, timeoutMs })), concurrency: 1, write, run, env });
+  // A native test waits for the web content and other services that the system starts outside its group, so a run that keeps its
+  // output in a folder also keeps there the stacks of the test and of its services at the limit (samplesAtLimit of test-runner.mjs).
+  const samples = run === undefined ? {} : { samplesAtLimit: true };
+  const { results } = await runTests({ tests: nativeTests(dir, list).map((item) => ({ ...item, timeoutMs, ...samples })), concurrency: 1, write, run, env });
   return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
 }
 

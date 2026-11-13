@@ -8,7 +8,7 @@ import { macosMinimum } from '../../macos-minimum.mjs';
 export { applicationArtifact, applicationExecutables } from './artifacts.mjs';
 export { crashReports, listProcesses, openApplication, quitApplication, runNativeTests, waitForLockRelease } from './end-to-end.mjs';
 export { processExecutable } from './process-executable.mjs';
-export { sampleProcess as processStacks } from '@soksak/window-check/stall-sample.mjs';
+export { launchdServices as processServices, sampleProcess as processStacks } from '@soksak/window-check/stall-sample.mjs';
 
 /**
  * The folder of the temporary folders of a test run. The temporary folder of the user has 49 bytes, which leaves the sockets of the
