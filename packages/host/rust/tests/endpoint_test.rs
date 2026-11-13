@@ -16,6 +16,9 @@ use std::path::Path;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
+#[path = "support/platform/connection_activity.rs"]
+mod connection_activity;
+
 #[path = "support/records.rs"]
 mod records;
 
@@ -1649,20 +1652,14 @@ fn the_close_of_a_connection_releases_its_presses() {
     endpoint.stop();
 }
 
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    fn sp_connection_activity_held() -> bool;
-}
-
 // The host holds the connection activity while a connection of its endpoint is open, so the system does not run it in the
 // background while a client waits for its answers, and releases it when the last connection closes. The end of a connection
 // releases the activity before it releases the presses of the connection, so the delivered release of a press shows that the
 // end passed the activity.
 // contract: endpoint.connection.holds-activity
-#[cfg(target_os = "macos")]
 #[test]
 fn the_endpoint_holds_the_activity_while_a_connection_is_open() {
-    let held = || unsafe { sp_connection_activity_held() };
+    let held = connection_activity::held;
     let config = folder::Folder::new();
     let (fake, seen) = Fake::new();
     let endpoint = start(config.path(), "test-activity", fake.clone());

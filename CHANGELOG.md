@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F774-1: the Rust test of the connection activity reads the native call through `tests/support/platform/connection_activity.rs`, so no OS cfg is outside `platform/<os>/`.
 - F779-2: the window check of image region presses waits for the answer of the focus call that the page makes on each press, which the host gives after the move of the keyboard applied or waits for the release, and then reads the focus once, so its wait ends by an event and not by the test limit.
 - F779-1: a window check that the test runner ends at its limit while it waits for a status names that status, the text of the wait and the last value that the status had.
 - F778: in a window run of 2026-11-14 `e2e/paint.test.mjs` and `e2e/plain-view.test.mjs` passed on the three hosts at a load average of 34 to 38, and the mygo `e2e/paint.test.mjs` passed three times.

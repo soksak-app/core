@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F774-1: connection activity 의 Rust test 는 `tests/support/platform/connection_activity.rs` 를 거쳐 native call 을 읽으므로, `platform/<os>/` 밖에 OS cfg 가 없다.
 - F779-2: image region 누름의 window check 는 page 가 누름마다 하는 focus call 의 답을 기다린 뒤 focus 를 한 번 읽는다. host 는 keyboard 이동이 적용되었거나 뗌을 기다리게 된 뒤에 그 답을 주므로, wait 는 test 제한이 아니라 event 로 끝난다.
 - F779-1: test runner 가 status 를 기다리는 window check 를 시간 제한에서 끝내면, check 는 그 status, wait 의 text, status 의 마지막 값을 밝힌다.
 - F778: 2026-11-14 window run 에서 `e2e/paint.test.mjs` 와 `e2e/plain-view.test.mjs` 는 load average 34 에서 38 사이에서 세 host 모두 통과했고, mygo `e2e/paint.test.mjs` 는 세 번 통과했다.
