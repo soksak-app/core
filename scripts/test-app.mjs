@@ -256,11 +256,17 @@ async function startApplication(item, children) {
   }
 }
 
-export async function quitApplication(item, children, since, write, connectClient = connect, lockRelease = waitForLockRelease) {
+/**
+ * Quits an application by its item and waits for its exit and its lock release. `limitMs` is the limit of the quit step; runPlan
+ * passes QUIT_LIMIT_MS, and a test passes its own limit so that the expiry is observed without a fake clock.
+ */
+export async function quitApplication(item, children, since, write, connectClient = connect, lockRelease = waitForLockRelease,
+  limitMs = QUIT_LIMIT_MS) {
+  if (typeof limitMs !== 'number' || !Number.isFinite(limitMs) || limitMs <= 0) throw new Error(`quitApplication needs a limit of more than 0 ms, not ${limitMs}`);
   const child = children.get(item.app);
   let client;
   let expired = false;
-  const bound = limit(QUIT_LIMIT_MS, `the normal quit did not complete in ${QUIT_LIMIT_MS / 1000}s`);
+  const bound = limit(limitMs, `the normal quit did not complete in ${limitMs / 1000}s`);
   let action;
   try {
     action = await Promise.race([
@@ -299,18 +305,18 @@ export async function quitApplication(item, children, since, write, connectClien
   }
   // Retain the existing lock-holder proof, including a replacement process
   // after relaunch. A timeout above is a failed Quit, never a forced shutdown.
-  await lockReleased(item.configDir, action, item.platform, lockRelease);
+  await lockReleased(item.configDir, action, item.platform, lockRelease, limitMs);
 }
 
 /**
  * Waits until no process holds `<config-dir>/process.lock` (docs/spec/endpoint.md). The started process is not always the owner:
  * diagnostics.host.relaunch replaces it with a new process. The lock release wait of the platform returns when the owner exits.
  */
-async function lockReleased(configDir, action, platform, lockRelease) {
+async function lockReleased(configDir, action, platform, lockRelease, limitMs) {
   const lock = join(configDir, 'process.lock');
   if (!existsSync(lock)) return;
-  if (!await lockRelease(lock, QUIT_LIMIT_MS / 1000, { platform })) {
-    throw new Error(`the process that holds ${lock} did not exit in ${QUIT_LIMIT_MS / 1000}s after ${action}`);
+  if (!await lockRelease(lock, limitMs / 1000, { platform })) {
+    throw new Error(`the process that holds ${lock} did not exit in ${limitMs / 1000}s after ${action}`);
   }
 }
 
@@ -335,9 +341,10 @@ async function runNative(item, interrupted) {
  * step reaches the application of an earlier start step. An abort of `interrupted`, whose reason is the name of the signal, ends the
  * running command, skips the later steps that are not cleanup steps and runs the cleanup steps, so the applications and their services end.
  * `lockRelease` and `processes` are the lock release wait and the process list of the platform; a test passes its own readers.
+ * `quitLimitMs` is the limit of each quit step (QUIT_LIMIT_MS by default); a test passes a shorter limit.
  */
 export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {}, connectClient = connect,
-  lockRelease = waitForLockRelease, processes = listProcesses }) {
+  lockRelease = waitForLockRelease, processes = listProcesses, quitLimitMs = QUIT_LIMIT_MS }) {
   const failures = [];
   const since = Date.now();
   let stopped = null;
@@ -363,7 +370,7 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       // A cleanup step runs to its end after an interrupt, because it ends what the earlier steps started.
       if (item.kind === 'run') await runCommand(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'start') await startApplication(item, children);
-      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease);
+      else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'remaining') await checkRemaining(item, processes);
       else if (item.kind === 'capture') await capture(item.capture);

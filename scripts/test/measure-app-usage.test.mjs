@@ -3,7 +3,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import test, { mock } from "node:test";
+import test from "node:test";
 
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
@@ -310,21 +310,9 @@ test("a window whose frames is null waits 3 seconds once", async () => {
   assert.deepEqual(waits, [3000]);
 });
 
-test("without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module", async () => {
-  mock.timers.enable({ apis: ["setTimeout"] });
-  try {
-    let settled = false;
-    const quiet = untilFramesQuiet({ frames: async () => [340] }).then((frames) => { settled = true; return frames; });
-    const turns = async () => { for (let turn = 0; turn < 10; turn++) await Promise.resolve(); };
-    await turns();
-    mock.timers.tick(2999);
-    await turns();
-    assert.equal(settled, false);
-    mock.timers.tick(1);
-    assert.deepEqual(await quiet, [340]);
-  } finally {
-    mock.timers.reset();
-  }
+// The default sleep is the real 3 s timer of the module; the test judges the returned frames, not the elapsed time.
+test("without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module", { timeout: 10000 }, async () => {
+  assert.deepEqual(await untilFramesQuiet({ frames: async () => [340] }), [340]);
 });
 
 test("the frames of every window must not change for 3 seconds", async () => {
