@@ -29,8 +29,9 @@ for (const app of Object.values(APPS))
       await s.run("core.card.sidebar.size", { card: card.id, side, size: 120 });
     }
     await s.presented();
+    // A capture activates nothing: the check judges that the activation of the application did not change, not whether the
+    // application is active, which a person who brings it forward changes (docs/spec/hosts.md#launch-activation).
     const before = await s.get("host.window");
-    assert.equal(before.active, false);
     const surface = (await s.surfaces()).find((item) => item.surface === tab.id);
     assert.ok(surface?.applied, "native surface absent");
     const { path } = await readStillCapture(s, t);
@@ -39,6 +40,6 @@ for (const app of Object.values(APPS))
     const captures = join(realpathSync(app.configDir), "logs", "captures");
     assert.ok(realpathSync(path).startsWith(`${captures}/`), `the still capture ${path} is not in ${captures}`);
     const after = await s.get("host.window");
-    assert.equal(after.active, false);
+    assert.equal(after.active, before.active, "the still changed the activation of the application");
     console.info(`PASS ${app.name}: still PNG observation (${Math.round(performance.now() - started)}ms)`);
   });

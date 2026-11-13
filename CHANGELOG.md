@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F777: the capture checks `e2e/capture-covered.test.mjs`, `capture-display-link`, `capture-lifecycle` and `capture-still` judge that a capture leaves the activation of the application as it was, instead of requiring an inactive application, which a person who brings the application forward changes. The four checks passed in a window run on the three hosts.
 - F776: the fold control check of `e2e/card-panels.test.mjs` presses the control again after the fold presented, so its press no longer ends the hold of the fold under load.
 - F775: a stall sample that the machine or the sample tool does not finish is reported as a `stall sample:` diagnostic with its reason and no longer fails the window check, because a sample is a record of the check, as a recording is.
 - F756-4: each change of the cursor of the virtual key window writes `native.input.virtual` of the phase `cursor`, whose reason names the cursor and up to four frames that called `-[NSCursor set]`, so the log of a failed cursor check names the code that set the cursor that it read.

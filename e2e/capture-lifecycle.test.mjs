@@ -32,7 +32,9 @@ for (const app of Object.values(APPS)) {
     for (let cycle = 0; cycle < 3; cycle++) {
       const started = performance.now();
       console.info(`running ${app.name}: capture lifecycle ${cycle + 1}`);
-      assert.equal((await s.get("host.window")).active, false);
+      // A capture activates nothing: the check judges that the activation of the application did not change, not whether the
+      // application is active, which a person who brings it forward changes (docs/spec/hosts.md#launch-activation).
+      const { active } = await s.get("host.window");
       const offsets = currentEventOffsets(app.configDir);
       const recording = await s.record();
       const textSize = cycle % 2 === 0 ? (original === 1 ? 1.1 : 1) : original;
@@ -79,7 +81,7 @@ for (const app of Object.values(APPS)) {
       completed.push({ directory: recording.frames, files: snapshot(recording.frames) });
       for (const item of completed)
         assert.deepEqual(snapshot(item.directory), item.files, "a later recording modified finalized artifacts");
-      assert.equal((await s.get("host.window")).active, false);
+      assert.equal((await s.get("host.window")).active, active, "the recording changed the activation of the application");
       console.info(`passed ${app.name}: capture lifecycle ${cycle + 1} (${Math.round(performance.now() - started)}ms, ${count} frames)`);
     }
     t.diagnostic("Three sequential recordings retain independent counts and unchanged finalized bytes; controlled native owners cover delayed callbacks.");

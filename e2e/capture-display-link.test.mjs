@@ -10,8 +10,9 @@ for (const app of Object.values(APPS)) {
   test(`${app.name}: capture stop preserves its display-link metadata`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     await fresh(s);
+    // A capture activates nothing: the check judges that the activation of the application did not change, not whether the
+    // application is active, which a person who brings it forward changes (docs/spec/hosts.md#launch-activation).
     const window = await s.get("host.window");
-    assert.equal(window.active, false, "the capture check must not activate its host");
     const settings = await s.get("core.settings");
     const originalTextSize = settings.values.textSize;
     assert.ok(Number.isFinite(originalTextSize), "the common textSize setting is unavailable");
@@ -56,7 +57,7 @@ for (const app of Object.values(APPS)) {
         t.diagnostic(`display-link available with ${record.observations.length} observations; preserved at ${evidencePath}; ` +
           "timestamps are refresh observations, not frame-presentation or cadence acceptance");
       try {
-        assert.equal((await s.get("host.window")).active, false, "the host became active during the non-activating capture check");
+        assert.equal((await s.get("host.window")).active, window.active, "the capture changed the activation of the host");
       } catch (error) {
         failures.push(error);
       }

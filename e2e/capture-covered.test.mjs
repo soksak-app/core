@@ -45,8 +45,9 @@ for (const app of Object.values(APPS)) {
     await s.until("layoutprobe.document", (at) => at.color === css(RED) && at.document === "visible" && at.changes === 0,
       "the region document did not report itself visible and red", { surface });
     await s.presented();
+    // A capture activates nothing: the check judges that the activation of the application did not change, not whether the
+    // application is active, which a person who brings it forward changes (docs/spec/hosts.md#launch-activation).
     const before = await s.get("host.window");
-    assert.equal(before.active, false, "the application is active before the still");
     const region = before.documents.find((d) => d.surface === surface && d.document === "page" && d.visible);
     assert.ok(region, `the probe tab has no visible document region: ${JSON.stringify(before.documents)}`);
     const folders = new Set();
@@ -101,6 +102,6 @@ for (const app of Object.values(APPS)) {
 
     const after = await s.get("host.window");
     assert.equal(after.occluded, true, "the window is no longer covered at the end");
-    assert.equal(after.active, false, "the application became active");
+    assert.equal(after.active, before.active, "the stills changed the activation of the application");
   });
 }
