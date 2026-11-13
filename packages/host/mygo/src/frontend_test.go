@@ -8,7 +8,7 @@ import "testing"
 func TestAWaitForTheReleaseOfAWindowEndsWhenTheWindowCloses(t *testing.T) {
 	f := &Frontend{held: true}
 	asked := 0
-	f.whenReleased(func() { asked++ })
+	f.WhenReleased(func() { asked++ })
 	if asked != 0 {
 		t.Fatalf("a held window asked again %d times before its release", asked)
 	}
@@ -16,7 +16,7 @@ func TestAWaitForTheReleaseOfAWindowEndsWhenTheWindowCloses(t *testing.T) {
 	if asked != 1 {
 		t.Fatalf("the wait for the release of a closed window asked again %d times, want 1", asked)
 	}
-	f.whenReleased(func() { asked++ })
+	f.WhenReleased(func() { asked++ })
 	if asked != 2 {
 		t.Fatalf("a wait for the release of a closed window did not ask again at once")
 	}

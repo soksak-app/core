@@ -388,7 +388,7 @@ func (f *Frontend) OnClosing(hook func() (keep bool)) {
 func (f *Frontend) presented(waits bool, done func(err error)) error {
 	var whenHeld func(again func())
 	if waits {
-		whenHeld = f.whenReleased
+		whenHeld = f.WhenReleased
 	}
 	return AwaitPresentation(f.name, f.window.AfterPresent, whenHeld, done)
 }
@@ -516,9 +516,10 @@ func (f *Frontend) release() {
 	}
 }
 
-// whenReleased runs run after the release of the window, or at once when the window is not held or closed. Call it on the main
-// thread.
-func (f *Frontend) whenReleased(run func()) {
+// WhenReleased runs run after the release of the window, or at once when the window is not held or closed: a window that a layout
+// transaction holds draws no frame, so the window server puts a window that was shown during a transaction on the screen only with
+// the frame after the release. Call it on the main thread.
+func (f *Frontend) WhenReleased(run func()) {
 	if !f.held || f.closed {
 		run()
 		return

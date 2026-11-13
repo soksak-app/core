@@ -60,6 +60,14 @@ func TestE2EAStillOfTheWindowShowsTheViewPage(t *testing.T) {
 	session := viewHost(t)
 	t.Cleanup(func() { session.layout(t) })
 	session.layout(t, viewSurface("still", true))
+	// The layout transaction holds the frames of the window until it ends, and the window server puts the window on the screen with
+	// its first frame after the release, so the still waits for the release and then for the presentation of a frame.
+	released := make(chan struct{})
+	mygo.RunOnMain(func() { session.window.WhenReleased(func() { close(released) }) })
+	<-released
+	if presented := support.NextFrame(t, session.window); presented == mygo.PresentHeld {
+		t.Fatalf("the window holds its frames after its release")
+	}
 	const r, g, b = 0x20, 0x40, 0x80
 	var seen [3]uint32
 	near := func(have, want uint32) bool { return have+8 >= want && have <= want+8 }

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F771: the mygo still check waits for the release of the window by its layout transaction and for its next frame before it reads the still, because the window server puts the window on the screen only with that frame.
 - F767-3-2-3: the check of a disabled page trace records the events that the tracer queues and requires none, instead of counting host calls that a trace never makes; the view subscriptions state that their cancel and report do not throw.
 - F767-3-2-2: eighteen checks of the workbench wait for the call of a fake, a declared `idle` of the view subscriptions, the transcript and the library, or the order of their events, instead of a settle; the check of `nextTask` requires that a message task runs the work.
 - F767-6: the timers and retries of the product are each a rule that a specification states or a wait for an event; the parent poll of the bounded command runner states that Node has no event for the end of the parent process.
