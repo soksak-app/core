@@ -51,7 +51,20 @@ static void recordActivations(CFTimeInterval began) {
         }];
 }
 
-// The handler and the record are installed when the launch is about to finish. The constructor registers for that with the C
+// A key that a check types into a text field opens the correction panel of AppKit when automatic spelling correction is on and the
+// application is active, and the event loop of that panel waits for a person on the main thread, so the reply that the check waits
+// for never runs. Whether the correction is on is a setting of the account, so the checks type with it off in the argument domain,
+// which comes before every other domain: WebKit reads WebAutomaticSpellingCorrectionEnabled and AppKit
+// NSAutomaticSpellingCorrectionEnabled.
+static void typeWithoutCorrection(void) {
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    NSMutableDictionary *arguments = [[defaults volatileDomainForName:NSArgumentDomain] mutableCopy] ?: [NSMutableDictionary dictionary];
+    arguments[@"NSAutomaticSpellingCorrectionEnabled"] = @NO;
+    arguments[@"WebAutomaticSpellingCorrectionEnabled"] = @NO;
+    [defaults setVolatileDomain:arguments forName:NSArgumentDomain];
+}
+
+// The handler, the record and the settings of typing are installed when the launch is about to finish. The constructor registers for that with the C
 // interface of the local notification center, which starts no thread, because a check that forks before it starts the
 // application, such as application_log_fatal_test, needs a parent with one thread: the runtime ends a child whose parent had
 // other threads when the child initializes a class.
@@ -63,6 +76,7 @@ static void prepareLaunch(CFNotificationCenterRef center, void *observer, CFNoti
     [NSAppleEventManager.sharedAppleEventManager setEventHandler:handler
         andSelector:@selector(handleOpenApplication:withReplyEvent:) forEventClass:kCoreEventClass andEventID:kAEOpenApplication];
     recordActivations(began);
+    typeWithoutCorrection();
 }
 
 __attribute__((constructor)) static void install(void) {

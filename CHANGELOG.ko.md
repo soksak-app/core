@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F769-2: native check 는 자동 맞춤법 교정을 끈 채로 입력한다. 그래서 계정에서 교정을 켠 경우에도 사람을 기다리는 AppKit 교정 panel 의 event loop 가 check 를 멈추지 않는다.
 - F767-4-3-1: Rust host 의 sidecar writer line 대기는 poison 된 lock 의 크기를 읽는 이유를 적는다.
 - F769-1-2: native 시험 한도의 sample check 는 platform 이름을 읽지 않고 platform module 에 그 platform 이 process 를 기록하는지 묻는다.
 - F767-2-2-2: layout package 는 window-check package 를 development dependency 로 선언하고 group 규칙을 그 이름으로 import 한다. 그래서 그 test 는 다른 package 의 경로를 읽지 않는다.

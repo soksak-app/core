@@ -222,6 +222,11 @@ int main(void) { @autoreleasepool {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+    // A key typed into a field opens the correction panel of AppKit when automatic spelling correction is on, and the event loop
+    // of that panel waits for a person on the main thread, so every check types with the correction off (support/no_activation.m).
+    check(!NSSpellChecker.isAutomaticSpellingCorrectionEnabled &&
+        [[NSUserDefaults.standardUserDefaults objectForKey:@"WebAutomaticSpellingCorrectionEnabled"] isEqual:@NO],
+        @"the check types with automatic spelling correction off");
 
     silence = [silentWave() retain];
     nw_listener_t frameListener = serve();
