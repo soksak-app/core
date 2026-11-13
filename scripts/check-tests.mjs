@@ -1446,6 +1446,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F774-3",
+    implementation: [
+      { file: "packages/workbench/event-classes.js", symbol: "native.connection.activity" },
+      { file: "packages/window-check/core-events.json", symbol: "native.connection.activity" },
+    ],
+    tests: [
+      { file: "scripts/test/event-classes.test.mjs", id: "the committed class tables equal what the catalog gives" },
+      { file: "packages/window-check/test/catalog.test.mjs", id: "the core catalog that the package ships is docs/spec/events.json" },
+    ],
+    expected: "The generated class tables and the catalog that the window check package ships hold every event of docs/spec/events.json, native.connection.activity included.",
+    levels: ["unit"],
+  },
+  {
     id: "F790",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (w *presentationWait) cancelAll() error {" },
