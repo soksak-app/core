@@ -180,6 +180,8 @@ Still은 새 drawable을 식별하지 않으므로 두 still의 pixel이 같을 
 - 수신 전에 같은 애플리케이션의 끝난 프로세스 소켓을 제거한다.
 - 같은 설정 디렉터리의 두 번째 프로세스를 거부하고 정상 종료 때 `process.lock`을 삭제한다.
 
+엔드포인트의 client(`packages/client`, `packages/mcp`, window-check session, `sok`)는 `docs/spec/cases/endpoint/`의 엔드포인트 계약 사례에 대해 시험한다. 사례는 client가 보내는 frame과 호스트가 돌려보내는 응답과 알림의 순서이며, 호스트가 값을 정하는 field(창 id, 시각, 순번)는 변수로 이름 붙인다. window check `e2e/endpoint-contract.test.mjs`는 실행 중인 애플리케이션에 모든 사례를 보내고 받은 frame을 사례와 비교하므로, 사례의 모든 응답은 실제 호스트가 주는 응답이다. 전송의 사례(framing, 선언되지 않은 메서드, 잘못된 frame)는 각 호스트의 unit test에서도 그 엔드포인트에 대해 실행한다. client test는 사례의 응답을 그 파일에서 읽고 자기 응답을 쓰지 않는다.
+
 ### 창 활성화 관찰
 
 `host.window.activationObservation`은 native window facts의 객체를 그대로 전달한다.
