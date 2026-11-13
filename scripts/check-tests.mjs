@@ -589,6 +589,19 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F760",
+    implementation: [
+      { file: "native/darwin/tests/support/no_activation.m", symbol: "- (void)handleOpenApplication:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/capture_test.m", id: "recording an unchanged window does not activate the application" },
+      { file: "native/darwin/tests/window_facts_test.m", id: "application stays inactive" },
+    ],
+    expected: "A native check that dispatches its events handles the open-application Apple event of its launch without activating its process.",
+    levels: ["native"],
+  },
+
+  {
     id: "F759",
     implementation: [
       { file: "packages/host/go/src/application_log.go", symbol: "func EndCrashOutput(config string) error" },

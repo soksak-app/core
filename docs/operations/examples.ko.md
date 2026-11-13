@@ -347,7 +347,7 @@ make -C native/darwin test
 make -C native/darwin test-app-activation
 ```
 
-`test`는 비활성 애플리케이션의 창에서 `input_inject_test`를 실행한다. 누름, 끌기, 스크롤, 키, 포커스, 버튼 없는 이동의 비활성 결과를 검사하며 애플리케이션을 활성화하지 않는다. 모든 네이티브 검사는 `tests/support/no_activation.m`을 링크하며, 이 파일은 종료할 때 프로세스가 활성이면 검사를 실패시킨다. `test-app-activation`에서 앱을 활성화하는 검사는 먼저 `sp_test_declare_activation`을 호출한다.
+`test`는 비활성 애플리케이션의 창에서 `input_inject_test`를 실행한다. 누름, 끌기, 스크롤, 키, 포커스, 버튼 없는 이동의 비활성 결과를 검사하며 애플리케이션을 활성화하지 않는다. 모든 네이티브 검사는 `tests/support/no_activation.m`을 링크하며, 이 파일은 종료할 때 프로세스가 활성이면 검사를 실패시킨다. `test-app-activation`에서 앱을 활성화하는 검사는 먼저 `sp_test_declare_activation`을 호출한다. Launch Services 는 자기가 시작한 프로세스에 open-application Apple event 를 보내고, 프로세스가 이벤트를 dispatch 하면 AppKit 의 handler 가 애플리케이션을 활성화한다. `tests/support/run_until.h`와 `tests/support/event_wait.h`의 wait 가 이벤트를 dispatch 한다. 그래서 이 파일은 launch 가 끝나기 직전에 아무것도 열지 않는 그 이벤트의 handler 를 설치하고, system 이 프로세스를 활성화하면 프로세스 시작부터의 시간과 함께 `ACTIVATED:` 줄을 쓴다. 실패한 검사의 출력이 활성화 앞의 단계를 보여 준다.
 
 `test-app-activation`은 검사 애플리케이션을 활성화하므로 키보드 포커스를 가져간다. 검사 창은 `ignoresMouseEvents`를 설정하지만, AppKit은 실제 포인터가 있는 추적 영역에 게시된 이동을 계속 전달한다. 그래서 시스템이 활성화한 애플리케이션의 local monitor 를 게시한 이동이 지나는 겹친 웹뷰 검사 `webview_input_test` 의 `--monitor` 실행은 창을 포인터에서 떨어진 곳에 두고, 포인터가 창에 들어오면 그 이유로 실패한다. 그 실행과 `image_region_ime_test`(그림 영역과 AppKit 텍스트 뷰 대조군의 한국어 2벌식 조합)를 실행한다.
 

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F760: 이벤트를 dispatch 하는 native 검사는 launch 의 open-application Apple event 를 처리하고 아무것도 열지 않는다. 그래서 더는 자기 프로세스를 활성화해 다른 애플리케이션의 앞자리를 빼앗지 않는다. 검사 프로세스의 system 활성화는 `ACTIVATED:` 줄로 기록된다.
 - F746: 녹화의 still 은 자기 worker 에서 압축되고 encoded frame 만 writer 를 기다리며, writer 는 그것을 최대 128 MiB 까지 쥔다. In flight 인 still 은 최대 8개이고, 잃은 still 은 녹화의 warn 이며, stop 은 때가 된 still 을 요청하고, 녹화와 window facts 의 window server 읽기는 더는 main thread 에서 돌지 않는다.
 - F746: Endpoint 연결은 page 답 하나가 풀 수 있는 reply 258개를 닫지 않고 담는다. `diagnostics.layout.trace` 가 모든 host 에서 창의 layout 을 trace 하고 window check 는 그것으로 layout timing 을 판정한다. Release 는 region 의 page 에 닿은 press 에 대해서만 기다린다. mygo soksak.8 과 soksak.9 는 값 하나인 method 를 부른 thread 에서 답하고 닫힌 창의 timer 를 멈춘다.
 - F756: 닫히는 tauriv2 창이 더는 WebContent process 를 끝내지 않는다. Framework 가 delegate 를 놓은 뒤 WebKit 이 보내는 navigation 과 media capture 결정을 dialog route 가 정한다.
