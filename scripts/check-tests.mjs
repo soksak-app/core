@@ -50,7 +50,7 @@ const MATRIX = [
     "scripts/check-exposure.mjs",
     "scripts/check-hosts-same.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/e2e-host-parity.test.mjs", "scripts/test/main-page-apps.test.mjs", "scripts/test/check-hosts-same.test.mjs", "scripts/test/check-exposure.test.mjs"], { sharedTests: true }),
-  lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs"]),
+  lane("test inventory", "js-ts", ["scripts/check-tests.mjs"], ["scripts/test/check-tests.test.mjs", "scripts/test/check-tests-stand-ins.test.mjs"]),
   lane("platform install", "js-ts", ["scripts/install-platform.mjs"], ["scripts/test/install-platform.test.mjs"]),
   lane("host contract audit", "js-ts", ["scripts/test-hosts.mjs"], ["scripts/test/test-hosts.test.mjs", "scripts/test/view-region-calls.test.mjs", "scripts/test/plugin-host-calls.test.mjs"]),
 lane("command supervision", "js-ts", ["scripts/test-command.mjs"], ["scripts/test/test-command.test.mjs"]),
@@ -4439,6 +4439,19 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/tests/installed_test.go", id: "TestTheRequestAfterAnUpdateReadsTheNewManifest" },
     ],
     expected: "A request of a page module reads the manifest of its own plugin alone, and the request after a change of the installation answers from the new files.",
+    levels: ["unit"],
+  },
+  {
+    id: "F795-11",
+    implementation: [
+      { file: "scripts/check-tests.mjs", symbol: "export function findStandIns(file, text)" },
+      { file: "scripts/check-tests.mjs", symbol: "export function auditStandIns(files, readSource" },
+    ],
+    tests: [
+      { file: "scripts/test/check-tests-stand-ins.test.mjs", id: "rejects a module replacement at the line that calls it" },
+      { file: "scripts/test/check-tests-stand-ins.test.mjs", id: "reports each identifier or word that names a stand-in" },
+    ],
+    expected: "The test check finds each module replacement, timer replacement, replacement of a global method, inline program, tool script on PATH and name of a stand-in, with its file, line and kind.",
     levels: ["unit"],
   },
   {
@@ -15454,6 +15467,90 @@ export function inventorySummary({ trackCount, implementationCount, testCount },
     "Structural evidence only; behavior was not executed.";
 }
 
+/**
+ * Stand-in findings (docs/operations/examples.md#test-kinds). A test judges code only with real inputs, so a test source does
+ * not replace a module or a global function, does not fake a clock, does not write program text inline and run it, does not
+ * put a tool on PATH, and does not name a stand-in. Each kind is one line pattern, or one line pattern with the lines after it
+ * for the inline program kind. The line patterns are matched without a parser: the detector reads the text as data.
+ */
+const STAND_IN_PARTS = new Set(["fake", "fakes", "faked", "faking", "stub", "stubs", "stubbed", "stubbing", "mock", "mocks", "mocked", "mocking"]);
+// Global objects whose methods a test may not replace with `t.mock.method`.
+const GLOBAL_OBJECTS = "globalThis|global|window|self|document|process|console|Date|performance|Math|JSON|Reflect|Intl|crypto|fetch|structuredClone|setTimeout|setInterval|setImmediate|clearTimeout|clearInterval|queueMicrotask";
+const MODULE_REPLACEMENT = /\bmock\.module\b/;
+const TIMER_REPLACEMENT = /\bmock\.timers\b|\buseFakeTimers\b|\binstallFakeTimers\b/;
+const GLOBAL_REPLACEMENT = new RegExp(String.raw`\bmock\.method\(\s*(?:${GLOBAL_OBJECTS})\b`);
+// Shebang text in a string or a template literal, or at the indented start of a line of a multi-line template literal.
+const SHEBANG_TEXT = /(?:["'`]|\\[nr])\s*#!\/|^\s+#!\//;
+// A file write whose data argument is a literal, which is program text, rather than a value read from a fixture or computed.
+const LITERAL_WRITE = /\b(?:writeFileSync|writeFile|WriteFile|fs::write)\(\s*[^,]+,\s*(?:\[\]byte\(\s*|b|r#*)?["'`]/;
+// Permission or execution of a file: chmod, a Rust or Go permission call, the process spawn calls, and the 0o7xx or 07xx modes.
+const PERMISSION_OR_EXECUTION = /\b(?:chmodSync|chmod|Chmod|set_permissions|spawnSync|execFileSync|execSync|execFile|spawn|Command::new)\b|\bexec\.Command\b|\b0o?7[0-7]{2}\b/;
+const PROGRAM_WINDOW = 10;
+// A write of the PATH variable, and a value that prepends to it (a delimiter, a concatenation, a join or a shell expansion).
+const PATH_WRITE = /\bPATH\s*=(?!=)|\bPATH["']?\s*:(?!:)|\b(?:setenv|Setenv|set_var|putenv)\(\s*["']PATH["']|\b(?:process\.)?env\.PATH\s*=(?!=)/;
+const PATH_PREPEND = /\bdelimiter\b|\+|\bjoin\(|\bJoin\(|\$\{?PATH\b/;
+// A temporary folder or an executable mode in the same file: the folder that a prepended PATH holds executables in.
+const TEMPORARY_OR_EXECUTABLE = /\b(?:mkdtemp\w*|MkdirTemp|TempDir|tmpdir|mktemp|CreateTemp|TMPDIR|tempdir)\b|\bchmod\w*|\bChmod\b|\bset_permissions\b|\b0o?7[0-7]{2}\b/;
+// The fixture folder holds the stand-ins that this detector judges: its files are the declared inputs of findStandIns, and its
+// own tests read them directly, so the repository scan skips the folder.
+const STAND_IN_FIXTURES = "scripts/test/fixtures/check-tests-stand-ins/";
+// The rule document defines the banned words and kinds in its test-kinds section, so its own mentions are not findings.
+const RULE_DOCUMENTS = new Set(["docs/operations/examples.md"]);
+// Records: the documents of docs/ and the changelogs. A record names a stand-in only as an identifier word.
+const RECORD_DOCUMENT = /^(?:docs\/.+\.md|CHANGELOG[^/]*\.md)$/;
+
+/** The word parts of the identifiers and words of a line, split at digits, camel-case boundaries and every non-letter. */
+function standInParts(line) {
+  return [...line.matchAll(/[A-Za-z][A-Za-z0-9]*/g)]
+    .flatMap(([word]) => word.split(/[0-9]+|(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/))
+    .filter((part) => STAND_IN_PARTS.has(part.toLowerCase()));
+}
+
+/**
+ * The stand-in findings of one file. A test source (isTestSource) gets every kind; a record gets only the identifier kind.
+ * A line has at most one finding of each kind; the kinds are counted separately.
+ */
+export function findStandIns(file, text) {
+  const lines = text.split("\n");
+  const testSource = isTestSource(file);
+  const findings = [];
+  lines.forEach((line, index) => {
+    const kinds = [];
+    if (standInParts(line).length) kinds.push("stand-in-name");
+    if (testSource) {
+      if (MODULE_REPLACEMENT.test(line)) kinds.push("module-replacement");
+      if (TIMER_REPLACEMENT.test(line)) kinds.push("timer-replacement");
+      if (GLOBAL_REPLACEMENT.test(line)) kinds.push("global-replacement");
+      if (SHEBANG_TEXT.test(line) || (LITERAL_WRITE.test(line) &&
+        lines.slice(index, index + PROGRAM_WINDOW).some((next) => PERMISSION_OR_EXECUTION.test(next)))) kinds.push("inline-program");
+      if (PATH_WRITE.test(line) && PATH_PREPEND.test(line) && TEMPORARY_OR_EXECUTABLE.test(text)) kinds.push("path-tool");
+    }
+    for (const kind of kinds) findings.push({ file, line: index + 1, kind, text: line.trim() });
+  });
+  return findings;
+}
+
+/**
+ * The stand-in findings of the files: test sources and records, except the fixture folder and the rule document. A file that
+ * cannot be read is a finding of kind `unreadable`; it is not skipped.
+ */
+export function auditStandIns(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
+  const findings = [];
+  for (const file of [...new Set(files)].sort()) {
+    if (file.startsWith(STAND_IN_FIXTURES) || RULE_DOCUMENTS.has(file)) continue;
+    if (!isTestSource(file) && !RECORD_DOCUMENT.test(file)) continue;
+    let text;
+    try { text = readSource(file); }
+    catch (error) {
+      findings.push({ file, line: 0, kind: "unreadable", text: error?.message ?? String(error) });
+      continue;
+    }
+    if (text.includes("\0")) continue;
+    findings.push(...findStandIns(file, text));
+  }
+  return findings;
+}
+
 export { MATRIX, repositoryFiles };
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
@@ -15476,6 +15573,12 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   errors.push(...auditWorkbenchCases(readFileSync(`${ROOT}docs/spec/host-contract.md`, "utf8"),
     repositoryFiles().filter((path) => WORKBENCH_CASE_SIDES.some(({ directory, file }) => path.startsWith(directory) && file.test(path)))
       .map((path) => ({ path, text: readFileSync(`${ROOT}${path}`, "utf8") }))));
+  // F795-3 to F795-10 replace the stand-ins that this audit finds; until they are complete the check prints the count of
+  // each kind, and F795-11 makes every finding an error when they are complete.
+  const standIns = auditStandIns(repositoryFiles());
+  const standInKinds = new Map();
+  for (const { kind } of standIns) standInKinds.set(kind, (standInKinds.get(kind) ?? 0) + 1);
+  if (standIns.length) console.log(`Stand-in findings: ${standIns.length} (${[...standInKinds].map(([kind, count]) => `${kind} ${count}`).join(", ")})`);
   let summary;
   try {
     summary = inventorySummary({ trackCount, implementationCount, testCount }, readFileSync(`${ROOT}docs/features.md`, "utf8"));

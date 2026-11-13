@@ -1,0 +1,4 @@
+import { mock, test } from "node:test";
+test("loads a module with a replaced export", () => {
+  mock.module("./operation.mjs", { namedExports: { run: () => "fixed" } });
+});
