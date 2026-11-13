@@ -25,8 +25,9 @@ func TestANativeLayoutRecordNamesItsCommitPath(t *testing.T) {
 		10, 100, nan, 110, nan, abi.SURFACE_LAYOUT_COMMIT_VIEW_ABANDON, 2, 112, 116.6, 108.3,
 		11, 120, nan, 130, nan, abi.SURFACE_LAYOUT_COMMIT_CANCEL, 0, 130, 133.3, 125,
 		12, 140, nan, nan, nan, nan, nan, nan, nan, nan,
+		13, 150, nan, 160, nan, abi.SURFACE_LAYOUT_COMMIT_INPUT, 0, 160, 166.6, 158.3,
 	}
-	records, err := layoutRecords(values, 6)
+	records, err := layoutRecords(values, 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +35,7 @@ func TestANativeLayoutRecordNamesItsCommitPath(t *testing.T) {
 	for _, record := range records {
 		paths = append(paths, record.CommitPath)
 	}
-	if want := []string{"view-join", "present", "start", "view-abandon", "cancel", ""}; !reflect.DeepEqual(paths, want) {
+	if want := []string{"view-join", "present", "start", "view-abandon", "cancel", "", "input"}; !reflect.DeepEqual(paths, want) {
 		t.Fatalf("commit paths = %q, want %q", paths, want)
 	}
 	first := platform.LayoutRecord{

@@ -1457,6 +1457,19 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F784",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/capture.go", symbol: "abi.SURFACE_LAYOUT_COMMIT_INPUT:" },
+      { file: "packages/host/rust/src/platform/darwin/capture.rs", symbol: "(SURFACE_LAYOUT_COMMIT_INPUT, \"input\")," },
+    ],
+    tests: [
+      { file: "packages/host/go/src/platform/darwin/capture_layout_test.go", id: "TestANativeLayoutRecordNamesItsCommitPath" },
+      { file: "packages/host/rust/src/platform/darwin/capture_layout_test.rs", id: "a_native_layout_record_names_its_commit_path" },
+    ],
+    expected: "Both hosts name the commit path code 6 of a layout record input.",
+    levels: ["unit"],
+  },
+  {
     id: "F783",
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },

@@ -70,8 +70,20 @@ fn a_native_layout_record_names_its_commit_path() {
             125.0,
         ],
         [12.0, 140.0, nan, nan, nan, nan, nan, nan, nan, nan],
+        [
+            13.0,
+            150.0,
+            nan,
+            160.0,
+            nan,
+            SURFACE_LAYOUT_COMMIT_INPUT,
+            0.0,
+            160.0,
+            166.6,
+            158.3,
+        ],
     ];
-    let records = layout_records(&rows.concat(), 6).unwrap();
+    let records = layout_records(&rows.concat(), 7).unwrap();
     let paths: Vec<_> = records.iter().map(|record| record.commit_path).collect();
     assert_eq!(
         paths,
@@ -81,7 +93,8 @@ fn a_native_layout_record_names_its_commit_path() {
             Some("start"),
             Some("view-abandon"),
             Some("cancel"),
-            None
+            None,
+            Some("input")
         ]
     );
     assert_eq!(

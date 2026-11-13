@@ -172,6 +172,7 @@ var layoutCommitPaths = map[float64]string{
 	abi.SURFACE_LAYOUT_COMMIT_VIEW_JOIN:    "view-join",
 	abi.SURFACE_LAYOUT_COMMIT_VIEW_ABANDON: "view-abandon",
 	abi.SURFACE_LAYOUT_COMMIT_CANCEL:       "cancel",
+	abi.SURFACE_LAYOUT_COMMIT_INPUT:        "input",
 }
 
 // layoutRecords reads count native layout records of SURFACE_LAYOUT_TRACE_STAGES values each: ticket, begun, presented,

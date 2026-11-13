@@ -66,6 +66,7 @@ const SURFACE_LAYOUT_COMMIT_START: f64 = 2.0;
 const SURFACE_LAYOUT_COMMIT_VIEW_JOIN: f64 = 3.0;
 const SURFACE_LAYOUT_COMMIT_VIEW_ABANDON: f64 = 4.0;
 const SURFACE_LAYOUT_COMMIT_CANCEL: f64 = 5.0;
+const SURFACE_LAYOUT_COMMIT_INPUT: f64 = 6.0;
 
 /// Stops the record and returns the record of each transaction. Call it on the main thread.
 pub fn layout_trace_stop() -> Result<Vec<LayoutRecord>, String> {
@@ -88,6 +89,7 @@ fn commit_path_name(code: f64) -> Option<&'static str> {
         (SURFACE_LAYOUT_COMMIT_VIEW_JOIN, "view-join"),
         (SURFACE_LAYOUT_COMMIT_VIEW_ABANDON, "view-abandon"),
         (SURFACE_LAYOUT_COMMIT_CANCEL, "cancel"),
+        (SURFACE_LAYOUT_COMMIT_INPUT, "input"),
     ]
     .into_iter()
     .find(|(declared, _)| *declared == code)

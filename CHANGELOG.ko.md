@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F784: 두 host 의 layout trace 는 누름이나 key event 가 hold 된 layout transaction 을 끝내는 commit path `input` 에 이름을 붙이므로, 누름이 hold 된 layout 을 끝낸 drag 는 더 이상 알 수 없는 commit path 로 실패하지 않는다.
 - F783: `diagnostics.drag` 의 native drag 의 `took` 은 page drag 가 구간을 재듯 왕복마다 누름부터 마지막 단계 전달까지의 합이므로, 포인터가 움직이지 않는 뗌 전달이 더 이상 바쁜 창의 drag 를 느리게 만들지 않는다. `deliveries` 는 그 시간을 계속 알린다.
 - F782: `diagnostics.drag` 의 native drag 는 각 누름, 단계, 뗌의 전달 밀리초인 `deliveries` 로 응답하고, 속도가 맞지 않은 window check drag 의 실패는 그 합과 최댓값을 말하므로, 느린 drag 는 창이 입력을 받는 데 걸린 시간을 알린다.
 - F781: `diagnostics.drag` 의 native drag 는 나가는 구간을 누름 시각에, 돌아오는 구간을 마지막 나가는 단계의 시각에 시작하므로, 각 단계는 누름 또는 이전 단계에서 한 표시 주기 뒤에 오고 입력 전달이 더 이상 drag 를 늘리지 않는다.
