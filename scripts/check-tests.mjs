@@ -589,6 +589,18 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-5",
+    implementation: [
+      { file: "native/darwin/tests/presentation_order_test.m", symbol: "if ((int)waits.count < draws) [webview evaluateJavaScript:@\"draw()\" completionHandler:nil];" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/presentation_order_test.m", id: "each draw message arrives after the acknowledgement of the draw before it " },
+    ],
+    expected: "The page of the presentation order check starts each draw at the acknowledgement of the draw before it, and the check judges that each draw message arrives after that acknowledgement.",
+    levels: ["native"],
+  },
+
+  {
     id: "F767-2-2",
     implementation: [
       { file: "packages/window-check/test-app.mjs", symbol: "async function endGroup(child, signal, exited) {" },
