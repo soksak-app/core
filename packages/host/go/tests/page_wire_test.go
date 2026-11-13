@@ -119,7 +119,14 @@ func runPageWireCase(t *testing.T, name, file string) {
 	}
 	// A case with no steps sends no call, so the producer has no call to run and the case passes with nothing to compare.
 	writer := startPageWireWriter(t, kase.Writer != nil && kase.Writer.Policy)
-	workspace := host.NewWorkspace(t.TempDir())
+	hostWithoutWindows, err := host.NewHostWithoutWindows(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := host.NewBindings(hostWithoutWindows, "Bindings")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for i := 0; i < len(kase.Steps); i += 2 {
 		call, reply := kase.Steps[i].Call, kase.Steps[i+1].Reply
 		if call == nil || reply == nil {
@@ -129,7 +136,7 @@ func runPageWireCase(t *testing.T, name, file string) {
 		if call.Payload != nil {
 			args = []json.RawMessage{call.Payload}
 		}
-		result, err := pageWireInvoke(context.Background(), writer, workspace, call.Name, args, call.Cids)
+		result, err := pageWireInvoke(context.Background(), writer, bindings, call.Name, args, call.Cids)
 		if reply.Error != nil {
 			if err == nil || err.Error() != *reply.Error {
 				t.Fatalf("step %d: %s returned %v, the case records the error %q", i, call.Name, err, *reply.Error)
@@ -167,7 +174,7 @@ func startPageWireWriter(t *testing.T, policy bool) *host.EventLog {
 // pageWireInvoke runs one call of the page. The page names the call as the runtime names it, and the Go method of the call is the
 // name with the first letter upper-cased. The recording entry takes the identifiers of the call; the operation is what the host
 // method runs.
-func pageWireInvoke(ctx context.Context, writer *host.EventLog, workspace *host.Workspace, name string, args []json.RawMessage, cids []string) (any, error) {
+func pageWireInvoke(ctx context.Context, writer *host.EventLog, bindings *host.Bindings, name string, args []json.RawMessage, cids []string) (any, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("call %s has %d arguments, the case records one payload", name, len(args))
 	}
@@ -187,24 +194,9 @@ func pageWireInvoke(ctx context.Context, writer *host.EventLog, workspace *host.
 			return pageWireLogReply(reply), nil
 		})
 	case "workspace":
-		// Host.Workspace: the request goes to the storage, and runWorkspace adds the identifiers of the open windows to a snapshot.
-		var request host.WorkspaceRequest
-		if err := json.Unmarshal(args[0], &request); err != nil {
-			return nil, err
-		}
-		return host.RecordedCall(ctx, "Workspace", args, cids, func() (any, error) {
-			result, err := workspace.Apply(request)
-			if err != nil || request.Kind != "snapshot" {
-				return result, err
-			}
-			record, ok := result.(host.Record)
-			if !ok {
-				return nil, fmt.Errorf("the snapshot is %T, not an object", result)
-			}
-			// The application has no window in this run, so no window holds a project.
-			record["open"] = []string{}
-			return record, nil
-		})
+		// Host.Workspace runs through the bindings of a host without windows: the request goes to the storage, and a snapshot
+		// carries the identifiers of the open windows, which are none in this run.
+		return bindings.Call(ctx, "Workspace", args, cids)
 	}
 	return nil, fmt.Errorf("the case calls %s, which the producer does not run", name)
 }
