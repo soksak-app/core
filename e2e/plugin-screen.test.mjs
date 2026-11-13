@@ -1,5 +1,5 @@
 // The plugin page of the library: checks the description, the version, the sidecars, the search and the plugin actions (Plugin screen in docs/spec/installation.md).
-// The page lists the fixture plugins of the check application (scripts/fixture-registry.mjs): the raster probe uses the fake sidecar
+// The page lists the fixture plugins of the check application (scripts/fixture-registry.mjs): the raster probe uses the fixture sidecar
 // rasterprobe, the plain-view probe is the plugin that the checks disable and enable, and the save-close probe gives the modified tab.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -8,7 +8,7 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fixturePluginIds } from "../scripts/fixture-registry.mjs";
 import { fresh, pluginChangeStarted } from "./fixture.mjs";
 
-/** The fixture plugin that uses a fake sidecar. */
+/** The fixture plugin that uses a fixture sidecar. */
 const SIDECAR_PLUGIN = "rasterprobe";
 /** The fixture plugin that the checks disable and enable; no start tab shows it. */
 const PLUGIN = "probeplain";

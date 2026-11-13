@@ -5,7 +5,7 @@ import { supplierDrawDurations } from "../supplier-draw.mjs";
 const record = (fields) => ({ event: "sidecar.rasterprobe.frame", fields });
 const drawn = (draw_us) => record({ raster: 4, surface: 7, draw_us });
 
-test("supplier draw durations read the paint time of every frame record of the fake sidecar", { timeout: 1000 }, () => {
+test("supplier draw durations read the paint time of every frame record of the fixture sidecar", { timeout: 1000 }, () => {
   assert.deepEqual(supplierDrawDurations([drawn(2000), drawn(1750)]), { draw: [1.75, 2] });
 });
 

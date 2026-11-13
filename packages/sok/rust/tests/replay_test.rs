@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 use log_support::{Folder, temp_dir};
 
 /// Prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
-const FAKE_REPLAY: &str = r#"#!/bin/sh
+const REPLAY_FIXTURE: &str = r#"#!/bin/sh
 total=0
 while IFS= read -r line; do
   case "$line" in
-    *'"event":"sidecar.fake.input"'*)
+    *'"event":"sidecar.probe.input"'*)
       hex=${line#*'"hex":"'}; hex=${hex%%'"'*}
       total=$((total + ${#hex} / 2)) ;;
     *'"class":"frame"'*)
@@ -32,9 +32,9 @@ fn log_open(ts: i64, layer: &str, role: &str) -> String {
     )
 }
 
-/// The hash that the fake script prints for a count of bytes.
-/// The events of the fake sidecar of each kind of replay input.
-const REPLAY_INPUTS: &str = r#"{"output":"sidecar.fake.input","write":"sidecar.fake.write","resize":"sidecar.fake.resize","selection":"sidecar.fake.selection","viewport":"sidecar.fake.viewport","theme":"sidecar.fake.theme"}"#;
+/// The hash that the probe script prints for a count of bytes.
+/// The events of the probe sidecar of each kind of replay input.
+const REPLAY_INPUTS: &str = r#"{"output":"sidecar.probe.input","write":"sidecar.probe.write","resize":"sidecar.probe.resize","selection":"sidecar.probe.selection","viewport":"sidecar.probe.viewport","theme":"sidecar.probe.theme"}"#;
 
 fn digits(n: usize) -> String {
     format!("{n:064}")
@@ -48,7 +48,7 @@ struct Events {
 
 fn input(ts: i64, seq: i64, sequence: i64, session: &str, hex: &str) -> String {
     format!(
-        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"io","event":"sidecar.fake.input","session":"{session}","fields":{{"sequence":{sequence},"hex":"{hex}"}}}}"#
+        r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"io","event":"sidecar.probe.input","session":"{session}","fields":{{"sequence":{sequence},"hex":"{hex}"}}}}"#
     )
 }
 
@@ -56,9 +56,9 @@ fn input(ts: i64, seq: i64, sequence: i64, session: &str, hex: &str) -> String {
 /// screen that it received.
 fn frame(layer: &str, ts: i64, seq: i64, sequence: i64, session: &str, hash: &str) -> String {
     let (name, segment) = if layer == "plugin" {
-        ("plugin.fake.frame", r#""segment":"b1","#)
+        ("plugin.probe.frame", r#""segment":"b1","#)
     } else {
-        ("sidecar.fake.frame", "")
+        ("sidecar.probe.frame", "")
     };
     format!(
         r#"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"{layer}","class":"frame","event":"{name}","session":"{session}","fields":{{"sequence":{sequence},{segment}"rows":2,"cols":3,"hash":"{hash}"}}}}"#
@@ -68,7 +68,7 @@ fn frame(layer: &str, ts: i64, seq: i64, sequence: i64, session: &str, hash: &st
 /// The first replay input of a segment (docs/spec/replay.md#view-state).
 fn theme(ts: i64, seq: i64, session: &str) -> String {
     format!(
-        r##"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"input","event":"sidecar.fake.theme","session":"{session}","fields":{{"sequence":1,"colors":{{"foreground":"#c0c0c0","background":"#101010","selection":"#404080"}}}}}}"##
+        r##"{{"ts_us":{ts},"mono_ns":{ts},"seq":{seq},"level":"debug","layer":"sidecar","class":"input","event":"sidecar.probe.theme","session":"{session}","fields":{{"sequence":1,"colors":{{"foreground":"#c0c0c0","background":"#101010","selection":"#404080"}}}}}}"##
     )
 }
 
@@ -101,13 +101,13 @@ fn event_file(open: String, lines: &[String]) -> String {
     all.join("\n") + "\n"
 }
 
-/// Writes the event files of the sidecar role "fake" and of the host, and installs a sidecar that declares the replay executable
+/// Writes the event files of the sidecar role "probe" and of the host, and installs a sidecar that declares the replay executable
 /// with the given script and the given role.
 fn replay_config(name: &str, events: &Events, script: &str, role: &str) -> Folder {
     let config = temp_dir(name);
     write_file(
-        &config.join("logs/fake-b1.jsonl"),
-        &event_file(log_open(1000, "sidecar", "fake"), &events.sidecar),
+        &config.join("logs/probe-b1.jsonl"),
+        &event_file(log_open(1000, "sidecar", "probe"), &events.sidecar),
         0o600,
     );
     write_file(
@@ -172,7 +172,7 @@ fn run_replay_with(entrance: Entrance, config: &Path, args: &[&str]) -> (String,
 // contract: cli.debug.replay-equal
 #[test]
 fn replay_reports_equal_when_every_stored_hash_is_the_replayed_one() {
-    let config = replay_config("replay-equal", &standard_events(), FAKE_REPLAY, "fake");
+    let config = replay_config("replay-equal", &standard_events(), REPLAY_FIXTURE, "probe");
     let (stdout, stderr, code) = run_replay(&config, &["s1"]);
     assert!(
         code == 0
@@ -187,7 +187,7 @@ fn replay_reports_equal_when_every_stored_hash_is_the_replayed_one() {
 #[test]
 fn replay_reports_a_rejected_file() {
     let old = "{\"ts_us\":1,\"mono_ns\":1,\"seq\":1,\"level\":\"info\",\"layer\":\"sidecar\",\"event\":\"log.open\",\"fields\":{\"schema\":2}}\n";
-    let config = replay_config("replay-rejected", &standard_events(), FAKE_REPLAY, "fake");
+    let config = replay_config("replay-rejected", &standard_events(), REPLAY_FIXTURE, "probe");
     write_file(&config.join("logs/files-old.jsonl"), old, 0o644);
     let (stdout, stderr, code) = run_replay(&config, &["s1"]);
     assert!(
@@ -200,10 +200,10 @@ fn replay_reports_a_rejected_file() {
     let config = replay_config(
         "replay-rejected-all",
         &standard_events(),
-        FAKE_REPLAY,
-        "fake",
+        REPLAY_FIXTURE,
+        "probe",
     );
-    write_file(&config.join("logs/fake-b1.jsonl"), old, 0o644);
+    write_file(&config.join("logs/probe-b1.jsonl"), old, 0o644);
     write_file(
         &config.join("logs/host-b1.jsonl"),
         &old.replace("\"schema\":2", "\"schema\":3")
@@ -213,7 +213,7 @@ fn replay_reports_a_rejected_file() {
     let (_, stderr, code) = run_replay(&config, &["s1"]);
     assert!(
         code == 1
-            && stderr.contains("rejected: logs/fake-b1.jsonl: schema 2 is not 3\n")
+            && stderr.contains("rejected: logs/probe-b1.jsonl: schema 2 is not 3\n")
             && stderr.contains("hold no event of the layer sidecar"),
         "the rejected file holds the session: code {code} stderr {stderr:?}"
     );
@@ -224,7 +224,7 @@ fn replay_reports_a_rejected_file() {
 fn replay_stops_at_the_sequence_of_until() {
     let mut events = standard_events();
     events.sidecar[3] = input(1030, 4, 3, "s1", "0d0a0a");
-    let config = replay_config("replay-until", &events, FAKE_REPLAY, "fake");
+    let config = replay_config("replay-until", &events, REPLAY_FIXTURE, "probe");
     let (stdout, stderr, code) = run_replay(&config, &["s1", "--until", "2"]);
     assert!(
         code == 0
@@ -318,8 +318,8 @@ fn replay_reports_the_first_divergence_with_its_layer() {
         let config = replay_config(
             &format!("replay-divergence-{index}"),
             &events,
-            FAKE_REPLAY,
-            "fake",
+            REPLAY_FIXTURE,
+            "probe",
         );
         let (stdout, stderr, code) = run_replay_with(soksak_sok::run_logged, &config, &["s1"]);
         let message = format!(
@@ -380,40 +380,40 @@ fn replay_refuses_what_it_cannot_compare() {
         refused(
             "no session",
             standard_events(),
-            FAKE_REPLAY,
-            "fake",
+            REPLAY_FIXTURE,
+            "probe",
             vec![],
             "sok: session is required\n",
         ),
         refused(
             "unknown session",
             standard_events(),
-            FAKE_REPLAY,
-            "fake",
+            REPLAY_FIXTURE,
+            "probe",
             vec!["s9"],
             "sok: replay session s9: the event files hold no event of the layer sidecar for it\n",
         ),
         refused(
             "no sidecar declares the role",
             standard_events(),
-            FAKE_REPLAY,
+            REPLAY_FIXTURE,
             "other",
             vec!["s1"],
-            "sok: replay session s1: no installed sidecar declares the replay role fake\n",
+            "sok: replay session s1: no installed sidecar declares the replay role probe\n",
         ),
         refused(
             "no frame record",
             no_frame,
-            FAKE_REPLAY,
-            "fake",
+            REPLAY_FIXTURE,
+            "probe",
             vec!["s1"],
             "sok: replay session s1: no frame record to compare\n",
         ),
         refused(
             "a stored hash is not a hash",
             bad_stored,
-            FAKE_REPLAY,
-            "fake",
+            REPLAY_FIXTURE,
+            "probe",
             vec!["s1"],
             "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n",
         ),
@@ -421,7 +421,7 @@ fn replay_refuses_what_it_cannot_compare() {
             "the executable fails",
             standard_events(),
             "#!/bin/sh\necho engine broke >&2\nexit 3\n",
-            "fake",
+            "probe",
             vec!["s1"],
             "sok: replay session s1: replay.sh exited with status 3: engine broke\n",
         ),
@@ -429,7 +429,7 @@ fn replay_refuses_what_it_cannot_compare() {
             "the executable prints a line that is not a hash",
             standard_events(),
             "#!/bin/sh\necho nope\n",
-            "fake",
+            "probe",
             vec!["s1"],
             "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n",
         ),
@@ -437,7 +437,7 @@ fn replay_refuses_what_it_cannot_compare() {
             "the executable prints no hash for a frame record",
             standard_events(),
             "#!/bin/sh\ncat >/dev/null\n",
-            "fake",
+            "probe",
             vec!["s1"],
             "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n",
         ),
@@ -458,7 +458,7 @@ fn replay_refuses_what_it_cannot_compare() {
         );
     }
     // A session whose sidecar events come from two roles has no single replay executable.
-    let config = replay_config("replay-two-roles", &standard_events(), FAKE_REPLAY, "fake");
+    let config = replay_config("replay-two-roles", &standard_events(), REPLAY_FIXTURE, "probe");
     write_file(
         &config.join("logs/other-b1.jsonl"),
         &event_file(
@@ -467,7 +467,7 @@ fn replay_refuses_what_it_cannot_compare() {
         ),
         0o600,
     );
-    let want = "sok: replay session s1: sidecar events of more than one role: fake, other\n";
+    let want = "sok: replay session s1: sidecar events of more than one role: other, probe\n";
     let (_, stderr, code) = run_replay(&config, &["s1"]);
     assert!(
         code == 1 && stderr == want,
@@ -516,12 +516,12 @@ fn segmented_config(name: &str, change: impl Fn(&mut Events, &mut Events)) -> Fo
             sidecar: first.sidecar,
             page,
         },
-        FAKE_REPLAY,
-        "fake",
+        REPLAY_FIXTURE,
+        "probe",
     );
-    let open = r#"{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":3,"pid":2,"role":"fake","boot":"b2"}}"#;
+    let open = r#"{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":3,"pid":2,"role":"probe","boot":"b2"}}"#;
     write_file(
-        &config.join("logs/fake-b2.jsonl"),
+        &config.join("logs/probe-b2.jsonl"),
         &event_file(open.to_string(), &second.sidecar),
         0o600,
     );
@@ -626,7 +626,7 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
     // The screen message carries the segment, so a page frame without it is refused in a session with one segment too.
     let mut events = standard_events();
     events.page[0] = events.page[0].replacen(r#""segment":"b1","#, "", 1);
-    let config = replay_config("replay-segment-errors-single", &events, FAKE_REPLAY, "fake");
+    let config = replay_config("replay-segment-errors-single", &events, REPLAY_FIXTURE, "probe");
     let (_, stderr, code) = run_replay(&config, &["s1"]);
     let want =
         "sok: replay session s1: the page frame record at sequence 2 has no fields.segment\n";
@@ -641,7 +641,7 @@ fn replay_refuses_a_page_frame_that_names_no_segment_of_the_session() {
 fn replay_refuses_a_segment_whose_inputs_break_the_rules_of_a_session() {
     let mut events = standard_events();
     events.sidecar.remove(0);
-    let config = replay_config("replay-session-rules", &events, FAKE_REPLAY, "fake");
+    let config = replay_config("replay-session-rules", &events, REPLAY_FIXTURE, "probe");
     let (_, stderr, code) = run_replay(&config, &["s1"]);
     let want = "sok: replay session s1: segment b1: input 1 has sequence 2 and the sequence after 0 is 1\n";
     assert!(
@@ -652,13 +652,13 @@ fn replay_refuses_a_segment_whose_inputs_break_the_rules_of_a_session() {
     let config = replay_config(
         "replay-session-no-inputs",
         &standard_events(),
-        FAKE_REPLAY,
-        "fake",
+        REPLAY_FIXTURE,
+        "probe",
     );
     let file = config.join("sidecars/probe-worker/1.0.0/darwin-arm64/sidecar.json");
     write_file(
         &file,
-        r#"{"executable":"worker","displayName":"soksak://sidecar/probe","protocol":1,"replay":{"role":"fake","executable":"replay.sh"}}"#,
+        r#"{"executable":"worker","displayName":"soksak://sidecar/probe","protocol":1,"replay":{"role":"probe","executable":"replay.sh"}}"#,
         0o644,
     );
     let (_, stderr, code) = run_replay(&config, &["s1"]);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The fixture registry (docs/spec/plugin-processes.md#verification-boundaries). Packs every fake plugin of e2e/fixtures, a folder that
-// holds plugin.json, and releases every fake sidecar of e2e/fixtures/sidecars, a folder that holds sidecar.json, for the current
+// The fixture registry (docs/spec/plugin-processes.md#verification-boundaries). Packs every fixture plugin of e2e/fixtures, a folder that
+// holds plugin.json, and releases every fixture sidecar of e2e/fixtures/sidecars, a folder that holds sidecar.json, for the current
 // platform; then writes the registry files with one pack `fixtures` of every fixture plugin and creates index.json with
 // `sok registry build` (docs/spec/cli.md). The core window checks install plugins from this registry. It reads no path outside
 // e2e/fixtures and no registry index, and it builds no plugin or sidecar repository.
@@ -24,9 +24,9 @@ import { combineFailures, runCommand } from "./test-command.mjs";
 
 /** The folder of the core fixtures. */
 export const FIXTURES = fileURLToPath(new URL("../e2e/fixtures/", import.meta.url));
-// The folder of the fake sidecars under the fixtures.
+// The folder of the fixture sidecars under the fixtures.
 const SIDECARS = "sidecars";
-// The folders that fixtureSources does not search: installed packages and the build output of a fake sidecar.
+// The folders that fixtureSources does not search: installed packages and the build output of a fixture sidecar.
 const SKIPPED_FOLDERS = new Set(["node_modules", "target"]);
 // The one pack of the fixture registry.
 const PACK = "fixtures";
@@ -223,7 +223,7 @@ export async function pnpmPack(dir, out, { signal, timeoutMs } = {}) {
 }
 
 /**
- * Writes the release of the fake sidecar folder dir for platform into out: the npm pack file of the folder, which keeps the execute
+ * Writes the release of the fixture sidecar folder dir for platform into out: the npm pack file of the folder, which keeps the execute
  * bit, named `<file name>-<version>-<platform>.tgz` (docs/spec/installation.md#sidecar-release). Resolves with it, its sha256 and
  * platform. signal and timeoutMs bound the pack.
  */
@@ -258,7 +258,7 @@ export async function registryBuild(binary, folder, { signal, timeoutMs } = {}) 
 
 /**
  * The sources of the fixture registry under root: plugins, every folder that holds plugin.json, and sidecars, every folder under
- * root/sidecars that holds sidecar.json; each sorted. A node_modules folder and a target folder, the build output of a fake
+ * root/sidecars that holds sidecar.json; each sorted. A node_modules folder and a target folder, the build output of a fixture
  * sidecar, are not searched.
  */
 export function fixtureSources(root = FIXTURES) {
@@ -327,7 +327,7 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
   }
   const unknown = Object.keys(versions).filter((id) => !ids.includes(id));
   if (unknown.length > 0) throw new Error(`versions name no fixture plugin: ${unknown.join(", ")}`);
-  writeJson(join(out, "packs", `${PACK}.json`), { name: PACK, description: "Every fake plugin of the core fixtures.", plugins: ids });
+  writeJson(join(out, "packs", `${PACK}.json`), { name: PACK, description: "Every fixture plugin of the core fixtures.", plugins: ids });
   writeJson(join(out, "revoked.json"), { plugins: [], sidecars: [] });
   return build(binary, out, bound);
 }

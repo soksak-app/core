@@ -73,25 +73,25 @@ test("checkPluginNames allows core, the host and the fixture plugins, and names 
     "e2e/unknown.test.mjs:3: names the plugin unknown, which is neither core nor a fixture plugin of e2e/fixtures",
   ]);
   assert.deepEqual(CORE_OWNERS, ["core", "host"]);
-  const records = { "e2e/draw.mjs": `event.event === "sidecar.fake.frame";\nevent.event === "sidecar.real.frame";\n` };
-  assert.deepEqual(checkPluginNames(["e2e/draw.mjs"], { fixtures: [], sidecars: ["fake"], readSource: (file) => records[file] }),
-    ["e2e/draw.mjs:2: names the sidecar real, which is not a fake sidecar of e2e/fixtures/sidecars"]);
-  assert.deepEqual(namedSidecars(`s.until("sidecar.fake.session"); log("sidecar.json");`), ["fake"]);
+  const records = { "e2e/draw.mjs": `event.event === "sidecar.probe.frame";\nevent.event === "sidecar.real.frame";\n` };
+  assert.deepEqual(checkPluginNames(["e2e/draw.mjs"], { fixtures: [], sidecars: ["probe"], readSource: (file) => records[file] }),
+    ["e2e/draw.mjs:2: names the sidecar real, which is not a fixture sidecar of e2e/fixtures/sidecars"]);
+  assert.deepEqual(namedSidecars(`s.until("sidecar.probe.session"); log("sidecar.json");`), ["probe"]);
   assert.deepEqual(checkPluginNames(["e2e/listed.test.mjs"], { fixtures: [], readSource: (file) => sources[file] }),
     ["e2e/listed.test.mjs:1: names the plugin unknown, which is neither core nor a fixture plugin of e2e/fixtures"],
     "a file that the classification no longer lists is checked");
 });
 
-test("the fake sidecars are named by the package names of the sidecar folders of the fixtures", { timeout: 1000 }, (t) => {
+test("the fixture sidecars are named by the package names of the sidecar folders of the fixtures", { timeout: 1000 }, (t) => {
   const root = mkdtempSync(join(tmpdir(), "soksak-boundaries-sidecars-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const folder = join(root, "sidecars", "fake");
+  const folder = join(root, "sidecars", "probe");
   mkdirSync(folder, { recursive: true });
   writeFileSync(join(folder, "sidecar.json"), "{}");
-  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@sok-check/sidecar-fake" }));
-  assert.deepEqual(fixtureSidecarNames(root), ["fake"]);
-  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@sok-check/fake" }));
-  assert.throws(() => fixtureSidecarNames(root), /the name "@sok-check\/fake" of a fake sidecar does not end with sidecar-<name>$/);
+  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@sok-check/sidecar-probe" }));
+  assert.deepEqual(fixtureSidecarNames(root), ["probe"]);
+  writeFileSync(join(folder, "package.json"), JSON.stringify({ name: "@sok-check/probe" }));
+  assert.throws(() => fixtureSidecarNames(root), /the name "@sok-check\/probe" of a fixture sidecar does not end with sidecar-<name>$/);
 });
 
 test("the plugin names are read in the checks and harness modules of e2e and scripts, not in their headless tests or the ledger", { timeout: 1000 }, () => {

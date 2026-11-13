@@ -1,4 +1,4 @@
-// The rasterprobe service: the fake persistent sidecar of the core window checks. It holds sessions of surfaces, each with one
+// The rasterprobe service: the persistent fixture sidecar of the core window checks. It holds sessions of surfaces, each with one
 // child process, and draws frames into the image region of its surface (see service.rs for its requests).
 //
 //     sok-rasterprobe --service-dir <dir> [--log-dir <dir>]   the service that the host starts (docs/spec/persistent-services.md)

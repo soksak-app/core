@@ -1,7 +1,7 @@
 {
   "id": "rasterprobe",
   "name": "Raster probe",
-  "description": "Window check fixture: a view whose image region shows the frames of the fake persistent sidecar rasterprobe, which reports the view, its session, its frames and its input as statuses.",
+  "description": "Window check fixture: a view whose image region shows the frames of the persistent fixture sidecar rasterprobe, which reports the view, its session, its frames and its input as statuses.",
   "surface": {
     "composition": {
       "kind": "view",

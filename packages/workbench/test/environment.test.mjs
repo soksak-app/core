@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// A fake application file. It uses no real plugin name or path.
+// An application file fixture. It uses no real plugin name or path.
 const files = {
   "/environment.json": {
     runtime: "runtime",

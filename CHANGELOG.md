@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Fixture names: the fixture plugins and sidecars of `e2e/fixtures`, the replay role of the `sok` tests, the bundle fixtures of the update tests and the invalid PNG fixture of the debug tests are named fixtures instead of fakes (F795-1).
 - F738-1: the audit of the host contract counts the tests of a Rust test target that runs without the test harness, which it reads from the manifests of the Rust crates.
 - F779-5: the unit test of the raster probe fixture expects the count of the answered focus calls of the presses.
 - F774-3: the event class tables of the Go and Rust CLI and of the page, and the catalog of `@soksak/window-check`, hold `native.connection.activity`.

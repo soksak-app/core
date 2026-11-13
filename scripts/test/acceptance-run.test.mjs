@@ -43,7 +43,7 @@ async function fixture(t, { worker } = {}) {
   await put(join(root, 'source.mjs'), 'export const value = 1;');
   await put(join(root, 'e2e/package.json'), { scripts: { 'test-app': 'node --test one.test.mjs',
     'test-app:activation': 'node --test activation.test.mjs', 'benchmark:fixture': 'node --test benchmark.test.mjs' } });
-  // The fixtures of the checkout: one fixture plugin, and with worker one fake sidecar.
+  // The fixtures of the checkout: one fixture plugin, and with worker one fixture sidecar.
   await put(join(root, 'e2e/fixtures/probe/plugin.json'), { id: 'fixture' });
   await put(join(root, 'e2e/fixtures/probe/package.json'), { name: '@fixture/plugin', version: '0.0.1' });
   if (worker) {
@@ -122,7 +122,7 @@ test('collected inputs bind exactly the enabled installed fixtures of the checko
   }
 });
 
-test('collected inputs bind the installed fake sidecars of the checkout and their executable bytes', { timeout: 10000 }, async (t) => {
+test('collected inputs bind the installed fixture sidecars of the checkout and their executable bytes', { timeout: 10000 }, async (t) => {
   const f = await fixture(t, { worker: {} });
   const { context } = await prepareCandidate(f.context);
   const before = await collectAcceptanceInputs(f.root, context, f.configRoot, { platform: system, identify: f.identify });

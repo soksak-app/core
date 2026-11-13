@@ -84,7 +84,7 @@ async function componentDirectory(config, path) {
 /**
  * The installed components of a configuration: every plugin and sidecar of its installed.json with its version and the hash of its
  * installed tree. The installed plugins must be exactly the enabled fixture plugins of the checkout `root` and the installed sidecars
- * exactly its fake sidecars (docs/spec/plugin-processes.md#verification-boundaries), so a run that installed a real plugin fails.
+ * exactly its fixture sidecars (docs/spec/plugin-processes.md#verification-boundaries), so a run that installed a real plugin fails.
  */
 async function installedComponents(config, root) {
   const installed = await json(join(config, 'plugins', 'installed.json'));
@@ -92,7 +92,7 @@ async function installedComponents(config, root) {
   const fixtures = join(root, 'e2e', 'fixtures');
   const sidecarNames = await Promise.all(fixtureSources(fixtures).sidecars.map(async (dir) => (await json(join(dir, 'package.json'))).name));
   requireValue(same(Object.keys(installed.plugins).sort(), fixturePluginIds(fixtures).sort()), 'installed plugins differ from the fixture plugins of the checkout');
-  requireValue(same(Object.keys(installed.sidecars).sort(), sidecarNames.sort()), 'installed sidecars differ from the fake sidecars of the checkout');
+  requireValue(same(Object.keys(installed.sidecars).sort(), sidecarNames.sort()), 'installed sidecars differ from the fixture sidecars of the checkout');
   const actual = [
     ...Object.entries(installed.plugins).map(([id, entry]) => ({ kind: 'plugin', id, ...entry })),
     ...Object.entries(installed.sidecars).map(([id, entry]) => ({ kind: 'sidecar', id, ...entry })),

@@ -247,12 +247,12 @@ fn debug_read_returns_a_png_file_as_an_image() {
         (read.size, read.truncated, read.text.as_str()),
         (png.len() as u64, false, "")
     );
-    std::fs::write(folder.join("fake.png"), "not a png").unwrap();
+    std::fs::write(folder.join("invalid.png"), "not a png").unwrap();
     assert_eq!(
-        debug::read(config.path(), "logs/captures/still-1/fake.png")
+        debug::read(config.path(), "logs/captures/still-1/invalid.png")
             .err()
             .as_deref(),
-        Some("debug: logs/captures/still-1/fake.png is not a PNG file")
+        Some("debug: logs/captures/still-1/invalid.png is not a PNG file")
     );
     let large = [&b"\x89PNG\r\n\x1a\n"[..], &vec![0u8; 16 * 1024 * 1024][..]].concat();
     std::fs::write(folder.join("large.png"), large).unwrap();

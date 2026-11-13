@@ -1,4 +1,4 @@
-# The fake persistent sidecar of the core window checks (docs/spec/plugin-processes.md#verification-boundaries). It is its own
+# The persistent fixture sidecar of the core window checks (docs/spec/plugin-processes.md#verification-boundaries). It is its own
 # workspace and not a member of the core workspace: the core build does not build it, and it keeps its own Cargo.lock and target/.
 [workspace]
 

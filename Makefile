@@ -469,11 +469,11 @@ build-native-tests:
 build-sok: check-cargo
 	@$(CARGO_ENV) $(CARGO) build --locked -p soksak-sok
 
-# The fixture registry (docs/spec/plugin-processes.md#verification-boundaries). Packs every fake plugin of e2e/fixtures and releases
-# every fake sidecar of e2e/fixtures/sidecars for the current platform, and then creates index.json in target/fixture-registry with
-# one pack fixtures of every fixture plugin. It reads no plugin or sidecar repository and no registry index. Each fake sidecar is
+# The fixture registry (docs/spec/plugin-processes.md#verification-boundaries). Packs every fixture plugin of e2e/fixtures and releases
+# every fixture sidecar of e2e/fixtures/sidecars for the current platform, and then creates index.json in target/fixture-registry with
+# one pack fixtures of every fixture plugin. It reads no plugin or sidecar repository and no registry index. Each fixture sidecar is
 # built first with its own build script, because its release holds the executable that its sidecar.json declares.
-# build-fixture-registry-from-sok builds the fake sidecars and the registry with the sok that FIXTURE_SOK names and builds no sok:
+# build-fixture-registry-from-sok builds the fixture sidecars and the registry with the sok that FIXTURE_SOK names and builds no sok:
 # a candidate or prebuilt run of scripts/test-app.mjs builds it from its checkout into its configuration root with the sok of a
 # bundle under test.
 FIXTURE_REGISTRY = target/fixture-registry

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 /**
- * Measures the draw durations of the supplier of an image region from its frame records: the fake sidecar of the raster probe writes
+ * Measures the draw durations of the supplier of an image region from its frame records: the fixture sidecar of the raster probe writes
  * `sidecar.rasterprobe.frame` for each frame it sends, with its raster, its transfer image and the time that painting it took
  * (`draw_us`). Returns the durations in milliseconds, sorted.
  */

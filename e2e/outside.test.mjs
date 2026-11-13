@@ -1,5 +1,5 @@
 // Records two round trips that move 250pt in 400ms over a raster probe in the card to the right of the left fixed sidebar and
-// checks the frames that its fake sidecar supplies during the drag. The recording is the evidence of the drag.
+// checks the frames that its fixture sidecar supplies during the drag. The recording is the evidence of the drag.
 import assert from "node:assert/strict";
 import { availableParallelism, loadavg } from "node:os";
 import test from "node:test";

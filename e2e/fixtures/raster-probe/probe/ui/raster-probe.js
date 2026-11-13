@@ -1,4 +1,4 @@
-// The view of the raster probe: one image region that the fake persistent sidecar @sok-check/sidecar-rasterprobe draws
+// The view of the raster probe: one image region that the persistent fixture sidecar @sok-check/sidecar-rasterprobe draws
 // (docs/spec/native-surfaces.md#image-regions, docs/spec/persistent-services.md). The view opens the session of its surface with its
 // image before it sends any other request: a view of a reloaded page starts with a surface whose session the close of the old page
 // may have ended, and a request before the open would reach a surface without a session. It forwards the text size factor of the surface and the input of the region to the sidecar, opens the session again on each

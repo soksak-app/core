@@ -161,8 +161,8 @@ func TestStagingRejectsAWrongHashAndAWrongBundleVersion(t *testing.T) {
 	}
 }
 
-// fakeBundle writes a folder that looks like an application bundle and whose Info.plist holds text.
-func fakeBundle(t *testing.T, parent, name, text string) string {
+// bundleFixture writes a folder that looks like an application bundle and whose Info.plist holds text.
+func bundleFixture(t *testing.T, parent, name, text string) string {
 	t.Helper()
 	bundle := filepath.Join(parent, name)
 	if err := os.MkdirAll(filepath.Join(bundle, "Contents"), 0o755); err != nil {
@@ -206,8 +206,8 @@ func endingProcess(t *testing.T) (int, func()) {
 func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testing.T) {
 	requireBundles(t)
 	parent := t.TempDir()
-	target := fakeBundle(t, parent, "soksak.app", "old")
-	staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
+	target := bundleFixture(t, parent, "soksak.app", "old")
+	staged := bundleFixture(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
 	pid, end := endingProcess(t)
 	var started []string
 	open := func(bundle string, arguments []string) error {
@@ -244,8 +244,8 @@ func TestTheBundleIsReplacedAfterTheProcessEndedAndTheApplicationStarts(t *testi
 func TestTheEarlierBundleStartsAgainWhenTheNewOneFailsToStart(t *testing.T) {
 	requireBundles(t)
 	parent := t.TempDir()
-	target := fakeBundle(t, parent, "soksak.app", "old")
-	staged := fakeBundle(t, parent, "staged.app", "new")
+	target := bundleFixture(t, parent, "soksak.app", "old")
+	staged := bundleFixture(t, parent, "staged.app", "new")
 	pid, end := endingProcess(t)
 	end()
 	var texts []string
@@ -274,7 +274,7 @@ func TestTheEarlierBundleStartsAgainWhenTheNewOneFailsToStart(t *testing.T) {
 func TestTheReplacementRefusesWhatIsNotABundle(t *testing.T) {
 	requireBundles(t)
 	parent := t.TempDir()
-	staged := fakeBundle(t, parent, "staged.app", "new")
+	staged := bundleFixture(t, parent, "staged.app", "new")
 	pid, end := endingProcess(t)
 	defer end()
 	open := func(string, []string) error { t.Fatal("the application started"); return nil }
@@ -282,7 +282,7 @@ func TestTheReplacementRefusesWhatIsNotABundle(t *testing.T) {
 	if err := os.MkdirAll(notBundle, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	target := fakeBundle(t, parent, "a.app", "old")
+	target := bundleFixture(t, parent, "a.app", "old")
 	for name, options := range map[string]sok.ReplaceOptions{
 		"a target that is not a bundle": {PID: pid, Bundle: staged, Target: notBundle},
 		"a missing bundle":              {PID: pid, Bundle: filepath.Join(parent, "none.app"), Target: target},
@@ -306,8 +306,8 @@ func TestTheReplacementRefusesWhatIsNotABundle(t *testing.T) {
 func TestTheReplacementWaitsForTheExitWithoutALimit(t *testing.T) {
 	requireBundles(t)
 	parent := t.TempDir()
-	target := fakeBundle(t, parent, "soksak.app", "old")
-	staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
+	target := bundleFixture(t, parent, "soksak.app", "old")
+	staged := bundleFixture(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
 	pid, end := endingProcess(t)
 	open := func(string, []string) error {
 		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
@@ -328,7 +328,7 @@ func TestTheReplacementWaitsForTheExitWithoutALimit(t *testing.T) {
 // contract: app-relaunch.starts-the-same-bundle-in-the-background-after-the-process-ended
 func TestTheRelaunchStartsTheSameBundleInTheBackgroundAfterTheProcessEnded(t *testing.T) {
 	requireBundles(t)
-	target := fakeBundle(t, t.TempDir(), "soksak.app", "same")
+	target := bundleFixture(t, t.TempDir(), "soksak.app", "same")
 	pid, end := endingProcess(t)
 	var started []string
 	open := func(bundle string, arguments []string, activate bool) error {
@@ -369,7 +369,7 @@ func TestTheRelaunchRefusesAFolderThatIsNotABundleAndWaitsForTheExit(t *testing.
 	if err == nil || err.Error() != "application relaunch: the target "+plain+" is not an application bundle" {
 		t.Fatalf("the error is %v", err)
 	}
-	target := fakeBundle(t, parent, "soksak.app", "same")
+	target := bundleFixture(t, parent, "soksak.app", "same")
 	// The test ends the process it controls; the relaunch then starts the bundle after the exit.
 	open := func(string, []string, bool) error {
 		if err := exec.Command("kill", "-0", strconv.Itoa(pid)).Run(); err == nil {
@@ -414,8 +414,8 @@ func TestTheUpdateAndTheRelaunchWaitForTheEndOfTheWaitOfThePlatform(t *testing.T
 	for _, operation := range []string{"update", "relaunch"} {
 		t.Run(operation, func(t *testing.T) {
 			parent := t.TempDir()
-			target := fakeBundle(t, parent, "soksak.app", "old")
-			staged := fakeBundle(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
+			target := bundleFixture(t, parent, "soksak.app", "old")
+			staged := bundleFixture(t, filepath.Join(parent, "updates", "0.0.9"), "soksak.app", "new")
 			began, release := beganPlatform(t)
 			var waitEnded bool
 			done := make(chan error, 1)

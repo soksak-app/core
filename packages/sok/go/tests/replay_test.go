@@ -19,12 +19,12 @@ import (
 
 const logOpen = `{"ts_us":%d,"mono_ns":%d,"seq":1,"level":"info","layer":"%s","event":"log.open","fields":{"schema":3,"pid":1,"role":"%s","boot":"b1"}}`
 
-// fakeReplay prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
-const fakeReplay = `#!/bin/sh
+// replayFixture prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
+const replayFixture = `#!/bin/sh
 total=0
 while IFS= read -r line; do
   case "$line" in
-    *'"event":"sidecar.fake.input"'*)
+    *'"event":"sidecar.probe.input"'*)
       hex=${line#*'"hex":"'}; hex=${hex%%'"'*}
       total=$((total + ${#hex} / 2)) ;;
     *'"class":"frame"'*)
@@ -34,10 +34,10 @@ while IFS= read -r line; do
 done
 `
 
-// replayInputs names the events of the fake sidecar of each kind of replay input.
-const replayInputs = `{"output":"sidecar.fake.input","write":"sidecar.fake.write","resize":"sidecar.fake.resize","selection":"sidecar.fake.selection","viewport":"sidecar.fake.viewport","theme":"sidecar.fake.theme"}`
+// replayInputs names the events of the probe sidecar of each kind of replay input.
+const replayInputs = `{"output":"sidecar.probe.input","write":"sidecar.probe.write","resize":"sidecar.probe.resize","selection":"sidecar.probe.selection","viewport":"sidecar.probe.viewport","theme":"sidecar.probe.theme"}`
 
-// digits is the hash that fakeReplay prints for a count of bytes.
+// digits is the hash that replayFixture prints for a count of bytes.
 func digits(n int) string { return fmt.Sprintf("%064d", n) }
 
 // replayEvents holds the event lines of one session: two inputs, each followed by a frame record of the sidecar and of the page.
@@ -47,22 +47,22 @@ type replayEvents struct {
 }
 
 func input(ts, seq, sequence int, session, hex string) string {
-	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"sidecar","class":"io","event":"sidecar.fake.input","session":"%s","fields":{"sequence":%d,"hex":"%s"}}`, ts, ts, seq, session, sequence, hex)
+	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"sidecar","class":"io","event":"sidecar.probe.input","session":"%s","fields":{"sequence":%d,"hex":"%s"}}`, ts, ts, seq, session, sequence, hex)
 }
 
 // frame is a frame record; the page frame record is the event of the plugin of the page (layer plugin), which names the segment
 // b1 of the screen that it received.
 func frame(layer string, ts, seq, sequence int, session, hash string) string {
-	name, segment := "sidecar.fake.frame", ""
+	name, segment := "sidecar.probe.frame", ""
 	if layer == "plugin" {
-		name, segment = "plugin.fake.frame", `"segment":"b1",`
+		name, segment = "plugin.probe.frame", `"segment":"b1",`
 	}
 	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"%s","class":"frame","event":"%s","session":"%s","fields":{"sequence":%d,%s"rows":2,"cols":3,"hash":"%s"}}`, ts, ts, seq, layer, name, session, sequence, segment, hash)
 }
 
 // theme is the first replay input of a segment (docs/spec/replay.md#view-state).
 func theme(ts, seq int, session string) string {
-	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"sidecar","class":"input","event":"sidecar.fake.theme","session":"%s","fields":{"sequence":1,"colors":{"foreground":"#c0c0c0","background":"#101010","selection":"#404080"}}}`, ts, ts, seq, session)
+	return fmt.Sprintf(`{"ts_us":%d,"mono_ns":%d,"seq":%d,"level":"debug","layer":"sidecar","class":"input","event":"sidecar.probe.theme","session":"%s","fields":{"sequence":1,"colors":{"foreground":"#c0c0c0","background":"#101010","selection":"#404080"}}}`, ts, ts, seq, session)
 }
 
 // standardEvents are a theme and the inputs "hi" (2 bytes) and "\r\n" (2 bytes) with a frame record after each, written consistently.
@@ -92,12 +92,12 @@ func writeReplayFile(t *testing.T, path, text string, mode os.FileMode) {
 	}
 }
 
-// replayConfig writes the event files of the sidecar role "fake" and of the host, and installs a sidecar that declares the
+// replayConfig writes the event files of the sidecar role "probe" and of the host, and installs a sidecar that declares the
 // replay executable with the given script and the given role.
 func replayConfig(t *testing.T, events replayEvents, script, role string) string {
 	t.Helper()
 	config := t.TempDir()
-	writeReplayFile(t, filepath.Join(config, "logs", "fake-b1.jsonl"), strings.Join(append([]string{fmt.Sprintf(logOpen, 1000, 1000, "sidecar", "fake")}, events.sidecar...), "\n")+"\n", 0o600)
+	writeReplayFile(t, filepath.Join(config, "logs", "probe-b1.jsonl"), strings.Join(append([]string{fmt.Sprintf(logOpen, 1000, 1000, "sidecar", "probe")}, events.sidecar...), "\n")+"\n", 0o600)
 	writeReplayFile(t, filepath.Join(config, "logs", "host-b1.jsonl"), strings.Join(append([]string{fmt.Sprintf(logOpen, 1001, 1001, "host", "host")}, events.page...), "\n")+"\n", 0o600)
 	folder := "sidecars/probe-worker/1.0.0/darwin-arm64"
 	writeReplayFile(t, filepath.Join(config, "plugins", "installed.json"), `{"format":3,"plugins":{"probe":{"version":"1.0.0","path":"plugins/probe/1.0.0","enabled":true,"sidecars":{"@probe/worker":"^1.0.0"}}},"sidecars":{"@probe/worker":{"version":"1.0.0","path":"`+folder+`"}}}`, 0o644)
@@ -124,7 +124,7 @@ func runReplayWith(t *testing.T, run func([]string, io.Writer, io.Writer, sok.Op
 
 // contract: cli.debug.replay-equal
 func TestReplayReportsEqualWhenEveryStoredHashIsTheReplayedOne(t *testing.T) {
-	config := replayConfig(t, standardEvents(), fakeReplay, "fake")
+	config := replayConfig(t, standardEvents(), replayFixture, "probe")
 	stdout, stderr, code := runReplay(t, config, "s1")
 	if code != 0 || stdout != "replay session s1: 2 sidecar frames and 2 page frames equal in 1 segments\n" || stderr != "" {
 		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
@@ -133,16 +133,16 @@ func TestReplayReportsEqualWhenEveryStoredHashIsTheReplayedOne(t *testing.T) {
 
 // contract: cli.debug.reports-a-rejected-file
 func TestReplayReportsARejectedFile(t *testing.T) {
-	config := replayConfig(t, standardEvents(), fakeReplay, "fake")
+	config := replayConfig(t, standardEvents(), replayFixture, "probe")
 	writeFile(t, filepath.Join(config, "logs", "files-old.jsonl"), oldSchemaOpen)
 	stdout, stderr, code := runReplay(t, config, "s1")
 	if code != 0 || stdout != "replay session s1: 2 sidecar frames and 2 page frames equal in 1 segments\n" || stderr != "rejected: logs/files-old.jsonl: schema 2 is not 3\n" {
 		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
 	}
-	config = replayConfig(t, standardEvents(), fakeReplay, "fake")
-	writeFile(t, filepath.Join(config, "logs", "fake-b1.jsonl"), oldSchemaOpen)
+	config = replayConfig(t, standardEvents(), replayFixture, "probe")
+	writeFile(t, filepath.Join(config, "logs", "probe-b1.jsonl"), oldSchemaOpen)
 	writeFile(t, filepath.Join(config, "logs", "host-b1.jsonl"), linesOf(1, 1))
-	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || !strings.Contains(stderr, "rejected: logs/fake-b1.jsonl: schema 2 is not 3\n") || !strings.Contains(stderr, "hold no event of the layer sidecar") {
+	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || !strings.Contains(stderr, "rejected: logs/probe-b1.jsonl: schema 2 is not 3\n") || !strings.Contains(stderr, "hold no event of the layer sidecar") {
 		t.Errorf("the rejected file holds the session: code %d stderr %q", code, stderr)
 	}
 }
@@ -151,7 +151,7 @@ func TestReplayReportsARejectedFile(t *testing.T) {
 func TestReplayStopsAtTheSequenceOfUntil(t *testing.T) {
 	events := standardEvents()
 	events.sidecar[3] = input(1030, 4, 3, "s1", "0d0a0a")
-	config := replayConfig(t, events, fakeReplay, "fake")
+	config := replayConfig(t, events, replayFixture, "probe")
 	stdout, stderr, code := runReplay(t, config, "s1", "--until", "2")
 	if code != 0 || stdout != "replay session s1: 1 sidecar frames and 1 page frames equal in 1 segments\n" || stderr != "" {
 		t.Errorf("code %d stdout %q stderr %q", code, stdout, stderr)
@@ -205,7 +205,7 @@ func TestReplayReportsTheFirstDivergenceWithItsLayer(t *testing.T) {
 	for _, c := range cases {
 		events := standardEvents()
 		c.change(&events)
-		config := replayConfig(t, events, fakeReplay, "fake")
+		config := replayConfig(t, events, replayFixture, "probe")
 		stdout, stderr, code := runReplayWith(t, sok.Main, config, "s1")
 		message := fmt.Sprintf("replay divergence: session s1 segment b1 sequence %d layer %s expected %s found %s", c.seq, c.layer, c.want, c.found)
 		if code != 1 || stdout != "" || stderr != "sok: "+message+"\n" {
@@ -231,14 +231,14 @@ func TestReplayRefusesWhatItCannotCompare(t *testing.T) {
 		args   []string
 		want   string
 	}{
-		{"no session", standardEvents(), fakeReplay, "fake", nil, "sok: session is required\n"},
-		{"unknown session", standardEvents(), fakeReplay, "fake", []string{"s9"}, "sok: replay session s9: the event files hold no event of the layer sidecar for it\n"},
-		{"no sidecar declares the role", standardEvents(), fakeReplay, "other", []string{"s1"}, "sok: replay session s1: no installed sidecar declares the replay role fake\n"},
-		{"no frame record", noFrame, fakeReplay, "fake", []string{"s1"}, "sok: replay session s1: no frame record to compare\n"},
-		{"a stored hash is not a hash", badStored, fakeReplay, "fake", []string{"s1"}, "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n"},
-		{"the executable fails", standardEvents(), "#!/bin/sh\necho engine broke >&2\nexit 3\n", "fake", []string{"s1"}, "sok: replay session s1: replay.sh exited with status 3: engine broke\n"},
-		{"the executable prints a line that is not a hash", standardEvents(), "#!/bin/sh\necho nope\n", "fake", []string{"s1"}, "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n"},
-		{"the executable prints no hash for a frame record", standardEvents(), "#!/bin/sh\ncat >/dev/null\n", "fake", []string{"s1"}, "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n"},
+		{"no session", standardEvents(), replayFixture, "probe", nil, "sok: session is required\n"},
+		{"unknown session", standardEvents(), replayFixture, "probe", []string{"s9"}, "sok: replay session s9: the event files hold no event of the layer sidecar for it\n"},
+		{"no sidecar declares the role", standardEvents(), replayFixture, "other", []string{"s1"}, "sok: replay session s1: no installed sidecar declares the replay role probe\n"},
+		{"no frame record", noFrame, replayFixture, "probe", []string{"s1"}, "sok: replay session s1: no frame record to compare\n"},
+		{"a stored hash is not a hash", badStored, replayFixture, "probe", []string{"s1"}, "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n"},
+		{"the executable fails", standardEvents(), "#!/bin/sh\necho engine broke >&2\nexit 3\n", "probe", []string{"s1"}, "sok: replay session s1: replay.sh exited with status 3: engine broke\n"},
+		{"the executable prints a line that is not a hash", standardEvents(), "#!/bin/sh\necho nope\n", "probe", []string{"s1"}, "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n"},
+		{"the executable prints no hash for a frame record", standardEvents(), "#!/bin/sh\ncat >/dev/null\n", "probe", []string{"s1"}, "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n"},
 	}
 	for _, c := range cases {
 		config := replayConfig(t, c.events, c.script, c.role)
@@ -248,10 +248,10 @@ func TestReplayRefusesWhatItCannotCompare(t *testing.T) {
 		}
 	}
 	// A session whose sidecar events come from two roles has no single replay executable.
-	config := replayConfig(t, standardEvents(), fakeReplay, "fake")
+	config := replayConfig(t, standardEvents(), replayFixture, "probe")
 	other := fmt.Sprintf(logOpen, 1002, 1002, "sidecar", "other") + "\n" + input(1050, 2, 4, "s1", "00") + "\n"
 	writeReplayFile(t, filepath.Join(config, "logs", "other-b1.jsonl"), other, 0o600)
-	want := "sok: replay session s1: sidecar events of more than one role: fake, other\n"
+	want := "sok: replay session s1: sidecar events of more than one role: other, probe\n"
 	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || stderr != want {
 		t.Errorf("two roles: code %d stderr %q, want %q", code, stderr, want)
 	}
@@ -284,9 +284,9 @@ func segmentedConfig(t *testing.T, change func(first, second *replayEvents)) str
 	if change != nil {
 		change(&first, &second)
 	}
-	config := replayConfig(t, replayEvents{sidecar: first.sidecar, page: append(first.page, second.page...)}, fakeReplay, "fake")
-	open := `{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":3,"pid":2,"role":"fake","boot":"b2"}}`
-	writeReplayFile(t, filepath.Join(config, "logs", "fake-b2.jsonl"), strings.Join(append([]string{open}, second.sidecar...), "\n")+"\n", 0o600)
+	config := replayConfig(t, replayEvents{sidecar: first.sidecar, page: append(first.page, second.page...)}, replayFixture, "probe")
+	open := `{"ts_us":2000,"mono_ns":2000,"seq":1,"level":"info","layer":"sidecar","event":"log.open","fields":{"schema":3,"pid":2,"role":"probe","boot":"b2"}}`
+	writeReplayFile(t, filepath.Join(config, "logs", "probe-b2.jsonl"), strings.Join(append([]string{open}, second.sidecar...), "\n")+"\n", 0o600)
 	return config
 }
 
@@ -357,7 +357,7 @@ func TestReplayRefusesAPageFrameThatNamesNoSegmentOfTheSession(t *testing.T) {
 	events := standardEvents()
 	events.page[0] = strings.Replace(events.page[0], `"segment":"b1",`, "", 1)
 	single := "sok: replay session s1: the page frame record at sequence 2 has no fields.segment\n"
-	if _, stderr, code := runReplay(t, replayConfig(t, events, fakeReplay, "fake"), "s1"); code != 1 || stderr != single {
+	if _, stderr, code := runReplay(t, replayConfig(t, events, replayFixture, "probe"), "s1"); code != 1 || stderr != single {
 		t.Errorf("one segment: code %d stderr %q, want %q", code, stderr, single)
 	}
 	// The events of two runs of the sidecar that alternate in time are not segments.

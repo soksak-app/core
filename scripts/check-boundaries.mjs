@@ -169,14 +169,14 @@ export function namedSidecars(line) {
 }
 
 /**
- * The names of the fake sidecars of the fixtures under root: the part after `sidecar-` of the package name of each folder that
+ * The names of the fixture sidecars of the fixtures under root: the part after `sidecar-` of the package name of each folder that
  * fixtureSources of scripts/fixture-registry.mjs releases, which names its events `sidecar.<name>.<event>`.
  */
 export function fixtureSidecarNames(root) {
   return fixtureSources(root).sidecars.map((dir) => {
     const name = readJson(join(dir, "package.json")).name;
     const match = /(?:^|\/)sidecar-([a-z][a-z0-9-]*)$/.exec(name ?? "");
-    if (!match) throw new Error(`${join(dir, "package.json")}: the name ${JSON.stringify(name)} of a fake sidecar does not end with sidecar-<name>`);
+    if (!match) throw new Error(`${join(dir, "package.json")}: the name ${JSON.stringify(name)} of a fixture sidecar does not end with sidecar-<name>`);
     return match[1];
   });
 }
@@ -205,13 +205,13 @@ export function namedPlugins(line) {
 }
 
 /**
- * Checks that the files name no plugin other than core, the host or a fixture plugin, and no sidecar other than a fake sidecar.
- * `fixtures` are the ids of the fixture plugins of e2e/fixtures and of the absent plugins that it declares, `sidecars` the names of its fake sidecars, `exempt` the files that
+ * Checks that the files name no plugin other than core, the host or a fixture plugin, and no sidecar other than a fixture sidecar.
+ * `fixtures` are the ids of the fixture plugins of e2e/fixtures and of the absent plugins that it declares, `sidecars` the names of its fixture sidecars, `exempt` the files that
  * docs/spec/verification-boundaries.json still lists, and readSource reads a relative path. Each error names the file, the line and
  * the plugin or sidecar.
  */
 export function checkPluginNames(files, { fixtures, sidecars = [], exempt = new Set(), readSource = (file) => readFileSync(join(ROOT, file), "utf8") }) {
-  const fakeSidecars = new Set(sidecars);
+  const fixtureSidecars = new Set(sidecars);
   const allowed = new Set([...CORE_OWNERS, ...fixtures]);
   const errors = [];
   for (const file of files) {
@@ -227,7 +227,7 @@ export function checkPluginNames(files, { fixtures, sidecars = [], exempt = new 
         if (!allowed.has(id)) errors.push(`${file}:${index + 1}: names the plugin ${id}, which is neither core nor a fixture plugin of e2e/fixtures`);
       }
       for (const name of namedSidecars(line)) {
-        if (!fakeSidecars.has(name)) errors.push(`${file}:${index + 1}: names the sidecar ${name}, which is not a fake sidecar of e2e/fixtures/sidecars`);
+        if (!fixtureSidecars.has(name)) errors.push(`${file}:${index + 1}: names the sidecar ${name}, which is not a fixture sidecar of e2e/fixtures/sidecars`);
       }
     });
   }

@@ -1,5 +1,5 @@
 // Checks the core boundary of view surfaces through fixtures: the image regions of the raster probe (e2e/raster-probe.mjs), whose
-// fake persistent sidecar service draws their frames and holds one session with one child process per surface, and the tab
+// persistent fixture sidecar service draws their frames and holds one session with one child process per surface, and the tab
 // reports of the layout probe. The checks cover the presentation of split and balanced image regions, the shared service and its
 // sessions across project returns, page starts and project removal, native focus on a click, the tab title bound, the directory that
 // a split inherits, divider drags, and window resizes.

@@ -1,5 +1,5 @@
 // Checks that a surface reattaches without an app restart when its persistent sidecar service dies (V5-106). The vehicle is the raster
-// probe and its fake persistent sidecar service: the check kills the service and measures that a new session opens and that a request
+// probe and its persistent fixture sidecar service: the check kills the service and measures that a new session opens and that a request
 // of the surface reaches the new session and changes its presented frames.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";

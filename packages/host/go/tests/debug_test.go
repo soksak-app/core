@@ -245,11 +245,11 @@ func TestDebugReadReturnsAPNGFileAsAnImage(t *testing.T) {
 	if _, err := host.DebugRead(config, "logs/captures/still-1/window.png"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(config, "logs", "captures", "still-1", "fake.png"), []byte("not a png"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config, "logs", "captures", "still-1", "invalid.png"), []byte("not a png"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := host.DebugRead(config, "logs/captures/still-1/fake.png"); err == nil || err.Error() != "debug: logs/captures/still-1/fake.png is not a PNG file" {
-		t.Fatalf("fake png: %v", err)
+	if _, err := host.DebugRead(config, "logs/captures/still-1/invalid.png"); err == nil || err.Error() != "debug: logs/captures/still-1/invalid.png is not a PNG file" {
+		t.Fatalf("invalid png: %v", err)
 	}
 	large := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16*1024*1024)...)
 	if err := os.WriteFile(filepath.Join(config, "logs", "captures", "still-1", "large.png"), large, 0o644); err != nil {

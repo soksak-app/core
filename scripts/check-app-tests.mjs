@@ -37,7 +37,7 @@ const RULES = [
   // so a server or process remains and the check process does not end. The cleanup of a session runs every step even when one fails.
   { what: "t.after for cleanup; register it with session.cleanup", pattern: /\bt\.after\s*\(/, sessionCleanup: true },
   // A window check does not read source paths of other components and receives values through declared status entries. The
-  // fixtures of core under e2e/fixtures, its fake sidecars included, belong to the checks themselves.
+  // fixtures of core under e2e/fixtures, its fixture sidecars included, belong to the checks themselves.
   { what: "a source path of another repository component", pattern: /(["'`/]|\.\.\/)(?<!e2e\/fixtures\/)(packages|plugins|sidecars|native|apps)\//, sourcePath: true },
   // A window check drives the application with the input that its host emulates inside the application, in a covered window of an
   // application that is not active (docs/spec/exposure.md#virtual-key-window): the HID events of the window server move the pointer

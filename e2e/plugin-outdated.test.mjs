@@ -1,7 +1,7 @@
 // The plugin page shows a persistent service that runs another version than the installed one, and its action
 // replaces the service (docs/spec/installation.md, Plugin screen; docs/spec/persistent-services.md#updates).
 //
-// The vehicle is the fake persistent sidecar of the raster probe, which reports the version of its package in its hello. No
+// The vehicle is the persistent fixture sidecar of the raster probe, which reports the version of its package in its hello. No
 // declared entry installs another version of a sidecar, so the check writes another installed version of that service into
 // the installed.json of its own disposable configuration directory, with a copy of the installed folder under the new
 // version, and restores both in its cleanup. The running service keeps reporting the version it was built with, which is

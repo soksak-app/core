@@ -1,7 +1,7 @@
 // A hidden view keeps its sidecar session across a main-page reload. The host owner tests establish the exact detach
 // acknowledgement barrier; this window check verifies that the app keeps the session headless and presents a new image
 // generation when the view is shown again. The vehicle is the raster probe, whose background declaration opens the session of a
-// hidden tab, and its fake persistent sidecar, which records the drawing mode of each surface.
+// hidden tab, and its persistent fixture sidecar, which records the drawing mode of each surface.
 import assert from "node:assert/strict";
 import test from "node:test";
 

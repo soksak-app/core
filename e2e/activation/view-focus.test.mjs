@@ -2,7 +2,7 @@
 // (e2e/raster-probe.mjs). The AppKit reference takes characters only through the OS input method, and the second check composes
 // Korean through it; the input method serves only the key window of the active application
 // (docs/spec/exposure.md#virtual-key-window), so this check activates the application and selects the input source. The probe
-// logs each input transaction of its region with the body that its fake sidecar received (rasterprobe.input), so the check
+// logs each input transaction of its region with the body that its fixture sidecar received (rasterprobe.input), so the check
 // compares the committed text and the preedit that reached the region and the sidecar with the reference document.
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
@@ -92,7 +92,7 @@ function regionDocument(input) {
 }
 
 /**
- * Waits until the fake sidecar received every logged transaction of the image region since `baseline` (the transaction count
+ * Waits until the fixture sidecar received every logged transaction of the image region since `baseline` (the transaction count
  * before the gesture), and checks that the log lost none of them, that each received body repeats the transaction exactly and
  * that no transaction carried a callback error. Returns the input status.
  */

@@ -81,15 +81,15 @@ func TestTheReplayInputRulesReproduceTheGoldenCases(t *testing.T) {
 func TestReplayRefusesASegmentWhoseInputsBreakTheRulesOfASession(t *testing.T) {
 	events := standardEvents()
 	events.sidecar = events.sidecar[1:]
-	config := replayConfig(t, events, fakeReplay, "fake")
+	config := replayConfig(t, events, replayFixture, "probe")
 	want := "sok: replay session s1: segment b1: input 1 has sequence 2 and the sequence after 0 is 1\n"
 	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || stderr != want {
 		t.Errorf("no theme: code %d stderr %q, want %q", code, stderr, want)
 	}
 	// A sidecar that does not name the events of its replay inputs cannot be checked.
-	config = replayConfig(t, standardEvents(), fakeReplay, "fake")
+	config = replayConfig(t, standardEvents(), replayFixture, "probe")
 	file := filepath.Join(config, "sidecars/probe-worker/1.0.0/darwin-arm64/sidecar.json")
-	writeReplayFile(t, file, `{"executable":"worker","displayName":"soksak://sidecar/probe","protocol":1,"replay":{"role":"fake","executable":"replay.sh"}}`, 0o644)
+	writeReplayFile(t, file, `{"executable":"worker","displayName":"soksak://sidecar/probe","protocol":1,"replay":{"role":"probe","executable":"replay.sh"}}`, 0o644)
 	if _, stderr, code := runReplay(t, config, "s1"); code != 1 || !strings.Contains(stderr, file+": replay.inputs must name the event of the layer sidecar of each kind of replay input; output is \"\"") {
 		t.Errorf("no inputs: code %d stderr %q", code, stderr)
 	}

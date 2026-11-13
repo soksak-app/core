@@ -1,5 +1,5 @@
 // Helpers of the window checks that use the raster probe fixture `rasterprobe` (e2e/fixtures/raster-probe/probe) as their image
-// region: a view with one image region `raster` that the fake persistent sidecar @sok-check/sidecar-rasterprobe
+// region: a view with one image region `raster` that the persistent fixture sidecar @sok-check/sidecar-rasterprobe
 // (e2e/fixtures/sidecars/rasterprobe) draws in one solid color with row bands and an identity marker
 // (docs/spec/plugin-processes.md#verification-boundaries). The checks reach the core boundary of image regions, frames and
 // persistent sidecar services through it, never through a real plugin.
@@ -14,7 +14,7 @@ import { processRows } from "./service-processes.mjs";
 export const RASTER = "rasterprobe";
 /** The name of its image region in host.window regions. */
 export const REGION = "raster";
-/** The npm name of its fake persistent sidecar. */
+/** The npm name of its persistent fixture sidecar. */
 export const RASTER_SIDECAR = "@sok-check/sidecar-rasterprobe";
 /** The entries that a raster probe tab registers when it is ready for a check. */
 export const RASTER_ENTRIES = Object.freeze(["status rasterprobe.view", "status rasterprobe.session", "status rasterprobe.frame",
@@ -153,7 +153,7 @@ export async function setMeasuredColor(s, surface) {
 /**
  * Prepares a raster probe session through a raw application client (`client`, `request(client, method, params)`): restores the
  * fixture layout, adds a raster probe tab to its focused card, waits for the notification that the tab is a visible surface and
- * then for the notification that its fake persistent sidecar opened the session. The sidecar runs as the one persistent service
+ * then for the notification that its persistent fixture sidecar opened the session. The sidecar runs as the one persistent service
  * with an endpoint. Returns `{surface, session}`.
  */
 export async function prepareRasterSession(client, request, ...rest) {

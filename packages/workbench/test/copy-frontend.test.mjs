@@ -14,7 +14,7 @@ const STAGE = fileURLToPath(new URL("../copy-frontend.mjs", import.meta.url));
 const OBSERVE = fileURLToPath(new URL("../observe.js", import.meta.url));
 const RELEASE_DIAGNOSTICS = fileURLToPath(new URL("../release-diagnostics.js", import.meta.url));
 
-/** A fake application without plugins. */
+/** An application fixture without plugins. */
 function fixtureApp(t) {
   const app = mkdtempSync(join(tmpdir(), "soksak-stage-"));
   t.after(() => rmSync(app, { recursive: true, force: true }));
@@ -66,7 +66,7 @@ test("a staged frontend with --diagnostics has the page diagnostic methods", (t)
     { ...PAGE_IMPORTS }, "diagnostic staging adds only the helper required by installed diagnostic modules");
 });
 
-/** A fake application of a host that stages no main page: it has no runtime directory and its environment names none. */
+/** An application fixture of a host that stages no main page: it has no runtime directory and its environment names none. */
 function viewRootApp(t) {
   const app = fixtureApp(t);
   rmSync(join(app, "runtime"), { recursive: true });

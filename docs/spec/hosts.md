@@ -522,7 +522,7 @@ On macOS each application runs from an application bundle, because the operating
 | `make build-wailsv3`, `make build-tauriv2`, `make build-mygo` | Build `native/darwin` and the frontend, stage it, and build the debug executable |
 | `make build-wailsv3-release`, `make build-tauriv2-release`, `make build-mygo-release` | Build the release executable |
 | `make run-wailsv3`, `make run-tauriv2`, `make run-mygo` | Build and run the debug executable |
-| `make build-fixture-registry` | Build the fixture registry in `target/fixture-registry` from the fixture plugins and fake sidecars of `e2e/fixtures` ([verification boundaries](plugin-processes.md#verification-boundaries)); a window check installs its plugins into each configuration |
+| `make build-fixture-registry` | Build the fixture registry in `target/fixture-registry` from the fixture plugins and fixture sidecars of `e2e/fixtures` ([verification boundaries](plugin-processes.md#verification-boundaries)); a window check installs its plugins into each configuration |
 | `make check-rust-clippy` | Run clippy with `-D warnings` on every package and test of the Rust workspace, with and without the diagnostics feature; `make test-native` runs it |
 | `make test-native` | Run `make -C native/darwin test`, `go test` for `packages/host/go` and `packages/host/wailsv3`, and `cargo test -p soksak-host -p soksak-host-tauriv2`, the host tests with and without diagnostics; each sidecar repository runs its own tests |
 | `make check-platform-files` | Run `scripts/check-platform-files.mjs` |

@@ -199,7 +199,7 @@ fn staging_rejects_a_wrong_hash_and_a_wrong_bundle_version() {
 }
 
 /// A folder that looks like an application bundle and whose Info.plist holds text.
-fn fake_bundle(parent: &Path, name: &str, text: &str) -> PathBuf {
+fn bundle_fixture(parent: &Path, name: &str, text: &str) -> PathBuf {
     let bundle = parent.join(name);
     std::fs::create_dir_all(bundle.join("Contents")).unwrap();
     std::fs::write(bundle.join("Contents/Info.plist"), text).unwrap();
@@ -244,8 +244,8 @@ fn the_bundle_is_replaced_after_the_process_ended_and_the_application_starts() {
         return;
     }
     let parent = Folder::new("appupdate");
-    let target = fake_bundle(parent.path(), "soksak.app", "old");
-    let staged = fake_bundle(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
+    let target = bundle_fixture(parent.path(), "soksak.app", "old");
+    let staged = bundle_fixture(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
     let mut process = ending();
     let pid = process.id();
     let started = std::sync::Mutex::new(vec![]);
@@ -299,8 +299,8 @@ fn the_earlier_bundle_starts_again_when_the_new_one_fails_to_start() {
         return;
     }
     let parent = Folder::new("appupdate");
-    let target = fake_bundle(parent.path(), "soksak.app", "old");
-    let staged = fake_bundle(parent.path(), "staged.app", "new");
+    let target = bundle_fixture(parent.path(), "soksak.app", "old");
+    let staged = bundle_fixture(parent.path(), "staged.app", "new");
     let mut process = ending();
     let pid = process.id() as i32;
     end(&mut process);
@@ -334,13 +334,13 @@ fn the_replacement_refuses_what_is_not_a_bundle() {
         return;
     }
     let parent = Folder::new("appupdate");
-    let staged = fake_bundle(parent.path(), "staged.app", "new");
+    let staged = bundle_fixture(parent.path(), "staged.app", "new");
     let mut process = ending();
     let pid = process.id() as i32;
     let open = |_: &Path, _: &[String]| -> Result<(), String> { panic!("the application started") };
     let plain = parent.path().join("plain");
     std::fs::create_dir_all(&plain).unwrap();
-    let other = fake_bundle(parent.path(), "a.app", "old");
+    let other = bundle_fixture(parent.path(), "a.app", "old");
     // The refusal comes before the wait for the running process, so it answers while that process runs.
     for (name, bundle, target) in [
         ("a target that is not a bundle", staged.clone(), plain),
@@ -371,8 +371,8 @@ fn the_replacement_waits_for_the_exit_without_a_limit() {
         return;
     }
     let parent = Folder::new("appupdate");
-    let target = fake_bundle(parent.path(), "soksak.app", "old");
-    let staged = fake_bundle(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
+    let target = bundle_fixture(parent.path(), "soksak.app", "old");
+    let staged = bundle_fixture(&parent.path().join("updates/0.0.9"), "soksak.app", "new");
     let mut process = ending();
     let pid = process.id() as i32;
     let replacing = std::thread::scope(|scope| {
@@ -406,7 +406,7 @@ fn the_relaunch_starts_the_same_bundle_in_the_background_after_the_process_ended
         return;
     }
     let parent = Folder::new("appupdate");
-    let target = fake_bundle(parent.path(), "soksak.app", "same");
+    let target = bundle_fixture(parent.path(), "soksak.app", "same");
     let mut process = ending();
     let pid = process.id();
     let started = std::sync::Mutex::new(vec![]);
@@ -473,7 +473,7 @@ fn the_relaunch_refuses_a_folder_that_is_not_a_bundle_and_waits_for_the_exit() {
             plain.display()
         )
     );
-    let target = fake_bundle(parent.path(), "soksak.app", "same");
+    let target = bundle_fixture(parent.path(), "soksak.app", "same");
     let relaunching = std::thread::scope(|scope| {
         let handle = scope.spawn(|| {
             relaunch_app(

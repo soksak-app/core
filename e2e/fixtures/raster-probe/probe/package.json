@@ -3,7 +3,7 @@
   "version": "0.0.40",
   "private": true,
   "type": "module",
-  "description": "Window check fixture: a view with one image region that the fake persistent sidecar rasterprobe draws.",
+  "description": "Window check fixture: a view with one image region that the persistent fixture sidecar rasterprobe draws.",
   "license": "MIT",
   "repository": "git+https://github.com/soksak-app/core.git",
   "engines": { "soksak": "*" },
