@@ -26,19 +26,21 @@ test("each plugin process status is registered and publishes its empty initial v
   }
 });
 
-test("the reports of call layers fill the open-call and loss statuses, and each change is announced", async (t) => {
+test("the reports of call layers fill the open-call and loss statuses, and each change is announced", async () => {
   const { createCalls } = await import("@soksak/plugin-api");
   const { callReporter, losses, openCalls, onPluginProcessChange } = await import("../plugin-processes.js");
-  t.mock.timers.enable({ apis: ["Date"] });
   let announced = 0;
   const stop = onPluginProcessChange(() => { announced += 1; });
+  // The clock of the layers is a declared parameter of createCalls: the start of each call is the instant that the test gives.
+  const clock = 1000;
   const layer = () => createCalls({
     plugin: "probe",
     send: () => {},
     onMessage: () => () => {},
     report: callReporter("probe"),
+    now: () => clock,
   });
-  const started = Date.now();
+  const started = clock;
   const first = layer();
   const controller = new AbortController();
   const cancelled = first.request("probe.run", {}, { signal: controller.signal });

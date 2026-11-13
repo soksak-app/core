@@ -66,6 +66,7 @@ const nowUs = () => Math.round((performance.timeOrigin + performance.now()) * 10
 function validate(options) {
   if (!options || typeof options !== 'object') throw new TypeError('options is required');
   const { tests, concurrency } = options;
+  if (options.processTable !== undefined && typeof options.processTable !== 'function') throw new TypeError('processTable must be a function that returns the process table');
   if (!Array.isArray(tests) || tests.length === 0) throw new TypeError('there are no tests to run');
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new TypeError('concurrency must be a positive integer');
   if (typeof options.write !== 'function') throw new TypeError('write must be a function');
@@ -156,9 +157,9 @@ function leftoverNames(pgid, leader, escaped, table) {
  * the table is read again until a read finds no running descendant that is not stopped, so a descendant cannot start another unseen.
  * It returns the last table, which lists the members of the group for their names.
  */
-function stopEscapedDescendants(pgid, stopped) {
+function stopEscapedDescendants(pgid, stopped, readTable) {
   for (;;) {
-    const table = processTable();
+    const table = readTable();
     const tree = new Set(table.filter((row) => row.pgid === pgid).map((row) => row.pid));
     const fresh = [];
     for (let grew = true; grew;) {
@@ -186,7 +187,7 @@ function stopEscapedDescendants(pgid, stopped) {
  * reads no process table: a test process that exits and leaves nothing is the common end of a test. macOS refuses the check with EPERM
  * for a group that holds only zombies, which the table then shows as ended.
  */
-function endGroup(pgid, leader) {
+function endGroup(pgid, leader, readTable) {
   try { process.kill(-pgid, 0); } catch (error) {
     if (error.code === 'ESRCH') return [];
     if (error.code !== 'EPERM') throw error;
@@ -196,7 +197,7 @@ function endGroup(pgid, leader) {
   let listError = null;
   const escaped = new Set();
   try {
-    const table = stopEscapedDescendants(pgid, escaped);
+    const table = stopEscapedDescendants(pgid, escaped, readTable);
     leftovers = leftoverNames(pgid, leader, [...escaped], table);
   } catch (error) { listError = error; }
   try {
@@ -218,7 +219,18 @@ function endGroup(pgid, leader) {
  * ended and the test fails with the names of the leftovers. When the item declares a limit, the group is ended at that limit, and the
  * timeout names the leftovers other than the test process.
  */
-function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary) {
+/**
+ * The state of the event watchdog at the instant `at`, in milliseconds of performance.now(). The watchdog was armed at `armedAt`, the
+ * start of the process or its last test event, and `lastEvent` names that event. It has passed when `limitMs` has elapsed since
+ * `armedAt`: then `reason` is the stop reason; otherwise `remainingMs` is the time left.
+ */
+export function eventWatchdog({ armedAt, lastEvent, limitMs, at }) {
+  const elapsed = at - armedAt;
+  if (elapsed < limitMs) return { passed: false, remainingMs: limitMs - elapsed };
+  return { passed: true, reason: `no test event for ${limitMs} ms, the largest limit of a test; last event: ${lastEvent}` };
+}
+
+function runOne(item, limitMs, env, outputPath, { stacks, services, processTable: readTable }, temporary) {
   return new Promise((resolve) => {
     const started = performance.now();
     const chunks = [];
@@ -260,7 +272,7 @@ function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary)
       clearLimit(watchdog);
       if (item.samplesAtLimit) ending = sampleAtLimit();
       else {
-        try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+        try { limit.leftovers = endGroup(child.pid, child.pid, readTable); } catch (error) { groupError = error; }
       }
     };
     // A process with `samplesAtLimit` waits at its limit for another process, such as a native check for the reply of its web content
@@ -281,7 +293,7 @@ function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary)
           await keep(member.pid, String(member.pid));
           let listed = [];
           try { listed = await services(member.pid); } catch (error) { errors.push(error.message); }
-          const table = listed.length > 0 ? new Map(processTable().map((row) => [row.pid, row.state])) : new Map();
+          const table = listed.length > 0 ? new Map(readTable().map((row) => [row.pid, row.state])) : new Map();
           for (const service of listed) {
             found.push(`pid ${service.pid} ${service.label} state ${table.get(service.pid) ?? 'absent'}`);
             await keep(service.pid, `${member.pid}-${service.pid}`);
@@ -290,12 +302,21 @@ function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary)
       } catch (error) { errors.push(`the process group ${child.pid} could not be read: ${error.message}`); }
       const failed = errors.length > 0 ? `; sample errors: ${errors.join('; ')}` : '';
       limit.reason = `${limit.reason}; samples: ${samples.length > 0 ? samples.join(', ') : 'none'}; services: ${found.length > 0 ? found.join(', ') : 'none'}${failed}`;
-      try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+      try { limit.leftovers = endGroup(child.pid, child.pid, readTable); } catch (error) { groupError = error; }
     };
+    // The instant that the watchdog was last armed at: the arm at the start of the process, or the event that re-armed it. A timer that
+    // fires before the limit has passed re-arms for the time left, so the limit is never judged by the timer alone.
+    let armedAt = performance.now();
     const arm = () => {
       if (item.eventLimitMs === undefined) return;
       clearLimit(watchdog);
-      watchdog = atLimit(() => endAtLimit(`no test event for ${item.eventLimitMs} ms, the largest limit of a test; last event: ${lastEvent}`), item.eventLimitMs);
+      armedAt = performance.now();
+      const check = () => {
+        const state = eventWatchdog({ armedAt, lastEvent, limitMs: item.eventLimitMs, at: performance.now() });
+        if (state.passed) endAtLimit(state.reason);
+        else watchdog = atLimit(check, state.remainingMs);
+      };
+      watchdog = atLimit(check, item.eventLimitMs);
     };
     // The exit limit of a process with `exitLimitMs`: `test:summary` is the last event of the tests of a file, so the process only exits
     // after it, and no test limit applies to that exit. A process that does not exit within the limit waits in its shutdown, which a
@@ -316,7 +337,7 @@ function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary)
         } catch (error) { errors.push(`the process group ${child.pid} could not be read: ${error.message}`); }
         const failed = errors.length > 0 ? `; sample errors: ${errors.join('; ')}` : '';
         limit.reason = `the file process did not exit within ${seconds(item.exitLimitMs)}s after its tests ended; last event: ${lastEvent}; samples: ${samples.length > 0 ? samples.join(', ') : 'none'}${failed}`;
-        try { limit.leftovers = endGroup(child.pid, child.pid); } catch (error) { groupError = error; }
+        try { limit.leftovers = endGroup(child.pid, child.pid, readTable); } catch (error) { groupError = error; }
       })();
     };
     const armExit = () => {
@@ -398,7 +419,7 @@ function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary)
         endAtLimit(`exceeded ${seconds(limitMs)}s and ended itself with its stacks`);
       }
       if (limit !== null) return;
-      try { exitLeftovers = endGroup(child.pid, null); } catch (error) { groupError = error; }
+      try { exitLeftovers = endGroup(child.pid, null, readTable); } catch (error) { groupError = error; }
     });
     // A file of the run receives the output as it arrives, so a run that stops leaves the output of the test it stopped in.
     const keep = (chunk) => {
@@ -476,6 +497,8 @@ function runOne(item, limitMs, env, outputPath, { stacks, services }, temporary)
  * events or none does. A result of a process that reports them also has `tests`, the tests that its files ran, its `PASS` line says
  * `no test ran` when it ran none, and the `TOTAL` counts the tests that ran in the files. `passed` is true when every process passed and,
  * in a run whose processes report their test events, a test ran; otherwise the line `FAIL no test ran in the <n> files of the run` says so.
+ * `processTable` (a function that returns the rows of window-check `processTable()`) replaces the read of the process table that ends
+ * a process group; a test passes its own reader, and the default is the process table of the system.
  * `run` (`{id, folder}`), when given, passes the identifier and the folder to each
  * test as `SOKSAK_RUN_ID` and the folder as `SOKSAK_RUN_FOLDER`, stores the output of every test in the folder, and keeps `manifest.json` there with each test, its status,
  * its start and its end in microseconds; the manifest is rewritten when a test starts and when it ends.
@@ -491,7 +514,8 @@ export async function runTests(options) {
   const { tests, concurrency, write } = options;
   const heartbeatMs = options.heartbeatMs ?? 10_000;
   const slowCount = options.slowCount ?? 10;
-  const recorders = { stacks: options.stacks ?? processStacks, services: options.services ?? processServices };
+  const recorders = { stacks: options.stacks ?? processStacks, services: options.services ?? processServices,
+    processTable: options.processTable ?? processTable };
   const begun = performance.now();
   const running = new Map();
   const results = new Map();

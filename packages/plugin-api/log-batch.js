@@ -65,7 +65,7 @@ const named = (value) => typeof value === "string" && value !== "";
  * `{layer: "workbench", member: "start", identity}` and a view page `{layer: "page", member: "page", identity}`.
  */
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES,
-  now = () => performance.now(), classify = () => undefined, gate = null, writer }) {
+  now = () => performance.now(), timer = (callback, ms) => setTimeout(callback, ms), classify = () => undefined, gate = null, writer }) {
   if (!named(writer?.layer) || !named(writer?.member) || !named(writer?.identity)) {
     throw new TypeError(`createEventBatcher requires the writer {layer, member, identity} of the document as non-empty strings, found ${JSON.stringify(writer)}`);
   }
@@ -182,7 +182,8 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   const awaitGated = () => {
     if (gatedTimer || sending || gated.size === 0) return;
     gatedTimer = true;
-    setTimeout(() => {
+    // `timer(callback, ms)` arms the report of the counts; a test passes its own timer and fires the callback itself.
+    timer(() => {
       gatedTimer = false;
       send().then(awaitGated, report);
     }, Math.max(0, GATED_REPORT_MS - (now() - gatedAt)));

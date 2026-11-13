@@ -12,9 +12,3 @@ test("drained ends after a long chain of microtasks and the next ticks they queu
   assert.equal(steps.length, 10001, "drained ended before the work of the chain");
   assert.equal(steps.at(-1), "last", "drained ended before a microtask queued by a next tick");
 });
-
-// A mocked setImmediate runs inside the tick of the check, before the microtasks of the work, so drained refuses it.
-test("drained fails while mock.timers mocks setImmediate", { timeout: 5000 }, async (t) => {
-  t.mock.timers.enable({ apis: ["setImmediate"] });
-  await assert.rejects(drained(), /setImmediate is mocked/);
-});

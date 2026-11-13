@@ -54,12 +54,12 @@ export const named = (members) => members.map((member) => `pid ${member.pid} ${m
  * when only zombies remain; such a group has nothing to end, so the refusal is not an error. A refusal while a member runs is an error,
  * and the error names the running members. Every other refusal is an error that names the signal and the group.
  */
-export function signalGroup(pgid, signal, send = sendToGroup) {
+export function signalGroup(pgid, signal, send = sendToGroup, members = groupMembers) {
   try { send(pgid, signal); } catch (error) {
     if (error.code === "ESRCH") return;
     error.message = `${signal} to process group ${pgid}: ${error.message}`;
     if (error.code !== "EPERM") throw error;
-    const running = runningMembers(pgid);
+    const running = runningMembers(pgid, members(pgid));
     if (running.length === 0) return;
     error.message += `; running: ${named(running)}`;
     throw error;
@@ -85,11 +85,11 @@ export function groupRuns(pgid, send = sendToGroup) {
  * Stops every process of the group of a test with SIGSTOP, so none of them runs while the leftovers are read. The stop comes before the
  * read, because the read takes seconds under load. A group that no longer exists has nothing to stop.
  */
-export function stopGroup(pgid, send = sendToGroup) {
-  signalGroup(pgid, "SIGSTOP", send);
+export function stopGroup(pgid, send = sendToGroup, members = groupMembers) {
+  signalGroup(pgid, "SIGSTOP", send, members);
 }
 
 /** Ends every process of the group pgid, the group of a test or of a bounded command. A group that no longer exists has nothing to end. */
-export function killGroup(pgid, send = sendToGroup) {
-  signalGroup(pgid, "SIGKILL", send);
+export function killGroup(pgid, send = sendToGroup, members = groupMembers) {
+  signalGroup(pgid, "SIGKILL", send, members);
 }

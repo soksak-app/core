@@ -684,7 +684,7 @@ const FEATURE_LINKS = [
   {
     id: "F767-1",
     implementation: [
-      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader) {" },
+      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader, readTable) {" },
     ],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop" },
@@ -847,8 +847,8 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/stall-sample.mjs", symbol: "export function plannedLength(method, params, displayed) {" },
     ],
     tests: [
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a drag being measured is not sampled: its stall counts 3 s from the end of its planned length" },
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a session request of a drag takes the planned length of the drag before its stall" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a drag being measured is not sampled before 3 s after the end of its planned length" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a session request of a drag names the planned length of the drag in its stall line" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "the planned length of a request is the length of its drag or the wait of its stop, and none for any other" },
       { file: "native/darwin/tests/press_release_test.m", id: "a release of a press that a boundary over a region took waits for no receipt of the page " },
       { file: "packages/window-check/test/recording.test.mjs", id: "a recording whose start names no recorded window is told, and its judgment fails" },
@@ -1699,9 +1699,8 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench/test/support/drained.mjs", symbol: "export const drained = () => {" }],
     tests: [
       { file: "packages/workbench/test/drained.test.mjs", id: "drained ends after a long chain of microtasks and the next ticks they queue" },
-      { file: "packages/workbench/test/drained.test.mjs", id: "drained fails while mock.timers mocks setImmediate" },
     ],
-    expected: "A negative check of work that runs in microtasks waits for the end of the microtask queue, which ends after every queued microtask and fails while setImmediate is mocked.",
+    expected: "A negative check of work that runs in microtasks waits for the end of the microtask queue, which ends after every queued microtask and the next ticks they queue.",
     levels: ["unit"],
   },
   {
@@ -1724,7 +1723,7 @@ const FEATURE_LINKS = [
   {
     id: "F767",
     implementation: [
-      { file: "packages/workbench/memory-saver.js", symbol: "idle: () => (running === 0 ? Promise.resolve() : new Promise((resolve) => idleWaits.push(resolve)))," },
+      { file: "packages/workbench/memory-saver.js", symbol: "idle: () => (core.busy() ? new Promise((resolve) => idleWaits.push(resolve)) : Promise.resolve())," },
       { file: "packages/workbench/layout-queue.js", symbol: "export async function drawPrepared({" },
     ],
     tests: [
@@ -1749,7 +1748,7 @@ const FEATURE_LINKS = [
     id: "F669",
     implementation: [
       { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
-      { file: "packages/window-check/process-group.mjs", symbol: "export function killGroup(pgid, send = sendToGroup) {" },
+      { file: "packages/window-check/process-group.mjs", symbol: "export function killGroup(pgid, send = sendToGroup, members = groupMembers) {" },
     ],
     tests: [
       { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a command group whose last member has ended but is not reaped ends without an error" },
@@ -3738,7 +3737,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "the state at the limit is read while the process still runs" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a state at the limit that does not finish does not hold the end of the process" },
       { file: "packages/window-check/test/platform/darwin/system/stall-sample.test.mjs", id: "a sample that stalls records the stacks of the sampling process before it ends" },
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "the limit of a process holds while a check moves mocked timers" },
+      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process at its limit with no state reader is reported without a state" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "stacks that the sampling process cannot record are named with the reason" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended by a signal of another sender is not reported as ended at its limit" },
     ],
@@ -4515,7 +4514,7 @@ const FEATURE_LINKS = [
   {
     id: "F533",
     implementation: [
-      { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = now() + delayMs();' },
+      { file: "packages/workbench/memory-saver.js", symbol: 'if (trigger === "delay") entry.unloadAt = input.at + delayMs();' },
     ],
     tests: [
       { file: "packages/workbench/test/memory-saver.test.mjs", id: "a failed ${step} at the deadline runs again one delay later, not at the deadline that passed" },
@@ -6424,7 +6423,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F257-3",
-    implementation: [{ file: "packages/window-check/process-group.mjs", symbol: "export function signalGroup(pgid, signal, send = sendToGroup)" }],
+    implementation: [{ file: "packages/window-check/process-group.mjs", symbol: "export function signalGroup(pgid, signal, send = sendToGroup, members = groupMembers)" }],
     tests: [
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with no running member ends without error" },
       { file: "scripts/test/test-runner.test.mjs", id: "a refused group signal with a running member names it" },
@@ -11568,7 +11567,7 @@ const FEATURE_LINKS = [
     id: "F502-18-1",
     implementation: [
       { file: "packages/workbench/memory-placement.js", symbol: "if (record.drawn) saver.classify();" },
-      { file: "packages/workbench/memory-saver.js", symbol: "    classify() {" },
+      { file: "packages/workbench/memory-saver.js", symbol: "    classify: (given) => call(given, () => {" },
       { file: "packages/workbench-mygo/src/memory_saver.go", symbol: "func (s *MemorySaver) Classify() {" },
     ],
     tests: [
@@ -12169,7 +12168,7 @@ const FEATURE_LINKS = [
   {
     id: "F299",
     implementation: [
-      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader)" },
+      { file: "scripts/test-runner.mjs", symbol: "function endGroup(pgid, leader, readTable)" },
       { file: "packages/window-check/process-group.mjs", symbol: "export function processTable()" },
     ],
     tests: [
@@ -12349,7 +12348,7 @@ const FEATURE_LINKS = [
   {
     id: "F346",
     implementation: [
-      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action, platform, lockRelease)" },
+      { file: "scripts/test-app.mjs", symbol: "async function lockReleased(configDir, action, platform, lockRelease, limitMs)" },
     ],
     tests: [
       { file: "scripts/test/test-app.test.mjs", id: "a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one" },
