@@ -448,7 +448,7 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
     // The cleanups stop the recordings that the check left, so their notes are told after them.
     for (const note of session.recordingNotes) t.diagnostic(`recording: ${note}`);
     // The cleanups may start stall samples too, so the samples are awaited after them and before the error audit.
-    await settleStallSamples(t, session, failures);
+    await settleStallSamples(t, session);
     // Every error line written to the application log during the check is kept as a diagnostic, and an error that the
     // check did not declare fails the check. A reload clears the error display of a document, so the log decides. The
     // log is read after the cleanups so that it includes the errors they cause.
@@ -517,7 +517,7 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
   } finally {
     // The end mark is a request that may start a stall sample, and a sample stores its dump through the connection, so
     // every sample ends before the connection is closed.
-    await settleStallSamples(t, session, failures);
+    await settleStallSamples(t, session);
     close();
   }
   if (failures.length === 1) throw failures[0];
@@ -525,21 +525,16 @@ async function finishSessionAudit(t, session, close, pendingDisposal) {
 }
 
 /**
- * Waits for every stall sample that the session holds, including a sample that starts while it waits. A sample that
- * recorded the host is reported as a diagnostic, and a failed sample is a failure with its reason.
+ * Waits for every stall sample that the session holds, including a sample that starts while it waits, and reports each as a
+ * diagnostic: the line of the recorded threads, or the reason why the host was not sampled. A sample is a record of the
+ * check, as a recording is, so a sample that the machine or the sample tool does not finish leaves the result of the check
+ * to what the check judges (docs/operations/examples.md#window-checks).
  */
-async function settleStallSamples(t, session, failures) {
+async function settleStallSamples(t, session) {
   while (session.stallSamples.size) {
     const held = [...session.stallSamples];
     session.stallSamples.clear();
-    for (const { line, error } of await Promise.all(held)) {
-      if (error) {
-        failures.push(error);
-        t.diagnostic(`cleanup failed: ${error.stack ?? error}`);
-      } else {
-        t.diagnostic(`stall sample: ${line}`);
-      }
-    }
+    for (const { line, error } of await Promise.all(held)) t.diagnostic(`stall sample: ${line ?? error.message}`);
   }
 }
 

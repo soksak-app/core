@@ -87,7 +87,9 @@ test("the session finish waits for a stall sample that a request answered after 
     `${logs}/stall-20-\\d+\\.txt, ${logs}/stall-20-\\d+-page-21\\.txt; host\\.stall\\.dump at b1:4; running host calls of main: wait_presented 3\\.0s$`).test(line)), [true]);
 });
 
-test("the session finish fails with the text of a stall sample that failed", async (t) => {
+// A stall sample is a record of the check, as a recording is: a sample that a loaded machine or the sample tool cannot finish
+// is reported with its reason, and the result of the check stays the result of what it checked (F775).
+test("the session finish reports a stall sample that failed and does not fail the check for it", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   running.length = 0;
   const { session, answer } = stalledSession(t);
@@ -96,9 +98,11 @@ test("the session finish fails with the text of a stall sample that failed", asy
   await settle();
   answer({ done: true });
   await reply;
-  const { check } = probe();
+  const { diagnostics, check } = probe();
   const finish = finishSession(check, session, () => {});
   const error = Object.assign(new Error("Command failed"), { code: 1 });
   for (const { callback } of running) callback(error, "", "sample cannot examine process\n");
-  await assert.rejects(finish, /^Error: probe host\.window\.reload still pending after 3000 ms; sampling the host failed: the host 20 and its pages were not sampled: sample 20 exited with 1: sample cannot examine process; sample 21 exited with 1: sample cannot examine process$/);
+  await finish;
+  assert.deepEqual(diagnostics.filter((line) => line.startsWith("stall sample") || line.startsWith("cleanup failed")),
+    ["stall sample: probe host.window.reload still pending after 3000 ms; sampling the host failed: the host 20 and its pages were not sampled: sample 20 exited with 1: sample cannot examine process; sample 21 exited with 1: sample cannot examine process"]);
 });
