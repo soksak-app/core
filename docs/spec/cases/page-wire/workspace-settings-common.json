@@ -1,0 +1,10 @@
+{
+  "name": "workspace-settings-common",
+  "description": "The workspace call with the kind settings and no project identifier writes the common settings file: the patch sets its keys and the remove list deletes its keys. The call answers nothing, and the host notifies the windows of the change.",
+  "replay": true,
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "patch": { "gap": 8 }, "remove": ["radius"] }, "cids": ["p1.9"] } },
+    { "reply": { "result": null } }
+  ]
+}

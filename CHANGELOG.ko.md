@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- workbench 의 log policy 시험이 `@soksak/runtime` 을 바꾸는 대신 기록된 page wire case 를 재생하고, `TestPageWire` 가 그 case 를 Go host 의 log 와 workspace 동작에 실행한다 (F795-10).
 - Go host 의 빈 native ring 시험이 자기 child process 에서 ring 을 읽는다. 같은 process 의 앞선 시험이 ring 에 기록을 남기기 때문이다 (F798).
 - fixture registry 의 pack fixture 시험이 F795-1 부터 `scripts/fixture-registry.mjs` 가 쓰는 설명을 기대한다. 그 시험은 F795-1 부터 실패하고 있었다 (F795-1-1).
 - `make repeat-rust` 가 package 폴더에서 실행되는 documentation test 명령에 절대 manifest 를 넘기고, Rust workspace 가 lint `linker_info` 를 warn 으로 두어 Rust build 가 runner 가 실패시키는 더 새 macOS 용 object 의 ld 경고를 출력한다. 둘 다 runner 시험이 실제 cargo 를 실행했을 때 드러났다 (F795-4).

@@ -1,0 +1,11 @@
+{
+  "name": "log-policy-write",
+  "description": "The call log with the action policy writes the policy file of the event log and answers nothing. The classes that the setting does not name are completed with the level error.",
+  "replay": true,
+  "writer": { "policy": true },
+  "variables": {},
+  "steps": [
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "info", "io": "off", "frame": "error" } } } },
+    { "reply": { "result": null } }
+  ]
+}

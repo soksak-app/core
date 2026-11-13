@@ -1,0 +1,10 @@
+{
+  "name": "workspace-snapshot",
+  "description": "The workspace call with the kind snapshot answers the common settings, the registered projects and the open project identifiers. With no settings file and no project file, the common settings and the projects are empty and no window holds a project.",
+  "replay": true,
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } }
+  ]
+}

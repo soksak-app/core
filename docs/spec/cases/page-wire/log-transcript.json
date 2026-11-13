@@ -1,0 +1,10 @@
+{
+  "name": "log-transcript",
+  "description": "The call log with the action transcript stores the line of a host call as a workbench record of the operation start and answers nothing; the line is shown in the transcript of the window.",
+  "replay": true,
+  "variables": {},
+  "steps": [
+    { "call": { "name": "log", "payload": { "action": "transcript", "start": "start-1", "line": "host syncSurfaces {\"surfaces\":[]} -> null" } } },
+    { "reply": { "result": null } }
+  ]
+}
