@@ -266,6 +266,8 @@ type Endpoint struct {
 	owner         EndpointInfo
 	published     bool
 	conns         map[*endpointConn]bool
+	// activity is whether the endpoint holds the connection activity of the platform (holdConnectionActivity).
+	activity bool
 	// counts is the number of subscribed connections for each topic.
 	counts map[topic]int
 	// queues are the subscription changes to run in the order received for each topic. When a list exists, a goroutine that runs
@@ -597,10 +599,28 @@ func (e *Endpoint) accept(listener net.Listener) {
 		c := &endpointConn{conn: conn, topics: map[topic]bool{}, out: make(chan endpointFrame, EndpointOutputFrames), done: make(chan struct{})}
 		e.mu.Lock()
 		e.conns[c] = true
+		if len(e.conns) == 1 {
+			e.activity = holdConnectionActivity(true)
+		}
 		e.mu.Unlock()
 		routine.Go("endpoint-write", c.write)
 		routine.Go("endpoint-read", func() { e.read(c) })
 	}
+}
+
+// holdConnectionActivity holds the activity of the process while a connection is open, so that the system does not run the host
+// in the background while a client waits for its answers (docs/spec/endpoint.md#transport). The caller holds e.mu, so the
+// requests follow the order of the changes of the connections. It reports whether the platform made the change.
+func holdConnectionActivity(held bool) bool {
+	current, err := platform.Current()
+	if err == nil {
+		err = current.HoldConnectionActivity(held)
+	}
+	if err != nil {
+		LogError("endpoint activity", err)
+		return false
+	}
+	return true
 }
 
 // serving reports whether listener is the listener that the endpoint serves.
@@ -1200,6 +1220,9 @@ func (e *Endpoint) drop(c *endpointConn, reason string) {
 	e.releasePresses(c)
 	e.mu.Lock()
 	delete(e.conns, c)
+	if len(e.conns) == 0 && e.activity {
+		e.activity = !holdConnectionActivity(false)
+	}
 	held := make([]topic, 0, len(c.topics))
 	for t := range c.topics {
 		held = append(held, t)

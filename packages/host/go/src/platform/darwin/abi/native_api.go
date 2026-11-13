@@ -259,6 +259,7 @@ type NativeFunctions struct {
 	ShapeSetFrame                          func(unsafe.Pointer, float64, float64, float64, float64)
 	ShapeSetStyle                          func(unsafe.Pointer, float64, float64, float64, float64, float64, float64, float64, float64, float64, float64)
 	SpBlockAsyncSignals                    func() int32
+	SpConnectionActivityHold               func(bool)
 	SpDiagnosticReportsDirectory           func(**byte) *byte
 	SpEventDrain                           func(*uint8, uint64) uint64
 	SpEventSetBoot                         func(*byte) bool
@@ -737,6 +738,9 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpBlockAsyncSignals == nil {
 		return fmt.Errorf("native API function is missing: sp_block_async_signals")
+	}
+	if functions.SpConnectionActivityHold == nil {
+		return fmt.Errorf("native API function is missing: sp_connection_activity_hold")
 	}
 	if functions.SpDiagnosticReportsDirectory == nil {
 		return fmt.Errorf("native API function is missing: sp_diagnostic_reports_directory")

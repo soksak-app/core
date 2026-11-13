@@ -14,6 +14,7 @@
 #include "signals.h"
 #include "mouse_buttons.h"
 #include "stall_watch.h"
+#include "connection_activity.h"
 #include "diagnostic_reports.h"
 #include "host_api_capture.h"
 #include "host_api_clipboard.h"

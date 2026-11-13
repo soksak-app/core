@@ -641,6 +641,9 @@ struct Shared {
     stopping: AtomicBool,
     /// The configuration folder, whose event files the method `log.query` reads.
     config: PathBuf,
+    /// Whether the endpoint holds the connection activity of the platform (`hold_connection_activity`). It changes only
+    /// while the lock of `peers` is held.
+    activity: AtomicBool,
 }
 
 /// Sends a notification to the connections. After the endpoint stops there is no connection to send to.
@@ -1169,6 +1172,7 @@ impl Endpoint {
             orders: AtomicU64::new(1),
             stopping: AtomicBool::new(false),
             config: directory.to_path_buf(),
+            activity: AtomicBool::new(false),
         });
         let mut endpoint = Endpoint {
             shared,
@@ -1503,6 +1507,19 @@ fn declared(method: &str) -> bool {
     METHODS.contains(&method) || DIAGNOSTICS.contains(&method)
 }
 
+/// Holds the activity of the process while a connection is open, so that the system does not run the host in the background
+/// while a client waits for its answers (docs/spec/endpoint.md#transport). The caller holds the lock of the peers, so the
+/// requests follow the order of the changes of the connections. It reports whether the platform made the change.
+fn hold_connection_activity(held: bool) -> bool {
+    if let Err(error) =
+        platform::current().and_then(|platform| platform.hold_connection_activity(held))
+    {
+        log_error("endpoint activity", error);
+        return false;
+    }
+    true
+}
+
 /// Reads and runs the requests of one connection. Subscription changes are applied in the order received, and the other
 /// requests run on their own threads.
 fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
@@ -1514,13 +1531,14 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
         }
     };
     let peer = shared.next.fetch_add(1, Ordering::Relaxed);
-    shared
-        .peers
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered
-        // in them; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .insert(
+    {
+        let mut peers = shared
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers, and the new connection is registered
+            // in them; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        peers.insert(
             peer,
             Peer {
                 writer: writer.clone(),
@@ -1530,6 +1548,12 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
                 changes: HashMap::new(),
             },
         );
+        if peers.len() == 1 {
+            shared
+                .activity
+                .store(hold_connection_activity(true), Ordering::Relaxed);
+        }
+    }
     let mut reason = String::from("peer closed");
     // The end of this connection, which ends the work of its requests whose response is not complete.
     let ended = ConnectionEnd::open();
@@ -1909,13 +1933,20 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
     for topic in topics {
         change(shared, peer, topic, false, None, 0);
     }
-    shared
-        .peers
-        .lock()
-        // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is
-        // removed from them; the panic hook records the panic.
-        .unwrap_or_else(PoisonError::into_inner)
-        .remove(&peer);
+    {
+        let mut peers = shared
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is
+            // removed from them; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner);
+        peers.remove(&peer);
+        if peers.is_empty() && shared.activity.load(Ordering::Relaxed) {
+            shared
+                .activity
+                .store(!hold_connection_activity(false), Ordering::Relaxed);
+        }
+    }
     // The connection is gone from the peers, so a `down` of it that is delivered after this releases its press itself.
     let owned: Vec<(PressKey, Press)> = {
         let mut presses = shared

@@ -255,6 +255,9 @@ impl Platform for Windows {
     fn stall_schedule(&self) -> Result<(i32, u64), String> {
         unsupported::stall_schedule()
     }
+    fn hold_connection_activity(&self, held: bool) -> Result<(), String> {
+        unsupported::hold_connection_activity(held)
+    }
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {
         unsupported::collect_garbage(view)
     }

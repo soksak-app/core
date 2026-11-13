@@ -208,6 +208,10 @@ pub fn stall_schedule() -> Result<(i32, u64), String> {
     missing("process schedule")
 }
 
+pub fn hold_connection_activity(_held: bool) -> Result<(), String> {
+    missing("connection activity")
+}
+
 pub fn collect_garbage(_view: &PlatformWebview) -> Result<(), String> {
     missing("JavaScript garbage collection")
 }

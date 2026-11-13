@@ -1522,6 +1522,16 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.SpBlockAsyncSignals, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "sp_connection_activity_hold")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_connection_activity_hold: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_connection_activity_hold: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpConnectionActivityHold, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "sp_diagnostic_reports_directory")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API sp_diagnostic_reports_directory: %w", err)

@@ -59,6 +59,8 @@ mod layout;
 #[path = "link.rs"]
 mod link;
 
+#[path = "connection_activity.rs"]
+mod connection_activity;
 #[path = "events.rs"]
 mod events;
 #[path = "file_watch.rs"]
@@ -326,6 +328,11 @@ impl Platform for Darwin {
 
     fn stall_schedule(&self) -> Result<(i32, u64), String> {
         stall_sample::stall_schedule()
+    }
+
+    fn hold_connection_activity(&self, held: bool) -> Result<(), String> {
+        connection_activity::hold_connection_activity(held);
+        Ok(())
     }
 
     fn collect_garbage(&self, view: &PlatformWebview) -> Result<(), String> {

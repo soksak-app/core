@@ -18,6 +18,8 @@ The socket is not placed in the configuration directory because socket paths are
 
 Implementation: `src/platform/<os>/endpoint.*` in each [native host](hosts.md).
 
+While an endpoint connection is open, the host holds the connection activity of its platform: on macOS a user-initiated activity of `NSProcessInfo` (`NSActivityUserInitiatedAllowingIdleSystemSleep`, `native/darwin/src/connection_activity.h`). The system runs an application that is not active and shows no window in the background, at the scheduling priority 4, and under the load of other processes such a host answered a request of a window check after more than 15 s while its threads ran 40 ms of CPU; a client that is connected waits for the answers, so the host is not run in the background while one is. The host takes the activity when it registers the first connection and releases it when it removes the last one, so a host to which nothing is connected runs as the system schedules it. The activity allows the idle sleep of the system. Windows has no implementation yet and the request returns `connection activity is not implemented on windows`, which the host writes as the error `endpoint activity`.
+
 ## Discovery
 
 The host listens first and writes `<config-dir>/endpoint.json` only after its first window is registered. A client that reads the file can therefore send requests for that window at once: `windows.list` lists it, and its host entries answer. Page entries return 1003 until `host.windows` reports the window as `ready`, so a client waits for that status notification. A host that cannot register its first window does not write the file and ends startup with an error.

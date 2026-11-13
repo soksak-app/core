@@ -151,6 +151,7 @@
     "shapeSetFrame",
     "shapeSetStyle",
     "sp_block_async_signals",
+    "sp_connection_activity_hold",
     "sp_diagnostic_reports_directory",
     "sp_event_drain",
     "sp_event_set_boot",

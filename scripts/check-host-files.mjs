@@ -441,6 +441,7 @@ export const MAIN_THREAD_FREE = {
   sp_host_diagnostic_callbacks_install: "diagnostic startup copies its complete callback table before diagnostic work begins, without invoking a callback or accessing AppKit",
   sp_stall_heartbeat: "the stall watch calls it on its own thread, because a stalled main thread could not run it, and it uses atomics and CFRunLoopPerformBlock, which any thread may call",
   sp_stall_schedule: "the stall watch calls it on its own thread, because a stalled main thread could not run it, and it reads proc_pidinfo and getrusage of the process, which any thread may call",
+  sp_connection_activity_hold: "the endpoint calls it on the goroutine or thread of a connection when the first connection opens and when the last one closes, and it begins or ends an activity of NSProcessInfo under a lock, which any thread may call",
   sp_stall_await_awake: "the stall watch blocks its own thread on a semaphore until the main run loop wakes; on the main thread the function would wait for itself",
 };
 

@@ -283,7 +283,8 @@ func Functions() abi.NativeFunctions {
 		ShapeSetStyle: func(a0 unsafe.Pointer, a1 float64, a2 float64, a3 float64, a4 float64, a5 float64, a6 float64, a7 float64, a8 float64, a9 float64, a10 float64) {
 			C.shapeSetStyle(a0, C.double(a1), C.double(a2), C.double(a3), C.double(a4), C.double(a5), C.double(a6), C.double(a7), C.double(a8), C.double(a9), C.double(a10))
 		},
-		SpBlockAsyncSignals: func() int32 { return int32(C.sp_block_async_signals()) },
+		SpBlockAsyncSignals:      func() int32 { return int32(C.sp_block_async_signals()) },
+		SpConnectionActivityHold: func(a0 bool) { C.sp_connection_activity_hold(C.bool(a0)) },
 		SpDiagnosticReportsDirectory: func(a0 **byte) *byte {
 			return (*byte)(unsafe.Pointer(C.sp_diagnostic_reports_directory((**C.char)(unsafe.Pointer(a0)))))
 		},

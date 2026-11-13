@@ -98,6 +98,7 @@ fn shared(service: Pages) -> Arc<Shared> {
         orders: AtomicU64::new(1),
         stopping: AtomicBool::new(false),
         config: PathBuf::new(),
+        activity: AtomicBool::new(false),
     })
 }
 

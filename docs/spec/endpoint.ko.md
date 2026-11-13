@@ -18,6 +18,8 @@ macOS 호스트가 이 명세를 구현하며 [기능 상태](../features.ko.md)
 
 구현 위치: 각 [네이티브 호스트](hosts.ko.md)의 `src/platform/<os>/endpoint.*`.
 
+Endpoint connection이 열려 있는 동안 host는 platform의 connection activity를 쥔다. macOS에서는 `NSProcessInfo`의 user-initiated activity(`NSActivityUserInitiatedAllowingIdleSystemSleep`, `native/darwin/src/connection_activity.h`)다. System은 활성이 아니고 창을 보이지 않는 application을 background에서 scheduling priority 4로 실행한다. 다른 process의 부하 아래에서 그런 host는 window check의 요청에 15 s 넘게 지나서 답했고, 그동안 그 thread들은 CPU를 40 ms 썼다. 연결된 client는 답을 기다리므로 host는 client가 연결되어 있는 동안 background에서 실행되지 않는다. Host는 첫 connection을 등록할 때 activity를 쥐고 마지막 connection을 제거할 때 놓으므로, 아무것도 연결되지 않은 host는 system이 정하는 대로 실행된다. 이 activity는 system의 idle sleep을 허용한다. Windows에는 아직 구현이 없고 요청은 `connection activity is not implemented on windows`를 돌려주며, host는 그것을 error `endpoint activity`로 쓴다.
+
 ## 주소 확인
 
 호스트는 먼저 듣기를 시작하고, 첫 창을 등록한 뒤에만 `<config-dir>/endpoint.json`을 기록한다. 따라서 파일을 읽은 클라이언트는 그 창에 바로 요청을 보낼 수 있다. `windows.list`는 그 창을 나열하고, 그 창의 호스트 항목은 응답한다. 페이지 항목은 `host.windows`가 그 창을 `ready`로 보고할 때까지 1003을 반환하므로 클라이언트는 그 상태 알림을 기다린다. 첫 창을 등록하지 못한 호스트는 파일을 기록하지 않고 오류로 시작을 끝낸다.

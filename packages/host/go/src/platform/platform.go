@@ -450,6 +450,10 @@ type Platform interface {
 	// StallSchedule returns the scheduling priority of this process, which is 4 while the system runs it in the background, and the
 	// CPU time that its threads used, in nanoseconds. The watch of the main thread records them with a stall (docs/spec/logging.md, stalls).
 	StallSchedule() (priority int32, cpuNanos uint64, err error)
+	// HoldConnectionActivity holds the activity of the process that keeps the system from running it in the background while held
+	// is true, and releases it while held is false; a call that requests the current state changes nothing. The endpoint holds it
+	// while a connection is open (docs/spec/endpoint.md#transport). Any goroutine may call it.
+	HoldConnectionActivity(held bool) error
 	// CollectGarbage makes the WebContent processes of view collect JavaScript objects. The memory measurement of a diagnostic build
 	// uses it. Call it on the UI thread.
 	CollectGarbage(view unsafe.Pointer) error

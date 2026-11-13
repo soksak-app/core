@@ -1649,6 +1649,56 @@ fn the_close_of_a_connection_releases_its_presses() {
     endpoint.stop();
 }
 
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn sp_connection_activity_held() -> bool;
+}
+
+// The host holds the connection activity while a connection of its endpoint is open, so the system does not run it in the
+// background while a client waits for its answers, and releases it when the last connection closes. The end of a connection
+// releases the activity before it releases the presses of the connection, so the delivered release of a press shows that the
+// end passed the activity.
+// contract: endpoint.connection.holds-activity
+#[cfg(target_os = "macos")]
+#[test]
+fn the_endpoint_holds_the_activity_while_a_connection_is_open() {
+    let held = || unsafe { sp_connection_activity_held() };
+    let config = folder::Folder::new();
+    let (fake, seen) = Fake::new();
+    let endpoint = start(config.path(), "test-activity", fake.clone());
+    assert!(!held(), "the activity is held before a connection");
+    let mut first = open(&endpoint);
+    let down = json!({"window": "w1", "pointer": "second", "x": 1, "y": 2, "phase": "down", "button": "right"});
+    assert_eq!(
+        request(&mut first, 1, "input.pointer", down)["result"],
+        Value::Null
+    );
+    let mut second = open(&endpoint);
+    let down = json!({"window": "w1", "pointer": "third", "x": 3, "y": 4, "phase": "down", "button": "right"});
+    assert_eq!(
+        request(&mut second, 1, "input.pointer", down)["result"],
+        Value::Null
+    );
+    assert!(
+        held(),
+        "the activity is not held while two connections are open"
+    );
+    while seen.try_recv().is_ok() {}
+    drop(first);
+    next_pointer(&seen, "up");
+    assert!(
+        held(),
+        "the close of one of two connections released the activity"
+    );
+    drop(second);
+    next_pointer(&seen, "up");
+    assert!(
+        !held(),
+        "the activity is held after the last connection closed"
+    );
+    endpoint.stop();
+}
+
 // A release refused with 1007 is delivered at the next host.buttons mask 0, and not at a mask that is not 0.
 // contract: endpoint.input.close-releases-presses
 #[test]
