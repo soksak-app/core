@@ -589,6 +589,20 @@ const FEATURE_LINKS = [
   },
 
   {
+    id: "F767-4-1",
+    implementation: [
+      { file: "packages/host/go/tests/support/event_log.go", symbol: "func CaptureLogAwait(t *testing.T) (written func() string, await func(text string) string) {" },
+      { file: "packages/host/rust/tests/support/records.rs", symbol: "pub fn await_text(writer: &EventLog, config: &Path, text: &str) -> String {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAnAcceptError" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_an_accept_error" },
+    ],
+    expected: "The endpoint checks of both hosts wait for the written batch of the event writer that holds their record.",
+    levels: ["unit"],
+  },
+
+  {
     id: "F767-5",
     implementation: [
       { file: "native/darwin/tests/presentation_order_test.m", symbol: "if ((int)waits.count < draws) [webview evaluateJavaScript:@\"draw()\" completionHandler:nil];" },

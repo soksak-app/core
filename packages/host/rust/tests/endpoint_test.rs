@@ -1174,19 +1174,16 @@ fn the_endpoint_records_why_a_connection_closes() {
         );
         assert_eq!(receive(&mut connection), None);
         // A frame that ends early closes with the reason of the read. The record is written by the serve loop after it
-        // reads the end of the connection, and nothing else reports that write, so the event log is read until it appears.
+        // reads the end of the connection, and the wait ends at the batch that holds it.
         let mut connection = open(&endpoint);
         connection.write_all(&10u32.to_be_bytes()).unwrap();
         connection.write_all(b"{\"j").unwrap();
         drop(connection);
-        loop {
-            writer.flush().unwrap();
-            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
-            if log.contains("connection closed: connection closed inside a frame body") {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
+        records::await_text(
+            &writer,
+            config,
+            "connection closed: connection closed inside a frame body",
+        );
         // The record of a close by the peer is written before the page is told that the last watcher ended.
         let mut connection = open(&endpoint);
         request(
@@ -1300,15 +1297,8 @@ fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
         entered.recv().unwrap();
         drop(connection);
         // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection. The
-        // serve loop writes those records, and no event reports the writes, so the event log is read until each appears.
-        let wait_for = |text: &str| loop {
-            writer.flush().unwrap();
-            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
-            if log.contains(text) {
-                return log;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        };
+        // serve loop writes those records, and each wait ends at the batch that holds its record.
+        let wait_for = |text: &str| records::await_text(&writer, config, text);
         wait_for("connection closed: peer closed");
         open_gate.send(()).unwrap();
         let log = wait_for("host endpoint: reply to 9 not sent: peer closed");
@@ -1513,16 +1503,8 @@ fn the_endpoint_records_an_accept_error() {
         let (fake, _) = Fake::new();
         endpoint::fail_accept_for_test(&config.join("sockets"), "accept fault");
         let endpoint = start(config, "test-accept-error", fake);
-        // The record is written by the accept loop after accept returns, and no event reports that write, so the event log is
-        // read until the record appears.
-        loop {
-            writer.flush().unwrap();
-            let log = records::text_of(&records::read_events(&records::event_log_path(config)));
-            if log.contains("error host endpoint accept: accept fault") {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
+        // The record is written by the accept loop after accept returns, and the wait ends at the batch that holds it.
+        records::await_text(&writer, config, "error host endpoint accept: accept fault");
         endpoint.stop();
         writer.flush().unwrap();
         return;

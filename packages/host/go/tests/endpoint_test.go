@@ -1450,7 +1450,7 @@ func TestEndpointRecordsWhyAConnectionCloses(t *testing.T) {
 // A connection that ends inside a frame closes with the reason of the read, not with peer closed.
 // contract: endpoint.close.reason-of-read-error
 func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
-	written := support.CaptureLog(t)
+	_, await := support.CaptureLogAwait(t)
 	backend := newFakeBackend()
 	_, address, _ := serve(t, backend)
 
@@ -1460,27 +1460,13 @@ func TestEndpointRecordsAReadErrorInsideAFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = conn.Close()
-	waitForLog(t, written, "connection closed: connection closed inside a frame body")
-}
-
-// waitForLog reads the log until it holds text. The records are written by the connection goroutines, and no event reports
-// those writes, so the log is read until the record appears; a record that never appears leaves the check to the limit of
-// its runner.
-func waitForLog(t *testing.T, written func() string, text string) string {
-	t.Helper()
-	for {
-		log := written()
-		if strings.Contains(log, text) {
-			return log
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	await("connection closed: connection closed inside a frame body")
 }
 
 // A reply to a connection that the peer closed before the reply is not an error: the host records the reply as not sent.
 // contract: endpoint.close.reply-after-peer-close
 func TestEndpointRecordsAReplyToAClosedConnectionAsNotSent(t *testing.T) {
-	written := support.CaptureLog(t)
+	_, await := support.CaptureLogAwait(t)
 	backend := newFakeBackend()
 	backend.holdMethod = "status.get"
 	backend.held = make(chan struct{})
@@ -1491,9 +1477,9 @@ func TestEndpointRecordsAReplyToAClosedConnectionAsNotSent(t *testing.T) {
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 9, "method": "status.get", "params": map[string]any{"window": "main", "name": "core.layout"}})
 	<-backend.entered
 	_ = conn.Close()
-	waitForLog(t, written, "connection closed: peer closed")
+	await("connection closed: peer closed")
 	close(backend.held)
-	log := waitForLog(t, written, "info host endpoint: reply to 9 not sent: peer closed")
+	log := await("info host endpoint: reply to 9 not sent: peer closed")
 	if strings.Contains(log, "error host endpoint") {
 		t.Fatalf("the reply to a closed connection was an error:\n%s", log)
 	}
@@ -1520,7 +1506,7 @@ func (brokenPipeConn) Write([]byte) (int, error) {
 // A write that fails because the peer closed the connection closes it as a peer close and records the frame as not sent.
 // contract: endpoint.close.reply-after-peer-close
 func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
-	written := support.CaptureLog(t)
+	written, await := support.CaptureLogAwait(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -1534,7 +1520,7 @@ func TestEndpointRecordsAWriteThatThePeerClosedAsNotSent(t *testing.T) {
 	t.Cleanup(func() { _ = endpoint.Close() })
 	conn := dial(t, listener.Addr().String())
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 4, "method": "windows.list"})
-	log := waitForLog(t, written, "info host endpoint: reply to 4 not sent: peer closed")
+	log := await("info host endpoint: reply to 4 not sent: peer closed")
 	closeRecord(t, written, "peer closed")
 	if strings.Contains(log, "error host endpoint") {
 		t.Fatalf("a write to a connection that the peer closed was an error:\n%s", log)
@@ -1552,7 +1538,7 @@ func (l acceptFault) Accept() (net.Conn, error) { return nil, l.err }
 // An accept that fails while the endpoint serves ends the accept loop and writes the reason to the application log.
 // contract: endpoint.accept.error-is-recorded
 func TestEndpointRecordsAnAcceptError(t *testing.T) {
-	written := support.CaptureLog(t)
+	_, await := support.CaptureLogAwait(t)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -1564,11 +1550,8 @@ func TestEndpointRecordsAnAcceptError(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = endpoint.Close() })
-	// The record is written by the accept goroutine after Accept returns, and no event reports that write, so the log is read until it appears.
-	want := " error host endpoint accept: accept fault"
-	for !strings.Contains(written(), want) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	// The record is written by the accept goroutine after Accept returns, and the wait ends at the batch that holds it.
+	await(" error host endpoint accept: accept fault")
 }
 
 // A request that ends without its result, the error 1005, writes the method and the reason to the application log before

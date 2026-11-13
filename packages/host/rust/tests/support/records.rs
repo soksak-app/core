@@ -20,6 +20,24 @@ pub fn start_writer(config: &Path) -> Arc<EventLog> {
     log
 }
 
+/// The records of the host in `config` once they hold `text`, in the text form of `text_of`. The writer tells each batch that it
+/// wrote (`set_on_write`), and the records are read again after each batch, so a record that a thread of the host writes ends
+/// the wait when its batch is written; a record that never comes leaves the check to the limit of its runner.
+pub fn await_text(writer: &EventLog, config: &Path, text: &str) -> String {
+    let (wrote, written) = std::sync::mpsc::sync_channel::<()>(1);
+    writer.set_on_write(Box::new(move |_, _| {
+        let _ = wrote.try_send(());
+    }));
+    loop {
+        writer.flush().unwrap();
+        let log = text_of(&read_events(&event_log_path(config)));
+        if log.contains(text) {
+            return log;
+        }
+        written.recv().unwrap();
+    }
+}
+
 /// The events of a process of the host: the lines of the main file at `path` and, when it exists, of the debug file beside it, in
 /// the order of `seq` (the writer assigns `seq` across both files).
 pub fn read_events(path: &Path) -> Vec<Value> {

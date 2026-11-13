@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F767-4-1: the endpoint checks of both hosts wait for the written batch of the event writer that holds their record instead of reading the log every 10 ms.
 - F767-5: the presentation order check starts each draw of its page at the acknowledgement of the draw before it instead of after fixed pauses, and judges that order.
 - F767-2-2: the commands of the window-check harness run in a process group of their own and end with every process they started, at once at their limit and after their own cleanup at an interrupt, instead of SIGKILL 30 seconds after SIGTERM to the command alone.
 - F769-1: a native test of a run with a folder that reaches its limit leaves the stacks of its processes and of the web content and other services that the system started for them, with the state of each service, in the folder of the run.

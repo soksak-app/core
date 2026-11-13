@@ -1,6 +1,7 @@
 package support
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,37 @@ func CaptureLog(t *testing.T) func() string {
 		}
 		return TextOf(ReadEvents(t, log.Path()))
 	}
+}
+
+// CaptureLogAwait is CaptureLog with a wait: await(text) returns the records once they hold text. The writer tells each batch
+// that it wrote (SetOnWrite), and the records are read again after each batch, so a record that a goroutine of the host writes
+// ends the wait when its batch is written; a record that never comes leaves the check to the limit of its runner.
+func CaptureLogAwait(t *testing.T) (written func() string, await func(text string) string) {
+	log := UseEventLog(t)
+	wrote := make(chan struct{}, 1)
+	log.SetOnWrite(func(string, int64) {
+		select {
+		case wrote <- struct{}{}:
+		default:
+		}
+	})
+	written = func() string {
+		if err := log.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		return TextOf(ReadEvents(t, log.Path()))
+	}
+	await = func(text string) string {
+		t.Helper()
+		for {
+			records := written()
+			if strings.Contains(records, text) {
+				return records
+			}
+			<-wrote
+		}
+	}
+	return written, await
 }
 
 // BufferDrops flushes the writer and returns the fields of the events `host.buffer.dropped`.
