@@ -589,8 +589,12 @@ pub fn view_import_map_text(frontend: &dyn Fn(&str) -> Option<Vec<u8>>) -> Resul
     let data = frontend(VIEW_IMPORTS_FILE).ok_or_else(|| {
         format!("{VIEW_IMPORTS_FILE}: the view import map is missing from the bundled frontend")
     })?;
-    String::from_utf8(data)
-        .map_err(|error| format!("{VIEW_IMPORTS_FILE}: the view import map is not UTF-8: {error}"))
+    String::from_utf8(data).map_err(|error| {
+        format!(
+            "{VIEW_IMPORTS_FILE}: the view import map is not UTF-8 at byte {}",
+            error.utf8_error().valid_up_to()
+        )
+    })
 }
 
 /// Sets the view import map of the application from view-imports.json of the bundled frontend. The native view handler inserts the

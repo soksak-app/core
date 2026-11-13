@@ -486,3 +486,13 @@ fn view_import_map_fails_without_the_staged_file() {
         "a bundled frontend without view-imports.json sets no view import map"
     );
 }
+
+// contract: document.view-import-map.native
+#[test]
+fn view_import_map_refuses_a_file_that_is_not_utf8() {
+    let frontend = |name: &str| (name == "view-imports.json").then(|| vec![b'{', 0xff, b'}']);
+    assert_eq!(
+        installed::view_import_map_text(&frontend),
+        Err("view-imports.json: the view import map is not UTF-8 at byte 1".to_string())
+    );
+}

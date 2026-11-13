@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 두 host 가 UTF-8 이 아닌 view import map 을 같은 문구로 거부하고, 그 문구는 UTF-8 이 아닌 첫 byte 를 가리킨다 (F803).
 - Go host 의 memory pressure source 의 거부된 시작이 실행 중인 source 의 report 를 더 이상 바꾸지 않으므로, 그 뒤의 level 이 사라지지 않는다 (F802).
 - Go core root resolver 와 view import map 텍스트가 설정 폴더와 번들된 frontend 의 함수가 되고, memory pressure 시험이 대역 source 대신 system tier 의 자식 process 에서 platform 의 실제 source 를 실행한다 (F795-9).
 - document region, file drop 기록, exposure 응답, compositor 배치 대기 시험이 page 의 실제 host module 을 대체하는 대신 page-wire case 를 재생한다 (F795-10).

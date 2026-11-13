@@ -271,6 +271,17 @@ func TestViewImportMapFailsWithoutTheStagedFile(t *testing.T) {
 	}
 }
 
+// contract: document.view-import-map.native
+func TestViewImportMapRefusesAFileThatIsNotUTF8(t *testing.T) {
+	frontend := coreFrontend()
+	frontend["view-imports.json"] = &fstest.MapFile{Data: []byte{'{', 0xff, '}'}}
+	_, err := host.ViewImportMapText(frontend)
+	want := "view-imports.json: the view import map is not UTF-8 at byte 1"
+	if err == nil || err.Error() != want {
+		t.Fatalf("a view import map that is not UTF-8 answered %v, want %q", err, want)
+	}
+}
+
 // contract: document.core-root.grant
 func TestCoreRootServesACoreTargetBesideAMalformedPlugin(t *testing.T) {
 	config := coreRootFixture(t)

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	sok "github.com/soksak-app/core/packages/sok/go/src"
@@ -608,11 +609,18 @@ func ApplyPluginEventClasses(log *EventLog, configDir string) {
 const viewImportsFile = "view-imports.json"
 
 // ViewImportMapText returns the text of the view import map of the application: view-imports.json of the bundled frontend. A
-// missing file is an error.
+// missing file and a file that is not UTF-8 are errors; the error of the second names the first byte that is not UTF-8.
 func ViewImportMapText(frontend fs.FS) (string, error) {
 	data, err := fs.ReadFile(frontend, viewImportsFile)
 	if err != nil {
 		return "", fmt.Errorf("%s: the view import map is missing from the bundled frontend: %w", viewImportsFile, err)
+	}
+	for at := 0; at < len(data); {
+		r, size := utf8.DecodeRune(data[at:])
+		if r == utf8.RuneError && size <= 1 {
+			return "", fmt.Errorf("%s: the view import map is not UTF-8 at byte %d", viewImportsFile, at)
+		}
+		at += size
 	}
 	return string(data), nil
 }
