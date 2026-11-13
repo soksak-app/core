@@ -1,27 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installContributions } from "../contributions.js";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 // The plugin page of the library shows the name, description, state, version, sidecars, and operation buttons of each plugin
 // (Plugin screen in docs/spec/installation.md).
 test("the plugin page of the library lists each plugin with its description, versions, sidecars and actions", async (t) => {
   const dom = new JSDOM("<body><div id=library></div></body>");
   globalThis.document = dom.window.document;
-  t.mock.module("../projects.js", { namedExports: {
-    inLibrary: () => true, all: () => [], isOpen: () => false, active: () => null,
-  } });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
   t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
-  t.mock.module("../library-preview.js", { namedExports: { preview: () => document.createElement("div") } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params, value) => {
-    element.dataset.command = command;
-    element.dataset.params = JSON.stringify(params ?? {});
-    if (value) element.dataset.value = value;
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
-  t.mock.module("../contributions.js", { namedExports: {
-    contributionsState: () => [{ plugin: "tty", point: "db.items", index: 0, state: "connected" }], onContributionsChange: () => {},
-  } });
+  // The tty plugin connects its item to the extension point items of the db plugin, which declares it with the version 1.0.0.
+  installContributions([
+    { id: "db", version: "2.0.0", package: "@x/db", manifest: { extends: { items: { version: "1.0.0", schema: {} } } } },
+    { id: "tty", version: "0.1.0", package: "@scope/tty", manifest: { contributes: { "db.items": [{ range: "^1.0.0", module: "item.js" }] } } },
+  ]);
   let refreshed = 0;
   const listeners = [];
   const status = {
@@ -129,7 +126,8 @@ test("the plugin page of the library lists each plugin with its description, ver
     assert.equal(text("kept", "versions"), "설치된 버전 2.0.0 · core 0.0.24에 맞는 버전 없음");
     assert.equal(text("lone", "versions"), "core 0.0.24에 맞는 버전 없음");
     assert.equal(text("lone", "sidecars"), null, "a card without a selected version names no sidecars");
-    assert.deepEqual(actions("kept")[0], ["적용", "core.plugins.apply", JSON.stringify({}), true]);
+    // A command without params writes no data-params (createBinder mark), so the apply button has none.
+    assert.deepEqual(actions("kept")[0], ["적용", "core.plugins.apply", undefined, true]);
 
     status.operation = { action: "install", plugin: "db", state: "done", error: null };
     for (const fn of listeners) fn();

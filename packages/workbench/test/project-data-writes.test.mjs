@@ -36,15 +36,11 @@ mock.module("../settings.js", {
   namedExports: { projectSidebars: () => ({ sets: [], links: [] }), beginSettings: () => {}, selectProject: () => {},
     value: () => "tabs", flushSettings: async () => {} },
 });
-mock.module("../operations.js", { namedExports: { beginOperation: () => "operation" } });
 mock.module("../tab-state.js", {
   namedExports: { openTabStates: async () => ({ reconcile: async () => {}, flush: async () => {} }) },
 });
 mock.module("../tab-session.js", {
   namedExports: { createTabSessions: () => ({ read: () => null, reconcile: async () => {}, flush: async () => {} }) },
-});
-mock.module("../document-regions.js", {
-  namedExports: { documentRegions: { interaction: () => null, tabs: () => [], useSessions: () => {} } },
 });
 mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
 

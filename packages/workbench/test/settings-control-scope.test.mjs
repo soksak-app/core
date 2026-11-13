@@ -12,8 +12,6 @@ test("a control of a setting changes the value that it shows in the scope that t
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
   t.after(() => dom.window.close());
-  t.mock.module("../compositor.js", { exports: { ...await import("../compositor.js"), standIn: () => {} } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
   const settings = await import("../settings.js");
   settings.beginSettings({ common: { top: false, mode: "dark" }, projects: [{ id: "prj-a", root: "/work/a", settings: { top: true, mode: "light" } }] }, "prj-a");
   const { registry } = await import("../exposure.js");

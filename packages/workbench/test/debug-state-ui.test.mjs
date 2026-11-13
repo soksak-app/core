@@ -3,6 +3,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 const state = (core, modal) => JSON.stringify({ time: "t", host: "tauriv2", versions: { core }, windows: [], workbench: { modal } });
 const FILES = {
@@ -33,18 +37,6 @@ async function openView(t, files = FILES, record = async () => ({ path: "logs/st
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
-  t.mock.module("../commands.js", { namedExports: {
-    commandOf: () => null,
-    delegate: () => {},
-    mark: (el, name, params, valueName) => {
-      el.dataset.command = name;
-      el.dataset.params = JSON.stringify(params);
-      if (valueName) el.dataset.value = valueName;
-    },
-    run: async () => {},
-  } });
-  t.mock.module("../exposure.js", { namedExports: { registry: { list: () => ({ status: [] }), registrants: () => [], handle: async () => ({}) } } });
   t.mock.module("../shown-errors.js", { namedExports: {
     hideError: () => {},
     showError: (element, where, text) => { element.textContent = text; shown.push({ where, text }); },

@@ -3,22 +3,11 @@
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
 
-const methods = new Map();
 const hostEvents = new Map();
 const inputs = [];
-mock.module("../exposure.js", { exports: {
-  registry: { method: (name, handler) => methods.set(name, handler) },
-  gateSurfaceReplies: () => {},
-} });
+// The modules below stay replaced: the plane and the surface modules present native surfaces, resize-loop needs a WebKit ResizeObserver,
+// page-layout imports host exports that the host replacement does not provide, and the host replacement stays as it is.
 mock.module("../host.js", { exports: { log: () => {}, native: false, watchCalls: () => {} } });
-mock.module("../page-log.js", { exports: { emitEvent: () => {} } });
-mock.module("../page-identity.js", { exports: { pageIdentity: "page-fixture" } });
-mock.module("../transcript.js", { exports: {
-  createTranscript: () => ({ set: () => {}, record: () => {} }), transcriptSender: () => () => {},
-} });
-mock.module("../surface-reply-hold.js", { exports: {
-  createSurfaceReplyHold: () => ({ gate: () => {}, closed: () => {}, hold: () => {}, held: async () => {} }),
-} });
 mock.module("../surface-modules.js", { exports: { mountedSurface: () => null } });
 mock.module("../resize-loop.js", { exports: { watchResizeLoop: () => {} } });
 mock.module("../page-layout.js", { exports: { armLayoutFault: () => {} } });
@@ -37,25 +26,23 @@ globalThis.document = {
   },
 };
 await import("../observe.js");
+const { registry } = await import("../exposure.js");
 
-test("diagnostics.drag.boundary answers the centre of the named boundary and its absence", () => {
-  const boundary = methods.get("diagnostics.drag.boundary");
-  assert.equal(typeof boundary, "function", "the page registers no diagnostics.drag.boundary");
-  assert.deepEqual(boundary({ axis: "x", line: 3 }), { x: 105, y: 190 });
+test("diagnostics.drag.boundary answers the centre of the named boundary and its absence", async () => {
+  assert.deepEqual(await registry.handle({ id: 1, method: "diagnostics.drag.boundary", params: { axis: "x", line: 3 } }), { result: { x: 105, y: 190 } });
   assert.equal(selectors.at(-1), '.sp-divider[data-axis="x"][data-line="3"]');
-  assert.throws(() => boundary({ axis: "y", line: 2 }), { message: "no y boundary at line 2" });
+  const absent = await registry.handle({ id: 2, method: "diagnostics.drag.boundary", params: { axis: "y", line: 2 } });
+  assert.equal(absent.error?.message, "no y boundary at line 2");
 });
 
 test("the page drag presses at the point that diagnostics.drag.boundary answers", async () => {
-  const boundary = methods.get("diagnostics.drag.boundary");
-  assert.equal(typeof boundary, "function", "the page registers no diagnostics.drag.boundary");
+  const from = (await registry.handle({ id: 3, method: "diagnostics.drag.boundary", params: { axis: "x", line: 3 } })).result;
   inputs.length = 0;
-  const drag = methods.get("diagnostics.drag")({ axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 });
+  const drag = registry.handle({ id: 4, method: "diagnostics.drag", params: { axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 } });
   // One leg out and one leg back, each ended by a host tick that is marked last.
   hostEvents.get("diagnostics-tick")({ fraction: 1, last: true });
   hostEvents.get("diagnostics-tick")({ fraction: 1, last: true });
-  const result = await drag;
-  const from = boundary({ axis: "x", line: 3 });
+  const { result } = await drag;
   assert.deepEqual(result.from, from);
   assert.equal(result.steps, 2, "each leg ends at the step that the host marks last");
   assert.equal(result.asked, 32, "asked is times × 2 × ms");
@@ -65,8 +52,9 @@ test("the page drag presses at the point that diagnostics.drag.boundary answers"
 
 test("a host tick that reports a step it could not pace rejects the page drag", async () => {
   inputs.length = 0;
-  const drag = methods.get("diagnostics.drag")({ axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 });
+  const drag = registry.handle({ id: 5, method: "diagnostics.drag", params: { axis: "x", line: 3, dx: 20, dy: 0, ms: 16, times: 1 } });
   hostEvents.get("diagnostics-tick")({ error: "the window is on no display with a refresh rate" });
   // The drag ends only by its rejection, so the rejection is the event that the check waits for.
-  await assert.rejects(drag, { message: "the window is on no display with a refresh rate" });
+  const { error } = await drag;
+  assert.equal(error?.message, "the window is on no display with a refresh rate");
 });

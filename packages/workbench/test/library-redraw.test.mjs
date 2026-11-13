@@ -3,28 +3,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 test("a library render keeps the controls of unchanged project cards in the document", async (t) => {
   const dom = new JSDOM("<body><div id=library></div></body>");
   globalThis.document = dom.window.document;
   globalThis.MutationObserver = dom.window.MutationObserver;
+  globalThis.location = dom.window.location;
   const projects = [
     { id: "prj-a", title: "a", root: "/work/a", spaces: [{ id: "s" }], activeSpaceId: "s" },
     { id: "prj-b", title: "b", root: "/work/b", spaces: [{ id: "s" }], activeSpaceId: "s" },
   ];
-  t.mock.module("../projects.js", { namedExports: {
-    inLibrary: () => true, all: () => projects, isOpen: () => false, active: () => null, close: async () => {},
-  } });
+  // The window starts with the two projects in its store snapshot, so the library lists them (docs/spec/native-host.md#page-start).
+  const { begin } = await import("../projects.js");
+  begin({ common: {}, projects, open: [] });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
   t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false,
     folder: async (root) => ({ root, identity: "id" }) } } });
-  t.mock.module("../library-preview.js", { namedExports: { preview: () => {
-    const el = document.createElement("div"); el.className = "library-preview"; return el;
-  } } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params) => {
-    element.dataset.command = command; element.dataset.params = JSON.stringify(params);
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null, outdated: [], updates: [] }), failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} },
     onPluginOperations: () => {},
@@ -57,16 +55,11 @@ test("a library render keeps the controls of unchanged project cards in the docu
 test("a plugin page render keeps the controls of unchanged plugin cards in the document", async (t) => {
   const dom = new JSDOM("<body><div id=library></div></body>");
   globalThis.document = dom.window.document;
-  t.mock.module("../projects.js", { namedExports: {
-    inLibrary: () => true, all: () => [], isOpen: () => false, active: () => null, close: async () => {},
-  } });
+  globalThis.location = dom.window.location;
+  const { begin } = await import("../projects.js");
+  begin({ common: {}, projects: [], open: [] });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
   t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
-  t.mock.module("../library-preview.js", { namedExports: { preview: () => document.createElement("div") } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params) => {
-    element.dataset.command = command; element.dataset.params = JSON.stringify(params ?? {});
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   const status = { registry: "file:///registry/index.json", error: null, restart: false, operation: null, outdated: [], updates: [], plugins: [
     { id: "tty", name: "터미널", description: "", state: "loaded", installed: { version: "0.1.0", enabled: true }, latest: "0.1.0", sidecars: [] },
   ] };

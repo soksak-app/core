@@ -36,7 +36,6 @@ mock.module("../host.js", {
     log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null, documents: null, report: () => {},
   },
 });
-mock.module("../plugin-data.js", { exports: { configureData: () => {}, compareProjectData: () => {} } });
 mock.module("../settings.js", {
   exports: { projectSidebars: () => ({ sets: [], links: [] }), beginSettings: async () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {} },
 });

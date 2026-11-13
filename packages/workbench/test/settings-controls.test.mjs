@@ -10,23 +10,22 @@ test("every setting form is drawn with its one control", async (t) => {
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../compositor.js", { exports: {
-    ...await import("../compositor.js"), standIn: () => {},
-  } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [
-    { id: "fixture", name: "Fixture", description: "Fixture card.", version: "1.0.0", surface: true, sections: [], sidecars: [] },
-  ] } });
   const settings = await import("../settings.js");
-  settings.setPluginSettings([{ id: "fixture", settings: {
-    shape: { label: "모양", type: "enum", values: ["block", "underline", "beam"], default: "block" },
-    columns: { label: "열", type: "integer", minimum: 20, maximum: 400, default: 80 },
-    family: { label: "글꼴", type: "string", maxLength: 40, default: "Menlo" },
-    home: { label: "홈 주소", type: "address", default: "" },
-  } }]);
-  const sets = [{ id: "set-1", title: "탐색기", sections: [], layout: "list" }];
-  t.mock.module("../settings.js", { exports: {
-    ...settings, scopedValue: (key, scope) => key === "sets" ? sets : key === "links" ? [] : settings.scopedValue(key, scope),
-  } });
+  const { installEnvironment } = await import("../environment.js");
+  const surface = { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } };
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] }] } },
+    sidebars: { sets: [{ id: "set-1", title: "탐색기", sections: [], layout: "list" }], links: [] },
+  }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", manifest: {
+    id: "fixture", name: "Fixture", description: "Fixture card.", mark: "f", icon: "<path/>", surface,
+    settings: {
+      shape: { label: "모양", type: "enum", values: ["block", "underline", "beam"], default: "block" },
+      columns: { label: "열", type: "integer", minimum: 20, maximum: 400, default: 80 },
+      family: { label: "글꼴", type: "string", maxLength: 40, default: "Menlo" },
+      home: { label: "홈 주소", type: "address", default: "" },
+    },
+  } }] }), [], "the fixture environment refused a plugin");
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const ui = await import("../settings-ui.js");
@@ -113,10 +112,6 @@ test("the settings modal reports the pane that scrolls beside the card", async (
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../compositor.js", { exports: {
-    ...await import("../compositor.js"), standIn: () => {},
-  } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
   const ui = await import("../settings-ui.js?pane");
   try {
     ui.openSettings();

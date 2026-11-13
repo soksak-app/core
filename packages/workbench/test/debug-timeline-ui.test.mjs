@@ -4,9 +4,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
 
 import * as timelineModule from "../debug-timeline.js";
 import { HOLD_LIMIT, PAGE_ROWS } from "../debug-timeline.js";
+
+installExposure(exposureFile);
 
 const LEVELS = ["error", "warn", "info", "debug", "trace"];
 
@@ -90,18 +94,6 @@ async function openView(t, { query, saveText = async () => ({ saved: null }) }) 
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
-  t.mock.module("../commands.js", { namedExports: {
-    commandOf: () => null,
-    delegate: () => {},
-    mark: (el, name, params, valueName) => {
-      el.dataset.command = name;
-      el.dataset.params = JSON.stringify(params ?? {});
-      if (valueName) el.dataset.value = valueName;
-    },
-    run: async () => {},
-  } });
-  t.mock.module("../exposure.js", { namedExports: { registry: { list: () => ({ status: [] }), registrants: () => [], handle: async () => ({}) } } });
   t.mock.module("../shown-errors.js", { namedExports: {
     hideError: (element, where) => hidden.push(where),
     showError: (element, where, text) => { element.textContent = text; shown.push({ where, text }); },

@@ -5,9 +5,6 @@ import { JSDOM } from "jsdom";
 mock.module(new URL("../host.js", import.meta.url).href, {
   namedExports: { native: true, surfaces: { kinds: ["probe"] } },
 });
-mock.module(new URL("../registry.js", import.meta.url).href, {
-  namedExports: { plugin: () => ({ surface: () => ({ module: "probe.js", composition: { kind: "dom" } }) }) },
-});
 
 /** A placement as the host answers it: a visible surface names the backing scale whose device pixels it was fitted to. */
 const seatedAt = (placement) => (placement.visible === true ? { ...placement, scale: 2 } : placement);

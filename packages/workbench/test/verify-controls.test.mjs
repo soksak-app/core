@@ -14,8 +14,6 @@ test("the window buttons count as centred within one device pixel of the first r
   const grid = new Soksak(undefined, { width: 100, height: 100 });
   t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => null } });
   t.mock.module("../plane.js", { exports: { currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [] } });
-  t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import("../verify.js");
   const row = (controls) => verify(controls).find((item) => item.name.startsWith("W "));
   try {

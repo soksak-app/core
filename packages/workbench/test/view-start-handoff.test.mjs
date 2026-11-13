@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { logGate } from "../log-gate.js";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-start-handoff";
 
@@ -56,22 +55,21 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  t.mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", version: "0.0.1", description: "Fixture surface.", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-    pluginDiagnostics: async () => null,
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    params: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
-    opens: ["txt"],
-    surface: (surfaceId) => ({ composition: { kind: "view", page: "ui/index.html" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
+    } },
+  }, { plugins: [{ id: pluginId, package: "@fixture/start-handoff", version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",
+    surface: {
+      composition: { kind: "view", page: "ui/index.html" },
+      params: { type: "object", properties: { path: { type: "string" } } },
+      opens: { extensions: ["txt"] },
+    },
+  } }] }), [], "the fixture environment refused a plugin");
 
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);

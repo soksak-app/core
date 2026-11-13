@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 // A removed project withdraws its folder error, so the same project added again with the same missing folder reports the error again.
 test("a removed project hides its folder error, and the error is written again when the project is added again", async (t) => {
@@ -23,10 +27,6 @@ test("a removed project hides its folder error, and the error is written again w
   t.mock.module("../library-preview.js", { namedExports: { preview: () => {
     const el = document.createElement("div"); el.className = "library-preview"; return el;
   } } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params) => {
-    element.dataset.command = command; element.dataset.params = JSON.stringify(params);
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null }), failure: () => null, refresh: async () => {} },
     onPluginOperations: () => {},

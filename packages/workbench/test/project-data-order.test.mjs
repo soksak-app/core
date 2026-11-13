@@ -60,7 +60,6 @@ mock.module("../settings.js", {
     if (id === failSelection) throw new Error("settings project selection failed");
   }, value: () => "tabs", flushSettings: async () => {} },
 });
-mock.module("../operations.js", { namedExports: { beginOperation: () => "operation" } });
 mock.module("../tab-state.js", {
   namedExports: { openTabStates: async () => {
     if (failTabStateOpenWithUndefined) throw undefined;
@@ -70,9 +69,6 @@ mock.module("../tab-state.js", {
 });
 mock.module("../tab-session.js", {
   namedExports: { createTabSessions: () => ({ read: () => null, reconcile: async () => {}, flush: async () => {} }) },
-});
-mock.module("../document-regions.js", {
-  namedExports: { documentRegions: { interaction: () => null, tabs: () => [], useSessions: () => {} } },
 });
 
 globalThis.dispatchEvent = () => true;

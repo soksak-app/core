@@ -11,10 +11,6 @@ test("the debug switch runs core.settings.debug and is on only when the trace an
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../compositor.js", { exports: {
-    ...await import("../compositor.js"), standIn: () => {},
-  } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
   const memory = { common: {}, projects: [] };
   const settings = await import("../settings.js");
   await settings.connectSettings({
@@ -52,9 +48,8 @@ test("the sidebars of a project are its own overrides over the common settings",
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
   const settings = await import("../settings.js");
-  const sets = [{ id: "mine", title: "mine", sections: [], layout: "list" }];
+  const sets =[{ id: "mine", title: "mine", sections: [], layout: "list" }];
   const common = settings.projectSidebars({});
   assert.ok(Array.isArray(common.sets) && Array.isArray(common.links), "a project without overrides has the common sets and links");
   assert.deepEqual(settings.projectSidebars({ settings: { sets, links: [] } }), { sets, links: [] });

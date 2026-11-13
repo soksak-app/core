@@ -17,8 +17,6 @@ test("a single empty plane before any commit states the checks that measured not
     currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
     railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
   } });
-  t.mock.module("../registry.js", { exports: { isPlace: () => false } });
-  t.mock.module("../settings.js", { exports: { cardRadius: () => 4, value: (key) => (key === "sidebarOrder" ? ["left", "right", "top", "bottom"] : undefined) } });
   const { verify } = await import(`../verify.js?skipped-${Math.random()}`);
   const rows = verify();
   const skipped = rows.filter((row) => row.skipped).map((row) => row.name.split(" ")[0]);

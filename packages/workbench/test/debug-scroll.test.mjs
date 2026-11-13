@@ -4,6 +4,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 test("a negative scroll position of the native modal is kept as reported and a value that is not a number is refused", async (t) => {
   const dom = new JSDOM("<body><div id=plane></div></body>");
@@ -17,9 +21,6 @@ test("a negative scroll position of the native modal is kept as reported and a v
     overlay,
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
-  t.mock.module("../commands.js", { namedExports: { commandOf: () => null, delegate: () => {}, mark: () => {}, run: async () => {} } });
-  t.mock.module("../exposure.js", { namedExports: { registry: { list: () => ({ status: [] }), registrants: () => [], handle: async () => ({}) } } });
   t.mock.module("../shown-errors.js", { namedExports: { hideError: () => {}, showError: () => {} } });
   const { closeDebug, debugState, openDebug } = await import("../debug-ui.js?scroll");
   document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0 });

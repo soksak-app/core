@@ -1,23 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 // The core update is the first row of the update list of the plugin page (docs/spec/installation.md#application-update).
 test("the update list shows the core update first with its release link, its action and the steps of the operation", async (t) => {
   const dom = new JSDOM("<body><div id=library></div></body>");
   globalThis.document = dom.window.document;
-  t.mock.module("../projects.js", { namedExports: {
-    inLibrary: () => true, all: () => [], isOpen: () => false, active: () => null,
-  } });
   t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
   t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
-  t.mock.module("../library-preview.js", { namedExports: { preview: () => document.createElement("div") } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params, value) => {
-    element.dataset.command = command;
-    element.dataset.params = JSON.stringify(params ?? {});
-    if (value) element.dataset.value = value;
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   let app = {
     version: "0.0.8",
     available: { version: "0.0.9", release: "https://github.com/soksak-app/core/releases/tag/v0.0.9" },

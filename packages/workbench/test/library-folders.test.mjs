@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 // A missing folder is reported once for its project entry. While the library checks the folder again after each project list change, the last known result stays on the card, so the error display is not withdrawn and written again.
 test("a missing project folder is reported once across project list changes, and a folder that appears again hides the error", async (t) => {
@@ -23,10 +27,6 @@ test("a missing project folder is reported once across project list changes, and
   t.mock.module("../library-preview.js", { namedExports: { preview: () => {
     const el = document.createElement("div"); el.className = "library-preview"; return el;
   } } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params) => {
-    element.dataset.command = command; element.dataset.params = JSON.stringify(params);
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null }), failure: () => null, refresh: async () => {} },
     onPluginOperations: () => {},
@@ -82,10 +82,6 @@ test("a project whose folder cannot be read shows the reason in the library and 
   t.mock.module("../library-preview.js", { namedExports: { preview: () => {
     const el = document.createElement("div"); el.className = "library-preview"; return el;
   } } });
-  t.mock.module("../commands.js", { namedExports: { delegate: () => {}, mark: (element, command, params) => {
-    element.dataset.command = command; element.dataset.params = JSON.stringify(params);
-  } } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
   // The operation state that the plugin page of the library uses. This test looks only at the project page.
   t.mock.module("../installed-plugins.js", { namedExports: {
     pluginOperations: { hosted: false, status: () => ({ plugins: [], operation: null }), failure: () => null, refresh: async () => {} },

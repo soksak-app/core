@@ -41,19 +41,14 @@ test("disabled page tracing does not format or relay a focus event", async (t) =
   t.mock.module("@soksak/runtime", { exports: {
     host: { call: async (name, params) => { calls.push({ name, params }); } },
   } });
-  // The page tracer queues its events through emitEvent of the page log; the fake records each event and builds its payload, as
-  // a gate that stores the event does, so a queued event and a formatted payload are both seen.
-  const emitted = [];
-  const actualLog = await import("../page-log.js");
-  t.mock.module("../page-log.js", { exports: { ...actualLog, emitEvent: (level, event, fields) => {
-    emitted.push(event);
-    if (typeof fields === "function") fields();
-  } } });
-  const page = await import("../performance.js?disabled-focus");
+  // The tracer writes through the event writer of the page records, so a relayed event and a formatted payload are both seen in
+  // the batches that the writer sends.
+  const { calls: relayed, tracer, batcher } = recorded();
   let formatted = 0;
-  page.trace("focus", { get target() { formatted++; return "address"; } });
-  assert.deepEqual(emitted, [], "disabled tracing queued a focus event");
-  assert.equal(calls.length, 0, "disabled tracing relayed a focus event");
+  tracer.trace("focus", { get target() { formatted++; return "address"; } });
+  await batcher.flush();
+  const events = relayed.filter(([kind]) => kind === "log").flatMap(([, batch]) => batch);
+  assert.equal(events.some(({ event }) => event === "workbench.trace.focus"), false, "disabled tracing relayed a focus event");
   assert.equal(formatted, 0, "disabled tracing formatted a focus event");
 });
 

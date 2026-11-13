@@ -49,11 +49,6 @@ test("a queued view call from a retired source generation does not reach the rep
   const listeners = sourceListenerMap();
   const replies = [];
   const actualHost = await import("../host.js");
-  const actualSourceOrigins = await import("../source-origins.js");
-  t.mock.module("../source-origins.js", { exports: {
-    ...actualSourceOrigins,
-    sourceOrigin: (_plugin, surface) => surface === "fixture-generation-surface" ? 2 : undefined,
-  } });
   t.mock.module("../host.js", { exports: {
     ...actualHost,
     native: true,
@@ -77,7 +72,8 @@ test("a queued view call from a retired source generation does not reach the rep
   const surface = { module: null, surfaceId, pluginId, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition: { kind: "view", page: "ui/page.html" } };
   try {
     authorizeSurface(surfaceId);
-    seedViewSource(pluginId, surfaceId);
+    // The source generation 2 is the current one, so the call of generation 1 is the retired one.
+    seedViewSource(pluginId, surfaceId, 2);
     await mountSurface(document.querySelector("#slot"), surface);
     listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id: 1, command: "runtime.settings.read", params: null });
     await viewCallsIdle();
@@ -161,7 +157,6 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
   const listeners = new Map();
   const replies = [];
   const actualHost = await import("../host.js");
-  const actualEnvironment = await import("../environment.js");
   t.mock.module("../host.js", { exports: {
     ...actualHost,
     native: true,
@@ -177,7 +172,6 @@ test("a retained view reads the text scale of its stored owner card", { timeout:
       } } };
     },
   } });
-  t.mock.module("../environment.js", { exports: { ...actualEnvironment, pluginDiagnostics: async () => null } });
   let liveScale = null;
   setSurfaceTextSize(() => liveScale);
   const { prepareRetainedSurface, releaseRetainedSurfaceSlots } = await import("../retained-surface-mounts.js");

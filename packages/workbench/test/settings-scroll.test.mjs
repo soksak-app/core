@@ -16,7 +16,6 @@ test("a negative scroll position of the settings modal is kept as reported and a
   const overlay = { show: (card, rect, handler) => { answer = handler; }, update: () => {}, place: () => {}, hide: () => {} };
   t.mock.module("../host.js", { exports: { ...await import("../host.js"), native: true, overlay } });
   t.mock.module("../compositor.js", { exports: { ...await import("../compositor.js"), standIn: () => {} } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const ui = await import("../settings-ui.js?scroll");

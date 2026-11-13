@@ -4,6 +4,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { installExposure } from "../exposure.js";
+import exposureFile from "../exposure.json" with { type: "json" };
+
+installExposure(exposureFile);
 
 async function openView(t, answer = { saved: "/d/soksak.tar.gz", total: 3000 }, fixtureEntries) {
   const dom = new JSDOM("<body><div id=plane></div></body>");
@@ -25,9 +29,6 @@ async function openView(t, answer = { saved: "/d/soksak.tar.gz", total: 3000 }, 
     overlay: { show: () => {}, update: () => {}, place: () => {}, hide: () => {} },
   } });
   t.mock.module("../compositor.js", { namedExports: { standIn: () => {} } });
-  t.mock.module("../icons.js", { namedExports: { icon: () => "" } });
-  t.mock.module("../commands.js", { namedExports: { commandOf: () => null, delegate: () => {}, mark: () => {}, run: async () => {} } });
-  t.mock.module("../exposure.js", { namedExports: { registry: { list: () => ({ status: [] }), registrants: () => [], handle: async () => ({}) } } });
   t.mock.module("../shown-errors.js", { namedExports: { hideError: () => {}, showError: () => {} } });
   const ui = await import(`../debug-ui.js?save-${Math.random()}`);
   document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0 });

@@ -12,7 +12,6 @@ test("a change before the subscription is applied, and a newer change during the
     call: async (name) => (name === "pluginsState" ? { registry: null, index: null, installed: structuredClone(installed) } : []),
     on: (event, fn) => { handlers.set(event, fn); },
   } } });
-  t.mock.module("../environment.js", { namedExports: { pluginUnits: () => [], refusedPlugins: () => new Set() } });
   const { followPluginChanges, pluginOperations } = await import("../installed-plugins.js");
   const seen = [];
   const finishes = [];

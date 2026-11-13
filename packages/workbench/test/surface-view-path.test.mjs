@@ -19,7 +19,6 @@ const store = await openTabStates({
 });
 mock.module("../projects.js", { namedExports: { active: () => null, tabStateStore: () => store, tabStatesReady: async () => store,
   waitForInitialProjectContext: async () => {} } });
-mock.module("../environment.js", { namedExports: { pluginDiagnostics: async () => null } });
 for (const id of ["fixture-unload", "fixture-plain"]) registerPlugin({ id, surface: () => null });
 const { setSurfaceTextSize } = await import("../text-size.js");
 setSurfaceTextSize(() => 1);
