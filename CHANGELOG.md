@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- `make repeat-rust` passes an absolute manifest to the documentation test command, which runs in the package folder, and the Rust workspace sets the lint `linker_info` to warn, so a Rust build prints the ld warning of an object built for a newer macOS version that the runners fail; both appeared when the runner tests ran the real cargo (F795-4).
+- The workbench tests run the real environment, settings, compositor, binder and source origin modules instead of replacing them with `mock.module`, and their fixture manifests satisfy the validator of the plugin interface (F795-7).
 - Korean agent guidance: the standard solution and the workaround are translated with the terms of the English text (F796).
 - Rule of real inputs: a test judges code only with data, a real program on fixture input, the real platform in the tier where it answers, or a fault injection at a declared point; a wire consumer runs the contract cases that the producer passes; the agent guidance no longer lets a consumer test use fakes (F795-2).
 - Fixture names: the fixture plugins and sidecars of `e2e/fixtures`, the replay role of the `sok` tests, the bundle fixtures of the update tests and the invalid PNG fixture of the debug tests are named fixtures instead of fakes (F795-1).

@@ -4,6 +4,8 @@
 
 ## 미배포
 
+- `make repeat-rust` 가 package 폴더에서 실행되는 documentation test 명령에 절대 manifest 를 넘기고, Rust workspace 가 lint `linker_info` 를 warn 으로 두어 Rust build 가 runner 가 실패시키는 더 새 macOS 용 object 의 ld 경고를 출력한다. 둘 다 runner 시험이 실제 cargo 를 실행했을 때 드러났다 (F795-4).
+- workbench 시험이 `mock.module` 로 바꾸던 environment, settings, compositor, binder, source origin module 을 실제로 실행하고, fixture manifest 가 plugin interface 의 validator 를 통과한다 (F795-7).
 - 한국어 agent guidance: 표준 해법과 workaround 를 영어 본문의 용어로 옮긴다 (F796).
 - 실제 입력의 규칙: test 는 데이터, fixture 입력 위의 실제 program, 답하는 tier 의 실제 platform, 선언된 지점의 fault injection 으로만 code 를 판정하고, wire consumer 는 producer 가 통과하는 계약 사례를 실행한다. agent guidance 는 더 이상 consumer test 가 fake 를 쓰게 하지 않는다 (F795-2).
 - fixture 이름: `e2e/fixtures` 의 fixture plugin 과 sidecar, `sok` 시험의 replay role, update 시험의 bundle fixture, debug 시험의 잘못된 PNG fixture 를 fake 대신 fixture 로 부른다 (F795-1).
