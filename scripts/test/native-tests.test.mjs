@@ -8,6 +8,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { nativeTests, runNativeTests } from "../native-tests.mjs";
+import { PlatformOperationNotImplemented, processServices } from "../platform/platform.js";
 
 const build = () => {
   const dir = mkdtempSync(join(tmpdir(), "native-tests-"));
@@ -139,9 +140,10 @@ test("a native test of a run over its limit leaves the stacks of its processes i
     write: (line) => lines.push(line) });
   assert.equal(code, 1);
   const line = lines.find((entry) => entry.startsWith("TIME slow_test")) ?? "";
-  // A platform that does not implement the records of the stacks names that in the result (scripts/platform/platform.js).
-  if (process.platform !== "darwin") {
-    assert.match(line, new RegExp(`; samples: none; services: none; sample errors: processStacks is not implemented on ${process.platform};`), JSON.stringify(lines));
+  // A platform that does not implement the records of the processes names that in the result (scripts/platform/platform.js).
+  const unimplemented = await processServices(process.pid).then(() => null, (error) => error);
+  if (unimplemented instanceof PlatformOperationNotImplemented) {
+    assert.ok(line.includes(`; samples: none; services: none; sample errors: processStacks is not implemented on ${unimplemented.platform};`), JSON.stringify(lines));
     return;
   }
   const match = /^TIME slow_test [0-9.]+s exceeded 0\.300s and was killed; samples: ([^;]+); services: [^;]+(?:; left running: .*)?$/.exec(line);

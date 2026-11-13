@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F769-1-2: the check of the samples at the limit of a native test asks the platform module whether the platform records processes instead of reading the platform name.
 - F767-2-2-2: the layout package declares the window-check package as a development dependency and imports the group rule by its name, so its tests read no path of another package.
 - F767-4-4: the cleanup of the replaced service checks of the Go host waits for the exit of the service it started instead of reading its state every 10 ms.
 - F767-4-3: the buffer bound checks of both hosts and the presentation stage check of the Go host wait for the change of the state they read instead of reading it every millisecond.
