@@ -640,7 +640,8 @@ func TestANativeDragStepFollowsTheStepBeforeItByOnePeriod(t *testing.T) {
 
 	// Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the out
 	// leg from the time of the press and the back leg from the time of the last step of the out leg, the last step of the
-	// back leg delivered 5 ms after its time, and a release: 32 + 32 + 5 + 5 ms.
+	// back leg delivered 5 ms after its time, and a release, which is outside took as the page leaves its release out: 32 +
+	// 32 + 5 ms.
 	var now time.Duration
 	var pressed, stepped []time.Duration
 	var times []time.Duration
@@ -672,8 +673,8 @@ func TestANativeDragStepFollowsTheStepBeforeItByOnePeriod(t *testing.T) {
 	if result["steps"] != 8 {
 		t.Fatalf("native drag steps %v, want 2 steps in each of the 4 legs", result["steps"])
 	}
-	if took, ok := result["took"].(int64); !ok || took != 148 {
-		t.Fatalf("native drag took %#v ms, want 148 ms: the deliveries are inside the periods", result["took"])
+	if took, ok := result["took"].(int64); !ok || took != 138 {
+		t.Fatalf("native drag took %#v ms, want 138 ms: each round trip from its press to the delivery of its last step", result["took"])
 	}
 	deliveries, ok := result["deliveries"].(map[string][]int64)
 	want := map[string][]int64{"press": {5, 5}, "step": {5, 5, 5, 5, 5, 5, 5, 5}, "release": {5, 5}}

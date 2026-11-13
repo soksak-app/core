@@ -456,8 +456,8 @@ func parseDragNative(params json.RawMessage) (bool, error) {
 // after previous, the host time of the step before it, and answers that time, and presented returns when
 // the window has presented its current layout; it runs before each press, because a press goes where the last frame
 // drew. A failed input after a press releases the button at the last point, so no press stays open in the window. The
-// reply is {from, steps, took, asked, pressWaits, tripSteps, deliveries}: took is the time from the first press to the last release without
-// the waits before the presses, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
+// reply is {from, steps, took, asked, pressWaits, tripSteps, deliveries}: took is the sum over the round trips of the time from the press to
+// the return of the delivery of the last step, on clock, the clock of the host, asked the time that the steps ask, and pressWaits the wait before
 // each press, all in milliseconds, tripSteps the number of steps of each round trip, and deliveries the milliseconds of the
 // delivery of each press, step and release, under press, step and release.
 func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver func(PointerInput) error, step func(previous time.Duration) (time.Duration, error), presented func() error) (map[string]any, error) {
@@ -468,8 +468,7 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 	input := func(phase string, p point) PointerInput {
 		return PointerInput{Pointer: mainPointer, X: p.X, Y: p.Y, Phase: phase, Button: "left", Clicks: 1}
 	}
-	began := clock()
-	var waited time.Duration
+	var took time.Duration
 	pressWaits := make([]int64, 0, plan.Times)
 	tripSteps := make([]int, 0, plan.Times)
 	deliveries := map[string][]int64{"press": {}, "step": {}, "release": {}}
@@ -495,11 +494,11 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 			return nil, fmt.Errorf("native drag wait before the press of round trip %d: %w", turn+1, err)
 		}
 		wait := clock() - waiting
-		waited += wait
 		pressWaits = append(pressWaits, wait.Milliseconds())
 		// The period of a step runs from the time of the press or of the step before it, so the delivery of an input, which
 		// is inside the period, does not lengthen the step (docs/spec/diagnostics.md).
 		previous := clock()
+		pressed := previous
 		if err := timed("press", input("down", from)); err != nil {
 			return nil, fmt.Errorf("native drag press of round trip %d: %w", turn+1, err)
 		}
@@ -538,12 +537,15 @@ func nativeDrag(plan dragPlan, from point, clock func() time.Duration, deliver f
 				}
 			}
 		}
+		// A round trip lasts from its press to the delivery of its last step, as the page times its legs: the wait before the
+		// press and the delivery of the release are outside it, and deliveries states them.
+		took += clock() - pressed
 		if err := timed("release", input("up", from)); err != nil {
 			return nil, fmt.Errorf("native drag release of round trip %d: %w", turn+1, err)
 		}
 		tripSteps = append(tripSteps, steps-tripStart)
 	}
-	return map[string]any{"from": from, "steps": steps, "took": (clock() - began - waited).Milliseconds(),
+	return map[string]any{"from": from, "steps": steps, "took": took.Milliseconds(),
 		"asked": plan.Times * 2 * plan.MS, "pressWaits": pressWaits, "tripSteps": tripSteps,
 		"deliveries": deliveries}, nil
 }

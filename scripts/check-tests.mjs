@@ -1457,6 +1457,19 @@ const FEATURE_LINKS = [
     levels: ["native", "unit"],
   },
   {
+    id: "F783",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn native_drag(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_test.go", id: "TestANativeDragStepFollowsTheStepBeforeItByOnePeriod" },
+      { file: "packages/host/rust/src/diagnostics_test.rs", id: "a_native_drag_step_follows_the_step_before_it_by_one_period" },
+    ],
+    expected: "took of a native drag is the sum over the round trips of the time from the press to the delivery of the last step.",
+    levels: ["unit"],
+  },
+  {
     id: "F782",
     implementation: [
       { file: "packages/host/go/src/diagnostics.go", symbol: "func nativeDrag(" },

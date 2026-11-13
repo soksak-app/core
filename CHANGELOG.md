@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F783: `took` of a native drag of `diagnostics.drag` is the sum over the round trips of the time from the press to the delivery of the last step, as a drag of the page times its legs, so the delivery of a release, in which the pointer does not move, no longer makes a drag of a busy window slow; `deliveries` still states it.
 - F782: a native drag of `diagnostics.drag` answers `deliveries`, the milliseconds of the delivery of each press, step and release, and the failure of a window check drag that is not paced states their totals and longest values, so a slow drag tells the time that the window took to receive its inputs.
 - F781: the out leg of a native drag of `diagnostics.drag` starts at the time of the press and its back leg at the time of the last out step, so each step comes one display period after the press or the step before it and the delivery of an input no longer lengthens the drag.
 - F772: the checks of the mygo workbench that read many points of one frame share one image of that frame, because the mygo fork `v0.7.4-244-g4abb83d-soksak.12` that core pins converts the image of a frame once; three such checks fell from 30.3 s, 21.4 s and 10.1 s to 4.75 s, 0.64 s and 0.16 s on macOS 26.6 arm64.

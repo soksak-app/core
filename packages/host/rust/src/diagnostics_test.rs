@@ -50,7 +50,8 @@ fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
 
     // Each input takes 5 ms to deliver. Every round trip is a press, two legs of 32 ms whose steps come 16 ms apart, the
     // out leg from the time of the press and the back leg from the time of the last step of the out leg, the last step of
-    // the back leg delivered 5 ms after its time, and a release: 32 + 32 + 5 + 5 ms.
+    // the back leg delivered 5 ms after its time, and a release, which is outside took as the page leaves its release out:
+    // 32 + 32 + 5 ms.
     let now = Cell::new(Duration::ZERO);
     let gaps = RefCell::new(Vec::new());
     let times = RefCell::new(Vec::new());
@@ -91,8 +92,8 @@ fn a_native_drag_step_follows_the_step_before_it_by_one_period() {
     assert_eq!(result["steps"], json!(8), "2 steps in each of the 4 legs");
     assert_eq!(
         result["took"].as_u64(),
-        Some(148),
-        "native drag took, want 148 ms: the deliveries are inside the periods"
+        Some(138),
+        "native drag took, want 138 ms: each round trip from its press to the delivery of its last step"
     );
     assert_eq!(
         result["deliveries"],

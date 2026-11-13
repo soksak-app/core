@@ -1200,7 +1200,8 @@ struct NativeDragPlan {
 /// of the step before it, and answers that time, and presented returns when the window has presented its
 /// current layout; it runs before each press, because a press goes where the last frame drew. A failed input after a press
 /// releases the button at the last point, so no press stays open in the window. The reply is {from, steps, took, asked,
-/// pressWaits, tripSteps, deliveries}: took is the time from the first press to the last release without the waits before the presses,
+/// pressWaits, tripSteps, deliveries}: took is the sum over the round trips of the time from the press to the return of the
+/// delivery of the last step,
 /// asked the time that the steps ask (times × 2 × ms), and pressWaits the wait before each press, all in milliseconds, and
 /// tripSteps the number of steps of each round trip, and deliveries the milliseconds of the delivery of each press, step and
 /// release, under press, step and release.
@@ -1225,8 +1226,7 @@ fn native_drag(
     };
     let at = |fraction: f64| (from.0 + plan.dx * fraction, from.1 + plan.dy * fraction);
     let span = plan.ms / 1000.0;
-    let began = clock();
-    let mut waited = Duration::ZERO;
+    let mut took = Duration::ZERO;
     let mut press_waits = Vec::with_capacity(plan.times as usize);
     let mut trip_steps = Vec::with_capacity(plan.times as usize);
     // The milliseconds of the delivery of each press, step and release, so a reply tells the time that the window took to
@@ -1262,13 +1262,13 @@ fn native_drag(
             )
         })?;
         let wait = clock() - waiting;
-        waited += wait;
         press_waits.push(wait.as_millis() as u64);
         // The period of a step runs from the time of the press or of the step before it, so the delivery of an input,
         // which is inside the period, does not lengthen the step (docs/spec/diagnostics.md).
         let mut previous = clock();
+        let pressed = previous;
         let delivered = deliver(input(1, from));
-        press_deliveries.push((clock() - previous).as_millis() as u64);
+        press_deliveries.push((clock() - pressed).as_millis() as u64);
         delivered.map_err(|error| {
             Failure::new(
                 error.code,
@@ -1320,6 +1320,9 @@ fn native_drag(
                 }
             }
         }
+        // A round trip lasts from its press to the delivery of its last step, as the page times its legs: the wait before
+        // the press and the delivery of the release are outside it, and deliveries states them.
+        took += clock() - pressed;
         let start = clock();
         let delivered = deliver(input(3, from));
         release_deliveries.push((clock() - start).as_millis() as u64);
@@ -1338,7 +1341,7 @@ fn native_drag(
     Ok(json!({
         "from": {"x": from.0, "y": from.1},
         "steps": steps,
-        "took": (clock() - began - waited).as_millis() as u64,
+        "took": took.as_millis() as u64,
         "asked": ((plan.times * 2) as f64 * plan.ms).round() as u64,
         "pressWaits": press_waits,
         "tripSteps": trip_steps,
