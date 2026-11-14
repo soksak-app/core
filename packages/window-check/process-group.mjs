@@ -44,6 +44,15 @@ export function runningMembers(pgid, members = groupMembers(pgid)) {
   return members.filter((member) => !hasEnded(member.state));
 }
 
+/**
+ * Whether the process pid still runs, by the rule of the group: a process that is absent from the process table, a zombie or exiting has
+ * ended. Signal 0 to the pid does not decide it, because the system answers it with success for a zombie that waits to be reaped.
+ */
+export function processRuns(pid, table = processTable) {
+  const row = table().find((entry) => entry.pid === pid);
+  return row !== undefined && !hasEnded(row.state);
+}
+
 /** Sends a signal to the process group pgid. The default is the group signal of the system; a test passes its own sender. */
 const sendToGroup = (pgid, signal) => process.kill(-pgid, signal);
 

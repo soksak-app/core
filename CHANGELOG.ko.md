@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- fixture registry test가 held pack의 종료를 zombie에도 성공하는 signal 0 대신 zombie를 끝난 것으로 보는 process table로 판정한다. 규칙은 process-group.mjs의 `processRuns`가 가진다 (#F819).
 - test library 가 host 에서 production 함수를 받고, fault release 가 자기 process 를 이름에 담으며, macOS 도구가 필요한 시험은 macOS 에서만 실행된다 (F818).
 - release 절차가 candidate acceptance 의 activation tier 를 마지막에 단독으로 실행한다 (F817).
 - Windows build 검사가 host source 를 시험 없이 compile 하고, version 검사가 test fixture 를 건너뛰며, SDK testing module 이 case 폴더를 소비자에게서 받고, window-source 감사가 endpoint 의 Unix socket 을 받아들이며, view drag 수치가 기록된 tool 출력을 판정하며, contract 감사가 test harness 없는 Rust target 의 module 을 읽는다 (F816).

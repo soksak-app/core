@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { processRuns } from "@soksak/window-check/process-group.mjs";
 import { releasePlatform } from "../platform/platform.js";
 import { FIXTURES, STEP_TIMEOUT_MS, WRONG_SHA256, buildFixtureRegistry, fixturePluginIds, fixtureRegistry, fixtureSources, main, nextPatch, npmSidecarRelease, pluginEntry,
   readIndex, repositoryText, servedIndex, serveRegistry, sidecarEntry, sidecarFileName, withRevoked, withWrongHash } from "../fixture-registry.mjs";
@@ -208,16 +209,6 @@ function packHeld(t, plugin) {
   return held;
 }
 
-/** Whether a process with the id exists. */
-function alive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if (error.code === "ESRCH") return false;
-    throw error;
-  }
-}
 
 test("a pack that exceeds the step limit fails the fixture registry build with the step that timed out", { timeout: 20000 }, async (t) => {
   const fixture = slowPackFixture(t);
@@ -238,7 +229,7 @@ test("an aborted signal stops the fixture registry build in its running step", {
   controller.abort();
   await assert.rejects(build, (error) => error.message.startsWith(`pack ${fixture.plugin}: cancelled: `));
   assert.ok(performance.now() - started < 10000, "the build did not stop at the abort");
-  assert.equal(alive(pid), false, "the held pack outlived the build");
+  assert.equal(processRuns(pid), false, "the held pack outlived the build");
   assert.equal(existsSync(join(fixture.out, "index.json")), false, "the registry build ran after the cancelled pack");
 });
 
@@ -257,7 +248,7 @@ test("the command line ends its build when the process receives SIGTERM and remo
   child.kill("SIGTERM");
   assert.equal(await ended, 1);
   assert.match(stderr, new RegExp(`pack ${fixture.plugin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}: cancelled: `));
-  assert.equal(alive(pid), false, "the held pack outlived the command line");
+  assert.equal(processRuns(pid), false, "the held pack outlived the command line");
   const missing = spawnSync(process.execPath, [MODULE, "--sok", SOK], { encoding: "utf8" });
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /--out is required/);

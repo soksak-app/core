@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The fixture registry tests judge the end of the held pack by the process table, where a zombie has ended, instead of signal 0, which succeeds for a zombie; `processRuns` of process-group.mjs holds the rule (#F819).
 - The test library takes the production functions from the host, the fault releases name their process, and the tests that need macOS tools run only on macOS (F818).
 - The release procedure runs the activation tier of candidate acceptance last and alone (F817).
 - The Windows build check compiles the host sources without their tests, the version check skips test fixtures, the SDK testing module takes its case folder from the consumer, the window-source audit accepts the Unix socket of the endpoint, the view drag figures judge recorded tool output, and the contract audit reads the modules of a Rust target without the test harness (F816).
