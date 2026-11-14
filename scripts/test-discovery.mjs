@@ -18,37 +18,60 @@ const execFileAsync = promisify(execFile);
  */
 export const BUILD_TIMEOUT_MS = 600_000;
 
+const seconds = (ms) => (ms / 1000).toFixed(3);
+
 /**
  * The tests of the Go packages that match `patterns` (relative to `cwd`). `tags` is a build tag list and `ldflags` the link
  * flags; `buildDir` receives the test binaries. Each test runs with `-test.timeout` of `timeoutMs`, so `t.Deadline` reports
- * its limit, and a test that does not end panics at that limit with the stacks of every goroutine (`stacksAtLimit`). Returns `{tests, failures}`: `tests` are runner items with `testName` (the
- * name `go test -json` gives) and `failures` name the packages whose build failed.
+ * its limit, and a test that does not end panics at that limit with the stacks of every goroutine (`stacksAtLimit`). The package
+ * list and the test list of each binary run through the runner with the limit `timeoutMs`. Returns `{tests, failures}`: `tests`
+ * are runner items with `testName` (the name `go test -json` gives) and `failures` name the patterns whose package list failed
+ * or reached its limit, the packages whose build failed and the binaries whose test list failed or reached its limit.
  */
 export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs, env = process.env }) {
   const { env: selectedEnv } = resolveGoNativeInputs({ patterns, tags, cwd, env });
   mkdirSync(buildDir, { recursive: true });
   const tagArgs = tags ? ['-tags', tags] : [];
-  const listed = await execFileAsync('go', ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns], { cwd, env: selectedEnv, maxBuffer: 1 << 24 });
-  const packages = listed.stdout.split('\n').filter((line) => line !== '').map((line) => {
-    const [importPath, dir] = line.split(' ');
-    return { importPath, dir };
-  });
+  // The package list and the test list of each binary run as steps of the runner under the limit of a test, so a list that waits
+  // reports its start and its elapsed time, and a list that fails or does not end is a failure that names its patterns or binary.
+  const packageList = { name: `list ${id} packages ${patterns.join(' ')}`, command: 'go', cwd, env: selectedEnv, timeoutMs,
+    args: ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns] };
+  const packageResult = (await runTests({ tests: [packageList], concurrency: 1, write })).results.get(packageList.name);
+  if (packageResult.status !== 'pass') {
+    return { tests: [], failures: [`${id}: go list of ${patterns.join(' ')} ended ${packageResult.status} after ${seconds(packageResult.elapsedMs)}s: ${packageResult.detail}`] };
+  }
+  const packages = [];
+  for (const line of packageResult.output.split('\n').filter((entry) => entry !== '')) {
+    const space = line.indexOf(' ');
+    const dir = line.slice(space + 1);
+    if (space < 1 || !isAbsolute(dir)) return { tests: [], failures: [`${id}: go list wrote a line that is not a package and its folder: ${line}`] };
+    packages.push({ importPath: line.slice(0, space), dir });
+  }
   const builds = packages.map((pkg, index) => ({
     name: `build ${id} ${pkg.importPath}`, command: 'go', cwd, env: selectedEnv,
     args: ['test', '-c', '-o', join(buildDir, `${id}-${index}.test`), ...tagArgs, ...(ldflags ? ['-ldflags', ldflags] : []), pkg.importPath],
     timeoutMs: BUILD_TIMEOUT_MS,
   }));
   const built = builds.length === 0 ? { results: new Map() } : await runTests({ tests: builds, concurrency, write });
-  const tests = [];
   const failures = [];
+  const lists = [];
   for (const [index, pkg] of packages.entries()) {
     if (built.results.get(builds[index].name).status !== 'pass') {
       failures.push(`${id}: the build of ${pkg.importPath} failed`);
       continue;
     }
     const binary = join(buildDir, `${id}-${index}.test`);
-    const names = await execFileAsync(binary, ['-test.list', '.'], { cwd: pkg.dir, env: selectedEnv, maxBuffer: 1 << 24 });
-    for (const testName of names.stdout.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
+    lists.push({ pkg, binary, item: { name: `list ${id} ${pkg.importPath} (${binary})`, command: binary, args: ['-test.list', '.'], cwd: pkg.dir, env: selectedEnv, timeoutMs } });
+  }
+  const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists.map((list) => list.item), concurrency, write });
+  const tests = [];
+  for (const { pkg, binary, item } of lists) {
+    const names = listed.results.get(item.name);
+    if (names.status !== 'pass') {
+      failures.push(`${id}: the list of ${pkg.importPath} (${binary}) ended ${names.status} after ${seconds(names.elapsedMs)}s: ${names.detail}`);
+      continue;
+    }
+    for (const testName of names.output.split('\n').filter((line) => /^(Test|Example)/.test(line))) {
       tests.push({ name: `${id} ${pkg.importPath}.${testName}`, run: id, testName, owner: relative(realpathSync(cwd), pkg.dir), command: binary,
         args: ['-test.run', `^${testName}$`, '-test.count=1', '-test.v', `-test.timeout=${timeoutMs}ms`], cwd: pkg.dir, env: selectedEnv, timeoutMs, stacksAtLimit: true });
     }
@@ -58,9 +81,10 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
 
 /**
  * The tests of the Rust package `packageName` built with `features`. `cargo test --no-run` builds the test executables; each
- * executable lists its tests and every test runs as `<executable> --exact <name>` in the folder of its manifest. Returns the
- * same `{tests, failures}` as discoverGo; a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, each
- * executable is removed once it listed its tests, so a check that only lists the tests of several runs holds the executables
+ * executable lists its tests through the runner with the limit `timeoutMs`, and every test runs as `<executable> --exact <name>`
+ * in the folder of its manifest. Returns the same `{tests, failures}` as discoverGo; a list that fails or reaches its limit is a
+ * failure that names the executable, and a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, every
+ * executable is removed once all of them listed their tests, so a check that only lists the tests of several runs holds the executables
  * of one run on the disk; its tests are not run. Only an executable that cargo named and that lies in the target folder of
  * cargo is removed: the run fails, and removes nothing, when one lies elsewhere.
  */
@@ -80,15 +104,27 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
       return { tests: [], failures: outside.map(({ executable }) => `${id}: the executable ${executable} is not in the target folder ${targetDir}`) };
     }
   }
+  // Each executable lists its tests as a step of the runner under the limit of a test, so a list that waits reports its start and
+  // its elapsed time, and a list that does not end fails at that limit with the executable named.
+  const lists = executables.map(({ executable, dir, target }) => ({
+    name: `list ${id} ${target} (${executable})`, command: executable, args: ['--list', '--format', 'terse'], cwd: dir, timeoutMs,
+  }));
+  const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists, concurrency: 1, write });
   const tests = [];
-  for (const { executable, dir, target, srcPath } of executables) {
-    const listed = await execFileAsync(executable, ['--list', '--format', 'terse'], { cwd: dir, maxBuffer: 1 << 24 });
-    for (const line of listed.stdout.split('\n')) {
+  const failures = [];
+  for (const [index, { executable, dir, target, srcPath }] of executables.entries()) {
+    const list = listed.results.get(lists[index].name);
+    if (list.status !== 'pass') {
+      failures.push(`${id}: the list of ${executable} ended ${list.status} after ${seconds(list.elapsedMs)}s: ${list.detail}`);
+      continue;
+    }
+    for (const line of list.output.split('\n')) {
       const match = line.match(/^(.+): test$/);
       if (match) tests.push({ name: `${id} ${target}::${match[1]}`, run: id, testName: match[1], owner: relative(realpathSync(cwd), dir), target, sourcePath: srcPath, command: executable, args: ['--exact', match[1]], cwd: dir, env, timeoutMs });
     }
-    if (listOnly) rmSync(executable);
   }
+  if (listOnly) for (const { executable } of executables) rmSync(executable);
+  if (failures.length > 0) return { tests, failures };
   if (tests.length === 0) return { tests, failures: [`${id}: the compiler listed no tests`] };
   return { tests, failures: [] };
 }
