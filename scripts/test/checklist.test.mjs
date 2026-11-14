@@ -15,16 +15,22 @@ function check(t, english, korean, previous = "", retirement, files = {}) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
   mkdirSync(join(root, "docs"));
-  writeFileSync(join(root, "docs/features.md"), previous + englishTable);
-  writeFileSync(join(root, "docs/features.ko.md"), previous + koreanTable);
+  const features = join(root, "docs/features.md");
+  const featuresKorean = join(root, "docs/features.ko.md");
+  const changelog = join(root, "CHANGELOG.md");
+  const changelogKorean = join(root, "CHANGELOG.ko.md");
+  writeFileSync(features, previous + englishTable);
+  writeFileSync(featuresKorean, previous + koreanTable);
   if (retirement) {
-    writeFileSync(join(root, "CHANGELOG.md"), `# Changelog\n\n## Unreleased\n\n${retirement.english}\n`);
-    writeFileSync(join(root, "CHANGELOG.ko.md"), `# 변경 기록\n\n## 미배포\n\n${retirement.korean}\n`);
+    const changelogText = `# Changelog\n\n## Unreleased\n\n${retirement.english}\n`;
+    const changelogKoreanText = `# 변경 기록\n\n## 미배포\n\n${retirement.korean}\n`;
+    writeFileSync(changelog, changelogText);
+    writeFileSync(changelogKorean, changelogKoreanText);
   }
   assert.equal(spawnSync("git", ["add", "docs"], { cwd: root }).status, 0);
   assert.equal(spawnSync("git", ["-c", "user.name=Checklist fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture baseline"], { cwd: root }).status, 0);
-  writeFileSync(join(root, "docs/features.md"), english + englishTable);
-  writeFileSync(join(root, "docs/features.ko.md"), korean + koreanTable);
+  writeFileSync(features, english + englishTable);
+  writeFileSync(featuresKorean, korean + koreanTable);
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(join(root, path, ".."), { recursive: true });
     writeFileSync(join(root, path), text);

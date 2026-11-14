@@ -1,0 +1,8 @@
+#!/bin/sh
+# runs for each tool
+printf 'PASS: a for b\n'
+if true; then
+  printf 'PASS: c\n'
+else
+  printf 'FAIL: c\n'
+fi

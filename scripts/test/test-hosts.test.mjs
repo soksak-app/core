@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -531,21 +531,15 @@ test('Go source inventory rejects a successful list command with no packages', (
   }), /go list test-source inventory failed.*found no packages/);
 });
 
-test('Go source inventory reports and bounds a stuck go list process', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'host-contract-go-timeout-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const bin = join(root, 'bin');
-  mkdirSync(bin);
-  const fakeGo = join(bin, 'go');
-  writeFileSync(fakeGo, '#!/bin/sh\nexec /bin/sleep 1\n');
-  chmodSync(fakeGo, 0o755);
+test('Go source inventory reports and bounds a go list process that outlives its limit', () => {
+  // The real go command lists the tracked fixture module; one millisecond ends before the process of go can answer.
   const output = [];
   assert.throws(() => goTestSourceFilesForRun({
-    cwd: root,
-    patterns: ['./...'],
-    timeoutMs: 25,
+    cwd: fileURLToPath(new URL('./fixtures/repeat-go/', import.meta.url)),
+    patterns: ['./plain'],
+    timeoutMs: 1,
     write: (line) => output.push(line),
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOOS: 'darwin', GOARCH: 'arm64' },
+    env: { ...process.env, GOOS: 'darwin', GOARCH: 'arm64', GOWORK: 'off' },
   }), /go list test-source inventory failed.*timed out/);
   assert.match(output[0], /^RUN  go list test-source inventory/);
   assert.match(output[1], /^FAIL go list test-source inventory.*after \d+\.\d+s:/);

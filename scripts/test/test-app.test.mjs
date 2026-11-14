@@ -2,7 +2,7 @@
 // configuration root for each run, the report of each step, and the failure on a process that remains after the applications quit.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -511,7 +511,7 @@ test("a quit step ends when the process that holds the configuration lock exits,
   // The lock release wait of the platform is replaced by one that returns when the holder exits, as the kernel wakes the wait of the
   // platform when the owner of the lock exits (scripts/test/platform/darwin/end-to-end.test.mjs checks the wait of macOS).
   const lock = join(player.configDir, "process.lock");
-  writeFileSync(lock, "");
+  copyFileSync(fileURLToPath(new URL("./fixtures/test-app/empty", import.meta.url)), lock);
   const holder = spawn(process.execPath, ["-e", "process.stdout.write('held'); setTimeout(() => {}, 400)"], { stdio: ["ignore", "pipe", "ignore"] });
   t.after(() => holder.kill());
   const holderExit = new Promise((resolve) => holder.once("exit", resolve));

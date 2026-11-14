@@ -23,7 +23,9 @@ function repositories(t) {
   git(root, "init", "-q", "--bare", "-b", "main", remote);
   git(root, "init", "-q", "-b", "main", work);
   git(work, "remote", "add", "origin", remote);
-  writeFileSync(join(work, "a.txt"), "a\n");
+  const tracked = join(work, "a.txt");
+  const content = "a\n";
+  writeFileSync(tracked, content);
   git(work, "add", "a.txt");
   git(work, "commit", "-q", "-m", "base");
   git(work, "push", "-q", "origin", "main");

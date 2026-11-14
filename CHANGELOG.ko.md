@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- script 시험이 입력 program 과 file 을 scripts/test/fixtures 아래 추적되는 폴더에서 복사하고, process identity build 시험이 인자를 기록하는 명령 대신 make 의 dry run 으로 명령을 나열하고 실제 clang 과 ar 로 build 한다 (F795-4).
 - workbench 의 tab session, performance trace, page log, theme 배치, keyboard 배치, layout 실패 시험이 page-wire case 위에서 page 의 실제 host, store, log module 로 실행된다. case 는 page 의 flush 가 보내는 batch 에 log gate 의 count 를 기록한다 (F795-10).
 - workbench 시험 파일 40 개가 더 page 의 실제 host, window, log, trace module 을 실행하고 그 module 을 대체하는 대신 page-wire case 를 재생하며, 시험 runtime 이 선택된 case 위에서 native runtime 의 window interface 를 page 에 주고, page-wire reader 가 `PAGE_WIRE_TRACE=1` 이면 page 의 각 호출을 쓴다 (F795-10).
 - page log 의 event 가 batch 가 나간 시점의 상태 대신 보낸 시점의 field 를 담는다 (F805).

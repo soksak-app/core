@@ -2,12 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { hashFile, hashTree } from '../candidate-identity.mjs';
 import { createCandidateContext } from '../candidate-context.mjs';
 
+const BUNDLES = fileURLToPath(new URL('./fixtures/candidate-bundles/', import.meta.url));
 const repository = 'example/core';
 const PACKAGES = [['packages/plugin-api', '@soksak/plugin-api'], ['native/darwin/process-identity', '@soksak/native-process-identity-darwin'],
   ['packages/client', '@soksak/client'], ['packages/log-contract', '@soksak/log-contract'], ['packages/window-check', '@soksak/window-check']];
@@ -35,9 +37,7 @@ async function candidateFixture(t, { duplicate = false } = {}) {
   for (const host of ['mygo', 'tauriv2', 'wailsv3']) {
     const folder = join(built, host);
     const bundle = join(folder, 'soksak.app');
-    await mkdir(join(bundle, 'Contents/MacOS'), { recursive: true });
-    await writeFile(join(bundle, 'Contents/Info.plist'), `metadata ${host}`);
-    await writeFile(join(bundle, 'Contents/MacOS', `sok-${host}`), `executable ${host}`);
+    await cp(join(BUNDLES, host, 'Contents'), join(bundle, 'Contents'), { recursive: true });
     await chmod(join(bundle, 'Contents/MacOS', `sok-${host}`), 0o755);
     bundles.set(host, await hashTree(bundle));
     execFileSync('zip', ['-q', '-r', join(built, `soksak-0.0.39-darwin-arm64-${host}.zip`), 'soksak.app'], { cwd: folder });

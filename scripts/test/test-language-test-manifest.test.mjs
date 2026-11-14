@@ -67,7 +67,7 @@ test('an Objective-C or shell test declares a PASS line for each call of its wri
     + '    check(YES, @"a for (b)");\n    check(YES, @"c");\n    NSLog(@"PASS: d");\n}\n';
   assert.deepEqual(declared('objective-c', objc), { tests: 3 });
   assert.match(declared('objective-c', objc.replace('    check(YES, @"c");', '    for (int i = 0; i < 2; i++) check(YES, @"c");')).reason, /in a loop/);
-  const shell = "#!/bin/sh\n# runs for each tool\nprintf 'PASS: a for b\\n'\nif true; then\n  printf 'PASS: c\\n'\nelse\n  printf 'FAIL: c\\n'\nfi\n";
+  const shell = readFileSync(new URL('./fixtures/language-test-manifest/pass-counter.txt', import.meta.url), 'utf8');
   assert.deepEqual(declared('shell', shell), { tests: 2 });
   assert.match(declared('shell', `${shell}for tool in a b; do\n  printf 'PASS: %s\\n' "$tool"\ndone\n`).reason, /in a loop/);
 });

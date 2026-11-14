@@ -29,7 +29,7 @@ test("rejects a replacement of a global method at the line that calls it", () =>
 
 test("rejects inline program text that the test writes and runs, shebang or literal", () => {
   const name = "inline-program.txt";
-  assert.deepEqual(linesOf(detect(name), "inline-program"), [lineOf(name, "#!/bin/sh"), lineOf(name, "console.log('x')")]);
+  assert.deepEqual(linesOf(detect(name), "inline-program"), [lineOf(name, "bin/sh"), lineOf(name, "console.log('x')")]);
 });
 
 test("rejects a search path prepended with a temporary folder that holds executables", () => {

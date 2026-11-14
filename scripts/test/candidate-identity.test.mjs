@@ -5,12 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hashFile, hashTree } from '../candidate-identity.mjs';
 
+// The bytes of the file that the tree hash binds.
+const CANDIDATE = 'candidate';
+
 test('candidate tree identity binds every file, executable mode and symlink target without extraction timestamps', { timeout: 10000 }, async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'soksak-candidate-tree-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'Contents'));
   const file = join(root, 'Contents', 'program');
-  await writeFile(file, 'candidate');
+  await writeFile(file, CANDIDATE);
   await symlink('program', join(root, 'Contents', 'link'));
   const first = await hashTree(root);
   await utimes(file, new Date(0), new Date(0));

@@ -4,11 +4,13 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { runTests } from "../../../test-runner.mjs";
 
-const node = (name, source, extra = {}) => ({ name, command: process.execPath, args: ["-e", source], timeoutMs: 5000, ...extra });
+const REPORT_TEMPORARY = fileURLToPath(new URL("../../fixtures/test-runner-temporary/report-temporary.cjs", import.meta.url));
+const node = (name, program, extra = {}) => ({ name, command: process.execPath, args: [program], timeoutMs: 5000, ...extra });
 
 async function run(tests, options = {}) {
   const lines = [];
@@ -32,10 +34,7 @@ function socketPathLimit() {
 test("the temporary folder of a test process leaves room for the longest socket path of the host tests and is private to the user", async (t) => {
   const out = mkdtempSync(join(tmpdir(), "runner-temporary-"));
   t.after(() => rmSync(out, { recursive: true, force: true }));
-  const source = `const fs = require('node:fs'); const path = require('node:path'); const os = require('node:os');
-    const status = fs.statSync(os.tmpdir());
-    fs.writeFileSync(path.join(process.env.OUT, 'seen'), JSON.stringify({ given: os.tmpdir(), real: fs.realpathSync(os.tmpdir()), mode: status.mode & 0o777, uid: status.uid }));`;
-  const { results } = await run([node("socket", source, { env: { OUT: out } })], { concurrency: 1 });
+  const { results } = await run([node("socket", REPORT_TEMPORARY, { env: { OUT: out } })], { concurrency: 1 });
   assert.equal(results.get("socket").status, "pass", results.get("socket").detail);
   const seen = JSON.parse(readFileSync(join(out, "seen"), "utf8"));
   const limit = socketPathLimit();

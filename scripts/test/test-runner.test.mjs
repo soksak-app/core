@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -173,7 +173,7 @@ test("the cleanup of a recorded group ends a group that macOS refuses with EPERM
   t.after(() => rmSync(folder, { recursive: true, force: true }));
   const pidFile = join(folder, "pid");
   // A group id that no process uses, so the process table lists no running member of it.
-  writeFileSync(pidFile, "999999");
+  copyFileSync(fileURLToPath(new URL("./fixtures/test-runner/unused-group-id", import.meta.url)), pidFile);
   const refuse = () => { throw Object.assign(new Error("kill EPERM"), { code: "EPERM" }); };
   assert.doesNotThrow(() => endRecordedGroup(pidFile, refuse));
 });
@@ -315,30 +315,30 @@ test("stacksAtLimit needs a limit of the test", async () => {
 });
 
 test("a test over its limit is stopped before the process table is read, and its elapsed time is taken at the stop", async () => {
-  // The runner reads the process table with `ps` at the limit. This `ps` writes the state of the test process and the time at which it
-  // began, so the check sees that the test process was stopped (T) when the table was read and that the elapsed time of the test ends
-  // before that read. The read takes 5 seconds, as a read under load can, so an elapsed time taken after the read ends after its start.
+  // The runner reads the process table at the limit through its declared option processTable. This reader records the state of the test
+  // process and the time at which the read began, so the check sees that the test process was stopped (T) when the table was read and
+  // that the elapsed time of the test ends before that read. The read takes 5 seconds, as a read under load can, so an elapsed time
+  // taken after the read ends after its start.
   const directory = mkdtempSync(join(tmpdir(), "soksak-runner-ps-"));
-  const ps = join(directory, "ps");
   const pidFile = join(directory, "pid");
-  const reads = join(directory, "reads");
-  writeFileSync(ps, `#!/bin/sh\nif [ "$1" = -A ]; then\n  printf '%s %s\\n' "$(${JSON.stringify(process.execPath)} -p 'Math.floor(performance.timeOrigin + performance.now())')" ` +
-    `"$(/bin/ps -o stat= -p "$(cat ${JSON.stringify(pidFile)})")" >> ${JSON.stringify(reads)}\n  sleep 5\nfi\nexec /bin/ps "$@"\n`);
-  chmodSync(ps, 0o755);
-  const saved = process.env.PATH;
-  process.env.PATH = `${directory}:${saved}`;
+  const reads = [];
+  const slowTable = () => {
+    const state = spawnSync("ps", ["-o", "stat=", "-p", readFileSync(pidFile, "utf8")], { encoding: "utf8" }).stdout.trim();
+    reads.push([Math.floor(performance.timeOrigin + performance.now()), state]);
+    spawnSync("sleep", ["5"]);
+    return processTable();
+  };
   try {
     const before = Math.ceil(performance.timeOrigin + performance.now());
     const source = `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ${sleeping(60000)}`;
-    const { results } = await run([node("slow", source, { timeoutMs: 2000 })], { concurrency: 1 });
+    const { results } = await run([node("slow", source, { timeoutMs: 2000 })], { concurrency: 1, processTable: slowTable });
     const result = results.get("slow");
     assert.equal(result.status, "timeout", result.detail);
-    const [read, state] = readFileSync(reads, "utf8").split("\n")[0].split(" ");
+    const [read, state] = reads[0];
     assert.match(state, /^T/, `the test process was in state ${state} when the process table was read`);
-    assert.ok(result.elapsedMs <= Number(read) - before,
-      `the elapsed time ${result.elapsedMs} ms ends after the read of the process table, ${Number(read) - before} ms after the start`);
+    assert.ok(result.elapsedMs <= read - before,
+      `the elapsed time ${result.elapsedMs} ms ends after the read of the process table, ${read - before} ms after the start`);
   } finally {
-    process.env.PATH = saved;
     rmSync(directory, { recursive: true, force: true });
   }
 });

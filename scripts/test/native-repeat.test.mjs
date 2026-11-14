@@ -61,7 +61,7 @@ test('test-app-activation-backspace-repeat forwards its focused variant and stop
   const executable = compile(build, 'image_region_ime_test', 'image_region_ime_test.c');
   const probe = compile(build, 'ime_source_probe', 'ime_source_probe.c');
   // The source probe fixture prints this snapshot, so the comparison after the run has the state that the run started with.
-  writeFileSync(`${probe}.snapshot`, '{"source":"com.apple.inputmethod.Korean.2SetKorean","frontmostPID":100,"processPID":200}\n');
+  copyFileSync(join(fixtures, 'ime_source_probe.snapshot'), `${probe}.snapshot`);
   const evidence = join(build, 'evidence');
   const result = spawnSync('make', ['-C', native, 'test-app-activation-backspace-repeat', 'COUNT=3', `BUILD=${build}`, `ACTIVATION_REPEAT_EVIDENCE=${evidence}`, '-o', executable, '-o', probe], {
     encoding: 'utf8', timeout: 60000,

@@ -5,10 +5,13 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { runCommand } from '../test-command.mjs';
 
 const node = process.execPath;
+// A descendant of a command under test: the tracked fixture program that writes the file of its argument at SIGTERM.
+const DESCENDANT = fileURLToPath(new URL('./fixtures/test-command/descendant.cjs', import.meta.url));
 const task = (source) => [node, ['-e', source]];
 // A command that ends on its own gets this limit, so the limit only bounds a hang and never decides the result under load.
 const hangMs = 60_000;
@@ -179,8 +182,7 @@ test('ends a descendant that ignores SIGTERM', { timeout: testHangMs }, async (t
       try { process.kill(descendantPid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
     }
   });
-  const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setInterval(()=>{},1000);`;
-  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);}});`;
+  const source = `const {spawn}=require('node:child_process'); const {writeFileSync}=require('node:fs'); const child=spawn(process.execPath,[${JSON.stringify(DESCENDANT)},${JSON.stringify(markerFile)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile)},String(child.pid)); process.exit(0);}});`;
   const [command, args] = task(source);
   const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
@@ -285,9 +287,8 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: test
     }
     await rm(directory, { recursive: true, force: true });
   });
-  const descendantSource = `const {writeFileSync}=require('node:fs'); process.on('SIGTERM',()=>writeFileSync(${JSON.stringify(markerFile)},'term')); process.send('ready'); setInterval(()=>{},1000);`;
   // The pid file is created by writing a temporary file and renaming it. The reader never reads an empty file in the middle of the write.
-  const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,['-e',${JSON.stringify(descendantSource)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
+  const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,[${JSON.stringify(DESCENDANT)},${JSON.stringify(markerFile)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
   // The pid file is read once the watch of the folder is active and again at each change, so its rename is seen at any load.
   // The wait ends by the pid file or by the exit of the command that writes it.
   const cliEnded = new AbortController();

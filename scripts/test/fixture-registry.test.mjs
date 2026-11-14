@@ -16,6 +16,8 @@ const SHA = "a".repeat(64);
 const MODULE = fileURLToPath(new URL("../fixture-registry.mjs", import.meta.url));
 // The tracked inputs of the pack and release tests: the executable of a sidecar fixture and the prepack script of a slow plugin fixture.
 const SIDECAR_WORKER = fileURLToPath(new URL("./fixtures/fixture-registry/sidecar/bin/worker", import.meta.url));
+const SIDECAR_NPM_MANIFEST = fileURLToPath(new URL("./fixtures/fixture-registry/sidecar/package-manifest.json", import.meta.url));
+const SIDECAR_DECLARATION = fileURLToPath(new URL("./fixtures/fixture-registry/sidecar/sidecar-manifest.json", import.meta.url));
 const HOLD_PACK = fileURLToPath(new URL("./fixtures/fixture-registry/hold.mjs", import.meta.url));
 const inside = (root, path) => {
   const rest = relative(root, resolve(path));
@@ -115,9 +117,8 @@ test("a sidecar fixture of the fixtures is released with npm pack under its plat
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sidecar = join(root, "sidecars", "worker");
   mkdirSync(join(sidecar, "bin"), { recursive: true });
-  writeFileSync(join(sidecar, "package.json"), JSON.stringify({ name: "@sok-check/worker", version: "0.0.1", license: "MIT",
-    repository: "git+https://example.invalid/core.git", files: ["sidecar.json", "bin"] }));
-  writeFileSync(join(sidecar, "sidecar.json"), JSON.stringify({ protocol: 1, executable: "bin/worker" }));
+  copyFileSync(SIDECAR_NPM_MANIFEST, join(sidecar, "package.json"));
+  copyFileSync(SIDECAR_DECLARATION, join(sidecar, "sidecar.json"));
   copyFileSync(SIDECAR_WORKER, join(sidecar, "bin", "worker"));
   chmodSync(join(sidecar, "bin", "worker"), 0o755);
   const plugin = join(root, "probe", "user");
@@ -148,9 +149,8 @@ test("a sidecar fixture whose declared executable is not built is not released",
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const sidecar = join(root, "sidecars", "worker");
   mkdirSync(sidecar, { recursive: true });
-  writeFileSync(join(sidecar, "package.json"), JSON.stringify({ name: "@sok-check/worker", version: "0.0.1", license: "MIT",
-    repository: "git+https://example.invalid/core.git", files: ["sidecar.json", "bin"] }));
-  writeFileSync(join(sidecar, "sidecar.json"), JSON.stringify({ protocol: 1, executable: "bin/worker" }));
+  copyFileSync(SIDECAR_NPM_MANIFEST, join(sidecar, "package.json"));
+  copyFileSync(SIDECAR_DECLARATION, join(sidecar, "sidecar.json"));
   const out = join(root, "releases");
   await assert.rejects(npmSidecarRelease(sidecar, out, { platform: "linux-x64" }),
     new RegExp(`pack sidecar ${sidecar}: sidecar.json executable bin/worker is not an executable file; build the sidecar first`));

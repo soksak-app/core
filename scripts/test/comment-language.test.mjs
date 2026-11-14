@@ -9,6 +9,7 @@ import { comments, findKoreanComments, workingTreeFiles } from "../check-comment
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+const fixture = (name) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "comment-language", name), "utf8");
 const scan = (files) => findKoreanComments(Object.keys(files), (file) => files[file])
   .map((item) => `${item.file}:${item.line}`);
 
@@ -33,7 +34,7 @@ test("English comments, Hangul outside comments and generated folders are not re
   assert.deepEqual(scan({
     "packages/a/a.js": "// Waits for the layout (core.grid).\nconst label = \"// 설정\"; // the label\n",
     "packages/a/b.js": "const more = `multi\n// 문자열 안이다\n`;\n",
-    "scripts/run.sh": "#!/bin/sh\necho \"# 주석이 아니다\"\n",
+    "scripts/run.sh": fixture("run-script.txt"),
     "packages/a/dist/a.js": "// 생성된 파일\n",
     "packages/a/node_modules/x/a.js": "// 의존성\n",
   }), []);
@@ -41,8 +42,8 @@ test("English comments, Hangul outside comments and generated folders are not re
 
 test("hook files and extensionless scripts are checked, and other extensionless files are not", () => {
   assert.deepEqual(scan({
-    ".githooks/commit-msg": "#!/bin/sh\n# 커밋 메시지 형식을 검사한다.\nexec node check.js \"$1\"\n",
-    "scripts/run-tool": "#!/bin/sh\n# 도구를 실행한다\n",
+    ".githooks/commit-msg": fixture("hook.txt"),
+    "scripts/run-tool": fixture("extensionless.txt"),
     "docs/NOTICE": "Notice text 한글\n# 한글 제목\n",
   }), [".githooks/commit-msg:2", "scripts/run-tool:2"]);
 });

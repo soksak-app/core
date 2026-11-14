@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { appendEvidenceAttempt, collectEvidence, evidenceDrift, persistEvidence, validateEvidence } from '../test-evidence.mjs';
 import * as evidence from '../test-evidence.mjs';
+
+const EVIDENCE_FIXTURES = fileURLToPath(new URL('./fixtures/test-evidence/', import.meta.url));
+const COLLECT_LARGE_UNTRACKED = join(EVIDENCE_FIXTURES, 'collect-large-untracked.mjs');
 
 async function inputFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'soksak-evidence-inputs-'));
@@ -120,7 +124,7 @@ test('evidence records content hashes, dirty state, expected/actual result, and 
   run('init', '-q');
   run('config', 'user.email', 'evidence@example.invalid');
   run('config', 'user.name', 'evidence');
-  await writeFile(join(repo, 'source.mjs'), 'export const value = 1;\n');
+  await copyFile(join(EVIDENCE_FIXTURES, 'source.mjs'), join(repo, 'source.mjs'));
   await writeFile(join(repo, 'source.test.mjs'), 'import "./source.mjs";\n');
   await writeFile(join(repo, 'package.json'), '{}\n');
   run('add', '.');
@@ -189,7 +193,7 @@ test('evidence is recorded for a worktree with a multi-megabyte binary change', 
     run('config', 'user.email', 'evidence@example.invalid');
     run('config', 'user.name', 'evidence');
     await writeFile(join(repo, 'large.bin'), randomBytes(4 * 1024 * 1024));
-    await writeFile(join(repo, 'source.mjs'), 'export const value = 1;\n');
+    await copyFile(join(EVIDENCE_FIXTURES, 'source.mjs'), join(repo, 'source.mjs'));
     run('add', '.');
     run('commit', '-q', '-m', 'initial');
     await writeFile(join(repo, 'large.bin'), randomBytes(4 * 1024 * 1024));
@@ -216,7 +220,7 @@ test('evidence records a renamed path and a path that git status quotes', { time
     run('config', 'user.email', 'evidence@example.invalid');
     run('config', 'user.name', 'evidence');
     await writeFile(join(repo, 'old.mjs'), 'export const value = 1;\n');
-    await writeFile(join(repo, 'source.mjs'), 'export const value = 1;\n');
+    await copyFile(join(EVIDENCE_FIXTURES, 'source.mjs'), join(repo, 'source.mjs'));
     run('add', '.');
     run('commit', '-q', '-m', 'initial');
     run('mv', 'old.mjs', 'new name.mjs');
@@ -249,7 +253,7 @@ test('evidence of a 256 MiB untracked file is collected with memory independent 
   run('init', '-q');
   run('config', 'user.email', 'evidence@example.invalid');
   run('config', 'user.name', 'evidence');
-  await writeFile(join(repo, 'source.mjs'), 'export const value = 1;\n');
+  await copyFile(join(EVIDENCE_FIXTURES, 'source.mjs'), join(repo, 'source.mjs'));
   run('add', '.');
   run('commit', '-q', '-m', 'initial');
   // A process of its own collects the evidence of an untracked file of the given size and writes its resident memory before the
@@ -258,17 +262,7 @@ test('evidence of a 256 MiB untracked file is collected with memory independent 
     const large = await open(join(repo, 'large.log'), 'w');
     await large.truncate(size);
     await large.close();
-    const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
-      const { collectEvidence } = await import(${JSON.stringify(new URL('../test-evidence.mjs', import.meta.url).href)});
-      const before = process.memoryUsage.rss();
-      const record = await collectEvidence({
-        root: ${JSON.stringify(repo)}, caseId: 'large-untracked-file', language: 'js-ts',
-        implementationFiles: ['source.mjs'], testFiles: ['source.mjs'], dependencyFiles: ['source.mjs'], buildFlags: [],
-        result: { status: 'pass', expected: 1, actual: 1, elapsedMs: 1 },
-      });
-      const file = record.git.files.find(({ path }) => path === 'large.log');
-      process.stdout.write(JSON.stringify({ before, peak: process.resourceUsage().maxRSS * 1024, sha256: file?.sha256 }) + '\\n');
-    `], { encoding: 'utf8' });
+    const child = spawnSync(process.execPath, [COLLECT_LARGE_UNTRACKED, repo], { encoding: 'utf8' });
     assert.equal(child.status, 0, child.stderr);
     const report = JSON.parse(child.stdout.trim().split('\n').at(-1));
     return { growth: report.peak - report.before, sha256: report.sha256 };

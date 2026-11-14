@@ -186,7 +186,9 @@ function sessionMeeting(goals, path, rate = 120) {
       }
     }
   }
-  writeFileSync(join(path, "runs.jsonl"), `${lines.join("\n")}\n`);
+  const runs = join(path, "runs.jsonl");
+  const text = `${lines.join("\n")}\n`;
+  writeFileSync(runs, text);
   return lines;
 }
 

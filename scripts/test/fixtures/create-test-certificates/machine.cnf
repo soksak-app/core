@@ -1,0 +1,7 @@
+[req]
+distinguished_name=name
+x509_extensions=machine
+[name]
+[machine]
+basicConstraints=critical,CA:true
+nsComment=machine

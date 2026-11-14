@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import { candidateNativeTests, candidateScripts } from '../candidate-policy.mjs'
 import { decodeAcceptanceReport, encodeAcceptanceReport } from '../candidate-report.mjs';
 import { finishAcceptanceRun, writeAcceptanceReport } from '../acceptance-run.mjs';
 
+const BUNDLES = fileURLToPath(new URL('./fixtures/candidate-bundles/', import.meta.url));
 const sha = 'a'.repeat(40);
 const digest = 'b'.repeat(64);
 function fixture() {
@@ -101,9 +102,7 @@ test('candidate publication hashes the exact downloaded files and complete bundl
   for (const host of ['mygo', 'tauriv2', 'wailsv3']) {
     const folder = join(root, host);
     const bundle = join(folder, 'soksak.app');
-    await mkdir(join(bundle, 'Contents/MacOS'), { recursive: true });
-    await writeFile(join(bundle, 'Contents/Info.plist'), 'candidate metadata');
-    await writeFile(join(bundle, 'Contents/MacOS', `sok-${host}`), `executable ${host}`);
+    await cp(join(BUNDLES, host, 'Contents'), join(bundle, 'Contents'), { recursive: true });
     await chmod(join(bundle, 'Contents/MacOS', `sok-${host}`), 0o755);
     expected.set(host, await hashTree(bundle));
     execFileSync('zip', ['-q', '-r', join(files, `soksak-0.0.39-darwin-arm64-${host}.zip`), 'soksak.app'], { cwd: folder });

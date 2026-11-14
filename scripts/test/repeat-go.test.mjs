@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -19,9 +19,11 @@ const nativeDeclaration = join(fixture, 'native-packages.json');
 function workspaceFor(t) {
   const directory = mkdtempSync(join(tmpdir(), 'soksak-go-repeat-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const file = join(directory, 'go.work');
-  writeFileSync(file, `go 1.27.3\n\nuse ${relative(directory, fixture)}\n`);
-  return file;
+  // The go command writes the workspace file of the folder: the go version of its toolchain and the use of the fixture module.
+  const { GOWORK, ...environment } = process.env;
+  const created = spawnSync('go', ['work', 'init', fixture], { cwd: directory, env: environment, encoding: 'utf8' });
+  assert.equal(created.status, 0, created.stdout + created.stderr);
+  return join(directory, 'go.work');
 }
 
 /** Runs `make` with the arguments in the repository root, with the workspace of the fixture module. */

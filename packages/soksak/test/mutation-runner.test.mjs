@@ -167,8 +167,11 @@ for (const [title, name, mutation, expectedCode, expectedOutput] of [
     for (const file of ["node-test-evidence.mjs", "test-event-reporter.mjs"]) await cp(new URL(`../../../scripts/${file}`, import.meta.url), join(root, "scripts", file));
     const original = mutation.source ?? "export const value = 1;";
     const entry = { id: selected ? "state" : "value", file: "dist/soksak.js", find: "export const value = 1;", to: "export const value = 2;", what: "return the wrong value", ...mutation };
-    await writeFile(join(packageRoot, "scripts/breaks.mjs"), `export const BREAKS = ${JSON.stringify([entry])};`);
-    await writeFile(join(packageRoot, "dist/soksak.js"), original);
+    const breaksFile = join(packageRoot, "scripts/breaks.mjs");
+    const mutatedFile = join(packageRoot, "dist/soksak.js");
+    const breaks = `export const BREAKS = ${JSON.stringify([entry])};`;
+    await writeFile(breaksFile, breaks);
+    await writeFile(mutatedFile, original);
     const originalTest = 'import test from "node:test"; import assert from "node:assert/strict"; import { value } from "../dist/soksak.js"; test("value", () => assert.equal(value, 1));';
     const changedTest = 'import test from "node:test"; test("unrelated", () => {});';
     const drift = name === "snapshot" ? `\nimport { writeFileSync } from "node:fs"; test("external edit", () => writeFileSync(process.env.MUTATION_LIVE_TEST, ${JSON.stringify(changedTest)}));` : "";

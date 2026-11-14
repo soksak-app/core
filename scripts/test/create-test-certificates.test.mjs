@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const FIXTURES = fileURLToPath(new URL("./fixtures/create-test-certificates/", import.meta.url));
 
 test("the registry TLS target fails and names the file when the authority file holds no certificate", { timeout: 30000 }, (t) => {
   const root = mkdtempSync(join(tmpdir(), "e2e-registry-tls-"));
@@ -15,7 +16,7 @@ test("the registry TLS target fails and names the file when the authority file h
   // of the test as it judges any file of the folder.
   const folder = join(root, "config", "soksak-check-registry-tls");
   mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, "ca.pem"), "");
+  copyFileSync(join(FIXTURES, "empty.pem"), join(folder, "ca.pem"));
   const run = spawnSync("make", ["--no-print-directory", "create-test-certificates"], {
     cwd: ROOT, encoding: "utf8", env: { ...process.env, SOKSAK_CONFIG_ROOT: join(root, "config") },
   });
@@ -28,9 +29,8 @@ test("the registry TLS target writes only its own extensions, whatever the opens
   t.after(() => rmSync(root, { recursive: true, force: true }));
   // A machine configuration that adds extensions to every self-signed certificate, as the default configuration of some openssl
   // releases does; its basicConstraints repeats one that the target declares, which gives a certificate with a duplicate extension.
-  writeFileSync(join(root, "machine.cnf"), "[req]\ndistinguished_name=name\nx509_extensions=machine\n[name]\n[machine]\nbasicConstraints=critical,CA:true\nnsComment=machine\n");
   const run = spawnSync("make", ["--no-print-directory", "create-test-certificates"], {
-    cwd: ROOT, encoding: "utf8", env: { ...process.env, OPENSSL_CONF: join(root, "machine.cnf"), SOKSAK_CONFIG_ROOT: join(root, "config") },
+    cwd: ROOT, encoding: "utf8", env: { ...process.env, OPENSSL_CONF: join(FIXTURES, "machine.cnf"), SOKSAK_CONFIG_ROOT: join(root, "config") },
   });
   assert.equal(run.status, 0, run.stderr);
   const text = spawnSync("openssl", ["x509", "-in", join(root, "config/soksak-check-registry-tls/ca.pem"), "-noout", "-text"], { encoding: "utf8" });

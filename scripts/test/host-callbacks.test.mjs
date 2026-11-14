@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+const fixtureHeader = (name) => new URL(`./fixtures/host-callbacks/${name}`, import.meta.url).pathname;
+// The text of a binding that its header no longer produces.
+const STALE_BINDING = "stale";
 const command = new URL("../check-host-callbacks.mjs", import.meta.url).pathname;
 
 test("default callback outputs include the independent shared-host fixture and explicit outputs remain isolated", async () => {
@@ -77,7 +80,7 @@ test("callback bindings follow the declared native entries and a repeated write 
   const folder = mkdtempSync(join(tmpdir(), "host-callback-bindings-"));
   try {
     const header = join(folder, "callbacks.h"), output = join(folder, "callbacks.go");
-    writeFileSync(header, "void unrelated(void);\nvoid sp_host_callback_ready(unsigned long context);\nvoid sp_host_diagnostic_callback_capture(unsigned long context);\n");
+    copyFileSync(fixtureHeader("ready-and-capture.h"), header);
     const args = [command, "--header", header, "--output", output];
     const written = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
     assert.equal(written.status, 0, written.stdout + written.stderr);
@@ -100,7 +103,7 @@ test("callback bindings follow the declared native entries and a repeated write 
     assert.notEqual(staleDiagnostic.status, 0, "a stale diagnostic binding passed its check");
     assert.ok(staleDiagnostic.stderr.includes(diagnosticFile), staleDiagnostic.stderr);
     assert.equal(spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" }).status, 0);
-    writeFileSync(header, "void sp_host_callback_ready(unsigned long context);\n");
+    copyFileSync(fixtureHeader("ready-context.h"), header);
     const obsolete = spawnSync(process.execPath, args, { encoding: "utf8" });
     assert.notEqual(obsolete.status, 0, "an obsolete diagnostic binding passed its check");
     assert.ok(obsolete.stderr.includes(diagnosticFile), obsolete.stderr);
@@ -118,7 +121,7 @@ test("a header without callback entry points is rejected by its path", { timeout
   const folder = mkdtempSync(join(tmpdir(), "host-callback-bindings-"));
   try {
     const header = join(folder, "empty.h");
-    writeFileSync(header, "void unrelated(void);\n");
+    copyFileSync(fixtureHeader("unrelated.h"), header);
     const result = spawnSync(process.execPath, [command, "--header", header, "--output", join(folder, "out.go"), "--write"], { encoding: "utf8" });
     assert.notEqual(result.status, 0);
     assert.ok(result.stderr.includes(header), result.stderr);
@@ -164,7 +167,7 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
   const productionBefore = productionFiles.map((path) => readFileSync(path, "utf8"));
   try {
     const header = join(folder, "callbacks.h"), output = join(folder, "cgo.go"), binding = join(folder, "native.go");
-    writeFileSync(header, "void sp_host_callback_quit_request(void);\nvoid sp_host_diagnostic_callback_process_exit_answered(unsigned long context, _Bool exited);\n");
+    copyFileSync(fixtureHeader("quit-and-exit-answered.h"), header);
     const args = [command, "--header", header, "--output", output, "--purego-output", binding];
     let result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -195,11 +198,11 @@ test("cgo-free generated artifacts are checked and obsolete diagnostics are remo
     assert.notEqual(result.status, 0);
     assert.ok(result.stderr.includes(diagnosticFile), result.stderr);
     writeFileSync(diagnosticFile, diagnostics);
-    writeFileSync(binding, "stale");
+    writeFileSync(binding, STALE_BINDING);
     result = spawnSync(process.execPath, args, { encoding: "utf8" });
     assert.notEqual(result.status, 0);
     assert.ok(result.stderr.includes(binding), result.stderr);
-    writeFileSync(header, "void sp_host_callback_ready(void);\n");
+    copyFileSync(fixtureHeader("ready.h"), header);
     result = spawnSync(process.execPath, [...args, "--write"], { encoding: "utf8" });
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.equal(existsSync(join(folder, "native_diagnostics.go")), false);

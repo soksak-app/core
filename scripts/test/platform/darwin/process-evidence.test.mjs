@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { collectEvidence, evidenceDrift, validateEvidence } from '../../../test-evidence.mjs';
 import { hashFile } from '../../../candidate-identity.mjs';
 import { processExecutable } from '../../../platform/darwin/process-executable.mjs';
 
+const UNRELATED = fileURLToPath(new URL('../../fixtures/process-evidence/unrelated.txt', import.meta.url));
+
 async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'soksak-process-evidence-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  await writeFile(join(root, 'source.mjs'), 'unrelated file');
+  await copyFile(UNRELATED, join(root, 'source.mjs'));
   const git = (...args) => execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' });
   git('init', '-q');
   git('add', '.');

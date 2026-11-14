@@ -67,8 +67,8 @@ for (const [name, source, flags, expected] of [
 
 test("a test script is a list of steps: a command before the tests, and the flags and paths of node --test", () => {
   assert.deepEqual(parseTestScript("node --test test/", "p"), { before: [], flags: [], paths: ["test/"] });
-  assert.deepEqual(parseTestScript("node --test --experimental-test-module-mocks test/", "p"),
-    { before: [], flags: ["--experimental-test-module-mocks"], paths: ["test/"] });
+  assert.deepEqual(parseTestScript("node --test --test-force-exit test/", "p"),
+    { before: [], flags: ["--test-force-exit"], paths: ["test/"] });
   assert.deepEqual(parseTestScript("node ./run.mjs --test --test-concurrency=1 --test-global-setup=./setup.mjs 'activation/*.test.mjs'", "e2e"),
     { before: [], flags: ["--test-concurrency=1", "--test-global-setup=./setup.mjs"], paths: ["activation/*.test.mjs"] });
   assert.deepEqual(parseTestScript("pnpm build && node --test test/", "p"), { before: [{ name: "pnpm build", command: "pnpm", args: ["build"] }], flags: [], paths: ["test/"] });
@@ -192,7 +192,7 @@ test("declared Node selection rejects every missing path even beside a valid fil
 test("each test file of a package is a test with the folder and the flags of its package", (t) => {
   const root = workspace();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test --experimental-test-module-mocks test/" } }));
+  put(root, "a/package.json", JSON.stringify({ name: "a", scripts: { test: "node --test --test-force-exit test/" } }));
   put(root, "a/test/one.test.mjs", "");
   put(root, "a/test/nested/two.test.mjs", "");
   put(root, "a/test/support/helper.mjs", "");
@@ -202,9 +202,9 @@ test("each test file of a package is a test with the folder and the flags of its
   put(root, "c/package.json", JSON.stringify({ name: "c" }));
   const { tests, before } = discoverNodeTests({ root, packages: ["a", "b", "c"] });
   assert.deepEqual(tests.map((item) => [item.name, item.args.slice(0, -1), item.cwd]), [
-    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/one.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
-    ["a/test/support/helper.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--experimental-test-module-mocks"], join(root, "a")],
+    ["a/test/nested/two.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit"], join(root, "a")],
+    ["a/test/one.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit"], join(root, "a")],
+    ["a/test/support/helper.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000", "--test-force-exit"], join(root, "a")],
     ["b/test/three.test.mjs", ["--test", "--test-reporter=tap", "--test-reporter-destination=stdout", `--test-reporter=${EVENT_REPORTER}`, "--test-reporter-destination=stderr", "--test-timeout=120000"], join(root, "b")],
   ]);
   assert.deepEqual(before, [{ name: "b: pnpm build", command: "pnpm", args: ["build"], cwd: join(root, "b") }]);

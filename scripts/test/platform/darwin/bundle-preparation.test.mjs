@@ -2,7 +2,7 @@
 // output that a reader with the signature of spawnSync returns, so the preparation is checked on any system.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import test from "node:test";
 import { prepareBundle } from "../../../platform/darwin/prepare-app-bundle.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "bundle-preparation");
 /** The output buffer of spawnSync when the caller names none. */
 const DEFAULT_BUFFER = 1024 * 1024;
 
@@ -63,12 +64,10 @@ test("bundle preparation recreates Contents when no process uses the bundle", { 
   const contents = join(bundle, "Contents");
   const sentinel = join(contents, "Resources", "remove-me.txt");
   mkdirSync(dirname(sentinel), { recursive: true });
-  writeFileSync(sentinel, "old bundle contents\n");
+  copyFileSync(join(FIXTURES, "remove-me.txt"), sentinel);
   try {
     // The Makefile prepares a bundle with this script.
-    const makefile = join(temporary, "bundle-preparation.mk");
-    writeFileSync(makefile, `include ${join(ROOT, "Makefile")}\n.PHONY: bundle-preparation-test\nbundle-preparation-test:\n\t@$(call bundle-info,$(BUNDLE),tauriv2)\n`);
-    const planned = spawnSync("make", ["-n", "--no-print-directory", "-f", makefile, "bundle-preparation-test", `BUNDLE=${bundle}`], { cwd: ROOT, encoding: "utf8" });
+    const planned = spawnSync("make", ["-n", "--no-print-directory", "-f", join(ROOT, "Makefile"), "-f", join(FIXTURES, "bundle-preparation.mk"), "bundle-preparation-test", `BUNDLE=${bundle}`], { cwd: ROOT, encoding: "utf8" });
     assert.equal(planned.status, 0, planned.stderr);
     assert.equal(planned.stdout.trim(), `node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "${bundle}" --app "tauriv2"`);
     prepare(bundle, "tauriv2", [[1, "/sbin/launchd"], [77, `${join(temporary, "other.app")}/Contents/MacOS/other`]]);

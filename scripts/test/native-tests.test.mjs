@@ -2,19 +2,22 @@
 // share the screen, and each one is named when it starts and ends with its elapsed time and has a limit of its own.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { nativeTests, runNativeTests } from "../native-tests.mjs";
 import { PlatformOperationNotImplemented, processServices } from "../platform/platform.js";
 
+const fixture = (name) => fileURLToPath(new URL(`./fixtures/native-tests/${name}`, import.meta.url));
+
 const build = () => {
   const dir = mkdtempSync(join(tmpdir(), "native-tests-"));
-  const script = (name, body) => {
+  const script = (name, program) => {
     mkdirSync(join(dir, name, ".."), { recursive: true });
-    writeFileSync(join(dir, name), `#!/bin/sh\n${body}\n`);
+    copyFileSync(fixture(program), join(dir, name));
     chmodSync(join(dir, name), 0o755);
   };
   return { dir, script };
@@ -51,7 +54,7 @@ test("the activation target builds and runs its cases through the native test ru
   mkdirSync(buildDir, { recursive: true });
   const future = new Date(Date.now() + 60 * 60 * 1000);
   const library = join(buildDir, "libsoksak-darwin.a");
-  writeFileSync(library, "");
+  copyFileSync(fixture("empty"), library);
   utimesSync(library, future, future);
   for (const name of [
     "webview_input_test",
@@ -64,7 +67,7 @@ test("the activation target builds and runs its cases through the native test ru
     "ime_person_app",
   ]) {
     const path = join(buildDir, name);
-    writeFileSync(path, "");
+    copyFileSync(fixture("empty"), path);
     utimesSync(path, future, future);
   }
 
@@ -105,8 +108,8 @@ test("the activation target builds and runs its cases through the native test ru
 test("the native tests run one at a time, each with its start and end, and a failure fails the run", async (t) => {
   const { dir, script } = build();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  script("ok_test", "echo fine");
-  script("bad_test", "echo broken >&2; exit 3");
+  script("ok_test", "fine.sh");
+  script("bad_test", "broken.sh");
   const lines = [];
   const code = await runNativeTests({ dir, list: ["ok_test", "bad_test"], timeoutMs: 20000, write: (line) => lines.push(line) });
   assert.equal(code, 1);
@@ -119,7 +122,7 @@ test("a successful native child keeps its stdout in the requested run record", a
   const { dir, script } = build();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const runFolder = join(dir, "run");
-  script("ok_test", "echo checkpoint=outer-restored source=ABC");
+  script("ok_test", "checkpoint.sh");
   const lines = [];
   const code = await runNativeTests({ dir, list: ["ok_test"], run: { id: "run", folder: runFolder },
     timeoutMs: 20000, write: (line) => lines.push(line) });
@@ -134,7 +137,7 @@ test("a native test of a run over its limit leaves the stacks of its processes i
   const { dir, script } = build();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const runFolder = join(dir, "run");
-  script("slow_test", "sleep 30");
+  script("slow_test", "slow.sh");
   const lines = [];
   const code = await runNativeTests({ dir, list: ["slow_test"], run: { id: "run", folder: runFolder }, timeoutMs: 300,
     write: (line) => lines.push(line) });
@@ -157,7 +160,7 @@ test("a native test of a run over its limit leaves the stacks of its processes i
 test("a native test over its limit is killed and fails the run", async (t) => {
   const { dir, script } = build();
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  script("slow_test", "sleep 30");
+  script("slow_test", "slow.sh");
   const lines = [];
   const code = await runNativeTests({ dir, list: ["slow_test"], timeoutMs: 300, write: (line) => lines.push(line) });
   assert.equal(code, 1);

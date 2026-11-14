@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import {
   CORE_OWNERS, GATE_SOURCES, absentPluginIds, checkGateSources, checkNames, checkPluginNames, checkSpecReads, checkTestPathReads, classifiedFiles,
   corePackageFolders, corePackageNames, fixtureSidecarNames, namedPlugins, namedSidecars, pluginNameScope,
@@ -24,21 +24,18 @@ test("the absent plugin ids of the fixtures name no fixture plugin, and the audi
   const fixtures = ["probeplain", "rasterprobe"];
   const dir = mkdtempSync(join(tmpdir(), "soksak-boundaries-absent-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  writeFileSync(join(dir, "absent-plugins.json"), JSON.stringify({ ids: ["probeplain"] }));
+  const absentFile = join(dir, "absent-plugins.json");
+  writeFileSync(absentFile, JSON.stringify({ ids: ["probeplain"] }));
   assert.throws(() => absentPluginIds(dir, fixtures), /absent-plugins\.json: the fixture plugins use the absent plugin ids probeplain$/);
-  writeFileSync(join(dir, "absent-plugins.json"), JSON.stringify({ ids: [] }));
+  writeFileSync(absentFile, JSON.stringify({ ids: [] }));
   assert.throws(() => absentPluginIds(dir, fixtures), /absent-plugins\.json: ids must be a list of plugin ids$/);
   const files = { "e2e/absent.test.mjs": `await s.run("core.card.add-tab", { card, plugin: "${absent[0]}" });\n` };
   assert.deepEqual(checkPluginNames(Object.keys(files), { fixtures: [...fixtures, ...absent], readSource: (file) => files[file] }), []);
 });
 
-test("importing the boundary module runs no check", (t) => {
-  // The probe is a file, so that process.argv[1] names it, as the entry guard of the imported modules expects.
-  const dir = mkdtempSync(join(tmpdir(), "soksak-boundaries-import-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const probe = join(dir, "probe.mjs");
-  const script = fileURLToPath(new URL("../check-boundaries.mjs", import.meta.url));
-  writeFileSync(probe, `import ${JSON.stringify(pathToFileURL(script).href)};\n`);
+test("importing the boundary module runs no check", () => {
+  // The probe is a tracked file that only imports the module, so that process.argv[1] names it, as the entry guard of the imported modules expects.
+  const probe = fileURLToPath(new URL("./fixtures/check-boundaries/import-boundaries.mjs", import.meta.url));
   const result = spawnSync(process.execPath, [probe], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, "");

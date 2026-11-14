@@ -1,9 +1,9 @@
 // Verifies that `make repeat-node` runs each repeat of a Node test file through the test runner, ends a repeat at its limit with its
 // process group, names each repeat when it starts, and judges a repeat by the passed tests that match the name pattern. The files are
-// written to a temporary folder outside the repository and run by the real node.
+// copied from the tracked folder scripts/test/fixtures/repeat-node to a temporary folder outside the repository and run by the real node.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -11,17 +11,18 @@ import { runNodeRepeat } from '../repeat-node.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 
-function fixture(t, source) {
+/** A copy of the tracked fixture test file `name` in a folder of the test, named as a test file. */
+function fixture(t, name) {
   const directory = mkdtempSync(join(tmpdir(), 'soksak-node-repeat-'));
   t.after(() => rmSync(directory, { recursive: true }));
   const file = join(directory, 'probe.test.mjs');
-  writeFileSync(file, `import test from "node:test";\n${source}\n`);
+  copyFileSync(join(root, 'scripts/test/fixtures/repeat-node', `${name}.mjs`), file);
   return file;
 }
 
 // The test named hangs keeps the event loop busy for 30 seconds, so only the kill at the run limit ends it sooner.
 test('make repeat-node names each run, ends a run that hangs at its limit, and reports the time it was killed', (t) => {
-  const file = fixture(t, 'test("hangs", () => new Promise((resolve) => setTimeout(resolve, 30000)));');
+  const file = fixture(t, 'hangs');
   const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=hangs', 'COUNT=1', 'TEST_TIMEOUT=2'], {
     cwd: root, encoding: 'utf8', timeout: 60000,
   });
@@ -34,7 +35,7 @@ test('make repeat-node names each run, ends a run that hangs at its limit, and r
 });
 
 test('make repeat-node runs the matching tests in every repeat and reports the count of passing runs', (t) => {
-  const file = fixture(t, 'test("owning case", () => {});\ntest("other case", () => {});');
+  const file = fixture(t, 'owning-and-other');
   const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=owning case', 'COUNT=2'], {
     cwd: root, encoding: 'utf8', timeout: 60000,
   });
@@ -45,7 +46,7 @@ test('make repeat-node runs the matching tests in every repeat and reports the c
 });
 
 test('make repeat-node stops at the first failed run and reports its output', (t) => {
-  const file = fixture(t, 'test("owning case", () => { throw new Error("boom"); });');
+  const file = fixture(t, 'owning-throws');
   const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=owning case', 'COUNT=2'], {
     cwd: root, encoding: 'utf8', timeout: 60000,
   });
@@ -56,7 +57,7 @@ test('make repeat-node stops at the first failed run and reports its output', (t
 });
 
 test('make repeat-node rejects a name pattern that runs no passed test, with the color of the reporter on or off', (t) => {
-  const file = fixture(t, 'test("probe passes", () => {});');
+  const file = fixture(t, 'probe-passes');
   for (const color of ['3', '0']) {
     const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=missing probe', 'COUNT=2'], {
       cwd: root, encoding: 'utf8', timeout: 60000, env: { ...process.env, FORCE_COLOR: color },
@@ -67,7 +68,7 @@ test('make repeat-node rejects a name pattern that runs no passed test, with the
 });
 
 test('make repeat-node counts passing runs when the reporter writes colors', (t) => {
-  const file = fixture(t, 'test("probe passes", () => {});');
+  const file = fixture(t, 'probe-passes');
   const result = spawnSync('make', ['repeat-node', `FILE=${file}`, 'NAME=probe passes', 'COUNT=2'], {
     cwd: root, encoding: 'utf8', timeout: 60000, env: { ...process.env, FORCE_COLOR: '3' },
   });
@@ -75,15 +76,15 @@ test('make repeat-node counts passing runs when the reporter writes colors', (t)
   assert.match(result.stdout, /2 of 2 runs pass/);
 });
 
-for (const [label, source] of [
-  ['empty registration', ''],
-  ['todo case', 'test.todo("required");'],
-  ['skipped case', 'test.skip("required", () => {});'],
-  ['skipped suite beside a passing case', 'test("required", () => {}); test.skip("omitted suite", () => {});'],
-  ['exit before registration', 'process.exit(0);'],
+for (const [label, name] of [
+  ['empty registration', 'empty-registration'],
+  ['todo case', 'todo-case'],
+  ['skipped case', 'skipped-case'],
+  ['skipped suite beside a passing case', 'skipped-suite'],
+  ['exit before registration', 'exit-before-registration'],
 ]) {
   test(`repeat refuses ${label} as executed passing evidence`, { timeout: 30_000 }, async (t) => {
-    const file = fixture(t, source);
+    const file = fixture(t, name);
     const output = [];
     const code = await runNodeRepeat({ file, name: '.*', count: 1, timeoutMs: 10_000, cwd: root, write: (line) => output.push(line) });
     assert.equal(code, 1, output.join('\n'));
@@ -91,7 +92,7 @@ for (const [label, source] of [
 }
 
 test('repeat accepts nested selected tests without running an unselected failure', { timeout: 30_000 }, async (t) => {
-  const file = fixture(t, 'test("selected parent", async (t) => { await t.test("selected child", () => {}); }); test("other", () => { throw new Error("not selected"); });');
+  const file = fixture(t, 'nested-selected');
   const output = [];
   assert.equal(await runNodeRepeat({ file, name: 'selected', count: 1, timeoutMs: 10_000, cwd: root, write: (line) => output.push(line) }), 0, output.join('\n'));
 });

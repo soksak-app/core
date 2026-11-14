@@ -2,12 +2,13 @@
 // with log.open. The findings of a log are tested in the log-contract package.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+const FIXTURES = fileURLToPath(new URL("./fixtures/audit-log/", import.meta.url));
 const COMMAND = fileURLToPath(new URL("../audit-log.mjs", import.meta.url));
 
 test("the audit command without its two arguments prints the usage and exits with status 2", () => {
@@ -21,8 +22,8 @@ test("the audit command refuses an empty log, since its first line is not log.op
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const log = join(dir, "empty.jsonl");
   const catalog = join(dir, "catalog.json");
-  writeFileSync(log, "");
-  writeFileSync(catalog, '{"schema":3,"events":{}}');
+  copyFileSync(join(FIXTURES, "empty.jsonl"), log);
+  copyFileSync(join(FIXTURES, "catalog.json"), catalog);
   const result = spawnSync(process.execPath, [COMMAND, log, catalog], { encoding: "utf8" });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /the first line is not log\.open: the file is empty/);
