@@ -1,0 +1,29 @@
+{
+  "name": "mcp-tools-call-rejected",
+  "description": "sok mcp answers a tools/call whose arguments are present, not null and no object with the JSON-RPC error -32602 arguments must be an object, a tools/call without params or without a string name with -32602 name must be a string, a request with a string that holds a lone surrogate escape, a member name or a value, with -32602 and the path of that string, and a tools/call of a tool that mcp.json does not list with the JSON-RPC error -32602 unknown tool and the name, each with the id of the call. A notification with such a string is reported on the standard error with the path and dropped, and a surrogate pair is a character. A line that is not valid JSON, and a ping line whose string holds the byte ff, which is not valid UTF-8, are answered with the JSON-RPC parse error -32700 and the id null, and so is a line nested 128 levels deep, while a line nested 127 levels deep reaches the library, which answers its unknown tool. None of them reaches the endpoint, and the server answers the next call.",
+  "replay": false,
+  "reason": "The case has no endpoint frame: it holds the messages of the MCP protocol of the server.",
+  "steps": [],
+  "mcp": {
+    "steps": [
+      { "client": { "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": { "name": "case", "version": "0" } } }, "server": { "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "2025-11-25" } } },
+      { "client": { "jsonrpc": "2.0", "method": "notifications/initialized" } },
+      { "client": { "jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": { "name": "agent_context", "arguments": [1] } }, "server": { "jsonrpc": "2.0", "id": 2, "error": { "code": -32602, "message": "arguments must be an object" } } },
+      { "client": { "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "window_open", "arguments": {} } }, "server": { "jsonrpc": "2.0", "id": 3, "error": { "code": -32602, "message": "unknown tool window_open" } } },
+      { "client": { "jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": { "arguments": {} } }, "server": { "jsonrpc": "2.0", "id": 4, "error": { "code": -32602, "message": "name must be a string" } } },
+      { "client": { "jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": { "name": 5, "arguments": {} } }, "server": { "jsonrpc": "2.0", "id": 5, "error": { "code": -32602, "message": "name must be a string" } } },
+      { "client": { "jsonrpc": "2.0", "id": 6, "method": "tools/call" }, "server": { "jsonrpc": "2.0", "id": 6, "error": { "code": -32602, "message": "name must be a string" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"status_get\",\"arguments\":{\"name\":\"a\\ud800\"}}}", "server": { "jsonrpc": "2.0", "id": 7, "error": { "code": -32602, "message": "params.arguments.name holds a lone surrogate escape" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"status_get\",\"arguments\":{\"\\udc00x\":1}}}", "server": { "jsonrpc": "2.0", "id": 8, "error": { "code": -32602, "message": "params.arguments.\\udc00x holds a lone surrogate escape" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"input_key\",\"arguments\":{\"key\":\"a\",\"modifiers\":[\"shift\",\"\\ud83d\"],\"phase\":\"down\"}}}", "server": { "jsonrpc": "2.0", "id": 9, "error": { "code": -32602, "message": "params.arguments.modifiers[1] holds a lone surrogate escape" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":99,\"reason\":\"\\udfff\"}}" },
+      { "stderr": "sok: mcp: params.reason holds a lone surrogate escape" },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"window_\\ud83d\\ude00\",\"arguments\":{}}}", "server": { "jsonrpc": "2.0", "id": 10, "error": { "code": -32602, "message": "unknown tool window_\ud83d\ude00" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":12,", "server": { "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": "Parse error" } } },
+      { "hex": "7b226a736f6e727063223a22322e30222c226964223a31332c226d6574686f64223a2270696e67222c22706172616d73223a7b2278223a22ff227d7d", "server": { "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": "Parse error" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":14,\"method\":\"tools/call\",\"params\":{\"name\":\"window_open\",\"arguments\":{\"a\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}}}", "server": { "jsonrpc": "2.0", "id": 14, "error": { "code": -32602, "message": "unknown tool window_open" } } },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":15,\"method\":\"tools/call\",\"params\":{\"name\":\"window_open\",\"arguments\":{\"a\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}}}", "server": { "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": "Parse error" } } },
+      { "client": { "jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": { "name": "agent_context", "arguments": null } }, "server": { "jsonrpc": "2.0", "id": 11, "result": { "content": [{ "type": "text", "text": "{\"configDirectory\":\"$config\",\"surface\":null,\"window\":null}" }] } } }
+    ]
+  }
+}

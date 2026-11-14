@@ -1,6 +1,6 @@
 {
   "name": "mcp-tools-call",
-  "description": "Each tool call of sok-mcp sends the endpoint method that it maps to, with the window of the call and its arguments, and answers the reply of the method. A window option selects the window without windows.list.",
+  "description": "Each tool call of sok mcp sends the endpoint method that it maps to, with the window of the call and its arguments, and answers the reply of the method; command_run without params sends an empty object, and a window argument takes precedence over the window option, which selects the window without windows.list. Each argument reaches the endpoint with the JSON text of the call, so the numbers 1e2 and 2.50 keep their text.",
   "replay": false,
   "reason": "The calls change the project of the window and the state of the page and of the native input, which the replay does not change on demand. The status, command and element values are passed through unchanged by the server, and the example values are the ones the MCP test checks.",
   "variables": {
@@ -10,11 +10,7 @@
     "ready": { "type": "boolean", "example": true },
     "screen": { "type": "any", "example": "home" },
     "opened": { "type": "any", "example": { "opened": "/p" } },
-    "rect": {
-      "type": "object",
-      "keys": ["x", "y", "width", "height", "zoom", "role", "document", "index"],
-      "example": { "x": 10, "y": 20, "width": 30, "height": 40, "zoom": 1, "role": null, "document": { "x": 0, "y": 0 }, "index": 1 }
-    }
+    "rect": { "type": "object", "keys": ["x", "y", "width", "height", "zoom", "role", "document", "index"], "example": { "x": 10, "y": 20, "width": 30, "height": 40, "zoom": 1, "role": null, "document": { "x": 0, "y": 0 }, "index": 1 } }
   },
   "steps": [
     { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
@@ -40,6 +36,35 @@
     { "send": { "jsonrpc": "2.0", "id": 11, "method": "input.key", "params": { "window": "main", "key": "Enter", "phase": "down", "modifiers": ["shift"] } } },
     { "reply": { "jsonrpc": "2.0", "id": 11, "result": null } },
     { "send": { "jsonrpc": "2.0", "id": 12, "method": "input.text", "params": { "window": "main", "phase": "mark", "text": "한", "selection": { "start": 0, "length": 1 } } } },
-    { "reply": { "jsonrpc": "2.0", "id": 12, "result": null } }
-  ]
+    { "reply": { "jsonrpc": "2.0", "id": 12, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 13, "method": "command.run", "params": { "window": "main", "name": "host.window.reload", "params": {} } } },
+    { "reply": { "jsonrpc": "2.0", "id": 13, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 14, "method": "status.get", "params": { "window": "other", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 14, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 15, "method": "input.pointer", "params": { "window": "main", "x": 1e2, "y": 2.50, "phase": "move" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 15, "result": null } }
+  ],
+  "mcp": {
+    "arguments": ["--window", "main"],
+    "steps": [
+      { "tool": "windows_list", "arguments": {}, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] },
+      { "tool": "status_get", "arguments": { "name": "core.screen" }, "result": "$screen" },
+      { "tool": "status_get", "arguments": { "name": "core.screen", "surface": "tab-a" }, "result": "$screen" },
+      { "tool": "command_run", "arguments": { "name": "core.project.open", "params": { "root": "/p" } }, "result": "$opened" },
+      { "tool": "element_rect", "arguments": { "name": "core.tab", "index": 1 }, "result": "$rect" },
+      { "tool": "element_act", "arguments": { "name": "core.tab", "action": "input", "value": "v" }, "result": null },
+      { "tool": "input_pointer", "arguments": { "x": 1, "y": 2, "phase": "move" }, "result": null },
+      { "tool": "input_pointer", "arguments": { "x": 1, "y": 2, "phase": "down", "button": "right" }, "result": null },
+      { "tool": "input_pointer", "arguments": { "x": 1, "y": 2, "phase": "move", "activate": true }, "result": null },
+      { "tool": "input_pointer", "arguments": { "x": 1, "y": 2, "phase": "down", "clicks": 2 }, "result": null },
+      { "tool": "input_key", "arguments": { "key": "Enter", "phase": "down", "modifiers": ["shift"] }, "result": null },
+      { "tool": "input_text", "arguments": { "phase": "mark", "text": "한", "selection": { "start": 0, "length": 1 } }, "result": null },
+      { "tool": "command_run", "arguments": { "name": "host.window.reload" }, "result": null },
+      { "tool": "status_get", "arguments": { "window": "other", "name": "core.screen" }, "result": "$screen" },
+      { "tool": "input_pointer", "arguments": { "x": "1", "y": 2, "phase": "move" }, "error": "x must be a number" },
+      { "tool": "element_rect", "arguments": { "name": "core.tab", "index": 1.5 }, "error": "index must be an integer" },
+      { "line": "{\"jsonrpc\":\"2.0\",\"id\":100,\"method\":\"tools/call\",\"params\":{\"name\":\"input_pointer\",\"arguments\":{\"x\":1e2,\"y\":2.50,\"phase\":\"move\"}}}", "server": { "jsonrpc": "2.0", "id": 100, "result": { "content": [{ "type": "text", "text": "null" }] } } },
+      { "received": "input.pointer", "contains": "\"x\":1e2,\"y\":2.50" }
+    ]
+  }
 }

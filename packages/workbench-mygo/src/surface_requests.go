@@ -276,8 +276,9 @@ func watchKey(name string, requested json.RawMessage) string {
 	return name + " " + string(requested)
 }
 
-// replySurface answers a request for a name that a surface registers, and tells whether the request is one.
-func (r *Registry) replySurface(method string, params json.RawMessage, answer func(result any, err error)) bool {
+// replySurface answers a request for a name that a surface registers, and tells whether the request is one. origin is the request
+// of the host that the forwards serve, 0 for none.
+func (r *Registry) replySurface(origin uint64, method string, params json.RawMessage, answer func(result any, err error)) bool {
 	kind, known := methodKinds[method]
 	if !known {
 		return false
@@ -306,7 +307,7 @@ func (r *Registry) replySurface(method string, params json.RawMessage, answer fu
 	r.mu.Unlock()
 	switch {
 	case method == "status.unwatch" && current != nil && !observed:
-		r.release(current, answer)
+		r.release(origin, current, answer)
 		return true
 	case method == "status.unwatch", method == "status.watch" && current != nil:
 		answer(nil, nil)
@@ -322,7 +323,7 @@ func (r *Registry) replySurface(method string, params json.RawMessage, answer fu
 		return true
 	}
 	if method != "status.watch" {
-		r.forward(surface, method, params, answer)
+		r.forward(origin, surface, method, params, answer)
 		return true
 	}
 	// The watch exists before the surface answers, because the surface sends the current value as it starts the watch.
@@ -333,7 +334,7 @@ func (r *Registry) replySurface(method string, params json.RawMessage, answer fu
 	r.mu.Lock()
 	r.surfaces.watches[key] = watched
 	r.mu.Unlock()
-	r.forward(surface, method, nameOnly(*name), func(result any, err error) {
+	r.forward(origin, surface, method, nameOnly(*name), func(result any, err error) {
 		if err != nil {
 			r.mu.Lock()
 			if r.surfaces.watches[key] == watched {
@@ -355,8 +356,9 @@ func nameOnly(name string) json.RawMessage {
 	return encoded
 }
 
-// release ends the watch of the surface when no other watch follows the same surface.
-func (r *Registry) release(watched *surfaceWatch, answer func(result any, err error)) {
+// release ends the watch of the surface when no other watch follows the same surface. origin is the request that the forward serves,
+// 0 for none.
+func (r *Registry) release(origin uint64, watched *surfaceWatch, answer func(result any, err error)) {
 	r.mu.Lock()
 	shared := false
 	for _, other := range r.surfaces.watches {
@@ -367,15 +369,19 @@ func (r *Registry) release(watched *surfaceWatch, answer func(result any, err er
 		answer(nil, nil)
 		return
 	}
-	r.forward(watched.surface, "status.unwatch", nameOnly(watched.name), answer)
+	r.forward(origin, watched.surface, "status.unwatch", nameOnly(watched.name), answer)
 }
 
-// forward sends a request to a surface. It has no time limit: the reply of the surface ends it.
-func (r *Registry) forward(surface, method string, params json.RawMessage, answer func(result any, err error)) {
+// forward sends a request to a surface. It has no time limit: the reply of the surface ends it, or the end of the request origin
+// of the host that it serves; origin 0 names none, for a forward that the workbench starts itself.
+func (r *Registry) forward(origin uint64, surface, method string, params json.RawMessage, answer func(result any, err error)) {
 	r.mu.Lock()
 	r.surfaces.forwards++
 	request := map[string]any{"id": r.surfaces.forwards, "surface": surface, "method": method, "params": params}
 	r.mu.Unlock()
+	if origin != 0 {
+		request["origin"] = origin
+	}
 	r.surfaces.links.Forward(request, func(value any, err error) {
 		if err != nil {
 			answer(nil, err)
@@ -530,7 +536,7 @@ func (r *Registry) reattach(observer *surfaceObserver) {
 		watched.local = append(watched.local, observer)
 		observer.watch = watched
 		r.mu.Unlock()
-		r.forward(id, "status.get", nameOnly(name), func(value any, err error) {
+		r.forward(0, id, "status.get", nameOnly(name), func(value any, err error) {
 			switch {
 			case err != nil:
 				r.observeFailed(name, id, err)
@@ -544,7 +550,7 @@ func (r *Registry) reattach(observer *surfaceObserver) {
 	r.surfaces.watches[key] = watched
 	observer.watch = watched
 	r.mu.Unlock()
-	r.forward(id, "status.watch", nameOnly(name), func(_ any, err error) {
+	r.forward(0, id, "status.watch", nameOnly(name), func(_ any, err error) {
 		if err == nil {
 			return
 		}
@@ -573,7 +579,7 @@ func (r *Registry) detach(observer *surfaceObserver) {
 	}
 	r.mu.Unlock()
 	if ended {
-		r.release(watched, func(_ any, err error) {
+		r.release(0, watched, func(_ any, err error) {
 			if err != nil {
 				r.observeFailed(watched.name, watched.surface, err)
 			}

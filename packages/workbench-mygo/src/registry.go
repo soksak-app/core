@@ -80,7 +80,11 @@ type Registry struct {
 	statuses map[string]Status
 	watches  map[string]*watch
 	elements Elements
+	// params holds the params of the command of each element that the binder keyed in the last frame, by its key.
+	params   map[Exposed]any
 	surfaces surfaceTable
+	// parts gives a window snapshot the layout, the plugins and the surfaces of the window.
+	parts func() (SnapshotParts, error)
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
 	// follow returns the answer of one command name that starts now, which waits until the window shows what the command changed.
@@ -90,7 +94,7 @@ type Registry struct {
 // NewRegistry returns an empty registry of the names of declared.
 func NewRegistry(declared *Declarations) *Registry {
 	return &Registry{declared: declared, commands: map[string]Command{}, later: map[string]LaterCommand{}, methods: map[string]LaterCommand{}, statuses: map[string]Status{},
-		watches: map[string]*watch{}, surfaces: newSurfaceTable()}
+		watches: map[string]*watch{}, params: map[Exposed]any{}, surfaces: newSurfaceTable()}
 }
 
 // Command registers the handler of the declared command name.
@@ -229,8 +233,14 @@ var methodKinds = map[string]string{
 var causeID = regexp.MustCompile(`^[^"\\\x00-\x1f\x7f]+$`)
 
 // Reply is Answer for a request that may answer in a later step: a command that answers later and a request that a surface answers.
-// It calls answer once, and a command request is recorded when it ended.
+// It calls answer once, and a command request is recorded when it ended. It is ReplyFor of a request that the workbench starts itself.
 func (r *Registry) Reply(method string, params json.RawMessage, changed Changed, answer func(result any, err error)) {
+	r.ReplyFor(0, method, params, changed, answer)
+}
+
+// ReplyFor is Reply for the request origin of the host, the id of its exposure-request: each forward to a surface that serves the
+// request names it, so the end of the request ends the forward (docs/spec/exposure.md#relay). origin 0 names no request.
+func (r *Registry) ReplyFor(origin uint64, method string, params json.RawMessage, changed Changed, answer func(result any, err error)) {
 	if name, command := commandOf(method, params); command && r.recorder != nil {
 		started, answered := time.Now(), answer
 		answer = func(result any, err error) {
@@ -241,7 +251,11 @@ func (r *Registry) Reply(method string, params json.RawMessage, changed Changed,
 	if name, command := commandOf(method, params); command {
 		answer = r.followed(name, answer)
 	}
-	if r.replySurface(method, params, answer) {
+	if r.replySurface(origin, method, params, answer) {
+		return
+	}
+	if method == "exposure.snapshot" {
+		r.snapshot(origin, params, answer)
 		return
 	}
 	r.mu.Lock()

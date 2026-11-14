@@ -68,6 +68,11 @@ mod connection_activity;
 mod events;
 #[path = "file_watch.rs"]
 mod file_watch;
+#[path = "login_shell.rs"]
+mod login_shell;
+#[cfg(test)]
+#[path = "login_shell_test.rs"]
+mod login_shell_test;
 #[path = "memory_pressure.rs"]
 mod memory_pressure;
 #[path = "mouse_buttons.rs"]
@@ -251,6 +256,9 @@ impl Platform for Darwin {
     }
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
         process_footprint::process_footprint(pid)
+    }
+    fn login_shell(&self) -> Result<String, String> {
+        login_shell::login_shell()
     }
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         window::move_to(window, x, y)

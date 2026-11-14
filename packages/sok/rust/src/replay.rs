@@ -32,6 +32,18 @@ pub(crate) fn set_run_log(log: Option<Arc<EventLog>>) {
     RUN_LOG.with(|slot| *slot.borrow_mut() = log);
 }
 
+/// Stores an event of a command in the event file of the run of this thread. A run without an event file stores nothing; the
+/// command reports the same failure on the standard error.
+pub(crate) fn emit_run_event<T: serde::Serialize>(level: Level, event: &str, fields: &T) {
+    RUN_LOG.with(|slot| {
+        if let Some(log) = slot.borrow().as_ref() {
+            // A refused event is counted by the writer, which stores it as `log.dropped` (docs/spec/logging.md).
+            // events: forwarded
+            log.emit(level, event, fields);
+        }
+    });
+}
+
 /// The first stored hash that differs from the replayed one.
 #[derive(Debug)]
 pub struct ReplayDivergence {

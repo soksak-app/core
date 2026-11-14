@@ -15,11 +15,11 @@ import (
 // contract: page.start.document
 func TestStartDocumentCarriesTheWorkspaceAndTheWindowControls(t *testing.T) {
 	data, err := host.StartDocument(map[string]any{"common": map[string]any{}, "projects": []any{}}, nil,
-		host.Chrome{Controls: host.Rect{X: 7, Y: 8, W: 52, H: 14}, Row: 32}, []string{"tab-a"})
+		host.Chrome{Controls: host.Rect{X: 7, Y: 8, W: 52, H: 14}, Row: 32}, []string{"tab-a"}, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"workspace":{"common":{},"projects":[]},"controls":{"controls":{"x":7,"y":8,"w":52,"h":14},"row":32},"pendingSurfaces":["tab-a"]}`
+	want := `{"workspace":{"common":{},"projects":[]},"controls":{"controls":{"x":7,"y":8,"w":52,"h":14},"row":32},"pendingSurfaces":["tab-a"],"window":"main"}`
 	if string(data) != want {
 		t.Fatalf("start document %s", data)
 	}

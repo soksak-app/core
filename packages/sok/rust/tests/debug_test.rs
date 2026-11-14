@@ -20,6 +20,8 @@ fn run_query_command(config_dir: &Path, args: &[&str]) -> (String, String, i32) 
         identifier: "app.soksak.tauri",
         paths_dir: Err("not used".to_string()),
         core_version: "0.0.2",
+        config_dir_variable: None,
+        surface_variable: None,
     };
     let code = soksak_sok::run(&all, &mut stdout, &mut stderr, &options);
     (

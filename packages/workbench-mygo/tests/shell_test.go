@@ -388,7 +388,10 @@ func (h *storedHost) table() map[string]workbench.HostCall {
 			plugins.starter = map[string]any{"format": 1, "state": request.State, "pack": request.Pack, "registry": request.Registry, "plugins": request.Plugins}
 			return nil, nil
 		}),
-		"linkOpen": answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),
+		// The settings window reads the setup parts when it opens (docs/spec/cli.md#agents-in-the-application); this host has none.
+		"setupState":   answer("setupState", func(json.RawMessage) (any, error) { return map[string]any{"parts": []any{}}, nil }),
+		"setupInstall": answer("setupInstall", func(json.RawMessage) (any, error) { return map[string]any{"parts": []any{}}, nil }),
+		"linkOpen":     answer("linkOpen", func(argument json.RawMessage) (any, error) { h.opened = append(h.opened, argument); return nil, nil }),
 		"appUpdateState": answer("appUpdateState", func(json.RawMessage) (any, error) {
 			if h.holdAppUpdate != nil {
 				h.holdAppUpdate.wait()
@@ -580,6 +583,8 @@ type shellFixture struct {
 	treeReads int
 	// treeEdit changes the element tree that the shell reads, as a window that drew elsewhere.
 	treeEdit func(tree []ui.ElementNode)
+	// ids is the random source of the new identifiers of the shell.
+	ids idSource
 }
 
 // installedDocument is the document of the installed plugins of the host.
@@ -647,6 +652,8 @@ func startedShellOf(t testing.TB, stored *storedHost, declared *workbench.Declar
 		Located:     func(project string) { stored.located = project },
 		Backdrop:    func(color string) error { stored.backdrops = append(stored.backdrops, color); return nil },
 		FirstScreen: func() {},
+		Name:        windowName,
+		Random:      &f.ids,
 	})
 	if err != nil {
 		t.Fatal(err)

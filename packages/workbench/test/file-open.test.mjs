@@ -27,3 +27,13 @@ test("a path to open is relative to the project root", () => {
     assert.throws(() => checkOpenPath(path), /path must be relative to the project root/, path);
   }
 });
+
+test("a path to open is taken in its normal form, so two spellings of one file name one tab", () => {
+  for (const [given, normal] of [["./docs/a.md", "docs/a.md"], ["docs//a.md", "docs/a.md"], ["docs/./a.md", "docs/a.md"], ["docs/a.md/", "docs/a.md"],
+    ["./a.md", "a.md"], ["문서.md".normalize("NFD"), "문서.md".normalize("NFC")]]) {
+    assert.equal(checkOpenPath(given), normal, given);
+  }
+  for (const path of [".", "./", "//"]) {
+    assert.throws(() => checkOpenPath(path), /^Error: path must be relative to the project root: /, path);
+  }
+});

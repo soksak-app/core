@@ -84,6 +84,8 @@ const COMMAND = {
   pluginsRun: "plugins_run",
   pluginsUseRegistry: "plugins_use_registry",
   pluginsStarter: "plugins_starter",
+  setupState: "setup_state",
+  setupInstall: "setup_install",
 };
 
 // The argument names differ per command. The Rust signature determines the names.
@@ -168,6 +170,8 @@ const ARG = {
   pluginsRun: (request) => ({ request }),
   pluginsUseRegistry: (request) => ({ request }),
   pluginsStarter: (request) => ({ request }),
+  setupState: () => ({}),
+  setupInstall: (request) => ({ request }),
 };
 
 /**

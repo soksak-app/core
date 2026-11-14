@@ -4,8 +4,9 @@
 use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
 
+use serde::Serialize;
+use serde_json::Value;
 use serde_json::value::RawValue;
-use serde_json::{Value, json};
 
 use crate::platform;
 
@@ -19,7 +20,7 @@ pub struct Endpoint {
 }
 
 /// The reason a request failed. A JSON-RPC error that the endpoint returned has a code.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Failure {
     Endpoint { code: i64, message: String },
     Other(String),
@@ -116,7 +117,7 @@ impl Client {
         self.stream.close()
     }
 
-    fn write(&mut self, message: &Value) -> Result<(), String> {
+    fn write(&mut self, message: &impl Serialize) -> Result<(), String> {
         let body = serde_json::to_vec(message).map_err(|error| error.to_string())?;
         if body.len() > MAX_FRAME_LENGTH {
             return Err(format!(
@@ -131,26 +132,42 @@ impl Client {
             .map_err(|error| format!("endpoint connection failed: {error}"))
     }
 
-    fn read(&mut self) -> Result<Message, String> {
-        let mut header = [0u8; 4];
-        if let Err(error) = self.stream.read_exact(&mut header) {
-            return Err(if error.kind() == ErrorKind::UnexpectedEof {
-                "endpoint connection closed".into()
-            } else {
-                format!("endpoint connection failed: {error}")
-            });
+    fn next_message(&mut self) -> Result<Message, String> {
+        read_message(&mut self.stream)
+    }
+
+    /// Returns the reading half of the connection: a thread reads the answers and notifications with it while requests of other
+    /// threads are written through `send` (docs/spec/cli.md#mcp-server).
+    pub fn reader(&self) -> Result<Reader, String> {
+        Ok(Reader {
+            stream: self.stream.try_clone()?,
+        })
+    }
+
+    /// Writes the request `method` with the id that the caller chose, without waiting for its answer, which the `Reader` of the
+    /// connection reads. params is any JSON value; raw values of an agent's call keep their text, such as the text of a number
+    /// (docs/spec/cli.md#mcp-server).
+    pub fn send<P: Serialize>(
+        &mut self,
+        id: u64,
+        method: &str,
+        params: Option<P>,
+    ) -> Result<(), String> {
+        /// A request frame; its members are written in the order of their names.
+        #[derive(Serialize)]
+        struct Request<'a, P> {
+            id: u64,
+            jsonrpc: &'static str,
+            method: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            params: Option<P>,
         }
-        let length = u32::from_be_bytes(header) as usize;
-        if length > MAX_FRAME_LENGTH {
-            return Err(format!(
-                "invalid frame from endpoint: frame length {length} exceeds limit {MAX_FRAME_LENGTH}"
-            ));
-        }
-        let mut body = vec![0u8; length];
-        self.stream
-            .read_exact(&mut body)
-            .map_err(|_| "endpoint connection closed".to_string())?;
-        parse_frame(&body)
+        self.write(&Request {
+            id,
+            jsonrpc: "2.0",
+            method,
+            params,
+        })
     }
 
     /// Sends the method and returns the result as the original JSON. The result is null when there is none.
@@ -162,13 +179,9 @@ impl Client {
     ) -> Result<String, Failure> {
         let id = self.next_id;
         self.next_id += 1;
-        let mut request = json!({"jsonrpc": "2.0", "id": id, "method": method});
-        if let Some(params) = params {
-            request["params"] = params;
-        }
-        self.write(&request)?;
+        self.send(id, method, params)?;
         loop {
-            let message = self.read()?;
+            let message = self.next_message()?;
             let Some(answer) = message.id else {
                 if let (Some(method), Some(params)) =
                     (message.method.as_deref(), message.params.as_deref())
@@ -199,7 +212,7 @@ impl Client {
         notify: &mut dyn FnMut(&str, &RawValue) -> Result<(), String>,
     ) -> String {
         loop {
-            let message = match self.read() {
+            let message = match self.next_message() {
                 Ok(message) => message,
                 Err(error) => return error,
             };
@@ -214,6 +227,46 @@ impl Client {
             }
         }
     }
+}
+
+/// The reading half of a connection that `Client::reader` returns.
+pub struct Reader {
+    stream: Box<dyn platform::Connection>,
+}
+
+impl Reader {
+    /// Reads the next message. When the connection is closed, it returns the error "endpoint connection closed".
+    pub fn next_message(&mut self) -> Result<Message, String> {
+        read_message(&mut self.stream)
+    }
+
+    /// Closes this handle of the connection and returns the result.
+    pub fn close(self) -> Result<(), String> {
+        self.stream.close()
+    }
+}
+
+/// Reads one frame of the stream and parses it into a message.
+fn read_message(stream: &mut dyn Read) -> Result<Message, String> {
+    let mut header = [0u8; 4];
+    if let Err(error) = stream.read_exact(&mut header) {
+        return Err(if error.kind() == ErrorKind::UnexpectedEof {
+            "endpoint connection closed".into()
+        } else {
+            format!("endpoint connection failed: {error}")
+        });
+    }
+    let length = u32::from_be_bytes(header) as usize;
+    if length > MAX_FRAME_LENGTH {
+        return Err(format!(
+            "invalid frame from endpoint: frame length {length} exceeds limit {MAX_FRAME_LENGTH}"
+        ));
+    }
+    let mut body = vec![0u8; length];
+    stream
+        .read_exact(&mut body)
+        .map_err(|_| "endpoint connection closed".to_string())?;
+    parse_frame(&body)
 }
 
 /// Parses the body of one frame of the endpoint into a message.

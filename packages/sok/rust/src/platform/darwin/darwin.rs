@@ -17,6 +17,12 @@ mod process_wait_signal_test;
 pub struct Darwin;
 
 impl Connection for UnixStream {
+    fn try_clone(&self) -> Result<Box<dyn Connection>, String> {
+        let stream = UnixStream::try_clone(self)
+            .map_err(|error| format!("endpoint connection: {}", crate::files::os_reason(&error)))?;
+        Ok(Box::new(stream))
+    }
+
     fn closer(&self) -> Result<Box<dyn Fn() -> Result<(), String> + Send>, String> {
         let stream = self
             .try_clone()

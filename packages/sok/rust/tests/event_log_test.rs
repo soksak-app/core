@@ -24,6 +24,8 @@ fn logged(config: &Path, command: Command2, args: &[&str]) -> (i32, String) {
         identifier: "com.soksak.test",
         paths_dir: Ok(Path::new("/nonexistent/paths.d")),
         core_version: "0.0.2",
+        config_dir_variable: None,
+        surface_variable: None,
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let code = soksak_sok::logged(&all, &mut stdout, &mut stderr, &options, command);
@@ -117,7 +119,7 @@ fn each_command_is_recorded_with_its_result() {
 
     let passing = Folder::new("log");
     support::store_every_level(passing.path());
-    let (code, stderr) = logged(passing.path(), &soksak_sok::run, &["path", "remove"]);
+    let (code, stderr) = logged(passing.path(), &soksak_sok::run, &["skill", "print"]);
     assert_eq!(code, 0, "stderr {stderr:?}");
     let events = events_of(passing.path());
     let ok = named(&events, "sok.command");
@@ -129,6 +131,45 @@ fn each_command_is_recorded_with_its_result() {
             && ok[0]["fields"].get("error").is_none(),
         "sok.command of a command that succeeded = {ok:?}"
     );
+}
+
+// A path entry command runs as root through sudo, so it opens no event file: a folder or file that it created in the configuration
+// directory would belong to root (docs/spec/cli.md#event-log).
+// contract: cli.log.path-entry-commands-open-no-event-file
+#[test]
+fn path_entry_commands_open_no_event_file() {
+    let config = Folder::new("log");
+    let paths = Folder::new("paths");
+    let options = Options {
+        identifier: "com.soksak.test",
+        paths_dir: Ok(paths.path()),
+        core_version: "0.0.2",
+        config_dir_variable: None,
+        surface_variable: None,
+    };
+    for action in ["install", "remove"] {
+        let args: Vec<String> = ["path", action, "--config-dir", config.text()]
+            .iter()
+            .map(|arg| arg.to_string())
+            .collect();
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let code = soksak_sok::logged(&args, &mut stdout, &mut stderr, &options, &soksak_sok::run);
+        assert_eq!(
+            code,
+            0,
+            "path {action}: stdout {:?} stderr {:?}",
+            String::from_utf8_lossy(&stdout),
+            String::from_utf8_lossy(&stderr)
+        );
+        let entries: Vec<_> = std::fs::read_dir(config.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert!(
+            entries.is_empty(),
+            "path {action} left the entries {entries:?} in the configuration directory"
+        );
+    }
 }
 
 // contract: cli.log.records-a-panic-with-its-stack
@@ -221,7 +262,7 @@ fn a_folder_that_cannot_be_written_is_reported_and_the_command_runs() {
     let parent = Folder::new("log");
     let config = parent.path().join("file");
     std::fs::write(&config, "x").unwrap();
-    let (code, stderr) = logged(&config, &soksak_sok::run, &["path", "remove"]);
+    let (code, stderr) = logged(&config, &soksak_sok::run, &["skill", "print"]);
     assert!(
         code == 0
             && stderr.starts_with("sok: event log: ")

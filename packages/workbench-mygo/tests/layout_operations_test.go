@@ -1,0 +1,774 @@
+// The layout operations core.layout.open, core.layout.select and core.layout.close and the layout of the window description
+// (docs/spec/cli.md#acting-on-a-layout), as packages/workbench/test states them for the page workbench. Each case applies an operation
+// twice and compares the result and the layout of the description after both applications.
+package workbench_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"reflect"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
+)
+
+// layoutPlugins are the plugins of the layout cases: notes takes the tab params path and line and saves, and plain takes no params.
+const layoutPlugins = `{"plugins": [
+	{"id": "notes", "package": "@scope/plugin-notes", "version": "1.0.0", "manifest": {"id": "notes", "name": "노트", "description": "notes", "mark": "n", "icon": "<path d=\"M1 1h14\"/>",
+		"surface": {"composition": {"kind": "view", "page": "ui/index.html"}, "save": "notes.save",
+			"params": {"type": "object", "properties": {"path": {"type": "string"}, "line": {"type": "number"}}}},
+		"exposes": {"commands": [{"name": "notes.save", "description": "saves", "params": {"type": "object", "properties": {}}, "result": {"type": "null"}}]}}},
+	{"id": "plain", "package": "@scope/plugin-plain", "version": "1.0.0", "manifest": {"id": "plain", "name": "Plain", "description": "plain", "mark": "p", "icon": "<path d=\"M1 1h14\"/>",
+		"surface": {"composition": {"kind": "view", "page": "ui/plain.html"}}}}
+]}`
+
+// paramTab is a stored tab of plugin with the stored params, which are absent for nil.
+func paramTab(id, plugin string, params map[string]any) map[string]any {
+	stored := tab(id, plugin)
+	if params != nil {
+		stored["params"] = params
+	}
+	return stored
+}
+
+// gridCard is a stored card between the lines c0 to c1 and r0 to r1 with tabs, the first of them active.
+func gridCard(id string, c0, c1, r0, r1 int, tabs ...map[string]any) map[string]any {
+	return map[string]any{"id": id, "c0": c0, "c1": c1, "r0": r0, "r1": r1, "data": map[string]any{"tabs": tabs, "activeId": tabs[0]["id"]}}
+}
+
+// gridSpace is a stored space with the lines xs and ys and cards.
+func gridSpace(id string, xs, ys []float64, cards ...map[string]any) map[string]any {
+	return map[string]any{"id": id, "title": id, "layout": map[string]any{"state": map[string]any{"xs": xs, "ys": ys, "paidBy": map[string]any{}, "cards": cards}}}
+}
+
+// gridProject is the stored project prj-a whose first space is active.
+func gridProject(spaces ...map[string]any) map[string]any {
+	return map[string]any{"id": "prj-a", "named": 1, "title": "a", "root": "/a", "identity": "identity of /a", "color": "#ffb36b",
+		"activeSpaceId": spaces[0]["id"], "spaces": spaces}
+}
+
+// layoutShell is a tab shell with the plugins of the layout cases that shows the project of spaces.
+func layoutShell(t *testing.T, spaces ...map[string]any) *tabShell {
+	t.Helper()
+	f := newTabShell(t, &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(spaces...)}})
+	f.open(t)
+	return f
+}
+
+// oneCard is the space spc-aaaaaa with the card main and tabs.
+func oneCard(tabs ...map[string]any) map[string]any {
+	return gridSpace("spc-aaaaaa", []float64{0, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tabs...))
+}
+
+// apply runs a layout operation with the JSON params and returns its result as JSON.
+func (f *tabShell) apply(name, params string) (string, error) {
+	f.t.Helper()
+	value, err := f.shell.Registry().Run(name, json.RawMessage(params))
+	f.settle()
+	if err != nil {
+		return "", err
+	}
+	text, err := json.Marshal(value)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text), nil
+}
+
+// described is the layout of the description of the window as JSON.
+func (f *tabShell) described() string {
+	f.t.Helper()
+	description, err := f.shell.LayoutDescription()
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	text, err := json.Marshal(description)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text)
+}
+
+// twice applies a layout operation two times and fails unless both answer the same and leave the same layout. It returns the
+// answer and the layout.
+func (f *tabShell) twice(name, params string) (map[string]any, describedLayout) {
+	f.t.Helper()
+	first, err := f.apply(name, params)
+	if err != nil {
+		f.t.Fatalf("%s %s: %v", name, params, err)
+	}
+	after := f.described()
+	second, err := f.apply(name, params)
+	if err != nil {
+		f.t.Fatalf("the second %s %s: %v", name, params, err)
+	}
+	if again := f.described(); first != second || after != again {
+		f.t.Fatalf("%s %s answered %s and then %s, with the layout\n%s\nand then\n%s", name, params, first, second, after, again)
+	}
+	var answer map[string]any
+	if err := json.Unmarshal([]byte(first), &answer); err != nil {
+		f.t.Fatal(err)
+	}
+	return answer, f.layout()
+}
+
+// describedLayout is the layout of the description as a test reads it.
+type describedLayout struct {
+	Space   string         `json:"space"`
+	Focused *string        `json:"focused"`
+	Root    *describedNode `json:"root"`
+}
+
+type describedNode struct {
+	Direction string          `json:"direction"`
+	Size      float64         `json:"size"`
+	Children  []describedNode `json:"children"`
+	Card      string          `json:"card"`
+	Frame     *struct {
+		X      float64 `json:"x"`
+		Y      float64 `json:"y"`
+		Width  float64 `json:"width"`
+		Height float64 `json:"height"`
+	} `json:"frame"`
+	Tabs []struct {
+		Tab    string          `json:"tab"`
+		Plugin string          `json:"plugin"`
+		Title  string          `json:"title"`
+		Active bool            `json:"active"`
+		Params json.RawMessage `json:"params"`
+	} `json:"tabs"`
+}
+
+func (f *tabShell) layout() describedLayout {
+	f.t.Helper()
+	var out describedLayout
+	if err := json.Unmarshal([]byte(f.described()), &out); err != nil {
+		f.t.Fatal(err)
+	}
+	if out.Root == nil {
+		f.t.Fatal("the description has no layout tree")
+	}
+	return out
+}
+
+// shape is the tree as text: a card is its id, and a split is its direction with its children and their sizes.
+func (n describedNode) shape() string {
+	if n.Direction == "" {
+		return n.Card
+	}
+	parts := make([]string, len(n.Children))
+	for i, child := range n.Children {
+		parts[i] = fmt.Sprintf("%s %.4g", child.shape(), child.Size)
+	}
+	return n.Direction + "[" + strings.Join(parts, ", ") + "]"
+}
+
+// card returns the node of the card id.
+func (l describedLayout) card(id string) (describedNode, bool) {
+	var find func(n describedNode) (describedNode, bool)
+	find = func(n describedNode) (describedNode, bool) {
+		if n.Direction == "" {
+			return n, n.Card == id
+		}
+		for _, child := range n.Children {
+			if found, ok := find(child); ok {
+				return found, true
+			}
+		}
+		return describedNode{}, false
+	}
+	return find(*l.Root)
+}
+
+// tabs lists the tab ids of the card id in tab order, with a star after the active one.
+func (l describedLayout) tabs(t *testing.T, id string) []string {
+	t.Helper()
+	node, ok := l.card(id)
+	if !ok {
+		t.Fatalf("the layout has no card %s: %s", id, l.Root.shape())
+	}
+	var out []string
+	for _, tab := range node.Tabs {
+		mark := tab.Tab
+		if tab.Active {
+			mark += "*"
+		}
+		out = append(out, mark)
+	}
+	return out
+}
+
+// paramsOf returns the params of the tab id of the card as JSON.
+func (l describedLayout) paramsOf(t *testing.T, card, id string) string {
+	t.Helper()
+	node, _ := l.card(card)
+	for _, tab := range node.Tabs {
+		if tab.Tab == id {
+			return string(tab.Params)
+		}
+	}
+	t.Fatalf("card %s has no tab %s", card, id)
+	return ""
+}
+
+// focusedCard is the focused card of the description.
+func (l describedLayout) focusedCard() string {
+	if l.Focused == nil {
+		return ""
+	}
+	return *l.Focused
+}
+
+// stored is the stored state of the projects as JSON.
+func (f *tabShell) stored() string {
+	f.t.Helper()
+	text, err := json.Marshal(f.host.projects)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return string(text)
+}
+
+// hostCalls counts the host calls name that the window made.
+func (f *tabShell) hostCalls(name string) int {
+	f.host.mu.Lock()
+	defer f.host.mu.Unlock()
+	count := 0
+	for _, call := range f.host.calls {
+		if call == name {
+			count++
+		}
+	}
+	return count
+}
+
+// contract: layout.open.adds-a-tab-once
+func TestALayoutOpenAddsATabOnce(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+		gridCard("main", 0, 1, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("other", 1, 2, 0, 1, tab("tab-bbbbbb", "notes"))))
+	f.run(t, "core.card.focus", `{"card":"other"}`)
+	answer, layout := f.twice("core.layout.open", `{"card":"main","plugin":"notes","params":{"path":"a.md"}}`)
+	added, _ := answer["tab"].(string)
+	if answer["card"] != "main" || !strings.HasPrefix(added, "tab-") {
+		t.Fatalf("the open answered %v", answer)
+	}
+	if got := layout.tabs(t, "main"); !slices.Equal(got, []string{"tab-aaaaaa", added + "*"}) {
+		t.Fatalf("main holds %v", got)
+	}
+	if got := layout.paramsOf(t, "main", added); got != `{"path":"a.md"}` {
+		t.Fatalf("the new tab has the params %s", got)
+	}
+	if layout.focusedCard() != "main" || layout.Space != "spc-aaaaaa" {
+		t.Fatalf("the layout is %+v", layout)
+	}
+	if got := layout.Root.shape(); got != "row[main 0.5, other 0.5]" {
+		t.Fatalf("the tree is %s", got)
+	}
+	// The frame of a card is the rectangle of the card in the window.
+	node, _ := layout.card("main")
+	drawn := f.box("core.card", "main")
+	if math.Abs(node.Frame.X-float64(drawn.X)) > 0.01 || math.Abs(node.Frame.Y-float64(drawn.Y)) > 0.01 ||
+		math.Abs(node.Frame.Width-float64(drawn.W)) > 0.01 || math.Abs(node.Frame.Height-float64(drawn.H)) > 0.01 {
+		t.Fatalf("the frame of main is %+v and the card is drawn at %+v", *node.Frame, drawn)
+	}
+}
+
+// contract: layout.open.selects-the-first-equal-tab
+func TestALayoutOpenSelectsTheFirstEqualTab(t *testing.T) {
+	f := layoutShell(t, oneCard(paramTab("tab-dddddd", "plain", nil), paramTab("tab-aaaaaa", "notes", nil),
+		paramTab("tab-bbbbbb", "notes", map[string]any{"line": 1, "path": "a.md"}), paramTab("tab-cccccc", "notes", map[string]any{"path": "a.md", "line": 1})))
+	// Another order of the members and another form of the number name the same params.
+	answer, layout := f.twice("core.layout.open", `{"card":"main","plugin":"notes","params":{"path":"a.md","line":1.0e0}}`)
+	if answer["tab"] != "tab-bbbbbb" || answer["card"] != "main" {
+		t.Fatalf("the open answered %v", answer)
+	}
+	if got := layout.tabs(t, "main"); !slices.Equal(got, []string{"tab-dddddd", "tab-aaaaaa", "tab-bbbbbb*", "tab-cccccc"}) {
+		t.Fatalf("main holds %v", got)
+	}
+	// An omitted params and a null are no params.
+	for _, params := range []string{`{"card":"main","plugin":"notes"}`, `{"card":"main","plugin":"notes","params":null}`} {
+		answer, layout = f.twice("core.layout.open", params)
+		if answer["tab"] != "tab-aaaaaa" || len(layout.tabs(t, "main")) != 4 {
+			t.Fatalf("%s answered %v with the tabs %v", params, answer, layout.tabs(t, "main"))
+		}
+	}
+	// Params that differ in a value add a tab.
+	answer, layout = f.twice("core.layout.open", `{"card":"main","plugin":"notes","params":{"path":"a.md","line":2}}`)
+	added, _ := answer["tab"].(string)
+	if got := layout.tabs(t, "main"); !slices.Equal(got, []string{"tab-dddddd", "tab-aaaaaa", "tab-bbbbbb", "tab-cccccc", added + "*"}) {
+		t.Fatalf("main holds %v", got)
+	}
+}
+
+// contract: layout.open.splits-once
+func TestALayoutOpenSplitsOnce(t *testing.T) {
+	for _, c := range []struct {
+		side, want string
+	}{
+		{"right", "row[main 0.5, %s 0.5]"}, {"left", "row[%s 0.5, main 0.5]"},
+		{"bottom", "column[main 0.5, %s 0.5]"}, {"top", "column[%s 0.5, main 0.5]"},
+	} {
+		t.Run(c.side, func(t *testing.T) {
+			f := layoutShell(t, oneCard(tab("tab-aaaaaa", "notes")))
+			answer, layout := f.twice("core.layout.open", `{"card":"main","side":"`+c.side+`","plugin":"notes","params":{"path":"s.md"}}`)
+			born, _ := answer["card"].(string)
+			if got := layout.Root.shape(); got != fmt.Sprintf(c.want, born) {
+				t.Fatalf("the tree is %s", got)
+			}
+			if got := layout.tabs(t, born); !slices.Equal(got, []string{answer["tab"].(string) + "*"}) || layout.focusedCard() != born {
+				t.Fatalf("the new card holds %v and the focus is %s", got, layout.focusedCard())
+			}
+		})
+	}
+	t.Run("parent of the other direction", func(t *testing.T) {
+		f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 1}, []float64{0, 0.5, 1},
+			gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("b", 0, 1, 1, 2, tab("tab-bbbbbb", "notes"))))
+		answer, layout := f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes"}`)
+		if got, want := layout.Root.shape(), fmt.Sprintf("column[row[a 0.5, %s 0.5] 0.5, b 0.5]", answer["card"]); got != want {
+			t.Fatalf("the tree is %s, want %s", got, want)
+		}
+	})
+	t.Run("a line that crosses the whole window", func(t *testing.T) {
+		f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+			gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("b", 1, 2, 0, 1, tab("tab-bbbbbb", "notes")),
+			gridCard("c", 0, 2, 1, 2, tab("tab-cccccc", "notes"))))
+		if got := f.layout().Root.shape(); got != "column[row[a 0.5, b 0.5] 0.5, c 0.5]" {
+			t.Fatalf("the tree before the split is %s", got)
+		}
+		answer, layout := f.twice("core.layout.open", `{"card":"c","side":"right","plugin":"notes"}`)
+		if got, want := layout.Root.shape(), fmt.Sprintf("row[column[a 0.5, c 0.5] 0.5, column[b 0.5, %s 0.5] 0.5]", answer["card"]); got != want {
+			t.Fatalf("the tree is %s, want %s", got, want)
+		}
+	})
+}
+
+// contract: layout.open.split-beside-another-neighbour
+func TestALayoutOpenSplitsBesideAnotherNeighbour(t *testing.T) {
+	pair := func() map[string]any {
+		return gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1}, gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "notes")),
+			gridCard("b", 1, 2, 0, 1, paramTab("tab-bbbbbb", "notes", map[string]any{"path": "b.md"})))
+	}
+	// The neighbour that holds the tab answers it.
+	f := layoutShell(t, pair())
+	answer, layout := f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"b.md"}}`)
+	if answer["card"] != "b" || answer["tab"] != "tab-bbbbbb" || layout.Root.shape() != "row[a 0.5, b 0.5]" {
+		t.Fatalf("the open answered %v with the tree %s", answer, layout.Root.shape())
+	}
+	// A neighbour without the tab gets a new card between it and the card.
+	f = layoutShell(t, pair())
+	answer, layout = f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"x.md"}}`)
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.25, %s 0.25, b 0.5]", answer["card"]); got != want {
+		t.Fatalf("the tree is %s, want %s", got, want)
+	}
+	if got := layout.tabs(t, "b"); !slices.Equal(got, []string{"tab-bbbbbb*"}) {
+		t.Fatalf("b holds %v", got)
+	}
+	// A card on the side that does not span the two lines of the card is no neighbour.
+	f = layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("a", 0, 1, 0, 2, tab("tab-aaaaaa", "notes")), gridCard("b", 1, 2, 0, 1, paramTab("tab-bbbbbb", "notes", map[string]any{"path": "b.md"})),
+		gridCard("c", 1, 2, 1, 2, tab("tab-cccccc", "notes"))))
+	answer, layout = f.twice("core.layout.open", `{"card":"a","side":"right","plugin":"notes","params":{"path":"b.md"}}`)
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[a 0.25, %s 0.25, column[b 0.5, c 0.5] 0.5]", answer["card"]); got != want {
+		t.Fatalf("the tree is %s, want %s", got, want)
+	}
+	if answer["tab"] == "tab-bbbbbb" || !slices.Equal(layout.tabs(t, "b"), []string{"tab-bbbbbb*"}) {
+		t.Fatalf("the open answered %v and b holds %v", answer, layout.tabs(t, "b"))
+	}
+}
+
+// contract: layout.open.path-chooses-the-plugin
+func TestALayoutOpenOfAPathChoosesThePlugin(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	first, layout := f.twice("core.layout.open", `{"card":"main","path":"docs/café.md"}`)
+	added, _ := first["tab"].(string)
+	if first["card"] != "main" || layout.paramsOf(t, "main", added) != `{"path":"docs/café.md"}` {
+		t.Fatalf("the open answered %v with the params %s", first, layout.paramsOf(t, "main", added))
+	}
+	node, _ := layout.card("main")
+	if node.Tabs[1].Plugin != "notes" {
+		t.Fatalf("the new tab is a tab of %s", node.Tabs[1].Plugin)
+	}
+	// A path in another form names the same file: a ./ before it, a . segment, an empty segment, and the decomposed letter.
+	for _, path := range []string{"./docs/café.md", "docs/./café.md", "docs//café.md", "docs/café.md"} {
+		answer, again := f.twice("core.layout.open", `{"card":"main","path":"`+path+`"}`)
+		if !reflect.DeepEqual(answer, first) || len(again.tabs(t, "main")) != 2 {
+			t.Fatalf("%s answered %v with the tabs %v", path, answer, again.tabs(t, "main"))
+		}
+	}
+	before, stored := f.described(), f.stored()
+	if _, err := f.apply("core.layout.open", `{"card":"main","path":"x.zzz"}`); err == nil || err.Error() != "no plugin opens x.zzz" {
+		t.Fatalf("the open of x.zzz failed with %v", err)
+	}
+	if f.described() != before || f.stored() != stored {
+		t.Fatal("the refused open changed the layout")
+	}
+}
+
+// contract: layout.open.concurrent-applications-add-one-tab
+func TestConcurrentLayoutOpensAddOneTab(t *testing.T) {
+	var mu sync.Mutex
+	var replies []string
+	host := &storedHost{installed: layoutPlugins, projects: []map[string]any{gridProject(oneCard(tab("tab-aaaaaa", "notes")))},
+		extra: map[string]workbench.HostCall{"exposureReply": func(_ context.Context, argument json.RawMessage) (any, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			replies = append(replies, string(argument))
+			return nil, nil
+		}}}
+	f := newTabShell(t, host)
+	f.open(t)
+	params := json.RawMessage(`{"name":"core.layout.open","params":{"card":"main","plugin":"notes","params":{"path":"c.md"}}}`)
+	// Both requests arrive before either is answered.
+	f.shell.Event("exposure-request", []any{map[string]any{"id": 1, "method": "command.run", "params": params}})
+	f.shell.Event("exposure-request", []any{map[string]any{"id": 2, "method": "command.run", "params": params}})
+	f.settle()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(replies) != 2 {
+		t.Fatalf("the replies are %v", replies)
+	}
+	results := make([]map[string]any, 2)
+	for i, reply := range replies {
+		var answered struct {
+			ID     int            `json:"id"`
+			Result map[string]any `json:"result"`
+		}
+		if err := json.Unmarshal([]byte(reply), &answered); err != nil || answered.Result == nil {
+			t.Fatalf("the reply %s: %v", reply, err)
+		}
+		results[i] = answered.Result
+	}
+	if !reflect.DeepEqual(results[0], results[1]) {
+		t.Fatalf("the two applications answered %v", results)
+	}
+	if got := f.layout().tabs(t, "main"); !slices.Equal(got, []string{"tab-aaaaaa", results[0]["tab"].(string) + "*"}) {
+		t.Fatalf("main holds %v", got)
+	}
+}
+
+// contract: layout.open.refusal-changes-nothing
+func TestARefusedLayoutOpenChangesNothing(t *testing.T) {
+	// The card thin is narrower than two cards of the minimum size and the gap, so it cannot split across.
+	f := layoutShell(t,
+		gridSpace("spc-aaaaaa", []float64{0, 0.44, 0.56, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tab("tab-bbbbbb", "notes")),
+			gridCard("thin", 1, 2, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("rest", 2, 3, 0, 1, tab("tab-cccccc", "notes"))),
+		gridSpace("spc-bbbbbb", []float64{0, 1}, []float64{0, 1}, gridCard("far", 0, 1, 0, 1, tab("tab-ffffff", "notes"))))
+	refusals := []struct{ params, want string }{
+		{`{"card":"nowhere","plugin":"notes"}`, "card nowhere is not in the layout of window main"},
+		{`{"card":"far","plugin":"notes"}`, "card far is in space spc-bbbbbb, which is not active"},
+		{`{"card":"main","plugin":"missing"}`, "unknown plugin missing"},
+		{`{"card":"main","plugin":"notes","params":{"path":7}}`, "params do not match notes surface.params"},
+		{`{"card":"main","plugin":"plain","params":{"path":"a"}}`, "plugin plain declares no tab params"},
+		{`{"card":"main","plugin":"notes","path":"a.md"}`, "core.layout.open takes plugin or path, not both"},
+		{`{"card":"main"}`, "core.layout.open needs plugin or path"},
+		{`{"card":"main","path":"a.md","params":{"path":"a.md"}}`, "core.layout.open takes params only with plugin"},
+		{`{"card":"main","side":"middle","plugin":"notes"}`, "unknown side middle; use left, right, top or bottom"},
+		// The neighbour rest holds no tab with these params, so the open splits thin.
+		{`{"card":"thin","side":"right","plugin":"notes","params":{"path":"x.md"}}`, "card thin cannot split toward right"},
+	}
+	check := func(params, want string) {
+		t.Helper()
+		before, stored := f.described(), f.stored()
+		if _, err := f.apply("core.layout.open", params); err == nil || err.Error() != want {
+			t.Fatalf("%s failed with %v, want %s", params, err, want)
+		}
+		if f.described() != before || f.stored() != stored {
+			t.Fatalf("the refused %s changed the layout", params)
+		}
+	}
+	for _, refusal := range refusals {
+		check(refusal.params, refusal.want)
+	}
+	// A card of a fullscreen arrangement does not change.
+	f.run(t, "core.card.fullscreen", `{"card":"main"}`)
+	check(`{"card":"main","plugin":"notes","params":{"path":"f.md"}}`,
+		"card main: the layout does not change while card main is fullscreen; restore the arrangement first")
+}
+
+// contract: layout.current.resolves-at-each-application
+func TestCurrentResolvesAtEachApplication(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "notes")))
+	f.run(t, "core.card.focus", `{"card":"main"}`)
+	first, err := f.apply("core.layout.open", `{"card":"current","side":"right","plugin":"notes"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.apply("core.layout.open", `{"card":"current","side":"right","plugin":"notes"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a, b map[string]string
+	if json.Unmarshal([]byte(first), &a) != nil || json.Unmarshal([]byte(second), &b) != nil || a["card"] == b["card"] {
+		t.Fatalf("the two applications answered %s and %s", first, second)
+	}
+	layout := f.layout()
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[main 0.5, %s 0.25, %s 0.25]", a["card"], b["card"]); got != want {
+		t.Fatalf("the tree is %s, want %s", got, want)
+	}
+	// The current tab is the active tab of the focused card.
+	answer, _ := f.twice("core.layout.select", `{"tab":"current"}`)
+	if answer["card"] != b["card"] || answer["tab"] != b["tab"] {
+		t.Fatalf("the select of the current tab answered %v", answer)
+	}
+}
+
+// contract: layout.select.twice-is-the-same
+func TestALayoutSelectTwiceIsTheSame(t *testing.T) {
+	f := layoutShell(t,
+		gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+			gridCard("main", 0, 1, 0, 1, tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes")), gridCard("other", 1, 2, 0, 1, tab("tab-cccccc", "notes"))),
+		gridSpace("spc-bbbbbb", []float64{0, 1}, []float64{0, 1}, gridCard("far", 0, 1, 0, 1, tab("tab-ffffff", "notes"))))
+	f.run(t, "core.card.focus", `{"card":"other"}`)
+	if _, err := f.apply("core.layout.select", `{"tab":"tab-bbbbbb"}`); err != nil {
+		t.Fatal(err)
+	}
+	layout := f.layout()
+	if got := layout.tabs(t, "main"); !slices.Equal(got, []string{"tab-aaaaaa", "tab-bbbbbb*"}) || layout.focusedCard() != "main" {
+		t.Fatalf("main holds %v and the focus is %s", got, layout.focusedCard())
+	}
+	before, stored, writes := f.described(), f.stored(), f.hostCalls("workspace")
+	answer, _ := f.twice("core.layout.select", `{"tab":"tab-bbbbbb"}`)
+	if answer["card"] != "main" || answer["tab"] != "tab-bbbbbb" {
+		t.Fatalf("the select answered %v", answer)
+	}
+	if f.described() != before || f.stored() != stored || f.hostCalls("workspace") != writes {
+		t.Fatal("a select of the active tab of the focused card changed the window")
+	}
+	for params, want := range map[string]string{
+		`{"tab":"tab-zzzzzz"}`: "tab tab-zzzzzz is not in the layout of window main",
+		`{"tab":"tab-ffffff"}`: "tab tab-ffffff is in space spc-bbbbbb, which is not active",
+	} {
+		if _, err := f.apply("core.layout.select", params); err == nil || err.Error() != want {
+			t.Fatalf("%s failed with %v, want %s", params, err, want)
+		}
+	}
+}
+
+// contract: layout.close.repeated-close-answers-closed
+func TestARepeatedLayoutCloseAnswersClosed(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+		gridCard("main", 0, 1, 0, 1, tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes")), gridCard("other", 1, 2, 0, 1, tab("tab-cccccc", "notes"))))
+	answer, layout := f.twice("core.layout.close", `{"tab":"tab-bbbbbb"}`)
+	if answer["closed"] != true || !slices.Equal(layout.tabs(t, "main"), []string{"tab-aaaaaa*"}) {
+		t.Fatalf("the close answered %v and main holds %v", answer, layout.tabs(t, "main"))
+	}
+	// A card that loses its last tab closes.
+	answer, layout = f.twice("core.layout.close", `{"tab":"tab-cccccc"}`)
+	if answer["closed"] != true || layout.Root.shape() != "main" {
+		t.Fatalf("the close answered %v with the tree %s", answer, layout.Root.shape())
+	}
+	// The random source gives the identifier of the closed tab first, and the new tab gets another.
+	f.ids.queued = []byte{1, 1, 1, 1, 1, 1}
+	opened, err := f.apply("core.layout.open", `{"card":"main","plugin":"notes","params":{"path":"n.md"}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(opened, "tab-bbbbbb") || len(f.ids.queued) != 0 {
+		t.Fatalf("the new tab is %s, and %d queued bytes were not drawn", opened, len(f.ids.queued))
+	}
+	if _, err := f.apply("core.layout.close", `{"tab":"tab-zzzzzz"}`); err == nil || err.Error() != "tab tab-zzzzzz is not in the layout of window main" {
+		t.Fatalf("the close of a tab that was never in the window failed with %v", err)
+	}
+}
+
+// contract: layout.close.unsaved-tab-answers-at-once
+func TestALayoutCloseOfAnUnsavedTabAnswersAtOnce(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "notes")))
+	f.modified("tab-aaaaaa")
+	for range 2 {
+		answer, err := f.apply("core.layout.close", `{"tab":"tab-aaaaaa"}`)
+		if err != nil || answer != `{"closed":false}` {
+			t.Fatalf("the close answered %s, %v", answer, err)
+		}
+		menu := f.menu()
+		if !menu.Open || menu.Title != "● tab-aaaaaa 탭에 저장하지 않은 변경이 있습니다" || !slices.Equal(menu.keys(), []string{"save", "discard", "keep"}) {
+			t.Fatalf("the question is %+v", menu)
+		}
+		if got := f.layout().tabs(t, "main"); !slices.Equal(got, []string{"tab-aaaaaa*", "tab-bbbbbb"}) {
+			t.Fatalf("main holds %v while the question is open", got)
+		}
+	}
+	f.click("core.picker.item", "discard")
+	if got := f.layout().tabs(t, "main"); !slices.Equal(got, []string{"tab-bbbbbb*"}) {
+		t.Fatalf("main holds %v after the answer", got)
+	}
+	if answer, err := f.apply("core.layout.close", `{"tab":"tab-aaaaaa"}`); err != nil || answer != `{"closed":true}` {
+		t.Fatalf("the close after the answer answered %s, %v", answer, err)
+	}
+}
+
+// core.file.open stores and compares the path of a tab in its normal form (docs/spec/plugins.md#pluginjson).
+func TestCoreFileOpenComparesThePathInItsNormalForm(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	first, err := f.apply("core.file.open", `{"path":"./docs/café.md","card":"main"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opened map[string]string
+	if err := json.Unmarshal([]byte(first), &opened); err != nil {
+		t.Fatal(err)
+	}
+	tabs := f.tabsOf("main")
+	if len(tabs) != 2 || !reflect.DeepEqual(tabs[1].(map[string]any)["params"], map[string]any{"path": "docs/café.md"}) {
+		t.Fatalf("the stored tabs are %v", tabs)
+	}
+	for _, path := range []string{"docs/café.md", "docs//./café.md"} {
+		again, err := f.apply("core.file.open", `{"path":"`+path+`","card":"main"}`)
+		if err != nil || again != first {
+			t.Fatalf("%s answered %s, %v, want %s", path, again, err, first)
+		}
+	}
+}
+
+// Closing a tab restores the arrangement of a fullscreen card before it closes the tab, as closeTabById and closeInLayout of
+// packages/workbench/plane.js do, so the close of the last tab of a fullscreen card closes the card instead of failing.
+func TestClosingATabOfAFullscreenCardRestoresTheArrangement(t *testing.T) {
+	fullscreen := func(f *tabShell) string {
+		t.Helper()
+		value, err := f.shell.Registry().Read("core.grid")
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var grid struct {
+			Fullscreen *string `json:"fullscreen"`
+		}
+		if err := json.Unmarshal(text, &grid); err != nil {
+			t.Fatal(err)
+		}
+		if grid.Fullscreen == nil {
+			return ""
+		}
+		return *grid.Fullscreen
+	}
+	for _, c := range []struct{ name, command, params, shape string }{
+		{"the last tab by core.tab.close", "core.tab.close", `{"tab":"tab-aaaaaa"}`, "side"},
+		{"the last tab by core.layout.close", "core.layout.close", `{"tab":"tab-aaaaaa"}`, "side"},
+		{"another tab by core.tab.close", "core.tab.close", `{"tab":"tab-bbbbbb"}`, "row[main 0.5, side 0.5]"},
+		{"another tab by core.layout.close", "core.layout.close", `{"tab":"tab-bbbbbb"}`, "row[main 0.5, side 0.5]"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			tabs := []map[string]any{tab("tab-aaaaaa", "notes")}
+			if c.shape != "side" {
+				tabs = append(tabs, tab("tab-bbbbbb", "notes"))
+			}
+			f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tabs...),
+				gridCard("side", 1, 2, 0, 1, tab("tab-cccccc", "notes"))))
+			f.run(t, "core.card.fullscreen", `{"card":"main"}`)
+			if got := fullscreen(f); got != "main" {
+				t.Fatalf("the fullscreen card is %q, want main", got)
+			}
+			answer, err := f.apply(c.command, c.params)
+			if err != nil {
+				t.Fatalf("%s %s failed: %v", c.command, c.params, err)
+			}
+			if answer != `{"closed":true}` {
+				t.Fatalf("%s %s answered %s", c.command, c.params, answer)
+			}
+			if got := fullscreen(f); got != "" {
+				t.Fatalf("after the close the fullscreen card is %q", got)
+			}
+			if got := f.layout().Root.shape(); got != c.shape {
+				t.Fatalf("after the close the layout is %s, want %s", got, c.shape)
+			}
+		})
+	}
+}
+
+// Closing the only tab of a card that cannot close opens a replacement tab with a null origin, as closeTab of
+// packages/workbench/plane.js does (F238-a-9): its plugin is the plugin of the active tab of the focused card, and the first plugin
+// with a tab surface when the focused card has no tab left.
+func TestClosingTheOnlyTabOfAFixedCardOpensAReplacementTab(t *testing.T) {
+	for _, command := range []string{"core.tab.close", "core.layout.close"} {
+		t.Run(command, func(t *testing.T) {
+			f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+			answer, err := f.apply(command, `{"tab":"tab-aaaaaa"}`)
+			if err != nil {
+				t.Fatalf("%s failed: %v", command, err)
+			}
+			if answer != `{"closed":true}` {
+				t.Fatalf("%s answered %s", command, answer)
+			}
+			main, ok := f.layout().card("main")
+			if !ok || len(main.Tabs) != 1 || main.Tabs[0].Tab == "tab-aaaaaa" || main.Tabs[0].Plugin != "notes" || !main.Tabs[0].Active {
+				t.Fatalf("after the close the card main holds %+v, want one active tab of notes, the first plugin", main.Tabs)
+			}
+			if stored, want := f.stored(), `"origin":{"directory":null}`; !strings.Contains(stored, want) {
+				t.Fatalf("the stored replacement tab has no null origin: %s", stored)
+			}
+		})
+	}
+}
+
+// askSurfaceWindow runs surface.window of the shell with the JSON params and returns its answer as JSON.
+func askSurfaceWindow(t *testing.T, shell *workbench.Shell, params string) (string, error) {
+	t.Helper()
+	var text string
+	var failure error
+	answered := false
+	shell.Registry().Reply("surface.window", json.RawMessage(params), nil, func(value any, err error) {
+		answered, failure = true, err
+		if err == nil {
+			encoded, encodeErr := json.Marshal(value)
+			if encodeErr != nil {
+				t.Fatal(encodeErr)
+			}
+			text = string(encoded)
+		}
+	})
+	if !answered {
+		t.Fatalf("surface.window %s has no answer", params)
+	}
+	return text, failure
+}
+
+// contract: layout.surface-window.answers-the-space
+func TestSurfaceWindowAnswersTheSpaceOfTheTab(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaa1", "plain")),
+		gridSpace("spc-bbbbbb", []float64{0, 1}, []float64{0, 1}, gridCard("other", 0, 1, 0, 1, tab("tab-ooooo1", "plain"))))
+	for params, want := range map[string]string{
+		`{"surface": "tab-aaaaa1"}`: `{"space":"spc-aaaaaa"}`,
+		`{"surface": "tab-ooooo1"}`: `{"space":"spc-bbbbbb"}`,
+		`{"surface": "tab-zzzzz9"}`: `null`,
+	} {
+		if got, err := askSurfaceWindow(t, f.shell, params); err != nil || got != want {
+			t.Errorf("surface.window %s answered %s %v, want %s", params, got, err, want)
+		}
+	}
+	for _, params := range []string{`{}`, `{"surface": ""}`, `{"surface": 7}`} {
+		_, err := askSurfaceWindow(t, f.shell, params)
+		var refusal *workbench.Refusal
+		if !errors.As(err, &refusal) || refusal.Code != workbench.InvalidParams || refusal.Message != "surface must be a non-empty string" {
+			t.Errorf("surface.window %s failed with %v, want the refusal -32602 surface must be a non-empty string", params, err)
+		}
+	}
+}
+
+// A section surface belongs to a sidebar of the window and to no layout of a space, so surface.window answers the space null for
+// each section that a sidebar of the window seats.
+// contract: layout.surface-window.answers-the-space
+func TestSurfaceWindowAnswersTheSpaceNullForASeatedSection(t *testing.T) {
+	f, stored := surfaceShellOf(t, sidebarsInstalled)
+	sections := leftSections(t, stored)
+	if len(sections) == 0 {
+		t.Fatal("the left sidebar seats no section")
+	}
+	for id := range sections {
+		params, err := json.Marshal(map[string]string{"surface": id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := askSurfaceWindow(t, f.shell, string(params)); err != nil || got != `{"space":null}` {
+			t.Errorf("surface.window %s answered %s %v, want {\"space\":null}", params, got, err)
+		}
+	}
+}

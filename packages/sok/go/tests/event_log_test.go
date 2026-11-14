@@ -207,12 +207,33 @@ func TestEachCommandIsRecordedWithItsResult(t *testing.T) {
 
 	passing := t.TempDir()
 	support.StoreEveryLevel(t, passing)
-	if code, _, stderr := loggedRun(passing, sok.Run, "path", "remove"); code != 0 {
+	if code, _, stderr := loggedRun(passing, sok.Run, "skill", "print"); code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 	ok := named(eventsOf(t, passing), "sok.command")
 	if len(ok) != 1 || ok[0].Level != "debug" || ok[0].Fields["ok"] != true || ok[0].Fields["status"] != float64(0) || ok[0].Fields["error"] != nil {
 		t.Fatalf("sok.command of a command that succeeded = %+v", ok)
+	}
+}
+
+// A path entry command runs as root through sudo, so it opens no event file: a folder or file that it created in the
+// configuration directory would belong to root (docs/spec/cli.md#event-log).
+// contract: cli.log.path-entry-commands-open-no-event-file
+func TestPathEntryCommandsOpenNoEventFile(t *testing.T) {
+	pathsDir = t.TempDir()
+	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
+	config := t.TempDir()
+	for _, action := range []string{"install", "remove"} {
+		if code, stdout, stderr := loggedRun(config, sok.Run, "path", action); code != 0 {
+			t.Fatalf("path %s: code %d stdout %q stderr %q", action, code, stdout, stderr)
+		}
+		entries, err := os.ReadDir(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("path %s left %d entries in the configuration directory, first %q", action, len(entries), entries[0].Name())
+		}
 	}
 }
 
@@ -286,7 +307,7 @@ func TestAFolderThatCannotBeWrittenIsReportedAndTheCommandRuns(t *testing.T) {
 	if err := os.WriteFile(config, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr := loggedRun(config, sok.Run, "path", "remove")
+	code, _, stderr := loggedRun(config, sok.Run, "skill", "print")
 	if code != 0 || !strings.HasPrefix(stderr, "sok: event log: ") || !strings.Contains(stderr, config) {
 		t.Fatalf("code %d stderr %q", code, stderr)
 	}

@@ -1,0 +1,34 @@
+{
+  "name": "sok-surface-window",
+  "description": "With SOKSAK_SURFACE and no --window or --project, sok asks surface.window at each request and uses its window although the application has several windows; --window takes precedence and sends no surface.window; an empty SOKSAK_SURFACE selects the only window as without it.",
+  "replay": false,
+  "reason": "The case needs the environment variable SOKSAK_SURFACE of the sok that the test starts, which a window check of the application does not set.",
+  "variables": {
+    "value": { "type": "any", "example": "ok" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "project-a", "space": "space-1" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "window": "project-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$value" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "main", "space": "space-1" } } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$value" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.get", "params": { "name": "core.screen", "window": "project-a" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": "$value" } },
+    { "close": "client" },
+
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": [
+      { "window": "main", "title": "soksak", "project": null, "key": true, "ready": true }
+    ] } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "name": "core.screen", "window": "main" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$value" } },
+    { "close": "client" }
+  ]
+}

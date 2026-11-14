@@ -39,6 +39,10 @@ name = "private_files_linux"
 path = "tests/platform/linux/private_files_test.rs"
 
 [[test]]
+name = "setup_darwin"
+path = "tests/platform/darwin/setup_test.rs"
+
+[[test]]
 name = "private_files_windows"
 path = "tests/platform/windows/private_files_test.rs"
 
@@ -56,15 +60,27 @@ ureq = { version = "3", default-features = false, features = ["rustls", "platfor
 # The diagnostic build parses each --registry-ca certificate with the parser that the TLS connection of ureq uses.
 rustls-pki-types = "1"
 webpki = { package = "rustls-webpki", version = "0.103", default-features = false, features = ["std"] }
+# The skill file is written through a temporary file of its folder that is renamed over it (docs/spec/cli.md#agent-skill).
+tempfile = "3"
+# The front matter of the agent skill (docs/spec/cli.md#agent-skill).
+serde_yaml_ng = "0.10"
+# The protocol of the MCP server `sok mcp` over standard input and output (docs/spec/cli.md#mcp-server).
+rmcp = { version = "3.10.0", default-features = false, features = ["server", "transport-io"] }
+# The runtime of rmcp: one thread serves the protocol, and each tool call runs in its own thread.
+tokio = { version = "1", features = ["rt", "io-std", "io-util", "macros", "sync"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 signal-hook = "0.3"
+# The read-only flag of the volume of sok (docs/spec/cli.md#mcp-registration).
+rustix = { version = "1", features = ["fs"] }
 
 [dev-dependencies]
 # 검사 소유의 TLS server 의 인증서와 server 연결.
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+# The bytes of a `hex` step of an mcp case, a line that a case file cannot hold as text (docs/spec/cases/endpoint/README.md).
+hex = "0.4"
 
 [lints]
 workspace = true

@@ -10,7 +10,7 @@ import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSur
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
 import { CHROME, placeFocusMark } from "./chrome-metrics.js";
-import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabsOf } from "./card-data.js";
+import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabName as shownTabName, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
 import { sectionSurfaceShown } from "./section-surfaces.js";
@@ -23,7 +23,9 @@ import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths,
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
-import { chooseOpener } from "./file-open.js";
+import { checkOpenPath, chooseOpener } from "./file-open.js";
+import { layoutTree, neighbourToward, sameJson } from "./layout-tree.js";
+import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { followRing, keyboardOwed } from "./keyboard.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
@@ -38,11 +40,11 @@ import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
-  tabModified, tabNotice } from "./tab-reports.js";
+  tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { hideError, showError } from "./shown-errors.js";
 import { registry } from "./exposure.js";
 import { configureSystemNotifications, systemNotifications } from "./system-notifications.js";
-import { initialProjectContextFailed, initialProjectContextReady, storedTabTaken, waitForInitialProjectContext } from "./projects.js";
+import { all as allProjects, initialProjectContextFailed, initialProjectContextReady, local as localProjects, storedTabTaken, waitForInitialProjectContext } from "./projects.js";
 
 const NEEDS = ["cards", "card", "insertAt", "moveTo", "standings", "moveBoundary", "zoneAt",
   "splitToward", "replace"];
@@ -122,6 +124,16 @@ let windowSidebars = {};
 
 let grid, view, focusedId;
 
+// The name of the window of this page, which its start document carries and the errors of the layout operations name
+// (docs/spec/native-host.md#page-start). It is null until the start names it.
+let windowName = null;
+
+/** Takes the name of the window of this page from its start document. A name that is not a nonempty string is refused. */
+export function nameWindow(name) {
+  if (typeof name !== "string" || name === "") throw new TypeError(`start document window must be the name of the window, not ${JSON.stringify(name)}`);
+  windowName = name;
+}
+
 /* The one move of the focus ring: the keyboard follows it (keyboard.js). */
 function focusOn(id) {
   focusedId = id;
@@ -146,10 +158,10 @@ let named = 0;
    T4 Drop on an edge = a new slot is needed on that side.
    T5 When the last tab leaves, the card disappears — no empty card remains.        */
 // A tab stores params only when it was opened with them (docs/spec/plugins.md#pluginjson).
-// A new tab id is held by no tab that this page issued, no tab of a stored layout, and no surface that waits for its image
-// detach; the tabs of the plane are issued or stored tabs.
+// A new tab id is held by no tab that this page issued, no tab of a stored layout, no tab that this window closed and no surface that
+// waits for its image detach; the tabs of the plane are issued or stored tabs.
 const issuedTabIds = new Set();
-const tabTaken = (id) => issuedTabIds.has(id) || storedTabTaken(id) || imageDetachHold(id) !== null;
+const tabTaken = (id) => issuedTabIds.has(id) || storedTabTaken(id) || tabClosed(id) || imageDetachHold(id) !== null;
 function tab(plugin, title, params, random) {
   const id = issueId("tab", tabTaken, random);
   issuedTabIds.add(id);
@@ -596,6 +608,7 @@ async function closeTab(cardId, tabId) {
   // The surface is released by the commit of this change after its place succeeds, because the place closes the regions of
   // the surface in the host (docs/spec/native-surfaces.md#region-lifetime); the settled barrier of the command waits for that commit.
   removeTab(card, tabId);
+  recordClosedTabs([tabId]);
   if (card.data.tabs.length === 0) {
     // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first
     // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
@@ -761,7 +774,7 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k)));
+    (k) => (what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
 
 /** Asks which tab to activate. It shows the tab list when the header is folded. */
@@ -872,18 +885,26 @@ function addTab(cardId, plugin, params) {
 const SPLIT_SIDES = ["left", "right", "top", "bottom"];
 const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
 
-function splitWith(cardId, side, plugin) {
+/** The axis of the line that a split toward side cuts. */
+const splitAxis = (side) => (side === "left" || side === "right" ? "x" : "y");
+
+function splitWith(cardId, side, plugin, params) {
   restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
+  // A split without space is refused before the tab of the new card is made, so a refused split issues no tab id, records no
+  // origin and leaves the tab-name counter.
+  if (!grid.canSplit(cardId, splitAxis(side))) {
+    settle();
+    return null;
+  }
   // default: a card without an active tab has no tab to inherit.
-  const t = newTab(plugin, null, activeTab(card)?.id ?? null, "split");
-  // When there is no space, splitToward returns null. No tab was removed from the source card, so there is no state to
-  // restore.
+  const t = newTab(plugin, params, activeTab(card)?.id ?? null, "split");
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
-  if (born) focusOn(born);
+  if (!born) throw new Error(`card ${cardId} could split toward ${side}, and the split toward ${side} made no card`);
+  focusOn(born);
   settle();
-  return born ? { card: born, tab: t.id } : null;
+  return { card: born, tab: t.id };
 }
 
 /* Whether the preview is in a view of the host. The view is kept during one drag and only its position is updated.
@@ -1917,7 +1938,7 @@ export function splitCard(id, side, kind) {
   layoutChangeable(id);
   knownPlugin(kind);
   if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
-  const made = splitWith(id, side, kind);
+  const made = splitWith(id, side, kind, null);
   if (!made) throw new Error(`card ${id} cannot split toward ${side}`);
   return made;
 }
@@ -1933,6 +1954,7 @@ export function closeCard(id) {
     return { closed: false };
   }
   restoreFullscreen();
+  recordClosedTabs(tabsOf(grid.card(id)).map((t) => t.id));
   grid.close(id);
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
@@ -1969,9 +1991,14 @@ function askBeforeClose(cardId, t, then) {
         return;
       }
     }
+    // The close of the last tab closes its card, and a fullscreen presentation of a card that left the layout fails the next draw,
+    // so both answers restore the arrangement first, as a close without the question does.
+    restoreFullscreen();
     await closeTab(cardId, t.id);
     then();
   });
+  // The question names its tab, so a close of the tab while the question is open opens no other question (docs/spec/cli.md#acting-on-a-layout).
+  picker.closing = t.id;
 }
 
 /** The answers of the question about a modified tab when a plugin change applies and when the window closes. */
@@ -2071,6 +2098,163 @@ export async function closeTabById(tabId) {
   restoreFullscreen();
   await closeTab(card.id, tabId);
   return { closed: true };
+}
+
+/* ── Layout operations ─────────────────────────────────────────────────────
+   core.layout.open, core.layout.select and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout
+   in the turn that runs it, so two applications sent at once run one after the other and the second finds what the first made. */
+
+/** The name of the window of this page for the errors of the layout operations. */
+function nameOfWindow() {
+  if (windowName === null) throw new Error("the window of this page has no name; the start document did not name it");
+  return windowName;
+}
+
+/** The content cards of the plane: the cards that are not place cards of window sidebars. */
+const contentCards = () => grid.cards.filter((card) => !isPlace(card.id));
+
+/** The space other than the shown one of the project of this window whose stored layout holds what found(cards) finds, or null. */
+function inactiveSpaceOf(found) {
+  const project = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
+  // default: a window that shows no space has no other space.
+  const space = project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards)) ?? null;
+  return space?.id ?? null;
+}
+
+/**
+ * The space of this window whose layout holds the tab surface, which surface.window answers (docs/spec/exposure.md#methods): the shown
+ * space when a content card of the plane holds the tab, else the space whose stored layout holds it among the other spaces of the project
+ * of the shown space and of the projects that this window opened, or null. The mygo workbench answers alike (surfaceSpace of
+ * packages/workbench-mygo/src/shell_exposure.go).
+ */
+export function surfaceSpace(surface) {
+  const holds = (cards) => cards.some((card) => tabsOf(card).some((tab) => tab.id === surface));
+  if (grid && heldSpace !== null && holds(contentCards())) return heldSpace;
+  // default: a window that shows no space has no project of a shown space.
+  const shown = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
+  for (const project of new Set([...(shown ? [shown] : []), ...localProjects()])) {
+    const space = project.spaces.find((entry) => entry.id !== heldSpace && holds(entry.layout.state.cards));
+    if (space) return space.id;
+  }
+  return null;
+}
+
+/** The content card named by id, or by current the focused card, of the shown space; another space or no space is an error. */
+function layoutCard(id) {
+  if (id === "current") {
+    const focused = grid?.card(focusedId);
+    if (!focused || isPlace(focused.id)) throw new Error(`card current names no card: window ${nameOfWindow()} has no focused card`);
+    return focused;
+  }
+  const card = grid?.card(id);
+  if (card && !isPlace(id)) return card;
+  const space = inactiveSpaceOf((cards) => cards.some((entry) => entry.id === id && !isPlace(entry.id)));
+  if (space !== null) throw new Error(`card ${id} is in space ${space}, which is not active`);
+  throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+}
+
+/** The tab named by id, or by current the active tab of the focused card, with its card; null for a tab that this window closed. */
+function layoutTab(id) {
+  if (id === "current") {
+    const card = layoutCard("current");
+    const tab = activeTab(card);
+    if (!tab) throw new Error(`tab current names no tab: card ${card.id} of window ${nameOfWindow()} has no active tab`);
+    return { card, tab };
+  }
+  const card = grid?.cards.find((entry) => tabsOf(entry).some((t) => t.id === id));
+  if (card) return { card, tab: tabsOf(card).find((t) => t.id === id) };
+  if (tabClosed(id)) return null;
+  // default: a stored card without data has no tabs.
+  const space = inactiveSpaceOf((cards) => cards.some((entry) => (entry.data?.tabs ?? []).some((t) => t.id === id)));
+  if (space !== null) throw new Error(`tab ${id} is in space ${space}, which is not active`);
+  throw new Error(`tab ${id} is not in the layout of window ${nameOfWindow()}`);
+}
+
+/**
+ * core.layout.open: selects the first tab of the plugin whose params equal the given ones in the target card, card or its neighbour toward
+ * side, or adds the tab to card or splits card toward side into a new card with the tab. path stands for the plugin that opens its
+ * extension with params {path} in the normal form of the path. Returns {card, tab}; a refusal changes nothing.
+ */
+export function openInLayout({ card: cardId, plugin: kind, params, path, side }) {
+  if (kind !== undefined && path !== undefined) throw new Error("core.layout.open takes plugin or path, not both");
+  if (kind === undefined && path === undefined) throw new Error("core.layout.open needs plugin or path");
+  if (path !== undefined && params !== undefined) throw new Error("core.layout.open takes params only with plugin");
+  if (side !== undefined && !SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  const card = layoutCard(cardId);
+  layoutChangeable(card.id);
+  let opener, wanted;
+  if (path !== undefined) {
+    const normal = checkOpenPath(path);
+    opener = chooseOpener(plugins().map((entry) => ({ id: entry.id, opens: entry.opens })), normal);
+    wanted = { path: normal };
+  } else {
+    knownPlugin(kind);
+    opener = kind;
+    wanted = checkTabParams(kind, plugin(kind).params, params);
+  }
+  const target = side === undefined ? card : neighbourToward(contentCards(), card, side);
+  // default: a tab stored without params has the params null.
+  const found = target ? tabsOf(target).find((t) => t.plugin === opener && sameJson(t.params ?? null, wanted)) : undefined;
+  if (found) {
+    selectTab(found.id);
+    return { card: target.id, tab: found.id };
+  }
+  if (side === undefined) return { card: card.id, tab: addTab(card.id, opener, wanted) };
+  if (!grid.canSplit(card.id, splitAxis(side))) throw new Error(`card ${card.id} cannot split toward ${side}`);
+  const made = splitWith(card.id, side, opener, wanted);
+  if (!made) throw new Error(`card ${card.id} cannot split toward ${side}`);
+  return made;
+}
+
+/** core.layout.select: makes the tab active and its card focused; a tab that is already so is left as it is. Returns {card, tab}. */
+export function selectInLayout({ tab: tabId }) {
+  const named = layoutTab(tabId);
+  if (named === null) throw new Error(`tab ${tabId} is not in the layout of window ${nameOfWindow()}`);
+  const { card, tab } = named;
+  const shown = view.fullscreenCard;
+  const unchanged = card.data.activeId === tab.id && focusedId === card.id && (shown === null || shown === card.id);
+  if (!unchanged) selectTab(tab.id);
+  return { card: card.id, tab: tab.id };
+}
+
+/**
+ * core.layout.close: closes the tab as its close control does. A modified tab opens the question of the control, once while it is open,
+ * and answers closed false at once; a tab that this window closed answers closed true.
+ */
+export async function closeInLayout({ tab: tabId }) {
+  const named = layoutTab(tabId);
+  if (named === null) return { closed: true };
+  const { card, tab } = named;
+  if (tabModified(tab.id)) {
+    if (picker?.closing !== tab.id) askBeforeClose(card.id, tab, () => {});
+    return { closed: false };
+  }
+  restoreFullscreen();
+  await closeTab(card.id, tab.id);
+  return { closed: true };
+}
+
+/**
+ * The layout of the window description (docs/spec/exposure.md#window-snapshot): the shown space, the focused card and the tree of the
+ * content cards with the frame of each card in window points and its tabs. It is null while the plane shows no space.
+ */
+export function layoutDescription() {
+  if (!grid) return null;
+  const origin = plane.getBoundingClientRect();
+  const root = layoutTree(contentCards(), grid.lines("x"), grid.lines("y"), (card, size) => {
+    const rect = grid.rect(card.id);
+    return {
+      card: card.id, size,
+      frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
+      tabs: tabsOf(card).map((t) => ({
+        // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
+        tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
+        // default: a tab stored without params has the params null.
+        params: t.params ?? null,
+      })),
+    };
+  });
+  return { space: heldSpace, focused: focusedId, root };
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];

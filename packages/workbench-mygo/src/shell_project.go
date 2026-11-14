@@ -1001,13 +1001,29 @@ func (s *Shell) splitCard(id, side, plugin string) (map[string]string, error) {
 	if !splitSide(side) {
 		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
+	return s.splitTab(id, side, known, nil)
+}
+
+// splitTab splits the card id toward side into a new card with a new tab of the known plugin with params, nil for none, focuses the
+// new card, and returns the card and its tab. A split that the layout refuses names no tab, so it changes nothing.
+func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMessage) (map[string]string, error) {
 	data, err := s.cardData(id)
 	if err != nil {
 		return nil, err
 	}
+	axis := "y"
+	if side == "left" || side == "right" {
+		axis = "x"
+	}
+	if !s.plane.CanSplit(id, axis) {
+		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
+	}
 	tab, err := s.newTabOf(known, data.ActiveTab())
 	if err != nil {
 		return nil, err
+	}
+	if params != nil {
+		tab.Rest["params"] = params
 	}
 	encoded, err := json.Marshal(tabData([]layout.Tab{tab}, tab.ID))
 	if err != nil {
@@ -1125,7 +1141,8 @@ func (s *Shell) selectTab(id string) error {
 	return nil
 }
 
-// closeTab closes the tab id. The last tab of a card closes the card.
+// closeTab closes the tab id. The last tab of a card closes the card; a card that cannot close takes a new tab instead, as closeTab of
+// packages/workbench/plane.js does.
 func (s *Shell) closeTab(id string) error {
 	card := s.cardOfTab(id)
 	if card == "" {
@@ -1135,16 +1152,57 @@ func (s *Shell) closeTab(id string) error {
 	if err != nil {
 		return err
 	}
-	if len(data.TabList()) == 1 {
+	if len(data.TabList()) == 1 && s.plane.CanClose(card) {
 		return s.closeCard(card)
 	}
 	data.RemoveTab(id)
+	if len(data.TabList()) == 0 {
+		refill, err := s.refillTab(card)
+		if err != nil {
+			return err
+		}
+		data.AppendTab(refill)
+	}
 	data.SettleActiveTab()
 	if err := s.storeCard(card, data); err != nil {
 		return err
 	}
 	s.settleThen(s.droppedTabs([]string{id}))
 	return nil
+}
+
+// refillTab is the new tab of the card id that lost its last tab and cannot close: a tab of the plugin of the active tab of the focused
+// card, or of the first plugin with a tab surface when the focused card shows no tab. The closed tab leaves no source tab, so the new
+// tab records the null origin (docs/spec/projects.md#tab-origin).
+func (s *Shell) refillTab(id string) (layout.Tab, error) {
+	plugin := ""
+	if s.focused != id {
+		if _, ok := s.plane.Card(s.focused); ok && !isPlace(s.focused) {
+			focused, err := s.cardData(s.focused)
+			if err != nil {
+				return layout.Tab{}, err
+			}
+			if tab := focused.ActiveTab(); tab != nil {
+				plugin = tab.Plugin
+			}
+		}
+	}
+	if plugin == "" {
+		for _, loaded := range s.plugins {
+			if loaded.Surface {
+				plugin = loaded.ID
+				break
+			}
+		}
+	}
+	if plugin == "" {
+		return layout.Tab{}, fmt.Errorf("card %s cannot close and no plugin opens a tab in it", id)
+	}
+	known, err := s.knownPlugin(plugin)
+	if err != nil {
+		return layout.Tab{}, err
+	}
+	return s.newTabOf(known, nil)
 }
 
 // sidebarOrder is the order of the window sidebars, the setting sidebarOrder (docs/spec/external-sidebars.md).

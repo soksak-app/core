@@ -22,6 +22,9 @@ import { pluginUnits } from "./environment.js";
 import { SIDE_NAMES, WINDOW_SIDES } from "./window-sidebars.js";
 import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
+import { setupParts } from "./setup-exposure.js";
+import { missingKinds } from "./setup-parts.js";
+import { showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
   CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
@@ -325,6 +328,59 @@ function drawGeneral() {
   if (scope === "common") body.append(group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", [
     row("디버그", debugSwitch()),
   ]));
+  if (scope === "common") body.append(setupGroup());
+}
+
+/** The names of the setup parts (docs/spec/settings.md#에이전트). */
+const SETUP_NAMES = { path: "명령 경로", skill: "스킬", mcp: "MCP 등록" };
+const SETUP_STATES = { ok: "설치됨", absent: "설치 안 됨", differs: "다름" };
+
+/**
+ * The 에이전트 group: one row per setup part with its name, file and state, the install step of a missing path entry, 설치 while a
+ * skill or mcp part is not ok, and 다시 확인. The error text of a part that cannot be read goes through the error display path.
+ */
+function setupGroup() {
+  const parts = setupParts.parts();
+  const rows = parts.map((part) => {
+    const el = document.createElement("div");
+    el.className = "set-row";
+    el.dataset.key = `setup:${part.part}:${part.file}`;
+    el.dataset.expose = "core.settings-modal.setup";
+    const name = document.createElement("span");
+    name.className = "set-row__name";
+    name.textContent = SETUP_NAMES[part.part];
+    const about = document.createElement("span");
+    about.className = "set-setup";
+    const state = document.createElement("span");
+    state.className = "set-setup__state";
+    if (part.state === "error") showError(state, `setup:${part.part}:${part.file}`, part.error);
+    else state.textContent = SETUP_STATES[part.state === "ok" ? "ok" : part.reason];
+    const file = document.createElement("span");
+    file.className = "set-caption";
+    file.textContent = part.file;
+    about.append(state, file);
+    if (part.part === "path" && part.state === "missing") {
+      const step = document.createElement("code");
+      step.className = "set-setup__step";
+      step.textContent = part.step;
+      about.append(step);
+    }
+    el.append(name, about);
+    return el;
+  });
+  if (!rows.length) {
+    const none = document.createElement("p");
+    none.className = "set-caption";
+    none.textContent = "이 컴퓨터에서 설정할 에이전트 항목이 없습니다.";
+    rows.push(none);
+  }
+  const kinds = missingKinds(parts);
+  const actions = document.createElement("div");
+  actions.className = "set-actions";
+  if (kinds.length) actions.append(button("setup-install", "core.settings-modal.setup-install", "설치", "core.setup.install", { parts: kinds }));
+  actions.append(button("setup-check", "core.settings-modal.setup-check", "다시 확인", "core.setup.check", {}));
+  return group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목. 명령 경로는 관리자 권한이 필요하므로 터미널에서 보이는 명령으로 설치한다.",
+    [...rows, actions]);
 }
 
 /** The debug switch. It is on when the performance trace is on and every class of the log policy is at trace, and it runs core.settings.debug with its new value. */
@@ -779,6 +835,8 @@ export function drawSettings() {
     body.append(folder);
   }
   SECTIONS.find(([id]) => id === here)[2]();
+  // Showing the 에이전트 group reads the setup parts (docs/spec/settings.md#에이전트).
+  setupParts.show(here === "general" && scope === "common");
   overlay.update(card);
   // When the content changes, the size of the card changes too. If the position is not notified again, the view
   // keeps the previous size and the card inside it grows or is cut off.
@@ -871,6 +929,7 @@ export function openSettings() {
 export function closeSettings() {
   if (!card) return;
   queueMicrotask(() => drawn());
+  setupParts.show(false);
   if (native) overlay.hide(card);
   else standIn(false);
   scrim.remove();

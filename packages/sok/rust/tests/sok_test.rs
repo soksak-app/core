@@ -28,6 +28,8 @@ fn run(args: &[&str]) -> (i32, String, String) {
         identifier: "com.soksak.test",
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
+        config_dir_variable: None,
+        surface_variable: None,
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     (
@@ -76,6 +78,8 @@ fn an_error_that_cannot_be_written_exits_with_status_3() {
         identifier: "com.soksak.test",
         paths_dir: Ok(&paths),
         core_version: "0.0.2",
+        config_dir_variable: None,
+        surface_variable: None,
     };
     let mut stdout = Vec::new();
     assert_eq!(
@@ -575,6 +579,8 @@ fn path_entries_fail_where_the_operating_system_has_no_folder() {
         identifier: "com.soksak.test",
         paths_dir: Err("path entries are not implemented on linux".to_string()),
         core_version: "0.0.2",
+        config_dir_variable: None,
+        surface_variable: None,
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     assert_eq!(

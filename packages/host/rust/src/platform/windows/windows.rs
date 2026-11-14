@@ -159,6 +159,9 @@ impl Platform for Windows {
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String> {
         unsupported::process_footprint(pid)
     }
+    fn login_shell(&self) -> Result<String, String> {
+        unsupported::login_shell()
+    }
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String> {
         unsupported::move_window(window, x, y)
     }

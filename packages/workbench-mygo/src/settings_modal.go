@@ -68,6 +68,8 @@ const (
 	controlCaption
 	// controlMark is the mark of the common tab that the project value of its setting applies.
 	controlMark
+	// controlSetup is a row of the 에이전트 group: the name, the state, the file and the install step of a setup part.
+	controlSetup
 )
 
 // ControlCommand is the command of a control, without the value that the control adds.
@@ -101,7 +103,8 @@ type SettingsControl struct {
 	unit       string
 	theme      *CatalogTheme // the theme of a swatch
 	maxLength  int
-	searchable bool // a field that runs its command for each change, as the plugin search does
+	searchable bool      // a field that runs its command for each change, as the plugin search does
+	setup      *setupRow // the content of a row of the 에이전트 group
 }
 
 // settingsRow is a row of a group: a name and its controls, with the key and the description of a declared setting.
@@ -497,6 +500,7 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 		on := s.settings.DebugOn()
 		debug := b.add(SettingsControl{Name: "core.settings-modal.debug", Label: "디버그", On: &on, Command: settingCommand("core.settings.debug", nil), kind: controlSwitch, param: "on"})
 		b.group("진단", "디버그를 켜면 성능 트레이스와 모든 로그 종류의 상세 기록이 남는다. 끄면 오류만 기록된다.", settingsRow{name: "디버그", controls: []*SettingsControl{debug}})
+		s.buildSetup(b)
 	}
 	return failed
 }

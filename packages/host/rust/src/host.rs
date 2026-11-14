@@ -84,6 +84,7 @@ pub mod responder;
 #[path = "routine/routine.rs"]
 pub mod routine;
 pub mod running_calls;
+pub mod setup;
 pub mod shapes;
 pub mod sidecar_reply;
 pub mod sidecar_routes;
@@ -429,6 +430,25 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
             applying.state::<WindowSidecars>().declare(&declarations)
         }),
         Box::new(move |change| windows::notify_plugins(&handle, change)),
+    )?);
+    // The setup operations use the sok of the application bundle, next to the executable
+    // (docs/spec/cli.md#agents-in-the-application).
+    let executable = std::env::current_exe()
+        .and_then(|path| path.canonicalize())
+        .map_err(|error| {
+            format!(
+                "setup: the location of the application is unknown: {}",
+                setup::os_reason(&error)
+            )
+        })?;
+    // default: an executable path always has a folder.
+    let bundle = executable.parent().unwrap_or(std::path::Path::new("/"));
+    let notifying = app.clone();
+    app.manage(setup::Setups::new(
+        bundle.join("sok"),
+        soksak_sok::identity::identity().to_string(),
+        Box::new(setup::SystemProcesses(platform::current()?)),
+        Box::new(move || windows::notify_setup(&notifying)),
     )?);
     let sidecars: WindowSidecars = installed::new_installed_sidecars(directory)?;
     let reporting = app.clone();

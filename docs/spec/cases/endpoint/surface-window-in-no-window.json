@@ -1,0 +1,27 @@
+{
+  "name": "surface-window-in-no-window",
+  "description": "surface.window of a surface that no page of the ready windows holds is answered with 1012 and the surface; a page that ended before it answered counts as a window that is not ready, and a page answer other than null or {space}, such as an object without space, is an internal error with the text of the answer.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "ready": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": {"surface": "tab-z9"}}},
+    {"page": {"call": {"window": "main", "name": "surface.window", "payload": {"surface": "tab-z9"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": 1012, "message": "surface tab-z9 is in no window"}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "surface.window", "params": {"surface": "tab-z9"}}},
+    {"page": {"call": {"window": "main", "name": "surface.window", "payload": {"surface": "tab-z9"}}}},
+    {"page": {"reply": {"error": {"code": 1003, "message": "the document closed before it replied"}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "error": {"code": 1003, "message": "window \"main\" is not ready"}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "surface.window", "params": {"surface": "tab-z9"}}},
+    {"page": {"call": {"window": "main", "name": "surface.window", "payload": {"surface": "tab-z9"}}}},
+    {"page": {"reply": {"result": 5}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "error": {"code": -32603, "message": "page surface.window is 5, not null or {space}"}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "surface.window", "params": {"surface": "tab-z9"}}},
+    {"page": {"call": {"window": "main", "name": "surface.window", "payload": {"surface": "tab-z9"}}}},
+    {"page": {"reply": {"result": {}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "error": {"code": -32603, "message": "page surface.window is {}, not null or {space}"}}}
+  ]
+}

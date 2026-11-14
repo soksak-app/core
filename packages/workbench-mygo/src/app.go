@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -149,6 +150,7 @@ func (a *App) Build(window host.Frontend) func(c *ui.Context) {
 		FirstScreen: painted.FirstScreen,
 		OpenLayout:  painted.OpenLayout,
 		Element:     func(id string) (uintptr, uintptr, bool) { return a.options.Element(window, id) }, Invalidate: painted.Invalidate, Elements: painted, Post: a.options.Post, Report: a.options.Report,
+		Name: window.Name(), Random: rand.Reader,
 		Tabs: a.tabPorts, Window: func() (WindowView, error) {
 			scale, err := painted.Scale()
 			if err != nil {
@@ -347,6 +349,9 @@ func (s *Shell) event(name string, data []any) {
 	case "window-active":
 		s.pluginOperations.Refresh(func() {})
 		s.appUpdates.Refresh(func() {})
+		s.setupOperations.Event()
+	case "setup-changed":
+		s.setupOperations.Event()
 	case "project-close-request":
 		s.closeWindowAsked()
 	case "project-remove-request":

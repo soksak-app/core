@@ -519,8 +519,8 @@ const OUTSIDE: &[(&str, &str)] = &[
         "windows.list answers the entry of the main window with the ready state that the page reports",
     ),
     (
-        "mcp-tools-list",
-        "the MCP client reads exposure.list of a window, which needs a page",
+        "mcp-exposure-search",
+        "the MCP server reads exposure.list of a window, which needs a page",
     ),
     (
         "no-request",

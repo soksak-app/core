@@ -663,6 +663,10 @@ pub fn process_footprint(_pid: u32) -> Result<ProcessFootprint, String> {
     missing("process footprint")
 }
 
+pub fn login_shell() -> Result<String, String> {
+    missing("login shell")
+}
+
 pub fn move_window(_window: Handle, _x: f64, _y: f64) -> Result<(), String> {
     missing("window placement")
 }

@@ -135,12 +135,6 @@ importers:
         specifier: workspace:*
         version: link:../plugin-api
 
-  packages/mcp:
-    dependencies:
-      '@soksak/client':
-        specifier: workspace:*
-        version: link:../client
-
   packages/plugin-api:
     dependencies:
       es-module-lexer:

@@ -52,6 +52,9 @@ func (w *appWindow) OpenLayout() (uint64, error) { return 0, nil }
 // Address returns the address of the window.
 func (w *appWindow) Address() string { return w.address }
 
+// Name returns the identifier of the window in windows.list.
+func (w *appWindow) Name() string { return "main" }
+
 // SetAddress records the address of the window.
 func (w *appWindow) SetAddress(address string) { w.address = address }
 

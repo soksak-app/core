@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 /// One endpoint connection.
 pub trait Connection: Read + Write + Send {
+    /// A second handle of this connection, so one thread reads while another writes (docs/spec/cli.md#mcp-server).
+    fn try_clone(&self) -> Result<Box<dyn Connection>, String>;
     /// A function that closes this connection from another thread. A thread that waits for a read receives an error that the connection closed.
     fn closer(&self) -> Result<Box<dyn Fn() -> Result<(), String> + Send>, String>;
     /// Closes the connection and returns the result.
@@ -72,6 +74,14 @@ pub trait Platform {
         arguments: &[String],
         activate: bool,
     ) -> Result<(), String>;
+    /// Whether the file system that holds the path is mounted read-only (docs/spec/cli.md#mcp-registration).
+    fn read_only_volume(&self, path: &std::path::Path) -> Result<bool, String>;
+    /// Whether the sok at the path may be registered as the MCP server: on macOS only the sok of an application bundle,
+    /// in `Contents/MacOS` of a folder whose name ends in `.app` (docs/spec/cli.md#mcp-registration).
+    fn registrable_sok(&self, sok: &std::path::Path) -> Result<bool, String>;
+    /// Replaces this process with the program and the arguments, with the same environment. It returns only on a failure, with its
+    /// text.
+    fn exec(&self, program: &std::path::Path, arguments: &[String]) -> String;
 }
 
 #[cfg(target_os = "macos")]

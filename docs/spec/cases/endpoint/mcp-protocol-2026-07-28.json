@@ -1,0 +1,14 @@
+{
+  "name": "mcp-protocol-2026-07-28",
+  "description": "sok mcp answers the revision 2026-07-28, whose requests carry the revision, the client and its capabilities in _meta: server/discover names the two revisions and the tools capability without listChanged, and tools/list and tools/call answer without an initialize. A member that the case does not state is the library's own.",
+  "replay": false,
+  "reason": "The case has no endpoint frame: it holds the messages of the MCP protocol of the server.",
+  "steps": [],
+  "mcp": {
+    "steps": [
+      { "client": { "jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { "name": "case", "version": "0" }, "io.modelcontextprotocol/clientCapabilities": {} } } }, "server": { "jsonrpc": "2.0", "id": 1, "result": { "supportedVersions": ["2026-07-28", "2025-11-25"], "capabilities": { "tools": {} }, "instructions": "$instructions", "_meta": { "io.modelcontextprotocol/serverInfo": { "name": "soksak", "version": "$version" } } } } },
+      { "client": { "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { "name": "case", "version": "0" }, "io.modelcontextprotocol/clientCapabilities": {} } } }, "server": { "jsonrpc": "2.0", "id": 2, "result": { "tools": "$tools" } } },
+      { "client": { "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "agent_context", "arguments": {}, "_meta": { "io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientInfo": { "name": "case", "version": "0" }, "io.modelcontextprotocol/clientCapabilities": {} } } }, "server": { "jsonrpc": "2.0", "id": 3, "result": { "content": [{ "type": "text", "text": "{\"configDirectory\":\"$config\",\"surface\":null,\"window\":null}" }] } } }
+    ]
+  }
+}

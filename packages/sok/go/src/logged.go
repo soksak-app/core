@@ -4,8 +4,11 @@ package sok
 // command targets holds the command with its result, and a panic with its stack.
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,11 +53,14 @@ func monotonicNanos() uint64 {
 
 var clockFailure sync.Once
 
-// StartToolEventLog starts the writer of the tool in logs/sok-<boot>.jsonl of the configuration directory config; the boot
-// identifier is the start time in seconds and the process identifier.
+// runBoot is the boot identifier of this process: the start time in nanoseconds since the Unix epoch and the process identifier. It
+// names the event file and the owner record of process.lock, and a sok that replaces the process through exec has its own.
+var runBoot = sync.OnceValue(func() string { return fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid()) })
+
+// StartToolEventLog starts the writer of the tool in logs/sok-<boot>.jsonl of the configuration directory config.
 func StartToolEventLog(config string) (*EventLog, error) {
 	log, err := StartEventLog(EventLogOptions{
-		Directory: filepath.Join(config, "logs"), Role: eventRole, Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid()),
+		Directory: filepath.Join(config, "logs"), Role: eventRole, Boot: runBoot(),
 		Layer: eventLayer, Clock: monotonicNanos, Spawn: Go,
 		QueueEvents: eventQueueEvents, QueueBytes: eventQueueBytes, BatchInterval: eventBatchInterval,
 	})
@@ -132,8 +138,12 @@ func interrupted(closeErr error) {
 
 // Logged runs command and records it: it starts the event file of the targeted configuration directory, runs the command,
 // stores a panic of the command with its stack as the exit status PanicStatus, stores the command with its result, and
-// flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it.
+// flushes the file. An event file that cannot be started is reported on the standard error and the command runs without it. A
+// path entry command runs without an event file.
 func Logged(args []string, stdout, stderr io.Writer, options Options, command Command) int {
+	if commandWord(args) == "path" {
+		return unlogged(args, stdout, stderr, options, command)
+	}
 	started := time.Now()
 	config, err := targetConfigDir(args, options)
 	var log *EventLog
@@ -145,6 +155,11 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 		// exit status 3 (docs/spec/cli.md).
 		if _, writeErr := fmt.Fprintf(stderr, "sok: event log: %v\n", err); writeErr != nil {
 			return 3
+		}
+		if config != "" {
+			if status, handled := handOff(args, config, stderr, nil, nil); handled {
+				return status
+			}
 		}
 		return command(args, stdout, stderr, options)
 	}
@@ -184,6 +199,9 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 		}
 		log.Close()
 	}
+	if status, handled := handOff(args, config, stderr, log, finish); handled {
+		return status
+	}
 	panicRecorder.Store(&record)
 	interruptRecorder.Store(&interrupt)
 	status, panicked := Guard(func() int { return command(args, stdout, captured, options) })
@@ -207,7 +225,128 @@ func Logged(args []string, stdout, stderr io.Writer, options Options, command Co
 	return status
 }
 
+// unlogged runs a path entry command without an event file (docs/spec/cli.md#event-log): it runs as root through sudo, and a folder
+// or file that it created in the configuration directory would belong to root and refuse the later runs of the person. A panic
+// of the command is written to the standard error and ends the run with the status PanicStatus.
+func unlogged(args []string, stdout, stderr io.Writer, options Options, command Command) int {
+	status, panicked := Guard(func() int { return command(args, stdout, stderr, options) })
+	if panicked == nil {
+		return status
+	}
+	if _, err := fmt.Fprintf(stderr, "sok: panic: %s\n%s", panicked.Text, panicked.Stack); err != nil {
+		return 3
+	}
+	return PanicStatus
+}
+
 // Main runs Run with the record of the tool.
 func Main(args []string, stdout, stderr io.Writer, options Options) int {
 	return Logged(args, stdout, stderr, options, Run)
+}
+
+// Hands a command to the sok of the application of SOKSAK_CONFIG_DIR (docs/spec/cli.md#the-window-of-an-agent): the sok that PATH
+// reaches can belong to another installed application of another release, and the application's own sok is the one whose methods
+// and core version match it.
+
+// configDirVariable names the configuration directory of the application whose surface started the process.
+const configDirVariable = "SOKSAK_CONFIG_DIR"
+
+// configFromEnvironment tells whether the configuration directory of the arguments comes from SOKSAK_CONFIG_DIR: no --config-dir
+// before an argument `--`, and the variable set and not empty.
+func configFromEnvironment(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			break
+		}
+		if arg == "--config-dir" || strings.HasPrefix(arg, "--config-dir=") {
+			return false
+		}
+	}
+	return os.Getenv(configDirVariable) != ""
+}
+
+// handoffTarget returns the running sok and the canonical path of the sok of the application whose endpoint.json the configuration
+// directory holds, or "" when the directory has no endpoint.json, the folder of its executable holds no sok, or that sok is the
+// running one.
+func handoffTarget(config string) (string, string, error) {
+	file := filepath.Join(config, "endpoint.json")
+	data, err := os.ReadFile(file)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fileError(file, err)
+	}
+	var endpoint struct {
+		Executable string `json:"executable"`
+	}
+	if err := json.Unmarshal(data, &endpoint); err != nil {
+		return "", "", invalidJSON(file, data, err)
+	}
+	if endpoint.Executable == "" {
+		return "", "", fmt.Errorf("%s has no executable", file)
+	}
+	candidate := filepath.Join(filepath.Dir(endpoint.Executable), "sok")
+	target, err := filepath.EvalSymlinks(candidate)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fileError(candidate, err)
+	}
+	running, err := runningSok()
+	if err != nil {
+		return "", "", err
+	}
+	if target == running {
+		return running, "", nil
+	}
+	return running, target, nil
+}
+
+// handOff replaces the process with the sok of the application of SOKSAK_CONFIG_DIR when the configuration directory comes from
+// that variable and the application runs another sok. Before the replacement it stores sok.exec and the command with the status
+// 0 in log, when the run has one, and flushes and closes it. It reports false when the running sok runs the command, and the exit
+// status of a failure otherwise.
+func handOff(args []string, config string, stderr io.Writer, log *EventLog, finish func(status int, errorText string)) (int, bool) {
+	if !configFromEnvironment(args) {
+		return 0, false
+	}
+	running, target, err := handoffTarget(config)
+	if err == nil && target == "" {
+		return 0, false
+	}
+	if err != nil {
+		text := "sok: " + err.Error()
+		status := 1
+		if _, writeErr := fmt.Fprintln(stderr, text); writeErr != nil {
+			status = 3
+		}
+		if log != nil {
+			finish(status, text)
+			closeRunLog(log, stderr)
+		}
+		return status, true
+	}
+	if log != nil {
+		log.Emit(LevelInfo, "sok.exec", map[string]any{"from": running, "to": target, "config": config})
+		finish(0, "")
+		closeRunLog(log, stderr)
+	}
+	system, err := platform.Current()
+	if err == nil {
+		err = system.ReplaceProcess(target, append([]string{target}, args...), os.Environ())
+	}
+	if _, writeErr := fmt.Fprintf(stderr, "sok: exec %s: %v\n", target, err); writeErr != nil {
+		return 3, true
+	}
+	return 1, true
+}
+
+// closeRunLog flushes and closes the event file of the run and reports a failed flush on the standard error.
+func closeRunLog(log *EventLog, stderr io.Writer) {
+	if err := log.Flush(); err != nil {
+		fmt.Fprintf(stderr, "sok: event log: %v\n", err)
+	}
+	log.Close()
 }

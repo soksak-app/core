@@ -105,6 +105,8 @@ func hostCalls(h *host.Host) map[string]HostCall {
 		"pluginsRun":               request(h.PluginsRun),
 		"pluginsUseRegistry":       request(h.PluginsUseRegistry),
 		"pluginsStarter":           request(h.PluginsStarter),
+		"setupState":               read(h.SetupState),
+		"setupInstall":             request(h.SetupInstall),
 		"sidecarSend": func(ctx context.Context, argument json.RawMessage) (any, error) {
 			var call struct{ Sidecar, Surface, Body, Cids json.RawMessage }
 			if err := json.Unmarshal(argument, &call); err != nil {

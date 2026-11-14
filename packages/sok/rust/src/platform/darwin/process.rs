@@ -302,4 +302,37 @@ impl Platform for Darwin {
             other => Err(format!("darwin/{other} has no platform key")),
         }
     }
+
+    /// Reads the mount flags of the file system with statvfs.
+    fn read_only_volume(&self, path: &std::path::Path) -> Result<bool, String> {
+        let status = rustix::fs::statvfs(path).map_err(|error| {
+            crate::files::file_error(path.display(), &std::io::Error::from(error))
+        })?;
+        Ok(status
+            .f_flag
+            .contains(rustix::fs::StatVfsMountFlags::RDONLY))
+    }
+
+    fn registrable_sok(&self, sok: &std::path::Path) -> Result<bool, String> {
+        let name = |path: Option<&std::path::Path>| {
+            path.and_then(std::path::Path::file_name)
+                .map(|name| name.to_string_lossy().into_owned())
+        };
+        let macos = sok.parent();
+        let contents = macos.and_then(std::path::Path::parent);
+        let bundle = contents.and_then(std::path::Path::parent);
+        Ok(name(macos).as_deref() == Some("MacOS")
+            && name(contents).as_deref() == Some("Contents")
+            && name(bundle).is_some_and(|name| name.ends_with(".app")))
+    }
+
+    fn exec(&self, program: &std::path::Path, arguments: &[String]) -> String {
+        use std::os::unix::process::CommandExt;
+        let error = std::process::Command::new(program).args(arguments).exec();
+        format!(
+            "exec {}: {}",
+            program.display(),
+            crate::files::os_reason(&error)
+        )
+    }
 }

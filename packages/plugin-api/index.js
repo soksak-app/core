@@ -1594,6 +1594,43 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
     return found.declaration;
   };
 
+  /** The first count Unicode scalar values of text: the string iterator steps over code points, so a surrogate pair stays whole. */
+  const firstScalars = (text, count) => {
+    let cut = "";
+    let taken = 0;
+    for (const character of text) {
+      if (taken === count) break;
+      cut += character;
+      taken += 1;
+    }
+    return cut;
+  };
+
+  /**
+   * One element of an element entry in a window snapshot: its role and rectangle as element.rect gives them, its text with runs of white
+   * space joined into one space and cut to its first 120 Unicode scalar values, so a cut never splits a character, whether it has a box
+   * that is not empty and is not hidden, and the command and the params that it runs, or null.
+   */
+  const snapshotItem = (name, element, index, withInert) => {
+    const { x, y, width, height, role } = rectOf(element);
+    const view = element.ownerDocument.defaultView;
+    const shown = width > 0 && height > 0 && view.getComputedStyle(element).visibility !== "hidden" && element.closest("[hidden]") === null;
+    const paramsText = element.getAttribute("data-params");
+    let params = null;
+    if (paramsText !== null) {
+      try {
+        params = JSON.parse(paramsText);
+      } catch (error) {
+        throw new Error(`element ${name} index ${index} has data-params that is not JSON: ${error.message}`);
+      }
+    }
+    return {
+      index, role, text: firstScalars((element.textContent ?? "").replace(/\s+/g, " "), 120), rect: { x, y, width, height }, visible: shown,
+      ...(withInert ? { inert: inert(element) } : {}),
+      command: element.getAttribute("data-command"), params,
+    };
+  };
+
   // default: an unregistered element name has no element, and the caller reports that case as an unregistered error.
   const elements = (name) => (elementEntries.get(name) ?? []).flatMap((provide) => provide()).filter((el) => el.isConnected !== false);
 
@@ -1628,6 +1665,32 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
     entry.value = value;
     entry.version++;
     entry.changed(entry.name, entry.value, entry.version);
+  }
+
+  /**
+   * The group of the entries registered in this document for exposure.snapshot (docs/spec/exposure.md#window-snapshot): each
+   * registered status with its value or the error of its read, each registered command and each element entry with its items, in
+   * declaration order and each in the declaration format. The statuses are read and the elements listed in the turn of the call.
+   * With withInert, each item tells whether it is behind the open dialog; a surface document leaves it to the main page.
+   */
+  function snapshot({ withInert = false } = {}) {
+    const entries = [...declared.values()];
+    const reads = entries.filter(({ kind, declaration }) => kind === "status" && statuses.has(declaration.name)).map(({ declaration }) => {
+      let read;
+      try {
+        read = Promise.resolve(statuses.get(declaration.name).read()).then((value) => ({ ...declaration, value: jsonStatusValue(declaration.name, value) }));
+      } catch (error) {
+        read = Promise.reject(error);
+      }
+      // default: a thrown value that is not an Error is written as its own text.
+      return read.catch((error) => ({ ...declaration, error: String(error?.message ?? error) }));
+    });
+    const commandList = entries.filter(({ kind, declaration }) => kind === "command" && commands.has(declaration.name))
+      .map(({ declaration }) => ({ ...declaration }));
+    const elementList = entries.filter(({ kind, declaration }) => kind === "element" && elements(declaration.name).length > 0)
+      .map(({ declaration }) => ({ ...declaration,
+        items: elements(declaration.name).map((element, index) => snapshotItem(declaration.name, element, index, withInert)) }));
+    return Promise.all(reads).then((status) => ({ status, commands: commandList, element: elementList }));
   }
 
   return {
@@ -1697,11 +1760,15 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       elementEntries.clear();
     },
 
+    snapshot,
+
     /**
      * Handles one request and returns the result. Throws ExposureError when it fails.
      * changed(name, value) is called when the value of a watched status changes.
      */
     async answer(method, params, changed = () => {}) {
+      // The part of this document in a window snapshot; the main page adds the place of the document and inert.
+      if (method === "exposure.snapshot") return snapshot();
       const kind = METHOD_KINDS[method];
       if (!kind) throw new ExposureError(EXPOSURE_ERRORS.unknownMethod, `unknown method ${method}`);
       if (!isObject(params) || typeof params.name !== "string") {

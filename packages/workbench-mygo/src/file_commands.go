@@ -6,6 +6,8 @@ import (
 	"path"
 	"slices"
 	"strings"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // FilePlugin is a loaded plugin as the file commands read it: its id and the extensions of surface.opens, which are none for
@@ -76,8 +78,27 @@ func CheckOpenPath(file string) error {
 	return nil
 }
 
-// OpenFile opens file, relative to the project root, in the plugin that declares its extension: it activates the tab of that
-// plugin with the same path, or adds one to card, or to the focused card when card is empty.
+// OpenPath returns file in the normal form of the path of a tab, after CheckOpenPath: without . segments, empty segments or a final /,
+// and in Unicode NFC, so ./a.md and a.md name one file (docs/spec/plugins.md#pluginjson). A path that names no file below the root
+// is refused.
+func OpenPath(file string) (string, error) {
+	if err := CheckOpenPath(file); err != nil {
+		return "", err
+	}
+	var parts []string
+	for _, part := range strings.Split(file, "/") {
+		if part != "" && part != "." {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
+		return "", fmt.Errorf("path must be relative to the project root: %s", file)
+	}
+	return norm.NFC.String(strings.Join(parts, "/")), nil
+}
+
+// OpenFile opens file, relative to the project root and in its normal form (OpenPath), in the plugin that declares its extension: it
+// activates the tab of that plugin with the same path, or adds one to card, or to the focused card when card is empty.
 func OpenFile(workspace FileWorkspace, file, card string) (FileOpened, error) {
 	opener, err := ChooseOpener(workspace.FilePlugins(), file)
 	if err != nil {
@@ -112,10 +133,11 @@ func RegisterFileCommands(registry *Registry, workspace FileWorkspace, calls *Ca
 		if !workspace.HasProject() {
 			return nil, fmt.Errorf("this window shows no project")
 		}
-		if err := CheckOpenPath(request.Path); err != nil {
+		file, err := OpenPath(request.Path)
+		if err != nil {
 			return nil, err
 		}
-		return OpenFile(workspace, request.Path, request.Card)
+		return OpenFile(workspace, file, request.Card)
 	})
 	// The host shows the save panel of the window, so the answer comes when the person has answered.
 	registry.CommandLater("core.file.place", func(params json.RawMessage, answer func(any, error)) {

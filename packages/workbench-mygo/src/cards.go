@@ -1,8 +1,11 @@
 package workbench
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -718,4 +721,373 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 			}
 		}
 	})
+}
+
+// LayoutDescription is the member layout of the window snapshot: the active space, the focused card and the tree of the content cards
+// (docs/spec/exposure.md#window-snapshot).
+type LayoutDescription struct {
+	Space   string      `json:"space"`
+	Focused *string     `json:"focused"`
+	Root    *LayoutNode `json:"root"`
+}
+
+// LayoutNode is a split, {direction, size, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description.
+type LayoutNode struct {
+	Direction string
+	Size      float64
+	Children  []LayoutNode
+	Card      string
+	Frame     LayoutFrame
+	Tabs      []LayoutTab
+}
+
+// LayoutFrame is the frame of a card in window points.
+type LayoutFrame struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Width  float64 `json:"width"`
+	Height float64 `json:"height"`
+}
+
+// LayoutTab is a tab of a card of a layout description; Params are the stored parameters of the tab, null without them.
+type LayoutTab struct {
+	Tab    string          `json:"tab"`
+	Plugin string          `json:"plugin"`
+	Title  string          `json:"title"`
+	Active bool            `json:"active"`
+	Params json.RawMessage `json:"params"`
+}
+
+// MarshalJSON writes a split as {direction, size, children} and a card as {card, size, frame, tabs}.
+func (n LayoutNode) MarshalJSON() ([]byte, error) {
+	if n.Direction != "" {
+		return json.Marshal(struct {
+			Direction string       `json:"direction"`
+			Size      float64      `json:"size"`
+			Children  []LayoutNode `json:"children"`
+		}{n.Direction, n.Size, n.Children})
+	}
+	tabs := n.Tabs
+	if tabs == nil {
+		tabs = []LayoutTab{}
+	}
+	return json.Marshal(struct {
+		Card  string      `json:"card"`
+		Size  float64     `json:"size"`
+		Frame LayoutFrame `json:"frame"`
+		Tabs  []LayoutTab `json:"tabs"`
+	}{n.Card, n.Size, n.Frame, tabs})
+}
+
+// LayoutDescription describes the layout of the shown space, and nil while the window shows no project. The tree comes from the lines
+// and the cards of the plane (layout.Tree), and a frame is the rectangle of a card in the window, as the frame drew it.
+func (s *Shell) LayoutDescription() (*LayoutDescription, error) {
+	project := s.opened()
+	if project == nil || s.plane == nil || s.browsing {
+		return nil, nil
+	}
+	tree, err := layout.Tree(s.plane.ToJSON())
+	if err != nil {
+		return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
+	}
+	description := &LayoutDescription{Space: project.ActiveSpaceID}
+	if _, ok := s.plane.Card(s.focused); ok && !isPlace(s.focused) {
+		focused := s.focused
+		description.Focused = &focused
+	}
+	if tree != nil {
+		root, err := s.describeNode(*tree)
+		if err != nil {
+			return nil, err
+		}
+		description.Root = &root
+	}
+	return description, nil
+}
+
+// describeNode is the node of the description of a node of the tree.
+func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
+	if node.Direction != "" {
+		described := LayoutNode{Direction: node.Direction, Size: node.Size}
+		for _, child := range node.Children {
+			part, err := s.describeNode(child)
+			if err != nil {
+				return LayoutNode{}, err
+			}
+			described.Children = append(described.Children, part)
+		}
+		return described, nil
+	}
+	data, err := s.cardData(node.Card)
+	if err != nil {
+		return LayoutNode{}, err
+	}
+	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.
+	origin := s.planeOrigin()
+	described := LayoutNode{Card: node.Card, Size: node.Size, Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}}
+	active := data.ActiveTab()
+	for _, tab := range data.TabList() {
+		params := tab.Rest["params"]
+		if params == nil {
+			params = json.RawMessage("null")
+		}
+		var reported *string
+		if report := s.surfaces.reports[tab.ID]; report != nil {
+			reported = optionalText(report.Title)
+		}
+		described.Tabs = append(described.Tabs, LayoutTab{Tab: tab.ID, Plugin: tab.Plugin, Title: layout.TabName(tab, reported, false),
+			Active: active != nil && active.ID == tab.ID, Params: params})
+	}
+	return described, nil
+}
+
+// The layout operations core.layout.open, core.layout.select and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
+// one step of the main thread, which decides and changes the layout, so the window applies them one at a time.
+
+// currentTarget is the name of the focused card, or of the active tab of the focused card, in a layout operation.
+const currentTarget = "current"
+
+type layoutOpenParam struct {
+	Card   string          `json:"card"`
+	Plugin *string         `json:"plugin"`
+	Path   *string         `json:"path"`
+	Params json.RawMessage `json:"params"`
+	Side   *string         `json:"side"`
+}
+
+// registerLayout registers the layout operations.
+func (s *Shell) registerLayout() {
+	command(s, "core.layout.open", func(value layoutOpenParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		return s.openLayoutTab(value)
+	})
+	command(s, "core.layout.select", func(value tabParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		card, tab, err := s.layoutTab(value.Tab)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.showLayoutTab(card, tab); err != nil {
+			return nil, err
+		}
+		return map[string]string{"card": card, "tab": tab}, nil
+	})
+	command(s, "core.layout.close", func(value tabParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		// No tab of the window takes the identifier of a closed tab, so a closed tab is in no layout.
+		if s.closedTabs[value.Tab] {
+			return closed(true), nil
+		}
+		_, tab, err := s.layoutTab(value.Tab)
+		if err != nil {
+			return nil, err
+		}
+		done, err := s.askedCloseTab(tab)
+		return closed(done), err
+	})
+}
+
+// openLayoutTab selects the first tab of the plugin with the params in the target card, or adds one to the card, or splits the card
+// toward the side with it.
+func (s *Shell) openLayoutTab(value layoutOpenParam) (map[string]string, error) {
+	switch {
+	case value.Plugin != nil && value.Path != nil:
+		return nil, fmt.Errorf("core.layout.open takes plugin or path, not both")
+	case value.Plugin == nil && value.Path == nil:
+		return nil, fmt.Errorf("core.layout.open needs plugin or path")
+	case value.Path != nil && value.Params != nil:
+		return nil, fmt.Errorf("core.layout.open takes params only with plugin")
+	case value.Side != nil && !splitSide(*value.Side):
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", *value.Side)
+	}
+	card, err := s.layoutCard(value.Card)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.layoutChangeable(card); err != nil {
+		return nil, err
+	}
+	var plugin string
+	params := value.Params
+	if value.Path != nil {
+		file, err := OpenPath(*value.Path)
+		if err != nil {
+			return nil, err
+		}
+		if plugin, err = ChooseOpener(shellFiles{s}.FilePlugins(), file); err != nil {
+			return nil, err
+		}
+		if params, err = json.Marshal(map[string]string{"path": file}); err != nil {
+			return nil, err
+		}
+	} else {
+		plugin = *value.Plugin
+	}
+	known, err := s.knownPlugin(plugin)
+	if err != nil {
+		return nil, err
+	}
+	checked, err := checkTabParams(known, params)
+	if err != nil {
+		return nil, err
+	}
+	target := card
+	if value.Side != nil {
+		target = s.neighbour(card, *value.Side)
+	}
+	if target != "" {
+		tab, err := s.equalTab(target, plugin, checked)
+		if err != nil {
+			return nil, err
+		}
+		if tab != "" {
+			if err := s.showLayoutTab(target, tab); err != nil {
+				return nil, err
+			}
+			return map[string]string{"card": target, "tab": tab}, nil
+		}
+	}
+	if value.Side != nil {
+		return s.splitTab(card, *value.Side, known, checked)
+	}
+	tab, err := s.addTab(card, plugin, checked)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]string{"card": card, "tab": tab}, nil
+}
+
+// equalTab returns the first tab of card in tab order whose plugin is plugin and whose params equal params as JSON values, nil
+// and absent params being null, or "" when no tab is such.
+func (s *Shell) equalTab(card, plugin string, params json.RawMessage) (string, error) {
+	data, err := s.cardData(card)
+	if err != nil {
+		return "", err
+	}
+	want, err := jsonValue(params)
+	if err != nil {
+		return "", err
+	}
+	for _, tab := range data.TabList() {
+		if tab.Plugin != plugin {
+			continue
+		}
+		stored, err := jsonValue(tab.Rest["params"])
+		if err != nil {
+			return "", fmt.Errorf("the params of tab %s: %w", tab.ID, err)
+		}
+		if reflect.DeepEqual(stored, want) {
+			return tab.ID, nil
+		}
+	}
+	return "", nil
+}
+
+// jsonValue decodes text into a JSON value, so the order of members and the form of numbers make no difference, and empty text is null.
+func jsonValue(text json.RawMessage) (any, error) {
+	var value any
+	if len(text) == 0 {
+		return nil, nil
+	}
+	err := json.Unmarshal(text, &value)
+	return value, err
+}
+
+// neighbour returns the content card whose edge lies on the line of the edge of card toward side and which spans the same two lines
+// across that side, compared by the lines of the layout, or "" when none does.
+func (s *Shell) neighbour(card, side string) string {
+	from, _ := s.plane.Card(card) // silent: layoutCard resolved card to a card of the plane.
+	for _, other := range s.plane.Cards() {
+		if other.ID == card || isPlace(other.ID) {
+			continue
+		}
+		rows := other.R0 == from.R0 && other.R1 == from.R1
+		columns := other.C0 == from.C0 && other.C1 == from.C1
+		if side == "right" && rows && other.C0 == from.C1 || side == "left" && rows && other.C1 == from.C0 ||
+			side == "bottom" && columns && other.R0 == from.R1 || side == "top" && columns && other.R1 == from.R0 {
+			return other.ID
+		}
+	}
+	return ""
+}
+
+// showLayoutTab makes tab the active tab of card and focuses card, and leaves a tab that is already active in the focused card as it is.
+func (s *Shell) showLayoutTab(card, tab string) error {
+	data, err := s.cardData(card)
+	if err != nil {
+		return err
+	}
+	if active := data.ActiveTab(); active != nil && active.ID == tab && s.focused == card && (s.fullscreen == "" || s.fullscreen == card) {
+		return nil
+	}
+	return s.selectTab(tab)
+}
+
+// layoutCard resolves the card of a layout operation: current is the focused card, and a card that is no content card of the plane
+// fails with the place where it is.
+func (s *Shell) layoutCard(id string) (string, error) {
+	if id == currentTarget {
+		if _, ok := s.plane.Card(s.focused); !ok || isPlace(s.focused) {
+			return "", fmt.Errorf("card current names no card: window %s has no focused card", s.options.Name)
+		}
+		return s.focused, nil
+	}
+	if _, ok := s.plane.Card(id); ok && !isPlace(id) {
+		return id, nil
+	}
+	return "", s.outOfLayout("card", id, func(cards []layout.Card) bool {
+		return slices.ContainsFunc(cards, func(card layout.Card) bool { return card.ID == id && !isPlace(id) })
+	})
+}
+
+// layoutTab resolves the tab of a layout operation to its card and itself: current is the active tab of the focused card, and a tab
+// that is in no card of the plane fails with the place where it is.
+func (s *Shell) layoutTab(id string) (string, string, error) {
+	if id == currentTarget {
+		card, err := s.layoutCard(id)
+		if err != nil {
+			return "", "", err
+		}
+		data, err := s.cardData(card)
+		if err != nil {
+			return "", "", err
+		}
+		if data.ActiveTab() == nil {
+			return "", "", fmt.Errorf("tab current names no tab: card %s of window %s has no active tab", card, s.options.Name)
+		}
+		return card, data.ActiveTab().ID, nil
+	}
+	if card := s.cardOfTab(id); card != "" {
+		return card, id, nil
+	}
+	return "", "", s.outOfLayout("tab", id, func(cards []layout.Card) bool {
+		found := false
+		eachTab(cards, func(tab layout.Tab, _ bool) { found = found || tab.ID == id })
+		return found
+	})
+}
+
+// outOfLayout is the failure of a card or a tab id that is not in the shown space: the other space of the shown project that holds it,
+// or no space.
+func (s *Shell) outOfLayout(kind, id string, holds func(cards []layout.Card) bool) error {
+	project := s.opened()
+	for _, space := range project.Spaces {
+		if space.ID == project.ActiveSpaceID {
+			continue
+		}
+		var stored storedLayout
+		if err := json.Unmarshal(space.Layout, &stored); err != nil {
+			return fmt.Errorf("space %s: %w", space.ID, err)
+		}
+		if holds(stored.State.Cards) {
+			return fmt.Errorf("%s %s is in space %s, which is not active", kind, id, space.ID)
+		}
+	}
+	return fmt.Errorf("%s %s is not in the layout of window %s", kind, id, s.options.Name)
 }

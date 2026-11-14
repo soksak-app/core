@@ -380,6 +380,8 @@ type caseOption func(*caseSettings)
 
 type caseSettings struct {
 	texts map[string]string
+	// raws are the raw JSON texts that the test gives variables (withRawJSON).
+	raws map[string]string
 }
 
 // withText gives the variable of the name the text that the host would choose. A test uses it for a value that depends on the
@@ -387,6 +389,17 @@ type caseSettings struct {
 func withText(name, text string) caseOption {
 	return func(settings *caseSettings) {
 		settings.texts[name] = text
+	}
+}
+
+// withRawJSON gives the variable of the name a raw JSON text that the host frame holds as it is. A test uses it for a value that a
+// case file cannot hold, such as a string with a lone surrogate escape, which names no character of a decoded value.
+func withRawJSON(name, text string) caseOption {
+	return func(settings *caseSettings) {
+		if settings.raws == nil {
+			settings.raws = map[string]string{}
+		}
+		settings.raws[name] = text
 	}
 }
 
@@ -399,18 +412,22 @@ type casePlayer struct {
 	steps     []caseStep
 	variables map[string]any
 	texts     map[string]string
+	raws      map[string]string
 
 	mu sync.Mutex
 	// cursor is the index of the next step.
 	cursor int
-	// requests are the frames of the client, in order.
+	// requests are the frames of the client, in order, and bodies their JSON texts as the client wrote them.
 	requests    []map[string]any
+	bodies      []string
 	connections int
 	failures    []string
 	closing     bool
 	open        map[net.Conn]bool
 	// done holds, for each connection in the order it was accepted, a channel that is closed when the connection has ended.
 	done []chan struct{}
+	// arrived is closed and replaced when the client sends a frame, so a test waits for a frame without polling.
+	arrived chan struct{}
 }
 
 // playCase starts the case of the name and returns its player. The test runs its check when it ends: the test fails with every frame of
@@ -442,6 +459,11 @@ func startCasePlayer(configDir, directory, name string, settings caseSettings) (
 	for text := range settings.texts {
 		if _, declared := kase.variables[text]; !declared {
 			return nil, fmt.Errorf("%s: the test gives a value for variable %s, which the case does not declare", name, text)
+		}
+	}
+	for raw := range settings.raws {
+		if _, declared := kase.variables[raw]; !declared {
+			return nil, fmt.Errorf("%s: the test gives a value for variable %s, which the case does not declare", name, raw)
 		}
 	}
 	// A Unix socket path is limited to 104 bytes. The test runner gives the process a short TMPDIR under /tmp, so the socket folder
@@ -489,6 +511,7 @@ func startCasePlayer(configDir, directory, name string, settings caseSettings) (
 		steps:     kase.steps,
 		variables: kase.variables,
 		texts:     settings.texts,
+		raws:      settings.raws,
 		open:      map[net.Conn]bool{},
 	}
 	go p.accept()
@@ -555,7 +578,7 @@ func (p *casePlayer) serve(conn net.Conn, prior []chan struct{}, done chan struc
 			p.fail(fmt.Sprintf("the client sent an invalid frame: %v", err))
 			return
 		}
-		frames, closedByHost, ok := p.receive(message)
+		frames, closedByHost, ok := p.receive(message, string(body))
 		if !ok {
 			return
 		}
@@ -611,6 +634,9 @@ func (p *casePlayer) bind(value any) any {
 	switch v := value.(type) {
 	case string:
 		if match := caseVariablePattern.FindStringSubmatch(v); match != nil {
+			if raw, given := p.raws[match[1]]; given {
+				return json.RawMessage(raw)
+			}
 			if text, given := p.texts[match[1]]; given {
 				return text
 			}
@@ -634,12 +660,17 @@ func (p *casePlayer) bind(value any) any {
 
 // receive checks a frame of the client against the next step, which must be a send step with the same frame. It returns the host frames
 // that follow the step; ok is false when the frame differs, and the connection ends.
-func (p *casePlayer) receive(message any) ([][]byte, bool, bool) {
+func (p *casePlayer) receive(message any, body string) ([][]byte, bool, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	request, isObject := message.(map[string]any)
 	if isObject {
 		p.requests = append(p.requests, request)
+		p.bodies = append(p.bodies, body)
+		if p.arrived != nil {
+			close(p.arrived)
+			p.arrived = nil
+		}
 	}
 	if p.cursor >= len(p.steps) || p.steps[p.cursor].kind != "send" {
 		want := "no further step"
@@ -798,4 +829,40 @@ func (p *casePlayer) connectionCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.connections
+}
+
+// lastText returns the JSON text of the last frame of method that the client sent, as the client wrote it, or "" when it sent
+// none.
+func (p *casePlayer) lastText(method string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for n := len(p.requests) - 1; n >= 0; n-- {
+		if p.requests[n]["method"] == method {
+			return p.bodies[n]
+		}
+	}
+	return ""
+}
+
+// waitForMethod waits until the client has sent count frames of method.
+func (p *casePlayer) waitForMethod(method string, count int) {
+	for {
+		p.mu.Lock()
+		seen := 0
+		for _, request := range p.requests {
+			if request["method"] == method {
+				seen++
+			}
+		}
+		if seen >= count {
+			p.mu.Unlock()
+			return
+		}
+		if p.arrived == nil {
+			p.arrived = make(chan struct{})
+		}
+		arrived := p.arrived
+		p.mu.Unlock()
+		<-arrived
+	}
 }

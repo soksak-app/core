@@ -18,10 +18,15 @@ export function chooseOpener(plugins, path) {
   return openers[0].id;
 }
 
-/** Returns path when it is relative to the project root and has no .. segment. */
+/**
+ * Returns the normal form of path when it is relative to the project root and has no .. segment: without . segments, empty segments or
+ * a final /, and in Unicode NFC, so that two spellings of one file name one tab (docs/spec/plugins.md#pluginjson).
+ */
 export function checkOpenPath(path) {
   if (typeof path !== "string" || path === "" || path.startsWith("/") || path.split("/").includes("..")) {
     throw new Error(`path must be relative to the project root: ${path}`);
   }
-  return path;
+  const normal = path.normalize("NFC").split("/").filter((segment) => segment !== "" && segment !== ".").join("/");
+  if (normal === "") throw new Error(`path must be relative to the project root: ${path}`);
+  return normal;
 }

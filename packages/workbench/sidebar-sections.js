@@ -94,6 +94,11 @@ function drawnEntry(surfaceId) {
   return null;
 }
 
+/** Whether a drawn set of this window holds the section surface, mounted, hidden or unloaded by the memory saver. */
+export function sectionDrawn(surfaceId) {
+  return drawnEntry(surfaceId) !== null;
+}
+
 /** Mounts the hidden sections among ids, which a drawn placement holds (docs/spec/plugins.md#memory-saver). The other ids are tabs. */
 export function mountPlacedSections(ids) {
   for (const id of ids) {

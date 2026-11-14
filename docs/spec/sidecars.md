@@ -62,6 +62,19 @@ The host enqueues each immutable `host.sidecars` value while serializing its sta
 
 A sidecar declares its message form in `sidecar.json` as `message: {form, operationField}`: `form` is `json-object`, and `operationField` names the string field of a request body that selects the operation. A `sidecar.json` with `hostReadOperations` is refused with `<path of sidecar.json>: hostReadOperations is removed`, and the installed document carries only the `message` of each sidecar dependency. `@soksak/plugin-api` checks these declarations (`validateSidecar`).
 
+## Processes of a surface
+
+A process that a sidecar starts for a surface, such as the shell of a session of a tab, carries two variables in its environment, so that `sok` and agents started inside it reach that application and the window of that surface ([the window of an agent](cli.md#the-window-of-an-agent)):
+
+| Variable | Value |
+| --- | --- |
+| `SOKSAK_CONFIG_DIR` | The configuration directory of the application that sent the request for the surface: for a sidecar on standard input and output the value of `SOKSAK_CONFIG_DIR` in its own environment, which the host sets when it starts the sidecar; for a persistent service the `client` of the connection that sent the request ([service transport](persistent-services.md#service-transport)) |
+| `SOKSAK_SURFACE` | The `surface` of the request |
+
+Every sidecar that starts processes for surfaces sets both, replacing a value that its own environment holds, and starts a process that belongs to no surface without `SOKSAK_SURFACE`, so no process names a surface that it does not belong to. A process that a session keeps across a reconnection keeps the values of its start, which stay right because a surface keeps its identifier. Each sidecar tests this obligation in its own repository with a process that it starts for a surface.
+
+The host starts every sidecar, on standard input and output or persistent, with `SOKSAK_CONFIG_DIR` set to its configuration directory and without `SOKSAK_SURFACE`, whatever the environment of the host held, because an application started from a process of another application inherits the variables of that process. The host tests the environment of the fixture sidecar (`docs/spec/cases/sidecars/fixture.sh`).
+
 ## Failure
 
 A sidecar that uses standard input and output fails when:

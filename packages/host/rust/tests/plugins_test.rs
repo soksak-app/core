@@ -20,6 +20,8 @@ fn sok_json(args: &[&str]) -> Value {
         identifier: "com.soksak.test",
         paths_dir: Ok(paths.path()),
         core_version: soksak_sok::version::CORE_VERSION,
+        config_dir_variable: None,
+        surface_variable: None,
     };
     let code = soksak_sok::run(&args, &mut stdout, &mut stderr, &options);
     assert_eq!(

@@ -420,6 +420,9 @@ type Platform interface {
 	// process, which counts the pages that no other process shares. The resident size counts the shared pages too. It returns an
 	// error when the process cannot be read, such as a process that has ended.
 	ProcessFootprint(pid int) (ProcessFootprint, error)
+	// LoginShell returns the login shell of the user of this process, as the user database (getpwuid_r) names it
+	// (docs/spec/cli.md#agents-in-the-application).
+	LoginShell() (string, error)
 	SetMainWebview(window Window) error
 	// RevealAfterLoad keeps the window transparent and makes it opaque when the next display ends after the first load of the main web view finished.
 	// The caller puts the window on the screen after this call (native/darwin/src/window_reveal.h). Call it on the UI thread.

@@ -1,0 +1,15 @@
+{
+  "name": "mcp-protocol-2025-11-25",
+  "description": "sok mcp answers the revision 2025-11-25 through initialize with that revision, the tools capability without listChanged, the server information and the instructions of mcp.json, and then answers tools/list and tools/call. A member that the case does not state is the library's own.",
+  "replay": false,
+  "reason": "The case has no endpoint frame: it holds the messages of the MCP protocol of the server.",
+  "steps": [],
+  "mcp": {
+    "steps": [
+      { "client": { "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": { "name": "case", "version": "0" } } }, "server": { "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "2025-11-25", "capabilities": { "tools": {} }, "serverInfo": { "name": "soksak", "version": "$version" }, "instructions": "$instructions" } } },
+      { "client": { "jsonrpc": "2.0", "method": "notifications/initialized" } },
+      { "client": { "jsonrpc": "2.0", "id": 2, "method": "tools/list" }, "server": { "jsonrpc": "2.0", "id": 2, "result": { "tools": "$tools" } } },
+      { "client": { "jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": { "name": "agent_context", "arguments": {} } }, "server": { "jsonrpc": "2.0", "id": 3, "result": { "content": [{ "type": "text", "text": "{\"configDirectory\":\"$config\",\"surface\":null,\"window\":null}" }] } } }
+    ]
+  }
+}

@@ -192,6 +192,7 @@ fn a_reload_ends_with_a_failed_start() {
     let data = Arc::new(WindowData::default());
     let ended = reload(&data);
     let started = start_waited_page(
+        "main",
         || Ok(data.clone()),
         || Err("the layout cannot be cancelled".to_string()),
         || panic!("a page whose start failed built its document"),

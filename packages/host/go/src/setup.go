@@ -1,0 +1,362 @@
+package host
+
+// The setup parts of the agents of the machine in the application (docs/spec/cli.md#agents-in-the-application): the host reads
+// the environment of the login shell of the person once per start, brings the agent skill current, and runs the setup operations
+// of the setup library of its command line in that environment for the setupState and setupInstall calls.
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"slices"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/soksak-app/core/packages/host/go/src/routine"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
+	sokplatform "github.com/soksak-app/core/packages/sok/go/src/platform"
+)
+
+// loginShellBound is the time in which the login shell must print the environment: a shell that waits for input has no event
+// that ends it.
+const loginShellBound = 10 * time.Second
+
+// errSetupOperationRunning is the refusal of a setup operation while another runs.
+var errSetupOperationRunning = errors.New("another setup operation is running")
+
+// SetupInstallRequest is the argument of the setupInstall call. Parts is received without a fixed type so that a value that is
+// not a list of strings is refused.
+type SetupInstallRequest struct {
+	Parts any `json:"parts"`
+}
+
+// LoginShellProcesses are the operations of the platform that the read of the login shell environment uses
+// (platform.Platform).
+type LoginShellProcesses interface {
+	LoginShell() (string, error)
+	NewProcessGroup(command *exec.Cmd) error
+	EndProcessGroup(pid int) error
+}
+
+// Setups runs the setup operations of the application: sokPath is the sok of the application bundle, and the setup parts are read
+// and installed in the environment of the login shell that processes names.
+type Setups struct {
+	sokPath    string
+	identifier string
+	pathsDir   string
+	pathsErr   error
+	processes  LoginShellProcesses
+	changed    func()
+
+	begin sync.Once
+	// ready is closed when the start ended: the read of the environment, with env or envErr, and the skill write after it, so a
+	// setup operation never runs beside the skill write of the start.
+	ready   chan struct{}
+	env     sok.AgentEnvironment
+	envErr  error
+	running sync.Mutex
+}
+
+// NewSetups returns the setup operations of the sok sokPath of the application identifier; changed sends setup-changed to every
+// window.
+func NewSetups(sokPath, identifier string, processes LoginShellProcesses, changed func()) (*Setups, error) {
+	system, err := sokplatform.Current()
+	if err != nil {
+		return nil, err
+	}
+	pathsDir, pathsErr := system.PathsDir()
+	return &Setups{sokPath: sokPath, identifier: identifier, pathsDir: pathsDir, pathsErr: pathsErr, processes: processes, changed: changed,
+		ready: make(chan struct{})}, nil
+}
+
+// Start reads the environment of the login shell once, then brings the skill current and sends setup-changed. The host calls it
+// after the start of the first window; a later call does nothing.
+func (s *Setups) Start() {
+	s.begin.Do(func() {
+		routine.Go("setup-environment", func() {
+			s.env, s.envErr = s.readEnvironment()
+			s.bringSkillCurrent()
+			close(s.ready)
+			s.changed()
+		})
+	})
+}
+
+// setup is the input of the setup library in the environment of the login shell, after the start ended.
+func (s *Setups) setup() (sok.Setup, error) {
+	<-s.ready
+	return s.environmentSetup()
+}
+
+// environmentSetup is the input of the setup library in the environment that the start read.
+func (s *Setups) environmentSetup() (sok.Setup, error) {
+	if s.envErr != nil {
+		return sok.Setup{}, s.envErr
+	}
+	return sok.Setup{Environment: s.env, Sok: s.sokPath, Identifier: s.identifier, PathsDir: s.pathsDir, PathsError: s.pathsErr}, nil
+}
+
+// bringSkillCurrent writes a differing skill file of each agent folder that exists, as `sok mcp` does, and records each skill file
+// that it could not write, or another failure, as one error host.setup.skill. No agent folder is no error.
+func (s *Setups) bringSkillCurrent() {
+	setup, err := s.environmentSetup()
+	if err == nil {
+		_, err = setup.InstallSkills()
+	}
+	var none *sok.NoAgentFolderError
+	if err == nil || errors.As(err, &none) {
+		return
+	}
+	var writes sok.SkillWriteErrors
+	if errors.As(err, &writes) {
+		for _, write := range writes {
+			EmitHost(LevelError, "host.setup.skill", map[string]any{"file": write.File, "reason": write.Err.Error()})
+		}
+		return
+	}
+	EmitHost(LevelError, "host.setup.skill", map[string]any{"file": nil, "reason": err.Error()})
+}
+
+// State returns the parts as `sok setup check` prints them, after the start ended.
+func (s *Setups) State() (sok.SetupParts, error) {
+	setup, err := s.setup()
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	return setup.Check()
+}
+
+// Install installs the named kinds of skill and mcp as `sok setup install` does and returns its parts, then sends setup-changed.
+// The path entry needs administrator rights, which the application has no terminal to ask for.
+func (s *Setups) Install(request SetupInstallRequest) (sok.SetupParts, error) {
+	kinds, err := setupKindsOf(request.Parts)
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	if !s.running.TryLock() {
+		return sok.SetupParts{}, errSetupOperationRunning
+	}
+	defer s.running.Unlock()
+	setup, err := s.setup()
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	if slices.Contains(kinds, "path") {
+		return sok.SetupParts{}, fmt.Errorf("the path entry needs administrator rights: run sudo %s path install in a terminal", sok.StepOf(s.sokPath))
+	}
+	parts, err := setup.Install(kinds, false)
+	// The install can have changed a part also when it failed, so every window reads the parts again.
+	s.changed()
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	return parts, nil
+}
+
+// setupPartKinds are the kinds of setup parts, as `sok setup` names them.
+var setupPartKinds = []string{"path", "skill", "mcp"}
+
+// setupKindsOf reads the parts of a setupInstall request: a non-empty list of setup part names without repetition.
+func setupKindsOf(value any) ([]string, error) {
+	list, ok := value.([]any)
+	kinds := make([]string, 0, len(list))
+	for _, item := range list {
+		kind, text := item.(string)
+		if !text || slices.Contains(kinds, kind) {
+			ok = false
+			break
+		}
+		kinds = append(kinds, kind)
+	}
+	if !ok || len(kinds) == 0 {
+		return nil, errors.New("parts must be a non-empty list of setup parts without repetition")
+	}
+	for _, kind := range kinds {
+		if !slices.Contains(setupPartKinds, kind) {
+			return nil, fmt.Errorf("unknown setup part: %s", kind)
+		}
+	}
+	return kinds, nil
+}
+
+// readEnvironment runs `<shell> -l -i -c '<sok> setup environment'` in a process group of its own with standard input from
+// /dev/null, and returns the environment of the JSON line that it prints. The read ends at that line, not at the end of the output
+// or of the shell, because a process that the start files of the shell started can hold the output open; the process group ends in
+// every outcome.
+func (s *Setups) readEnvironment() (_ sok.AgentEnvironment, failure error) {
+	shell, err := s.processes.LoginShell()
+	if err != nil {
+		return sok.AgentEnvironment{}, err
+	}
+	fail := func(format string, values ...any) (sok.AgentEnvironment, error) {
+		return sok.AgentEnvironment{}, fmt.Errorf("login shell %s: %s", shell, fmt.Sprintf(format, values...))
+	}
+	stdoutRead, stdoutWrite, err := os.Pipe()
+	if err != nil {
+		return fail("%v", err)
+	}
+	defer stdoutRead.Close()
+	stderrRead, stderrWrite, err := os.Pipe()
+	if err != nil {
+		stdoutWrite.Close()
+		return fail("%v", err)
+	}
+	defer stderrRead.Close()
+	command := exec.Command(shell, "-l", "-i", "-c", sok.StepOf(s.sokPath)+" setup environment")
+	command.Stdout, command.Stderr = stdoutWrite, stderrWrite
+	if err := s.processes.NewProcessGroup(command); err != nil {
+		stdoutWrite.Close()
+		stderrWrite.Close()
+		return fail("%v", err)
+	}
+	// exec opens /dev/null for a nil standard input.
+	err = command.Start()
+	stdoutWrite.Close()
+	stderrWrite.Close()
+	if err != nil {
+		return fail("start: %s", osReason(err))
+	}
+	group := command.Process.Pid
+	defer func() {
+		if err := s.processes.EndProcessGroup(group); err != nil {
+			failure = errors.Join(failure, fmt.Errorf("login shell %s: %w", shell, err))
+		}
+	}()
+	exited := make(chan error, 1)
+	routine.Go("login-shell-wait", func() { exited <- command.Wait() })
+	lines := make(chan sok.AgentEnvironment, 1)
+	stdoutDone := make(chan struct{})
+	routine.Go("login-shell-stdout", func() {
+		defer close(stdoutDone)
+		if environment, ok := environmentLine(stdoutRead); ok {
+			lines <- environment
+		}
+	})
+	var stderr bytes.Buffer
+	var stderrErr error
+	stderrDone := make(chan struct{})
+	routine.Go("login-shell-stderr", func() {
+		defer close(stderrDone)
+		// The read ends at the end of the pipe, or when the return closes the pipe; only a read that ended at the end of the pipe
+		// is inspected.
+		_, stderrErr = io.Copy(&stderr, stderrRead)
+	})
+	bound := time.NewTimer(loginShellBound)
+	defer bound.Stop()
+	select {
+	case environment := <-lines:
+		return environment, nil
+	case waitErr := <-exited:
+		// The output that the shell wrote before it ended is in the pipes. A process that the start files started can hold them
+		// open, so the process group ends first and the reads then take the output and end at the end of the pipes. A process that
+		// left the group and holds them leaves the read to the bound.
+		if err := s.processes.EndProcessGroup(group); err != nil {
+			return fail("%v", err)
+		}
+		outputs := make(chan struct{})
+		routine.Go("login-shell-outputs", func() {
+			<-stdoutDone
+			<-stderrDone
+			close(outputs)
+		})
+		select {
+		case <-outputs:
+		case <-bound.C:
+			return fail("no environment within %d s", int(loginShellBound/time.Second))
+		}
+		select {
+		case environment := <-lines:
+			return environment, nil
+		default:
+		}
+		reason := exitReason(waitErr)
+		if stderrErr != nil {
+			return fail("%s; read the standard error: %s", reason, osReason(stderrErr))
+		}
+		if line, _, _ := strings.Cut(strings.TrimSpace(stderr.String()), "\n"); line != "" {
+			reason += ": " + line
+		}
+		return fail("%s", reason)
+	case <-bound.C:
+		return fail("no environment within %d s", int(loginShellBound/time.Second))
+	}
+}
+
+// environmentLine reads lines until one is the JSON object of `sok setup environment`; the lines before it are output of the start
+// files of the shell.
+func environmentLine(reader io.Reader) (sok.AgentEnvironment, bool) {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if !bytes.HasPrefix(line, []byte("{")) {
+			continue
+		}
+		// The line is the one object and nothing after it.
+		decoder := json.NewDecoder(bytes.NewReader(line))
+		decoder.DisallowUnknownFields()
+		var environment sok.AgentEnvironment
+		if decoder.Decode(&environment) == nil && decoder.InputOffset() == int64(len(line)) {
+			return environment, true
+		}
+	}
+	return sok.AgentEnvironment{}, false
+}
+
+// osReason is the text of the operating system error of err without the operation and the path, as the Rust host writes it.
+func osReason(err error) string {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errno.Error()
+	}
+	return err.Error()
+}
+
+// exitReason is the exit status of a shell, or the signal that ended it.
+func exitReason(err error) string {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			return fmt.Sprintf("signal %d", int(status.Signal()))
+		}
+		return fmt.Sprintf("exit status %d", exit.ExitCode())
+	}
+	if err != nil {
+		return err.Error()
+	}
+	return "exit status 0"
+}
+
+// SetupState is the setupState call of the page.
+func (h *Host) SetupState() (sok.SetupParts, error) {
+	return h.setups.State()
+}
+
+// SetupInstall is the setupInstall call of the page.
+func (h *Host) SetupInstall(requestJSON json.RawMessage) (sok.SetupParts, error) {
+	request, err := argument[SetupInstallRequest]("request", requestJSON)
+	if err != nil {
+		return sok.SetupParts{}, err
+	}
+	return h.setups.Install(request)
+}
+
+// notifySetup sends setup-changed to every window.
+func (h *Host) notifySetup() {
+	h.mu.Lock()
+	windows := make([]*Surfaces, 0, len(h.windows))
+	for _, s := range h.windows {
+		windows = append(windows, s)
+	}
+	h.mu.Unlock()
+	for _, s := range windows {
+		s.Emit("setup-changed")
+	}
+}

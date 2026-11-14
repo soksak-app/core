@@ -347,6 +347,8 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | C12 | `tests/platform/process_unix.go`, `tests/platform/process_windows.go` | `src/platform/darwin/process_wait_signal_test.rs`, `src/platform/linux/process_wait_signal_test.rs` | 소유, process lock case, process wait 검사는 파일의 advisory lock 을 잡고 자기 process 에 signal 을 보낸다. Go 는 이것을 `syscall.Flock` 과 `syscall.Kill` 로 하며, 이것은 Windows 가 아닌 platform 만 주므로 시험의 platform package 에 build constraint 마다 파일이 있고, 보류 platform 인 Windows 에서는 둘 다 실패한다. `cli.process-wait.signal-ends-the-wait` 의 Go signal 시험은 `tests/process_wait_test.go` 다. Rust 는 lock 을 standard library 의 `File::try_lock` 으로 잡고, 같은 contract 의 signal 시험은 darwin 과 linux 만 주는 자기 process 의 signal 을 올리므로 각 platform module 의 child 로서 crate 의 비공개 wait helper 에 닿는다 |
 | C13 | `tests/case_player_test.go` | `tests/support/case_player.rs` | 둘 다 같은 규칙으로 `sok` test를 위해 endpoint case를 재생한다. Go player는 external test package의 파일이고, Rust integration test는 각각 별도 crate이므로 Rust player는 `tests/support/`의 module이다 |
 | C14 | `tests/fixtures/bundle/Contents/Info.plist`, `tests/fixtures/bundle/Contents/MacOS/soksak`, `tests/fixtures/installed-empty.json` | `tests/fixtures/bundle/soksak`, `tests/fixtures/plugins/installed.json` | 각 언어의 update test와 plugin test는 bundle과 installed plugin document를 자기 fixture에서 읽는다. Go update test는 bundle 전체의 파일을, Rust update test는 executable만 읽고, 각 언어의 plugin test는 그 test가 읽는 경로로 document를 둔다 |
+| C15 | `src/agents/SKILL.md`, `src/agents/mcp.json` | 없음 | Agent skill과 MCP 도구 목록은 두 `sok` 구현의 하나의 원본이다(docs/spec/cli.md#agent-sources). `go:embed`는 자기 package 폴더 아래의 파일만 읽으므로 파일은 Go package에 있고, Rust `sok`은 같은 파일을 `include_str!`로 포함한다 |
+| C16 | `tests/agents_support_test.go` | `tests/support/agents.rs` | 둘 다 agent command test의 일회용 machine, test가 정한 변수만으로 `sok`을 실행하는 부분과 fixture program을 담는다. Go helper는 외부 test package의 파일이고, Rust integration test는 각각 별도 crate이므로 Rust helper는 `tests/support/`의 module이다 |
 | H53 | `src/platform/windows/com.go` | 없음 | Go host 는 cgo 없이 COM table 로 WebView2 를 호출한다. Rust host 는 그 table 을 `webview2-com` crate 에서 얻는다 |
 | H54 | `src/platform/windows/capture_diagnostics.go` | 없음 | Go build tag 는 파일 전체를 고르므로 diagnostic build 의 method 가 자기 파일을 가진다. Rust 는 `src/platform/windows/windows.rs` 에서 method 마다 feature 로 고른다 |
 | H69 | 없음 | `src/exposure_menu_executor_test.rs` | Tauri host 는 framework callback 이 풀린 뒤 platform 의 UI queue 에서 `host.menu.select` 의 항목을 실행한다. framework task 로 실행하면 항목이 도는 동안 그 callback 의 잠금을 쥐고 있고, 항목은 애플리케이션의 lifecycle callback 에 다시 들어갈 수 있기 때문이다. 이 crate 안 test 는 test framework 의 queue 로 공개되지 않은 executor 에 닿는다. Go host 는 framework callback 없이 UI thread 의 한 step 에서 항목을 실행하므로 test 할 executor 가 없다. |
@@ -372,6 +374,7 @@ host는 `application.Run` 바로 앞에서 framework가 init에서 main thread�
 | H93 | 없음 | `tests/fixtures/recording/blocker`, `tests/recording_hold_test.rs` | Rust recording test는 `blocker` 파일을 권한을 없앤 folder에 복사해 실제 file system이 그 제거를 거부하게 한다. Go test는 그 파일을 test 안에서 쓴다. 새 window의 hold는 test process의 main thread에서만 실행되고, 그 thread는 test harness가 없는 Rust target만 가지므로(행 H86) Rust hold test는 따로 target이다. Go hold test는 `src/diagnostics_new_window_test.go`에 있다 |
 | H94 | 없음 | `tests/fixtures/update/Info.plist` | Rust update test는 staged bundle의 `Info.plist`를 이 fixture에서 복사한다. Go update test는 같은 document를 test 안에서 쓴다 |
 | H95 | 없음 | `tests/support/endpoint_case.rs`, `tests/support/main_thread.rs`, `tests/support/sidecar_recorder.rs`, `tests/support/tier_service.rs`, `tests/support/wire_replay.rs` | Rust integration test는 각각 별도 crate이므로 endpoint case player, main thread target의 runner, sidecar send recorder, page 없는 endpoint test의 service, wire-case producer의 공통 부분은 `tests/support/`의 module이다. Go test는 같은 부분을 한 package에 둔다: endpoint case player는 `tests/endpoint_cases_test.go`, sidecar recorder는 `tests/support/sidecars.go`, wire-case 부분은 `tests/page_wire_test.go`에 있다. Go test는 `TestMain`으로 main thread에서 실행되므로 runner가 필요 없다 |
+| H97 | 없음 | `tests/fixtures/setup/sok` | Rust host의 setup test는 이 fixture program을 application bundle의 `sok`으로 실행하고, 이 program은 `sok setup environment`의 environment를 출력한다. Go setup test는 Go host library가 module로 요구하는 Go module의 `sok`을 build한다 |
 
 ### Framework 표
 
@@ -493,12 +496,11 @@ Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wa
 ## Command line 트리
 
 ```
-packages/sok/agents/      SKILL.md, mcp.json: 두 구현의 agent 글
 packages/sok/go/          packages/sok/rust/
   src/sok.go  (package sok)      src/sok.rs  (library root)
   src/<role>.go                  src/<role>.rs
   src/cmd/sok/main.go            src/main.rs           차이 C1
-  src/SKILL.md, src/mcp.json     (Go 사본, 검사됨)
+  src/agents/SKILL.md, mcp.json  (두 구현의 agent 글)
   tests/<role>_test.go           tests/<role>_test.rs
   go.mod, go.sum                 Cargo.toml            차이 C8
 ```

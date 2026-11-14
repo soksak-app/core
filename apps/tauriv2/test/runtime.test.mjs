@@ -397,6 +397,29 @@ test("a call of the main page that carries out an operation sends its identifier
   }
 });
 
+// The setup calls of the settings window (docs/spec/cli.md#agents-in-the-application) reach the setup commands of the host.
+test("the setup calls reach the setup commands with the request of an install", async () => {
+  const calls = [];
+  globalThis.window = { __TAURI__: {
+    core: { invoke: async (command, args) => { calls.push([command, args]); return null; } },
+    event: { listen: async () => () => {} },
+    webview: { getCurrentWebview: () => ({ label: "main" }) },
+  } };
+  globalThis.location = { search: "" };
+  try {
+    const { host } = await import("../runtime/index.js?test=setup-calls");
+    await host.call("setupState");
+    await host.call("setupInstall", { parts: ["skill", "mcp"] });
+    assert.deepEqual(calls, [
+      ["setup_state", {}],
+      ["setup_install", { request: { parts: ["skill", "mcp"] } }],
+    ]);
+  } finally {
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});
+
 // A modal document reports its state through the modal answer channel and has no status watch route (docs/spec/exposure.md#modal-documents),
 // so the changed of its exposure port refuses a value with that reason, and createExpose accepts the port at the start of the document (F354).
 test("the exposure port of a modal document has a changed that refuses a value for the missing watch route", async () => {

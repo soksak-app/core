@@ -88,14 +88,14 @@ pub(crate) fn own_configuration(config_dir: &Path) -> Result<Box<dyn FnOnce() + 
             continue;
         }
         // The owner of this command is written in the form of the host. The boot identifier is the one of the event file of a sok
-        // run: the start time in seconds and the process identifier.
+        // run: the start time in Unix nanoseconds and the process identifier.
         let pid = std::process::id();
-        let seconds = std::time::SystemTime::now()
+        let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs());
+            .map_or(0, |since| since.as_nanos());
         let owner = LockOwner {
             pid: pid as i32,
-            boot: format!("{seconds}-{pid}"),
+            boot: format!("{nanos}-{pid}"),
         };
         let text = serde_json::to_string(&owner)
             .map_err(|error| format!("{}: {error}", path.display()))?;

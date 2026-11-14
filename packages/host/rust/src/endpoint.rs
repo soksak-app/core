@@ -54,6 +54,8 @@ pub const BUTTON_HELD: i64 = 1007;
 pub const PRESS_OPEN: i64 = 1008;
 /// An open press of another pointer would share the state that the input changes, so the input was not delivered.
 pub const POINTER_HELD: i64 = 1011;
+/// No layout of a ready window holds the surface of `surface.window`.
+pub const NO_SURFACE: i64 = 1012;
 /// A registered command or state handler failed.
 pub const HANDLER_FAILED: i64 = -32000;
 
@@ -62,6 +64,8 @@ const METHODS: &[&str] = &[
     "windows.list",
     "log.query",
     "exposure.list",
+    "exposure.snapshot",
+    "surface.window",
     "status.get",
     "status.watch",
     "status.unwatch",
@@ -1980,6 +1984,9 @@ fn run(
     if method == "log.query" {
         return crate::log_query::answer(&shared.config, params);
     }
+    if method == "surface.window" {
+        return surface_window(shared, params, reply);
+    }
     let (window, params) = target(shared, method, params)?;
     #[cfg(feature = "diagnostics")]
     if method == "diagnostics.clock" {
@@ -1992,6 +1999,20 @@ fn run(
             return crate::exposure::exposure_list(&params, || {
                 shared.service.call(&window, method, Map::new(), reply)
             });
+        }
+        "exposure.snapshot" => {
+            let windows = shared.service.windows()?;
+            return crate::exposure::exposure_snapshot(
+                &window,
+                &params,
+                windows,
+                |name| {
+                    let mut request = Map::new();
+                    request.insert("name".into(), Value::String(name.into()));
+                    shared.service.call(&window, "status.get", request, None)
+                },
+                || shared.service.call(&window, method, params.clone(), reply),
+            );
         }
         "status.get" | "command.run" | "element.rect" | "element.act" => {
             host_request(method, &params)?;
@@ -2011,6 +2032,84 @@ fn run(
         _ => {}
     }
     shared.service.call(&window, method, params, reply)
+}
+
+/// Answers `surface.window {surface}`: `{window, space}` of the first window in the order of `windows.list` whose main page answers
+/// that the layout of one of its spaces holds the surface, or that a sidebar of it draws the section surface, with the space null.
+/// The page of each ready window answers `{space}`, `{space: null}` or null. A window that is
+/// not ready, or whose page ended or was read again after the list, may hold the surface, so without a window that holds it the
+/// request fails with 1003 for the first such window; with none, it fails with 1012 (docs/spec/exposure.md#methods).
+fn surface_window(
+    shared: &Shared,
+    params: Option<Value>,
+    reply: Option<ReplyScope>,
+) -> Result<Box<RawValue>, Failure> {
+    let Some(Value::Object(params)) = params else {
+        return Err(Failure::params("params must be an object"));
+    };
+    let surface = match params.get("surface") {
+        Some(Value::String(surface)) if !surface.is_empty() => surface.clone(),
+        _ => return Err(Failure::params("surface must be a non-empty string")),
+    };
+    let Value::Array(entries) = shared.service.windows()? else {
+        return Err(Failure::new(-32603, "windows.list is not an array"));
+    };
+    let mut loading: Option<String> = None;
+    for entry in &entries {
+        let Some(window) = entry.get("window").and_then(Value::as_str) else {
+            return Err(Failure::new(
+                -32603,
+                format!("windows.list has an entry without a window: {entry}"),
+            ));
+        };
+        if entry.get("ready") != Some(&Value::Bool(true)) {
+            loading.get_or_insert_with(|| window.to_string());
+            continue;
+        }
+        let mut asked = Map::new();
+        asked.insert("surface".into(), Value::String(surface.clone()));
+        let answer = match shared
+            .service
+            .call(window, "surface.window", asked, reply.clone())
+        {
+            Err(failure) if failure.code == MISSING_DOCUMENT => {
+                loading.get_or_insert_with(|| window.to_string());
+                continue;
+            }
+            answer => answer?,
+        };
+        // default: an answer that does not parse is reported below with its text.
+        let held = serde_json::from_str::<Value>(answer.get()).ok();
+        match held.as_ref().map(|held| (held, held.get("space"))) {
+            Some((Value::Null, _)) => continue,
+            Some((Value::Object(_), Some(Value::String(space)))) if !space.is_empty() => {
+                return raw(&json!({"window": window, "space": space}));
+            }
+            // A section surface belongs to a sidebar of the window and to no layout of a space, so its page answers the space null.
+            Some((Value::Object(_), Some(Value::Null))) => {
+                return raw(&json!({"window": window, "space": null}));
+            }
+            _ => {
+                return Err(Failure::new(
+                    -32603,
+                    format!(
+                        "page surface.window is {}, not null or {{space}}",
+                        answer.get()
+                    ),
+                ));
+            }
+        }
+    }
+    match loading {
+        Some(window) => Err(Failure::new(
+            MISSING_DOCUMENT,
+            format!("window {window:?} is not ready"),
+        )),
+        None => Err(Failure::new(
+            NO_SURFACE,
+            format!("surface {surface} is in no window"),
+        )),
+    }
 }
 
 /// Checks a request whose name has the owner `host` against the entries that the host declares: an undeclared name is 1001, the

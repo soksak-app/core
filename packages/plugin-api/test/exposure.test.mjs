@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 import {
   EXPOSURE_ERRORS, ExposureError, actOn, createExpose, declarationMap, exposureEntries, matchesSchema, pagePackage,
   acceptInstalledPlugins, mergeExposes, replyPayload, validateInstalledPlugins, validateDiagnostics, validateExposes, validateExposureFile,
@@ -637,4 +638,42 @@ test("an inert element answers its rectangle and refuses every action", async ()
   await entries.answer("element.act", { name: "probe.row", address: { at: 1 }, action: "click" });
   assert.deepEqual([input.clicks, other.clicks], [0, 1]);
   assert.equal(EXPOSURE_ERRORS.inert, 1010);
+});
+
+test("the snapshot of a document lists a status whose read fails with the error of the read, and the inert of each item on request", async () => {
+  const declared = declarationMap({
+    status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }, { name: "probe.broken", description: "Broken.", schema: { type: "object" } }],
+    element: [{ name: "probe.row", description: "Rows.", many: true }],
+  });
+  const { window } = new JSDOM("<ul><li id='a'>a</li><li id='b'>b</li></ul>");
+  const rows = [...window.document.querySelectorAll("li")];
+  for (const row of rows) row.getBoundingClientRect = () => ({ left: 1, top: 2, width: 3, height: 4, right: 4, bottom: 6 });
+  const entries = exposureEntries(declared, { inert: (element) => element.id === "b" });
+  entries.status("probe.lines", () => ["one"], () => () => {});
+  entries.status("probe.broken", () => { throw new Error("the store is closed"); }, () => () => {});
+  entries.element("probe.row", () => rows);
+  const group = await entries.snapshot({ withInert: true });
+  assert.deepEqual(group.status, [
+    { name: "probe.lines", description: "Lines.", schema: { type: "array" }, value: ["one"] },
+    { name: "probe.broken", description: "Broken.", schema: { type: "object" }, error: "the store is closed" },
+  ]);
+  assert.deepEqual(group.element[0].items.map(({ index, inert, role }) => ({ index, inert, role })),
+    [{ index: 0, inert: false, role: "listitem" }, { index: 1, inert: true, role: "listitem" }]);
+  assert.deepEqual(group.commands, []);
+  window.close();
+});
+
+// The text of an item is cut to its first 120 Unicode scalar values (docs/spec/exposure.md#window-snapshot), so a character outside
+// the Basic Multilingual Plane at the cut is kept whole, and the page and the mygo workbench give the same text.
+test("the snapshot cuts the text of an item to 120 Unicode scalar values without splitting a character", async () => {
+  const declared = declarationMap({ element: [{ name: "probe.row", description: "Rows." }] });
+  const { window } = new JSDOM("<p></p>");
+  const row = window.document.querySelector("p");
+  row.textContent = `${"a".repeat(119)}\u{1F600}b`;
+  const entries = exposureEntries(declared);
+  entries.element("probe.row", () => [row]);
+  const [item] = (await entries.snapshot({ withInert: false })).element[0].items;
+  assert.equal(item.text, `${"a".repeat(119)}\u{1F600}`);
+  assert.equal([...item.text].length, 120);
+  window.close();
 });

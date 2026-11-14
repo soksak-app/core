@@ -73,3 +73,15 @@ func (windows) OpenProcessLockFile(path string) (*os.File, error) {
 func (windows) PathsDir() (string, error) {
 	return "", errors.New("path entries are not implemented on windows")
 }
+
+func (windows) ReadOnlyVolume(path string) (bool, error) {
+	return false, fmt.Errorf("the read-only flag of the volume of %s is not implemented on windows", path)
+}
+
+func (windows) RegisteredSok(string) error {
+	return errors.New("application bundles are not implemented on windows")
+}
+
+func (windows) ReplaceProcess(string, []string, []string) error {
+	return errors.New("process replacement is not implemented on windows")
+}

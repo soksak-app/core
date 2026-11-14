@@ -1072,6 +1072,22 @@ async fn plugins_use_registry(
     .await
 }
 
+/// Returns the setup parts of the agents of the machine, the same as sok setup check (docs/spec/cli.md#agents-in-the-application).
+#[tauri::command]
+async fn setup_state(app: AppHandle) -> Result<soksak_host::setup::Parts, String> {
+    blocking(move || app.state::<soksak_host::setup::Setups>().state()).await
+}
+
+/// Installs the named setup parts, the same as sok setup install.
+#[tauri::command]
+async fn setup_install(
+    app: AppHandle,
+    request: Argument<soksak_host::setup::InstallRequest>,
+) -> Result<soksak_host::setup::Parts, String> {
+    let Argument(request) = request;
+    blocking(move || app.state::<soksak_host::setup::Setups>().install(request)).await
+}
+
 /// Records or completes the durable starter installation job.
 #[tauri::command]
 async fn plugins_starter(

@@ -1,0 +1,6 @@
+{
+  "executable": "bin/sok-agentprobe",
+  "displayName": "soksak://sidecar/agentprobe",
+  "protocol": 1,
+  "message": { "form": "json-object", "operationField": "operation" }
+}

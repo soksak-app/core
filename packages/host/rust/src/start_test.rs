@@ -14,6 +14,7 @@ fn the_page_start_sends_the_image_detach_and_lists_its_surface_without_waiting()
     std::thread::scope(|scope| {
         scope.spawn(|| {
             let document = after_page_started(
+                "main",
                 || {
                     order.lock().unwrap().push("page started");
                     detach_sender
@@ -44,7 +45,7 @@ fn the_page_start_sends_the_image_detach_and_lists_its_surface_without_waiting()
         let document: serde_json::Value = serde_json::from_slice(&document).unwrap();
         assert_eq!(
             document,
-            json!({"workspace": {"workspace": true}, "controls": {"controls": true}, "pendingSurfaces": ["surface-a"]})
+            json!({"workspace": {"workspace": true}, "controls": {"controls": true}, "pendingSurfaces": ["surface-a"], "window": "main"})
         );
     });
     assert_eq!(*order.lock().unwrap(), ["page started", "parts", "pending"]);
@@ -55,6 +56,7 @@ fn the_page_start_sends_the_image_detach_and_lists_its_surface_without_waiting()
 fn a_page_start_failure_builds_no_start_document() {
     let mut built = false;
     let result = after_page_started(
+        "main",
         || Err("page start failed".to_string()),
         || {
             built = true;
@@ -92,7 +94,7 @@ fn a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error() 
         "the title bar was not set for absent settings"
     );
     let (workspace, controls) = parts.expect("a failed snapshot answered no start document");
-    let data = start_document(&workspace, &controls, &[]).unwrap();
+    let data = start_document(&workspace, &controls, &[], "main").unwrap();
     assert!(
         String::from_utf8(data.clone())
             .unwrap()
@@ -105,6 +107,7 @@ fn a_failed_workspace_snapshot_still_reads_the_controls_and_carries_the_error() 
             "error": "/config/projects.json: projects format 1 is required",
             "controls": {"controls": {"x": 7, "y": 8, "w": 52, "h": 14}, "row": 40},
             "pendingSurfaces": [],
+            "window": "main",
         })
     );
 }

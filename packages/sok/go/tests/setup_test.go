@@ -1,0 +1,406 @@
+package tests
+
+// Checks the MCP registration and the setup parts (docs/spec/cli.md#mcp-registration, docs/spec/cli.md#setup-parts) with the
+// fixture program of the claude command (docs/spec/cases/setup/fixture.sh) in a disposable home.
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	sok "github.com/soksak-app/core/packages/sok/go/src"
+	"github.com/soksak-app/core/packages/sok/go/tests/support"
+)
+
+type mcpInstall struct {
+	Registration struct {
+		Type    string         `json:"type"`
+		Command string         `json:"command"`
+		Args    []string       `json:"args"`
+		Env     map[string]any `json:"env"`
+	} `json:"registration"`
+	State   string  `json:"state"`
+	Running *string `json:"running"`
+}
+
+func decodeInstall(t *testing.T, stdout string) mcpInstall {
+	t.Helper()
+	var out mcpInstall
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("mcp install printed %q: %v", stdout, err)
+	}
+	return out
+}
+
+type setupPart struct {
+	Part    string `json:"part"`
+	File    string `json:"file"`
+	State   string `json:"state"`
+	Step    string `json:"step"`
+	Reason  string `json:"reason,omitempty"`
+	Error   string `json:"error,omitempty"`
+	Changed *bool  `json:"changed,omitempty"`
+}
+
+func decodeParts(t *testing.T, stdout string) []setupPart {
+	t.Helper()
+	var out struct {
+		Parts []setupPart `json:"parts"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("setup printed %q: %v", stdout, err)
+	}
+	return out.Parts
+}
+
+// describeParts writes each part as `<part> <state> <reason or error>` on its own line.
+func describeParts(parts []setupPart) string {
+	lines := []string{}
+	for _, part := range parts {
+		line := part.Part + " " + part.State
+		if part.Reason != "" {
+			line += " " + part.Reason
+		}
+		if part.Error != "" {
+			line += " " + part.Error
+		}
+		if part.Changed != nil {
+			line += fmt.Sprintf(" changed=%v", *part.Changed)
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// registrationFixture is a disposable home with the claude fixture and a sok of an application bundle on PATH.
+type registrationFixture struct {
+	agentHome
+	claudeDir string
+	sok       string
+	config    string
+}
+
+func newRegistrationFixture(t *testing.T) registrationFixture {
+	t.Helper()
+	h := newAgentHome(t)
+	claudeDir := setupFixture(t, "claude")
+	sok := bundleSok(t, repositoryFile(t, "docs/spec/cases/setup/fixture.sh"), "First")
+	t.Setenv("PATH", filepath.Dir(sok)+string(os.PathListSeparator)+claudeDir)
+	return registrationFixture{agentHome: h, claudeDir: claudeDir, sok: sok, config: filepath.Join(h.home, ".claude.json")}
+}
+
+// writeRegistration writes the configuration file of the claude command with the entry soksak.
+func writeRegistration(t *testing.T, file string, entry string) {
+	t.Helper()
+	writeText(t, file, `{"numStartups": 3, "mcpServers": {"other": {"type": "stdio", "command": "x"}, "soksak": `+entry+`}}`)
+}
+
+// contract: cli.mcp.install-requires-the-claude-command
+func TestMcpInstallRequiresTheClaudeCommand(t *testing.T) {
+	f := newRegistrationFixture(t)
+	t.Setenv("PATH", filepath.Dir(f.sok))
+	writeText(t, f.config, `{"numStartups": 3}`)
+	code, stdout, stderr := run("mcp", "install")
+	want := fmt.Sprintf("sok: the claude command is not on PATH; register the MCP server \"%s mcp\" (standard input and output) with the agent\n", f.sok)
+	if code != 1 || stdout != "" || stderr != want {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	if fileText(t, f.config) != `{"numStartups": 3}` || f.commands(t) != nil {
+		t.Fatalf("file %q commands %v", fileText(t, f.config), f.commands(t))
+	}
+}
+
+// contract: cli.mcp.install-registers-once
+func TestMcpInstallRegistersOnce(t *testing.T) {
+	f := newRegistrationFixture(t)
+	code, stdout, stderr := run("mcp", "install")
+	if code != 0 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	out := decodeInstall(t, stdout)
+	if out.State != "registered" || out.Registration.Type != "stdio" || out.Registration.Command != f.sok ||
+		fmt.Sprint(out.Registration.Args) != "[mcp]" || out.Running == nil || *out.Running != testExecutable(t) {
+		t.Fatalf("output %s", stdout)
+	}
+	if !strings.Contains(stdout, "\"state\": \"registered\",\n  \"running\": ") || !strings.HasPrefix(stdout, "{\n  \"registration\": {\n    \"type\": \"stdio\",") {
+		t.Fatalf("output members out of order: %s", stdout)
+	}
+	want := "claude mcp add --scope user soksak -- " + f.sok + " mcp"
+	if commands := f.commands(t); fmt.Sprint(commands) != "["+want+"]" {
+		t.Fatalf("commands %q, want %q", commands, want)
+	}
+	code, stdout, stderr = run("mcp", "install")
+	if code != 0 || decodeInstall(t, stdout).State != "current" || len(f.commands(t)) != 1 {
+		t.Fatalf("code %d stdout %q stderr %q commands %v", code, stdout, stderr, f.commands(t))
+	}
+}
+
+// contract: cli.mcp.install-registers-the-first-sok-on-path
+func TestMcpInstallRegistersTheFirstSokOnPath(t *testing.T) {
+	program := builtSok(t)
+	f := newRegistrationFixture(t)
+	first := bundleSok(t, program, "One")
+	second := bundleSok(t, program, "Two")
+	t.Setenv("PATH", strings.Join([]string{filepath.Dir(first), filepath.Dir(second), f.claudeDir}, string(os.PathListSeparator)))
+	code, stdout, stderr := runProgram(t, second, environment(), "mcp", "install")
+	out := decodeInstall(t, stdout)
+	if code != 0 || out.State != "registered" || out.Registration.Command != first || out.Running == nil || *out.Running != second {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	_, stdout, stderr = runProgram(t, second, environment(), "setup", "check")
+	parts := decodeParts(t, stdout)
+	mcp := parts[len(parts)-1]
+	if mcp.Part != "mcp" || mcp.State != "ok" || mcp.File != f.config {
+		t.Fatalf("parts %s stderr %q", stdout, stderr)
+	}
+	// Without a sok on PATH the running sok is registered and no running member is printed.
+	t.Setenv("PATH", f.claudeDir)
+	code, stdout, stderr = runProgram(t, second, environment(), "mcp", "install")
+	out = decodeInstall(t, stdout)
+	if code != 0 || out.State != "registered" || out.Registration.Command != second || out.Running != nil || strings.Contains(stdout, "running") {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+// contract: cli.mcp.install-registers-a-moved-executable-again
+func TestMcpInstallRegistersAMovedExecutableAgain(t *testing.T) {
+	for _, entry := range []string{
+		`{"type": "stdio", "command": "/Applications/Old.app/Contents/MacOS/sok", "args": ["mcp"], "env": {}}`,
+		`{"type": "stdio", "command": "%s", "args": ["mcp", "--window", "main"]}`,
+		`{"type": "stdio", "command": "%s", "args": ["mcp"], "env": {"A": "1"}}`,
+	} {
+		f := newRegistrationFixture(t)
+		if strings.Contains(entry, "%s") {
+			entry = fmt.Sprintf(entry, f.sok)
+		}
+		writeRegistration(t, f.config, entry)
+		code, stdout, stderr := run("mcp", "install")
+		if code != 0 || decodeInstall(t, stdout).State != "registered" {
+			t.Fatalf("%s: code %d stdout %q stderr %q", entry, code, stdout, stderr)
+		}
+		want := []string{"claude mcp remove --scope user soksak", "claude mcp add --scope user soksak -- " + f.sok + " mcp"}
+		if commands := f.commands(t); fmt.Sprint(commands) != fmt.Sprint(want) {
+			t.Fatalf("%s: commands %q, want %q", entry, commands, want)
+		}
+	}
+}
+
+// contract: cli.mcp.install-reads-the-claude-config-dir
+func TestMcpInstallReadsTheClaudeConfigDir(t *testing.T) {
+	f := newRegistrationFixture(t)
+	dir := filepath.Join(f.home, "claude-config")
+	mkdirs(t, dir)
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	writeRegistration(t, filepath.Join(dir, ".claude.json"), fmt.Sprintf(`{"type": "stdio", "command": %q, "args": ["mcp"]}`, f.sok))
+	code, stdout, stderr := run("mcp", "install")
+	if code != 0 || decodeInstall(t, stdout).State != "current" || f.commands(t) != nil || fileText(t, f.config) != "" {
+		t.Fatalf("code %d stdout %q stderr %q commands %v", code, stdout, stderr, f.commands(t))
+	}
+	_, stdout, _ = run("setup", "check")
+	parts := decodeParts(t, stdout)
+	if mcp := parts[len(parts)-1]; mcp.Part != "mcp" || mcp.File != filepath.Join(dir, ".claude.json") || mcp.State != "ok" {
+		t.Fatalf("parts %s", stdout)
+	}
+}
+
+// contract: cli.mcp.install-reports-claude-failures
+func TestMcpInstallReportsClaudeFailures(t *testing.T) {
+	f := newRegistrationFixture(t)
+	t.Setenv("SETUP_FIXTURE_FAIL", "add")
+	if code, _, stderr := run("mcp", "install"); code != 1 || stderr != "sok: claude mcp add failed with status 7: fixture add refused\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	writeRegistration(t, f.config, `{"type": "stdio", "command": "/old/sok", "args": ["mcp"]}`)
+	if code, _, stderr := run("mcp", "install"); code != 1 || stderr != "sok: claude mcp add failed with status 7: fixture add refused; the earlier registration /old/sok was removed\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	writeRegistration(t, f.config, `{"type": "stdio", "command": "/old/sok", "args": ["mcp"]}`)
+	t.Setenv("SETUP_FIXTURE_FAIL", "remove")
+	if code, _, stderr := run("mcp", "install"); code != 1 || stderr != "sok: claude mcp remove failed with status 7: fixture remove refused\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	t.Setenv("SETUP_FIXTURE_FAIL", "")
+	t.Setenv("SETUP_FIXTURE_SKIP_WRITE", "1")
+	os.Remove(f.config)
+	if code, _, stderr := run("mcp", "install"); code != 1 || stderr != "sok: claude mcp add did not write the registration to "+f.config+"\n" {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	before := len(f.commands(t))
+	for text, position := range map[string]string{"{not json": "line 1 column 2", "{\n  \"a\": nope}": "line 2 column 9", "{": "line 1 column 1"} {
+		writeText(t, f.config, text)
+		want := "sok: " + f.config + " is not valid JSON at " + position + "\n"
+		if code, _, stderr := run("mcp", "install"); code != 1 || stderr != want || len(f.commands(t)) != before {
+			t.Fatalf("%q: code %d stderr %q, want %q", text, code, stderr, want)
+		}
+	}
+}
+
+// partsFixture is a registration fixture with a path entry folder and an agent folder.
+func partsFixture(t *testing.T) (registrationFixture, string, string) {
+	t.Helper()
+	f := newRegistrationFixture(t)
+	pathsDir = t.TempDir()
+	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
+	mkdirs(t, filepath.Join(f.home, ".claude"))
+	return f, filepath.Join(pathsDir, "com.soksak.test"), filepath.Join(f.home, ".claude", "skills", "soksak", "SKILL.md")
+}
+
+// contract: cli.setup.check-reports-each-part
+func TestSetupCheckReportsEachPart(t *testing.T) {
+	f, entry, skill := partsFixture(t)
+	running := testExecutable(t)
+	code, stdout, stderr := run("setup", "check")
+	parts := decodeParts(t, stdout)
+	if code != 1 || describeParts(parts) != "path missing absent\nskill missing absent\nmcp missing absent" {
+		t.Fatalf("code %d parts %s", code, stdout)
+	}
+	if parts[0].File != entry || parts[1].File != skill || parts[2].File != f.config ||
+		parts[0].Step != "sudo "+running+" path install" || parts[1].Step != running+" skill install" || parts[2].Step != running+" mcp install" {
+		t.Fatalf("parts %s", stdout)
+	}
+	if want := fmt.Sprintf("sok: setup parts are not current: path %s, skill %s, mcp %s\n", entry, skill, f.config); stderr != want {
+		t.Fatalf("stderr %q, want %q", stderr, want)
+	}
+	if !strings.HasPrefix(stdout, "{\n  \"parts\": [\n    {\n      \"part\": \"path\",\n      \"file\": ") {
+		t.Fatalf("members out of order: %s", stdout)
+	}
+	// Each part current.
+	writeText(t, entry, filepath.Dir(running)+"\n")
+	writeText(t, skill, skillSource(t))
+	writeRegistration(t, f.config, fmt.Sprintf(`{"type": "stdio", "command": %q, "args": ["mcp"], "env": {}}`, f.sok))
+	if code, stdout, stderr := run("setup", "check"); code != 0 || stderr != "" || describeParts(decodeParts(t, stdout)) != "path ok\nskill ok\nmcp ok" {
+		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
+	}
+	// Each part differs.
+	writeText(t, entry, "/elsewhere\n")
+	writeText(t, skill, "edited\n")
+	writeRegistration(t, f.config, `{"type": "stdio", "command": "/elsewhere/sok", "args": ["mcp"]}`)
+	if code, stdout, _ := run("setup", "check"); code != 1 || describeParts(decodeParts(t, stdout)) != "path missing differs\nskill missing differs\nmcp missing differs" {
+		t.Fatalf("code %d stdout %s", code, stdout)
+	}
+	// A part that cannot be read is an error with its text.
+	if err := os.Chmod(skill, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(skill, 0o644) })
+	writeText(t, f.config, "{not json")
+	_, stdout, _ = run("setup", "check")
+	parts = decodeParts(t, stdout)
+	if parts[1].State != "error" || parts[1].Error != skill+": permission denied" || parts[2].State != "error" || parts[2].Error != f.config+" is not valid JSON at line 1 column 2" {
+		t.Fatalf("parts %s", stdout)
+	}
+	// The check changed no file.
+	if fileText(t, entry) != "/elsewhere\n" || fileText(t, f.config) != "{not json" || f.commands(t) != nil {
+		t.Fatalf("the check changed a file: %q %q %v", fileText(t, entry), fileText(t, f.config), f.commands(t))
+	}
+	// Without an agent folder and without the claude command, the parts that do not apply are not listed.
+	os.RemoveAll(filepath.Join(f.home, ".claude"))
+	t.Setenv("PATH", filepath.Dir(f.sok))
+	if _, stdout, _ := run("setup", "check"); describeParts(decodeParts(t, stdout)) != "path missing differs" {
+		t.Fatalf("parts %s", stdout)
+	}
+}
+
+// contract: cli.setup.check-reports-each-part
+func TestSetupStepsQuoteTheSok(t *testing.T) {
+	program := builtSok(t)
+	newRegistrationFixture(t)
+	quoted := copyExecutable(t, program, filepath.Join(t.TempDir(), "It's here.app", "Contents", "MacOS", "sok"))
+	_, stdout, stderr := runProgram(t, quoted, environment(), "setup", "check")
+	parts := decodeParts(t, stdout)
+	want := `'` + strings.ReplaceAll(quoted, `'`, `'\''`) + `' mcp install`
+	if mcp := parts[len(parts)-1]; mcp.Part != "mcp" || mcp.Step != want {
+		t.Fatalf("parts %s stderr %q, want the step %q", stdout, stderr, want)
+	}
+}
+
+// contract: cli.setup.install-installs-missing-parts
+func TestSetupInstallInstallsMissingParts(t *testing.T) {
+	f, entry, skill := partsFixture(t)
+	running := testExecutable(t)
+	writeText(t, entry, filepath.Dir(running)+"\n")
+	// Named kinds limit the install to those kinds.
+	code, stdout, stderr := run("setup", "install", "skill")
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp missing absent changed=false" || f.commands(t) != nil {
+		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
+	}
+	writeText(t, skill, "edited\n")
+	code, stdout, stderr = run("setup", "install")
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=true\nmcp ok changed=true" {
+		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = run("setup", "install")
+	if code != 0 || describeParts(decodeParts(t, stdout)) != "path ok changed=false\nskill ok changed=false\nmcp ok changed=false" || len(f.commands(t)) != 1 {
+		t.Fatalf("code %d stdout %s stderr %q commands %v", code, stdout, stderr, f.commands(t))
+	}
+	if code, _, stderr := run("setup", "install", "nothing"); code != 2 || !strings.HasPrefix(stderr, "sok: unknown setup part: nothing\n") {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+}
+
+// The path entry command that setup install runs through sudo opens no event file, so the run of the person stores its result as
+// sok.setup.path (docs/spec/cli.md#event-log): ok when sudo succeeded, and the error when it failed.
+// contract: cli.setup.install-records-the-path-step
+func TestSetupInstallRecordsThePathStep(t *testing.T) {
+	h := newAgentHome(t)
+	pathsDir = t.TempDir()
+	t.Cleanup(func() { pathsDir = "/nonexistent/paths.d" })
+	entry := filepath.Join(pathsDir, "com.soksak.test")
+	running := testExecutable(t)
+	install := func(path string) sok.Command {
+		return func([]string, io.Writer, io.Writer, sok.Options) int {
+			setup := sok.Setup{Environment: sok.AgentEnvironment{Home: &h.home, Path: &path}, Sok: running, Identifier: "com.soksak.test", PathsDir: pathsDir}
+			if _, err := setup.Install([]string{"path"}, true); err == nil {
+				return 0
+			}
+			return 1
+		}
+	}
+	// Each run has a configuration directory of its own: a sok process runs one command, and its event file is named by the boot
+	// identifier of the process, which the runs of this test process share.
+	config := t.TempDir()
+	support.StoreEveryLevel(t, config)
+	// The fixture sudo records its arguments and exits with 0 without writing the entry, so the part stays missing.
+	if code, _, stderr := loggedRun(config, install(setupFixture(t, "sudo")), "setup", "install", "path"); code != 1 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	if commands := h.commands(t); len(commands) != 1 || commands[0] != "sudo "+running+" path install" {
+		t.Fatalf("commands %q", commands)
+	}
+	// Without sudo on PATH the step fails.
+	without := t.TempDir()
+	support.StoreEveryLevel(t, without)
+	if code, _, stderr := loggedRun(without, install(t.TempDir()), "setup", "install", "path"); code != 1 {
+		t.Fatalf("code %d stderr %q", code, stderr)
+	}
+	steps := append(named(eventsOf(t, config), "sok.setup.path"), named(eventsOf(t, without), "sok.setup.path")...)
+	if len(steps) != 2 {
+		t.Fatalf("sok.setup.path events %+v", steps)
+	}
+	if steps[0].Level != "info" || steps[0].Fields["file"] != entry || steps[0].Fields["ok"] != true || steps[0].Fields["error"] != nil {
+		t.Fatalf("the step that succeeded is %+v", steps[0])
+	}
+	if steps[1].Level != "warn" || steps[1].Fields["file"] != entry || steps[1].Fields["ok"] != false || steps[1].Fields["error"] != "the sudo command is not on PATH" {
+		t.Fatalf("the step that failed is %+v", steps[1])
+	}
+}
+
+// contract: cli.setup.environment-prints-the-variables
+func TestSetupEnvironmentPrintsTheVariables(t *testing.T) {
+	t.Setenv("HOME", `/home/a "b"`)
+	t.Setenv("PATH", "/x:/y")
+	unsetenv(t, "CLAUDE_CONFIG_DIR")
+	code, stdout, stderr := run("setup", "environment")
+	if code != 0 || stderr != "" || stdout != `{"HOME":"/home/a \"b\"","PATH":"/x:/y","CLAUDE_CONFIG_DIR":null}`+"\n" {
+		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	unsetenv(t, "HOME")
+	if _, stdout, _ := run("setup", "environment"); stdout != `{"HOME":null,"PATH":"/x:/y","CLAUDE_CONFIG_DIR":""}`+"\n" {
+		t.Fatalf("stdout %q", stdout)
+	}
+}

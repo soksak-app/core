@@ -147,6 +147,28 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	t.Fatal("no split was refused")
 }
 
+// A split that the minimum size refuses names no tab, so the number of the next new tab of the layout is the number that it would have had
+// without the refused split, and the stored project does not change.
+func TestARefusedSplitLeavesTheTabNumberUnchanged(t *testing.T) {
+	// The card thin is narrower than two cards of the minimum size and the gap, so it cannot split across.
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.44, 0.56, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tab("tab-bbbbbb", "notes")),
+		gridCard("thin", 1, 2, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("rest", 2, 3, 0, 1, tab("tab-cccccc", "notes"))))
+	stored := f.stored()
+	if _, err := f.apply("core.card.split", `{"card":"thin","side":"right","plugin":"notes"}`); err == nil || err.Error() != "card thin cannot split toward right" {
+		t.Fatalf("the split of thin failed with %v", err)
+	}
+	if f.stored() != stored {
+		t.Fatal("the refused split changed the stored project")
+	}
+	if _, err := f.apply("core.card.add-tab", `{"card":"main","plugin":"notes"}`); err != nil {
+		t.Fatal(err)
+	}
+	main, _ := f.layout().card("main")
+	if len(main.Tabs) != 2 || main.Tabs[1].Title != "n 탭 1" {
+		t.Fatalf("after the refused split the card main holds the tabs %+v, want the new tab n 탭 1 last", main.Tabs)
+	}
+}
+
 // Closing a split gives its room back, answers closed, and moves the focus to a card that remains. The last card does not close.
 func TestCoreCardCloseClosesASplit(t *testing.T) {
 	f, left, right := splitShell(t)

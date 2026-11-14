@@ -96,6 +96,7 @@ func (s *Shell) register() {
 	s.registerTabDrag()
 	s.registerCardSidebars()
 	s.registerPlugins()
+	s.registerSetup()
 	s.registerDebug()
 	// The project list shows the library and selects its page of the projects (docs/spec/installation.md#plugin-screen).
 	act(s, "core.projects.browse", func(struct{}) error {
@@ -118,6 +119,7 @@ func (s *Shell) register() {
 	s.registerProjectOpen()
 	s.registerFixture()
 	s.registerPlacementLast()
+	s.registry.Method("surface.window", s.surfaceSpace)
 	act(s, "core.project.activate", func(value idParam) error { s.activate(value.ID); return nil })
 	s.registerProjectClose()
 	s.registry.CommandLater("core.window.new", func(_ json.RawMessage, answer func(any, error)) {

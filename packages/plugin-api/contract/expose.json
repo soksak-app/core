@@ -995,6 +995,244 @@
           }
         }
       ]
+    },
+    {
+      "id": "expose.snapshot.answers-the-group-of-the-document",
+      "markup": "<button id='save' data-command='demo.save' data-params='{\"mode\":\"all\"}'>\n  Save\n   file </button><span id='note'></span>",
+      "rects": {
+        "save": {
+          "left": 10,
+          "top": 20,
+          "width": 100,
+          "height": 30
+        },
+        "note": {
+          "left": 0,
+          "top": 0,
+          "width": 0,
+          "height": 0
+        }
+      },
+      "initial": {
+        "count": 1
+      },
+      "declarations": {
+        "status": [
+          {
+            "name": "demo.count",
+            "description": "The count of the demo.",
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "name": "demo.unused",
+            "description": "A status that the page does not register.",
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "commands": [
+          {
+            "name": "demo.save",
+            "description": "Saves the demo.",
+            "params": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string"
+                }
+              }
+            },
+            "result": {
+              "type": "null"
+            }
+          }
+        ],
+        "element": [
+          {
+            "name": "demo.save-button",
+            "description": "The save button of the demo."
+          },
+          {
+            "name": "demo.note",
+            "description": "The note of the demo, which has no box."
+          }
+        ]
+      },
+      "steps": [
+        {
+          "status": {
+            "name": "demo.count"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "status",
+                "name": "demo.count"
+              }
+            ],
+            "replies": [],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "command": {
+            "name": "demo.save"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "command",
+                "name": "demo.save"
+              }
+            ],
+            "replies": [],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "element": {
+            "name": "demo.save-button",
+            "selector": "#save"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "element",
+                "name": "demo.save-button"
+              }
+            ],
+            "replies": [],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "element": {
+            "name": "demo.note",
+            "selector": "#note"
+          },
+          "output": {
+            "registered": [
+              {
+                "kind": "element",
+                "name": "demo.note"
+              }
+            ],
+            "replies": [],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        },
+        {
+          "request": {
+            "id": 1,
+            "method": "exposure.snapshot",
+            "params": {}
+          },
+          "output": {
+            "registered": [],
+            "replies": [
+              {
+                "id": 1,
+                "payload": {
+                  "result": {
+                    "status": [
+                      {
+                        "name": "demo.count",
+                        "description": "The count of the demo.",
+                        "schema": {
+                          "type": "object"
+                        },
+                        "value": {
+                          "count": 1
+                        }
+                      }
+                    ],
+                    "commands": [
+                      {
+                        "name": "demo.save",
+                        "description": "Saves the demo.",
+                        "params": {
+                          "type": "object",
+                          "properties": {
+                            "mode": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "result": {
+                          "type": "null"
+                        }
+                      }
+                    ],
+                    "element": [
+                      {
+                        "name": "demo.save-button",
+                        "description": "The save button of the demo.",
+                        "items": [
+                          {
+                            "index": 0,
+                            "role": "button",
+                            "text": " Save file ",
+                            "rect": {
+                              "x": 10,
+                              "y": 20,
+                              "width": 100,
+                              "height": 30
+                            },
+                            "visible": true,
+                            "command": "demo.save",
+                            "params": {
+                              "mode": "all"
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "name": "demo.note",
+                        "description": "The note of the demo, which has no box.",
+                        "items": [
+                          {
+                            "index": 0,
+                            "role": null,
+                            "text": "",
+                            "rect": {
+                              "x": 0,
+                              "y": 0,
+                              "width": 0,
+                              "height": 0
+                            },
+                            "visible": false,
+                            "command": null,
+                            "params": null
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "changed": [],
+            "effects": [],
+            "result": null,
+            "throws": null
+          }
+        }
+      ]
     }
   ]
 }

@@ -21,12 +21,13 @@ pub const START_DOCUMENT_PATH: &str = "/start.json";
 /// The error when the requesting webview is not the main webview of any window.
 pub const NO_WINDOW: &str = "the start document request names no window";
 
-/// The start document that holds the workspace snapshot, or the error of the snapshot in its place, and the window button
-/// reply.
+/// The start document that holds the workspace snapshot, or the error of the snapshot in its place, the window button
+/// reply, the surfaces with a pending image detach and the name of the window, which windows.list gives as its window.
 pub fn start_document(
     workspace: &Result<Value, String>,
     controls: &Value,
     pending_surfaces: &[String],
+    window: &str,
 ) -> Result<Vec<u8>, String> {
     #[derive(serde::Serialize)]
     #[serde(rename_all = "camelCase")]
@@ -37,6 +38,7 @@ pub fn start_document(
         error: Option<&'a str>,
         controls: &'a Value,
         pending_surfaces: &'a [String],
+        window: &'a str,
     }
     let (workspace, error) = match workspace {
         Ok(workspace) => (Some(workspace), None),
@@ -47,6 +49,7 @@ pub fn start_document(
         error,
         controls,
         pending_surfaces,
+        window,
     })
     .map_err(|error| error.to_string())
 }
@@ -80,6 +83,7 @@ pub(crate) fn start_parts(
 /// Runs the page start, which sends the image detaches without waiting for them, then builds the parts of the document,
 /// and reads the pending surfaces last, so a detach that ends later is told by its image-detach-ended event.
 pub(crate) fn after_page_started(
+    window: &str,
     page_started: impl FnOnce() -> Result<(), String>,
     parts: impl FnOnce() -> Result<(Result<Value, String>, Value), String>,
     pending_surfaces: impl FnOnce() -> Result<Vec<String>, String>,
@@ -87,7 +91,7 @@ pub(crate) fn after_page_started(
     page_started()?;
     let (workspace, controls) = parts()?;
     let pending = pending_surfaces()?;
-    start_document(&workspace, &controls, &pending)
+    start_document(&workspace, &controls, &pending, window)
 }
 
 /// Passes a start document request to start with the label of the requesting webview. Another owner or path is not
@@ -158,6 +162,7 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
         .filter(|window| window.label() == webview)
         .ok_or_else(|| NO_WINDOW.to_string())?;
     start_waited_page(
+        window.label(),
         || crate::windows::window_data(&window),
         // The start document is built off the main thread, and the cleanup of the earlier page calls the native layout,
         // which runs only on the main thread (docs/spec/native-host.md#page-start).
@@ -192,6 +197,7 @@ pub fn start_page(app: &AppHandle, webview: &str) -> Result<Vec<u8>, String> {
 /// fails, and when its document carries the error of the snapshot, because such a page shows that error and reports no
 /// ready. reloads gives the window data that holds those reloads.
 pub(crate) fn start_waited_page(
+    window: &str,
     reloads: impl FnOnce() -> Result<std::sync::Arc<crate::windows::WindowData>, String>,
     page_started: impl FnOnce() -> Result<(), String>,
     parts: impl FnOnce() -> Result<(Result<Value, String>, Value), String>,
@@ -199,6 +205,7 @@ pub(crate) fn start_waited_page(
 ) -> Result<Vec<u8>, String> {
     let mut snapshot_failure = None;
     let started = after_page_started(
+        window,
         page_started,
         || {
             let parts = parts();

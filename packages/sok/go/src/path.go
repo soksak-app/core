@@ -27,6 +27,9 @@ func runPath(action string, stdout io.Writer, options Options) error {
 		if err != nil {
 			return fmt.Errorf("the location of sok is unknown: %w", err)
 		}
+		if err := RequireWritableVolume(executable); err != nil {
+			return err
+		}
 		directory := filepath.Dir(executable)
 		if err := os.WriteFile(file, []byte(directory+"\n"), 0o644); err != nil {
 			return fmt.Errorf("cannot write %w; run sudo sok path install", fileError(file, err))

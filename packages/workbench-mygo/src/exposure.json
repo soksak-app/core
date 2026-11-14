@@ -1120,6 +1120,71 @@
         }
       },
       {
+        "name": "core.setup",
+        "description": "The setup parts that let an agent on the machine learn and reach the application, as the host call setupState returns them in the environment of the login shell of the person: parts of the last read or install in the order of sok setup check, each with its part (path, skill or mcp), file, state (ok, missing or error), install step, reason (absent or differs) of a missing part, error text of a part that cannot be read and, after an install, whether the install changed it; [] before the first read; and running, the kinds of the install that runs, or null.",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "enum": [
+                      "path",
+                      "skill",
+                      "mcp"
+                    ]
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "missing",
+                      "error"
+                    ]
+                  },
+                  "step": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "absent",
+                      "differs"
+                    ]
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "changed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "running": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "skill",
+                  "mcp"
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
         "name": "core.debug",
         "description": "The debug view: whether it is open, the path of the state file that opening wrote or null, the files of the logs folder with their path, size in bytes and modification time in milliseconds, the file that the view shows with its kind text or image or null, the timeline of the host event files with its files, the files whose reading stopped at the row limit, whether it follows the growing files and the number of rows appended since it was shown, the greatest seq of each process in the page that showed it and in its last read, the counts of all rows, rows that pass the filter and shown lines with the context rows, the number of selected rows and the warning that a saved file can hold typed text, and its filter or null, the shown state file with its path, the number of tree lines, the state file it is compared with or null and the number of differences, or null, the scroll position of the shown content in points, the running or last save operation with, for a save of the logs folder, the bytes written and the bytes listed, and the error of the last failed step or operation or null.",
         "schema": {
@@ -2015,6 +2080,129 @@
         },
         "result": {
           "type": "null"
+        }
+      },
+      {
+        "name": "core.setup.check",
+        "description": "Reads the setup parts again through the host call setupState and answers them; fails with the host error, and with setup operations need a native host without a host.",
+        "params": {
+          "type": "object",
+          "properties": {}
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "enum": [
+                      "path",
+                      "skill",
+                      "mcp"
+                    ]
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "missing",
+                      "error"
+                    ]
+                  },
+                  "step": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "absent",
+                      "differs"
+                    ]
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "changed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "core.setup.install",
+        "description": "Installs the setup parts of the named kinds, a non-empty list of skill and mcp without repetition, through the host call setupInstall, as sok setup install does, and answers the parts after the install; fails with -32602 for another list, with the host error when the install fails or another runs, and with setup operations need a native host without a host.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "skill",
+                  "mcp"
+                ]
+              }
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "parts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "part": {
+                    "type": "string",
+                    "enum": [
+                      "path",
+                      "skill",
+                      "mcp"
+                    ]
+                  },
+                  "file": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "ok",
+                      "missing",
+                      "error"
+                    ]
+                  },
+                  "step": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "absent",
+                      "differs"
+                    ]
+                  },
+                  "error": {
+                    "type": "string"
+                  },
+                  "changed": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
         }
       },
       {
@@ -3359,7 +3547,7 @@
       },
       {
         "name": "core.file.open",
-        "description": "Opens the file at path, relative to the project root, in the loaded plugin whose surface.opens declares its extension, or else in the plugin that declares *: activates the tab of that plugin with the same path, or adds a tab with params {path} to card or to the focused card.",
+        "description": "Opens the file at path, relative to the project root, in the loaded plugin whose surface.opens declares its extension: activates the tab of that plugin with the same path in the space, or adds a tab with params {path} to card or to the focused card. The path is stored and compared in its normal form, without . segments, empty segments or a final / and in Unicode NFC.",
         "params": {
           "type": "object",
           "properties": {
@@ -3450,6 +3638,89 @@
           "type": "object",
           "properties": {
             "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "closed": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.layout.open",
+        "description": "Opens a tab of plugin with params, or of the plugin that opens the extension of path with params {path} in the normal form of the path, in card, or with side in the neighbour of card toward side: selects the first tab of the plugin whose params equal the given ones as JSON values, else adds the tab to card or splits card toward side into a new card with the tab. card is a card identifier or current, the focused card. The result names the card and the tab, selected and its card focused; the same operation applied again answers the same.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "plugin": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            },
+            "path": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.layout.select",
+        "description": "Makes a tab the active tab of its card and focuses the card; tab is a tab identifier or current, the active tab of the focused card. A tab that is already active and focused is left as it is.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.layout.close",
+        "description": "Closes a tab as its close control does, and a card without tabs closes; tab is a tab identifier or current. A tab with unsaved changes opens the question of the close control and the result is closed false at once; a tab that this window closed since its workbench started answers closed true and changes nothing.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
               "type": "string"
             }
           }
@@ -4498,6 +4769,19 @@
       {
         "name": "core.settings-modal.debug",
         "description": "The 디버그 switch of the 진단 row: on when the performance trace is on and every class of the log policy is at trace."
+      },
+      {
+        "name": "core.settings-modal.setup",
+        "description": "The rows of the 에이전트 group in the order of the setup parts: the name of the part, its file, its state and, for a missing path entry, its install step; the key of a row is setup:<part>:<file>.",
+        "many": true
+      },
+      {
+        "name": "core.settings-modal.setup-install",
+        "description": "The 설치 button of the 에이전트 group, shown while a skill or mcp part is not ok: runs core.setup.install with those kinds."
+      },
+      {
+        "name": "core.settings-modal.setup-check",
+        "description": "The 다시 확인 button of the 에이전트 group: runs core.setup.check."
       },
       {
         "name": "core.settings-modal.reset",

@@ -1,6 +1,7 @@
 package workbench_test
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"testing"
 
@@ -8,6 +9,22 @@ import (
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
+
+// windowName is the identifier of the window of a test shell in windows.list.
+const windowName = "main"
+
+// idSource is the random source of the identifiers of a test shell: it gives the queued bytes first, so a test makes a new
+// identifier repeat one that it names, and then the bytes of the random source of the system.
+type idSource struct{ queued []byte }
+
+func (s *idSource) Read(buffer []byte) (int, error) {
+	if len(s.queued) == 0 {
+		return rand.Read(buffer)
+	}
+	n := copy(buffer, s.queued)
+	s.queued = s.queued[n:]
+	return n, nil
+}
 
 // keyed returns the element of the frame with the element name and the item, as the element tree of U4 gives it.
 func keyed(nodes []ui.ElementNode, name, item string) (ui.ElementNode, bool) {

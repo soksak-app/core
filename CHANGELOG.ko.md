@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Machine의 agent가 `sok`으로 application을 배우고 다룬다. `sok skill install`은 탐색을 가르치는 고정 skill을 쓰고, `sok mcp`는 호출마다 실행 중인 application의 exposure를 읽는 tool 열한 개를 제공하며, `sok mcp install`은 `claude` command로 그것을 등록하고, `sok setup check|install`은 이 부분을 보고하고 설치하며, 설정 창이 그것을 보여 준다. `core.layout.open`, `core.layout.select`, `core.layout.close`는 하나의 멱등 규칙으로 tab을 열고, 고르고, 닫으며, window snapshot은 window와 그 layout을 담는다(F831).
 - Release acceptance는 모든 script의 모든 check를 두 번 실행하는 대신, 후보가 직전 release 이후 추가하거나 바꾼 window check와 native end-to-end 항목을 모든 후보 host에서 한 번 실행하도록 요구한다. 후보 전체는 CI가 증명한다(F845).
 - mygo host는 page가 앞선 pointer 이동에 늦게 답해도 content의 cursor를 유지하고, window check의 주입된 이동은 AppKit의 cursor rect로 cursor를 정한다 (F844).
 - 두 host가 `status.watch`의 reply를, 답하기 전에 도착한 그 status의 notification보다 먼저 쓴다 (F835).

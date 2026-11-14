@@ -62,6 +62,19 @@ Host는 state mutation을 직렬화하는 동안 각 immutable `host.sidecars` �
 
 사이드카는 `sidecar.json`에 메시지 형식을 `message: {form, operationField}`로 선언한다. `form`은 `json-object`이고, `operationField`는 요청 본문에서 작업을 고르는 문자열 필드 이름이다. `hostReadOperations`가 있는 `sidecar.json`은 `<path of sidecar.json>: hostReadOperations is removed`로 거절되며, installed document는 사이드카 의존마다 `message`만 담는다. `@soksak/plugin-api`는 이 선언을 `validateSidecar`로 검사한다.
 
+## Surface의 프로세스
+
+sidecar가 surface를 위해 시작하는 프로세스(탭의 session의 shell 등)는 환경에 변수 두 개를 담는다. 그래서 그 안에서 시작한 `sok`과 agent는 그 애플리케이션과 그 surface의 창에 닿는다([에이전트의 창](cli.ko.md#에이전트의-창)).
+
+| 변수 | 값 |
+| --- | --- |
+| `SOKSAK_CONFIG_DIR` | surface의 요청을 보낸 애플리케이션의 설정 디렉터리. 표준 입출력 sidecar이면 자기 환경의 `SOKSAK_CONFIG_DIR` 값이며, 호스트가 sidecar를 시작할 때 그 값을 설정한다. 지속 서비스이면 요청을 보낸 연결의 `client`다([서비스 전송](persistent-services.ko.md#서비스-전송)) |
+| `SOKSAK_SURFACE` | 요청의 `surface` |
+
+surface를 위해 프로세스를 시작하는 모든 sidecar는 자기 환경이 가진 값을 대신해 두 변수를 모두 설정하고, 어느 surface에도 속하지 않는 프로세스는 `SOKSAK_SURFACE` 없이 시작한다. 그래서 어떤 프로세스도 자기가 속하지 않은 surface를 가리키지 않는다. session이 재연결을 넘어 유지하는 프로세스는 시작 때의 값을 유지하며, surface는 식별자를 유지하므로 그 값은 맞는 값으로 남는다. 각 sidecar는 surface를 위해 시작한 프로세스로 이 의무를 자기 repository에서 테스트한다.
+
+호스트는 표준 입출력 sidecar와 지속 서비스를 모두 `SOKSAK_CONFIG_DIR`를 자기 설정 디렉터리로 설정하고 `SOKSAK_SURFACE` 없이 시작한다. 호스트의 환경이 무엇을 가졌든 그렇다. 다른 애플리케이션의 프로세스에서 시작한 애플리케이션은 그 프로세스의 변수를 물려받기 때문이다. 호스트는 fixture sidecar(`docs/spec/cases/sidecars/fixture.sh`)의 환경을 테스트한다.
+
 ## 실패
 
 표준 입출력을 쓰는 사이드카는 다음 경우에 실패한다.

@@ -183,18 +183,18 @@ test("a value that no watch takes is recorded in the trace with its reason", () 
   ]);
 }));
 
-test("the core declaration file is valid and every main-page entry is registered by core-exposure.js or marked in markup", () => {
+test("the core declaration file is valid and every main-page entry is registered by a staged module or marked in markup", () => {
   const file = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8"));
   validateExposureFile(file);
   const source = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
-  const code = source("core-exposure.js");
+  // Reads every owning module of the staging declaration: core-exposure.js and the separated modules that register their own entries.
+  const modules = JSON.parse(source("package.json")).files.filter((name) => name.endsWith(".js"));
+  const code = modules.map(source).join("\n");
   // The core view bridge registers only the three common document entries.
   const main = (list) => list.filter(({ name }) => !surfaceDocumentEntry(name));
   assert.ok(file.exposes.status.some(({ name }) => surfaceDocumentEntry(name)), "surface document entries are declared");
   for (const { name } of main(file.exposes.status)) assert.match(code, new RegExp(`status\\("${name}"`), name);
   for (const { name } of main(file.exposes.commands)) assert.match(code, new RegExp(`command\\("${name}"`), name);
-  // Reads every owning module of the staging declaration. A separated operation module passes the same name check.
-  const modules = JSON.parse(source("package.json")).files.filter((name) => name.endsWith(".js"));
   const markup = ["index.html", ...modules].map(source).join("\n");
   for (const { name } of file.exposes.element) {
     assert.ok(markup.includes(`"${name}"`) || markup.includes(`'${name}'`), `${name} has no data-expose in the markup`);
@@ -920,4 +920,74 @@ test("an open dialog refuses an action on a core element and a surface element, 
   } finally {
     unmark();
   }  wire.finish();
+});
+
+test("a window snapshot holds the layout, the plugins, the group of the main document, one group per surface and the unregistered entries", async () => {
+  const made = coreRegistry(open("exposure-registry-snapshot"));
+  const unmark = markViewSurface("tab-a");
+  const layout = { space: "spc-a", focused: "main", root: { card: "main", size: 1, frame: { x: 0, y: 0, width: 800, height: 600 }, tabs: [] } };
+  const plugins = [{ plugin: "probe", name: "Probe", description: "Probe.", surface: { params: null, opens: [] } }];
+  const surfaces = [
+    { surface: "tab-a", plugin: "probe", kind: "tab", state: "loaded", visible: true },
+    { surface: "tab-b", plugin: "probe", kind: "tab", state: "loaded", visible: false },
+    { surface: "tab-c", plugin: "probe", kind: "tab", state: "unloaded", visible: false },
+    { surface: "tab-d", plugin: "probe", kind: "tab", state: "loaded", visible: false },
+  ];
+  // The open dialog holds the surface documents behind it; the elements of the main document are not behind it.
+  made.configure({ surfacePlugin: () => "probe", snapshotParts: () => ({ layout, plugins, surfaces }),
+    surfaceFrame: (surface) => (surface === "tab-a" ? { x: 100, y: 50, w: 400, h: 300 } : null), elementInert: (element) => element === null });
+  made.status("core.fixture.count", () => 3, () => () => {});
+  made.command("core.fixture.add", ({ n }) => n + 1);
+  made.element("core.fixture.button");
+  made.element("core.fixture.row");
+  made.element("core.fixture.missing");
+  for (const surface of ["tab-a", "tab-b"]) {
+    made.registered({ surface, kind: "status", name: "probe.lines" });
+    made.registered({ surface, kind: "element", name: "probe.lines" });
+  }
+  // JSDOM has no layout: the button has a box and is visible, the rows have an empty box and are not visible.
+  const button = document.querySelector('[data-expose="core.fixture.button"]');
+  const rows = [...document.querySelectorAll('[data-expose="core.fixture.row"]')];
+  const earlier = [button, ...rows].map((element) => [element, Object.getOwnPropertyDescriptor(element, "getBoundingClientRect")]);
+  button.getBoundingClientRect = () => ({ left: 4, top: 5, width: 6, height: 7 });
+  for (const row of rows) row.getBoundingClientRect = () => ({ left: 0, top: 0, width: 0, height: 0 });
+  try {
+    const { result } = await made.handle({ id: 7, method: "exposure.snapshot", params: {} });
+    assert.deepEqual(result.layout, layout);
+    assert.deepEqual(result.plugins, plugins);
+    const [main, ...rest] = result.groups;
+    assert.deepEqual(main.status, [{ name: "core.fixture.count", description: "Count.", schema: { type: "integer" }, value: 3 }]);
+    assert.deepEqual(main.commands.map(({ name, params }) => ({ name, params })),
+      [{ name: "core.fixture.add", params: { type: "object", properties: { n: { type: "integer" } } } }]);
+    assert.deepEqual(main.element.map(({ name, items }) => [name, items.map(({ index, role, text, visible, inert, command, params }) =>
+      ({ index, role, text, visible, inert, command, params }))]), [
+      ["core.fixture.button", [{ index: 0, role: "button", text: "b", visible: true, inert: false, command: null, params: null }]],
+      ["core.fixture.row", [0, 1].map((index) => ({ index, role: null, text: `r${index}`, visible: false, inert: false, command: null, params: null }))],
+    ]);
+    assert.deepEqual(rest, [
+      { owner: "surface", surface: "tab-a", plugin: "probe", kind: "tab", state: "loaded", visible: true,
+        status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" }, value: ["x"] }], commands: [],
+        element: [{ name: "probe.lines", description: "Output.", items: [{ index: 0, role: null, text: "x",
+          rect: { x: 112, y: 74, width: 80, height: 30 }, visible: true, inert: true, command: null, params: null }] }] },
+      { owner: "surface", surface: "tab-b", plugin: "probe", kind: "tab", state: "loaded", visible: false, error: EXPOSURE_ERRORS.gone,
+        status: [], commands: [], element: [] },
+      { owner: "surface", surface: "tab-c", plugin: "probe", kind: "tab", state: "unloaded", visible: false, status: [], commands: [], element: [] },
+      { owner: "surface", surface: "tab-d", plugin: "probe", kind: "tab", state: "loaded", visible: false, status: [], commands: [], element: [] },
+    ]);
+    assert.deepEqual(result.unregistered, [
+      { kind: "status", name: "core.surface.document" }, { kind: "command", name: "probe.send" }, { kind: "element", name: "core.fixture.missing" },
+    ]);
+    // With surface, the groups hold only the group of that surface.
+    const only = (await made.handle({ id: 8, method: "exposure.snapshot", params: { surface: "tab-a" } })).result;
+    assert.deepEqual(only.groups.map(({ owner, surface }) => [owner, surface]), [["surface", "tab-a"]]);
+    assert.deepEqual((await made.handle({ id: 9, method: "exposure.snapshot", params: { surface: "tab-z" } })).error,
+      { code: EXPOSURE_ERRORS.invalidParams, message: "surface tab-z is not a surface of this window" });
+  } finally {
+    for (const [element, descriptor] of earlier) {
+      if (descriptor) Object.defineProperty(element, "getBoundingClientRect", descriptor);
+      else delete element.getBoundingClientRect;
+    }
+    unmark();
+  }
+  wire.finish();
 });

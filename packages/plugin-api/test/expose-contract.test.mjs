@@ -17,6 +17,7 @@ const EXPECTED_IDS = [
   "expose.dispose.removes-bindings",
   "expose.dispose.races-a-registration-loading-declarations",
   "expose.bind.function-params-are-read-at-each-run",
+  "expose.snapshot.answers-the-group-of-the-document",
 ];
 
 // Lets every pending promise of the registration and reply chain settle before a step reports its output.

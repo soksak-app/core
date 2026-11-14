@@ -29,9 +29,14 @@ const StarterJobFile = "plugins/starter.json"
 
 const StarterJobFormat = 1
 
-// configDirOf is --config-dir or the configuration directory of this application.
+// configDirOf is --config-dir, else SOKSAK_CONFIG_DIR when it is set and not empty, else the configuration directory of this
+// application.
 func configDirOf(values map[string]string, options Options) (string, error) {
 	if dir, ok := values["config-dir"]; ok {
+		return dir, nil
+	}
+	// A process that a surface started names the configuration directory of its application (docs/spec/cli.md#the-window-of-an-agent).
+	if dir := os.Getenv("SOKSAK_CONFIG_DIR"); dir != "" {
 		return dir, nil
 	}
 	base, err := os.UserConfigDir()

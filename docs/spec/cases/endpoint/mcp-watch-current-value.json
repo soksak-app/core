@@ -1,6 +1,6 @@
 {
   "name": "mcp-watch-current-value",
-  "description": "status_watch_once with equals, without a window option: the server reads windows.list, then watches the status, reads its current value and ends the watch with status.unwatch.",
+  "description": "status_watch_once of sok mcp with equals, without a window and with an empty SOKSAK_SURFACE: the server reads windows.list, then watches the status, reads its current value and ends the watch with status.unwatch.",
   "replay": false,
   "reason": "The MCP test checks that the server returns the value unchanged. Its value is a string, while the core.screen status of the workbench is an object (packages/workbench/core-exposure.js:334), so the replay cannot give the value that the test checks.",
   "variables": {
@@ -19,5 +19,11 @@
     { "reply": { "jsonrpc": "2.0", "id": 3, "result": "$screen" } },
     { "send": { "jsonrpc": "2.0", "id": 4, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
     { "reply": { "jsonrpc": "2.0", "id": 4, "result": null } }
-  ]
+  ],
+  "mcp": {
+    "environment": { "SOKSAK_SURFACE": "" },
+    "steps": [
+      { "tool": "status_watch_once", "arguments": { "name": "core.screen", "equals": "$screen" }, "result": "$screen" }
+    ]
+  }
 }

@@ -6,6 +6,8 @@ fn options() -> Options<'static> {
         identifier: "com.soksak.test",
         paths_dir: Ok(Path::new("/tmp")),
         core_version: super::version::CORE_VERSION,
+        config_dir_variable: None,
+        surface_variable: None,
     }
 }
 

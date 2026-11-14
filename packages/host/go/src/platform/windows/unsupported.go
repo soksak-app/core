@@ -91,6 +91,10 @@ func (implementation) WindowColorSpace(platform.Window) (string, error) {
 func (implementation) ProcessFootprint(int) (platform.ProcessFootprint, error) {
 	return platform.ProcessFootprint{}, unsupported("process footprint")
 }
+
+func (implementation) LoginShell() (string, error) {
+	return "", unsupported("login shell")
+}
 func (implementation) ConfigureMainWindow(platform.Window, bool) error {
 	return unsupported("main window configuration")
 }

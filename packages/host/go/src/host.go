@@ -135,6 +135,17 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if err != nil {
 		return nil, err
 	}
+	// The setup operations use the sok of the application bundle, next to the executable (docs/spec/cli.md#agents-in-the-application).
+	executable, err := os.Executable()
+	if err == nil {
+		executable, err = filepath.EvalSymlinks(executable)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("setup: the location of the application is unknown: %s", osReason(err))
+	}
+	if host.setups, err = NewSetups(filepath.Join(filepath.Dir(executable), "sok"), identifier, system, host.notifySetup); err != nil {
+		return nil, err
+	}
 	// The core root of the views serves the files of the configuration folder and the bundled frontend, so the application does not start
 	// when the platform cannot register the resolver.
 	if err := RegisterCoreRoot(system, configDirectory, frontend); err != nil {

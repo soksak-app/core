@@ -87,6 +87,8 @@ type Host struct {
 	owners     map[string]*Surfaces
 	sidecars   *Sidecars
 	plugins    *Plugins
+	// setups are the setup parts of the agents of the machine (docs/spec/cli.md#agents-in-the-application).
+	setups *Setups
 	// buttons is the value of host.buttons. It installs the watch after the application started and before endpoint.json is written.
 	buttons *Buttons
 	// dialogs holds the dialogs of the windows whose host.dialog a client watches (docs/spec/exposure.md#dialogs).
@@ -252,6 +254,8 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.ready = true
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
+	// The environment of the login shell is read after the start of the first window, not on the start path.
+	h.setups.Start()
 	s.imageDetachPageReady()
 	s.responderWorkbenchReady()
 	s.replayRegistrations()

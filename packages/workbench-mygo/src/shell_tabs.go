@@ -160,6 +160,7 @@ func (s *Shell) connectTabs(ports TabPorts) {
 		Emit:     ports.Emit,
 	})
 	RegisterFileCommands(s.registry, shellFiles{s}, s.calls)
+	s.registerLayout()
 	RegisterMemorySaver(s.registry, tabs.saver, ports.Enabled, ports.Delay)
 }
 
@@ -254,7 +255,7 @@ func (s *Shell) backgroundTabs() []BackgroundTab {
 func (s *Shell) layoutTabs() ([]MemorySurface, map[string]bool, error) {
 	var surfaces []MemorySurface
 	shown := map[string]bool{}
-	err := s.eachLayoutTab(func(_ string, tab layout.Tab, active bool) {
+	err := s.eachLayoutTab(func(_, _ string, tab layout.Tab, active bool) {
 		plugin := s.pluginOf(tab.Plugin)
 		surfaces = append(surfaces, MemorySurface{ID: tab.ID, Plugin: tab.Plugin, Kind: "tab", Unload: plugin != nil && plugin.Unload})
 		if active {
@@ -273,22 +274,23 @@ func (s *Shell) layoutTabs() ([]MemorySurface, map[string]bool, error) {
 	return surfaces, shown, nil
 }
 
-// eachLayoutTab visits the tabs of every space of the projects that the window opened, with the plane in the place of the shown space.
-func (s *Shell) eachLayoutTab(visit func(project string, tab layout.Tab, active bool)) error {
+// eachLayoutTab visits the tabs of every space of the projects that the window opened, with the project and the space of each tab and
+// the plane in the place of the shown space once the plane is made; before that the stored layout of the shown space is its layout.
+func (s *Shell) eachLayoutTab(visit func(project, space string, tab layout.Tab, active bool)) error {
 	for _, project := range s.projects {
 		if !s.windowProjects[project.ID] {
 			continue
 		}
 		for _, space := range project.Spaces {
-			if project.ID == s.active && space.ID == project.ActiveSpaceID {
-				eachTab(s.plane.Cards(), func(tab layout.Tab, active bool) { visit(project.ID, tab, active) })
+			if project.ID == s.active && space.ID == project.ActiveSpaceID && s.plane != nil {
+				eachTab(s.plane.Cards(), func(tab layout.Tab, active bool) { visit(project.ID, space.ID, tab, active) })
 				continue
 			}
 			var stored storedLayout
 			if err := json.Unmarshal(space.Layout, &stored); err != nil {
 				return fmt.Errorf("space %s: %w", space.ID, err)
 			}
-			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, tab, false) })
+			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
 		}
 	}
 	return nil
@@ -301,7 +303,7 @@ func (s *Shell) holdHiddenTabs() {
 		return
 	}
 	s.tabs.hiddenDue = false
-	err := s.eachLayoutTab(func(project string, tab layout.Tab, active bool) {
+	err := s.eachLayoutTab(func(project, _ string, tab layout.Tab, active bool) {
 		unit := s.units[tab.Plugin]
 		_, stopped := s.surfaces.stopped(tab.ID)
 		if active || unit == nil || unit.Composition == nil || unit.Background != nil || stopped || s.surfaces.detachHeld(tab.ID) || s.tabs.saver.Unloaded(tab.ID) {
@@ -381,9 +383,12 @@ func (s *Shell) observeMemory() bool {
 }
 
 // droppedTabs removes the stored state and session of tabs and ends their sidecar sessions after the layout write that drops them is
-// confirmed, so a refused write removes none.
+// confirmed, so a refused write removes none. The window keeps the closed identifiers.
 func (s *Shell) droppedTabs(tabs []string) func() {
 	s.forgetSurfaces(tabs)
+	for _, tab := range tabs {
+		s.closedTabs[tab] = true
+	}
 	if len(tabs) == 0 {
 		return func() {}
 	}

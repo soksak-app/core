@@ -347,6 +347,8 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | C12 | `tests/platform/process_unix.go`, `tests/platform/process_windows.go` | `src/platform/darwin/process_wait_signal_test.rs`, `src/platform/linux/process_wait_signal_test.rs` | The checks of the ownership, of the process lock cases and of the process wait take an advisory lock of a file and send a signal to their own process. Go takes them from `syscall.Flock` and `syscall.Kill`, which only the platforms other than Windows give, so the platform package of the tests has a file of each build constraint, and on Windows, a held platform, both fail; the Go signal test of `cli.process-wait.signal-ends-the-wait` is `tests/process_wait_test.go`. Rust takes the lock with `File::try_lock` of the standard library, and its signal test of the same contract raises the signal in its own process, which only darwin and linux give, so it is a child of the platform module of each, where it reaches the private wait helpers of the crate |
 | C13 | `tests/case_player_test.go` | `tests/support/case_player.rs` | Both play the endpoint cases for the tests of `sok` with the same rules. The Go player is a file of the external test package; the Rust player is a module of `tests/support/` because the Rust integration tests are separate crates |
 | C14 | `tests/fixtures/bundle/Contents/Info.plist`, `tests/fixtures/bundle/Contents/MacOS/soksak`, `tests/fixtures/installed-empty.json` | `tests/fixtures/bundle/soksak`, `tests/fixtures/plugins/installed.json` | The update and plugin tests of each language read the bundle and the installed plugin document from their own fixtures. The Go update test reads the files of a whole bundle and the Rust update test reads only the executable, and the plugin tests of each language name the document by the path that their test reads |
+| C15 | `src/agents/SKILL.md`, `src/agents/mcp.json` | none | The agent skill and the MCP tool list are one source of both `sok` implementations (docs/spec/cli.md#agent-sources): `go:embed` reads only files below the folder of its package, so the files are in the Go package and the Rust `sok` includes the same files with `include_str!` |
+| C16 | `tests/agents_support_test.go` | `tests/support/agents.rs` | Both hold the disposable machine, the run of a `sok` with only the variables that a test sets and the fixture program of the agent command tests. The Go helpers are a file of the external test package; the Rust helpers are a module of `tests/support/` because the Rust integration tests are separate crates |
 | H53 | `src/platform/windows/com.go` | none | The Go host calls WebView2 through its COM tables with no cgo; the Rust host has those tables from the `webview2-com` crate |
 | H54 | `src/platform/windows/capture_diagnostics.go` | none | A Go build tag selects a whole file, so the methods of the diagnostic build are a file of their own; Rust selects each method in `src/platform/windows/windows.rs` with a feature |
 | H69 | none | `src/exposure_menu_executor_test.rs` | The Tauri host performs the item of `host.menu.select` from the UI queue of the platform after the framework callback has unwound, because a framework task would hold the locks of that callback while the item runs and the item can reenter the lifecycle callbacks of the application. This in-crate test reaches the unexported executor with the queue of the test framework. The Go host performs the item in one step of the UI thread with no framework callback around it, so it has no such executor to test. |
@@ -372,6 +374,7 @@ The allowed differences are two tables, and a row ID is unique across both. The 
 | H93 | none | `tests/fixtures/recording/blocker`, `tests/recording_hold_test.rs` | The Rust recording tests copy the file `blocker` into a folder whose permissions they remove, so the real file system refuses its removal; the Go tests write that file in the test. The hold of a new window runs only on the main thread of a test process, which only a Rust target without the test harness has (row H86), so the Rust hold tests are a target of their own; the Go hold tests are in `src/diagnostics_new_window_test.go` |
 | H94 | none | `tests/fixtures/update/Info.plist` | The Rust update tests copy the `Info.plist` of a staged bundle from this fixture; the Go update tests write the same document in the test |
 | H95 | none | `tests/support/endpoint_case.rs`, `tests/support/main_thread.rs`, `tests/support/sidecar_recorder.rs`, `tests/support/tier_service.rs`, `tests/support/wire_replay.rs` | The Rust integration tests are separate crates, so the player of the endpoint cases, the runner of a target on the main thread, the recorder of sidecar sends, the service of an endpoint test without a page and the shared parts of the wire-case producers are modules of `tests/support/`. The Go tests hold the same parts in one package: the endpoint case player in `tests/endpoint_cases_test.go`, the sidecar recorder in `tests/support/sidecars.go`, and the wire-case parts in `tests/page_wire_test.go`; a Go test runs on the main thread through `TestMain` and needs no runner |
+| H97 | none | `tests/fixtures/setup/sok` | The setup tests of the Rust host run this fixture program as the `sok` of an application bundle, which prints the environment of `sok setup environment`; the Go setup tests build the `sok` of the Go module, which the Go host library requires as a module |
 
 ### Framework table
 
@@ -493,12 +496,11 @@ The Wails binding service name is `github.com/soksak-app/core/packages/host/wail
 ## Command line tree
 
 ```
-packages/sok/agents/      SKILL.md, mcp.json: the agent texts of both implementations
 packages/sok/go/          packages/sok/rust/
   src/sok.go  (package sok)      src/sok.rs  (library root)
   src/<role>.go                  src/<role>.rs
   src/cmd/sok/main.go            src/main.rs           difference C1
-  src/SKILL.md, src/mcp.json     (Go copies, checked)
+  src/agents/SKILL.md, mcp.json  (agent texts of both)
   tests/<role>_test.go           tests/<role>_test.rs
   go.mod, go.sum                 Cargo.toml            difference C8
 ```

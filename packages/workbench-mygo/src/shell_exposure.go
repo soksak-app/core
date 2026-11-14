@@ -1,9 +1,12 @@
 package workbench
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"sort"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // The surfaces of a window as the registry sees them: the declarations of its plugins, the order of the surfaces that answer a
@@ -43,6 +46,53 @@ func (s *Shell) linkSurfaces() {
 		Changed: s.requests.surfaceChanged,
 		Failed:  s.fail,
 	})
+	s.registry.SnapshotPartsOf(s.snapshotParts)
+}
+
+// snapshotParts are the layout of the shown space, the loaded plugins and the surfaces of the window for a window snapshot
+// (docs/spec/exposure.md#window-snapshot), as snapshotParts of packages/workbench/core-exposure.js gives them.
+func (s *Shell) snapshotParts() (SnapshotParts, error) {
+	description, err := s.LayoutDescription()
+	if err != nil {
+		return SnapshotParts{}, err
+	}
+	parts := SnapshotParts{Plugins: []PluginDescription{}, Surfaces: []SnapshotSurface{}}
+	if description != nil {
+		parts.Layout = description
+	}
+	for _, plugin := range s.plugins {
+		described := PluginDescription{Plugin: plugin.ID, Name: plugin.Name, Description: plugin.Description}
+		if plugin.Surface {
+			// default: a plugin without surface.opens opens no file, which the snapshot lists as no extension.
+			opens := []string{}
+			if unit := s.units[plugin.ID]; unit != nil && unit.Opens != nil {
+				opens = unit.Opens
+			}
+			described.Surface = &PluginSurface{Params: plugin.Params, Opens: opens}
+		}
+		parts.Plugins = append(parts.Plugins, described)
+	}
+	rows, err := s.surfacesState()
+	if err != nil {
+		return SnapshotParts{}, err
+	}
+	for _, row := range rows {
+		var surface SnapshotSurface
+		switch entry := row.(type) {
+		case surfaceStatus:
+			surface = SnapshotSurface{Surface: entry.Surface, Plugin: entry.Plugin, Kind: entry.Kind, Visible: entry.Visible}
+		case placeholderStatus:
+			surface = SnapshotSurface{Surface: entry.Surface, Plugin: entry.Plugin, Kind: entry.Kind, Visible: entry.Visible}
+		default:
+			return SnapshotParts{}, fmt.Errorf("core.surfaces holds the row %T", row)
+		}
+		surface.State = "loaded"
+		if s.tabs != nil && s.tabs.saver != nil && s.tabs.saver.Unloaded(surface.Surface) {
+			surface.State = "unloaded"
+		}
+		parts.Surfaces = append(parts.Surfaces, surface)
+	}
+	return parts, nil
 }
 
 // surfacePlugin returns the plugin of a surface that the window holds.
@@ -51,6 +101,39 @@ func (s *Shell) surfacePlugin(surface string) string {
 		return held.tab.Plugin
 	}
 	return ""
+}
+
+// surfaceSpace answers surface.window of the window (docs/spec/exposure.md#methods): {space} of the space whose layout holds the tab
+// surface among the spaces of the projects that the window opened, with the plane in the place of the shown space, {space: null} for a
+// section surface that a sidebar of the window seats, or null, as the page answers it (surface.window of packages/workbench/
+// core-exposure.js). The host asks each ready window and answers {window, space}.
+func (s *Shell) surfaceSpace(raw json.RawMessage, answer func(any, error)) {
+	var params struct {
+		Surface *string `json:"surface"`
+	}
+	if json.Unmarshal(raw, &params) != nil || params.Surface == nil || *params.Surface == "" {
+		answer(nil, Refuse(InvalidParams, "surface must be a non-empty string"))
+		return
+	}
+	var held *string
+	err := s.eachLayoutTab(func(_, space string, tab layout.Tab, _ bool) {
+		if held == nil && tab.ID == *params.Surface {
+			held = &space
+		}
+	})
+	switch {
+	case err != nil:
+		answer(nil, err)
+	case held == nil:
+		// A section surface belongs to a sidebar of the window and to no layout of a space, so a seated section answers the space null.
+		if _, seated := s.surfaces.seated[*params.Surface]; seated {
+			answer(map[string]any{"space": nil}, nil)
+			return
+		}
+		answer(nil, nil)
+	default:
+		answer(map[string]string{"space": *held}, nil)
+	}
 }
 
 // preferredSurfaces is the order of the surfaces that receive a request: the tab of the focused card, then the visible surfaces.

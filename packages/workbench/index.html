@@ -62,7 +62,7 @@ import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTab
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
-  activeTab, currentGrid, onLayout, onRender, plane, setGap, settle, settleModifiedTabsToClose, tabsOf,
+  activeTab, currentGrid, nameWindow, onLayout, onRender, plane, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
 import { observePlaneGrid } from "./device-grid.js";
 
@@ -81,6 +81,8 @@ import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
 import { coreChanged, followPlugins, installCoreExposure, redrawSettings, setVerify } from "./core-exposure.js";
+/* The setup parts of the agents of this machine, which the settings window shows (docs/spec/settings.md#에이전트). */
+import { installSetupExposure } from "./setup-exposure.js";
 /* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
 import "./diagnostics.js";
 
@@ -122,6 +124,8 @@ if (start.error !== undefined) {
 // A refused projects.json or settings.json is left out of the snapshot with its error, so the error is shown and the page
 // starts without it.
 for (const text of storedFileErrors(start.workspace)) showError(text);
+// The layout operations and the window snapshot name this window by the name that the start document carries.
+nameWindow(start.window);
 
 installExposure(exposureFile);
 // An installed plugin that the page refuses is left out and its error is shown, so the other plugins and the page start. An
@@ -595,6 +599,7 @@ const coreExposure = installCoreExposure({
     projectTabs: workarea.querySelector(".project-column") ? "left" : "top",
   }),
 });
+installSetupExposure({ showError, changed: redrawSettings });
 // Every wait of the start can fail, and a failure rejects the memory readiness, so no drawn placement waits for a readiness that
 // never comes.
 try {

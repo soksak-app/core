@@ -169,3 +169,28 @@ func (darwin) AppendLogFile(path string) (*os.File, error) {
 func (darwin) OpenProcessLockFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 }
+
+// ReadOnlyVolume reads the flags of the file system of the path; MNT_RDONLY is the read-only mount of a disk image or of the
+// translocated copy of a downloaded application.
+func (darwin) ReadOnlyVolume(path string) (bool, error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return false, &os.PathError{Op: "statfs", Path: path, Err: err}
+	}
+	return stat.Flags&unix.MNT_RDONLY != 0, nil
+}
+
+// RegisteredSok requires the sok of an application bundle, in Contents/MacOS of a folder whose name ends in .app.
+func (darwin) RegisteredSok(path string) error {
+	macos := filepath.Dir(path)
+	contents := filepath.Dir(macos)
+	if filepath.Base(macos) != "MacOS" || filepath.Base(contents) != "Contents" || !strings.HasSuffix(filepath.Base(filepath.Dir(contents)), ".app") {
+		return fmt.Errorf("the first sok on PATH, %s, is not the sok of an application bundle", path)
+	}
+	return nil
+}
+
+// ReplaceProcess runs execve.
+func (darwin) ReplaceProcess(path string, args, env []string) error {
+	return unix.Exec(path, args, env)
+}

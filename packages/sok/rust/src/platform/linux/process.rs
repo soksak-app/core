@@ -198,4 +198,29 @@ impl Platform for Linux {
             other => Err(format!("linux/{other} has no platform key")),
         }
     }
+
+    /// Reads the mount flags of the file system with statvfs.
+    fn read_only_volume(&self, path: &std::path::Path) -> Result<bool, String> {
+        let status = rustix::fs::statvfs(path).map_err(|error| {
+            crate::files::file_error(path.display(), &std::io::Error::from(error))
+        })?;
+        Ok(status
+            .f_flag
+            .contains(rustix::fs::StatVfsMountFlags::RDONLY))
+    }
+
+    /// Linux has no application bundle, so the first sok on PATH is registered as it is.
+    fn registrable_sok(&self, _sok: &std::path::Path) -> Result<bool, String> {
+        Ok(true)
+    }
+
+    fn exec(&self, program: &std::path::Path, arguments: &[String]) -> String {
+        use std::os::unix::process::CommandExt;
+        let error = std::process::Command::new(program).args(arguments).exec();
+        format!(
+            "exec {}: {}",
+            program.display(),
+            crate::files::os_reason(&error)
+        )
+    }
 }

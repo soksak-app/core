@@ -1,0 +1,43 @@
+{
+  "id": "agentprobe",
+  "name": "Agent probe",
+  "description": "Window check fixture in the place of a process plugin: its sidecar starts a process of the surface that runs `sok context`, and the view reports what the process wrote.",
+  "surface": { "composition": { "kind": "view", "page": "ui/page.html" } },
+  "dependencies": { "@sok-check/sidecar-agentprobe": "*" },
+  "mark": "A",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
+  "exposes": {
+    "status": [
+      {
+        "name": "agentprobe.process",
+        "description": "The last process of the surface: the SOKSAK_CONFIG_DIR and SOKSAK_SURFACE that it carried and the exit status, the signal, the standard output and the standard error of the `sok context` that it ran, or the error of the sidecar; null before the first process ended.",
+        "schema": {
+          "type": ["object", "null"],
+          "properties": {
+            "configDirectory": { "type": ["string", "null"] },
+            "surface": { "type": ["string", "null"] },
+            "context": {
+              "type": "object",
+              "properties": {
+                "status": { "type": ["integer", "null"] },
+                "signal": { "type": ["integer", "null"] },
+                "stdout": { "type": "string" },
+                "stderr": { "type": "string" }
+              }
+            },
+            "error": { "type": "string" }
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "agentprobe.start",
+        "description": "Asks the sidecar to start for the surface a process that runs `<sok> context`, where sok is the path of a sok program.",
+        "params": { "type": "object", "properties": { "sok": { "type": "string" } } },
+        "result": { "type": "null" }
+      }
+    ],
+    "element": []
+  }
+}

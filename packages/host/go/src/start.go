@@ -19,14 +19,16 @@ const StartDocumentPath = "/start.json"
 // ErrNoStartWindow is the error for a start document request that points to no window.
 var ErrNoStartWindow = errors.New("the start document request names no window")
 
-// StartDocument is the start document that carries the workspace snapshot, or the error of the snapshot in its place, and the window button reply.
-func StartDocument(workspace any, workspaceErr error, controls Chrome, pendingSurfaces []string) ([]byte, error) {
+// StartDocument is the start document that carries the workspace snapshot, or the error of the snapshot in its place, the window button reply,
+// the surfaces with a pending image detach and the name of the window, which windows.list gives as its window.
+func StartDocument(workspace any, workspaceErr error, controls Chrome, pendingSurfaces []string, window string) ([]byte, error) {
 	document := struct {
 		Workspace       any      `json:"workspace,omitempty"`
 		Error           string   `json:"error,omitempty"`
 		Controls        Chrome   `json:"controls"`
 		PendingSurfaces []string `json:"pendingSurfaces"`
-	}{Controls: controls, PendingSurfaces: pendingSurfaces}
+		Window          string   `json:"window"`
+	}{Controls: controls, PendingSurfaces: pendingSurfaces, Window: window}
 	if workspaceErr != nil {
 		document.Error = workspaceErr.Error()
 	} else {
@@ -146,7 +148,7 @@ func (h *Host) startPage(window uint) ([]byte, error) {
 		h.startFailed(s, workspaceErr)
 	}
 	// The list is read after the detaches start, so a detach that ends later is told by its image-detach-ended event.
-	return StartDocument(workspace, workspaceErr, controls, s.pendingImageDetachSurfaces())
+	return StartDocument(workspace, workspaceErr, controls, s.pendingImageDetachSurfaces(), s.name)
 }
 
 // startFailed ends the reloads of s that wait for the page whose start failed with err, and returns err.

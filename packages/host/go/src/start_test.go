@@ -140,11 +140,11 @@ func TestAFailedWorkspaceSnapshotStillReadsTheControlsAndCarriesTheError(t *test
 	if err != nil {
 		t.Fatalf("a failed snapshot answered no start document: %v", err)
 	}
-	data, err := StartDocument(workspace, workspaceErr, controls, []string{})
+	data, err := StartDocument(workspace, workspaceErr, controls, []string{}, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"error":"/config/projects.json: projects format 1 is required","controls":{"controls":{"x":7,"y":8,"w":52,"h":14},"row":40},"pendingSurfaces":[]}`
+	want := `{"error":"/config/projects.json: projects format 1 is required","controls":{"controls":{"x":7,"y":8,"w":52,"h":14},"row":40},"pendingSurfaces":[],"window":"main"}`
 	if string(data) != want {
 		t.Fatalf("start document %s", data)
 	}

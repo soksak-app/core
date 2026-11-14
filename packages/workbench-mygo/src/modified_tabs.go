@@ -88,21 +88,38 @@ func (s *Shell) saveTab(tab, save string, answered func(settled bool)) {
 	})
 }
 
-// askedCloseTab closes the tab id when it is not modified and asks about it otherwise. It tells whether the tab closed.
+// askedCloseTab closes the tab id when it is not modified and asks about it otherwise. It tells whether the tab closed. While the
+// question about the tab is open, a close opens no other question.
 func (s *Shell) askedCloseTab(id string) (bool, error) {
 	tab, err := s.tabOf(id)
 	if err != nil {
 		return false, err
 	}
 	if !s.tabModified(id) {
-		return true, s.closeTab(id)
+		return true, s.closeRestored(id)
 	}
+	if s.asked[id] {
+		return false, nil
+	}
+	s.asked[id] = true
 	s.askModified(s.cardOfTab(id), tab, closeAnswers, func(settled bool) {
+		delete(s.asked, id)
 		if settled {
-			s.showFailure(s.closeTab(id))
+			s.showFailure(s.closeRestored(id))
 		}
 	})
 	return false, nil
+}
+
+// closeRestored restores the arrangement of a fullscreen card and closes the tab id, as closeTabById and closeInLayout of
+// packages/workbench/plane.js do: the layout does not change while a card is fullscreen, and the close of the last tab of a card
+// closes the card.
+func (s *Shell) closeRestored(id string) error {
+	if s.fullscreen != "" {
+		s.fullscreen = ""
+		s.options.Invalidate()
+	}
+	return s.closeTab(id)
 }
 
 // showFailure shows err when there is one.

@@ -1,0 +1,86 @@
+// The tree of the layout of the window description for the arrangements of docs/spec/cases/layout/tree.json that hold a place card of a
+// window sidebar (docs/spec/exposure.md#window-snapshot): the window of this test declares the sidebars of those cards, so the plane keeps
+// them, and the tree leaves them out. layout-operations.test.mjs runs the arrangements without a window sidebar.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+
+const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
+dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
+for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document, location: dom.window.location,
+  getComputedStyle: dom.window.getComputedStyle.bind(dom.window), CSS: dom.window.CSS, PointerEvent: dom.window.PointerEvent,
+  MouseEvent: dom.window.MouseEvent, ErrorEvent: dom.window.ErrorEvent,
+  addEventListener: dom.window.addEventListener.bind(dom.window), dispatchEvent: dom.window.dispatchEvent.bind(dom.window),
+  // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
+  devicePixelRatio: dom.window.devicePixelRatio })) {
+  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+}
+// JSDOM has no layout engine and does not load the application stylesheet.
+const planeElement = document.getElementById("plane");
+Object.defineProperty(planeElement, "clientWidth", { value: 1600 });
+Object.defineProperty(planeElement, "clientHeight", { value: 1200 });
+const style = document.createElement("style");
+style.textContent = ".card { --bw: 1px; --divider: 1px; }";
+document.head.appendChild(style);
+Object.defineProperty(document, "adoptedStyleSheets", { value: [] });
+
+const PLAIN = "fixture-plain";
+const SIDES = ["left", "right", "top", "bottom"];
+const { cases } = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/layout/tree.json", import.meta.url), "utf8"));
+const withSidebar = cases.filter(({ layout: { cards } }) => cards.some(({ id }) => SIDES.includes(id)));
+const sides = [...new Set(withSidebar.flatMap(({ layout: { cards } }) => cards.map(({ id }) => id).filter((id) => SIDES.includes(id))))];
+
+const { installEnvironment } = await import("../environment.js");
+assert.deepEqual(installEnvironment({
+  runtime: "runtime",
+  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: PLAIN, title: "t" }] }] } },
+  // Each side of the cases holds a window sidebar with a set of one section.
+  sidebars: { sets: [{ id: "set-list", title: "List", sections: ["fixture-sections.list"], layout: "list" }],
+    links: sides.map((side) => ({ place: side, plugin: null, set: "set-list" })) },
+}, { plugins: [
+  { id: PLAIN, package: "@fixture/plain", version: "0.0.1", manifest: { id: PLAIN, name: PLAIN, description: "검사용 표면.", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/index.html" } } } },
+  { id: "fixture-sections", package: "@fixture/sections", version: "0.0.1", manifest: { id: "fixture-sections", name: "Sections",
+    description: "검사용 섹션.", sections: [{ id: "fixture-sections.list", name: "List", composition: { kind: "view", page: "ui/list.html" }, height: "fill" }] } },
+] }), [], "the fixture environment refused a plugin");
+// The sidebar draws its section controls, which connect only to declared core commands.
+const { registry } = await import("../exposure.js");
+registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
+const plane = await import("../plane.js");
+
+// contract: layout.tree.one-tree-per-arrangement
+test("the lines and cards of each arrangement of tree.json with a window sidebar give its root without the place card", { timeout: 5000 }, () => {
+  assert.ok(withSidebar.length >= 1, "tree.json holds no arrangement with a window sidebar");
+  const close = (actual, expected, where) => {
+    if (typeof expected === "number") {
+      assert.ok(Math.abs(actual - expected) <= 1e-9 * Math.max(1, Math.abs(expected)), `${where}: ${actual} is not ${expected}`);
+      return;
+    }
+    if (typeof expected !== "object") {
+      assert.equal(actual, expected, where);
+      return;
+    }
+    assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort(), where);
+    for (const key of Object.keys(expected)) {
+      if (key === "children") expected.children.forEach((child, i) => close(actual.children[i], child, `${where}/${i}`));
+      else close(actual[key], expected[key], `${where}.${key}`);
+    }
+  };
+  const strip = (node) => (node.card ? { card: node.card, size: node.size }
+    : { direction: node.direction, size: node.size, children: node.children.map(strip) });
+  for (const { name, layout: { xs, ys, cards }, root } of withSidebar) {
+    const content = cards.filter(({ id }) => !SIDES.includes(id));
+    plane.adopt({ focusedId: content[0].id, named: 0, sidebars: {},
+      // The plane keeps the size of a window sidebar as it is drawn, so the record holds the extent that the lines of the case give it.
+      windowSidebars: Object.fromEntries(cards.filter(({ id }) => SIDES.includes(id)).map(({ id, c0, c1, r0, r1 }) =>
+        [id, id === "left" || id === "right" ? { width: (xs[c1] - xs[c0]) * 1600 } : { height: (ys[r1] - ys[r0]) * 1200 }])),
+      state: { xs, ys, cards: cards.map((card, i) => (SIDES.includes(card.id) ? { ...card, fixed: true, data: null } : { ...card, data: {
+        tabs: [{ id: `tab-side${String(i).padStart(2, "0")}`, plugin: PLAIN, title: "t", origin: { directory: null } }],
+        activeId: `tab-side${String(i).padStart(2, "0")}` } })) } }, "spc-aaaaaa");
+    assert.deepEqual(plane.currentGrid().cards.map(({ id }) => id).sort(), cards.map(({ id }) => id).sort(), `${name}: the plane did not keep the cards of the case`);
+    assert.deepEqual(plane.currentGrid().lines("x"), xs, `${name}: the plane moved the lines of the case`);
+    close(strip(plane.layoutDescription().root), root, name);
+  }
+});

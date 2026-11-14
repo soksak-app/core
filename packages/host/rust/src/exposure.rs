@@ -245,6 +245,98 @@ pub fn exposure_list(
     }
 }
 
+/// The window snapshot of a request (docs/spec/exposure.md#window-snapshot): the window as windows.list gives it, then the layout,
+/// the plugins, the groups and the unregistered entries of the main page, with the group of the host before the groups of the page,
+/// the same as the Go host. A snapshot of one surface holds only the group of that surface, so it has no host group. windows is the
+/// windows.list of the host, status reads a host status and page asks the main page.
+pub fn exposure_snapshot(
+    window: &str,
+    params: &Map<String, Value>,
+    windows: Value,
+    mut status: impl FnMut(&str) -> Result<Box<RawValue>, Failure>,
+    page: impl FnOnce() -> Result<Box<RawValue>, Failure>,
+) -> Result<Box<RawValue>, Failure> {
+    let entry = windows
+        .as_array()
+        .and_then(|list| list.iter().find(|entry| entry["window"] == window))
+        .ok_or_else(|| missing_window(window))?;
+    let own = if params.contains_key("surface") {
+        None
+    } else {
+        Some(host_group(&mut status)?)
+    };
+    let reply = page()?;
+    let part = match serde_json::from_str::<Map<String, Value>>(reply.get()) {
+        Ok(part) => part,
+        Err(error) if reply.get().trim_start().starts_with('{') => {
+            return Err(Failure::new(
+                -32603,
+                format!("page exposure.snapshot: {error}"),
+            ));
+        }
+        Err(_) => {
+            return Err(Failure::new(
+                -32603,
+                format!("page exposure.snapshot is {}, not an object", reply.get()),
+            ));
+        }
+    };
+    for member in ["layout", "plugins", "groups", "unregistered"] {
+        if !part.contains_key(member) {
+            return Err(Failure::new(
+                -32603,
+                format!("page exposure.snapshot has no {member}"),
+            ));
+        }
+    }
+    let Some(page_groups) = part["groups"].as_array() else {
+        return Err(Failure::new(
+            -32603,
+            format!(
+                "page exposure.snapshot groups is {}, not an array",
+                part["groups"]
+            ),
+        ));
+    };
+    let mut groups: Vec<Value> = own.into_iter().collect();
+    groups.extend(page_groups.iter().cloned());
+    raw(&json!({
+        "window": {"window": entry["window"], "title": entry["title"], "project": entry["project"]},
+        "layout": part["layout"], "plugins": part["plugins"], "groups": groups,
+        "unregistered": part["unregistered"],
+    }))
+}
+
+/// The group of the host in a window snapshot: each host status in name order with its value, or with the text of the failure of its
+/// read, and each host command in name order, each in the declaration format. The host declares no element entry.
+fn host_group(
+    status: &mut impl FnMut(&str) -> Result<Box<RawValue>, Failure>,
+) -> Result<Value, Failure> {
+    let declared = host_declarations();
+    let mut entries = Vec::new();
+    for declaration in declared["status"].as_array().into_iter().flatten() {
+        let mut entry = declaration.clone();
+        let Some(name) = entry["name"].as_str().map(String::from) else {
+            return Err(Failure::new(
+                -32603,
+                format!("host status declaration has no name: {declaration}"),
+            ));
+        };
+        match status(&name) {
+            Ok(value) => {
+                entry["value"] = serde_json::from_str(value.get()).map_err(|error| {
+                    Failure::new(-32603, format!("status {name} value: {error}"))
+                })?;
+            }
+            Err(failure) => entry["error"] = Value::String(failure.message),
+        }
+        entries.push(entry);
+    }
+    Ok(json!({
+        "owner": "host", "status": entries, "commands": declared["commands"].clone(), "element": [],
+    }))
+}
+
 pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
     let mut lists = match serde_json::from_str::<BTreeMap<String, Vec<Box<RawValue>>>>(listed.get())
     {

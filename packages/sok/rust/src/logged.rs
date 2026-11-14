@@ -17,7 +17,7 @@ use crate::routine::{PANIC_STATUS, Panic, guard, set_interrupt_recorder, set_rec
 use crate::{Error, Options, command, config_dir_of};
 
 /// The bound of the arguments and of the error text of a command event (docs/spec/logging.md#bounds).
-const CALL_TEXT_BYTES: usize = 1024;
+pub(crate) const CALL_TEXT_BYTES: usize = 1024;
 
 /// The layer and the role of the tool in the event contract, and the bounds of its writer (docs/spec/logging.md#bounds). A run
 /// of the tool emits at most a handful of events (`log.open`, `sok.command`, `sok.panic`), so the file is not rotated.
@@ -44,16 +44,17 @@ fn monotonic_ns() -> u64 {
 }
 
 /// Starts the writer of the tool in `logs/sok-<boot>.jsonl` of the configuration folder `config`; the boot identifier is
-/// the start time in seconds and the process identifier.
+/// the start time in Unix nanoseconds and the process identifier, so a sok that replaces itself through exec in the same second, with
+/// the same process identifier, names another file.
 pub fn start_tool_event_log(config: &Path) -> Result<EventLog, String> {
     // default: a clock before the epoch is a defect of the machine; the boot then starts at 0 and the audit refuses the lines.
-    let seconds = SystemTime::now()
+    let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs());
+        .map_or(0, |elapsed| elapsed.as_nanos());
     let log = EventLog::start(WriterOptions {
         directory: config.join("logs"),
         role: EVENT_ROLE.into(),
-        boot: format!("{seconds}-{}", std::process::id()),
+        boot: format!("{nanos}-{}", std::process::id()),
         layer: EVENT_LAYER,
         clock: monotonic_ns,
         spawn: |body| Ok(crate::routine::spawn_named("event-log-writer", body)),
@@ -93,6 +94,56 @@ fn target_config_dir(args: &[String], options: &Options) -> Result<std::path::Pa
     config_dir_of(&values, options).map_err(|error| match error {
         Error::Usage(message) | Error::Failed(message) => message,
     })
+}
+
+/// Whether `--config-dir` is given before any `--`.
+fn has_config_dir(args: &[String]) -> bool {
+    args.iter()
+        .take_while(|arg| *arg != "--")
+        .any(|arg| arg == "--config-dir" || arg.starts_with("--config-dir="))
+}
+
+/// The sok of the application of `SOKSAK_CONFIG_DIR` when it is another sok than the running one: the sok in the folder of the
+/// `executable` of its `endpoint.json` (docs/spec/cli.md#the-window-of-an-agent). It returns the running sok, that sok and the
+/// configuration directory, or None when the directory comes from `--config-dir`, has no `endpoint.json`, or its folder holds no
+/// other sok.
+fn application_sok(
+    args: &[String],
+    options: &Options,
+) -> Result<Option<(std::path::PathBuf, std::path::PathBuf, std::path::PathBuf)>, String> {
+    let Some(config) = options.config_dir_variable.filter(|dir| !dir.is_empty()) else {
+        return Ok(None);
+    };
+    if has_config_dir(args) {
+        return Ok(None);
+    }
+    let file = Path::new(config).join("endpoint.json");
+    let text = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(crate::files::file_error(file.display(), &error)),
+    };
+    let endpoint: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|error| crate::registration::invalid_json(&file, &error))?;
+    let executable = endpoint["executable"]
+        .as_str()
+        .filter(|executable| !executable.is_empty())
+        .ok_or_else(|| format!("{} has no executable", file.display()))?;
+    // default: an executable path without a folder holds no sok beside it.
+    let Some(folder) = Path::new(executable).parent() else {
+        return Ok(None);
+    };
+    let candidate = folder.join("sok");
+    let to = match candidate.canonicalize() {
+        Ok(to) => to,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(crate::files::file_error(candidate.display(), &error)),
+    };
+    let from = crate::setup::running_sok()?;
+    if from == to {
+        return Ok(None);
+    }
+    Ok(Some((from, to, std::path::PathBuf::from(config))))
 }
 
 /// Passes everything to its stream and keeps the first line of what was written, up to `CALL_TEXT_BYTES`.
@@ -172,7 +223,8 @@ impl Record {
 
 /// Runs `command` and records it: it starts the event file of the targeted configuration folder, runs the command, stores a
 /// panic of the command with its stack as the exit status `PANIC_STATUS`, stores the command with its result, and flushes the
-/// file. An event file that cannot be started is reported on the standard error and the command runs without it.
+/// file. An event file that cannot be started is reported on the standard error and the command runs without it. A path entry
+/// command runs without an event file.
 pub fn logged(
     args: &[String],
     stdout: &mut dyn Write,
@@ -180,6 +232,9 @@ pub fn logged(
     options: &Options,
     command: Command,
 ) -> i32 {
+    if command::command_word(args) == Some("path") {
+        return unlogged(args, stdout, stderr, options, command);
+    }
     let started = Instant::now();
     let log = target_config_dir(args, options).and_then(|config| start_tool_event_log(&config));
     let log = match log {
@@ -218,6 +273,53 @@ pub fn logged(
             }
         })));
     }
+    match application_sok(args, options) {
+        Ok(None) => {}
+        Ok(Some((from, to, config))) => {
+            record.log.emit(
+                Level::Info,
+                "sok.exec",
+                &json!({"from": from.display().to_string(), "to": to.display().to_string(), "config": config.display().to_string()}),
+            );
+            record.finish(0, "");
+            set_recorder(None);
+            set_interrupt_recorder(None);
+            let flushed = record.log.flush();
+            set_run_log(None);
+            record.log.close();
+            if let Err(error) = flushed
+                && writeln!(stderr, "sok: event log: {error}").is_err()
+            {
+                return 3;
+            }
+            let error = match crate::platform::current() {
+                Ok(platform) => platform.exec(&to, args),
+                Err(error) => error,
+            };
+            return match writeln!(stderr, "sok: {error}") {
+                Ok(()) => 1,
+                Err(_) => 3,
+            };
+        }
+        Err(error) => {
+            record.finish(1, &format!("sok: {error}"));
+            set_recorder(None);
+            set_interrupt_recorder(None);
+            let flushed = record.log.flush();
+            set_run_log(None);
+            record.log.close();
+            let mut status = match writeln!(stderr, "sok: {error}") {
+                Ok(()) => 1,
+                Err(_) => 3,
+            };
+            if let Err(error) = flushed
+                && writeln!(stderr, "sok: event log: {error}").is_err()
+            {
+                status = 3;
+            }
+            return status;
+        }
+    }
     let mut captured = FirstLine {
         stream: stderr,
         text: Vec::new(),
@@ -246,6 +348,28 @@ pub fn logged(
     set_run_log(None);
     record.log.close();
     status
+}
+
+/// Runs a path entry command without an event file (docs/spec/cli.md#event-log): it runs as root through sudo, and a folder or file
+/// that it created in the configuration folder would belong to root and refuse the later runs of the person. A panic of the command
+/// is written to the standard error and ends the run with the status `PANIC_STATUS`.
+fn unlogged(
+    args: &[String],
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    options: &Options,
+    command: Command,
+) -> i32 {
+    match guard(|| command(args, stdout, stderr, options)) {
+        Ok(status) => status,
+        Err(panic) => {
+            if write!(stderr, "sok: panic: {}\n{}", panic.text, panic.stack).is_err() {
+                3
+            } else {
+                PANIC_STATUS
+            }
+        }
+    }
 }
 
 /// Runs `run` with the record of the tool.

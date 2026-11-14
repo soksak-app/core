@@ -52,9 +52,11 @@ pub enum PageReply {
 }
 
 /// One request that the endpoint relays to the page and the reply that the page gives: the page follows its exchanges in order,
-/// as the `page` steps of a case do. The payload is absent when the endpoint sends no params.
+/// as the `page` steps of a case do. The payload is absent when the endpoint sends no params, and the window is the window of the
+/// page when the case names one.
 #[derive(Clone, Debug)]
 pub struct Exchange {
+    window: Option<String>,
     name: String,
     payload: Option<Value>,
     reply: PageReply,
@@ -64,6 +66,7 @@ pub struct Exchange {
 /// An exchange of the call `name` with the params `payload` (`Value::Null` for no params) that the page answers with `result`.
 pub fn exchange(name: &str, payload: Value, result: Value) -> Exchange {
     Exchange {
+        window: None,
         name: name.into(),
         payload: (!payload.is_null()).then_some(payload),
         reply: PageReply::Result(result),
@@ -110,6 +113,8 @@ pub struct CasePage {
     relay: Arc<Relay>,
     script: Vec<Exchange>,
     windows: Mutex<Vec<String>>,
+    /// The windows whose page reports that it is ready; the other windows are listed as loading.
+    ready: Vec<String>,
     state: Mutex<PageState>,
     calls: Sender<()>,
     /// The receiver of the signals of the relayed calls and the number of signals that were taken.
@@ -131,15 +136,21 @@ fn locked<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 impl CasePage {
     /// A page with the windows and the exchanges.
     pub fn new(windows: &[&str], script: Vec<Exchange>) -> Arc<CasePage> {
-        CasePage::with_input(windows, script, false)
+        CasePage::with_input(windows, &[], script, false)
     }
 
-    fn with_input(windows: &[&str], script: Vec<Exchange>, delivers_input: bool) -> Arc<CasePage> {
+    fn with_input(
+        windows: &[&str],
+        ready: &[String],
+        script: Vec<Exchange>,
+        delivers_input: bool,
+    ) -> Arc<CasePage> {
         let (calls, awaited) = mpsc::channel();
         Arc::new(CasePage {
             relay: Arc::new(Relay::default()),
             script,
             windows: Mutex::new(windows.iter().map(|window| window.to_string()).collect()),
+            ready: ready.to_vec(),
             state: Mutex::new(PageState {
                 next: 0,
                 held: VecDeque::new(),
@@ -163,10 +174,15 @@ impl CasePage {
         CasePage::new(windows, Vec::new())
     }
 
-    /// Reads the page steps of a case into the exchanges of its page: each call is followed at once by its reply.
-    fn from_steps(windows: &[String], steps: &[Value]) -> Result<Arc<CasePage>, String> {
+    /// Reads the page steps of a case into the exchanges of its page: each call is followed at once by its reply. The windows of
+    /// ready report a ready page.
+    fn from_steps(
+        windows: &[String],
+        ready: &[String],
+        steps: &[Value],
+    ) -> Result<Arc<CasePage>, String> {
         let mut script = Vec::new();
-        let mut pending: Option<(String, Option<Value>)> = None;
+        let mut pending: Option<(Option<String>, String, Option<Value>)> = None;
         for (index, step) in steps.iter().enumerate() {
             let Some(page) = step.get("page") else {
                 if pending.is_some() {
@@ -186,9 +202,18 @@ impl CasePage {
                     .get("name")
                     .and_then(Value::as_str)
                     .ok_or_else(|| format!("step {index}: a call of the page has no name"))?;
-                pending = Some((name.to_string(), call.get("payload").cloned()));
+                let window = match call.get("window") {
+                    None => None,
+                    Some(Value::String(window)) => Some(window.clone()),
+                    Some(other) => {
+                        return Err(format!(
+                            "step {index}: the window of a call of the page is {other}, not a string"
+                        ));
+                    }
+                };
+                pending = Some((window, name.to_string(), call.get("payload").cloned()));
             } else if let Some(reply) = page.get("reply") {
-                let (name, payload) = pending
+                let (window, name, payload) = pending
                     .take()
                     .ok_or_else(|| format!("step {index}: a reply of the page follows no call"))?;
                 let held = reply.get("held").and_then(Value::as_bool).unwrap_or(false);
@@ -213,6 +238,7 @@ impl CasePage {
                     }
                 };
                 script.push(Exchange {
+                    window,
                     name,
                     payload,
                     reply,
@@ -228,7 +254,7 @@ impl CasePage {
             return Err("the last call of the page has no reply".into());
         }
         let windows: Vec<&str> = windows.iter().map(String::as_str).collect();
-        Ok(CasePage::with_input(&windows, script, true))
+        Ok(CasePage::with_input(&windows, ready, script, true))
     }
 
     /// Adds a window, as the registration of a window does.
@@ -333,7 +359,8 @@ impl Service for CasePage {
         let entries: Vec<Value> = locked(&self.windows)
             .iter()
             .map(|window| {
-                json!({"window": window, "title": "", "project": null, "key": false, "ready": false})
+                let ready = self.ready.contains(window);
+                json!({"window": window, "title": "", "project": null, "key": false, "ready": ready})
             })
             .collect();
         Ok(Value::Array(entries))
@@ -385,15 +412,22 @@ impl Service for CasePage {
                 format!("{method}: the case has no page step for this request"),
             ));
         };
-        if method != exchange.name || !same_params(&params, &exchange.payload) {
+        if method != exchange.name
+            || !same_params(&params, &exchange.payload)
+            || exchange
+                .window
+                .as_ref()
+                .is_some_and(|named| named != window)
+        {
             self.problem(format!(
-                "page call {index} is {method} {}, the case has {} {}",
+                "page call {index} is {method} {} to window {window}, the case has {} {} to window {:?}",
                 Value::Object(params),
                 exchange.name,
                 exchange
                     .payload
                     .as_ref()
-                    .map_or(String::new(), Value::to_string)
+                    .map_or(String::new(), Value::to_string),
+                exchange.window.as_deref().unwrap_or_default()
             ));
         }
         self.relay.request(window, |id| {
@@ -482,6 +516,8 @@ pub struct Case {
     pub replay: bool,
     pub scripted: bool,
     pub windows: Vec<String>,
+    /// The windows of `windows` whose page reports that it is ready.
+    pub ready: Vec<String>,
     pub variables: Map<String, Value>,
     pub steps: Vec<Value>,
 }
@@ -525,7 +561,7 @@ pub fn read_case(path: &Path) -> Result<Case, String> {
             path.display()
         ));
     }
-    let windows = case
+    let windows: Vec<String> = case
         .get("windows")
         .and_then(Value::as_array)
         .map(|windows| {
@@ -535,11 +571,36 @@ pub fn read_case(path: &Path) -> Result<Case, String> {
                 .collect()
         })
         .unwrap_or_default();
+    let mut ready = Vec::new();
+    for window in case
+        .get("ready")
+        .map(|ready| {
+            ready
+                .as_array()
+                .ok_or_else(|| format!("{}: ready must be a list", path.display()))
+        })
+        .transpose()?
+        .into_iter()
+        .flatten()
+    {
+        match window.as_str() {
+            Some(window) if windows.iter().any(|listed: &String| listed == window) => {
+                ready.push(window.to_string());
+            }
+            _ => {
+                return Err(format!(
+                    "{}: ready names the window {window}, which windows does not have",
+                    path.display()
+                ));
+            }
+        }
+    }
     Ok(Case {
         name: name.unwrap_or_default().to_string(),
         replay,
         scripted,
         windows,
+        ready,
         variables: case
             .get("variables")
             .and_then(Value::as_object)
@@ -602,7 +663,7 @@ fn run(case: &Case, windows: &[String], config: &Path, with_log: bool) {
         soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
         records::start_writer(config)
     });
-    let page = CasePage::from_steps(windows, &case.steps)
+    let page = CasePage::from_steps(windows, &case.ready, &case.steps)
         .unwrap_or_else(|error| panic!("{}: {error}", case.name));
     let endpoint = Endpoint::start(
         &config.join("sockets"),

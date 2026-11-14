@@ -112,6 +112,33 @@ test("a call of the main page that carries out an operation sends its identifier
   }
 });
 
+// The setup calls of the settings window (docs/spec/cli.md#agents-in-the-application) reach the setup methods of the host.
+test("the setup calls reach the setup methods with the request of an install", async () => {
+  const calls = [];
+  register("./support/wails-runtime-loader.mjs", import.meta.url);
+  globalThis.__wailsRuntime = {
+    Call: { ByName: async (name, method, args, cids) => { calls.push([name, method, args, cids]); return null; } },
+    Window: { Name: async () => "main" },
+    Events: { On: () => () => {} },
+  };
+  globalThis.window = {};
+  globalThis.location = { search: "" };
+  try {
+    const { host } = await import("../runtime/index.js?test=setup-calls");
+    await host.call("setupState");
+    await host.call("setupInstall", { parts: ["skill", "mcp"] });
+    const service = "github.com/soksak-app/core/packages/host/wailsv3/src.Bindings.Call";
+    assert.deepEqual(calls, [
+      [service, "SetupState", [], []],
+      [service, "SetupInstall", [{ parts: ["skill", "mcp"] }], []],
+    ]);
+  } finally {
+    delete globalThis.__wailsRuntime;
+    delete globalThis.window;
+    delete globalThis.location;
+  }
+});
+
 test("Wails host calls and listeners share one lazy runtime module resolution", { timeout: 5_000 }, async () => {
   let resolutions = 0;
   const source = `const runtime = globalThis.__wailsRuntime; export const Call = runtime.Call; `

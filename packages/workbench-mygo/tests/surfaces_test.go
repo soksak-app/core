@@ -380,6 +380,8 @@ func surfaceShellOn(t testing.TB, document string, stored *surfaceHost) *shellFi
 		Elements:    fixtureElements{f},
 		Tabs:        stored.tabs,
 		Window:      func() (workbench.WindowView, error) { stored.windowReads++; return stored.window, stored.windowFailure },
+		Name:        windowName,
+		Random:      &f.ids,
 	})
 	if err != nil {
 		t.Fatal(err)

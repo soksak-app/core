@@ -1,0 +1,12 @@
+{
+  "name": "mcp-protocol-unsupported",
+  "description": "sok mcp refuses the revision 2025-06-18: an initialize of that revision is answered with the revision 2025-11-25, which the client then refuses or speaks. A member that the case does not state is the library's own.",
+  "replay": false,
+  "reason": "The case has no endpoint frame: it holds the messages of the MCP protocol of the server.",
+  "steps": [],
+  "mcp": {
+    "steps": [
+      { "client": { "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "case", "version": "0" } } }, "server": { "jsonrpc": "2.0", "id": 1, "result": { "protocolVersion": "2025-11-25", "serverInfo": { "name": "soksak", "version": "$version" } } } }
+    ]
+  }
+}

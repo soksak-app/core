@@ -102,6 +102,8 @@ export function createRegistry({ call = null, report = null } = {}) {
     elementPlace: () => null,
     // default: without a modal source no element is inert. It takes null for the document of a surface.
     elementInert: () => false,
+    // default: without the workbench of a window the snapshot has no layout, no plugin and no surface.
+    snapshotParts: () => ({ layout: null, plugins: [], surfaces: [] }),
     // Called when an observation inside this document fails. It is reported as a page error (docs/spec/plugins.md#sections).
     failed: (error) => dispatchEvent(new ErrorEvent("error", { message: error.message })),
   };
@@ -240,6 +242,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     // default: a request without parameters omits params.
     if (methods.has(method)) return methods.get(method)(params ?? {});
     if (method === "exposure.list") return list();
+    if (method === "exposure.snapshot") return snapshot(params ?? {}, origin);
     const name = params?.name;
     const kind = METHOD_KINDS[method];
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;
@@ -282,6 +285,76 @@ export function createRegistry({ call = null, report = null } = {}) {
       if (following.get(key) === watch) following.delete(key);
       throw error;
     }
+  }
+
+  /**
+   * The part of the main page in a window snapshot (docs/spec/exposure.md#window-snapshot): the layout and the plugins of the window, the
+   * group of the main document, one group per surface in the order of core.surfaces and the declared entries that no owner registered;
+   * the host adds the window and its own group. The main document is read in the turn of the request, then each surface document that
+   * registered entries is asked in turn. With surface, the groups hold only the group of that surface.
+   */
+  async function snapshot({ surface: only }, origin) {
+    if (only !== undefined && typeof only !== "string") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "surface must be a string");
+    const { layout, plugins, surfaces: listed } = options.snapshotParts();
+    const chosen = only === undefined ? listed : listed.filter(({ surface }) => surface === only);
+    if (only !== undefined && chosen.length === 0) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `surface ${only} is not a surface of this window`);
+    const unregistered = only === undefined ? unregisteredEntries() : [];
+    const own = only === undefined
+      ? Promise.all([core.snapshot({ withInert: true }), ...[...pages.values()].map((page) => page.entries.snapshot({ withInert: true }))])
+      : null;
+    const groups = [];
+    if (own) {
+      const parts = await own;
+      groups.push({ owner: "core", status: parts.flatMap((part) => part.status), commands: parts.flatMap((part) => part.commands),
+        element: parts.flatMap((part) => part.element) });
+    }
+    for (const { surface, plugin, kind, state, visible } of chosen) {
+      const group = { owner: "surface", surface, plugin, kind, state, visible };
+      // An unloaded surface has no document, and a surface that registered nothing has no entries to read.
+      if (state === "unloaded" || surfaceNames(surface).length === 0) {
+        groups.push({ ...group, status: [], commands: [], element: [] });
+        continue;
+      }
+      let part;
+      try {
+        part = await forward(surface, "exposure.snapshot", {}, origin);
+      } catch (error) {
+        if (error.code !== EXPOSURE_ERRORS.gone) throw error;
+        // The document of the surface ended before it answered.
+        groups.push({ ...group, error: EXPOSURE_ERRORS.gone, status: [], commands: [], element: [] });
+        continue;
+      }
+      groups.push({ ...group, ...placedPart(surface, part) });
+    }
+    return { layout, plugins, groups, unregistered };
+  }
+
+  /**
+   * The group of a surface document with the rectangles of its items in window coordinates and inert: a view answers in its own document
+   * coordinates, so the applied frame of the view is added, as for element.rect; only this document knows the open dialog.
+   */
+  function placedPart(surface, { status, commands, element }) {
+    let frame = { x: 0, y: 0 };
+    if (viewSurfaces.has(surface)) {
+      frame = options.surfaceFrame(surface);
+      if (!frame || ![frame.x, frame.y].every(Number.isFinite)) {
+        throw new ExposureError(EXPOSURE_ERRORS.failed, `surface ${surface} has no valid applied frame`);
+      }
+    }
+    const inert = options.elementInert(null);
+    return {
+      status, commands,
+      element: element.map((entry) => ({ ...entry, items: entry.items.map(({ rect, command, params, ...item }) => ({
+        ...item, rect: { ...rect, x: rect.x + frame.x, y: rect.y + frame.y }, inert, command, params,
+      })) })),
+    };
+  }
+
+  /** The declared entries of this window that no owner registered, {kind, name}, in the order of exposure.list. */
+  function unregisteredEntries() {
+    const listed = list();
+    return [["status", "status"], ["commands", "command"], ["element", "element"]]
+      .flatMap(([key, kind]) => listed[key].filter((entry) => !entry.registered).map(({ name }) => ({ kind, name })));
   }
 
   /** List in the declaration format. registered is added to each entry. */

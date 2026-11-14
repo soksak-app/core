@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
 )
@@ -122,9 +121,8 @@ func ownConfiguration(configDir string) (func(), error) {
 			}
 			continue
 		}
-		// The owner of this command is written in the form of the host. The boot identifier is the one of the event file of a sok run:
-		// the start time in seconds and the process identifier.
-		contents, err := json.Marshal(lockOwner{PID: os.Getpid(), Boot: fmt.Sprintf("%d-%d", time.Now().Unix(), os.Getpid())})
+		// The owner of this command is written in the form of the host, with the boot identifier that names the event file of the run.
+		contents, err := json.Marshal(lockOwner{PID: os.Getpid(), Boot: runBoot()})
 		if err != nil {
 			return nil, errors.Join(err, file.Close())
 		}

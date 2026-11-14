@@ -1,10 +1,10 @@
 package workbench
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"path"
 	"slices"
@@ -65,6 +65,12 @@ type ShellOptions struct {
 	// Tabs returns the ports of the file commands, the memory saver, the tab stores and the background sessions of the shell. Without it
 	// they are not registered.
 	Tabs func(shell *Shell) TabPorts
+	// Name is the identifier of the window in windows.list, which the errors of the layout operations name
+	// (docs/spec/cli.md#acting-on-a-layout).
+	Name string
+	// Random is the source of the random bytes of new identifiers, the random source of the system in the application; a test gives a
+	// source whose bytes repeat an identifier.
+	Random io.Reader
 }
 
 // WindowView is the state of a window that core.window.workbench states.
@@ -306,6 +312,10 @@ type Shell struct {
 	// replies of the surfaces that diagnostics.surface.hold names.
 	transcript *Transcript
 	replyHold  *SurfaceReplyHold
+	// closedTabs holds each tab that the window closed since its workbench started, which no new tab takes and which core.layout.close
+	// answers as closed, and asked each tab whose close question is open (docs/spec/cli.md#acting-on-a-layout).
+	closedTabs map[string]bool
+	asked      map[string]bool
 	// cardReads holds the decoded data of the cards, and railRead the last rail outline.
 	cardReads map[string]cardRead
 	railRead  railRead
@@ -400,7 +410,9 @@ type Shell struct {
 
 	pluginOperations *PluginOperations
 	appUpdates       *AppUpdates
-	starter          pluginStarter
+	// setupOperations are the setup parts of the agents of the machine (docs/spec/settings.md#에이전트).
+	setupOperations *SetupOperations
+	starter         pluginStarter
 
 	text *TextSize
 	// planeSpace is the id of the space that the plane was last made of.
@@ -456,6 +468,12 @@ type Shell struct {
 
 // NewShell returns the shell of a window, with its commands in the registry.
 func NewShell(options ShellOptions) (*Shell, error) {
+	if options.Name == "" {
+		return nil, errors.New("the shell options name no window")
+	}
+	if options.Random == nil {
+		return nil, errors.New("the shell options give no random source")
+	}
 	read, err := readMetrics(options.Declared)
 	if err != nil {
 		return nil, err
@@ -478,7 +496,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err := json.Unmarshal(options.Environment, &environment); err != nil {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
-	s := &Shell{windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
+	s := &Shell{closedTabs: map[string]bool{}, asked: map[string]bool{}, windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	// Every frame that the shell asks for passes this count: a command answers after the frame that its run asked for.
 	invalidate := options.Invalidate
@@ -503,6 +521,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.starter = environment.pluginStarter
 	s.pluginOperations = NewPluginOperations(s.calls, s.events.BeginOperation, func() []LoadedPlugin { return s.plugins }, func() map[string]bool { return s.refused }, s.options.Invalidate)
 	s.appUpdates = NewAppUpdates(s.calls, s.events.BeginOperation, s.pluginOperations.State, s.options.Invalidate)
+	s.setupOperations = NewSetupOperations(s.calls, s.options.Invalidate, s.fail)
 	s.registry.Elements(options.Elements)
 	// An installation that cannot be read has no installed plugin, and the window shows why (docs/spec/installation.md#serving-installed-plugins).
 	installed, refused, err := acceptInstalled(options.Installed)
@@ -765,13 +784,13 @@ func (s *Shell) isOpen(id string) bool { return s.windowProjects[id] || s.otherO
 // opened returns the project that the window shows, or nil.
 func (s *Shell) opened() *projectRecord { return s.project(s.active) }
 
-// issueID returns a new id of the form of packages/workbench/ids.js: three letters and six base32 characters.
-func issueID(prefix string, taken func(id string) bool) string {
+// issueID returns a new id of the form of packages/workbench/ids.js from the bytes of source: three letters and six base32 characters.
+func issueID(source io.Reader, prefix string, taken func(id string) bool) string {
 	const alphabet = "abcdefghijklmnopqrstuvwxyz234567"
 	for {
 		random := make([]byte, 6)
-		if _, err := rand.Read(random); err != nil {
-			panic(err) // crypto/rand.Read ends the program itself on a platform that fails.
+		if _, err := io.ReadFull(source, random); err != nil {
+			panic(err) // The random source of the system ends the program itself on a platform that fails, and a test source never ends.
 		}
 		id := []byte(prefix)
 		for _, value := range random {
@@ -784,11 +803,11 @@ func issueID(prefix string, taken func(id string) bool) string {
 }
 
 func (s *Shell) newProjectID() string {
-	return issueID("prj-", func(id string) bool { return s.project(id) != nil })
+	return issueID(s.options.Random, "prj-", func(id string) bool { return s.project(id) != nil })
 }
 
 func (s *Shell) newSpaceID() string {
-	return issueID("spc-", func(id string) bool {
+	return issueID(s.options.Random, "spc-", func(id string) bool {
 		for _, project := range s.projects {
 			for _, space := range project.Spaces {
 				if space.ID == id {
@@ -801,7 +820,7 @@ func (s *Shell) newSpaceID() string {
 }
 
 func (s *Shell) newTabID() string {
-	return issueID("tab-", func(id string) bool {
+	return issueID(s.options.Random, "tab-", func(id string) bool {
 		for _, project := range s.projects {
 			// silent: a space whose layout cannot be read has no tab id that a new id could repeat in the shown plane.
 			ids, _ := layout.SpaceTabIDs(&project.Project)
@@ -811,7 +830,7 @@ func (s *Shell) newTabID() string {
 				}
 			}
 		}
-		return s.planeHasTab(id) || s.surfaces.detachHeld(id)
+		return s.planeHasTab(id) || s.surfaces.detachHeld(id) || s.closedTabs[id]
 	})
 }
 
@@ -883,6 +902,7 @@ func (s *Shell) View(c *ui.Context) {
 	// The step after the frame gives the statuses of the frame, and an answer that the frame releases (a placement commit) waits for it.
 	s.statusesAfterFrame()
 	s.exposedFocus.Frame(c)
+	s.binder.Frame()
 	s.sidebars.Begin()
 	clear(s.surfaces.drawn)
 	s.surfaces.shown = s.surfaces.shown[:0]

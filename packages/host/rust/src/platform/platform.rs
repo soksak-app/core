@@ -646,6 +646,9 @@ pub trait Platform: CoreRootHost + Send + Sync {
     /// Returns the physical footprint of the process pid and its parts, which count the pages that no other process shares. It
     /// is an error when the process cannot be read, such as a process that has ended.
     fn process_footprint(&self, pid: u32) -> Result<ProcessFootprint, String>;
+    /// Returns the login shell of the user of this process, as the user database (getpwuid_r) names it
+    /// (docs/spec/cli.md#agents-in-the-application).
+    fn login_shell(&self) -> Result<String, String>;
     /// Moves the upper left of the window frame to the screen coordinates (x, y). Call it on the main thread.
     fn move_window(&self, window: Handle, x: f64, y: f64) -> Result<(), String>;
     /// Orders the window in front of every window of its window level, of this and of other applications, without activating the

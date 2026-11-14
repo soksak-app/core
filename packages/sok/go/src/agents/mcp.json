@@ -1,0 +1,448 @@
+{
+  "instructions": "These tools reach the running soksak application whose configuration directory this server uses: its windows, the layout of cards and tabs, the surfaces of plugins, and the declared statuses, commands and elements. A call while no application runs is a tool error; the next call tries again.\n\nwindow_describe describes a window in one step, page by page: the layout, the plugins, the current status values, the elements with the commands they run and the commands with their parameters. The whole exposure of a window is available and is listed by window_describe and by exposure_search without a query. It changes when a plugin is installed, removed, enabled or disabled, so search it when needed.\n\nSearch with exposure_search and read the declaration with exposure_describe before running a command with command_run. Arrange a window with the idempotent commands core.layout.open, core.layout.select and core.layout.close on identifiers from window_describe.\n\nWithout a window argument the tools use the window of the agent, else the key window. agent_context gives the configuration directory, the surface and the window of the agent.\n\nRules: run only declared commands; wait on statuses, not on time; ask the person before closing modified work, removing a plugin or quitting; ask the person for a system dialog, an input method activation or administrator rights; report an error with its text.",
+  "tools": [
+    {
+      "name": "agent_context",
+      "description": "Returns {configDirectory, surface, window}: the configuration directory of the server, the surface whose process started the agent and the window of that surface, or null outside a soksak window.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "command_run",
+      "description": "Runs a declared command with parameters that match its schema and returns its result.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "surface": {
+            "type": "string",
+            "description": "Surface identifier from window_describe. Defaults to the choice of the workbench."
+          },
+          "name": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "description": "The parameters of the command. Defaults to {}."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "element_act",
+      "description": "Acts on a declared element with a synthetic action: click, input of a value, or dispatch of an event.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string",
+            "description": "Surface identifier from window_describe. Defaults to the choice of the workbench."
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "click",
+              "input",
+              "dispatch"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "description": "The value of the input action."
+          },
+          "event": {
+            "type": "object",
+            "description": "The event of the dispatch action, with its type."
+          }
+        },
+        "required": [
+          "name",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "element_rect",
+      "description": "Returns the rectangle of a declared element in window coordinates.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string",
+            "description": "Surface identifier from window_describe. Defaults to the choice of the workbench."
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The index of the element for an entry with several elements."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "exposure_describe",
+      "description": "Returns the declaration of one status, command or element with registered, including the parameter schema of a command.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "status",
+              "command",
+              "element"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "exposure_search",
+      "description": "Searches the declared statuses, commands and elements of a window. An entry matches when its name or description holds each word of the query; without a query every entry matches. Returns {entries, total, next} with entries as {kind, name, description, registered} in pages: pass after with next until next is null.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "status",
+              "command",
+              "element"
+            ]
+          },
+          "query": {
+            "type": "string"
+          },
+          "after": {
+            "type": "string",
+            "description": "The next key of the previous page."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Entries of a page. Defaults to 50."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "input_key",
+      "description": "Sends a native key event.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "key": {
+            "type": "string",
+            "description": "Enter, Tab, Escape, Backspace, Delete, Space, Arrow*, Home, End, PageUp, PageDown, or one character."
+          },
+          "text": {
+            "type": "string"
+          },
+          "modifiers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shift",
+                "control",
+                "option",
+                "command"
+              ]
+            }
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "down",
+              "up"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "phase"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "input_pointer",
+      "description": "Sends a native pointer event at window coordinates. A move to a window that is not the key window fails with 1006 unless activate is true.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "move",
+              "down",
+              "drag",
+              "up",
+              "scroll"
+            ]
+          },
+          "button": {
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ],
+            "description": "Defaults to left."
+          },
+          "deltaX": {
+            "type": "number",
+            "description": "Scroll distance in points."
+          },
+          "deltaY": {
+            "type": "number",
+            "description": "Scroll distance in points."
+          },
+          "clicks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "description": "Only for down and up: the click count. Defaults to 1."
+          },
+          "activate": {
+            "type": "boolean",
+            "description": "Only for move: makes the window the key window first."
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "phase"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "input_text",
+      "description": "Gives one step of a composition to the text input client of the key responder, as an input method does: mark sets the marked text, insert commits a text, unmark commits the marked text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "mark",
+              "insert",
+              "unmark"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "The marked or inserted text; unmark takes none."
+          },
+          "selection": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "length": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "start",
+              "length"
+            ],
+            "additionalProperties": false,
+            "description": "Only for mark: the selected range of the marked text in UTF-16 code units."
+          },
+          "replacement": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "length": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "start",
+              "length"
+            ],
+            "additionalProperties": false,
+            "description": "The range of the document text that the step replaces, in UTF-16 code units."
+          }
+        },
+        "required": [
+          "phase"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "status_get",
+      "description": "Returns the current value of a status.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string",
+            "description": "Surface identifier from window_describe. Defaults to the choice of the workbench."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "status_watch_once",
+      "description": "Waits for a status value. With equals, returns when the value equals it, including the current value; without equals, returns the next changed value. The wait has no time limit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "name": {
+            "type": "string"
+          },
+          "surface": {
+            "type": "string",
+            "description": "Surface identifier from window_describe. Defaults to the choice of the workbench."
+          },
+          "equals": {
+            "description": "The value to wait for."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "window_describe",
+      "description": "Describes a window in one step: window, layout, plugins and agent, then one row per declared entry with the current status values, the elements with the commands they run and the commands with their parameters. Rows come in pages: pass after with next until next is null.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "window": {
+            "type": "string",
+            "description": "Window identifier from windows_list. Defaults to the window of the agent, else the key window, else the first window."
+          },
+          "surface": {
+            "type": "string",
+            "description": "Describes only this surface."
+          },
+          "full": {
+            "type": "boolean",
+            "description": "Gives whole values and schemas instead of the compact form."
+          },
+          "after": {
+            "type": "string",
+            "description": "The next key of the previous page."
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "Rows of a page. Defaults to 200."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "windows_list",
+      "description": "Lists the windows of the application as {window, title, project, key, ready}.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

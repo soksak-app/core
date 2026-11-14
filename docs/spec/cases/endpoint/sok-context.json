@@ -1,0 +1,11 @@
+{
+  "name": "sok-context",
+  "description": "sok context with SOKSAK_SURFACE asks surface.window once and prints the configuration directory, the surface and its window.",
+  "replay": false,
+  "reason": "The case needs the environment variable SOKSAK_SURFACE of the sok that the test starts, which a window check of the application does not set.",
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "surface.window", "params": { "surface": "terminal-1" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": { "window": "project-a", "space": "space-1" } } },
+    { "close": "client" }
+  ]
+}

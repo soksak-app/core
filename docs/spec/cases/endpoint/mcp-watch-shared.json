@@ -1,0 +1,27 @@
+{
+  "name": "mcp-watch-shared",
+  "description": "Two status_watch_once calls of sok mcp on one status share one status.watch: the second call takes the current value that the first one read, and status.unwatch follows only when the last call, which the client cancels, ends without a result.",
+  "replay": false,
+  "reason": "The client cancels a call, which the replay of the application cannot do.",
+  "variables": {
+    "screen": { "type": "any", "example": "home" }
+  },
+  "steps": [
+    { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
+    { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
+    { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
+    { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }
+  ],
+  "mcp": {
+    "arguments": ["--window", "main"],
+    "steps": [
+      { "tool": "status_watch_once", "arguments": { "name": "core.screen", "equals": "project" }, "as": "first" },
+      { "received": "status.get" },
+      { "tool": "status_watch_once", "arguments": { "name": "core.screen", "equals": "$screen" }, "result": "$screen" },
+      { "cancel": "first" },
+      { "received": "status.unwatch" }
+    ]
+  }
+}

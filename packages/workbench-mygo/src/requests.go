@@ -51,7 +51,7 @@ func (q *Requests) Deliver(data ...any) {
 			q.closed(number)
 			return
 		}
-		q.registry.Reply(request.Method, request.Params, q.changed, func(result any, err error) {
+		q.registry.ReplyFor(request.ID, request.Method, request.Params, q.changed, func(result any, err error) {
 			q.calls.CallInOrder(exposureOrder, "exposureReply", replyOf(request.ID, result, err), func(_ any, err error) {
 				if err != nil {
 					q.failed(fmt.Sprintf("exposure reply: %v", err))

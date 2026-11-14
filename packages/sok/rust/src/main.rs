@@ -11,10 +11,24 @@ fn main() {
             std::process::exit(1);
         }
     };
+    // The variables of an agent that a surface started (docs/spec/cli.md#the-window-of-an-agent); a value that is not UTF-8 is
+    // refused.
+    let variable = |name: &str| match std::env::var(name) {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            eprintln!("sok: {name} is not valid UTF-8");
+            std::process::exit(1);
+        }
+    };
+    let config_dir_variable = variable("SOKSAK_CONFIG_DIR");
+    let surface_variable = variable("SOKSAK_SURFACE");
     let options = soksak_sok::Options {
         identifier,
         paths_dir: paths.as_deref().map_err(Clone::clone),
         core_version: soksak_sok::version::CORE_VERSION,
+        config_dir_variable: config_dir_variable.as_deref(),
+        surface_variable: surface_variable.as_deref(),
     };
     let code = soksak_sok::run_logged(
         &args,

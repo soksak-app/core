@@ -770,6 +770,15 @@ pub(crate) fn notify_sidecars(app: &AppHandle) {
     }
 }
 
+/// Sends setup-changed to every window (docs/spec/cli.md#agents-in-the-application).
+pub(crate) fn notify_setup(app: &AppHandle) {
+    for window in app.windows().values() {
+        if let Err(error) = emit_window(window, "setup-changed", ()) {
+            log_error("setup-changed", error);
+        }
+    }
+}
+
 /// Sends plugins-changed to all windows.
 pub(crate) fn notify_plugins(app: &AppHandle, change: crate::plugins::Changed) {
     // The enable of a plugin clears the sidecar stops of its manifest in one step, as a surface open does.
@@ -1847,6 +1856,8 @@ pub fn window_ready(window: &Window) -> Result<(), String> {
     end_reloads(&data, Ok(()));
     crate::exposure::rewatch(window);
     crate::deep_link::ready(window.app_handle());
+    // The environment of the login shell is read after the start of the first window, not on the start path.
+    window.app_handle().state::<crate::setup::Setups>().start();
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }
 

@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use serde_json::value::RawValue;
 use serde_json::{Map, Value};
 
+mod agent_window;
+pub mod agents;
 pub mod appupdate;
 mod command;
 mod debug;
@@ -26,6 +28,7 @@ pub mod log_policy;
 pub mod log_query;
 mod logged;
 mod manifest;
+mod mcp_server;
 mod output;
 mod ownership;
 mod path;
@@ -34,10 +37,13 @@ pub mod platform;
 pub mod plugin_catalog;
 pub mod plugins;
 mod process;
+pub mod registration;
 mod registry;
 pub mod replay;
 pub mod replay_inputs;
 pub mod routine;
+pub mod setup;
+pub mod skill;
 pub mod version;
 pub use logged::{Command, logged, run_logged, start_tool_event_log};
 pub use output::current_platform;
@@ -66,7 +72,14 @@ commands:
   debug replay SESSION [--until SEQUENCE]
                             replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
+  context                   prints the configuration directory, the surface of SOKSAK_SURFACE and its window
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
+  skill print|install       writes the agent skill to standard output or into the skill folder of each agent folder
+  mcp install               registers sok mcp with the claude command in its user scope
+  setup check               prints each setup part with its state and its install step
+  setup install [path|skill|mcp]...
+                            installs each missing setup part of the named kinds
+  setup environment         prints HOME, PATH and CLAUDE_CONFIG_DIR of the environment as one JSON line
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]
@@ -80,7 +93,7 @@ commands:
   plugin list               prints plugins/installed.json
 
 window:
-  --window NAME | --project DIRECTORY   without either, the only window of the application
+  --window NAME | --project DIRECTORY   without either, the window of the surface SOKSAK_SURFACE, else the only window of the application
 
 common options:
   --config-dir DIR          configuration directory of the running application (default: this application's)";
@@ -107,7 +120,7 @@ macro_rules! usage {
     ($($arg:tt)*) => { Error::Usage(format!($($arg)*)) };
 }
 
-const BOOLEANS: &[&str] = &["watch", "activate", "help"];
+const BOOLEANS: &[&str] = &["watch", "activate", "help", "full"];
 const OPTIONS: &[&str] = &[
     "wait",
     "bundle",
@@ -143,6 +156,8 @@ const OPTIONS: &[&str] = &[
     "channel",
     "class",
     "event-prefix",
+    "kind",
+    "query",
     "run",
     "order",
     "limit",
@@ -563,8 +578,24 @@ fn no_notify(_: &str, _: &RawValue) -> Result<(), String> {
     Ok(())
 }
 
-/// Chooses the window to request from --window, --project or the only window.
-fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
+/// The window whose layout holds the surface now, through `surface.window` (docs/spec/cli.md#the-window-of-an-agent). A surface in
+/// no window of ready windows (1012) fails with the text that names `SOKSAK_SURFACE`, and no other window is chosen.
+pub fn surface_window(
+    client: &mut Client,
+    surface: &str,
+) -> Result<agent_window::SurfaceHome, Failure> {
+    agent_window::surface_window(
+        &mut |method: &str, params: Option<Value>| client.request(method, params, &mut no_notify),
+        surface,
+    )
+}
+
+/// Chooses the window to request from --window, --project, the window of the surface of `SOKSAK_SURFACE` or the only window.
+fn select_window(
+    a: &Arguments,
+    client: &mut Client,
+    surface: Option<&str>,
+) -> Result<String, Error> {
     let by_name = a.values.get("window");
     let by_project = a.values.get("project");
     if by_name.is_some() && by_project.is_some() {
@@ -575,45 +606,25 @@ fn select_window(a: &Arguments, client: &mut Client) -> Result<String, Error> {
     if let Some(name) = by_name {
         return Ok(name.clone());
     }
-    let result = client.request("windows.list", None, &mut no_notify)?;
-    let windows: Vec<Value> = serde_json::from_str(&result)
-        .map_err(|error| format!("windows.list returned an unexpected value: {error}"))?;
-    let mut names: Vec<String> = windows
-        .iter()
-        .filter_map(|entry| entry["window"].as_str().map(String::from))
-        .collect();
-    names.sort();
+    if by_project.is_none()
+        && let Some(surface) = surface
+    {
+        return Ok(surface_window(client, surface)?.window);
+    }
+    let windows = agent_window::read_windows(&mut |method: &str, params: Option<Value>| {
+        client.request(method, params, &mut no_notify)
+    })?;
     if let Some(project) = by_project {
-        let target = std::fs::canonicalize(project)
-            .map_err(|error| format!("project directory {project}: {error}"))?;
-        for entry in &windows {
-            let Some(open) = entry["project"].as_str() else {
-                continue;
-            };
-            // default: a window whose project path cannot be resolved cannot be the target; no match returns the error that lists the windows.
-            if std::fs::canonicalize(open).ok().as_deref() == Some(target.as_path())
-                && let Some(name) = entry["window"].as_str()
-            {
-                return Ok(name.to_string());
-            }
-        }
-        return Err(Error::Failed(format!(
-            "no window shows the project {}; windows: {}",
-            target.display(),
-            names.join(", ")
-        )));
+        return Ok(agent_window::project_window(&windows, project)?);
     }
     if windows.len() != 1 {
         return Err(usage!(
             "the application has {} windows ({}); select one with --window or --project",
             windows.len(),
-            names.join(", ")
+            agent_window::window_names(&windows).join(", ")
         ));
     }
-    windows[0]["window"]
-        .as_str()
-        .map(String::from)
-        .ok_or_else(|| Error::Failed("windows.list returned a window without a name".into()))
+    Ok(windows[0].window.clone())
 }
 
 /// Writes JSON with two-space indentation and keeps the key order. The result equals json.Indent of Go.
@@ -812,6 +823,18 @@ pub struct Options<'a> {
     pub paths_dir: Result<&'a Path, String>,
     /// The core version used to choose plugins. The executable supplies the version of this crate.
     pub core_version: &'a str,
+    /// `SOKSAK_CONFIG_DIR` of the environment: the configuration directory when `--config-dir` is not given and it is not empty
+    /// (docs/spec/cli.md#the-window-of-an-agent).
+    pub config_dir_variable: Option<&'a str>,
+    /// `SOKSAK_SURFACE` of the environment: the surface whose window a command without a window uses when it is not empty.
+    pub surface_variable: Option<&'a str>,
+}
+
+impl Options<'_> {
+    /// The surface that `SOKSAK_SURFACE` names, or None when it is not set or empty.
+    pub fn surface(&self) -> Option<&str> {
+        self.surface_variable.filter(|surface| !surface.is_empty())
+    }
 }
 
 /// Runs one command and returns the exit status.
@@ -857,6 +880,9 @@ pub(crate) fn config_dir_of(
     options: &Options,
 ) -> Result<PathBuf, Error> {
     if let Some(dir) = values.get("config-dir") {
+        return Ok(PathBuf::from(dir));
+    }
+    if let Some(dir) = options.config_dir_variable.filter(|dir| !dir.is_empty()) {
         return Ok(PathBuf::from(dir));
     }
     let base = platform::current()?
@@ -929,6 +955,20 @@ fn execute(
         let action = a.positional(1, "path action")?;
         return path::run_path(&action, stdout, options);
     }
+    match first_two {
+        (Some("skill" | "setup"), _) | (Some("mcp"), Some("install")) => {
+            return setup::run_agent_setup(&a.positionals, stdout, options);
+        }
+        (Some("context"), _) => return context(&a, stdout, options),
+        // `sok mcp [window]` serves MCP on standard input and output (docs/spec/cli.md#mcp-server).
+        (Some("mcp"), _) => return mcp_server::run(&a, stderr, options),
+        _ => {}
+    }
+    if let Some(viewed) =
+        agent_window::run_agent_view(&a, stdout, options, &mut || connect_to(&a.values, options))
+    {
+        return viewed;
+    }
     let mut client: Option<Client> = None;
     let connect = |client: &mut Option<Client>| -> Result<(), Error> {
         if client.is_none() {
@@ -939,7 +979,11 @@ fn execute(
     let request = {
         let mut choose = || -> Result<String, Error> {
             connect(&mut client)?;
-            select_window(&a, client.as_mut().expect("connected above"))
+            select_window(
+                &a,
+                client.as_mut().expect("connected above"),
+                options.surface(),
+            )
         };
         plan(&a, &mut choose)?
     };
@@ -950,6 +994,37 @@ fn execute(
     let closed = client.close();
     outcome?;
     closed.map_err(Error::Failed)
+}
+
+/// Prints `{configDirectory, surface, window}`: the configuration directory that the command uses, the surface of `SOKSAK_SURFACE`
+/// and the window of that surface through `surface.window`, or `null` for both without it.
+fn context(a: &Arguments, stdout: &mut dyn Write, options: &Options) -> Result<(), Error> {
+    if let Some(extra) = a.positionals.get(1) {
+        return Err(usage!("context takes no argument: {extra}"));
+    }
+    if a.values.keys().any(|name| name != "config-dir") || a.flags.values().any(|given| *given) {
+        return Err(usage!("context takes only --config-dir"));
+    }
+    let config_dir = config_dir_of(&a.values, options)?;
+    let surface = options.surface();
+    let window = match surface {
+        None => None,
+        Some(surface) => {
+            let mut client = connect_to(&a.values, options)?;
+            let outcome = surface_window(&mut client, surface);
+            let closed = client.close();
+            let home = outcome?;
+            closed.map_err(Error::Failed)?;
+            Some(home.window)
+        }
+    };
+    let out = serde_json::to_string_pretty(&serde_json::json!({
+        "configDirectory": config_dir.display().to_string(),
+        "surface": surface,
+        "window": window,
+    }))
+    .map_err(|error| error.to_string())?;
+    writeln!(stdout, "{out}").map_err(|error| Error::Failed(error.to_string()))
 }
 
 #[cfg(test)]

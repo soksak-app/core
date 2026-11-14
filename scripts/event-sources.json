@@ -65,6 +65,14 @@
         "event": 1,
         "fields": 2,
         "only": "^packages/sok/"
+      },
+      {
+        "call": "emit_run_event",
+        "level": 0,
+        "event": 1,
+        "fields": 2,
+        "bare": true,
+        "only": "^packages/sok/"
       }
     ]
   }

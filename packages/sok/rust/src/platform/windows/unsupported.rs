@@ -119,4 +119,19 @@ impl Platform for Windows {
     fn key(&self) -> Result<String, String> {
         Err("platform key is not implemented on windows".into())
     }
+
+    fn read_only_volume(&self, path: &std::path::Path) -> Result<bool, String> {
+        Err(format!(
+            "the read-only flag of the volume of {} is not implemented on windows",
+            path.display()
+        ))
+    }
+
+    fn registrable_sok(&self, _sok: &std::path::Path) -> Result<bool, String> {
+        Err("application bundles are not implemented on windows".into())
+    }
+
+    fn exec(&self, _program: &std::path::Path, _arguments: &[String]) -> String {
+        "process replacement is not implemented on windows".into()
+    }
 }

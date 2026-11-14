@@ -58,6 +58,9 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	w := &s.settingsWindow
 	w.width, w.height = float64(width), float64(height)
 	s.tellLanguage(c.Locale())
+	// Showing the 에이전트 group reads the setup parts (docs/spec/settings.md#에이전트); the group stands in the common scope of
+	// the general section, and the scope is common while no project is selected.
+	s.setupOperations.Show(w.open && w.section == "general" && (w.scope == "common" || s.settings.Project() == ""))
 	if !w.open {
 		return
 	}
@@ -304,6 +307,8 @@ func (s *Shell) drawControl(c *ui.Context, control *SettingsControl, pane settin
 		s.exposedBox(c, control.Name, "", "").Grow(1).Basis(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
 			ui.Text(c, control.Label).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
 		})
+	case controlSetup:
+		s.drawSetupRow(c, control, pane)
 	case controlMark:
 		// The mark that the project value applies, the .set-applied of packages/workbench/app.css (docs/spec/settings.md#scope-of-a-control).
 		s.exposedBox(c, control.Name, "", control.item()).Shrink(0).Role(ui.RoleGroup).Label(control.Label).Children(func() {
@@ -553,5 +558,25 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 		if value != "" && (plain.drawSearchCancel(c) || field.Shortcut(0, ui.KeyEscape)) {
 			s.runControl(control, "")
 		}
+	})
+}
+
+// drawSetupRow draws a row of the 에이전트 group, as setupGroup of packages/workbench/settings-ui.js draws it: the name column, then
+// the state, the file and the install step of a missing path entry. The error of a part is drawn by the error display path.
+func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
+	row := control.setup
+	s.exposedBox(c, control.Name, "", control.item()).FillWidth().Row().MinHeight(pane.rowH).Gap(pane.rowGap).AlignItems(ui.Center).Role(ui.RoleGroup).Label(control.Label).Children(func() {
+		s.drawRowName(c, row.name, pane)
+		ui.Column(c).Grow(1).Basis(0).Gap(pane.captionGap).Children(func() {
+			if row.failed {
+				DrawError(c, s.errors, control.item())
+			} else {
+				ui.Text(c, row.state).Wrap().FontSize(s.textControl()).TextColor(s.palette.Fg)
+			}
+			ui.Text(c, row.file).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Muted)
+			if row.step != "" {
+				ui.Text(c, row.step).Wrap().FontSize(s.textSmall()).TextColor(s.palette.Fg)
+			}
+		})
 	})
 }

@@ -23,6 +23,7 @@ import {
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
+  openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
 } from "./plane.js";
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
@@ -42,7 +43,7 @@ import { systemNotifications } from "./system-notifications.js";
 import { windows } from "@soksak/runtime";
 import { audit, onBinding } from "./commands.js";
 import { onTextScope } from "./text-size.js";
-import { foldSection, onSectionsChange, selectSection, sidebarsState, sizeSection } from "./sidebar-sections.js";
+import { foldSection, onSectionsChange, sectionDrawn, selectSection, sidebarsState, sizeSection } from "./sidebar-sections.js";
 import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } from "./tab-reports.js";
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
@@ -421,6 +422,15 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   };
   // The host asks it before it waits for the presentation of the window (docs/spec/host-contract.md).
   registry.method(PLACEMENT_LAST, placementLast);
+  // The host asks each ready window for the space that holds a surface and answers surface.window with the window and the space
+  // (docs/spec/exposure.md#methods). A section surface belongs to a sidebar of this window and to no layout of a space, so a drawn
+  // section answers the space null.
+  registry.method("surface.window", ({ surface }) => {
+    if (typeof surface !== "string" || surface === "") throw new ExposureError(EXPOSURE_ERRORS.invalidParams, "surface must be a non-empty string");
+    const space = surfaceSpace(surface);
+    if (space !== null) return { space };
+    return sectionDrawn(surface) ? { space: null } : null;
+  });
   registry.command("core.settings.set", invalid(async ({ patch, scope }) => {
     await set(patch, scope, "core.settings.set");
   }));
@@ -586,6 +596,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => closeCard(card));
+  // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
+  registry.command("core.layout.open", (params) => openInLayout(params));
+  registry.command("core.layout.select", (params) => selectInLayout(params));
+  registry.command("core.layout.close", (params) => closeInLayout(params));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));
   registry.command("core.tab.unload", async ({ tab }) => {
@@ -680,7 +694,28 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
       const record = seated()?.surfaces.find((entry) => entry.id === surface);
       return record ? shift(record.applied, planeOrigin()) : null;
     },
-    elementPlace: overlayElementRect, elementInert: behindDialog, unloaded: (surface) => memory.unloaded(surface), leftOut: surfaceLeftOut });
+    elementPlace: overlayElementRect, elementInert: behindDialog, unloaded: (surface) => memory.unloaded(surface), leftOut: surfaceLeftOut,
+    snapshotParts: () => ({
+      layout: layoutDescription(),
+      plugins: pluginDescriptions(),
+      surfaces: surfacesState().map(({ surface, plugin: owner, kind, visible }) => ({
+        surface, plugin: owner, kind, visible, state: memory.unloaded(surface) ? "unloaded" : "loaded",
+      })),
+    }) });
+}
+
+/**
+ * The loaded plugins of the window for its snapshot (docs/spec/exposure.md#window-snapshot): {plugin, name, description, surface}, where
+ * surface is null for a plugin without a tab surface and otherwise the surface.params schema of its tabs or null and the extensions of
+ * surface.opens or [].
+ */
+function pluginDescriptions() {
+  return pluginUnits().map((unit) => {
+    if (!unit.surface) return { plugin: unit.id, name: unit.name, description: unit.description, surface: null };
+    const { params, opens } = plugin(unit.id);
+    // default: a plugin without surface.opens opens no file, which the snapshot lists as no extension.
+    return { plugin: unit.id, name: unit.name, description: unit.description, surface: { params, opens: opens ?? [] } };
+  });
 }
 
 // Action marker for window size changes (V5-104). It marks the log so that an event can be matched to the action that preceded it.

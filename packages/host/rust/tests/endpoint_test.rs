@@ -423,6 +423,21 @@ fn scripted_name_errors() {
     endpoint_case::play("scripted_name_errors", "name-errors");
 }
 
+// contract: endpoint.surface-window.resolves-the-owner, endpoint.surface-window.answers-1003-while-a-window-loads
+#[test]
+fn scripted_surface_window() {
+    endpoint_case::play("scripted_surface_window", "surface-window");
+}
+
+// contract: endpoint.surface-window.resolves-the-owner
+#[test]
+fn scripted_surface_window_in_no_window() {
+    endpoint_case::play(
+        "scripted_surface_window_in_no_window",
+        "surface-window-in-no-window",
+    );
+}
+
 // contract: endpoint.dialog.watch-reaches-the-host
 #[test]
 fn scripted_watch_host_dialog() {
@@ -448,6 +463,8 @@ const SCRIPTED: &[&str] = &[
     "no-result-recorded",
     "reply-after-peer-close",
     "round-trip-page-params",
+    "surface-window",
+    "surface-window-in-no-window",
     "target-params-order",
     "undeclared-methods-removed",
     "unwatch-without-watch",

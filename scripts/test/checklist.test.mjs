@@ -45,6 +45,15 @@ test("checklist permits translated text and linked follow-up identifiers", { tim
   assert.equal(result.status, 0, result.stderr);
 });
 
+test("documentation audit requires no translation pair for the agent texts that sok serves", { timeout: 3000 }, (t) => {
+  const done = ["- [o] G1 — done\n", "- [o] G1 — 완료\n"];
+  const skill = check(t, ...done, "", undefined, { "packages/sok/go/src/agents/SKILL.md": "---\nname: soksak\n---\n" });
+  assert.equal(skill.status, 0, skill.stderr);
+  const other = check(t, ...done, "", undefined, { "packages/sok/go/src/notes.md": "# Notes\n" });
+  assert.notEqual(other.status, 0, "documentation audit accepted a document without a translation pair");
+  assert.match(other.stderr, /packages\/sok\/go\/src\/notes\.md: missing translation pair/);
+});
+
 test("documentation audit rejects a stale current claim about completed scope", { timeout: 3000 }, (t) => {
   const result = check(t,
     "- [o] G1 — done\n\nControlled-site pixels and restored/new-document validation remain open under F3.\n",

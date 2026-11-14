@@ -40,6 +40,7 @@ type endpointCase struct {
 	Reason      string                  `json:"reason"`
 	Page        string                  `json:"page"`
 	Windows     []string                `json:"windows"`
+	Ready       []string                `json:"ready"`
 	Variables   map[string]caseVariable `json:"variables"`
 	Steps       []caseStep              `json:"steps"`
 }
@@ -76,8 +77,10 @@ type casePageStep struct {
 	Notice  *casePageNotice `json:"notice"`
 }
 
-// casePageCall is a request that the endpoint sends to the page: the method and its params, which are absent when it sends none.
+// casePageCall is a request that the endpoint sends to the page: the method and its params, which are absent when it sends none,
+// and the window of the page when the case names one.
 type casePageCall struct {
+	Window  string          `json:"window"`
 	Name    string          `json:"name"`
 	Payload json.RawMessage `json:"payload"`
 }
@@ -143,7 +146,7 @@ var endpointCasesOutsideTier = map[string]string{
 	"no-request":                       "the case has no host frame: it checks the reading of endpoint.json by the client, which the client tests check",
 	"exposure-list":                    "exposure.list answers the entries that the page declares",
 	"hello":                            "windows.list answers the entry of the main window with the ready state that the page reports",
-	"mcp-tools-list":                   "the MCP client reads exposure.list of a window, which needs a page",
+	"mcp-exposure-search":              "the MCP server reads exposure.list of a window, which needs a page",
 	"sok-capture-still":                "the sok client captures a registered window, which needs a page",
 	"sok-commands":                     "the sok client reads exposure.list of a window, which needs a page",
 	"sok-declared-rejects":             "the sok client reads exposure.list of a window, which needs a page",
@@ -236,7 +239,7 @@ func TestEndpointCases(t *testing.T) {
 // TestEndpointScriptedCases plays each case with a scripted page of docs/spec/cases/endpoint: the endpoint relays its requests to a
 // page that follows the page steps of the case, and every frame, page call, log record and watch of the case must be as the case
 // has it (docs/spec/cases/endpoint/README.md).
-// contract: endpoint.transport.undeclared-method-closes, endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid, endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window, endpoint.rpc.element-rect-role, endpoint.rpc.target-params-are-checked-in-order, endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase, endpoint.transport.close-reason-is-recorded, endpoint.close.reply-after-peer-close, endpoint.no-result.is-recorded, exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests, endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches, endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch, endpoint.watch.subscription-arrival-order, endpoint.watch.reply-before-current-value, endpoint.watch.unwatch-enters-the-queue-only-after-a-watch, endpoint.watch.other-requests-not-blocked-by-pending-subscription, endpoint.dialog.watch-reaches-the-host, exposure.list.host-owner-without-page, exposure.list.non-object-list-rejected, endpoint.input.dialog-answer
+// contract: endpoint.transport.undeclared-method-closes, endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid, endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window, endpoint.rpc.element-rect-role, endpoint.rpc.target-params-are-checked-in-order, endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase, endpoint.transport.close-reason-is-recorded, endpoint.close.reply-after-peer-close, endpoint.no-result.is-recorded, exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests, endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches, endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch, endpoint.watch.subscription-arrival-order, endpoint.watch.reply-before-current-value, endpoint.watch.unwatch-enters-the-queue-only-after-a-watch, endpoint.watch.other-requests-not-blocked-by-pending-subscription, endpoint.dialog.watch-reaches-the-host, exposure.list.host-owner-without-page, exposure.list.non-object-list-rejected, endpoint.input.dialog-answer, endpoint.surface-window.resolves-the-owner, endpoint.surface-window.answers-1003-while-a-window-loads
 func TestEndpointScriptedCases(t *testing.T) {
 	directory := endpointCaseDirectory(t)
 	entries, err := os.ReadDir(directory)
@@ -273,6 +276,7 @@ func playEndpointCase(t *testing.T, kase endpointCase) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", kase.Name, err)
 	}
+	page.ready = slices.Clone(kase.Ready)
 	log := support.UseEventLog(t)
 	wrote := make(chan struct{}, 1)
 	log.SetOnWrite(func(string, int64) {
@@ -333,6 +337,11 @@ func loadEndpointCase(path string) (endpointCase, error) {
 	}
 	if !kase.Replay && kase.Reason == "" {
 		return endpointCase{}, fmt.Errorf("%s: a case with replay false must give its reason", path)
+	}
+	for _, window := range kase.Ready {
+		if !slices.Contains(kase.Windows, window) {
+			return endpointCase{}, fmt.Errorf("%s: ready names the window %q, which windows does not have", path, window)
+		}
 	}
 	return kase, nil
 }
@@ -764,8 +773,10 @@ type casePage struct {
 	relay  *host.Relay[string]
 	script []casePageExchange
 
-	mu       sync.Mutex
-	windows  []string
+	mu      sync.Mutex
+	windows []string
+	// ready are the windows whose page reports that it is ready; the other windows are listed as loading.
+	ready    []string
 	next     int
 	held     []heldPageReply
 	watches  []string
@@ -839,7 +850,7 @@ func (p *casePage) Windows() []host.WindowEntry {
 	defer p.mu.Unlock()
 	entries := make([]host.WindowEntry, 0, len(p.windows))
 	for _, window := range p.windows {
-		entries = append(entries, host.WindowEntry{Window: window})
+		entries = append(entries, host.WindowEntry{Window: window, Ready: slices.Contains(p.ready, window)})
 	}
 	return entries
 }
@@ -871,8 +882,8 @@ func (p *casePage) PageRequest(ctx context.Context, window, method string, param
 		return nil, fmt.Errorf("%s: %w", method, errNoPage)
 	}
 	exchange := p.script[index]
-	if method != exchange.call.Name || !caseSameParams(params, exchange.call.Payload) {
-		p.problem("page call %d is %s %s, the case has %s %s", index, method, params, exchange.call.Name, exchange.call.Payload)
+	if method != exchange.call.Name || !caseSameParams(params, exchange.call.Payload) || (exchange.call.Window != "" && window != exchange.call.Window) {
+		p.problem("page call %d is %s %s to window %s, the case has %s %s to window %q", index, method, params, window, exchange.call.Name, exchange.call.Payload, exchange.call.Window)
 	}
 	result := p.relay.RequestContext(ctx, window, func(id uint64) error {
 		reply := exchange.reply

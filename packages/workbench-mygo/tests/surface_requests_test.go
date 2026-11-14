@@ -637,3 +637,42 @@ func TestACommandDeclarationWithATimeoutIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// A forward that serves a request of the host names that request as origin, so the end of the request ends the forward; a forward
+// that the workbench starts itself names none (exposureForward in docs/spec/exposure.md#relay).
+func TestAForwardNamesTheRequestThatItServes(t *testing.T) {
+	f := newSurfaceRequests(t)
+	f.frames["tab-a"] = [2]float64{0, 0}
+	f.register("tab-a", "command", "textprobe.input")
+	f.register("tab-a", "status", "textprobe.screen")
+	f.registry.SnapshotPartsOf(func() (workbench.SnapshotParts, error) {
+		return workbench.SnapshotParts{Plugins: []workbench.PluginDescription{},
+			Surfaces: []workbench.SnapshotSurface{{Surface: "tab-a", Plugin: "textprobe", Kind: "tab", State: "loaded", Visible: true}}}, nil
+	})
+	f.reply = func(request map[string]any) (any, error) {
+		if request["method"] == "exposure.snapshot" {
+			return map[string]any{"result": map[string]any{"status": []any{}, "commands": []any{}, "element": []any{}}}, nil
+		}
+		return map[string]any{"result": nil}, nil
+	}
+	if reply := f.ask("command.run", `{"name": "textprobe.input", "params": {}, "surface": "tab-a"}`); reply["error"] != nil {
+		t.Fatalf("the command answered %v", reply)
+	}
+	if reply := f.ask("exposure.snapshot", `{}`); reply["error"] != nil {
+		t.Fatalf("the snapshot answered %v", reply)
+	}
+	if reply := f.ask("status.watch", `{"name": "textprobe.screen"}`); reply["error"] != nil {
+		t.Fatalf("the watch answered %v", reply)
+	}
+	stop := f.registry.Observe("textprobe.screen", nil, false, func(any) {})
+	defer stop()
+	var origins []string
+	for _, forward := range f.forwards {
+		origin, named := forward["origin"]
+		origins = append(origins, fmt.Sprintf("%v %v %v", forward["method"], named, origin))
+	}
+	want := []string{"command.run true 7", "exposure.snapshot true 7", "status.watch true 7", "status.watch false <nil>"}
+	if !reflect.DeepEqual(origins, want) {
+		t.Fatalf("the forwards are %q, want %q", origins, want)
+	}
+}

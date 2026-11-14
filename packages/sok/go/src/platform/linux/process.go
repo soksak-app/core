@@ -119,3 +119,21 @@ func (linux) AppendLogFile(path string) (*os.File, error) {
 func (linux) OpenProcessLockFile(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 }
+
+// ReadOnlyVolume reads the flags of the file system of the path; MS_RDONLY has the value of the kernel's ST_RDONLY, which the
+// package unix does not define.
+func (linux) ReadOnlyVolume(path string) (bool, error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return false, &os.PathError{Op: "statfs", Path: path, Err: err}
+	}
+	return stat.Flags&unix.MS_RDONLY != 0, nil
+}
+
+// RegisteredSok accepts every sok: Linux has no application bundle, so the first sok on PATH is registered as it is.
+func (linux) RegisteredSok(string) error { return nil }
+
+// ReplaceProcess runs execve.
+func (linux) ReplaceProcess(path string, args, env []string) error {
+	return unix.Exec(path, args, env)
+}

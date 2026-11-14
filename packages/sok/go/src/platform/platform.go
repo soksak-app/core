@@ -46,6 +46,14 @@ type Platform interface {
 	AppendLogFile(path string) (*os.File, error)
 	// OpenProcessLockFile opens or creates the configuration ownership lock with private access (mode 0600 on Unix).
 	OpenProcessLockFile(path string) (*os.File, error)
+	// ReadOnlyVolume reports whether the file system of the path is mounted read-only (docs/spec/cli.md#mcp-registration).
+	ReadOnlyVolume(path string) (bool, error)
+	// RegisteredSok checks that the sok that the MCP registration names belongs to an application of this platform: on macOS it is
+	// in Contents/MacOS of a folder whose name ends in .app (docs/spec/cli.md#mcp-registration).
+	RegisteredSok(path string) error
+	// ReplaceProcess replaces the running process with the executable at path, with the arguments and the environment
+	// (docs/spec/cli.md#the-window-of-an-agent). It returns only when the replacement fails.
+	ReplaceProcess(path string, args, env []string) error
 }
 
 var current Platform

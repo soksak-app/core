@@ -50,7 +50,7 @@ func (b *Binder) Bound(element ui.Element, name string) ui.Element {
 // Press creates a button without a look that runs command with params, and gives it the element name name. item tells it from
 // the elements of the same name. Add its look and its children to the element that it returns.
 func (b *Binder) Press(c *ui.Context, name, command, item string, params any) ui.Element {
-	return b.Bound(ui.ButtonBase(b.next(c, name, command, item)).OnClick(func() {
+	return b.Bound(ui.ButtonBase(b.next(c, name, command, item, params)).OnClick(func() {
 		if b.pointer != nil {
 			b.pointer.Click(name)
 		}
@@ -64,25 +64,32 @@ func (b *Binder) Absent(c *ui.Context, name, command, item string, params any) u
 	if b.focus != nil {
 		b.focus.Hold(name)
 	}
-	return ui.Box(b.next(c, name, command, item)).Size(0, 0).Role(ui.RoleButton).OnClick(func() { b.run(command, params) })
+	return ui.Box(b.next(c, name, command, item, params)).Size(0, 0).Role(ui.RoleButton).OnClick(func() { b.run(command, params) })
 }
 
 // Control gives the next widget of c its element name and command, for a widget that takes its input as it is created. It returns
 // the function that runs the command with the value of the widget.
 func (b *Binder) Control(c *ui.Context, name, command, item string) func(params any) {
-	b.next(c, name, command, item)
+	b.next(c, name, command, item, nil)
 	return func(params any) { b.run(command, params) }
 }
 
-// next keys the next element of c, and refuses a name or a command that is not declared.
-func (b *Binder) next(c *ui.Context, name, command, item string) *ui.Context {
+// Frame starts the elements of a frame: the params of the elements of the last frame are dropped, and each element that the frame keys
+// records its own. The window calls it at the start of each frame.
+func (b *Binder) Frame() { clear(b.registry.params) }
+
+// next keys the next element of c with the params of its command, for the window snapshot (docs/spec/exposure.md#window-snapshot),
+// and refuses a name or a command that is not declared.
+func (b *Binder) next(c *ui.Context, name, command, item string, params any) *ui.Context {
 	if !b.registry.declared.Elements[name] {
 		panic(fmt.Sprintf("element name %s is not declared", name))
 	}
 	if !b.registry.declared.Commands[command] {
 		panic(fmt.Sprintf("command %s is not declared", command))
 	}
-	return c.Key(Exposed{Name: name, Command: command, Item: item})
+	key := Exposed{Name: name, Command: command, Item: item}
+	b.registry.params[key] = params
+	return c.Key(key)
 }
 
 // run runs command with params and hands a failure to the binder.

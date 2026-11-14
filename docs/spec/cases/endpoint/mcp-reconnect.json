@@ -1,6 +1,6 @@
 {
   "name": "mcp-reconnect",
-  "description": "After the host closes the connection, the next request of the server opens a new connection to the endpoint.json of the configuration directory and sends its request there.",
+  "description": "sok mcp started without an endpoint file answers a call with the error of the missing file and keeps serving; once the endpoint exists, the next call reaches it, and after the host closes the connection the next call opens a new connection to the endpoint.json of the configuration directory.",
   "replay": false,
   "reason": "The host closes the connection of a client only when the application ends the connection, which the replay cannot force on demand.",
   "variables": {
@@ -15,5 +15,15 @@
     { "close": "host" },
     { "send": { "jsonrpc": "2.0", "id": 1, "method": "windows.list" } },
     { "reply": { "jsonrpc": "2.0", "id": 1, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] } }
-  ]
+  ],
+  "mcp": {
+    "endpoint": "later",
+    "steps": [
+      { "tool": "windows_list", "arguments": {}, "error": "$config/endpoint.json does not exist; the application is not running" },
+      { "start": true },
+      { "tool": "windows_list", "arguments": {}, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] },
+      { "stderr": "sok: mcp: endpoint connection closed" },
+      { "tool": "windows_list", "arguments": {}, "result": [{ "window": "main", "title": "$title", "project": "$project", "key": "$key", "ready": "$ready" }] }
+    ]
+  }
 }

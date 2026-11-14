@@ -2,7 +2,7 @@
 
 [English](cli.md)
 
-`sok`은 soksak 애플리케이션의 command line이며, 모든 명령을 이것으로 공개한다. 두 package가 한 계약으로 이것을 구현한다. Tauri 애플리케이션용 Rust `packages/sok/rust`와 Wails·mygo 애플리케이션용 Go `packages/sok/go`이다([hosts](hosts.ko.md#command-line-트리)). 두 package는 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고(macOS에서는 `Contents/MacOS/sok`), host는 설정 창의 plugin 명령에 그 `sok`을 실행하므로 언어마다 설치 구현은 하나다. `sok`은 `--config-dir`가 다른 폴더를 지정하지 않으면 자신이 속한 애플리케이션의 설정 폴더(`app.soksak.tauri`, `app.soksak.wails` 또는 `app.soksak.mygo`, `dev` 플래그 빌드는 `.dev`를 붙인다. [projects](projects.ko.md#저장) 참조)를 쓴다. 그래서 `PATH`가 닿는 `sok`이 구현과 설정 폴더를 정한다. `PATH`는 bundle의 실행 파일 폴더를 담은 경로 항목 `/etc/paths.d/<application identifier>`로 bundle에 닿는다. `sok path install`은 그것을 실행한 `sok`의 항목을 쓰고 `sok path remove`는 지운다. 둘 다 관리자 권한(`sudo`)이 필요하고, 되풀이해도 결과가 같으며, 쓰기에 실패하면 파일과 이유를 보고한다. 새 shell이 항목을 읽는다. Command line은 symbolic link를 쓰지 않는다.
+`sok`은 soksak 애플리케이션의 command line이며, 모든 명령을 이것으로 공개한다. 두 package가 한 계약으로 이것을 구현한다. Tauri 애플리케이션용 Rust `packages/sok/rust`와 Wails·mygo 애플리케이션용 Go `packages/sok/go`이다([hosts](hosts.ko.md#command-line-트리)). 두 package는 애플리케이션 framework를 link하지 않는다. 각 애플리케이션 bundle은 실행 파일 옆에 자기 `sok`을 담고(macOS에서는 `Contents/MacOS/sok`), host는 설정 창의 plugin 작업과 setup 작업에 자기 언어 `sok`의 library를 link하므로([애플리케이션 안의 plugin 작업](installation.ko.md#애플리케이션-안의-plugin-작업)) 언어마다 설치 구현은 하나다. `sok`은 `--config-dir`가 다른 폴더를 지정하지 않으면, 그것이 없을 때는 환경의 `SOKSAK_CONFIG_DIR`가 설정되어 있고 비어 있지 않으면 그 폴더를([에이전트의 창](#에이전트의-창)), 그 밖에는 자신이 속한 애플리케이션의 설정 폴더(`app.soksak.tauri`, `app.soksak.wails` 또는 `app.soksak.mygo`, `dev` 플래그 빌드는 `.dev`를 붙인다. [projects](projects.ko.md#저장) 참조)를 쓴다. 그래서 `PATH`가 닿는 `sok`이 구현을 정하고, 애플리케이션 밖에서 설정 폴더는 그 `sok`의 것이다. `PATH`는 bundle의 실행 파일 폴더를 담은 경로 항목 `/etc/paths.d/<application identifier>`로 bundle에 닿는다. `sok path install`은 그것을 실행한 `sok`의 항목을 쓰고 `sok path remove`는 지운다. 둘 다 관리자 권한(`sudo`)이 필요하고, 되풀이해도 결과가 같으며, 쓰기에 실패하면 파일과 이유를 보고한다. 새 shell이 항목을 읽는다. Command line은 symbolic link를 쓰지 않는다.
 
 ## 운영체제
 
@@ -17,6 +17,8 @@
 | `sok <command> [window] [--surface <id>] [--<parameter> <value>]... [--params <json>]` | 실행 중인 애플리케이션에서 core나 plugin이 선언한 command를 [endpoint](endpoint.ko.md) method `command.run`으로 실행한다 |
 | `sok commands [window] [--query <text>]` | `exposure.list`의 `commands` 목록을 출력한다. 선언된 command마다 설명, 매개변수 schema, 결과 schema다. `--query`는 query에 맞는 command만 남긴다([탐색](#탐색)) |
 | `sok windows` | 실행 중인 애플리케이션의 창을 나열한다 |
+| `sok describe [window] [--surface <id>] [--full] [--after <key>] [--limit <n>]` | 창의 설명을 출력한다. 창과 그 안의 각 surface의 항목을 현재 status 값, element, command와 함께 담는다([창 설명](#창-설명)) |
+| `sok context` | `{configDirectory, surface, window}`를 출력한다. 명령이 쓰는 설정 폴더, `SOKSAK_SURFACE`가 지정한 surface 또는 `null`, 그 surface의 창 또는 `null`이다([에이전트의 창](#에이전트의-창)) |
 | `sok exposures [window] [--kind status\|command\|element] [--query <text>]` | 선언된 모든 status, command, element 항목을 나열한다. `--kind`는 목록 하나만, `--query`는 query에 맞는 항목만 남긴다([탐색](#탐색)) |
 | `sok status <name> [window] [--surface <id>] [--watch]` | Status 값을 출력한다. `--watch`는 값과 이후 바뀔 때마다 JSON 한 줄씩 출력한다. SIGINT나 SIGTERM은 watch를 끝낸다: signal을 받은 routine이 연결을 닫고, 닫힘의 결과와 함께 명령을 기록하고, 상태 0으로, 또는 닫힘의 오류와 함께 1로 프로세스를 끝낸다. 명령이 표준 출력 쓰기에서 기다리는 동안에도 같다 |
 | `sok element rect\|click\|input\|dispatch <name> [window] [--surface <id>] [--index <n>] [--value <text>] [--event <json>]` | 선언된 element 항목에 동작한다 |
@@ -46,7 +48,7 @@
 
 ## 창
 
-`[window]`는 `--window <name>` 또는 `--project <directory>`다. `--project`는 둘을 canonical 경로로 바꾼 뒤, 열린 project 폴더가 그 폴더인 창을 고른다. 둘 다 없으면 창이 하나일 때 그 창을 쓰고, 여러 개면 실패하며 창 목록을 보인다.
+`[window]`는 `--window <name>` 또는 `--project <directory>`다. `--project`는 둘을 canonical 경로로 바꾼 뒤, 열린 project 폴더가 그 폴더인 창을 고른다. 둘 다 없으면 환경이 surface를 지정한 `sok`은 그 surface의 창을 쓰고([에이전트의 창](#에이전트의-창)), 그 밖에는 창이 하나일 때 그 창을 쓰고, 여러 개면 실패하며 창 목록을 보인다.
 
 ## 매개변수
 
@@ -64,14 +66,19 @@ sok은 애플리케이션에 연결하기 전에 명령의 인자를 검사하�
 
 ## Event log
 
-`sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값이거나 애플리케이션의 기본 디렉터리다. `registry build`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 시작 시각(초)과 프로세스 식별자다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.
+`sok path install`과 `sok path remove`를 뺀 `sok`을 실행할 때마다 명령이 대상으로 삼는 설정 디렉터리에 자신의 event 파일 `logs/sok-<boot>.jsonl`을 쓴다. 대상은 명령을 해석하기 전에, 인자 `--` 앞에서만 읽는 `--config-dir`의 값, 그것이 없으면 설정되어 있고 비어 있지 않은 `SOKSAK_CONFIG_DIR`, 그 밖에는 애플리케이션의 기본 디렉터리다. `registry build`처럼 설정을 읽지 않는 명령도 기본 디렉터리에 기록한다. 파일은 층 `sok`으로 [event 계약](logging.ko.md)을 따르고, boot 식별자는 Unix epoch 이후 시작 시각(나노초)과 프로세스 식별자이므로, `exec`으로 프로세스를 대신하는 `sok`([에이전트의 창](#에이전트의-창))은 다른 파일을 쓴다. 도구는 `logs/`(mode 0700)와 파일(mode 0600, 새로 만듦)이 없으면 만든다. 파일은 level `error`, `warn`, `info`를 담고, level `debug`와 `trace`의 event(상태 0으로 끝나는 명령의 `sok.command`)는 `logs/sok-<boot>.debug.jsonl`에 있다. 도구는 이 파일을 첫 event와 함께 만들고 `log.open`으로 시작한다. 한 번의 실행이 저장하는 것은 다음과 같다.
 
 - 첫 줄 `log.open`.
 - 명령이 끝날 때 한 번 `sok.command`: 명령 단어(`name`), 공백으로 이은 인자(`args`), 실행의 마이크로초, `ok`, 종료 상태(`status`), 상태가 0이 아니면 표준 오류의 첫 줄(`error`). `args`와 `error`는 문자 경계에서 1024바이트로 자르고, 둘 중 하나라도 잘렸으면 event에 `truncated: true`가 붙는다. level은 `debug`이고, 상태가 0이 아니면 `warn`이다.
+- 실행이 명령을 `SOKSAK_CONFIG_DIR`의 애플리케이션의 `sok`에 넘길 때 level `info`의 `sok.exec`: `from`, `to`, `config`([에이전트의 창](#에이전트의-창)).
+- `sok setup install`이 `sudo <sok> path install`을 실행했으면 `sok.setup.path`: 경로 항목 파일(`file`), `ok`, 실패한 단계면 그 오류(`error`). `error`는 문자 경계에서 1024바이트로 자르고, 잘렸으면 `truncated: true`가 붙는다. level은 `info`이고, 실패한 단계면 `warn`이다.
+- `sok mcp`가 시작할 때 skill을 최신으로 만들며 쓰지 못한 skill 파일마다 level `error`의 `sok.skill`: 그 skill 파일(`file`)과 소문자로 쓴 운영체제 이유(`reason`). 설정되지 않은 `HOME`이나 읽을 수 없는 agent folder처럼 skill 파일을 밝히지 않는 실패에는 `file`이 없고 그 글 전체가 `reason`이다([MCP server](#mcp-server)).
 - `sok debug replay`가 저장된 hash와 재생한 hash가 다른 것을 찾으면 level `error`의 `sok.replay.divergence`: session, segment, 순번, 층, 기대한 hash와 찾은 hash([replay](replay.ko.md#명령)).
 - panic이면 level `error`의 `sok.panic`: panic한 goroutine이나 thread(명령이면 `main`), panic의 글, panic 시점의 stack. 도구는 `sok: panic: <text>`와 stack을 표준 오류에 쓰고, event와 상태 4의 `sok.command`를 저장하고, 파일을 flush한 뒤 상태 4로 끝난다. 명령이 아닌 goroutine이나 thread의 panic도 같은 방식으로 프로세스를 끝낸다.
 
 Go 도구의 모든 goroutine은 `Go`(`src/routine.go`)로, Rust 도구의 모든 thread는 `spawn_named`(`src/routine.rs`)로 시작한다. 이 둘이 도구에서 goroutine이나 thread를 시작하고 panic을 recover하는 유일한 곳이며, [event source check](logging.ko.md#event-sources)가 이를 요구한다. writer는 [상한](logging.ko.md#상한)의 한도를 가진 event 계약의 writer이고, 한 번의 실행이 저장하는 event는 위 몇 개뿐이므로 두 파일 모두 rotate하지 않는다. 만들 수 없는 폴더나 파일은 표준 오류에 `sok: event log: <path>: <reason>`로 보고하고, 명령은 기록 없이 실행되며 자기 종료 상태를 유지한다. 도구는 이 파일을 읽지 않으며, 읽는 쪽은 로그 감사와 사람뿐이다.
+
+`sok path install`과 `sok path remove`는 event 파일을 열지 않고 경로 항목 폴더에만 쓴다. 이 둘은 `sudo`를 거쳐 root로 실행되므로, 사람의 설정 디렉터리에 만든 폴더나 파일은 root의 것이 되어 사람이 나중에 실행할 때 거부된다. 둘 중 하나의 panic은 표준 오류에 쓰이고 상태 4로 끝난다. `sudo <sok> path install`을 실행하는 `sok setup install`은 그 단계의 결과를 사람으로서 자기 event 파일에 `sok.setup.path`로 저장한다.
 
 ## Release, registry
 
@@ -111,30 +118,70 @@ Agent는 사람의 컴퓨터에서 사람을 위해 명령을 실행하고 도�
 
 ### 에이전트 글
 
-`packages/sok/agents/`는 agent가 읽는 글을 두 구현을 위해 한 벌로 담는다.
+`packages/sok/go/src/agents/`는 agent가 읽는 글을 두 구현을 위해 한 벌로 담는다.
 
 | 파일 | 내용 |
 | --- | --- |
 | `SKILL.md` | Agent skill([에이전트 skill](#에이전트-skill)) |
 | `mcp.json` | `{instructions, tools}`: UTF-8로 4096 byte 이하인 MCP server의 instructions와, `tools/list` 순서의 각 도구의 `name`, `description`, `inputSchema`([MCP server](#mcp-server)) |
 
-Rust `sok`은 이 폴더의 파일을 `include_str!`로 포함한다. Go `sok`은 `go:embed`가 embed하는 package의 폴더 아래 파일만 읽으므로 그 사본을 `packages/sok/go/src/`에 두고 embed한다. `cli.agents.copies-equal-the-sources`의 Go test가 각 사본을 원본과 비교하며, 이는 `make check-exposure`가 `packages/workbench-mygo`의 선언 사본을 원본과 같게 유지하는 것과 같다. 이 폴더는 package가 아니다. Manifest가 없고, 두 package의 test는 `docs/spec/cases`의 case를 읽듯 이것을 읽는다. 두 server는 library가 type에서 만드는 schema가 아니라 `mcp.json`의 input schema를 그대로 도구에 등록하므로 두 목록은 같은 JSON이다.
+Go `sok`은 파일을 `go:embed`로 embed한다. `go:embed`는 embed하는 package의 폴더 아래 파일만 읽으므로 이 폴더는 Go package `sok`의 폴더 안에 있다. Rust `sok`은 같은 파일을 `include_str!`로 포함하므로 두 구현은 한 벌에서 build된다. 이 파일은 `sok`이 agent에게 쓰고 제공하는 프로그램의 글이며 repository의 문서가 아니므로 한국어 번역 짝이 없고, `make check-docs`가 이 폴더에 대해 그렇게 밝힌다. 두 server는 library가 type에서 만드는 schema가 아니라 `mcp.json`의 input schema를 그대로 도구에 등록하므로 두 목록은 같은 JSON이다.
 
 ### 탐색
 
 애플리케이션은 agent가 한 번에 읽을 수 있는 것보다 많은 command, status, element를 선언하고, 설치된 plugin마다 자기 것을 더한다([노출](exposure.ko.md#선언)). 그래서 agent는 필요한 항목을 필요할 때 실행 중인 애플리케이션의 노출에서 찾으며, 미리 쓴 목록에서 찾지 않는다. Plugin을 설치, 제거, 사용, 사용 안 함으로 바꾸면 창이 workbench를 다시 시작한 뒤 `exposure.list`가 바뀌고([변경 적용](installation.ko.md#변경-적용)), 다음 탐색은 바뀐 목록을 읽는다. 더는 선언되지 않은 항목의 요청은 그 이름을 밝히는 엔드포인트 오류로 실패한다.
 
+Core, host, 불러온 각 plugin이 선언한 모든 command, status, element에 agent가 닿는다. 창의 `exposure.list`는 그 전부를 담고, `--query` 없는 `sok exposures`와 `sok commands`는 그 전부를 출력하며, query 없는 `exposure_search`는 그 전부를 그 수와 함께 page로 나열하고, 선언된 command 가운데 `sok <command>`와 `command_run`에서 빠지는 것은 없다. 사람의 응답을 받는 대화상자를 여는 command처럼 작업에 사람이 필요한 command도 다른 모든 command처럼 실행된다. `host.dialog`처럼 그것이 바꾸는 status가 agent에게 사람이 필요함을 보여 주고, skill은 agent에게 사람에게 묻게 한다. 노출의 어느 것도 agent에게 숨기지 않으므로, agent는 자기 창에서 할 수 있는 모든 것을 배울 수 있다.
+
 Query의 각 단어가 항목의 이름이나 설명의 일부이면 query는 그 항목에 맞는다. 단어는 query에서 space, tab, 줄바꿈 사이의 부분이고, 빈 부분은 단어가 아니다. `A`부터 `Z`와 `a`부터 `z`는 대소문자를 가리지 않고 맞으며, 다른 모든 문자는 자기 자신에만 맞는다. 빈 query는 모든 항목에 맞는다. `sok exposures --query`와 `sok commands --query`는 맞는 항목을 `exposure.list`의 순서로 전체 선언과 함께 출력하고, MCP 도구 `exposure_search`도 같은 규칙을 쓴다.
+
+### 창 설명
+
+`sok describe`와 MCP 도구 `window_describe`는 `exposure.snapshot`([창 snapshot](exposure.ko.md#창-snapshot))으로 창을 요청 하나에 설명한다. Host, core, plugin과 함께 각 surface의 항목, 각 status의 현재 값, role, 글, 보임 여부, 실행하는 command를 가진 element, 매개변수를 가진 command를 담는다. 그래서 agent는 창이 무엇을 보여 주고 창에 무엇을 보낼 수 있는지를 한 단계에 배운다. 창은 [창 규칙](#창)의 창이고, `surface`는 surface 하나를 설명한다.
+
+설명은 snapshot의 `window`, `layout`, `plugins`로 시작한다. 이것들은 작고 agent가 무엇이든 배치하려면 필요하므로 두 형식 모두에서 전부 담는다. 그리고 `agent`로 시작하며, 이것은 `SOKSAK_SURFACE`가 그 창의 surface를 지정하면 agent 자신의 surface의 `{surface, space, card}`이고, 아니면 `null`이다. `space`는 `surface.window`가 답한, 그 surface를 layout에 가진 space이고 section surface면 `null`이다. `card`는 그 surface의 카드이며, section surface이거나 그 space가 설명이 레이아웃을 담는 active space가 아니면 `null`이다. 그 뒤는 항목마다 한 row인 순서 있는 row 목록이고, 각 row는 snapshot이 준 group(`host`, `core`, 또는 surface와 그 plugin)을 가지며, 그 뒤에 `unregistered`의 row가 온다. 기본인 compact 형식은 row마다 다음을 담는다. 이름, 첫 문장에서 자른 설명, status는 200자로 자른 JSON 글인 값과 잘렸을 때의 `cut: true`, command는 schema에서 만든 `<name>: <type>` 형태의 매개변수, element는 `index`, `role`, `text`, `visible`, `inert`, `command`를 가진 처음 20개의 item과, 더 있을 때의 `cut: true`와 `itemsTotal`이다. 나머지 item에는 `full`, `exposure_describe`, `index`를 준 `element_rect`로 닿는다. `full`은 row를 snapshot이 주는 대로, 전체 값과 schema와 함께 준다. `window`, `layout`, `plugins`, `agent`는 첫 page에 있다. 각 row는 key `<group> <kind> <name>`을 가지며, group은 `host`, `core`, surface 식별자, `unregistered`다. Page는 key가 `after`인 row 다음의 row(`after`가 없으면 첫 row부터)를 최대 `limit`개(1부터 500, 기본 200) 담고, JSON 글을 40000 byte보다 길게 만들 row 앞에서 끝난다. 혼자서 더 긴 row는 값이나 item을 자르고 `cut: true`를 붙여 그 page의 유일한 row가 된다. 그래서 모든 page는 row를 하나 이상 담고 나열은 언제나 나아간다. 이 한도는 page를 agent가 도구 결과 하나에 두는 한도, 기본 25000 token 안에 둔다. 애플리케이션에서 가장 조밀한 글인 한글 글은 UTF-8 3 byte에 약 1 token을 차지하므로 40000 byte는 약 13000 token에 머문다. 설명은 row의 수인 `total`과, 뒤에 row가 있으면 page의 마지막 row의 key, 아니면 `null`인 `next`를 가진다. 각 page는 새 snapshot이다. Page들의 row를 합치면 각 page 시점의 창 항목이고, 그 page 전에 변경으로 없어진 row는 나열되지 않는다. 그래서 나열은 밀리는 offset 없이 바뀌는 창을 따른다. Key가 새 snapshot의 어떤 row도 가리키지 않는 `after`는, 변경이 그 row를 없앴든 key가 처음부터 row를 가리키지 않았든 `after <key> names no row of the description`으로 실패하고, 맞는 항목을 가리키지 않는 `exposure_search`의 `after`는 `after <key> names no entry of the search`로 실패한다. 없는 key 다음의 page는 알 수 없으므로 agent는 `after` 없이 나열을 다시 시작한다. JSON 글이 lone surrogate escape, 곧 UTF-16 surrogate pair의 한쪽만 있는 `\u` escape를 담은 status 값은 어떤 문자도 가리키지 않으므로 설명은 `status <name> of group <group>: the value holds a lone surrogate escape`로 실패한다. `encoding/json`은 그런 escape를 U+FFFD로 decode하고 `serde_json`은 거부하므로, 두 구현 모두 decode하기 전에 글을 검사한다.
+
+### 레이아웃에 동작하기
+
+Agent는 자기 창이나 surface에 한정되지 않는다. 모든 요청은 `window`와 `surface`를 받고, 그것이 없는 요청의 창은 agent 자신의 창이다([에이전트의 창](#에이전트의-창)). `windows_list`와 `window`를 준 `window_describe`는 애플리케이션의 모든 창을 설명한다.
+
+창의 배치에 관한 모든 요청은 모델 하나와 그 위의 operation 셋으로 정리된다. 요청의 종류마다의 command나 skill 부분은 없다. 요청은 모델의 node에 대한 이 operation들의 조합이다.
+
+모델은 창의 설명이다([창 snapshot](exposure.ko.md#창-snapshot)). 창은 active space의 `layout`을 담는다. 이것은 안쪽 node가 `direction`과 각 자식의 `size`를 가진 split이고 leaf가 content 카드인 tree다. 카드는 탭을 탭 순서로 담고 active 탭을 표시한다. 탭은 plugin, `params`(경로나 주소처럼 연 resource), title을 가진 surface다. 그리고 surface의 row는 그 노출, 곧 surface가 등록한 status, element, command다. 탭의 식별자는 그 surface의 식별자이므로 탭과 그 노출은 식별자 하나를 공유한다. 사이드바의 섹션 surface에는 탭이 없고 tree 밖에 있다. 카드, 탭, surface는 있는 동안 유지되는 식별자를 가진다. Split은 식별자가 없다. 레이아웃은 선과 카드를 저장하고 split을 저장하지 않으며, 설명의 split은 설명마다 그것들에서 만들어지기 때문이다([창 snapshot](exposure.ko.md#창-snapshot)). Operation은 대상을 카드나 탭의 식별자, 또는 `current`로만 지정한다. `card: "current"`는 창의 focus된 카드이고 `tab: "current"`는 그 카드의 active 탭이며, 적용마다 정해진다. Active가 아닌 space의 카드나 탭은 `<card or tab> <id> is in space <space>, which is not active`로 실패하고, 창의 어느 space에도 없는 것은 `<card or tab> <id> is not in the layout of window <name>`로 실패한다.
+
+Operation은 core의 command이며, 카드 컨트롤의 command 옆에 선언된다. 카드 컨트롤의 command는 사람이 실행할 때마다 탭을 더하거나 카드를 나누므로 그대로 남는다.
+
+| Command | 매개변수 | 결과 | 규칙 |
+| --- | --- | --- | --- |
+| `core.layout.open` | `{card, plugin, params?, side?}` 또는 `{card, path, side?}` | `{card, tab}` | `side`가 없으면 대상 카드는 `card`다. `side`(`left`, `right`, `top`, `bottom`)가 있으면 대상 카드는 `side` 쪽의 `card`의 이웃이다. 이웃은 그 변이 `card`의 `side` 쪽 변의 선 위에 있고, 그 변을 가로지르는 범위가 `card`와 같은 두 선에 걸치는 카드이며, 좌표가 아니라 레이아웃의 선으로 비교하고, 없으면 없다. 대상 카드가 `params`가 JSON 값으로서 `params`와 같은 `plugin`의 탭을 담으면(생략한 `params`는 `null`이고, member의 순서와 수의 형태는 차이가 없다), operation은 탭 순서에서 그런 첫 탭을 고른다. 아니면 `params`를 가진 `plugin`의 탭을 `card`에 더하거나, `side`가 있으면 `card`를 `side` 쪽으로 나눠 그 탭을 가진 새 카드를 만든다. `path`는 `path`의 확장자를 여는 plugin과 `params` `{path}`를 뜻하며, 경로는 [plugin.json](plugins.ko.md#pluginjson)의 정규 형태로 된 project root에 상대인 경로다. 그래서 `./aaa.html`과 `aaa.html`은 탭 하나를 지정한다. `params`는 그 plugin의 `surface.params`에 맞아야 한다. 결과는 카드와 탭을 밝히며, 그 탭은 선택되고 그 카드에 focus가 있다 |
+| `core.layout.select` | `{tab}` | `{card, tab}` | `tab`을 그 카드의 active 탭으로 하고 그 카드에 focus를 준다. 이미 active이고 focus가 있는 탭은 그대로 둔다 |
+| `core.layout.close` | `{tab}` | `{closed}` | 탭의 닫기 컨트롤처럼 `tab`을 닫고, 탭이 없는 카드는 닫힌다. 저장하지 않은 변경이 있는 탭에는 그 컨트롤의 질문을 열며, `core.picker`가 그것을 보여 주고, 곧바로 `closed: false`로 답한다. 사람이 질문에 답하고, 다음 설명의 `layout`의 탭이 그 결과다. 그 질문이 열려 있는 동안 그 탭의 닫기는 다른 질문을 열지 않고 다시 `closed: false`로 답한다. 이 창이 그 workbench가 시작한 뒤 닫은 탭은 `closed: true`로 답하고 아무것도 바꾸지 않는다. 창에 있었던 적이 없는 탭은 `tab <id> is not in the layout of window <name>`로 실패한다 |
+
+각 operation은 식별자에 대해 idempotent하다. 같은 카드와 탭 식별자로 같은 operation을 두 번째 적용하면 같은 상태를 남기고 같은 결과를 돌려준다. `current`는 적용마다 정해지고 operation은 결과의 카드에 focus를 주므로, 되풀이는 첫 적용이 돌려준 식별자를 지정한다. `core.layout.open`은 첫 적용이 만든 탭을 찾는다. 그것이 여는 탭의 정체는 카드, plugin, `params`이고, split은 새 카드를 `side` 쪽의 이웃에 두며, 두 번째 적용은 모든 배치에서 거기서 그것을 찾기 때문이다. `core.layout.select`는 두 번째에 아무것도 바꾸지 않고, `core.layout.close`는 다시 `closed: true`로 답한다. 창의 workbench는 레이아웃 operation을 하나씩 적용하고, operation은 한 turn에 레이아웃을 판단하고 바꾼다. 그래서 같은 operation을 동시에 보내는 두 agent는 탭 하나를 만들고 결과 하나를 받는다. 대상이 없거나 바뀔 수 없으면 operation은 변경 없이 카드 command의 오류로 실패한다. 그 쪽으로 나눌 수 없는 카드, 전체 화면 배치의 카드, 알 수 없는 plugin, 맞지 않는 `params`가 그렇다.
+
+다음은 예제 요청이며, 각각 operation의 조합이다. 각각 `window_describe`(또는 `sok describe`)로 시작하고, `<process plugin>`처럼 꺾쇠 안의 이름은 agent가 설명의 `plugins`에서 설명, `surface.params`, `opens`로 고른 plugin을 뜻한다.
+
+| 요청 | 단계 |
+| --- | --- |
+| Agent의 카드 오른쪽 카드를 나눈다. 한쪽에는 process session을, 다른 쪽에는 주소를 보인다 | `R`은 카드 사이 간격을 건너 `agent.card`의 frame 오른쪽 변에서 frame이 시작하고, 세로 방향으로 그것과 가장 많이 겹치는 카드다. 둘이 같게 겹치면 agent는 사람에게 묻는다. `core.layout.open {card: R, side: "bottom", plugin: <process plugin>}`은 `{card: N, tab: T}`를 준다. `core.layout.open {card: R, plugin: <address plugin>, params: {<its address parameter>: "http://localhost:3366"}}`은 `{card: R, tab: U}`를 준다. 그 뒤 `N`은 `R` 아래에서 `T`를 담고, `R`은 이전 탭들과 active인 `U`를 담는다 |
+| Process session의 카드에서 편집 plugin을 파일 `aaa.html`과 함께 새 탭으로 연다 | `C`는 `tabs`에 process plugin의 탭을 담은 카드다. `core.layout.open {card: C, plugin: <editing plugin>, params: {path: "aaa.html"}}`은 `{card: C, tab: E}`를 준다. Agent가 plugin을 지정하지 않으면 `core.layout.open {card: C, path: "aaa.html"}`이 `.html`을 여는 plugin을 고른다 |
+| Process session의 탭으로 바꾼다 | `T`는 `layout`에서 `plugin`이 process plugin인 탭이며, 여럿이면 요청이 밝히는 `title`의 탭이다. `core.layout.select {tab: T}`는 `{card: N, tab: T}`를 준다 |
+
+응답을 잃은 뒤 돌려받은 식별자로 되풀이한 요청이나 두 번째 agent가 보낸 요청은 같은 식별자를 주고 카드나 탭을 더하지 않는다. 한 단계 뒤 탭의 plugin의 command는 `exposure_search`나 `window_describe {surface}`로 찾고 `command_run {surface}`로 실행한다. Skill은 모델과 세 operation을 가르치고, 이 요청들을 그것들의 조합으로만, 실제 plugin의 식별자가 아니라 plugin의 역할로 준다. 설치된 plugin은 설치마다 다르고 설명의 `plugins`에서 찾기 때문이다.
+
+Workbench case `layout.open.*`, `layout.select.*`, `layout.close.*`([workbench cases](host-contract.ko.md#workbench-cases))는 각 규칙을 page와 mygo host의 workbench에서 검사한다. 각 case는 operation을 두 번 적용하고 설명의 레이아웃과 두 적용의 결과를 비교한다. 창 검사 `e2e/agent-layout.test.mjs`는 `e2e/fixtures/agent-probe/`의 fixture plugin에 대해 `sok`으로 세 요청을 두 번 실행한다. Process plugin 자리에는 `agentprobe`(package `@sok-check/agentprobe`)가 있으며, 그 fixture sidecar는 자기 surface를 위해 자기 `SOKSAK_CONFIG_DIR`, `SOKSAK_SURFACE`, `sok context`의 출력을 쓰는 process를 시작한다. 주소 plugin과 편집 plugin 자리에는 `agentopen`(package `@sok-check/agentopen`)이 있으며, 그 `surface.params`는 `path`와 `address`를 받고 `surface.opens`는 `html`을 선언한다. 이 검사는 각 단계가 돌려주는 식별자, 각 요청 뒤 설명의 레이아웃, 각 새 탭의 매개변수, 바꾼 뒤의 active 탭, 각 요청의 두 번째 실행이 같은 식별자를 돌려주고 같은 레이아웃을 남긴다는 것, 그리고 process가 자기 창에 닿는다는 것을 확인한다.
 
 ### 에이전트 skill
 
-Agent skill은 공유 skill 형식의 `packages/sok/agents/SKILL.md`다. 폴더 이름과 같은 `name: soksak`과, agent가 언제 그것을 쓰는지 밝히는 1024 Unicode scalar value 이하의 `description`을 담은 front matter 다음에 지시가 온다. Agent는 이름과 설명만 context에 두고, skill을 쓸 때 지시를 읽는다.
+Agent skill은 공유 skill 형식의 `packages/sok/go/src/agents/SKILL.md`다. 폴더 이름과 같은 `name: soksak`과, agent가 언제 그것을 쓰는지 밝히는 1024 Unicode scalar value 이하의 `description`을 담은 front matter 다음에 지시가 온다. Agent는 이름과 설명만 context에 두고, skill을 쓸 때 지시를 읽는다.
 
 Skill은 정적이다. Command, status, element, plugin의 목록을 담지 않는다. 그런 목록은 plugin이 바뀐 뒤 낡고 읽기에 너무 길기 때문이다. 한 설치의 내용도 담지 않으므로 plugin이 바뀌어도 새 skill이 필요 없다. 모든 설치에 맞는 것을 담는다.
 
 - soksak이 무엇인지, `sok`과 MCP 도구가 그 `sok`이 쓰는 설정 폴더의 실행 중인 애플리케이션에 닿는다는 것. MCP 도구는 MCP server가 등록된 agent에만 있고, `sok`은 어느 shell에서든 애플리케이션에 닿는다;
 - 실행 중인 애플리케이션과 그 창을 찾는 법(`sok windows`, `windows_list`), 그리고 실행 중인 애플리케이션이 없을 때 요청은 엔드포인트 파일이 없다는 글로 실패한다는 것;
-- 항목을 찾는 법([탐색](#탐색)): `sok commands --query`, `sok exposures --kind --query`, `exposure_search`, 그리고 쓰기 전에 항목 하나의 선언을 읽는 것(`exposure_describe`);
+- `sok describe`와 `window_describe`가 surface와 그 plugin, 현재 status 값, 실행하는 command를 가진 element, 매개변수를 가진 command로 창을 한 단계에 page 단위로 설명한다는 것. 창의 노출 전체를 얻을 수 있고 그 전부를 나열하는 법(`sok describe`, `sok exposures`, query 없는 `exposure_search`, page 단위), 그것이 plugin의 설치, 제거, 사용, 사용 안 함으로 바뀐다는 것, 그리고 항목을 찾는 법([탐색](#탐색)): `sok commands --query`, `sok exposures --kind --query`, `exposure_search`, 그리고 쓰기 전에 항목 하나의 선언을 읽는 것(`exposure_describe`);
+- [레이아웃에 동작하기](#레이아웃에-동작하기)의 모델과 operation: split에서 카드, 탭, surface와 그 노출까지의 창의 tree, 식별자나 `current`로 지정하는 대상, 규칙을 가진 idempotent한 세 operation `core.layout.open`, `core.layout.select`, `core.layout.close`, 요청은 그것들의 조합이고 안전하게 되풀이된다는 것, 조합으로서의 예제 요청, `plugins`에서 설명, `surface.params`, `opens`로 plugin을 찾는 법, 그리고 탭의 command를 그 surface를 검색해 찾는 법. 그리고 요청은 어느 창이나 surface든 지정할 수 있다는 것;
+- soksak 창 안의 agent는 지정하지 않아도 자기 창에 닿고, `sok context`나 `agent_context`로 자기 설정 폴더, surface, 창을 찾는다는 것([에이전트의 창](#에이전트의-창));
 - schema의 매개변수로 command를 실행하는 법(`sok <command>`, `command_run`), status를 읽고 기다리는 법(`sok status`, `status_get`, `status_watch_once`), element에 동작하는 법(`sok element`, `element_rect`, `element_act`), 그리고 native 입력이 맞는 때(`sok input`, `input_pointer`, `input_key`, `input_text`);
 - 실행 중인 애플리케이션 옆의 `sok plugin`은 거부되므로([설치](installation.ko.md#애플리케이션-안의-plugin-작업)) plugin은 실행 중인 애플리케이션의 선언된 command `core.plugins.*`로 바꾼다는 것;
 - agent가 따르는 규칙: 선언된 command만 실행한다. command를 실행하기 전에 그 schema를 읽는다. 시간이 아니라 status를 기다린다. 수정된 탭 닫기, plugin 제거, 애플리케이션 종료처럼 사람의 작업을 없애는 변경은 먼저 사람에게 묻는다. 시스템 대화상자의 응답, 입력기를 위한 애플리케이션 활성화, 관리자 권한처럼 사람이 필요한 작업은 사람에게 묻고 우회하지 않는다. 오류는 그 글과 함께 사람에게 보고한다.
@@ -145,24 +192,26 @@ Agent가 읽을 때 skill은 명령을 실행하지 않는다. 모든 agent가 �
 
 Agent folder는 이 순서로 `<home>/.claude`, 설정되어 비지 않았을 때의 `$CLAUDE_CONFIG_DIR`, `<home>/.agents`다. Agent folder는 symbolic link를 따라간 뒤 폴더이면 있는 것이다. 없는 agent folder는 사람이 쓰지 않는 agent의 것이다. Agent folder의 skill 파일은 `<agent folder>/skills/soksak/SKILL.md`이고, skill 폴더가 같은 canonical 폴더로 풀리는 두 agent folder는 skill 파일 하나를 가지며, 순서에서 처음 자리에 한 번 나열된다. Skill 파일은 그 byte가 실행 중인 `sok`의 skill 글과 같으면 최신이다.
 
-`sok skill install`은 있는 agent folder마다 skill 파일을 쓰고, 하나도 없으면 아무것도 쓰지 않고 `no agent folder: neither <home>/.claude nor <home>/.agents is a directory; sok skill print writes the skill to standard output`로 실패한다. `CLAUDE_CONFIG_DIR`가 설정되어 있으면 그 글은 `<home>/.claude` 다음에 그 폴더를 밝힌다. 파일을 쓰기 전에 먼저 있는 agent folder마다 빠진 `skills`와 `skills/soksak` 폴더를 만든다(mode 0755). Agent는 session 시작 때 `skills` 폴더가 있었을 때만 실행 중인 session에서 그 폴더의 변경을 따르기 때문이다. 최신인 skill 파일은 그대로 둔다. 다른 파일은 같은 폴더에 고유한 이름으로 만든 임시 파일(Go `os.CreateTemp`, Rust `tempfile::NamedTempFile::new_in`과 `persist`)로 써서 mode 0644로 skill 파일 위에 rename한다. 그래서 읽는 쪽은 일부만 쓰인 skill을 읽지 않고, 동시에 쓰는 둘이 한 임시 파일에 쓰지 않는다. `{"skills": [{"file": <path>, "state": "written" | "current"}]}`를 출력한다. 쓰기에 실패하면 그 앞에 쓴 파일은 두고 `<path>: <reason>`로 실패하며 임시 파일을 지운다. 되풀이하면 모든 파일에 `current`를 출력하고 아무것도 쓰지 않는다.
+`sok skill install`은 있는 agent folder마다 skill 파일을 쓰고, 하나도 없으면 아무것도 쓰지 않고 `no agent folder: neither <home>/.claude nor <home>/.agents is a directory; sok skill print writes the skill to standard output`로 실패한다. `CLAUDE_CONFIG_DIR`가 설정되어 있으면 그 글은 `<home>/.claude` 다음에 그 폴더를 밝힌다. 파일을 쓰기 전에 먼저 있는 agent folder마다 빠진 `skills`와 `skills/soksak` 폴더를 만든다(mode 0755). Agent는 session 시작 때 `skills` 폴더가 있었을 때만 실행 중인 session에서 그 폴더의 변경을 따르기 때문이다. 최신인 skill 파일은 그대로 둔다. 다른 파일은 같은 폴더에 고유한 이름으로 만든 임시 파일(Go `os.CreateTemp`, Rust `tempfile::NamedTempFile::new_in`과 `persist`)로 써서 mode 0644로 skill 파일 위에 rename한다. 그래서 읽는 쪽은 일부만 쓰인 skill을 읽지 않고, 동시에 쓰는 둘이 한 임시 파일에 쓰지 않는다. `{"skills": [{"file": <path>, "state": "written" | "current"}]}`를 출력한다. 쓰지 못한 skill 파일이 있어도 나머지를 멈추지 않는다. 명령은 모든 agent folder를 시도하고, 쓰거나 최신으로 찾은 파일을 출력한 뒤, 쓰지 못한 skill 파일마다 `<path>: <reason>`를 agent folder 순서로 `; `로 이어 실패한다. 폴더를 만들지 못한 때에도 `<path>`는 skill 파일이고, `<reason>`은 운영체제 이유다. 임시 파일은 지우며, 지우지 못한 임시 파일은 이유에 `; cleanup <temporary file>: <reason>`를 더한다. 되풀이하면 모든 파일에 `current`를 출력하고 아무것도 쓰지 않는다.
 
 Skill 글과 다른 skill 파일은 사람이 고친 것이라도 바꾼다. 그 파일은 `sok`의 것이고, 실행 중인 `sok`의 skill 글이 그것을 설명하기 때문이다. 글은 release로만 바뀌므로 다시 쓰기는 애플리케이션 업데이트를 따른다. 다른 release인 두 설치된 애플리케이션은 각자의 글을 쓰고, 마지막에 시작한 애플리케이션의 글이 남는다. 두 `skills` 폴더를 다 읽는 agent는 같은 이름에 같은 byte인 skill 둘을 읽으며, 둘은 같은 도구를 설명한다. Agent는 새 skill 파일을 그 뒤에 시작한 session에서 읽고, 어떤 agent는 실행 중인 session에서도 읽는다.
 
 ### MCP server
 
-`sok mcp [window]`는 stdio MCP server다. 표준 입력에서 MCP message를 읽고, 표준 출력에는 한 줄에 JSON-RPC 2.0 message 하나씩 MCP message만 쓰며, 진단은 표준 오류에 쓴다. 네트워크 port를 열지 않는다. 각 구현은 그 언어의 공식 MCP library, Go는 `github.com/modelcontextprotocol/go-sdk`, Rust는 `rmcp`를 쓰고, library가 주는 protocol code를 쓰지 않는다. 둘 다 protocol revision `2026-07-28`과 `2025-11-25`에 답하고 다른 모든 revision을 거부한다. 이전 server와 같고, 계약 case가 message를 밝히는 revision이 이 둘이기 때문이다. Go server는 library가 그렇지 않으면 이전 revision에도 답하므로 `ServerOptions.SupportedProtocolVersions`를 이 둘로 정하고, Rust server는 pin한 `rmcp` release의 server option으로 같은 목록을 정한다. Case `mcp-protocol-2026-07-28`, `mcp-protocol-2025-11-25`, `mcp-protocol-unsupported`(`2025-06-18`의 요청)가 이것을 지킨다. Server 정보는 `{"name": "soksak", "version": <core version>}`이고, instructions는 `mcp.json`의 것이다. 도구가 닿는 곳, agent가 실행 전에 찾는다는 것, skill의 규칙을 짧게 담는다. Agent는 server의 instructions를 context에 두기 때문이다.
+`sok mcp [window]`는 stdio MCP server다. 표준 입력에서 MCP message를 읽고, 표준 출력에는 한 줄에 JSON-RPC 2.0 message 하나씩 MCP message만 쓰며, 진단은 표준 오류에 쓴다. 네트워크 port를 열지 않는다. 각 구현은 그 언어의 공식 MCP library, Go는 `github.com/modelcontextprotocol/go-sdk`, Rust는 `rmcp`를 쓰고, library가 주는 protocol code를 쓰지 않는다. server는 아래와 같이 library가 읽기 전에 각 줄을 판단하기 위해서만 표준 입력의 message 줄을 읽는다. 둘 다 protocol revision `2026-07-28`과 `2025-11-25`를 지원한다. 계약 case가 message를 밝히는 revision이 이 둘이기 때문이다. Go server는 library가 그렇지 않으면 이전 revision에도 답하므로 `ServerOptions.SupportedProtocolVersions`를 이 둘로 정하고, Rust server는 pin한 `rmcp` release의 server option으로 같은 목록을 정한다. Revision은 MCP가 정한 대로 협상한다. 지원하는 revision을 요청한 `initialize`에는 그 revision으로 답하고, 다른 revision을 요청한 `initialize`에는 server가 지원하는 `initialize`의 revision인 `2025-11-25`로 답하므로, client는 그 revision으로 계속하거나 session을 끝낸다. `2026-07-28`의 요청은 revision을 `_meta`에 담고 `initialize`가 필요 없다. Case `mcp-protocol-2026-07-28`, `mcp-protocol-2025-11-25`, `mcp-protocol-unsupported`(`2025-11-25`로 답하는 `2025-06-18`의 `initialize`)가 이것을 지킨다. Server 정보는 `{"name": "soksak", "version": <core version>}`이고, instructions는 `mcp.json`의 것이다. 도구가 닿는 곳, `window_describe`가 surface, 현재 status 값, element, command로 창을 page 단위로 설명한다는 것, 창의 노출 전체를 얻을 수 있고 `window_describe`와 query 없는 `exposure_search`가 그것을 나열한다는 것, 그것이 설치된 plugin에 따라 바뀐다는 것, agent가 실행 전에 찾고 선언을 읽는다는 것, 도구의 기본 창이 agent의 창이라는 것, skill의 규칙을 짧게 담는다. Agent는 server의 instructions를 context에 두기 때문이다.
 
-`sok mcp`는 시작할 때 첫 message를 읽기 전에 skill을 최신으로 만든다. 있는 agent folder마다 `sok skill install`처럼 skill 파일을 쓴다. 여기서 agent folder가 없는 것은 오류가 아니고, 쓰기 실패는 표준 오류에 `sok: skill: <path>: <reason>`로 쓰고 event log에 저장한다. 어느 경우든 server는 시작한다.
+`sok mcp`는 시작할 때 첫 message를 읽기 전에 skill을 최신으로 만든다. 있는 agent folder마다 `sok skill install`처럼 skill 파일을 쓴다. 여기서 agent folder가 없는 것은 오류가 아니고, 쓰지 못한 skill 파일마다 표준 오류에 `sok: skill: <path>: <reason>` 한 줄을 쓰고 event log에 `sok.skill` 하나로 저장한다. 어느 경우든 server는 시작한다.
 
-Server는 표준 입력이 열려 있는 동안, 실행 중인 애플리케이션이 없을 때와 애플리케이션이 끝나거나 다시 시작하는 동안에도 계속 응답한다. 엔드포인트가 필요한 첫 도구 호출에서 연결하고, 연결이 끝난 뒤의 다음 호출에서 다시 연결한다. 실행 중인 애플리케이션이 없을 때의 호출은 없는 엔드포인트 파일이나 실행 중이지 않은 process의 글을 담은 도구 오류이고, 다음 호출이 다시 시도한다. 호출의 창은 그 `window` 인자, 없으면 시작의 `[window]`(모든 명령처럼 `--window <name>`이나 `--project <directory>`), 없으면 `windows.list`의 key window, 없으면 그 첫 창이다.
+Server는 표준 입력이 열려 있는 동안, 실행 중인 애플리케이션이 없을 때와 애플리케이션이 끝나거나 다시 시작하는 동안에도 계속 응답한다. 엔드포인트가 필요한 첫 도구 호출에서 연결하고, 연결이 끝난 뒤의 다음 호출에서 다시 연결한다. 실행 중인 애플리케이션이 없을 때의 호출은 없는 엔드포인트 파일이나 실행 중이지 않은 process의 글을 담은 도구 오류이고, 다음 호출이 다시 시도한다. 호출의 창은 그 `window` 인자, 없으면 시작의 `[window]`(모든 명령처럼 `--window <name>`이나 `--project <directory>`), 없으면 호출 때 정하는 `SOKSAK_SURFACE`가 지정한 surface의 창([에이전트의 창](#에이전트의-창)), 없으면 `windows.list`의 key window, 없으면 그 첫 창이다.
 
 도구는 고정된 집합이며, 노출로 만드는 도구는 없다.
 
 | 도구 | 인자 | 엔드포인트 요청과 결과 |
 | --- | --- | --- |
 | `windows_list` | 없음 | `windows.list` |
-| `exposure_search` | `window?`, `kind?`(`status`, `command`, `element`), `query?`, `offset?`, `limit?` | 그 창의 `exposure.list`. `{entries, total, next}`: 맞는 항목([탐색](#탐색))을 schema 없이 `{kind, name, description, registered}`로 `exposure.list` 순서에서 `offset`(기본 0)부터 최대 `limit`개(1부터 200, 기본 50), 맞는 항목의 수, 다음 page의 `offset` 또는 `null` |
+| `agent_context` | 없음 | `sok context`가 출력하는 `{configDirectory, surface, window}`. `SOKSAK_SURFACE`가 설정되어 있으면 `surface.window` |
+| `window_describe` | `window?`, `surface?`, `full?`, `after?`, `limit?` | 그 창의 `exposure.snapshot`. [창 설명](#창-설명) |
+| `exposure_search` | `window?`, `kind?`(`status`, `command`, `element`), `query?`, `after?`, `limit?` | 그 창의 `exposure.list`. `{entries, total, next}`: 맞는 항목([탐색](#탐색))을 schema 없이 `{kind, name, description, registered}`로 `exposure.list` 순서에서 key `<kind> <name>`이 `after`인 항목 다음부터(`after`가 없으면 처음부터) 최대 `limit`개(1부터 200, 기본 50), 맞는 항목의 수, 뒤에 항목이 더 있으면 page의 마지막 항목의 key, 아니면 `null` |
 | `exposure_describe` | `window?`, `kind`, `name` | 그 창의 `exposure.list`. 항목의 선언과 `registered`, 목록에 없는 이름은 도구 오류 `<kind> <name> is not declared` |
 | `command_run` | `window?`, `surface?`, `name`, `params?` | `params`, 없으면 `{}`로 `command.run` |
 | `status_get` | `window?`, `name`, `surface?` | `status.get` |
@@ -173,24 +222,40 @@ Server는 표준 입력이 열려 있는 동안, 실행 중인 애플리케이�
 | `input_key` | `window?`, `key`, `text?`, `modifiers?`, `phase` | `input.key` |
 | `input_text` | `window?`, `phase`, `text?`, `selection?`, `replacement?` | `input.text` |
 
-`tools/list`는 엔드포인트 요청을 보내지 않고 `mcp.json`의 도구로 답한다. 결과는 엔드포인트 결과의 JSON 글이고, 결과가 없으면 `null`이다. 엔드포인트 오류, 끝난 연결, 세 목록이 없거나 `params` 없는 command를 담은 노출 목록은 `<message>` 글의 도구 오류이며, 엔드포인트 오류는 뒤에 ` (<code>)`가 붙는다. 탐색마다 실행 중인 애플리케이션의 `exposure.list`를 읽으므로 plugin 변경은 도구 목록의 변경 없이 다음 검색에서 agent에게 닿고, server는 `tools.listChanged`를 false로 선언한다.
+`tools/list`는 엔드포인트 요청을 보내지 않고 `mcp.json`의 도구로 답한다. `mcp.json`은 도구를 이름 순서로 나열하며, 두 library가 `tools/list`에 답하는 순서가 이것이다. 호출의 각 인자는 decode했다가 다시 encode하지 않고 호출의 JSON 글 그대로 엔드포인트에 닿으므로, `1e2`와 `2.50`은 두 구현에서 모두 글을 유지한다. Go server는 library가 유지하는 글을 넘기고, Rust server는 각 `tools/call`의 인자를 message 줄에서 가져온다. `rmcp`가 Rust server에 decode한 값을 넘기기 때문이다. library가 message 줄을 읽기 전에 server는 두 library가 다르게 적용하거나 적용하지 않는 규칙으로 그 줄을 판단해 거부한다. 짝의 한쪽이 아닌 UTF-16 surrogate의 `\u` escape를 담은 문자열(멤버 이름이나 값)이 있는 message는 `<path> holds a lone surrogate escape`로 거부한다. path는 쓰인 그대로의 멤버 이름을 점으로 잇고 배열의 n번째 항목을 `[n]`으로 쓴다(예: `params.arguments.name`). `encoding/json`은 그런 escape를 U+FFFD로 decode하고 `serde_json`은 줄 전체를 거부하기 때문이다. `params`가 없거나 문자열 `name`이 없는 `tools/call`은 `name must be a string`으로, `arguments`가 있고 `null`이 아니며 object가 아닌 `tools/call`은 `arguments must be an object`로 거부한다. Go library는 이 둘을 자기 decode 오류로 거부하고 `rmcp`는 custom request로 읽기 때문이다. 거부한 request에는 JSON-RPC 오류 `-32602`, 그 글, request의 `id`로 답한다. 답할 `id`가 없는 거부된 message(notification이나 `id`에 그런 escape가 있는 request)에는 답하지 않고, server가 표준 오류에 `sok: mcp: <text>`를 쓴다. 유효한 UTF-8이 아니거나 유효한 JSON이 아닌 줄(빈 줄 포함), 또는 배열과 object가 127단계보다 깊이 중첩된 줄에는 JSON-RPC parse error인 `{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}`로 답한다. 줄의 `id`를 읽을 수 없으므로 `id`는 null이며, server는 계속 응답한다. `encoding/json`은 유효하지 않은 각 byte를 U+FFFD로 바꾸므로 UTF-8 검사가 먼저이고, 127단계의 한도는 `serde_json`이 읽는 깊이다. `serde_json`은 128번째 단계에 들어가는 값을 거부하고 `encoding/json`은 10000단계를 읽는다. 이 판단이 없으면 Go library는 session을 끝내고 `rmcp`는 그 줄을 무시한다. object가 아닌 JSON 값은 그대로 library에 닿고, line feed 앞이 16777216바이트 이상인 줄은 두 library의 한도를 넘으므로 `mcp message exceeds 16777216 bytes`와 상태 1로 server를 끝낸다. `mcp.json`에 없는 도구의 `tools/call`에는 JSON-RPC 오류 `-32602` `unknown tool <name>`과 호출의 `id`로 답한다. 거부된 호출은 엔드포인트에 닿지 않는다. case `mcp-tools-call-rejected`가 각 거부를, `mcp-tools-call`이 글을 유지하는 인자를 지킨다. 결과는 엔드포인트 결과의 JSON 글이고, 결과가 없으면 `null`이다. 엔드포인트 오류, 끝난 연결, 세 목록이 없거나 `params` 없는 command를 담은 노출 목록은 `<message>` 글의 도구 오류이며, 엔드포인트 오류는 뒤에 ` (<code>)`가 붙는다. 탐색마다 실행 중인 애플리케이션의 `exposure.list`를 읽으므로 plugin 변경은 도구 목록의 변경 없이 다음 검색에서 agent에게 닿고, server는 capability `tools`를 `listChanged` 없이 선언하며 MCP는 그것을 false로 읽는다.
 
 `status_watch_once`의 watch는 그 호출의 것이다. Server는 기다리는 호출들을 위해 창, status, surface마다 엔드포인트 watch 하나를 두고, 그 마지막 호출이 끝나면 `status.unwatch`를 보낸다. Client가 취소한 호출은 결과 없이 끝나고 같은 방식으로 watch의 자기 몫을 끝낸다.
 
-`docs/spec/cases/endpoint/`의 엔드포인트 case `mcp-*`는 server의 계약 case이고, 두 구현이 그것을 재생한다([검사](endpoint.ko.md#검사)). 이 도구 집합에 맞춰 바뀐다. `mcp-tools-list`는 window 없는 `exposure_search`의 엔드포인트 요청(`windows.list` 다음 `exposure.list`)인 `mcp-exposure-search`가 된다. `mcp-exposure-without-element`와 `mcp-exposure-without-params`는 `exposure_search`와 `exposure_describe`가 거부하는 응답을 밝힌다. `mcp-tools-call`은 같은 `command.run` frame의 command를 `command_run`으로 보낸다. 새 `mcp-watch-shared`는 한 status의 두 기다림을 한 watch에 둔다. `mcp-reconnect`는 엔드포인트 파일 없이도 시작한다. 다른 case는 frame을 그대로 두고 client로 `sok mcp`를 밝힌다.
+`docs/spec/cases/endpoint/`의 엔드포인트 case `mcp-*`는 server의 계약 case이고, 두 구현이 그것을 재생한다([검사](endpoint.ko.md#검사)). `mcp-exposure-search`는 window 없는 `exposure_search`의 엔드포인트 요청(`windows.list` 다음 `exposure.list`)을 담는다. `mcp-exposure-without-element`와 `mcp-exposure-without-params`는 `exposure_search`와 `exposure_describe`가 거부하는 응답을 밝힌다. `mcp-tools-call`은 command를 `command_run`으로 보낸다. `mcp-watch-shared`는 한 status의 두 기다림을 한 watch에 둔다. `mcp-reconnect`는 엔드포인트 파일 없이 시작한다. Case의 `mcp` member는 server의 message를 밝힌다([엔드포인트 case](cases/endpoint/README.ko.md)).
+
+### 에이전트의 창
+
+Agent는 대개 soksak 창 안에서 실행된다. Terminal 탭의 shell처럼 surface가 시작한 process가 agent를 시작하고, agent가 `sok`과 `sok mcp`를 시작한다. 그런 process는 환경에 변수 둘을 가진다([surface의 프로세스](sidecars.ko.md#surface의-프로세스)).
+
+| 변수 | 값 |
+| --- | --- |
+| `SOKSAK_CONFIG_DIR` | 그 process를 시작한 surface가 속한 애플리케이션의 설정 폴더 |
+| `SOKSAK_SURFACE` | 그 surface의 식별자 |
+
+`sok`과 `sok mcp`는 `--config-dir`가 주어지지 않으면 `SOKSAK_CONFIG_DIR`를 설정 폴더로 쓴다. 그래서 `PATH`의 첫 `sok`이 다른 설치된 애플리케이션의 것이어도 그 창의 애플리케이션에 닿는다. `[window]`나 `window` 인자가 없으면 `SOKSAK_SURFACE`가 지정한 surface의 창을 쓴다. 요청마다 엔드포인트에 `surface.window {surface}`를 묻고([메서드](exposure.ko.md#메서드)), 그래서 이전 요청의 창을 기억하지 않는다. 애플리케이션의 창 하나가 `windows.list`에서 `ready`가 아닌 동안 `surface.window`는 1003으로 답한다. 그 창의 레이아웃이 그 surface를 담을 수 있기 때문이며, `sok`은 그 오류를 보고한다. 탭이나 창이 닫혔거나, 어느 창도 보이지 않는 project의 저장된 레이아웃이 담고 있어서 ready인 창 어디에도 없는 surface는 요청을 `SOKSAK_SURFACE names surface <id>, which is in no window of the application`로 실패시킨다. `sok`과 `sok mcp`는 결코 다른 창으로 대신하지 않는다. 그러면 agent의 요청이 agent가 보지 않는 창에 동작하기 때문이다. `SOKSAK_SURFACE`가 없거나 빈 값이면 이 변수들이 없을 때처럼 창을 고른다. `--surface`나 `surface`가 없는 요청은 workbench의 surface 선택을 따른다([표면 선택](exposure.ko.md#표면-선택)). Agent의 요청은 흔히 다른 탭을 향하므로 agent 자신의 surface를 요청에 강제하지 않는다. `sok context`와 `agent_context`는 그것이 필요한 요청을 위해 agent에게 자기 surface를 준다.
+
+애플리케이션은 이 변수들을 읽지 않는다. 애플리케이션은 설정 폴더를 `--config-dir`에서만 받고([projects](projects.ko.md#저장)), 그 host는 시작할 때 어떤 process도 시작하기 전에 자기 process 환경에서 `SOKSAK_CONFIG_DIR`와 `SOKSAK_SURFACE`를 지운다. 다른 애플리케이션의 process에서 시작한 애플리케이션은 그것을 물려받고, 그러면 `sok app update`처럼 host가 시작하는 모든 `sok`이 다른 애플리케이션의 폴더에 동작하기 때문이다. 그 뒤 host는 자기가 시작하는 모든 sidecar의 환경에 `SOKSAK_CONFIG_DIR`를 정한다([surface의 프로세스](sidecars.ko.md#surface의-프로세스)). `sok`을 시작하는 test는 실행마다 두 변수를 정하거나 지운다. 그래서 soksak 창 안에서 실행한 test는 그 창의 애플리케이션에 닿지 않는다.
+
+`--config-dir`는 `SOKSAK_CONFIG_DIR`보다 우선한다. 설정 폴더가 `SOKSAK_CONFIG_DIR`에서 오고, 그 폴더의 애플리케이션이 실행 중인 것과 다른 `sok`을 실행하면, 곧 그 `endpoint.json`의 `executable`이 폴더에 다른 `sok`을 가지면, 실행 중인 `sok`은 명령을 parse하기 전에 같은 인자와 환경으로 `exec`를 통해 자신을 그 `sok`으로 바꾼다. 둘은 canonical 경로로 비교한다. Symbolic link를 푼 실행 중인 `sok`을 `executable`의 폴더에 있는 `sok`의 canonical 경로와 비교하므로, 바꾼 `sok`은 자신을 찾고 다시 자신을 바꾸지 않는다. `exec` 전에 그 실행은 `sok.exec {from, to, config}`와, 상태 0과 받은 그대로의 인자를 가진 `sok.command`를 저장하고 event 파일을 flush하고 닫는다. 바꾼 `sok`은 자기 event 파일을 쓴다. 이 교체가 있는 것은 `PATH`의 `sok`이 다른 release의 다른 설치된 애플리케이션의 것일 수 있고, 메서드와 core version이 애플리케이션에 맞는 것은 그 애플리케이션 자신의 `sok`이기 때문이다. 그 폴더에 `endpoint.json`이 없으면 애플리케이션이 필요한 명령은 없는 엔드포인트 파일의 오류로 실패하고, 필요 없는 명령은 실행 중인 `sok`에서 실행된다. `sok mcp`는 이 선택을 시작할 때 하므로, 애플리케이션이 실행 중이지 않을 때 시작한 server는 자신으로 응답하고, 그 애플리케이션이 답하지 않는 메서드의 요청은 엔드포인트 오류로 실패한다.
 
 ### MCP 등록
 
-MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `claude` 명령이 `PATH`에 있을 때 해당한다. 그 파일은 실행 환경에서 그 명령의 설정 파일이다. `CLAUDE_CONFIG_DIR`가 설정되어 비지 않았으면 `$CLAUDE_CONFIG_DIR/.claude.json`, 아니면 `<home>/.claude.json`이다. 없는 파일에는 등록이 없고, parse되지 않는 파일은 `<file>: <reason>`로 실패한다. 파일의 `mcpServers.soksak`이 `type` `"stdio"`, `command` `<sok>`, `args` `["mcp"]`를 가지고 `env`가 없거나 빈 object이면 등록은 최신이다. 그 파일은 다른 프로그램의 설정이다. `claude` 명령은 server를 시작하지 않고는 등록을 답하지 않으므로, `sok`은 그 파일의 `mcpServers.soksak`만 읽고, 파일은 `claude` 명령으로만 바꾼다.
+MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `claude` 명령이 `PATH`에 있을 때 해당한다. 그 파일은 실행 환경에서 그 명령의 설정 파일이다. `CLAUDE_CONFIG_DIR`가 설정되어 비지 않았으면 `$CLAUDE_CONFIG_DIR/.claude.json`, 아니면 `<home>/.claude.json`이다. 없는 파일에는 등록이 없고, parse되지 않는 파일은 `<file>: <reason>`로 실패한다. 등록되는 `sok`은 `PATH`가 처음 닿는 `sok`이다. `PATH`의 순서에서 실행 가능한 일반 파일 `sok`을 가진 첫 폴더의 것으로 symbolic link를 풀며, `PATH`의 어느 폴더에도 없으면 `<sok>`이다. macOS에서 그것은 이름이 `.app`으로 끝나는 폴더의 `Contents/MacOS` 폴더에 있는 애플리케이션 bundle의 `sok`이어야 한다. 다른 도구의 프로그램이나 build 출력 같은 다른 첫 `sok`은 `sok mcp install`을 실패시키고 `sok setup check`의 `mcp` part를 `error`로 만들며, 둘 다 `the first sok on PATH, <path>, is not the sok of an application bundle`를 쓰고, 아무것도 등록하지 않는다. Linux에는 애플리케이션 bundle과 경로 항목이 없으므로, 거기서는 `PATH`의 첫 `sok`을 그대로 등록한다. 파일의 `mcpServers.soksak`이 `type` `"stdio"`, `command` 등록되는 `sok`, `args` `["mcp"]`를 가지고 `env`가 없거나 빈 object이면 등록은 최신이다. 그 파일은 다른 프로그램의 설정이다. `claude` 명령은 server를 시작하지 않고는 등록을 답하지 않으므로, `sok`은 그 파일의 `mcpServers.soksak`만 읽고, 파일은 `claude` 명령으로만 바꾼다.
 
 `sok mcp install`은 등록을 읽고,
 
 - 최신 등록이 있으면 아무것도 바꾸지 않고 `{"registration": <entry>, "state": "current"}`를 출력한다;
-- 다른 등록이 있으면 `claude mcp remove --scope user soksak`을 실행한 다음 `claude mcp add --scope user soksak -- <sok> mcp`를 실행하고, 등록이 없으면 두 번째만 실행한다. 그 뒤 파일을 다시 읽어 등록이 최신이면 `{"registration": <entry>, "state": "registered"}`를 출력하고, 아니면 `claude mcp add did not write the registration to <file>`로 실패한다.
+- 두 출력 모두, 실행 중인 `sok`이 등록되는 `sok`이 아니면 `state` 뒤에 `<sok>`을 담은 member `running`이 온다. 그래서 출력은 자기가 아니라 `PATH`의 첫 `sok`을 등록했음을 밝힌다;
+- 다른 등록이 있으면 `claude mcp remove --scope user soksak`을 실행한 다음 `claude mcp add --scope user soksak -- <registered sok> mcp`를 실행하고, 등록이 없으면 두 번째만 실행한다. 그 뒤 파일을 다시 읽어 등록이 최신이면 `{"registration": <entry>, "state": "registered"}`를 출력하고, 아니면 `claude mcp add did not write the registration to <file>`로 실패한다.
 
-0이 아닌 상태로 끝난 `claude` 명령은 설치를 `claude mcp <add or remove> failed with status <n>: <first line of its standard error>`로 실패시킨다. Remove 뒤에 실패한 add는 `; the earlier registration <command> was removed`를 덧붙인다. `PATH`에 `claude` 명령이 없으면 설치는 `the claude command is not on PATH; register the MCP server "<sok> mcp" (standard input and output) with the agent`로 실패하고 아무것도 바꾸지 않는다. 등록은 `sok` 하나를 가리키므로 애플리케이션 하나의 설정 폴더에 닿는다. 실행 중인 agent session은 session 중에 등록된 server를 다음 session에서야 시작한다.
+0이 아닌 상태로 끝난 `claude` 명령은 설치를 `claude mcp <add or remove> failed with status <n>: <first line of its standard error>`로 실패시킨다. Remove 뒤에 실패한 add는 `; the earlier registration <command> was removed`를 덧붙인다. `PATH`에 `claude` 명령이 없으면 설치는 `the claude command is not on PATH; register the MCP server "<registered sok> mcp" (standard input and output) with the agent`로 실패하고 아무것도 바꾸지 않는다. 등록 이름 `soksak` 하나가 설치된 모든 soksak 애플리케이션을 위한다. 각 애플리케이션은 경로 항목으로 자기 `sok`의 폴더를 `PATH`에 더하고, 그 가운데 `PATH`에서 첫째인 것이 등록되는 `sok`이며, agent는 shell이 `sok`으로 닿듯 등록으로 그 `sok`의 애플리케이션에 닿는다. 어느 애플리케이션에서 설치해도 같은 `sok`을 등록하므로, 두 애플리케이션의 설치는 등록 하나를 남긴다. 실행 중인 agent session은 session 중에 등록된 server를 다음 session에서야 시작한다.
 
-`<sok>`은 실행보다 오래 남아야 한다. 읽기 전용 disk image나, 사람이 옮기지 않은 내려받은 애플리케이션을 시스템이 실행하는 읽기 전용 mount(App Translocation)처럼 읽기 전용으로 mount된 volume의 `sok`은 `sok mcp install`과 `sok path install`이 `<sok> is on a read-only volume; move the application to a folder such as /Applications and start it again`로 거부한다. `<sok>`의 file system의 읽기 전용 flag가 정한다. Go는 두 platform에서 `golang.org/x/sys/unix.Statfs`를 읽고 `Flags`를 macOS에서는 `unix.MNT_RDONLY`로, Linux에서는 그 package가 정의하지 않는 kernel의 `ST_RDONLY`와 값이 같은 `unix.MS_RDONLY`로 검사한다. Rust는 `rustix::fs::statvfs`를 읽고 `StatVfsMountFlags::RDONLY`를 검사한다.
+`<sok>`은 실행보다 오래 남아야 한다. 읽기 전용 disk image나, 사람이 옮기지 않은 내려받은 애플리케이션을 시스템이 실행하는 읽기 전용 mount(App Translocation)처럼 읽기 전용으로 mount된 volume의 `sok`은 `<sok>`에 대해 `sok path install`이, 등록되는 `sok`에 대해 `sok mcp install`이 `<sok> is on a read-only volume; move the application to a folder such as /Applications and start it again`로 거부한다. `<sok>`의 file system의 읽기 전용 flag가 정한다. Go는 두 platform에서 `golang.org/x/sys/unix.Statfs`를 읽고 `Flags`를 macOS에서는 `unix.MNT_RDONLY`로, Linux에서는 그 package가 정의하지 않는 kernel의 `ST_RDONLY`와 값이 같은 `unix.MS_RDONLY`로 검사한다. Rust는 `rustix::fs::statvfs`를 읽고 `StatVfsMountFlags::RDONLY`를 검사한다.
 
 ### Setup part
 
@@ -200,7 +265,7 @@ MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `cl
 | `skill` | 있는 agent folder마다 | `<agent folder>/skills/soksak/SKILL.md` | byte가 skill 글과 같다 | `<sok> skill install` |
 | `mcp` | `claude` 명령이 `PATH`에 있을 때 | `claude` 명령의 설정 파일 | 등록이 최신이다 | `<sok> mcp install` |
 
-`sok setup check`는 `{"parts": [{part, file, state, step, reason?, command?, error?}]}`를 이 member 순서로, part는 표의 순서로, skill 파일은 agent folder의 순서로 출력한다. `state`는 `ok`, `missing`, `error`다. 빠진 part는 `reason`을 가진다. 없는 파일이나 등록은 `absent`, 설치가 쓰는 것과 다른 것은 `differs`, `command`가 다른 설치된 애플리케이션의 `sok`인 등록은 `other`이고 그때 `command`가 그것을 밝힌다. 다른 애플리케이션의 `sok`은 `<sok>`이 아닌 절대 경로로, macOS에서는 이름이 `.app`으로 끝나는 폴더의 `Contents/MacOS`에 있는 실행 가능한 일반 파일 `sok`, Linux에서는 실행 가능한 일반 파일 `sok`이다. 최신이 아닌 다른 모든 등록은 `differs`다. 상태를 읽을 수 없는 part는 실패의 글인 `error`를 가진다. 해당하지 않는 part는 나열하지 않는다. Linux에는 `path` part가 없다. 이 명령은 아무것도 바꾸지 않으며, 나열된 모든 part가 `ok`이면 0으로, 아니면 표준 출력의 JSON 뒤에 표준 오류에 `sok: setup parts are not current: <part> <file>, ...`를 쓰고 1로 끝난다.
+`sok setup check`는 `{"parts": [{part, file, state, step, reason?, error?}]}`를 이 member 순서로, part는 표의 순서로, skill 파일은 agent folder의 순서로 출력한다. `state`는 `ok`, `missing`, `error`다. 빠진 part는 `reason`을 가진다. 없는 파일이나 등록은 `absent`, 등록되는 것이 아닌 `sok`을 가리키는 등록처럼 설치가 쓰는 것과 다른 것은 `differs`다. 상태를 읽을 수 없는 part는 실패의 글인 `error`를 가진다. 해당하지 않는 part는 나열하지 않는다. Linux에는 `path` part가 없다. 이 명령은 아무것도 바꾸지 않으며, 나열된 모든 part가 `ok`이면 0으로, 아니면 표준 출력의 JSON 뒤에 표준 오류에 `sok: setup parts are not current: <part> <file>, ...`를 쓰고 1로 끝난다.
 
 `sok setup install`은 지정한 종류의, 이름이 없으면 모든 종류의 `ok`가 아닌 나열된 part를 각자의 명령의 규칙으로 설치하고, `ok`인 part는 그대로 둔다. 빠진 경로 항목은 관리자 권한이 필요하지만 skill 파일과 등록은 사람의 것이다. 이 명령은 다른 사용자로 실행되지 않으며, 표준 입력이 terminal이면 `sudo <sok> path install`을 child로 실행해 거기서 password를 묻고, 그렇지 않으면 경로 항목을 빠진 채로 둔다. 설치 뒤의 part를 `sok setup check`처럼 출력하며, 각 part는 자기가 바꾸었으면 true인 `changed`를 가진다. 나열된 모든 part가 `ok`이면 0으로, 아니면 `sok: setup parts are not current: <part> <file>, ...`와 설치에 실패한 part마다 그 오류를 쓰고 1로 끝난다. 되풀이해도 아무것도 바꾸지 않는다.
 
@@ -208,9 +273,9 @@ MCP 등록은 `claude` 명령의 user scope에 있는 항목 `soksak`이고, `cl
 
 Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](installation.ko.md#애플리케이션-안의-plugin-작업)) setup 작업을 command line(`packages/sok`)의 setup library로 실행한다. 그래서 애플리케이션과 `sok setup`은 같은 code로 같은 파일을 읽고 바꾼다. `<sok>`은 애플리케이션 bundle의 `sok`이다.
 
-시스템이 애플리케이션을 위해 시작한 process는 사람의 shell이 아니라 session의 환경을 받으므로, 그 `PATH`에는 shell이 더하는 폴더가 없고 거기서 `claude` 명령을 찾지 못한다. 그래서 host는 host 시작마다 한 번 사람의 login shell, 곧 사용자 database(`getpwuid`)의 shell의 환경을 읽는다. `<shell> -l -i -c <sok> setup environment`를 실행하며, `<sok>`은 단계의 규칙으로 따옴표를 붙이고 명령은 인자 하나로 준다. 이 shell은 자기 process group(Go `Setpgid`, Rust `process_group(0)`)에서 표준 입력을 `/dev/null`로 하여 실행한다. `sok setup environment`가 출력한 JSON 줄의 `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`를 setup library에 주므로 사람의 shell 문법은 관여하지 않는다. 읽기는 출력의 끝이나 shell의 끝이 아니라 그 줄이 표준 출력에 도착할 때 끝난다. Shell의 시작 파일이 시작한 process가 출력을 열어 둘 수 있기 때문이다. 그 뒤 host는 process group을 끝내며, 다른 모든 결과에서도 끝낸다. 표준 출력과 표준 오류는 따로 읽고, 줄 앞에 나온 시작 파일의 출력은 버린다. 줄 앞에 끝난 shell은 setup 작업을 `login shell <shell>: <reason>`로 실패시키며, reason은 종료 상태와 표준 오류의 첫 줄이다. 10 s 안에 줄을 주지 않은 shell은 `login shell <shell>: no environment within 10 s`로 실패시킨다. 입력을 기다리는 shell에는 그것을 끝내는 event가 없기 때문이다. 읽기는 시작 경로가 아니라 첫 창이 시작한 뒤에 실행된다. Agent session 하나의 환경은 login shell과 다를 수 있다. 예를 들어 session이 `CLAUDE_CONFIG_DIR`를 정할 수 있다. 설정 창은 login shell 환경의 part를 보여 주고, session 안의 `sok setup`은 그 session의 part를 보여 준다.
+시스템이 애플리케이션을 위해 시작한 process는 사람의 shell이 아니라 session의 환경을 받으므로, 그 `PATH`에는 shell이 더하는 폴더가 없고 거기서 `claude` 명령을 찾지 못한다. 그래서 host는 host 시작마다 한 번 사람의 login shell, 곧 사용자 database(`getpwuid`)의 shell의 환경을 읽는다. `<shell> -l -i -c <sok> setup environment`를 실행하며, `<sok>`은 단계의 규칙으로 따옴표를 붙이고 명령은 인자 하나로 준다. 이 shell은 자기 process group(Go `Setpgid`, Rust `process_group(0)`)에서 표준 입력을 `/dev/null`로 하여 실행한다. `sok setup environment`가 출력한 JSON 줄의 `HOME`, `PATH`, `CLAUDE_CONFIG_DIR`를 setup library에 주므로 사람의 shell 문법은 관여하지 않는다. 읽기는 출력의 끝이나 shell의 끝이 아니라 그 줄이 표준 출력에 도착할 때 끝난다. Shell의 시작 파일이 시작한 process가 출력을 열어 둘 수 있기 때문이다. 그 뒤 host는 process group을 끝내며, 다른 모든 결과에서도 끝낸다. 표준 출력과 표준 오류는 따로 읽고, 줄 앞에 나온 시작 파일의 출력은 버린다. 줄 앞에 끝난 shell은 setup 작업을 `login shell <shell>: <reason>`로 실패시키며, reason은 종료 상태와 표준 오류의 첫 줄이다. 10 s 안에 줄을 주지 않은 shell은 `login shell <shell>: no environment within 10 s`로 실패시킨다. 입력을 기다리는 shell에는 그것을 끝내는 event가 없기 때문이다. 읽기는 시작 경로가 아니라 첫 창이 시작한 뒤에 실행된다. Agent session 하나의 환경은 login shell과 다를 수 있다. 예를 들어 session이 `CLAUDE_CONFIG_DIR`를 정할 수 있다. 설정 창은 `PATH`가 등록되는 `sok`도 정하는 login shell 환경의 part를 보여 주고, session 안의 `sok setup`은 그 session의 part를 보여 준다.
 
-환경을 읽은 뒤 host는 `sok mcp`처럼 skill을 최신으로 만들고, 실패한 쓰기는 파일과 이유와 함께 오류 `host.setup.skill`로 기록한다. 경로 항목과 등록은 설치하지 않는다. 그것은 사람의 시스템과 agent의 설정을 바꾸므로 사람이 요청할 때만 한다.
+환경을 읽은 뒤 host는 `sok mcp`처럼 skill을 최신으로 만들고, 쓰지 못한 skill 파일마다 파일과 이유와 함께 오류 `host.setup.skill` 하나로 기록한다. 경로 항목과 등록은 설치하지 않는다. 그것은 사람의 시스템과 agent의 설정을 바꾸므로 사람이 요청할 때만 한다.
 
 | Host call 또는 event | 뜻 |
 | --- | --- |
@@ -229,7 +294,7 @@ Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](
 
 이 계약의 검토는 다음 반론에 답했다.
 
-- 등록 이름 하나는 한 번에 애플리케이션 하나를 위한다. 애플리케이션은 스스로 등록하지 않으므로 설치된 두 애플리케이션이 서로의 등록을 가져가지 않는다. 검사는 다른 애플리케이션의 등록을 `other`로 보고하고, 설정 창의 버튼은 그것을 바꾼다고 밝힌다.
+- 등록 이름 `soksak` 하나가 설치된 모든 soksak 애플리케이션을 위하고, 등록은 `PATH`의 첫 `sok`을 가리킨다. 설치된 애플리케이션의 경로 항목이 만드는 `PATH`의 순서가 이미 shell이 `sok`으로 닿는 애플리케이션을 정한다. 등록이 같은 순서를 따르므로 agent는 `sok`으로도 MCP 도구로도 같은 애플리케이션에 닿고, 어느 애플리케이션에서 설치해도 같은 등록을 쓰며, 두 애플리케이션이 서로의 등록을 바꾸지 않는다. 애플리케이션마다의 등록은 고를 규칙 없이 같은 도구의 server 여럿을 agent에게 줄 것이다.
 - Agent session은 `CLAUDE_CONFIG_DIR`를 정할 수 있으므로, agent folder는 `<home>/.claude`와 그 폴더를 둘 다 받고 canonical skill 폴더마다 skill 파일 하나를 두며, 등록 파일은 실행 환경의 것이다.
 - 여럿이 동시에 skill을 최신으로 만들 수 있으므로(모든 agent session이 `sok mcp`를 시작한다), 각자는 고유한 이름의 임시 파일과 rename으로 쓴다.
 - Library는 type에서 schema를 다른 형태로 만들므로, 도구 목록은 두 server가 그 schema를 그대로 등록하는 JSON 파일 하나다.
@@ -237,5 +302,21 @@ Host는 plugin 작업을 실행하듯([애플리케이션 안의 plugin 작업](
 - 출력한 뒤 기다리거나 background process가 출력을 잡는 login shell은 스스로 읽기를 끝내지 않으므로, 읽기는 JSON 줄이나 한도에서 끝나고 host가 shell의 process group을 끝낸다.
 - 읽기 전용 mount의 `sok`은 실행 뒤 사라지므로, 그 경로를 쓰는 설치는 그것을 거부한다. 검사는 file system의 읽기 전용 flag를 Go에서는 `statfs`로, Rust에서는 `statvfs`로 읽는다.
 - `claude` 명령의 설정 파일 감시는 agent session마다 그 파일을 다시 쓰므로 거부했다. 상태는 사람이 볼 때 읽는다.
+- Agent는 요청마다 창으로 정하는 `SOKSAK_SURFACE`로 자기 창에, `SOKSAK_CONFIG_DIR`로 자기 애플리케이션에 닿는다. 어느 창에도 없는 surface는 오류이며, 다른 창을 고를 이유가 아니다. 요청의 surface는 `SOKSAK_SURFACE`로 정하지 않는다. Workbench의 선택이 이미 active 탭을 향하고, 고정된 surface는 다른 탭을 위한 요청을 agent 자신의 surface로 보내기 때문이다.
+- 설명은 레이아웃을 frame을 가진 split과 카드의 tree로, 각 카드의 탭을 plugin, title, active 상태, 매개변수와 함께, 그리고 불러온 plugin을 탭 매개변수와 여는 확장자와 함께 담는다. Agent는 보이는 것에 상대적으로 탭을 배치하거나 찾고 작업에 따라 plugin을 고르기 때문이다. 레이아웃 operation은 결과의 식별자를 돌려주므로, 요청의 순서는 단계 사이에 설명이 필요 없다.
+- 창은 status마다 요청 하나가 아니라 host와 각 document가 한 turn에 답하는 요청 하나 `exposure.snapshot`으로 설명한다. 창은 항목 수백 개를 담고, 항목마다의 요청은 그만큼의 왕복이 걸리며 값을 서로 다른 시점에 읽을 것이다. 설명은 compact 형식과 byte 한도를 가진 page를 가지므로 결과 하나가 agent가 도구 결과에 두는 한도 안에 머물고, `full`, `surface`, `exposure_describe`가 일부를 펼친다.
+- 노출의 선언된 모든 항목에 닿고 그것을 나열한다. 사람이 필요한 command도 빠지지 않는다. 빠뜨리면 애플리케이션이 할 수 있는 것을 숨기게 되고, 그 status가 agent에게 사람이 필요한 때를 보여 주기 때문이다.
+- 창 안의 process는 `PATH`의 첫 `sok`과 다른, 다른 release의 다른 설치된 애플리케이션의 것일 수 있다. 그래서 창의 폴더가 지정하는 `sok`이 명령을 창 자신의 `sok`에 넘긴다. Host는 자기 환경에서 변수를 지우므로 그것은 다른 애플리케이션에 닿지 않는다.
+- 설명과 검색의 page는 offset이 아니라 마지막 row를 key로 하고, 각 page는 새 snapshot이다. 두 page 사이에 창이 바뀌기 때문이다. Page보다 큰 row는 값을 잘라 자기 page 하나가 되므로 나열은 언제나 나아간다.
+- 창의 배치에 관한 모든 요청은 요청의 종류마다의 command나 skill 부분이 아니라 모델 하나와 operation 셋의 조합이다. 요청의 종류는 끝이 없고, 종류마다의 command는 새 요청마다 skill과 노출을 키우면서도 새 종류마다 여전히 같은 단계가 필요할 것이다. 모델은 사람이 보는 tree, 곧 split에서 카드, 탭, surface와 그 노출까지이므로, 요청 안의 자리(오른쪽, 아래, 어떤 탭의 카드 안)는 node의 식별자로 정해진다.
+- Operation은 idempotent하다. 그래서 agent는 응답을 잃거나 다시 시작한 뒤 요청을 되풀이하고, 같은 요청을 하는 두 agent는 탭 하나를 만든다. `core.layout.open`이 여는 탭의 정체는 그 카드, plugin, `params`이며, 이것은 사람도 쓰는 자연 key(그 카드의 process session, 그 카드의 파일 `aaa.html`)이고 호출자의 key가 아니다. 호출자의 key는 레이아웃에 저장되어야 하고 사람이 연 탭을 찾지 못하며, key를 잃은 agent는 두 번째 탭을 만들 것이다. Split은 저장된 split 표시가 아니라, split이 새 카드를 두는 자리인 그 쪽의 이웃으로 다시 찾는다. 하위 tree 전체를 밝히는 선언 형식은 거부했다. 사람이 손으로 바꾼 하위 tree가 있으면 operation이 밝힌 형태에 이르려고 사람의 카드를 옮기거나 닫을 것이기 때문이다.
+- 같은 카드에 같은 `params`를 가진 같은 plugin의 두 번째 탭은 `core.layout.open`이 만들지 않는다. 사람의 카드 컨트롤 `core.card.add-tab`과 `core.card.split`은 실행할 때마다 탭을 더하거나 나누며 그대로 남는다. 사람은 같은 plugin의 두 번째 session을 일부러 더하기 때문이다. 그런 탭이 필요한 agent는 다른 `params`로 그것을 지정한다.
+- 창이 그 workbench가 시작한 뒤 닫은 탭의 `core.layout.close`는 `closed: true`로 답하고, 창에 있었던 적이 없는 탭의 것은 실패한다. 탭 식별자는 무작위이고(packages/workbench/ids.js), 창은 workbench가 실행되는 동안 닫은 식별자를 새 탭에 주지 않는다. 그래서 창은 닫은 식별자로 닫힌 탭과 틀린 식별자를 구별하며, 틀린 식별자에 대한 성공은 agent의 오류를 숨길 것이다. 목록은 workbench가 실행되는 동안 닫힌 모든 식별자를 각각 몇 byte로 담고 저장되지 않는다. Workbench가 다시 시작한 뒤 되풀이한 닫기는 실패하고, 설명은 그 탭이 없다는 것을 보여 준다.
+- Split은 식별자가 없고 어느 operation도 그것을 받지 않는다. 레이아웃은 선과 카드를 저장하고 split을 저장하지 않으므로, split 아래 카드로 만든 식별자는 그중 하나가 나뉘거나 닫히면 바뀔 것이다. 그리고 split이 선을 한 영역 전체에 걸치게 만들면 배치의 tree는 방향을 바꾼다. 그래서 어느 쪽의 이웃은 tree가 아니라 레이아웃의 선으로 찾는다. 위쪽 카드가 가운데에서 나뉜 창에서 아래쪽 카드를 같은 선에서 나누면 두 선이 창 전체에 걸치고 tree는 두 열의 `row`가 된다. Tree에서 얻은 이웃은 더 이상 찾지 못하므로 두 번째 적용이 다시 나눌 것이다.
+- `current`는 적용마다 정해지고 idempotent는 식별자에 대해 성립한다. Operation은 결과의 카드에 focus를 주고, 두 번째 `current`는 그 카드를 지정하기 때문이다.
+- Workbench는 창의 레이아웃 operation을 하나씩 적용하고 한 turn에 판단하고 바꾼다. 탭이 있는지 확인하고 그것을 더하는 일을 서로 다른 turn에 하는 두 agent는 둘 다 탭을 더할 것이기 때문이다.
+- `core.layout.close`는 저장하지 않은 변경이 있는 탭의 질문에 곧바로 `closed: false`로 답하고 사람을 기다리지 않는다. 사람은 command가 기다릴 수 있는 것보다 오래 걸릴 수 있고, `core.picker`와 다음 설명이 질문과 그 결과를 보여 준다.
+- 설명의 tree는 page와 mygo host의 workbench가 같은 선과 카드에서 만들고, `docs/spec/cases/layout/tree.json`의 case가 격자, 중첩, 카드 하나 배치에서 둘이 같은 tree를 만들도록 검사한다.
+- `core.layout.open {card, path}`는 파일의 열린 탭을 대상 카드에서만 찾는다. Space에서 찾는 `core.file.open`과 다르다. Operation은 요청이 지정하는 카드에 탭을 두고, 다른 카드에 있는 같은 파일의 탭은 그 자리가 아니기 때문이다.
 - `claude` 명령의 local이나 project scope의 `soksak` 항목은 검사가 갖지 않은 작업 폴더에 달려 있으므로 검사하지 않는다.
 - Load 중인 창은 1003으로 답하고 도구 오류가 그것을 전하므로, 도구에는 자기 준비 규칙이 필요 없다.

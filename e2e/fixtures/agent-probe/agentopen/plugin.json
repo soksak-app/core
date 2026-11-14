@@ -1,0 +1,23 @@
+{
+  "id": "agentopen",
+  "name": "Agent open probe",
+  "description": "Window check fixture in the place of the address and editing plugins: its tab params take path and address, it opens html files, and the view reports the params of its tab.",
+  "surface": {
+    "params": { "type": "object", "properties": { "path": { "type": "string" }, "address": { "type": "string" } } },
+    "opens": { "extensions": ["html"] },
+    "composition": { "kind": "view", "page": "ui/page.html" }
+  },
+  "mark": "O",
+  "icon": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" rx=\"2\"/>",
+  "exposes": {
+    "status": [
+      {
+        "name": "agentopen.params",
+        "description": "The params of the tab as the start values of its view give them, or null for a tab without params.",
+        "schema": { "type": ["object", "null"], "properties": { "path": { "type": "string" }, "address": { "type": "string" } } }
+      }
+    ],
+    "commands": [],
+    "element": []
+  }
+}

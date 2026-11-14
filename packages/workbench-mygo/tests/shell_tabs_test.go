@@ -81,6 +81,9 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 	f := &tabShell{shellFixture: &shellFixture{t: t, host: stored, pending: make(steps, 256)},
 		readEntered: make(chan string, 16), timers: &clock{}, sidecar: make(chan string, 16), events: &stateEvents{}}
 	table := stored.table()
+	for name, call := range stored.extra {
+		table[name] = call
+	}
 	base := table["workspace"]
 	table["workspace"] = func(ctx context.Context, argument json.RawMessage) (any, error) {
 		var request struct {
@@ -174,6 +177,8 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 				Now:   func() int64 { return f.timers.now },
 				After: f.timers.after}
 		},
+		Name:   windowName,
+		Random: &f.ids,
 	})
 	if err != nil {
 		t.Fatal(err)

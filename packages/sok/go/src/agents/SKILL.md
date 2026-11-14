@@ -1,0 +1,57 @@
+---
+name: soksak
+description: Reads and operates a running soksak application through the sok command line or the soksak MCP tools. Use it when a request concerns a soksak window, its layout of cards and tabs, its plugins, a status value, an element or a command of the application, or when the agent runs in a soksak window and the request concerns that window.
+---
+
+# soksak
+
+soksak is a desktop application whose windows hold a layout of cards with tabs; each tab is a surface of a plugin. The application declares every action as a command, every visible state as a status and every interactive control as an element, and its endpoint answers requests for them.
+
+`sok` and the MCP tools of the server `sok mcp` reach the running application whose configuration directory that `sok` uses. The MCP tools exist only when the MCP server is registered with the agent; `sok` reaches the application from any shell. Every command of `sok` prints JSON on standard output and an error as `sok: <message>` on standard error.
+
+## Finding the application and its windows
+
+- `sok windows` or `windows_list` lists the windows. A request while no application runs fails with the text that the endpoint file does not exist; tell the person that the application is not running.
+- A request names its window with `--window <name>` or `--project <directory>` (`window` for the tools). Without one, an agent in a soksak window reaches its own window, and otherwise the only window.
+- `sok context` or `agent_context` gives `{configDirectory, surface, window}`: the configuration directory, the surface whose process started the agent and the window of that surface, or `null` outside a soksak window.
+
+## Learning the window
+
+- `sok describe` or `window_describe` describes the window in one step: the layout, the loaded plugins, the surfaces with their plugin, the current status values, the elements with the commands they run, and the commands with their parameters. The description comes in pages; pass `--after <next>` (`after`) until `next` is `null`. `--full` (`full`) gives whole values and schemas, and `--surface <id>` (`surface`) describes one surface.
+- The whole exposure of the window is available: `sok describe`, `sok exposures` and `exposure_search` without a query list every declared command, status and element, page by page.
+- The exposure changes when a plugin is installed, removed, enabled or disabled, so read it when needed and never from memory of an earlier session.
+- Find entries with `sok commands --query <words>`, `sok exposures --kind status|command|element --query <words>` or `exposure_search`; a query matches an entry whose name or description holds each word. Read the declaration of one entry before its use with `exposure_describe` or the output of `sok commands`.
+
+## Acting on a layout
+
+The description holds the `layout` of the active space as a tree: inner nodes are splits with a `direction` and the `size` of each child, and the leaves are cards. A card holds its tabs in tab order with the active one marked; a tab is a surface with its plugin, its `params` (the opened resource, such as a path or an address) and its title, and its identifier is the identifier of its surface, whose rows are its exposure. `agent` names the agent's own surface, space and card. A split has no identifier.
+
+Every request about the arrangement of a window is a composition of three idempotent operations. A target is the identifier of a card or a tab, or `current` (the focused card, the active tab of that card).
+
+- `core.layout.open {card, plugin, params?, side?}` or `{card, path, side?}` returns `{card, tab}`. Without `side` it selects the first tab of `plugin` with equal `params` in `card`, or adds one. With `side` (`left`, `right`, `top`, `bottom`) it uses the neighbour of `card` toward `side`, or splits `card` toward `side` into a new card with the tab. `path` chooses the plugin that opens the extension of the path.
+- `core.layout.select {tab}` returns `{card, tab}`: it makes the tab active and focuses its card.
+- `core.layout.close {tab}` returns `{closed}`. A tab with unsaved changes opens the question of its close control and answers `closed: false`; the person answers it.
+
+A repeated operation with the returned identifiers gives the same identifiers and adds no card or tab, so repeat a request safely after a lost reply. Choose a plugin from `plugins` of the description by its description, its `surface.params` and its `opens`. Examples, each after a description:
+
+- Split the card on the right of your card and show a process session below and an address above: find the card `R` right of `agent.card`; `core.layout.open {card: R, side: "bottom", plugin: <process plugin>}`; `core.layout.open {card: R, plugin: <address plugin>, params: {<address parameter>: "http://localhost:3366"}}`.
+- Open a file as a new tab in the card of a process session: find the card `C` whose tabs hold the process plugin; `core.layout.open {card: C, path: "aaa.html"}`.
+- Switch to a tab: find the tab `T` in `layout`; `core.layout.select {tab: T}`.
+
+After a step, find the commands of the plugin of a tab with `exposure_search` or `window_describe {surface}` and run them with `command_run {surface}`. A request can name any window and any surface.
+
+## Running and observing
+
+- Run a declared command with the parameters of its schema: `sok <command> [--<parameter> <value>]... [--params <json>]`, or `command_run {name, params}`.
+- Read a status with `sok status <name>` or `status_get`; wait for a value with `sok status <name> --watch` or `status_watch_once {name, equals}`.
+- Act on an element with `sok element rect|click|input|dispatch <name>`, `element_rect` or `element_act`.
+- Use native input (`sok input pointer|gesture|key|text`, `input_pointer`, `input_key`, `input_text`) only when a request needs real input events; a command or an element action is the normal path.
+- Change plugins through the declared commands `core.plugins.*` of the running application; `sok plugin` beside a running application is refused.
+
+## Rules
+
+- Run only declared commands, and read the schema of a command before running it.
+- Wait on statuses, not on time.
+- Ask the person before a change that removes the person's work, such as closing a modified tab, removing a plugin or quitting the application.
+- Ask the person for an operation that needs the person, such as the answer of a system dialog, the activation of the application for an input method, or administrator rights; do not work around it. A status such as `host.dialog` shows that the person is needed.
+- Report an error to the person with its text.

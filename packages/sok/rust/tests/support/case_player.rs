@@ -77,6 +77,8 @@ enum Ordered {
     Object(Vec<(String, Ordered)>),
     Array(Vec<Ordered>),
     Scalar(Value),
+    /// A raw JSON text that a test gives a variable (play_case_with_raw), written as it is.
+    Raw(Box<RawValue>),
 }
 
 impl<'de> serde::Deserialize<'de> for Ordered {
@@ -140,6 +142,7 @@ impl serde::Serialize for Ordered {
         use serde::ser::{SerializeMap, SerializeSeq};
         match self {
             Ordered::Scalar(value) => value.serialize(serializer),
+            Ordered::Raw(raw) => raw.serialize(serializer),
             Ordered::Array(items) => {
                 let mut seq = serializer.serialize_seq(Some(items.len()))?;
                 for item in items {
@@ -167,7 +170,7 @@ impl Ordered {
                     visit(name);
                 }
             }
-            Ordered::Scalar(_) => {}
+            Ordered::Scalar(_) | Ordered::Raw(_) => {}
             Ordered::Array(items) => items.iter().for_each(|item| item.each_variable(visit)),
             Ordered::Object(members) => members
                 .iter()
@@ -182,7 +185,7 @@ impl Ordered {
                 Some(name) => bind(name)?,
                 None => self.clone(),
             },
-            Ordered::Scalar(_) => self.clone(),
+            Ordered::Scalar(_) | Ordered::Raw(_) => self.clone(),
             Ordered::Array(items) => Ordered::Array(
                 items
                     .iter()
@@ -413,6 +416,8 @@ struct State {
     cursor: usize,
     /// The frames of the client, in order.
     requests: Vec<Value>,
+    /// The JSON texts of the frames of the client as the client wrote them, in the order of requests.
+    bodies: Vec<String>,
     /// The number of connections that the client opened.
     connections: usize,
     /// The failures of the case, each with the name of the case.
@@ -431,7 +436,11 @@ struct Shared {
     steps: Vec<Step>,
     examples: BTreeMap<String, Box<RawValue>>,
     texts: BTreeMap<String, String>,
+    /// The raw JSON texts that the test gives variables (play_case_with_raw).
+    raws: BTreeMap<String, Box<RawValue>>,
     state: Mutex<State>,
+    /// Signalled when the client sends a frame, so a test waits for a frame without polling.
+    arrived: Condvar,
 }
 
 impl Shared {
@@ -452,6 +461,9 @@ impl Shared {
     /// Replaces each variable of a host frame with the text that the test gave it, or with its example.
     fn bind(&self, frame: &Ordered) -> Result<String, String> {
         let bound = frame.bound(&|variable| {
+            if let Some(raw) = self.raws.get(variable) {
+                return Ok(Ordered::Raw(raw.clone()));
+            }
             if let Some(text) = self.texts.get(variable) {
                 return Ok(Ordered::Scalar(Value::String(text.clone())));
             }
@@ -496,10 +508,12 @@ impl Shared {
 
     /// Checks a frame of the client against the next step, which must be a send step with the same frame. It returns the host frames
     /// that follow the step, or None when the frame differs or the case cannot be played; the connection then ends.
-    fn receive(&self, message: Value) -> Option<(Vec<String>, bool)> {
+    fn receive(&self, message: Value, body: String) -> Option<(Vec<String>, bool)> {
         let mut state = self.lock();
         if message.is_object() {
             state.requests.push(message.clone());
+            state.bodies.push(body);
+            self.arrived.notify_all();
         }
         let cursor = state.cursor;
         let mismatch = match self.steps.get(cursor) {
@@ -563,7 +577,9 @@ impl Shared {
 /// case when it is dropped at the end of the test.
 pub struct CasePlayer {
     shared: Arc<Shared>,
-    config_dir: Folder,
+    /// The configuration directory that the player made, which it removes; None when the test gave the directory.
+    config_folder: Option<Folder>,
+    config_dir: PathBuf,
     socket_dir: Folder,
     address: PathBuf,
     accept: Option<JoinHandle<()>>,
@@ -580,9 +596,40 @@ pub fn play_case_with_text(name: &str, variable: &str, text: &str) -> CasePlayer
     open_case(name, &[(variable, text)]).unwrap_or_else(|error| panic!("{error}"))
 }
 
+/// Plays the case of the name. The variable takes a raw JSON text that the host frame holds as it is; a test uses it for a value that
+/// a case file cannot hold, such as a string with a lone surrogate escape, which names no character of a decoded value.
+pub fn play_case_with_raw(name: &str, variable: &str, raw: &str) -> CasePlayer {
+    open_case_with(name, None, &[], &[(variable, raw)]).unwrap_or_else(|error| panic!("{error}"))
+}
+
+/// Plays the case of the name in the configuration directory that the test gives, where it writes endpoint.json; a test uses it
+/// when the client starts before the application does. The texts are those of play_case_with_text.
+pub fn play_case_in(name: &str, config_dir: &Path, texts: &[(&str, &str)]) -> CasePlayer {
+    open_case_in(name, Some(config_dir), texts).unwrap_or_else(|error| panic!("{error}"))
+}
+
 /// Opens the case of the name with the given texts: writes endpoint.json of a new configuration directory, starts listening on the
 /// socket that the file names, and starts the accept loop.
 fn open_case(name: &str, texts: &[(&str, &str)]) -> Result<CasePlayer, String> {
+    open_case_in(name, None, texts)
+}
+
+/// open_case in the given configuration directory, or in a new one.
+fn open_case_in(
+    name: &str,
+    chosen: Option<&Path>,
+    texts: &[(&str, &str)],
+) -> Result<CasePlayer, String> {
+    open_case_with(name, chosen, texts, &[])
+}
+
+/// open_case_in with the raw JSON texts of play_case_with_raw.
+fn open_case_with(
+    name: &str,
+    chosen: Option<&Path>,
+    texts: &[(&str, &str)],
+    raws: &[(&str, &str)],
+) -> Result<CasePlayer, String> {
     let directory = case_directory()?;
     let case = load_case(&directory, name)?;
     let mut given = BTreeMap::new();
@@ -594,8 +641,25 @@ fn open_case(name: &str, texts: &[(&str, &str)]) -> Result<CasePlayer, String> {
         }
         given.insert(variable.to_string(), text.to_string());
     }
+    let mut given_raws = BTreeMap::new();
+    for (variable, raw) in raws {
+        if !case.examples.contains_key(*variable) {
+            return Err(format!(
+                "{name}: the test gives a value for variable {variable}, which the case does not declare"
+            ));
+        }
+        let raw = RawValue::from_string(raw.to_string()).map_err(|error| {
+            format!("{name}: the raw text of variable {variable} is no JSON: {error}")
+        })?;
+        given_raws.insert(variable.to_string(), raw);
+    }
 
-    let config_dir = Folder::new("sok");
+    let config_folder = chosen.is_none().then(|| Folder::new("sok"));
+    let config_dir = match (&config_folder, chosen) {
+        (Some(folder), _) => folder.path().to_path_buf(),
+        (None, Some(chosen)) => chosen.to_path_buf(),
+        (None, None) => unreachable!("a player without a given directory makes one"),
+    };
     // A Unix socket path is limited to 104 bytes. The test runner gives the process a short TMPDIR under /tmp, so the socket folder
     // lies there.
     let socket_dir = Folder::new("socket");
@@ -613,23 +677,23 @@ fn open_case(name: &str, texts: &[(&str, &str)]) -> Result<CasePlayer, String> {
         "executable": executable.display().to_string(),
         "started": rfc3339_utc_now(),
     });
-    std::fs::write(
-        config_dir.path().join("endpoint.json"),
-        endpoint.to_string(),
-    )
-    .map_err(|error| format!("{name}: cannot write endpoint.json: {error}"))?;
+    std::fs::write(config_dir.join("endpoint.json"), endpoint.to_string())
+        .map_err(|error| format!("{name}: cannot write endpoint.json: {error}"))?;
 
     let shared = Arc::new(Shared {
         name: name.to_string(),
         steps: case.steps,
         examples: case.examples,
         texts: given,
+        raws: given_raws,
         state: Mutex::new(State::default()),
+        arrived: Condvar::new(),
     });
     let accepting = Arc::clone(&shared);
     let accept = std::thread::spawn(move || accept_loop(accepting, listener));
     Ok(CasePlayer {
         shared,
+        config_folder,
         config_dir,
         socket_dir,
         address,
@@ -792,7 +856,8 @@ fn play(shared: &Shared, stream: &mut UnixStream, prior: &[Ended]) {
                 return;
             }
         };
-        let Some((frames, closed_by_host)) = shared.receive(message) else {
+        let written = String::from_utf8_lossy(&body).into_owned();
+        let Some((frames, closed_by_host)) = shared.receive(message, written) else {
             return;
         };
         if !deliver(shared, stream, &frames) || closed_by_host {
@@ -859,7 +924,52 @@ impl Drop for CasePlayer {
 impl CasePlayer {
     /// Returns the configuration directory that holds endpoint.json.
     pub fn dir(&self) -> String {
-        self.config_dir.path().display().to_string()
+        self.config_dir.display().to_string()
+    }
+
+    /// Waits until the client has sent count frames of the method, for at most the bound of a case.
+    pub fn wait_for_method(&self, method: &str, count: usize) {
+        let deadline = Instant::now() + CASE_LIMIT;
+        let mut state = self.shared.lock();
+        loop {
+            let seen = state
+                .requests
+                .iter()
+                .filter(|request| request["method"] == method)
+                .count();
+            if seen >= count {
+                return;
+            }
+            let Some(remaining) = deadline.checked_duration_since(Instant::now()) else {
+                let methods: Vec<String> = state
+                    .requests
+                    .iter()
+                    .map(|request| request["method"].to_string())
+                    .collect();
+                drop(state);
+                panic!(
+                    "{}: the client sent {seen} frames of {method} within {CASE_LIMIT:?}, not {count}; frames: {methods:?}",
+                    self.shared.name
+                );
+            };
+            state = self
+                .shared
+                .arrived
+                .wait_timeout(state, remaining)
+                .expect("the player state")
+                .0;
+        }
+    }
+
+    /// The value of a variable that a text names (`$name`) and the case declares: the text that the test gave it, else its
+    /// example. None when the text names no declared variable.
+    pub fn variable(&self, text: &str) -> Option<Value> {
+        let name = variable_name(text)?;
+        if let Some(given) = self.shared.texts.get(name) {
+            return Some(Value::String(given.clone()));
+        }
+        let example = self.shared.examples.get(name)?;
+        Some(serde_json::from_str(example.get()).expect("an example is JSON"))
     }
 
     /// Returns the methods of the frames that the client sent, in order.
@@ -880,6 +990,20 @@ impl CasePlayer {
             .last()
             .expect("the client sent a frame")["params"]
             .clone()
+    }
+
+    /// Returns the JSON text of the last frame of the method that the client sent, as the client wrote it, or the empty text when
+    /// it sent none.
+    pub fn last_text(&self, method: &str) -> String {
+        let state = self.shared.lock();
+        state
+            .requests
+            .iter()
+            .zip(&state.bodies)
+            .rev()
+            .find(|(request, _)| request["method"] == method)
+            .map(|(_, text)| text.clone())
+            .unwrap_or_default()
     }
 
     /// Returns the frames that the client sent, in order.

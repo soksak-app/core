@@ -47,6 +47,7 @@ const (
 	codeButtonHeld    = 1007
 	codePressOpen     = 1008
 	codePointerHeld   = 1011
+	codeNoSurface     = 1012
 )
 
 // RPCError is the JSON-RPC error object.
@@ -1381,8 +1382,72 @@ var endpointMethods = map[string]endpointMethod{
 	"input.key":     inputKey,
 	"input.text":    inputText,
 
+	// exposure.snapshot answers the window snapshot (docs/spec/exposure.md#window-snapshot).
+	"exposure.snapshot": exposureSnapshot,
+
+	// surface.window answers the window and the space whose layout holds a surface (docs/spec/exposure.md#methods).
+	"surface.window": surfaceWindow,
+
 	// input.dialog.answer answers a request of host.dialog (docs/spec/exposure.md#dialogs).
 	"input.dialog.answer": inputDialogAnswer,
+}
+
+// surfaceWindow answers surface.window {surface}: {window, space} of the first window in the order of windows.list whose main page
+// answers that the layout of one of its spaces holds the surface, or that a sidebar of it draws the section surface, with the space
+// null. The page of each ready window answers {space}, {space: null} or null. A window that
+// is not ready, or whose page ended or was read again after the list, may hold the surface, so without a window that holds it the
+// request fails with 1003 for the first such window; with none, it fails with 1012 (docs/spec/exposure.md#methods).
+func surfaceWindow(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {
+	var fields struct {
+		Surface json.RawMessage `json:"surface"`
+	}
+	if err := decode(params, &fields); err != nil {
+		return nil, err
+	}
+	var surface string
+	if json.Unmarshal(fields.Surface, &surface) != nil || surface == "" {
+		return nil, rpcError(codeInvalidParams, "surface must be a non-empty string")
+	}
+	asked := mustJSON(map[string]string{"surface": surface})
+	loading := ""
+	for _, entry := range e.backend.Windows() {
+		if !entry.Ready {
+			if loading == "" {
+				loading = entry.Window
+			}
+			continue
+		}
+		reply, err := e.backend.PageRequest(scope.Context(), entry.Window, "surface.window", asked)
+		if WindowClosed(err) {
+			if loading == "" {
+				loading = entry.Window
+			}
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if trimmed := bytes.TrimSpace(reply); string(trimmed) == "null" {
+			continue
+		}
+		var held map[string]json.RawMessage
+		if trimmed := bytes.TrimSpace(reply); len(trimmed) == 0 || trimmed[0] != '{' || json.Unmarshal(reply, &held) != nil || held["space"] == nil {
+			return nil, rpcError(codeInternal, "page surface.window is %s, not null or {space}", reply)
+		}
+		// A section surface belongs to a sidebar of the window and to no layout of a space, so its page answers the space null.
+		if string(bytes.TrimSpace(held["space"])) == "null" {
+			return map[string]any{"window": entry.Window, "space": nil}, nil
+		}
+		var space string
+		if json.Unmarshal(held["space"], &space) != nil || space == "" {
+			return nil, rpcError(codeInternal, "page surface.window is %s, not null or {space}", reply)
+		}
+		return map[string]string{"window": entry.Window, "space": space}, nil
+	}
+	if loading != "" {
+		return nil, rpcError(codeNoWindow, "window %q is not ready", loading)
+	}
+	return nil, rpcError(codeNoSurface, "surface %s is in no window", surface)
 }
 
 // namePattern is the form of an entry name.
@@ -1498,6 +1563,92 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *R
 		list["element"] = []json.RawMessage{}
 	}
 	return list, nil
+}
+
+// exposureSnapshot answers the window snapshot (docs/spec/exposure.md#window-snapshot): the window as windows.list gives it, then the
+// layout, the plugins, the groups and the unregistered entries of the main page, with the group of the host before the groups of
+// the page. A snapshot of one surface holds only the group of that surface, so it has no host group.
+func exposureSnapshot(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *ReplyScope) (any, error) {
+	window, err := e.window(params)
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := decode(params, &fields); err != nil {
+		return nil, err
+	}
+	var entry *WindowEntry
+	for _, listed := range e.backend.Windows() {
+		if listed.Window == window {
+			entry = &listed
+			break
+		}
+	}
+	if entry == nil {
+		return nil, errMissingWindow(window)
+	}
+	var own map[string]any
+	if _, one := fields["surface"]; !one {
+		own = hostGroup(e.backend, window)
+	}
+	reply, err := e.backend.PageRequest(scope.Context(), window, "exposure.snapshot", withoutWindow(params))
+	if err != nil {
+		return nil, err
+	}
+	if trimmed := bytes.TrimSpace(reply); len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, rpcError(codeInternal, "page exposure.snapshot is %s, not an object", reply)
+	}
+	var part map[string]json.RawMessage
+	if err := json.Unmarshal(reply, &part); err != nil {
+		return nil, rpcError(codeInternal, "page exposure.snapshot: %v", err)
+	}
+	for _, member := range []string{"layout", "plugins", "groups", "unregistered"} {
+		if _, present := part[member]; !present {
+			return nil, rpcError(codeInternal, "page exposure.snapshot has no %s", member)
+		}
+	}
+	var groups []json.RawMessage
+	if err := json.Unmarshal(part["groups"], &groups); err != nil || groups == nil {
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, part["groups"]); err != nil {
+			return nil, rpcError(codeInternal, "page exposure.snapshot groups: %v", err)
+		}
+		return nil, rpcError(codeInternal, "page exposure.snapshot groups is %s, not an array", compact.String())
+	}
+	if own != nil {
+		groups = append([]json.RawMessage{mustJSON(own)}, groups...)
+	}
+	return map[string]any{
+		"window": map[string]any{"window": entry.Window, "title": entry.Title, "project": entry.Project},
+		"layout": part["layout"], "plugins": part["plugins"], "groups": groups, "unregistered": part["unregistered"],
+	}, nil
+}
+
+// hostGroup is the group of the host in a window snapshot: each host status in name order with its value, or with the text of the
+// failure of its read, and each host command in name order, each in the declaration format. The host declares no element entry.
+func hostGroup(backend Backend, window string) map[string]any {
+	status := []map[string]any{}
+	for _, entry := range listedEntries(hostStatus, true) {
+		delete(entry, "registered")
+		name := entry["name"].(string)
+		value, err := backend.HostStatus(window, name)
+		var refusal *RPCError
+		switch {
+		case errors.As(err, &refusal):
+			entry["error"] = refusal.Message
+		case err != nil:
+			entry["error"] = err.Error()
+		default:
+			entry["value"] = value
+		}
+		status = append(status, entry)
+	}
+	commands := []map[string]any{}
+	for _, entry := range listedEntries(hostCommands, false) {
+		delete(entry, "registered")
+		commands = append(commands, entry)
+	}
+	return map[string]any{"owner": "host", "status": status, "commands": commands, "element": []any{}}
 }
 
 func statusGet(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *ReplyScope) (any, error) {

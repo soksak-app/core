@@ -39,7 +39,14 @@ commands:
   debug replay SESSION [--until SEQUENCE]
                             replays the session with the replay executable of its sidecar and compares every stored screen hash
   capture [window]          (diagnostic builds) writes a still image of the window without focusing it
+  context                   prints the configuration directory, the surface of SOKSAK_SURFACE and its window
   path install|remove       writes or deletes the PATH entry of this application (needs sudo)
+  skill print|install       writes the agent skill to standard output or into the skill folder of each agent folder
+  mcp install               registers sok mcp with the claude command in its user scope
+  setup check               prints each setup part with its state and its install step
+  setup install [path|skill|mcp]...
+                            installs each missing setup part of the named kinds
+  setup environment         prints HOME, PATH and CLAUDE_CONFIG_DIR of the environment as one JSON line
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]
@@ -53,7 +60,7 @@ commands:
   plugin list               prints plugins/installed.json
 
 window:
-  --window NAME | --project DIRECTORY   without either, the only window of the application
+  --window NAME | --project DIRECTORY   without either, the window of the surface SOKSAK_SURFACE, else the only window of the application
 
 common options:
   --config-dir DIR          configuration directory of the running application (default: this application's)`
@@ -66,14 +73,14 @@ func (e UsageError) Error() string { return e.message }
 func usage(format string, args ...any) error { return UsageError{fmt.Sprintf(format, args...)} }
 
 // booleans are the flags that take no value.
-var booleans = map[string]bool{"watch": true, "activate": true, "help": true}
+var booleans = map[string]bool{"watch": true, "activate": true, "help": true, "full": true}
 
 // options are the flags that take a value.
 var options = map[string]bool{
 	"config-dir": true, "window": true, "project": true, "surface": true, "index": true, "value": true, "event": true,
 	"wait": true, "bundle": true, "target": true, "x": true, "y": true, "phase": true, "platform": true, "button": true, "pointer": true, "delta-x": true, "clicks": true, "delta-y": true, "points": true, "key": true, "text": true, "modifiers": true, "selection": true, "replacement": true,
 	"level": true, "layer": true, "session": true, "cid": true, "from": true, "to": true,
-	"channel": true, "class": true, "event-prefix": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
+	"channel": true, "class": true, "event-prefix": true, "kind": true, "query": true, "run": true, "order": true, "limit": true, "after": true, "around": true, "earlier": true, "later": true, "until": true,
 }
 
 type arguments struct {
@@ -426,9 +433,11 @@ func planGesture(a arguments, withWindow func(func(string) (request, error)) (re
 type windowEntry struct {
 	Window  string  `json:"window"`
 	Project *string `json:"project"`
+	Key     bool    `json:"key"`
 }
 
-// selectWindow chooses the window to request with --window, --project or the only window.
+// selectWindow chooses the window to request with --window, --project, the window of the surface that SOKSAK_SURFACE names, or
+// the only window (docs/spec/cli.md#windows).
 func selectWindow(a arguments, client *Client) (string, error) {
 	name, byName := a.values["window"]
 	project, byProject := a.values["project"]
@@ -438,38 +447,48 @@ func selectWindow(a arguments, client *Client) (string, error) {
 	if byName {
 		return name, nil
 	}
-	result, err := client.Request("windows.list", nil)
+	if surface := agentSurface(); surface != "" && !byProject {
+		home, err := surfaceWindow(client.Request, surface)
+		return home.Window, err
+	}
+	windows, err := readWindows(client.Request)
 	if err != nil {
 		return "", err
 	}
-	var windows []windowEntry
-	if err := json.Unmarshal(result, &windows); err != nil {
-		return "", fmt.Errorf("windows.list returned an unexpected value: %w", err)
+	if byProject {
+		return projectWindow(windows, project)
 	}
+	if len(windows) != 1 {
+		return "", usage("the application has %d windows (%s); select one with --window or --project", len(windows), strings.Join(windowNames(windows), ", "))
+	}
+	return windows[0].Window, nil
+}
+
+// windowNames are the names of the windows in the order of their text.
+func windowNames(windows []windowEntry) []string {
 	names := make([]string, 0, len(windows))
 	for _, entry := range windows {
 		names = append(names, entry.Window)
 	}
 	sort.Strings(names)
-	if byProject {
-		target, err := filepath.EvalSymlinks(project)
-		if err != nil {
-			return "", fmt.Errorf("project directory %s: %w", project, err)
-		}
-		for _, entry := range windows {
-			if entry.Project == nil {
-				continue
-			}
-			if open, err := filepath.EvalSymlinks(*entry.Project); err == nil && open == target {
-				return entry.Window, nil
-			}
-		}
-		return "", fmt.Errorf("no window shows the project %s; windows: %s", target, strings.Join(names, ", "))
+	return names
+}
+
+// projectWindow is the window whose open project folder is the directory project, both resolved to canonical paths.
+func projectWindow(windows []windowEntry, project string) (string, error) {
+	target, err := filepath.EvalSymlinks(project)
+	if err != nil {
+		return "", fmt.Errorf("project directory %s: %w", project, err)
 	}
-	if len(windows) != 1 {
-		return "", usage("the application has %d windows (%s); select one with --window or --project", len(windows), strings.Join(names, ", "))
+	for _, entry := range windows {
+		if entry.Project == nil {
+			continue
+		}
+		if open, err := filepath.EvalSymlinks(*entry.Project); err == nil && open == target {
+			return entry.Window, nil
+		}
 	}
-	return windows[0].Window, nil
+	return "", fmt.Errorf("no window shows the project %s; windows: %s", target, strings.Join(windowNames(windows), ", "))
 }
 
 // indent indents JSON by two spaces and keeps the key order.
@@ -669,6 +688,12 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 		}
 		return runPath(action, stdout, options)
 	}
+	if handled, err := runAgentSetup(a, stdout, options); handled {
+		return err
+	}
+	if len(a.positionals) > 0 && a.positionals[0] == "mcp" && (len(a.positionals) == 1 || a.positionals[1] != "install" && a.positionals[1] != "remove") {
+		return runMCP(a, stderr, options)
+	}
 	var client *Client
 	connect := func() (*Client, error) {
 		if client != nil {
@@ -687,6 +712,9 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 			}
 		}
 	}()
+	if handled, err := runAgentView(a, stdout, options, connect); handled {
+		return err
+	}
 	req, err := plan(a, func() (string, error) {
 		c, err := connect()
 		if err != nil {
