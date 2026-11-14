@@ -1,0 +1,66 @@
+{
+  "name": "verify-ahead-v7b-fitted",
+  "description": "The page prepares one layout of one DOM surface of a plugin with a height of 580.5 in a plane at 6,6 on a display of one device pixel per point, and the host answers the syncSurfaces call with the height of 580 that the device pixels show.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 209,
+              "y": 39,
+              "w": 2323,
+              "h": 580.5
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": true,
+              "scale": 1,
+              "x": 209,
+              "y": 39,
+              "w": 2323,
+              "h": 580
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,6160 @@
+{
+  "name": "project-data-writes-session",
+  "description": "The page starts at the library with one project, then writes the project data of that project through patches that the host answers later: two writes in a row, a read that a write outran, refused writes, replaces from one read and replaces against stored values of each text form; the host sends a change notice before each read of the registry.",
+  "replay": false,
+  "reason": "The page start sends the theme of the window and reports the window ready (setTheme, windowReady), and the held replies of the patches are settled by the test, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "snapshot": {
+      "type": "object",
+      "example": {
+        "common": {},
+        "projects": [
+          {
+            "id": "prj-alpha",
+            "root": "/work/alpha",
+            "identity": "alpha",
+            "title": "alpha",
+            "color": "#fff",
+            "named": 1,
+            "activeSpaceId": "spc-alpha",
+            "spaces": [
+              {
+                "id": "spc-alpha",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "cards": []
+                  }
+                }
+              }
+            ],
+            "settings": {}
+          }
+        ],
+        "open": []
+      }
+    },
+    "theme": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#000"
+        }
+      },
+      "source": "page"
+    },
+    "language": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "off"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "policy",
+          "classes": {
+            "lifecycle": "error",
+            "input": "error",
+            "call": "error",
+            "io": "error",
+            "frame": "error"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabState"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessions"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "windowReady"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "one"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "one"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "two"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "one"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "two"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "three"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "one"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "two"
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "one"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "two"
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "lost"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "two"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "three"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "the disk is full",
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "two"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "three"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "the disk is full",
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "three"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1,
+                      "y": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1,
+                      "y": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "a": {
+                        "b": 1,
+                        "c": [
+                          {
+                            "d": 2,
+                            "e": 3
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "a": {
+                        "b": 1,
+                        "c": [
+                          {
+                            "d": 2,
+                            "e": 3
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1000.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1000.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": -0.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": -0.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 9007199254740993
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 9007199254740993
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "a/b"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "a/b"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "é": "é"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "é": "é"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": null
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": null
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": ""
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": ""
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": []
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": []
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1,
+                      "y": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1,
+                      "y": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "a": {
+                        "b": 1,
+                        "c": [
+                          {
+                            "d": 2,
+                            "e": 3
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "a": {
+                        "b": 1,
+                        "c": [
+                          {
+                            "d": 2,
+                            "e": 3
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1000.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1000.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": -0.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": -0.0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 9007199254740993
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 9007199254740993
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "<a>"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "a/b"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "t": "a/b"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "é": "é"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "é": "é"
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": [
+                        1,
+                        2
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": null
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": null
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 0
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": ""
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": ""
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": []
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": []
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "notice": {
+        "event": "workspace-changed"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": [
+            {
+              "id": "prj-alpha",
+              "root": "/work/alpha",
+              "identity": "alpha",
+              "title": "alpha",
+              "color": "#fff",
+              "named": 1,
+              "activeSpaceId": "spc-alpha",
+              "spaces": [
+                {
+                  "id": "spc-alpha",
+                  "title": "SPACE1",
+                  "layout": {
+                    "state": {
+                      "cards": []
+                    }
+                  }
+                }
+              ],
+              "settings": {},
+              "plugins": {
+                "probe": {
+                  "first": {
+                    "format": 1,
+                    "value": "kept"
+                  },
+                  "second": {
+                    "format": 1,
+                    "value": "later"
+                  },
+                  "third": {
+                    "format": 1,
+                    "value": "first change"
+                  }
+                },
+                "ordered": {
+                  "point": {
+                    "format": 1,
+                    "value": {
+                      "x": 1
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "open": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "first change"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-alpha",
+          "patch": {
+            "plugins": {
+              "probe": {
+                "first": {
+                  "format": 1,
+                  "value": "kept"
+                },
+                "second": {
+                  "format": 1,
+                  "value": "later"
+                },
+                "third": {
+                  "format": 1,
+                  "value": "lost"
+                }
+              },
+              "ordered": {
+                "point": {
+                  "format": 1,
+                  "value": {
+                    "next": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "the disk is full",
+        "held": true
+      }
+    }
+  ]
+}

@@ -4,13 +4,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
-import { registerSourceOrigin } from "../source-origins.js";
-import { recordOrigin } from "../tab-reports.js";
-import { setSurfaceTextSize } from "../text-size.js";
+import { host, selectPageWire } from "@soksak/runtime";
 import { drained } from "./support/drained.mjs";
 
+// The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the
+// first module that imports host.js is imported, because host.js reads the host when it is imported.
+const wire = selectPageWire("surface-view-tab-state-open");
+const { registerPlugin } = await import("../registry.js");
+const { registerSourceOrigin } = await import("../source-origins.js");
+const { recordOrigin } = await import("../tab-reports.js");
+const { setSurfaceTextSize } = await import("../text-size.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
+const projects = await import("../projects.js");
+const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js");
+
 setSurfaceTextSize(() => 1);
+// projects.initialise reads the project parameter of the address of the window.
+globalThis.location = new URL("http://soksak.test/index.html");
 
 test("a view call of a surface with surface.unload waits for the tab state store to open", { timeout: 5000 }, async (t) => {
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
@@ -18,88 +28,53 @@ test("a view call of a surface with surface.unload waits for the tab state store
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  // The store is not open until the test opens it, as it is not while the page is initialising.
-  let storeNow = null;
-  let openStore;
-  const storeOpened = new Promise((resolve) => { openStore = resolve; });
-  const listeners = new Map();
-  let viewCallListenerReady;
-  const viewCallListenerRegistered = new Promise((resolve) => { viewCallListenerReady = resolve; });
-  const replies = [];
-  // The order of the store opening and of the replies: no reply may come before the store opens.
-  const order = [];
-  // Resolves when the view has received count replies.
-  const replyWaiters = [];
-  const recordedReply = () => { for (const check of replyWaiters.splice(0)) check(); };
-  const untilReplies = (count) => new Promise((resolve) => {
-    const check = () => (replies.length >= count ? resolve() : replyWaiters.push(check));
-    check();
-  });
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async (name, listener) => {
-        listeners.set(name, listener);
-        if (name === "view-call") viewCallListenerReady();
-        return () => {};
-      }, call: async (name, payload) => {
-        if (name === "viewReply") { replies.push(payload); order.push("reply"); recordedReply(); }
-        return null;
-      } } };
-    },
-  } });
-  const actualProjects = await import("../projects.js");
-  t.mock.module("../projects.js", { exports: {
-    ...actualProjects,
-    active: () => null,
-    tabStateStore: () => storeNow,
-    tabStatesReady: () => storeOpened,
-    waitForInitialProjectContext: async () => {},
-  } });
-  const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-tab-state");
   const pluginId = "fixture-tab-state-view";
   const surfaceId = "fixture-tab-state-view-surface";
+  const unload = { format: 2, maxBytes: 64 };
+  // The host holds the reply of the tab state read until the test releases it, so the store is not open while the page is initialising.
+  const initialising = projects.initialise(new HostWorkspaceStore(host), (plugin) => (plugin === pluginId ? unload : false));
+  // The initialisation reads the registry and then asks for the tab state; the end of the microtask queue follows both calls.
+  await drained();
+  assert.deepEqual(wire.calls.map(({ name, payload }) => [name, payload.kind]), [["workspace", "snapshot"], ["workspace", "tabState"]]);
   recordOrigin(surfaceId, null, "test fixture");
   registerSourceOrigin(pluginId, surfaceId, 1);
   registerPlugin({ id: pluginId, surface: () => null });
   const composition = { kind: "view", page: "ui/page.html" };
-  const unload = { format: 2, maxBytes: 64 };
   const surface = { module: null, surfaceId, pluginId, unload, declarations: { status: [], commands: [], element: [] }, sidecars: [], composition };
   try {
     authorizeSurface(surfaceId);
     const mounted = mountSurface(document.querySelector("#slot"), surface, { onState: () => {} });
-    await viewCallListenerRegistered;
     const reported = [];
     const originalDispatchEvent = globalThis.dispatchEvent;
     globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
     t.after(() => { globalThis.dispatchEvent = originalDispatchEvent; });
-    const call = (id, command, params) => listeners.get("view-call")({ surface: surfaceId, plugin: pluginId, generation: 1, id, command, params });
-    call(1, "tab.state.read", null);
-    call(2, "tab.title", "Early");
-    call(3, "tab.state.write", { page: 4 });
+    // The three calls of the view reach the listener that the mount installed, in the order of the notices of the case.
+    wire.deliverNotice();
+    wire.deliverNotice();
+    wire.deliverNotice();
     // A call runs in microtasks until it waits for the tab state store, so after the end of the microtask queue a call that did not
     // wait for the store has replied.
     await drained();
-    assert.deepEqual(order, [], "a call was answered before the tab state store opened");
-    const labels = [];
-    const writes = [];
-    storeNow = { entry: () => null, cacheLabel: (...label) => labels.push(label), write: (...write) => writes.push(write) };
-    order.push("opened");
-    openStore();
+    assert.deepEqual(wire.calls.filter(({ name }) => name === "viewReply"), [], "a call was answered before the tab state store opened");
+    const beforeOpen = wire.calls.length;
+    wire.release();
+    await initialising;
     await mounted;
-    await untilReplies(3);
-    assert.deepEqual(order, ["opened", "reply", "reply", "reply"], "a call was answered before the tab state store opened");
+    await drained();
+    const replies = wire.calls.slice(beforeOpen).filter(({ name }) => name === "viewReply").map(({ payload }) => payload);
+    assert.deepEqual(wire.calls.slice(0, beforeOpen).filter(({ name }) => name === "viewReply"), [],
+      "a call was answered before the tab state store opened");
     assert.deepEqual(replies.map(({ id, result, error }) => ({ id, result: result ?? null, error: error ?? null })),
       [1, 2, 3].map((id) => ({ id, result: null, error: null })));
-    assert.deepEqual(labels, [[surfaceId, pluginId, "Early"]], "the title sent before the store opened left no label");
-    assert.deepEqual(writes, [[surfaceId, { format: 2, value: { page: 4 } }]], "the state sent before the store opened was not stored");
+    const store = projects.tabStateStore();
+    assert.deepEqual(store.entry(surfaceId), { label: "Early", state: { format: 2, value: { page: 4 } } },
+      "the title and the state sent before the store opened were not kept by the store");
     assert.deepEqual(reported, []);
+    // The store writes a changed entry after its coalescing interval; the flush writes it now.
+    await store.flush();
   } finally {
     await disposeSurface(surfaceId);
     dom.window.close();
   }
+  wire.finish();
 });

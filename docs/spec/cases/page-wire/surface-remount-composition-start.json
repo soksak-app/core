@@ -1,0 +1,250 @@
+{
+  "name": "surface-remount-composition-start",
+  "description": "The page that starts its first record reads the host clock five times and writes the clock statement and the event workbench.start in one batch.",
+  "replay": false,
+  "reason": "The page writes its events through the host call log with its own clock readings, which the Go producer cannot reproduce without the page (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "identity": {
+      "type": "string",
+      "example": "3f2c9a6e-0b1d-4c7e-9a52-6d1e8b4f0a21",
+      "source": "page"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "event-1-ts-us": {
+      "type": "integer",
+      "example": 1791000000000790,
+      "source": "page"
+    },
+    "event-1-mono-ns": {
+      "type": "integer",
+      "example": 5000001000,
+      "source": "page"
+    },
+    "clock-trip-us": {
+      "type": "integer",
+      "example": 120,
+      "source": "page"
+    },
+    "clock-resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "event-2-ts-us": {
+      "type": "integer",
+      "example": 1791000000000791,
+      "source": "page"
+    },
+    "event-2-mono-ns": {
+      "type": "integer",
+      "example": 5000001001,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "9b8ae03e-c3cf-4a76-8a41-bcb85b1932c7",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 35,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999999424,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4998968226,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.start",
+              "fields": {
+                "started_at": 0,
+                "url": "http://localhost/"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,278 @@
+{
+  "name": "background-session-race-subscription",
+  "description": "The page asks the host to forward the messages of the background session of a tab that has no surface, and the host answers after that tab closed; the page then asks the host to stop forwarding the messages of that session and sends no open to the sidecar.",
+  "replay": false,
+  "reason": "sidecarListen registers a session with the sidecar services of a window, and only the native host with a window and a sidecar answers it (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "hidden-tab": {
+      "type": "string",
+      "example": "tab-bbbbbb",
+      "source": "page"
+    },
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "5d5e7510-e529-40f7-a7de-ce19b0cb926b",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 23,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000055,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999599498,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1790999999999992,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 4999536206,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "$authorization",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarListen",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "id": "$hidden-tab",
+          "on": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarListen",
+        "payload": {
+          "sidecar": "@scope/fixture-sidecar",
+          "id": "$hidden-tab",
+          "on": false
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "lifecycle",
+                "level": "info",
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

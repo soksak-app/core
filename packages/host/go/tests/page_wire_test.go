@@ -66,11 +66,20 @@ func (spec pageWireVariableSpec) types() []string {
 	return nil
 }
 
-// pageWireStep is one call step, one reply step or one notice step.
+// pageWireStep is one call step, one reply step, one notice step or one listen step.
 type pageWireStep struct {
 	Call   *pageWireCall   `json:"call"`
 	Reply  *pageWireReply  `json:"reply"`
 	Notice *pageWireNotice `json:"notice"`
+	Listen *pageWireListen `json:"listen"`
+}
+
+// pageWireListen is the registration of a listener that the page makes for an event of the host. Error is the text that the registration
+// rejects with, and it is absent when the registration succeeds. Held is the reader's: the reader settles a held registration when the test releases it.
+type pageWireListen struct {
+	Event string  `json:"event"`
+	Error *string `json:"error"`
+	Held  bool    `json:"held"`
 }
 
 // pageWireNotice is a notice that the host sends to the listeners of the page.
@@ -141,10 +150,13 @@ func runPageWireCase(t *testing.T, name, file string) {
 		t.Skip(kase.Reason)
 	}
 	// The producer runs the calls of the host without a window, and a notice reaches only the listeners of a window, so a case with a
-	// notice is replayed in the tier that has windows.
+	// notice is replayed in the tier that has windows. A registration of a listener is made by a page, which this producer does not have.
 	for i, step := range kase.Steps {
 		if step.Notice != nil {
 			t.Fatalf("%s: step %d is a notice, which this producer cannot observe; the case needs replay false and the reason", file, i)
+		}
+		if step.Listen != nil {
+			t.Fatalf("%s: step %d is the registration of a listener, which this producer has no page to make; the case needs replay false and the reason", file, i)
 		}
 	}
 	if len(kase.Steps)%2 != 0 {

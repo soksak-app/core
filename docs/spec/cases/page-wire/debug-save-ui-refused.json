@@ -1,0 +1,628 @@
+{
+  "name": "debug-save-ui-refused",
+  "description": "The page opens the debug view and starts a save of the logs folder; a second save while the first writes is refused, the view shows the refusal, and the page writes it to the application log in its first batch, after the clock requests of the anchor; the host event of a failed write redraws the view with its error, which the page writes to the log; closing the view hides the modal view.",
+  "replay": false,
+  "reason": "The case shows, updates, places and hides a modal view of a window through the overlay calls and sends the host event of a save, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "page-identity": {
+      "type": "string",
+      "example": "6571a40e-6d32-4c55-9632-3f4f321f53e5",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999997352,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4996896893,
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 9,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-10": {
+      "type": "integer",
+      "example": 1791000000001585,
+      "source": "page"
+    },
+    "mono-ns-10": {
+      "type": "integer",
+      "example": 5001129664,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "debug",
+          "title": "디버그",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\" hidden=\"\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"1\"></progress><span class=\"dbg-card__progress-text\"></span></div><p class=\"dbg-card__error\" hidden=\"\"></p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-1.json"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFiles"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": {
+          "id": "debug",
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "title": "디버그",
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\" data-scroll-key=\"list\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\" hidden=\"\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"1\"></progress><span class=\"dbg-card__progress-text\"></span></div><p class=\"dbg-card__error\" hidden=\"\"></p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": {
+          "id": "debug",
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "title": "디버그",
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\" data-scroll-key=\"list\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\" hidden=\"\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"1\"></progress><span class=\"dbg-card__progress-text\"></span></div><p class=\"dbg-card__error\" hidden=\"\"></p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugSaveAll"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "saved": "/d/soksak.tar.gz",
+          "total": 3000
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": {
+          "id": "debug",
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "title": "디버그",
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\" data-scroll-key=\"list\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\" disabled=\"\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\" hidden=\"\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"1\"></progress><span class=\"dbg-card__progress-text\"></span></div><p class=\"dbg-card__error\" hidden=\"\"></p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": {
+          "id": "debug",
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "title": "디버그",
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\" data-scroll-key=\"list\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\" disabled=\"\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"3000\"></progress><span class=\"dbg-card__progress-text\">0.0 / 0.0 MB</span></div><p class=\"dbg-card__error\" hidden=\"\"></p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "debug",
+                "text": "save-all: debug: a save of the logs folder is running: /d/soksak.tar.gz"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": {
+          "id": "debug",
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "title": "디버그",
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\" data-scroll-key=\"list\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\" disabled=\"\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"3000\"></progress><span class=\"dbg-card__progress-text\">0.0 / 0.0 MB</span></div><p class=\"dbg-card__error\" data-error=\"debug\">save-all: debug: a save of the logs folder is running: /d/soksak.tar.gz</p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "debug-save-done",
+        "payload": {
+          "saved": "/d/soksak.tar.gz",
+          "error": "debug: logs/host-1.jsonl: disk full"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": {
+          "id": "debug",
+          "mode": "dialog",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "title": "디버그",
+          "className": "set-card dbg-card",
+          "html": "<header class=\"set-card__head\"><span class=\"set-card__title\">디버그</span><button class=\"act\" type=\"button\" data-key=\"close\" data-expose=\"core.debug.close\" data-command=\"core.debug.close\" title=\"닫는다\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M18 6 6 18\"></path><path d=\"m6 6 12 12\"></path></svg></button></header><div class=\"dbg-card__pane\" data-scroll-key=\"list\"><p class=\"set-caption\">애플리케이션의 모든 진단 파일이다. 결함을 알릴 때 모두 저장한 파일을 함께 보낸다.</p><div class=\"set-actions\"><button class=\"ui-button\" type=\"button\" data-key=\"save-all\" data-expose=\"core.debug.save-all\" data-command=\"core.debug.save-all\">모두 저장</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline\" data-expose=\"core.debug.timeline\" data-command=\"core.debug.timeline\">타임라인</button></div><div class=\"dbg-card__progress\" hidden=\"\"><progress data-expose=\"core.debug.progress\" value=\"0\" max=\"3000\"></progress><span class=\"dbg-card__progress-text\">0.0 / 0.0 MB</span></div><p class=\"dbg-card__error\" data-error=\"debug\">save-all: debug: logs/host-1.jsonl: disk full</p><div class=\"dbg-card__list\"></div><div class=\"dbg-card__view\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"list\" data-expose=\"core.debug.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span><span class=\"dbg-card__cut\" hidden=\"\">앞부분 생략</span></div><pre class=\"dbg-card__text\" data-expose=\"core.debug.text\"></pre><img class=\"dbg-card__image\" data-expose=\"core.debug.image\" alt=\"\" hidden=\"\"></div><div class=\"dbg-card__state\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"state-list\" data-expose=\"core.debug.state.list\" data-command=\"core.debug.list\">목록</button><span class=\"dbg-card__path\"></span></div><div class=\"dbg-card__choice\"><select data-key=\"state-with\" data-expose=\"core.debug.state.with\" aria-label=\"비교할 상태 파일\" data-command=\"core.debug.state.compare\" data-value=\"with\"></select></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.differences\"></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.state.tree\"></div></div><div class=\"dbg-card__timeline\" hidden=\"\"><div class=\"dbg-card__bar\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-list\" data-expose=\"core.debug.timeline.list\" data-command=\"core.debug.list\">목록</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-follow\" data-expose=\"core.debug.timeline.follow\" data-command=\"core.debug.timeline.follow\" data-params=\"{&quot;on&quot;:false}\">따라가기 멈춤</button><button class=\"ui-button\" type=\"button\" data-key=\"timeline-older\" data-expose=\"core.debug.timeline.older\" data-command=\"core.debug.timeline.older\">이전 행</button><span class=\"dbg-card__cut\" data-expose=\"core.debug.timeline.omitted\" hidden=\"\"></span></div><div class=\"dbg-card__filters\"><select data-set=\"channel\" data-expose=\"core.debug.timeline.channel\" aria-label=\"channel\" data-command=\"core.debug.timeline.filter\" data-value=\"channel\"><option value=\"other\">other</option><option value=\"debug\">debug</option><option value=\"all\">all</option></select><select data-set=\"level\" data-expose=\"core.debug.timeline.level\" aria-label=\"가장 낮은 level\" data-command=\"core.debug.timeline.filter\" data-value=\"level\"><option value=\"error\">error</option><option value=\"warn\">warn</option><option value=\"info\">info</option><option value=\"debug\">debug</option><option value=\"trace\">trace</option></select><select data-set=\"layer\" data-expose=\"core.debug.timeline.layer\" aria-label=\"layer\" data-command=\"core.debug.timeline.filter\" data-value=\"layer\"><option value=\"all\">all</option><option value=\"native\">native</option><option value=\"host\">host</option><option value=\"workbench\">workbench</option><option value=\"page\">page</option><option value=\"plugin\">plugin</option><option value=\"sidecar\">sidecar</option><option value=\"sok\">sok</option></select><input type=\"text\" class=\"set-text\" placeholder=\"찾을 글자\" data-set=\"text\" data-expose=\"core.debug.timeline.text\" aria-label=\"찾을 글자\" data-command=\"core.debug.timeline.filter\" data-value=\"text\"><input type=\"text\" class=\"set-text\" placeholder=\"class\" data-set=\"class\" data-expose=\"core.debug.timeline.class\" aria-label=\"class\" data-command=\"core.debug.timeline.filter\" data-value=\"class\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름\" data-set=\"event\" data-expose=\"core.debug.timeline.event\" aria-label=\"event 이름\" data-command=\"core.debug.timeline.filter\" data-value=\"event\"><input type=\"text\" class=\"set-text\" placeholder=\"event 이름의 앞부분\" data-set=\"event_prefix\" data-expose=\"core.debug.timeline.event-prefix\" aria-label=\"event 이름의 앞부분\" data-command=\"core.debug.timeline.filter\" data-value=\"event_prefix\"><input type=\"text\" class=\"set-text\" placeholder=\"surface\" data-set=\"surface\" data-expose=\"core.debug.timeline.surface\" aria-label=\"surface\" data-command=\"core.debug.timeline.filter\" data-value=\"surface\"><input type=\"text\" class=\"set-text\" placeholder=\"session\" data-set=\"session\" data-expose=\"core.debug.timeline.session\" aria-label=\"session\" data-command=\"core.debug.timeline.filter\" data-value=\"session\"><input type=\"text\" class=\"set-text\" placeholder=\"correlation identifier\" data-set=\"cid\" data-expose=\"core.debug.timeline.cid\" aria-label=\"correlation identifier\" data-command=\"core.debug.timeline.filter\" data-value=\"cid\"><input type=\"text\" class=\"set-text\" placeholder=\"run 식별자\" data-set=\"run\" data-expose=\"core.debug.timeline.run\" aria-label=\"run 식별자\" data-command=\"core.debug.timeline.filter\" data-value=\"run\"><input type=\"text\" class=\"set-text\" placeholder=\"시작 시각 (UTC)\" data-set=\"from\" data-expose=\"core.debug.timeline.from\" aria-label=\"시작 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"from\"><input type=\"text\" class=\"set-text\" placeholder=\"끝 시각 (UTC)\" data-set=\"to\" data-expose=\"core.debug.timeline.to\" aria-label=\"끝 시각 (UTC)\" data-command=\"core.debug.timeline.filter\" data-value=\"to\"></div><div class=\"dbg-card__save\"><button class=\"ui-button\" type=\"button\" data-key=\"timeline-save\" data-expose=\"core.debug.timeline.save\" data-command=\"core.debug.timeline.save\">선택한 행 저장</button><span class=\"dbg-card__warning\" data-expose=\"core.debug.timeline.warning\">저장한 파일에는 입력한 글자가 들어 있을 수 있다.</span></div><div class=\"dbg-card__rows\" data-expose=\"core.debug.timeline.rows\"></div></div></div>",
+          "css": ".dbg-card { border-top-color: rgb(7, 8, 9); background-color: rgb(255, 255, 255); }",
+          "border": "rgb(7, 8, 9)"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-10",
+              "mono_ns": "$mono-ns-10",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "debug",
+                "text": "save-all: debug: logs/host-1.jsonl: disk full"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

@@ -31,13 +31,14 @@ A variable name has the form of lower-case letters, digits and hyphens. `type` i
 
 ## Steps
 
-A step is one of three objects.
+A step is one of four objects.
 
 - `{"call": {"name": ..., "payload": ..., "cids": [...]}}`: the page calls the host method `name`. `payload` is the single argument of the call, and it is absent when the page sends no argument. `cids` lists the correlation identifiers that the page passes with the call, and it is absent when the page passes none.
 - `{"reply": {"result": ...}}` or `{"reply": {"error": "..."}}`: the answer of the host to the call before it. `result` is the JSON value that the call resolves with (`null` when the host answers nothing). `error` is the text of the error that the call rejects with. `"held": true` makes the reader hold the reply until the test releases it, so a test can let the page act while a call is outstanding; the producer compares the reply as any other.
 - `{"notice": {"event": ..., "payload": ...}}`: the host sends the notice `event` with the single argument `payload` to the listeners that the page registered for `event`; `payload` is absent when the notice has no argument.
+- `{"listen": {"event": ...}}` or `{"listen": {"event": ..., "error": "...", "held": true}}`: the page registers a listener for `event` with `host.on(event, listener)`. Without `error`, the registration resolves with its unsubscribe function. With `error`, the registration rejects with that text, and the listener is not registered. `"held": true` makes the reader hold the settlement of the registration until the test releases it, as for a reply.
 
-A call step is followed by its reply step, and a notice stands between those pairs. Calls are compared with the page's calls exactly, field by field, after JSON encoding, so an absent field and a `null` are different values.
+A call step is followed by its reply step, and a notice or a listen step stands between those pairs. Calls are compared with the page's calls exactly, field by field, after JSON encoding, so an absent field and a `null` are different values.
 
 ## Reader semantics
 
@@ -46,14 +47,16 @@ The workbench test runtime (`packages/workbench/test/runtime/page-wire.js`, sele
 - A call that is not the next call of the case rejects, and the difference is kept as a failure.
 - A call after the last step of the case rejects, and is kept as a failure.
 - The `calls` list of the reader holds every call of the page, so a test can compare it with the calls it expects.
-- `release()` settles the oldest held reply.
-- `deliverNotice()` plays the next step, which must be a notice, and calls each listener that the page registered for its event; a notice without a listener is a failure. The test delivers a notice at the point where the host would send it.
+- A case without a listen step does not record the registrations of the page: each `host.on` registers its listener and resolves at once. A case with at least one listen step records every registration of the page, so each `host.on` is answered by the next step, which must be the listen step of its event; a registration that is not the next step rejects, and the difference is kept as a failure, as for a call. A registration after the last step is a failure as well. The producer does not run a case with a listen step, because the registration belongs to a page.
+- `release()` settles the oldest held reply or held registration.
+- `unsubscribed` lists the events whose listener the page removed with the function that its registration resolved with, in the order of the removals.
 - With the environment variable `PAGE_WIRE_TRACE=1`, the reader writes each call that the page sends to the standard error, matched or not, so the author of a case reads the order of the calls of the page.
+- `deliverNotice()` plays the next step, which must be a notice, and calls each listener that the page registered for its event; a notice without a listener is a failure. The test delivers a notice at the point where the host would send it.
 - `finish()` throws when a failure was kept, when a step of the case was not played or when a held reply was not released. A test calls it at the end of its body.
 
 ## Producer runs
 
-Each package that hosts a page-wire producer runs the cases with `replay: true` against its real host. The Go producer runs the host without a window, and a notice reaches only the listeners of a window, so it refuses a case with `replay: true` that holds a notice; such a case has `replay: false` and its reason until a producer with windows runs it. A reply that the real host gives differently from the case is a defect of the host or of the case. The producer runner of the host is `packages/host/go/tests/page_wire_test.go` (`TestPageWire`), which runs each case with `replay: true` through the recording entry of the bindings (`host.RecordedCall`) and the operation of the host method of each call (`host.LogCommand` for `log`, `host.Workspace.Apply` for `workspace`). The replies of the cases in this directory are the values that the host source returns for the request: the call `log` in `packages/host/go/src/event_relay.go` (`LogCommand`, `Log`) and `packages/host/go/src/log_policy.go` (`setLogPolicy`), and the call `workspace` in `packages/host/go/src/workspace.go` (`snapshot`, `Apply`, `runWorkspace`).
+Each package that hosts a page-wire producer runs the cases with `replay: true` against its real host. The Go producer runs the host without a window, and a notice reaches only the listeners of a window, so it refuses a case with `replay: true` that holds a notice or a listen step; such a case has `replay: false` and its reason until a producer with windows runs it. A reply that the real host gives differently from the case is a defect of the host or of the case. The producer runner of the host is `packages/host/go/tests/page_wire_test.go` (`TestPageWire`), which runs each case with `replay: true` through the recording entry of the bindings (`host.RecordedCall`) and the operation of the host method of each call (`host.LogCommand` for `log`, `host.Workspace.Apply` for `workspace`). The replies of the cases in this directory are the values that the host source returns for the request: the call `log` in `packages/host/go/src/event_relay.go` (`LogCommand`, `Log`) and `packages/host/go/src/log_policy.go` (`setLogPolicy`), and the call `workspace` in `packages/host/go/src/workspace.go` (`snapshot`, `Apply`, `runWorkspace`).
 
 ## Limits
 

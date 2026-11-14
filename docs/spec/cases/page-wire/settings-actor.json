@@ -1,0 +1,55 @@
+{
+  "name": "settings-actor",
+  "description": "The page anchors its clock with the first batch, the record of its start; a change of the settings then sends one event that names the scope, the actor and the keys of the change with the identifiers of the change, and the write of the settings carries the same identifiers.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits), and the calls setTheme, setMenuLanguage and performance apply to the window of the native host, which the producer does not run.",
+  "variables": {
+    "ts-us": { "type": "integer", "example": 1791000000000456 },
+    "mono-ns": { "type": "integer", "example": 5000000789 },
+    "page-identity": { "type": "string", "example": "6f1d0c2e-5a7b-4e8f-9c3d-2b1a0f9e8d7c", "source": "page" },
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456, "source": "page" },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789, "source": "page" },
+    "trip-us": { "type": "integer", "example": 40, "source": "page" },
+    "resolution-us": { "type": "integer", "example": 1, "source": "page" },
+    "start-ts-us": { "type": "integer", "example": 1791000000001000, "source": "page" },
+    "start-mono-ns": { "type": "integer", "example": 5000001000000, "source": "page" },
+    "change-ts-us": { "type": "integer", "example": 1791000000002000, "source": "page" },
+    "change-mono-ns": { "type": "integer", "example": 5000002000000, "source": "page" },
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" },
+    "cid": { "type": "string", "example": "p6f1d0c2e-5a7b-4e8f-9c3d-2b1a0f9e8d7c.1", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },
+    { "call": { "name": "log", "payload": { "action": "batch", "events": [
+      { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.log.clock", "fields": { "trip_us": "$trip-us", "resolution_us": "$resolution-us" } },
+      { "ts_us": "$start-ts-us", "mono_ns": "$start-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.start", "fields": { "started_at": 1, "url": "http://localhost/" } }
+    ] } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "batch", "events": [
+      { "ts_us": "$change-ts-us", "mono_ns": "$change-mono-ns", "start": "$page-identity", "level": "info", "event": "workbench.settings.change", "fields": { "scope": "common", "actor": "core.settings.set", "keys": "gap,radius" }, "cids": ["$cid"] }
+    ] } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "gap": 9, "radius": 3 }, "remove": [] }, "cids": ["$cid"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "gap": 9, "radius": 3 }, "projects": [] } } }
+  ]
+}

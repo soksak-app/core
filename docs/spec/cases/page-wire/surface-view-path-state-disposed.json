@@ -1,0 +1,25 @@
+{
+  "name": "surface-view-path-state-disposed",
+  "description": "A view writes its tab state and sends a second write that the page runs after the dispose of the view; the page answers only the first write, and the store writes the first state to the host.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}, "bytes": {"type": "integer", "example": 62}},
+  "steps": [
+    {"call": {"name": "workspace", "payload": {"kind": "snapshot"}}},
+    {"reply": {"result": {"common": {}, "projects": [], "open": []}}},
+    {"call": {"name": "workspace", "payload": {"kind": "tabState"}}},
+    {"reply": {"result": null}},
+    {"call": {"name": "workspace", "payload": {"kind": "tabSessions"}}},
+    {"reply": {"result": []}},
+    {"call": {"name": "windowReady"}},
+    {"reply": {"result": null}},
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-unload", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-state-disposed"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-state-disposed", "plugin": "fixture-unload", "generation": 1, "id": 1, "command": "tab.state.write", "params": {"page": 1}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 1, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-state-disposed"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-state-disposed", "plugin": "fixture-unload", "generation": 1, "id": 2, "command": "tab.state.write", "params": {"page": 9}}}},
+    {"call": {"name": "workspace", "payload": {"kind": "tabStatePut", "tab": "view-state-disposed", "entry": {"state": {"format": 2, "value": {"page": 1}}}}}},
+    {"reply": {"result": "$bytes"}}
+  ]
+}

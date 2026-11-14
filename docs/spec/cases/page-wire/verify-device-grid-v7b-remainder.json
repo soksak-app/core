@@ -1,0 +1,74 @@
+{
+  "name": "verify-device-grid-v7b-remainder",
+  "description": "The page prepares one layout of one DOM surface of a plugin at 203,553.66 1360×413.33 in a plane at 7,83 on a display of three device pixels per point, and the host answers the syncSurfaces call with the rectangle that it fitted in window coordinates, whose height carries the remainder of that subtraction.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {
+    "sync-request": {
+      "type": "object",
+      "example": {
+        "surfaces": []
+      },
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 210,
+              "y": 636.66,
+              "w": 1360,
+              "h": 413.33000000000004
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": true,
+              "scale": 3,
+              "x": 210,
+              "y": 636.6666666666666,
+              "w": 1360,
+              "h": 413.0000000000001
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "settings-performance-flag",
+  "description": "The page reads the stored settings, reports the stored trace switch as off, and writes the change of the trace switch to the common settings file with the identifiers of the change, after it applied the theme and before it sends the menu language; the host then answers the snapshot that holds the written value.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits), and the calls setTheme, setMenuLanguage and performance apply to the window of the native host, which the producer does not run.",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" },
+    "cid": { "type": "string", "example": "p0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e.1", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "diagnostics.performance": false }, "remove": [] }, "cids": ["$cid"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "diagnostics.performance": false }, "projects": [] } } }
+  ]
+}

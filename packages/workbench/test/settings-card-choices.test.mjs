@@ -8,13 +8,22 @@ test("missing card sidebar links display off without an inherit option", async (
   globalThis.document = dom.window.document;
   globalThis.window = dom.window;
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../compositor.js", { exports: {
-    ...await import("../compositor.js"), standIn: () => {},
-  } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [
-    { id: "fixture", name: "Fixture", description: "Fixture card.", surface: true, sections: [] },
-  ] } });
+  // The loaded plugin is an installed manifest that the environment registers.
+  const { installEnvironment } = await import("../environment.js");
+  const surface = { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } };
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
+      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "fixture", title: "Fixture" }] },
+    ] } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [{ id: "fixture", package: "@fixture/fixture", version: "1.0.0", manifest: {
+    id: "fixture", name: "Fixture", description: "Fixture card.", mark: "f", icon: "<path/>", surface,
+  } }] }), [], "the fixture environment refused a plugin");
   const settings = await import("../settings.js");
+  // The links below are values that settings.js refuses to hold: connectSettings and beginSettings validate the sets and links of the effective
+  // settings (validateSidebars) and throw before the value is stored. No real input gives the settings window a link to a set that the sets
+  // lack, or a link without a set, for a loaded plugin, so the value of the settings scope that the window reads is given here.
   let links = [];
   t.mock.module("../settings.js", { exports: {
     ...settings, scopedValue: (key, scope) => key === "links" ? links : settings.scopedValue(key, scope),

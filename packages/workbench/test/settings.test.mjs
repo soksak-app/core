@@ -1,6 +1,37 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
+import { JSDOM } from 'jsdom';
+import { host, selectPageWire } from '@soksak/runtime';
+import { HostWorkspaceStore } from '../host-store.js';
 import { effectiveSettings } from '../settings-scope.js';
+
+// The host calls of the settings are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). A test selects its case
+// before it imports a module that reads the host, and the settings module of a test is a copy of its own, so its state is new. The
+// store of the settings is the store that the application uses over the host of the case. Each application of the settings sends the theme and
+// then the menu language to the host in turn, so a test waits for the ordered calls before it goes on.
+const dom = new JSDOM('<body></body>', { url: 'http://localhost/' });
+globalThis.document = dom.window.document;
+after(() => dom.window.close());
+
+// The page starts with the default policy of the event log written, as the first application of the stored settings writes it. The policy
+// module of the page keeps the policy that it wrote last, so the cases of the tests state the calls of a policy that differs from it. The page
+// without an operation sink stores no first event of an operation; the test of the actor installs the sink that the log of the page installs.
+const start = selectPageWire('settings-policy-start');
+const { installOperationSink } = await import('../operations.js');
+await import('../page-log.js');
+installOperationSink(null);
+const { setLogPolicy } = await import('../log-policy.js');
+await setLogPolicy({});
+start.finish();
+
+/** Ends after the host calls that the page started in one turn were answered, as the notice of the host reaches the listeners in a turn of its own. */
+const settled = () => new Promise((resolve) => setImmediate(resolve));
+const isSettingsWrite = ({ name, payload }) => name === 'workspace' && payload.kind === 'settings';
+const isSnapshot = ({ name, payload }) => name === 'workspace' && payload.kind === 'snapshot';
+const settingsWrites = (wire) => wire.calls.filter(isSettingsWrite);
+const logCalls = (wire) => wire.calls.filter(({ name }) => name === 'log');
+const performanceActions = (wire) => wire.calls.filter(({ name }) => name === 'performance').map(({ payload }) => payload.action);
+const ALL_ERROR = { lifecycle: 'error', input: 'error', call: 'error', io: 'error', frame: 'error' };
 
 test('project values override common values and opening mode remains common-only', () => {
   const defaults = { gap:6, mode:'dark', projectOpening:'windows', links:[] };
@@ -13,378 +44,307 @@ test('project values override common values and opening mode remains common-only
 });
 
 test('the performance trace flag is a declared boolean defaulting to false', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: {}, projects: [] };
+  const wire = selectPageWire('settings-performance-flag');
   const { connectSettings, set: change, value } = await import('../settings.js?test=performance-flag');
-  try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
-      onChange: () => () => {},
-    });
-    // The trace is off by default: no layer builds or stores a trace event until the debug switch turns it on (docs/spec/settings.md, the section of core.settings.debug).
-    assert.equal(value('diagnostics.performance'), false);
-    await change({ 'diagnostics.performance': false }, 'common', 'test');
-    assert.equal(memory.common['diagnostics.performance'], false);
-    assert.equal(value('diagnostics.performance'), false);
-    assert.throws(() => change({ 'diagnostics.performance': 'yes' }, 'common', 'test'),
-      /Invalid setting diagnostics.performance/);
-  } finally {
-    globalThis.document = realDocument;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  await connectSettings(new HostWorkspaceStore(host));
+  // The trace is off by default: no layer builds or stores a trace event until the debug switch turns it on (docs/spec/settings.md, the section of core.settings.debug).
+  assert.equal(value('diagnostics.performance'), false);
+  await change({ 'diagnostics.performance': false }, 'common', 'test');
+  await orderedCallsAnswered();
+  assert.equal(settingsWrites(wire)[0].payload.patch['diagnostics.performance'], false);
+  assert.equal(value('diagnostics.performance'), false);
+  assert.throws(() => change({ 'diagnostics.performance': 'yes' }, 'common', 'test'),
+    /Invalid setting diagnostics.performance/);
+  assert.deepEqual(performanceActions(wire), ['off'], 'the page reported the stored switch once');
+  wire.finish();
 });
 
-test('the log policy is a declared object of levels for the classes, applied when the settings load and when it changes', async (t) => {
-  const applied = [];
-  t.mock.module('../log-policy.js', { exports: { setLogPolicy: async (policy, cids) => { applied.push([policy, cids]); } } });
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: {}, projects: [] };
-  const written = [];
+test('the log policy is a declared object of levels for the classes, applied when the settings load and when it changes', async () => {
+  const wire = selectPageWire('settings-log-policy');
   const { connectSettings, set: change, value } = await import('../settings.js?test=log-policy');
-  try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values, cids) => { written.push(cids); memory.common = { ...memory.common, ...values }; },
-      onChange: () => () => {},
-    });
-    // The policy stores only errors by default: a class that the setting does not name stores the level error. A policy
-    // that the stored settings give has no change, so it carries no cids.
-    assert.deepEqual(value('diagnostics.log'), {});
-    assert.deepEqual(applied, [[{}, undefined]]);
-    await change({ 'diagnostics.log': { call: 'info' } }, 'common', 'test');
-    assert.deepEqual(memory.common['diagnostics.log'], { call: 'info' });
-    // The policy of a change carries the cids of the change, the same cids that the write of the settings carries
-    // (docs/spec/logging.md#policy).
-    assert.equal(written.length, 1);
-    assert.ok(Array.isArray(written[0]) && written[0].length > 0, `the write carries the cids ${JSON.stringify(written[0])}`);
-    assert.deepEqual(applied.find(([, cids]) => cids !== undefined), [{ call: 'info' }, written[0]]);
-    for (const bad of [{ audio: 'off' }, { call: 'loud' }, 'off', null, []]) {
-      assert.throws(() => change({ 'diagnostics.log': bad }, 'common', 'test'), /Invalid setting diagnostics.log/);
-    }
-    assert.deepEqual(value('diagnostics.log'), { call: 'info' });
-  } finally {
-    globalThis.document = realDocument;
+  const { orderedCallsAnswered } = await import('../host.js');
+  const { logGate } = await import('../log-gate.js');
+  await connectSettings(new HostWorkspaceStore(host));
+  await orderedCallsAnswered();
+  // The policy stores only errors by default: a class that the setting does not name stores the level error. The policy that the stored
+  // settings give is in force in the gate of the page, and the host holds it already, so no call carries it.
+  assert.deepEqual(value('diagnostics.log'), {});
+  assert.deepEqual(logGate.classes(), ALL_ERROR);
+  assert.deepEqual(logCalls(wire), []);
+  await change({ 'diagnostics.log': { call: 'info' } }, 'common', 'test');
+  await orderedCallsAnswered();
+  // The policy of a change carries the cids of the change, the same cids that the write of the settings carries
+  // (docs/spec/logging.md#policy). The case binds both to one identifier.
+  const writes = settingsWrites(wire);
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].payload.patch['diagnostics.log'], { call: 'info' });
+  assert.ok(Array.isArray(writes[0].cids) && writes[0].cids.length > 0, `the write carries the cids ${JSON.stringify(writes[0].cids)}`);
+  const applied = logCalls(wire).filter(({ payload }) => payload.cids !== undefined);
+  assert.deepEqual(applied.map(({ payload }) => [payload.classes, payload.cids]),
+    [[{ ...ALL_ERROR, call: 'info' }, writes[0].cids]]);
+  for (const bad of [{ audio: 'off' }, { call: 'loud' }, 'off', null, []]) {
+    assert.throws(() => change({ 'diagnostics.log': bad }, 'common', 'test'), /Invalid setting diagnostics.log/);
   }
+  assert.deepEqual(value('diagnostics.log'), { call: 'info' });
+  wire.finish();
 });
 
-test('a settings file change propagates the effective performance switch', async (t) => {
-  const calls = [];
-  t.mock.module('../performance.js', { exports: {
-    setTraceEnabled: async (enabled) => { calls.push(['change', enabled]); },
-    reportTraceAtStart: async (enabled) => { calls.push(['start', enabled]); },
-    trace: () => {}, timed: async (_name, answer) => answer(),
-  } });
-  const previous = globalThis.document;
-  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: {}, projects: [] };
-  let changed;
+test('a settings file change propagates the effective performance switch', async () => {
+  const wire = selectPageWire('settings-external-performance');
   const { connectSettings } = await import('../settings.js?test=external-performance');
-  try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory), settings: async () => {},
-      onChange: (listener) => { changed = listener; },
-    });
-    // The trace starts off by default, and a settings file that turns it on propagates the change.
-    memory.common['diagnostics.performance'] = true;
-    await changed();
-    assert.deepEqual(calls, [['start', false], ['change', true]], 'file changes did not propagate the effective switch');
-  } finally {
-    globalThis.document = previous;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  await connectSettings(new HostWorkspaceStore(host));
+  // The trace starts off by default, and a settings file that turns it on propagates the change.
+  wire.deliverNotice();
+  await settled();
+  await orderedCallsAnswered();
+  assert.deepEqual(performanceActions(wire), ['off', 'on'], 'file changes did not propagate the effective switch');
+  wire.finish();
 });
 
-test('settings stored in an earlier form are refused with the file that holds them and are not written', async (t) => {
-  const reports = [];
-  t.mock.module('../host.js', { namedExports: {
-    surfaces: { theme() {}, menuLanguage() {} }, log: (line) => { reports.push(line); },
-  } });
-  const previous = globalThis.document;
-  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const store = (memory, writes) => ({
-    snapshot: async () => structuredClone(memory),
-    settings: async (id, values) => { writes.push([id, values]); },
-    onChange: () => () => {},
-  });
-  try {
-    const writes = [];
-    const { connectSettings } = await import('../settings.js?test=removed-keys');
-    await assert.rejects(connectSettings(store({ common: { gap: 8, cardSidebar: 'inset' }, projects: [] }, writes)),
-      /^Error: settings\.json: unknown setting cardSidebar$/);
-    const { beginSettings } = await import('../settings.js?test=removed-project-keys');
-    assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', root: '/work/a', settings: { rail: 'flow' } }] }, 'prj-a'),
-      /^Error: \/work\/a\/\.soksak\/settings\.json: unknown setting rail$/);
-    assert.deepEqual(writes, []);
-    assert.deepEqual(reports, []);
-  } finally {
-    globalThis.document = previous;
-  }
+test('settings stored in an earlier form are refused with the file that holds them and are not written', async () => {
+  const wire = selectPageWire('settings-earlier-form');
+  const { connectSettings } = await import('../settings.js?test=removed-keys');
+  await assert.rejects(connectSettings(new HostWorkspaceStore(host)),
+    /^Error: settings\.json: unknown setting cardSidebar$/);
+  const { beginSettings } = await import('../settings.js?test=removed-project-keys');
+  assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', root: '/work/a', settings: { rail: 'flow' } }] }, 'prj-a'),
+    /^Error: \/work\/a\/\.soksak\/settings\.json: unknown setting rail$/);
+  assert.deepEqual(settingsWrites(wire), []);
+  // A report of the page leaves in a batch of the call log; the case has no call of the log.
+  assert.deepEqual(logCalls(wire), []);
+  wire.finish();
 });
 
 test('stored settings of a plugin that is not loaded are kept and not applied', async () => {
-  const previous = globalThis.document;
-  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: { gap: 8, 'absent.option': 3 }, projects: [{ id: 'prj-a', settings: { 'absent.option': 4 } }] };
+  const wire = selectPageWire('settings-absent-plugin');
   const { connectSettings, set: change, value } = await import('../settings.js?test=absent-plugin');
-  try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => {
-        const target = id === null ? memory.common : memory.projects.find((p) => p.id === id).settings;
-        for (const [key, val] of Object.entries(values)) {
-          if (val === undefined) delete target[key];
-          else target[key] = val;
-        }
-      },
-      onChange: () => () => {},
-    });
-    assert.equal(value('gap'), 8);
-    assert.equal(value('absent.option'), undefined, 'a setting of a plugin that is not loaded was applied');
-    await change({ gap: 9 }, 'common', 'test');
-    assert.deepEqual(memory.common, { gap: 9, 'absent.option': 3 });
-    assert.deepEqual(memory.projects[0].settings, { 'absent.option': 4 });
-    assert.throws(() => change({ 'absent.option': 5 }, 'common', 'test'), /Unknown setting: absent.option/);
-  } finally {
-    globalThis.document = previous;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  await connectSettings(new HostWorkspaceStore(host));
+  await orderedCallsAnswered();
+  assert.equal(value('gap'), 8);
+  assert.equal(value('absent.option'), undefined, 'a setting of a plugin that is not loaded was applied');
+  await change({ gap: 9 }, 'common', 'test');
+  await orderedCallsAnswered();
+  // The write names the key that changed and no key of the plugin that is not loaded, so the stored value of that key stays in the file,
+  // and no write reaches the settings file of the project.
+  assert.deepEqual(settingsWrites(wire).map(({ payload }) => payload), [{ kind: 'settings', id: null, patch: { gap: 9 }, remove: [] }]);
+  assert.throws(() => change({ 'absent.option': 5 }, 'common', 'test'), /Unknown setting: absent.option/);
+  wire.finish();
 });
 
 test('a settings file of the shown project that the host refuses is reported and the applied settings stay', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: { gap: 8 }, projects: [{ id: 'prj-a', root: '/work/a', settings: { gap: 12 } }] };
-  let changed;
-  const { beginSettings, connectSettings, value } = await import('../settings.js?test=refused-project-file');
+  const wire = selectPageWire('settings-refused-project-file');
+  // The page reports the refusal as the error event of the document, which the window of this document receives.
+  const reported = [];
+  const listener = (event) => reported.push(event.message);
+  dom.window.addEventListener('error', listener);
+  const before = { dispatchEvent: globalThis.dispatchEvent, ErrorEvent: globalThis.ErrorEvent };
+  globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
+  globalThis.ErrorEvent = dom.window.ErrorEvent;
   try {
-    beginSettings(structuredClone(memory), 'prj-a');
-    await connectSettings({ snapshot: async () => structuredClone(memory), settings: async () => {}, onChange: (listener) => { changed = listener; } });
+    const { beginSettings, connectSettings, value } = await import('../settings.js?test=refused-project-file');
+    const { orderedCallsAnswered } = await import('../host.js');
+    beginSettings({ common: { gap: 8 }, projects: [{ id: 'prj-a', root: '/work/a', settings: { gap: 12 } }] }, 'prj-a');
+    await orderedCallsAnswered();
+    await connectSettings(new HostWorkspaceStore(host));
     const error = '/work/a/.soksak/settings.json: settings.json: format must be 1';
-    memory.projects[0] = { id: 'prj-a', root: '/work/a', settingsError: error };
-    const reported = [];
-    const realDispatch = globalThis.dispatchEvent;
-    globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
-    try {
-      await changed();
-    } finally {
-      globalThis.dispatchEvent = realDispatch;
-    }
+    wire.deliverNotice();
+    await settled();
     assert.deepEqual(reported, [error], 'the refused project settings file was not reported');
     assert.equal(value('gap'), 12, 'the refused file replaced the applied project settings');
+    wire.finish();
   } finally {
-    globalThis.document = realDocument;
+    dom.window.removeEventListener('error', listener);
+    for (const [name, original] of Object.entries(before)) {
+      if (original === undefined) delete globalThis[name];
+      else globalThis[name] = original;
+    }
   }
 });
 
 test('the start document applies the common and project settings in the current format before the store connects', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-begin');
   const { beginSettings, value, settingProject } = await import('../settings.js?test=begin');
-  try {
-    beginSettings({ common: { gap: 8 }, projects: [{ id: 'prj-a', root: '/work/a', settings: { gap: 12 } }, { id: 'prj-b', root: '/work/b', settings: { gap: 4 } }] }, 'prj-a');
-    assert.equal(value('gap'), 12, 'the project overrides were not applied');
-    assert.throws(() => beginSettings({ common: { gap: 8, latency: 3 }, projects: [] }, null), /^Error: settings\.json: unknown setting latency$/);
-    assert.equal(settingProject(), 'prj-a');
-    assert.throws(() => beginSettings({ common: { unknownSetting: 1 }, projects: [] }, null), /settings\.json: unknown setting unknownSetting/);
-  } finally {
-    globalThis.document = realDocument;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  beginSettings({ common: { gap: 8 }, projects: [{ id: 'prj-a', root: '/work/a', settings: { gap: 12 } }, { id: 'prj-b', root: '/work/b', settings: { gap: 4 } }] }, 'prj-a');
+  assert.equal(value('gap'), 12, 'the project overrides were not applied');
+  assert.throws(() => beginSettings({ common: { gap: 8, latency: 3 }, projects: [] }, null), /^Error: settings\.json: unknown setting latency$/);
+  assert.equal(settingProject(), 'prj-a');
+  assert.throws(() => beginSettings({ common: { unknownSetting: 1 }, projects: [] }, null), /settings\.json: unknown setting unknownSetting/);
+  await orderedCallsAnswered();
+  wire.finish();
 });
 
 test('stored and changed core setting values must have their declared form', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-core-values');
   const { beginSettings, connectSettings, set: change } = await import('../settings.js?test=core-values');
-  try {
-    const invalid = [
-      ['gap', 'wide'], ['gap', 25], ['radius', 1.5], ['size', 9], ['font', 'serif'], ['theme', 'neon'], ['mode', 'dim'],
-      ['projectOpening', 'tab'], ['projectTabs', 'right'], ['focusInd', 'glow'], ['fullRule', 'both'],
-      ['left', 'yes'], ['right', 1], ['dim', null],
-    ];
-    for (const [key, stored] of invalid) {
-      const pattern = new RegExp(`Invalid setting ${key}: ${JSON.stringify(stored)}`);
-      assert.throws(() => beginSettings({ common: { [key]: stored }, projects: [] }, null), pattern,
-        `reading ${key} ${JSON.stringify(stored)} was accepted`);
-    }
-    await assert.rejects(connectSettings({
-      snapshot: async () => ({ common: { gap: 'wide' }, projects: [] }), settings: async () => {}, onChange: () => () => {},
-    }), /Invalid setting gap: "wide"/);
-    await connectSettings({
-      snapshot: async () => ({ common: {}, projects: [] }), settings: async () => {}, onChange: () => () => {},
-    });
-    for (const [key, value] of invalid) {
-      assert.throws(() => change({ [key]: value }, 'common', 'test'), new RegExp(`Invalid setting ${key}`),
-        `changing ${key} to ${JSON.stringify(value)} was accepted`);
-    }
-    beginSettings({ common: { gap: 0, radius: 24, size: 10, font: 'mono-jet', theme: 'slate', mode: 'light',
-      projectOpening: 'tabs', projectTabs: 'left', focusInd: 'corner', fullRule: 'none', left: false, right: true, dim: true },
-    projects: [] }, null);
-  } finally {
-    globalThis.document = realDocument;
+  const { orderedCallsAnswered } = await import('../host.js');
+  const invalid = [
+    ['gap', 'wide'], ['gap', 25], ['radius', 1.5], ['size', 9], ['font', 'serif'], ['theme', 'neon'], ['mode', 'dim'],
+    ['projectOpening', 'tab'], ['projectTabs', 'right'], ['focusInd', 'glow'], ['fullRule', 'both'],
+    ['left', 'yes'], ['right', 1], ['dim', null],
+  ];
+  for (const [key, stored] of invalid) {
+    const pattern = new RegExp(`Invalid setting ${key}: ${JSON.stringify(stored)}`);
+    assert.throws(() => beginSettings({ common: { [key]: stored }, projects: [] }, null), pattern,
+      `reading ${key} ${JSON.stringify(stored)} was accepted`);
   }
+  // The first snapshot of the case holds the value gap wide, and the second holds no stored settings.
+  await assert.rejects(connectSettings(new HostWorkspaceStore(host)), /Invalid setting gap: "wide"/);
+  await connectSettings(new HostWorkspaceStore(host));
+  for (const [key, value] of invalid) {
+    assert.throws(() => change({ [key]: value }, 'common', 'test'), new RegExp(`Invalid setting ${key}`),
+      `changing ${key} to ${JSON.stringify(value)} was accepted`);
+  }
+  beginSettings({ common: { gap: 0, radius: 24, size: 10, font: 'mono-jet', theme: 'slate', mode: 'light',
+    projectOpening: 'tabs', projectTabs: 'left', focusInd: 'corner', fullRule: 'none', left: false, right: true, dim: true },
+  projects: [] }, null);
+  await orderedCallsAnswered();
+  assert.deepEqual(settingsWrites(wire), [], 'a refused value was written');
+  wire.finish();
 });
 
-test('a stored link to a set that does not exist is refused and not written', async (t) => {
-  const reports = [];
-  t.mock.module('../host.js', { namedExports: {
-    surfaces: { theme() {}, menuLanguage() {} }, log: (line) => { reports.push(line); },
-  } });
-  const previous = globalThis.document;
-  globalThis.document = { addEventListener() {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const kept = { id: 'set-kept', title: '남은 세트', sections: [], layout: 'list' };
-  const memory = {
-    common: { sets: [kept], links: [{ place: 'left', plugin: null, set: 'set-kept' }, { place: 'right', plugin: null, set: 'set-gone' }] },
-    projects: [],
-  };
-  const writes = [];
+test('a stored link to a set that does not exist is refused and not written', async () => {
+  const wire = selectPageWire('settings-gone-sets');
   const { connectSettings } = await import('../settings.js?test=gone-sets');
-  try {
-    await assert.rejects(connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => { writes.push([id, values]); },
-      onChange: () => () => {},
-    }), /a right link requires a known set/);
-    assert.deepEqual(writes, []);
-    assert.deepEqual(reports, []);
-  } finally {
-    globalThis.document = previous;
-  }
+  await assert.rejects(connectSettings(new HostWorkspaceStore(host)), /a right link requires a known set/);
+  assert.deepEqual(settingsWrites(wire), []);
+  assert.deepEqual(logCalls(wire), []);
+  wire.finish();
 });
 
 // The host sets the window title bar from textSize of the common settings before the page starts, so the frame scale is common only
 // (docs/spec/native-surfaces.md#title-bar-height).
 test('the frame text factor is common-only', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-text-size-common');
   const { beginSettings, set: change } = await import('../settings.js?test=text-size-common');
-  try {
-    assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { textSize: 1.5 } }] }, 'prj-a'),
-      /project settings: textSize is common-only/);
-    beginSettings({ common: { textSize: 1.5 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-    assert.throws(() => change({ textSize: 2 }, 'project', 'test'), { message: 'textSize is common-only' });
-  } finally {
-    globalThis.document = realDocument;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { textSize: 1.5 } }] }, 'prj-a'),
+    /project settings: textSize is common-only/);
+  beginSettings({ common: { textSize: 1.5 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+  assert.throws(() => change({ textSize: 2 }, 'project', 'test'), { message: 'textSize is common-only' });
+  await orderedCallsAnswered();
+  wire.finish();
 });
 
 // A project write of a common-only key fails with the message of the hosts, `<key> is common-only` (docs/spec/projects.md#persistence).
 test('a project write of each common-only key fails with the message of the hosts', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-common-only-write');
   const { beginSettings, set: change } = await import('../settings.js?test=common-only-write');
-  try {
-    beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-    for (const [key, value] of [['projectOpening', 'tabs'], ['textSize', 2], ['memorySaver', false], ['memorySaverDelay', 30]]) {
-      assert.throws(() => change({ [key]: value }, 'project', 'test'), { message: `${key} is common-only` });
-    }
-  } finally {
-    globalThis.document = realDocument;
+  const { orderedCallsAnswered } = await import('../host.js');
+  beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+  for (const [key, value] of [['projectOpening', 'tabs'], ['textSize', 2], ['memorySaver', false], ['memorySaverDelay', 30]]) {
+    assert.throws(() => change({ [key]: value }, 'project', 'test'), { message: `${key} is common-only` });
   }
+  await orderedCallsAnswered();
+  wire.finish();
 });
 
 // The memory saver settings are common-only, memorySaver is a boolean defaulting to true and memorySaverDelay an integer
 // from 5 to 720 minutes defaulting to 120 (docs/spec/settings.md#values).
 test('the memory saver settings are common-only with their defaults and ranges', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-memory-saver');
   const { beginSettings, set: change, value } = await import('../settings.js?test=memory-saver');
-  try {
-    beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-    assert.equal(value('memorySaver'), true);
-    assert.equal(value('memorySaverDelay'), 120);
-    assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { memorySaverDelay: 10 } }] }, 'prj-a'),
-      /project settings: memorySaverDelay is common-only/);
-    beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-    assert.throws(() => change({ memorySaver: false }, 'project', 'test'), /memorySaver is common-only/);
-    for (const delay of [4, 721, 7.5, '60']) {
-      assert.throws(() => change({ memorySaverDelay: delay }, 'common', 'test'),
-        { message: `Invalid setting memorySaverDelay: ${JSON.stringify(delay)}` });
-    }
-    assert.throws(() => change({ memorySaver: 'on' }, 'common', 'test'), /Invalid setting memorySaver: "on" is not a boolean/);
-  } finally {
-    globalThis.document = realDocument;
+  const { orderedCallsAnswered } = await import('../host.js');
+  beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+  assert.equal(value('memorySaver'), true);
+  assert.equal(value('memorySaverDelay'), 120);
+  assert.throws(() => beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: { memorySaverDelay: 10 } }] }, 'prj-a'),
+    /project settings: memorySaverDelay is common-only/);
+  beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+  assert.throws(() => change({ memorySaver: false }, 'project', 'test'), /memorySaver is common-only/);
+  for (const delay of [4, 721, 7.5, '60']) {
+    assert.throws(() => change({ memorySaverDelay: delay }, 'common', 'test'),
+      { message: `Invalid setting memorySaverDelay: ${JSON.stringify(delay)}` });
   }
+  assert.throws(() => change({ memorySaver: 'on' }, 'common', 'test'), /Invalid setting memorySaver: "on" is not a boolean/);
+  await orderedCallsAnswered();
+  wire.finish();
 });
 
 test('a change of the settings names its actor and its keys, and its identifiers go with the write', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-actor');
   const { installOperationSink } = await import('../operations.js');
-  const started = [];
-  installOperationSink((event, fields, cids) => started.push([event, fields, cids]));
-  const memory = { common: {}, projects: [] };
-  const writes = [];
+  const { emitEvent, flushEvents, recordWorkbenchStart } = await import('../page-log.js');
+  const { logGate } = await import('../log-gate.js');
   const { connectSettings, set: change, reset } = await import('../settings.js?test=actor');
+  const { orderedCallsAnswered } = await import('../host.js');
+  // The sink of the log of the page: it stores the first event of an operation with its identifiers, as page-log.js installs it.
+  installOperationSink((event, fields, cids) => emitEvent('info', event, fields, cids));
   try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values, cids) => { writes.push([id, values, cids]); memory.common = { ...memory.common, ...values }; },
-      onChange: () => () => {},
-    });
+    await connectSettings(new HostWorkspaceStore(host));
+    await orderedCallsAnswered();
+    // The first batch of the page anchors its clock with the clocks of the host, so the batch of the change that follows carries no clock call. The record
+    // of the start of the page is that first batch.
+    recordWorkbenchStart({ href: 'http://localhost/' }, 1);
+    await flushEvents();
+    // The policy of the gate stores the event of the operation: its class is call, at the level info.
+    logGate.set({ ...logGate.classes(), call: 'info' });
     await change({ gap: 9, radius: 3 }, 'common', 'core.settings.set');
-    assert.deepEqual(started.map(([event, fields]) => [event, fields]), [
-      ['workbench.settings.change', { scope: 'common', actor: 'core.settings.set', keys: 'gap,radius' }],
+    await orderedCallsAnswered();
+    await flushEvents();
+    const operations = () => wire.calls
+      .filter(({ name, payload }) => name === 'log' && payload.action === 'batch')
+      .flatMap(({ payload }) => payload.events)
+      .filter(({ event }) => event === 'workbench.settings.change');
+    assert.deepEqual(operations().map(({ level, event, fields }) => [level, event, fields]), [
+      ['info', 'workbench.settings.change', { scope: 'common', actor: 'core.settings.set', keys: 'gap,radius' }],
     ]);
-    assert.deepEqual(writes.map(([id, values, cids]) => [id, values, cids]), [[null, { gap: 9, radius: 3 }, started[0][2]]]);
+    const writes = settingsWrites(wire);
+    assert.deepEqual(writes.map(({ payload, cids }) => [payload.id, payload.patch, cids]), [[null, { gap: 9, radius: 3 }, operations()[0].cids]]);
     assert.throws(() => change({ gap: 10 }, 'common'), /set requires the actor that changes the settings/);
     assert.throws(() => change({ gap: 10 }, 'common', ''), /set requires the actor that changes the settings/);
-    assert.equal(started.length, 1, 'a refused change started an operation');
+    assert.equal(operations().length, 1, 'a refused change started an operation');
     assert.throws(() => reset('gap'), /set requires the actor|No project is selected/);
+    wire.finish();
   } finally {
     installOperationSink(null);
-    globalThis.document = realDocument;
   }
 });
 
 test('the debug switch sets the trace and every class to trace, and off restores the defaults', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: {}, projects: [] };
+  const wire = selectPageWire('settings-debug-switch');
   const { connectSettings, set: change, setDebug, debugOn, value } = await import('../settings.js?test=debug-switch');
-  try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: async (id, values) => { memory.common = { ...memory.common, ...values }; },
-      onChange: () => () => {},
-    });
-    assert.equal(debugOn(), false);
-    await setDebug(true, 'core.settings.debug');
-    assert.equal(memory.common['diagnostics.performance'], true);
-    assert.deepEqual(memory.common['diagnostics.log'], { lifecycle: 'trace', input: 'trace', call: 'trace', io: 'trace', frame: 'trace' });
-    assert.equal(debugOn(), true);
-    await setDebug(false, 'core.settings.debug');
-    assert.equal(memory.common['diagnostics.performance'], false);
-    assert.deepEqual(memory.common['diagnostics.log'], {});
-    assert.equal(value('diagnostics.performance'), false);
-    assert.equal(debugOn(), false);
-    // A policy that names only some classes at trace is not the debug state, because the switch shows on only when every class is trace.
-    await setDebug(true, 'core.settings.debug');
-    await change({ 'diagnostics.performance': true, 'diagnostics.log': { call: 'trace' } }, 'common', 'test');
-    assert.equal(debugOn(), false);
-  } finally {
-    globalThis.document = realDocument;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  await connectSettings(new HostWorkspaceStore(host));
+  await orderedCallsAnswered();
+  assert.equal(debugOn(), false);
+  await setDebug(true, 'core.settings.debug');
+  await orderedCallsAnswered();
+  const [on] = settingsWrites(wire);
+  assert.equal(on.payload.patch['diagnostics.performance'], true);
+  assert.deepEqual(on.payload.patch['diagnostics.log'], { lifecycle: 'trace', input: 'trace', call: 'trace', io: 'trace', frame: 'trace' });
+  assert.equal(debugOn(), true);
+  await setDebug(false, 'core.settings.debug');
+  await orderedCallsAnswered();
+  const [, off] = settingsWrites(wire);
+  assert.equal(off.payload.patch['diagnostics.performance'], false);
+  assert.deepEqual(off.payload.patch['diagnostics.log'], {});
+  assert.equal(value('diagnostics.performance'), false);
+  assert.equal(debugOn(), false);
+  // A policy that names only some classes at trace is not the debug state, because the switch shows on only when every class is trace.
+  await change({ 'diagnostics.performance': true, 'diagnostics.log': { call: 'trace' } }, 'common', 'test');
+  await orderedCallsAnswered();
+  assert.equal(debugOn(), false);
+  wire.finish();
 });
 
 test('a change of the store is read through the read of that change', async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
+  const wire = selectPageWire('settings-change-read');
   const { connectSettings, value } = await import('../settings.js?test=change-read');
-  try {
-    let changed = null;
-    let snapshots = 0;
-    await connectSettings({
-      snapshot: async () => { snapshots += 1; return { common: {}, projects: [] }; },
-      settings: async () => {},
-      onChange: (listener) => { changed = listener; },
-    });
-    snapshots = 0;
-    let reads = 0;
-    await changed(async () => { reads += 1; return { common: { gap: 9 }, projects: [] }; });
-    assert.equal(reads, 1, 'the read of the change');
-    assert.equal(snapshots, 0, 'no read of its own');
-    assert.equal(value('gap'), 9);
-  } finally {
-    globalThis.document = realDocument;
-  }
+  const { orderedCallsAnswered } = await import('../host.js');
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await orderedCallsAnswered();
+  // The registry of a window listens to the same notice and reads through the same read: the listeners that read while one call runs share it.
+  store.onChange((read) => { read(); });
+  const before = wire.calls.filter(isSnapshot).length;
+  wire.deliverNotice();
+  await settled();
+  await orderedCallsAnswered();
+  assert.equal(wire.calls.filter(isSnapshot).length - before, 1, 'the settings read the store once more for the change, besides the shared read of the change');
+  assert.equal(value('gap'), 9);
+  wire.finish();
 });

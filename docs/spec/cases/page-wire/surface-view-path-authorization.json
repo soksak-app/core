@@ -1,0 +1,11 @@
+{
+  "name": "surface-view-path-authorization",
+  "description": "A view declares its composition once, after the host authorizes its surface.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-auth-a"}}},
+    {"reply": {"result": null}}
+  ]
+}

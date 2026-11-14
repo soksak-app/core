@@ -1,0 +1,332 @@
+{
+  "name": "surface-view-path-mount-end",
+  "description": "A view declares its composition, and the host refuses the declaration of a second view; the page records the failed mount as the error event workbench.surface.mount.failed, which it sends in the first log batch after the clock answers of the host.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "page-identity": {
+      "type": "string",
+      "example": "b8085505-f10d-4c60-bd53-e4f6c8cef36a",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 10,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999999972,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999516622,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000840,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000384539,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000834,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5000378831,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "fixture-plain",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [],
+            "overlays": []
+          },
+          "surface": "view-mount-ok"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "fixture-plain",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [],
+            "overlays": []
+          },
+          "surface": "view-mount-refused"
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "the host refused compositionDeclare"
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.surface.mount.failed",
+              "fields": {
+                "plugin": "fixture-plain",
+                "surface": "view-mount-refused",
+                "attempt": 2,
+                "phase": "mount",
+                "reason": "the host refused compositionDeclare"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 66
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "lifecycle",
+                "level": "debug",
+                "count": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

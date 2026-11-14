@@ -1,24 +1,26 @@
 // A check that has nothing to measure in a state is no pass: it is stated as skipped.
+// The plane and the compositor are the modules of the page, which runs without an application host.
 import assert from "node:assert/strict";
-import test from "node:test";
-import { JSDOM } from "jsdom";
-import { Soksak } from "soksak";
+import { after, test } from "node:test";
+import { openVerifyPlane } from "./support/verify-plane.mjs";
 
-test("a single empty plane before any commit states the checks that measured nothing as skipped", async (t) => {
-  const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"></div></div>');
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  globalThis.devicePixelRatio = 1;
-  t.after(() => { delete globalThis.devicePixelRatio; dom.window.close(); });
-  const plane = document.querySelector("#plane");
-  const grid = new Soksak(undefined, { width: 100, height: 100 });
-  t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => null } });
-  t.mock.module("../plane.js", { exports: {
-    currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
-    railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
-  } });
-  const { verify } = await import(`../verify.js?skipped-${Math.random()}`);
-  const rows = verify();
+const page = await openVerifyPlane();
+after(() => page.close());
+
+test("a single empty plane before any commit states the checks that measured nothing as skipped", { timeout: 5000 }, () => {
+  // JSDOM has no layout, so the card has no room for its head and foot rows of the declared heights, and the check of the drop zones
+  // measures no card.
+  const sheet = document.createElement("style");
+  sheet.textContent = ":root { --head-h: 40px; --foot-h: 30px; }";
+  document.head.appendChild(sheet);
+  try {
+    check(page.verify());
+  } finally {
+    sheet.remove();
+  }
+});
+
+function check(rows) {
   const skipped = rows.filter((row) => row.skipped).map((row) => row.name.split(" ")[0]);
   assert.deepEqual(skipped, ["V0", "V1", "V3", "V6", "V7a", "V7c", "V7b", "V9", "V10", "R", "D", "P", "W"]);
   for (const row of rows) {
@@ -27,4 +29,4 @@ test("a single empty plane before any commit states the checks that measured not
       assert.ok(row.note, `${row.name} does not say why`);
     }
   }
-});
+}

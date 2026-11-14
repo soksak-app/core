@@ -1,91 +1,79 @@
 // A window close request asks for each modified tab before the projects are saved and the window closes
 // (docs/spec/plugins.md#tab-reports).
+// The host calls and the notices of the page are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). The
+// case of the setup is selected before the modules are imported, because the page reads the host when it imports them. Each test starts
+// the page over its own case: it connects the settings and starts the project list to the store of that case, and the state of the
+// project list that the earlier tests left stands as the case of the test records it.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { drained } from "./support/drained.mjs";
 
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 1,
   activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
 };
+// The stored settings store the operations of the page (the class call) and the start of the document (the class lifecycle).
+const COMMON = { "diagnostics.log": { lifecycle: "info", call: "info" } };
+const POLICY = { lifecycle: "info", input: "error", call: "info", io: "error", frame: "error" };
 
-/* The order of the saves, the questions and the window close. */
-const events = [];
-let requestClose = null;
-let requestRemoval = null;
-/* Whether another window shows the project; the host answers a removal request for it with allowed. */
-let elsewhere = false;
-let hostAllows = true;
-/* The identifiers that each host call received, and the first events of the operations. */
-const hostCids = [];
-const started = [];
-mock.module("@soksak/runtime", {
-  namedExports: {
-    windows: {
-      folder: async (root) => ({ root, identity: PROJECT.identity }),
-      openProject: async (request, cids) => { hostCids.push(["openProject", cids]); return { local: true }; },
-      projectShown: async () => {},
-      newWindow: async (cids) => { hostCids.push(["newWindow", cids]); },
-      state: async () => { events.push("geometry"); return null; },
-      close: async (cids) => { events.push("close"); hostCids.push(["close", cids]); },
-      releaseProject: async (id, cids) => { events.push("release"); hostCids.push(["releaseProject", cids]); },
-      closeKept: async (cids) => { events.push("kept"); hostCids.push(["closeKept", cids]); },
-      ready: async () => {},
-      onActivate: async () => {},
-      onCloseRequest: async (fn) => { requestClose = fn; },
-      onRemoveProjectRequest: async (fn) => { requestRemoval = fn; },
-      askRemoveProject: async (id, cids) => { events.push(`host asked ${id}`); hostCids.push(["askRemoveProject", cids]); return hostAllows; },
-      answerRemoveProject: async (id, allowed) => { events.push(`answered ${id} ${allowed}`); },
-    },
-  },
-});
-mock.module("../host.js", {
-  namedExports: { log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null, documents: null,
-    report: () => {} },
-});
-mock.module("../page-log.js", {
-  namedExports: { flushEvents: async () => { events.push("logflush"); }, emitEvent: () => {} },
-});
-// The order of the operation start beside the order of the saves and the close.
-const operationStarts = [];
-const realSink = null;
-mock.module("../settings.js", {
-  namedExports: { projectSidebars: () => ({ sets: [], links: [] }),
-    beginSettings: () => {}, selectProject: async () => {}, value: () => "tabs",
-    flushSettings: async () => { events.push("settings"); },
-  },
-});
+let wire = selectPageWire("projects-close-window-start");
+
+// The window of the page: its address, its history and the error event that the page reports failures through.
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://soksak.test/index.html" });
+globalThis.document = dom.window.document;
+globalThis.location = dom.window.location;
+globalThis.history = dom.window.history;
+globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
+globalThis.ErrorEvent = dom.window.ErrorEvent;
+// The failures reported through the window error event.
 const reported = [];
-globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
-globalThis.location = new URL("http://soksak.test/index.html");
-globalThis.history = { replaceState: () => {} };
-
-mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+dom.window.addEventListener("error", (event) => reported.push(event.message));
 
 const projects = await import("../projects.js");
-const { installOperationSink } = await import("../operations.js");
-installOperationSink((event, fields, cids) => started.push([event, fields, cids]));
+const { orderedCallsAnswered } = await import("../host.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
+const { connectSettings, set } = await import("../settings.js");
+const { logGate } = await import("../log-gate.js");
+const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
 
-/* Whether the person keeps a modified tab; the question is recorded in events. */
+/* Whether the person keeps a modified tab; the question is recorded in `order` and `asks`. */
 let kept = false;
+/* The questions and the emptied planes in the order of the callbacks, and the number of host calls at each question. */
+const order = [];
+const asks = [];
 projects.onSwitch({
   check: () => {}, save: () => PROJECT.spaces[0].layout, load: () => {}, update: () => {}, retain: async () => {},
-  presented: async () => {}, empty: async () => { events.push("empty"); },
-  settleTabs: async () => { events.push("ask"); return !kept; },
+  presented: async () => {}, empty: async () => { order.push("empty"); },
+  settleTabs: async () => { order.push("ask"); asks.push(wire.calls.length); return !kept; },
 });
-const store = {
-  snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT)], open: [] }),
-  // The tab state store holds no entry.
-  tabState: async () => null,
-  tabStatePut: async () => 0,
-  // The tab sessions hold no file.
-  tabSession: async () => null,
-  tabSessionPut: async () => null,
-  tabSessions: async () => [],
-  add: async () => { throw new Error("not used"); },
-  patch: async () => { events.push("patch"); },
-  remove: async () => { events.push("remove"); },
-  onChange: () => {},
-};
+
+// The start of the page: the first screen is the library, and the start of the document is the first event that leaves the log.
+projects.begin({ common: structuredClone(COMMON), projects: [], open: [] });
+await orderedCallsAnswered();
+logGate.set(POLICY);
+recordWorkbenchStart(location, performance.timeOrigin);
+await flushEvents();
+wire.finish();
+
+/** Starts the page over the case of a test: the settings and the project list connect to the store of that case, so no call of the page reaches the case of an earlier test. */
+async function start(name) {
+  wire = selectPageWire(name);
+  order.length = 0;
+  asks.length = 0;
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
+}
+
+/** The names of the host calls of the page from the call at index `from` on. */
+const namesFrom = (from) => wire.calls.slice(from).map(({ name }) => name);
+/** The calls of the page from index `from` on that carry the host call name. */
+const callsFrom = (from, name) => wire.calls.slice(from).filter((call) => call.name === name);
+const isRemove = ({ name, payload }) => name === "workspace" && payload.kind === "remove";
+/** The events of the log batches that the page sent from index `from` on. */
+const eventsFrom = (from) => callsFrom(from, "log").filter(({ payload }) => payload.action === "batch").flatMap(({ payload }) => payload.events);
 
 // On a first run the starter install emits a plugin change before the page initialises its projects (F199.4).
 test("flushing the projects before initialise fails with an explicit error", async () => {
@@ -93,81 +81,124 @@ test("flushing the projects before initialise fails with an explicit error", asy
 });
 
 test("a window close request asks about modified tabs before it saves and closes", async () => {
-  await projects.initialise(store);
+  await start("projects-close-window-asks-first");
   await projects.activate(PROJECT.id);
-  events.length = 0;
+  order.length = 0;
+  asks.length = 0;
   kept = false;
-  await requestClose();
-  assert.equal(events[0], "ask", `the window saved or closed before the question: ${events}`);
-  assert.equal(events.at(-1), "close");
+  const from = wire.calls.length;
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, ["ask"]);
+  assert.equal(asks[0], from, `the window saved or closed before the question: ${namesFrom(from)}`);
+  assert.equal(wire.calls.at(-1).name, "windowClose");
   assert.deepEqual(reported, []);
+  wire.finish();
 });
 
 test("a kept modified tab keeps the window open and unsaved", async () => {
-  events.length = 0;
+  await start("projects-close-window-kept");
   kept = true;
-  await requestClose();
-  assert.deepEqual(events, ["ask", "kept"], "a kept tab did not report the kept close to the host");
+  const from = wire.calls.length;
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, ["ask"]);
+  assert.equal(asks[0], from);
+  // The kept close reports to the host and leaves the operation of the close in the log; the page stores and closes nothing.
+  assert.deepEqual(namesFrom(from), ["windowCloseKept", "log"], "a kept tab did not report the kept close to the host");
+  wire.finish();
 });
 
 test("removing the project shown in the window asks about modified tabs before it removes the project", async () => {
-  events.length = 0;
+  await start("projects-close-window-remove-shown");
   kept = true;
+  const from = wire.calls.length;
   assert.equal(await projects.close(PROJECT.id), false);
-  assert.deepEqual(events, ["ask"], "a kept modified tab did not keep the project");
+  assert.deepEqual(order, ["ask"], "a kept modified tab did not keep the project");
+  assert.deepEqual(namesFrom(from), [], "a kept modified tab sent a host call");
   kept = false;
-  events.length = 0;
+  order.length = 0;
+  asks.length = 0;
+  const second = wire.calls.length;
   assert.equal(await projects.close(PROJECT.id), true);
-  assert.equal(events[0], "ask", `the project was saved or removed before the question: ${events}`);
-  assert.ok(events.includes("remove"));
+  await drained();
+  assert.equal(order[0], "ask", `the project was saved or removed before the question: ${order}`);
+  assert.equal(asks[0], second, `the project was saved or removed before the question: ${namesFrom(second)}`);
+  assert.ok(wire.calls.slice(second).some(isRemove));
+  wire.finish();
 });
 
 test("removing a project that another window shows asks that window and keeps the project when it refuses", async () => {
-  await projects.initialise(store);
+  await start("projects-close-window-remove-elsewhere");
   await projects.browse();
-  events.length = 0;
-  hostAllows = false;
+  const from = wire.calls.length;
+  // The host answers the first question of the owner window with a refusal and the second with the permission.
   assert.equal(await projects.close(PROJECT.id), false);
-  assert.deepEqual(events, [`host asked ${PROJECT.id}`], "the refusal of the owner window did not keep the project");
-  hostAllows = true;
-  events.length = 0;
+  await drained();
+  assert.deepEqual(namesFrom(from), ["projectRemoveAsk", "log"], "the refusal of the owner window did not keep the project");
+  assert.equal(wire.calls[from].payload, PROJECT.id);
+  const second = wire.calls.length;
   assert.equal(await projects.close(PROJECT.id), true);
-  assert.equal(events[0], `host asked ${PROJECT.id}`);
-  assert.ok(events.includes("remove"));
+  await drained();
+  assert.equal(wire.calls[second].name, "projectRemoveAsk");
+  assert.equal(wire.calls[second].payload, PROJECT.id);
+  assert.ok(wire.calls.slice(second).some(isRemove));
+  wire.finish();
 });
 
 test("a removal request for the project shown here asks about modified tabs and answers the host", async () => {
-  await projects.initialise(store);
+  await start("projects-close-window-remove-request");
   await projects.activate(PROJECT.id);
-  events.length = 0;
+  const answered = (from) => callsFrom(from, "projectRemoveAnswer").map(({ payload }) => payload);
+  order.length = 0;
+  asks.length = 0;
   kept = true;
-  await requestRemoval(PROJECT.id);
-  assert.deepEqual(events, ["ask", `answered ${PROJECT.id} false`]);
-  events.length = 0;
+  let from = wire.calls.length;
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, ["ask"]);
+  assert.equal(asks[0], from);
+  assert.deepEqual(answered(from), [{ id: PROJECT.id, allowed: false }]);
+  order.length = 0;
+  asks.length = 0;
   kept = false;
-  await requestRemoval(PROJECT.id);
-  assert.deepEqual(events, ["ask", `answered ${PROJECT.id} true`]);
+  from = wire.calls.length;
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, ["ask"]);
+  assert.equal(asks[0], from);
+  assert.deepEqual(answered(from), [{ id: PROJECT.id, allowed: true }]);
   // A project that the library shows has no tab in the plane, so the answer needs no question.
   await projects.browse();
-  events.length = 0;
-  await requestRemoval(PROJECT.id);
-  assert.deepEqual(events, [`answered ${PROJECT.id} true`]);
+  order.length = 0;
+  from = wire.calls.length;
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, []);
+  assert.deepEqual(namesFrom(from), ["projectRemoveAnswer"]);
+  assert.deepEqual(answered(from), [{ id: PROJECT.id, allowed: true }]);
+  wire.finish();
 });
 
 test("opening a project, removing it, opening a window and closing it are operations whose identifiers go with their host calls", async () => {
-  await projects.initialise(store);
-  hostCids.length = 0;
-  started.length = 0;
+  await start("projects-close-window-operation-cids");
+  const from = wire.calls.length;
   kept = false;
-  hostAllows = true;
   await projects.activate(PROJECT.id);
   await projects.newWindow();
   await projects.close(PROJECT.id);
-  await projects.initialise(store);
+  // Another window adds the project again: the host announces the registry change and the window reads the registry.
+  wire.deliverNotice();
+  await projects.idle();
   await projects.activate(PROJECT.id);
-  await requestClose();
+  wire.deliverNotice();
+  await drained();
   kept = true;
-  await requestClose();
+  wire.deliverNotice();
+  await drained();
+  await flushEvents();
+  // The first events of the operations, as the log batches carry them.
+  const started = eventsFrom(from).map(({ event, fields, cids }) => [event, fields, cids]);
   const operation = (event, action) => started.filter(([name, fields]) => name === event && fields.action === action).map(([, , cids]) => cids);
   const [opened] = operation("workbench.project.operation", "open");
   const [removed] = operation("workbench.project.operation", "remove");
@@ -176,62 +207,66 @@ test("opening a project, removing it, opening a window and closing it are operat
   const [closedKept] = operation("workbench.window.operation", "close_kept");
   for (const cids of [opened, removed, newWindow, closed, closedKept]) assert.match(cids?.[0] ?? "", /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.\d+$/);
   assert.equal(new Set([opened, removed, newWindow, closed, closedKept].map((cids) => cids[0])).size, 5, "an operation took the identifier of another");
-  const cidsOf = (name) => hostCids.filter(([called]) => called === name).map(([, cids]) => cids);
-  assert.deepEqual(cidsOf("openProject")[0], opened);
-  assert.deepEqual(cidsOf("newWindow"), [newWindow]);
-  assert.deepEqual(cidsOf("releaseProject")[0], removed);
-  assert.deepEqual(cidsOf("close").at(-1), closed);
-  assert.deepEqual(cidsOf("closeKept"), [closedKept]);
+  const cidsOf = (name) => callsFrom(from, name).map(({ cids }) => cids);
+  assert.deepEqual(cidsOf("projectOpen")[0], opened);
+  assert.deepEqual(cidsOf("windowNew"), [newWindow]);
+  assert.deepEqual(cidsOf("projectRelease")[0], removed);
+  assert.deepEqual(cidsOf("windowClose").at(-1), closed);
+  assert.deepEqual(cidsOf("windowCloseKept"), [closedKept]);
   assert.deepEqual(started.find(([event, fields]) => event === "workbench.project.operation" && fields.action === "open")[1], { action: "open", project: PROJECT.id });
   assert.deepEqual(started.find(([event, fields]) => event === "workbench.project.operation" && fields.action === "remove")[1], { action: "remove", project: PROJECT.id });
+  wire.finish();
 });
 
 test("the page flushes its event queue after the operation of the close starts and before its host call", async () => {
-  const sink = (event, fields) => { if (event === "workbench.window.operation") events.push(`operation ${fields.action}`); };
-  installOperationSink((event, fields, cids) => { sink(event, fields); started.push([event, fields, cids]); });
-  await projects.initialise(store);
+  await start("projects-close-window-log-flush");
   await projects.activate(PROJECT.id);
-  events.length = 0;
   kept = false;
-  await requestClose();
+  // A settings write that the host has not answered stands when the close request arrives; the close saves the settings first.
+  const saving = set({ left: false }, "common", "core.settings.set");
+  await orderedCallsAnswered();
+  await drained();
+  order.length = 0;
+  asks.length = 0;
+  const from = wire.calls.length;
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, ["ask"]);
+  assert.equal(asks[0], from);
+  assert.equal(wire.calls.length, from, "the window stored the geometry or closed before the settings write ended");
+  wire.release();
+  await saving;
+  await drained();
   // The window ends with the call, so the queue that the drain hands to the writer of the host must already hold the first
-  // event of the operation (F161.26).
-  assert.deepEqual(events, ["ask", "settings", "geometry", "operation close", "logflush", "close"],
-    `the operation, the drain and the close ran in another order: ${events}`);
+  // event of the operation (F161.26): the batch that carries it stands between the geometry and the close.
+  const sent = wire.calls.slice(from);
+  assert.deepEqual(sent.map(({ name }) => name), ["workspace", "windowState", "log", "windowClose"],
+    `the settings read, the geometry, the drain and the close ran in another order: ${namesFrom(from)}`);
+  assert.deepEqual(sent[0].payload, { kind: "snapshot" });
+  assert.deepEqual(eventsFrom(from).map(({ event, fields }) => [event, fields]), [["workbench.window.operation", { action: "close" }]]);
+  assert.deepEqual(sent[3].cids, eventsFrom(from)[0].cids);
+  wire.finish();
 });
 
 test("a close request that follows a registry change without the shown project asks after the window ends that project", async () => {
   // Another window removed the project after this window answered its question; the registry change reaches this window
   // before the close request, and the read of the registry is still running when the request arrives (F292-50).
-  let notify = null;
-  let removed = false;
-  let reading = null;
-  const read = new Promise((resolve) => { reading = resolve; });
-  let release = null;
-  const held = new Promise((resolve) => { release = resolve; });
-  const changing = {
-    ...store,
-    snapshot: async () => {
-      if (!removed) return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
-      reading();
-      await held;
-      return { common: {}, projects: [], open: [] };
-    },
-    onChange: (fn) => { notify = fn; },
-  };
-  await projects.initialise(changing);
+  await start("projects-close-window-registry-change");
   await projects.activate(PROJECT.id);
   kept = false;
-  removed = true;
-  events.length = 0;
-  notify();
-  const closing = requestClose();
-  await read;
-  release();
-  await closing;
-  assert.ok(events.includes("empty"), `the window did not end the removed project: ${events}`);
-  assert.ok(events.indexOf("empty") < events.indexOf("ask"),
-    `the close asked about the tabs of the removed project before the window ended it: ${events}`);
-  assert.equal(events.at(-1), "close");
+  order.length = 0;
+  asks.length = 0;
+  // The host answers the read of the registry that the change started after the close request arrived.
+  wire.deliverNotice();
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(order, [], "the close asked about the tabs before the read of the registry ended");
+  wire.release();
+  await drained();
+  assert.ok(order.includes("empty"), `the window did not end the removed project: ${order}`);
+  assert.ok(order.indexOf("empty") < order.indexOf("ask"),
+    `the close asked about the tabs of the removed project before the window ended it: ${order}`);
+  assert.equal(wire.calls.at(-1).name, "windowClose");
   assert.deepEqual(reported, []);
+  wire.finish();
 });

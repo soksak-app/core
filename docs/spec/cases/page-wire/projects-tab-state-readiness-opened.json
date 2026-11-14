@@ -1,0 +1,24 @@
+{
+  "name": "projects-tab-state-readiness-opened",
+  "description": "The page starts at the library, reads the empty registry, the tab state file and the tab session list, and reports its window ready once the tab state store is open.",
+  "replay": false,
+  "reason": "The page start sends the theme of the window and reports the window ready (setTheme, windowReady), which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#000" } }, "source": "page" },
+    "language": { "type": "string", "example": "en", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": "$theme" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabState" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabSessions" } } },
+    { "reply": { "result": [] } },
+    { "call": { "name": "windowReady" } },
+    { "reply": { "result": null } }
+  ]
+}

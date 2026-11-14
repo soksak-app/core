@@ -1,20 +1,18 @@
 import assert from "node:assert/strict";
-import test from "node:test";
-import { JSDOM } from "jsdom";
-import { Soksak } from "soksak";
+import { after, test } from "node:test";
+import { openVerifyPlane } from "./support/verify-plane.mjs";
+
+// The page runs without an application host, so the plane is laid out and drawn in the document of index.html. The verification reads
+// the plane and the compositor of that page; the rectangle of the first row is the geometry that the document provides. A plugin that no
+// environment loads opens as a placeholder tab, so the card holds one tab without a surface.
+const page = await openVerifyPlane();
+after(() => page.close());
+const { verify } = page;
+document.querySelector(".chrome-bar").getBoundingClientRect = () => ({ top: 0, bottom: 45, height: 45, left: 0, right: 600, width: 600 });
 
 // AppKit aligns the window buttons to device pixels, so when the remaining height is an odd number of pixels, the top and the bottom differ by one pixel.
 // Row W judges that difference as centered within one device pixel (1 / devicePixelRatio).
-test("the window buttons count as centred within one device pixel of the first row", async (t) => {
-  const dom = new JSDOM('<div class="chrome-bar"></div><div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  document.querySelector(".chrome-bar").getBoundingClientRect = () => ({ top: 0, bottom: 45, height: 45, left: 0, right: 600, width: 600 });
-  const plane = document.querySelector("#plane");
-  const grid = new Soksak(undefined, { width: 100, height: 100 });
-  t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => null } });
-  t.mock.module("../plane.js", { exports: { currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [] } });
-  const { verify } = await import("../verify.js");
+test("the window buttons count as centred within one device pixel of the first row", { timeout: 5000 }, async () => {
   const row = (controls) => verify(controls).find((item) => item.name.startsWith("W "));
   try {
     globalThis.devicePixelRatio = 1;
@@ -24,7 +22,6 @@ test("the window buttons count as centred within one device pixel of the first r
     assert.equal(row({ x: 13, y: 15.5, w: 54, h: 14 }).ok, true, "15.5 above and below is centred at scale 2");
     assert.equal(row({ x: 13, y: 15, w: 54, h: 14 }).ok, false, "15 above and 16 below is two device pixels apart at scale 2");
   } finally {
-    delete globalThis.devicePixelRatio;
-    dom.window.close();
+    page.reset();
   }
 });

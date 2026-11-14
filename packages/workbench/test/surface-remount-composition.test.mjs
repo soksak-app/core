@@ -1,15 +1,44 @@
 import assert from "node:assert/strict";
-import test, { mock } from "node:test";
+import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
-import { recordOrigin } from "../tab-reports.js";
-import { setSurfaceTextSize } from "../text-size.js";
-import { pageIdentity } from "../page-identity.js";
+import { selectPageWire } from "@soksak/runtime";
 import { drained } from "./support/drained.mjs";
 
-setSurfaceTextSize(() => 1);
+// The host calls of the surfaces are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). A case is selected
+// before the first module that imports host.js is imported, because host.js reads the host when it is imported. The case of the start
+// holds the first batch of the page log, which states the clock anchor, so every later case holds the batches of its own events only.
+const startWire = selectPageWire("surface-remount-composition-start");
+const { registerPlugin } = await import("../registry.js");
+const { recordOrigin } = await import("../tab-reports.js");
+const { setSurfaceTextSize } = await import("../text-size.js");
+const { pageIdentity } = await import("../page-identity.js");
+await import("../host.js");
+const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
+const { setTraceEnabled } = await import("../performance.js");
+const { setLogPolicy } = await import("../log-policy.js");
+const { documentRegions } = await import("../document-regions.js");
+await import("../surface-modules.js");
 
-test("a remount waiting for dispose is visible to composition waits", { timeout: 5000 }, async (t) => {
+setSurfaceTextSize(() => 1);
+recordWorkbenchStart({ href: "http://localhost/" }, 0);
+await flushEvents();
+startWire.finish();
+
+/** The events that the page sent in the batches of its wire. */
+const batchEvents = (wire) => wire.calls
+  .filter(({ name, payload }) => name === "log" && payload?.action === "batch")
+  .flatMap(({ payload }) => payload.events);
+/** The events of the trace of the composition of a surface, as {event, fields}. */
+const compositionEvents = (wire) => batchEvents(wire)
+  .filter(({ event }) => event === "workbench.trace.surface.composition")
+  .map(({ event, fields }) => ({ event, fields }));
+/** The events that record a failed mount, as {level, event, fields}. */
+const failedMounts = (wire) => batchEvents(wire)
+  .filter(({ event }) => event === "workbench.surface.mount.failed")
+  .map(({ level, event, fields }) => ({ level, event, fields }));
+
+test("a remount waiting for dispose is visible to composition waits", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-replacement");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
@@ -17,78 +46,13 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
   dom.window.cancelAnimationFrame = () => {};
 
   const id = "fixture-remount-composition";
-  let waitForComposition;
-  let waitResult;
-  let releaseWaitObserved;
-  let inspectRelease = true;
-  let refuseComposition = false;
-  let holdDispose = false;
-  let tracing = true;
   let pageIdentityReads = 0;
   const pageTimeOrigin = dom.window.performance.timeOrigin;
   Object.defineProperty(dom.window.performance, "timeOrigin", { configurable: true, get() {
     pageIdentityReads += 1;
     return pageTimeOrigin;
   } });
-  const traceEvents = [];
-  let announceDisposal;
-  let releaseDisposal;
-  const disposalStarted = new Promise((resolve) => { announceDisposal = resolve; });
-  const disposalGate = new Promise((resolve) => { releaseDisposal = resolve; });
-  const actualRegions = await import("../document-regions.js");
-  t.mock.module("../document-regions.js", { exports: {
-    ...actualRegions,
-    documentRegions: {
-      ...actualRegions.documentRegions,
-      released(surfaceId) {
-        actualRegions.documentRegions.released(surfaceId);
-        if (surfaceId !== id || !inspectRelease) return;
-        queueMicrotask(async () => {
-          try {
-            await waitForComposition(surfaceId);
-            waitResult = null;
-          } catch (error) {
-            waitResult = error;
-          }
-          releaseWaitObserved?.();
-        });
-      },
-    },
-  } });
-
-  const actualPerformance = await import("../performance.js");
-  t.mock.module("../performance.js", { exports: {
-    ...actualPerformance,
-    traceEnabled: () => tracing,
-    trace: (event, fields) => traceEvents.push({ event, fields }),
-  } });
-
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      const exposure = runtime.exposure;
-      return { ...runtime, exposure: { ...exposure, dispose: async () => {
-        if (holdDispose) {
-          announceDisposal();
-          await disposalGate;
-          holdDispose = false;
-        }
-        return exposure.dispose();
-      } }, native: { ...runtime.native, on: async () => () => {}, call: async (name) => {
-        if (name === "compositionDeclare" && refuseComposition) {
-          refuseComposition = false;
-          throw new Error("the host refused the replacement composition");
-        }
-        return null;
-      } } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?remount-composition");
-  waitForComposition = waitSurfaceCompositionDeclared;
   const pluginId = "fixture-remount-composition";
   recordOrigin(id, null, "test fixture");
   registerPlugin({ id: pluginId, surface: () => null });
@@ -101,97 +65,94 @@ test("a remount waiting for dispose is visible to composition waits", { timeout:
   };
 
   try {
+    // The events of the trace of the composition are of the class call, which the policy stores at the level debug.
+    await setLogPolicy({ call: "debug" });
+    await setTraceEnabled(true);
     authorizeSurface(id);
     await mountSurface(slot, surface);
     await waitSurfaceCompositionDeclared(id);
-    assert.deepEqual(traceEvents.filter(({ event }) => event === "surface.composition"), [{
-      event: "surface.composition",
+    await flushEvents();
+    assert.deepEqual(compositionEvents(wire), [{
+      event: "workbench.trace.surface.composition",
       fields: { page: pageIdentity, surface: id, attempt: 1, action: "declare", outcome: "accepted" },
     }], "the accepted native composition declaration was not correlated with its page and mount attempt");
-    inspectRelease = false;
-    holdDispose = true;
+    // The disposal marks the entry as disposed in the call, and its cleanup continues in the microtasks after the call, so the
+    // retired entry is visible to the checks that follow the call in the same turn.
     const oldDisposal = disposeSurface(id, { released: true });
-    await disposalStarted;
-    assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "dispose").at(-1), {
-      event: "surface.composition",
+    assert.equal(mountedSurface(id)?.disposed, true, "the test did not hold the retired entry during cleanup");
+    const staleWait = waitSurfaceCompositionDeclared(id);
+    await assert.rejects(staleWait, /surface fixture-remount-composition is not mounted/,
+      "a disposed entry without a replacement satisfied the composition wait");
+    await oldDisposal;
+    await flushEvents();
+    assert.deepEqual(compositionEvents(wire).filter(({ fields }) => fields.action === "dispose").at(-1), {
+      event: "workbench.trace.surface.composition",
       fields: { page: pageIdentity, surface: id, attempt: 1, action: "dispose", reason: "released" },
     }, "page disposal was not recorded distinctly from native composition removal");
-    assert.equal(mountedSurface(id)?.disposed, true, "the test did not hold the retired entry during cleanup");
-    try {
-      const staleWait = waitSurfaceCompositionDeclared(id);
-      await assert.rejects(staleWait, /surface fixture-remount-composition is not mounted/,
-        "a disposed entry without a replacement satisfied the composition wait");
-    } finally {
-      releaseDisposal();
-    }
-    await oldDisposal;
-    inspectRelease = true;
 
     authorizeSurface(id);
     await mountSurface(slot, surface);
     await waitSurfaceCompositionDeclared(id);
-    const releaseWait = new Promise((resolve) => { releaseWaitObserved = resolve; });
+    await flushEvents();
     const disposing = disposeSurface(id, { released: true });
     const remounting = mountSurface(slot, surface);
+    // The wait starts while the retired entry is disposing and the replacement mount is registered.
+    const replacementWait = waitSurfaceCompositionDeclared(id).then(() => null, (error) => error);
     await disposing;
     authorizeSurface(id);
     await remounting;
     await waitSurfaceCompositionDeclared(id);
-    await releaseWait;
-
+    const waitResult = await replacementWait;
     assert.equal(waitResult, null, waitResult?.message ?? "composition wait failed during replacement mount");
-    inspectRelease = false;
+    await flushEvents();
     await disposeSurface(id, { released: true });
     await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-composition is not mounted/,
       "disposing without a replacement must not leave a pending or mounted surface");
+    await flushEvents();
 
     authorizeSurface(id);
-    refuseComposition = true;
     const failedMount = mountSurface(slot, surface);
     const failedWait = waitSurfaceCompositionDeclared(id);
     await assert.rejects(failedMount, /the host refused the replacement composition/);
     await assert.rejects(failedWait, /the host refused the replacement composition/);
-    assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "declare").at(-1), {
-      event: "surface.composition",
+    await flushEvents();
+    assert.deepEqual(compositionEvents(wire).filter(({ fields }) => fields.action === "declare").at(-1), {
+      event: "workbench.trace.surface.composition",
       fields: { page: pageIdentity, surface: id, attempt: 4, action: "declare", outcome: "rejected" },
     }, "a rejected native declaration was not recorded with the failed mount attempt");
-    assert.deepEqual(traceEvents.filter(({ event, fields }) => event === "surface.composition" && fields.action === "dispose").at(-1), {
-      event: "surface.composition",
+    assert.deepEqual(compositionEvents(wire).filter(({ fields }) => fields.action === "dispose").at(-1), {
+      event: "workbench.trace.surface.composition",
       fields: { page: pageIdentity, surface: id, attempt: 4, action: "dispose", reason: "mount-failure" },
     }, "failed mount disposal did not preserve its page-local reason");
     await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-composition mount attempt 4 failed during mount: the host refused the replacement composition/,
       "a failed replacement must preserve its original failure after releasing its mounted entry");
 
     const readsBeforeDisabledMount = pageIdentityReads;
-    tracing = false;
+    const recordedBeforeDisabledMount = compositionEvents(wire).length;
+    await setTraceEnabled(false);
     authorizeSurface(id);
     await mountSurface(slot, surface);
     await waitSurfaceCompositionDeclared(id);
     await disposeSurface(id, { released: true });
+    await flushEvents();
     assert.equal(pageIdentityReads, readsBeforeDisabledMount, "a disabled trace built composition event fields");
+    assert.equal(compositionEvents(wire).length, recordedBeforeDisabledMount, "a disabled trace recorded composition events");
+    // The policy returns to the errors of every class, so the later tests of the file store only the events that they name.
+    await setLogPolicy({});
   } finally {
-    releaseDisposal();
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("a mount failure before registration reaches composition wait and releases its host", { timeout: 5000 }, async (t) => {
+test("a mount failure before registration reaches composition wait and releases its host", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-registration-failure");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?remount-registration-failure");
   const id = "fixture-remount-registration-failure";
   const pluginId = "fixture-remount-registration-failure";
@@ -214,6 +175,7 @@ test("a mount failure before registration reaches composition wait and releases 
     assert.equal(slot.querySelector(".surface-module-host"), null, "a failed registration left its host in the slot");
     await assert.rejects(waitSurfaceCompositionDeclared(id), /surface fixture-remount-registration-failure mount attempt 1 failed during mount: initial state callback failed/,
       "a failed registration must preserve its original failure after releasing its mounted entry");
+    await flushEvents();
 
     const falsyId = "fixture-remount-falsy-failure";
     const falsyPluginId = "fixture-remount-falsy-failure";
@@ -226,28 +188,21 @@ test("a mount failure before registration reaches composition wait and releases 
     await assert.rejects(falsyMount, (error) => error === null);
     await assert.rejects(falsyWait, (error) => error === null);
     assert.equal(slot.querySelector(".surface-module-host"), null, "a falsy registration failure left its host in the slot");
+    await flushEvents();
   } finally {
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("same-slot and moved-slot mounts preserve the entry while authorization is pending", { timeout: 5000 }, async (t) => {
+test("same-slot and moved-slot mounts preserve the entry while authorization is pending", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-slots");
   const dom = new JSDOM("<main><div id=first></div><div id=second></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?remount-registration-paths");
   const id = "fixture-remount-registration-paths";
   const pluginId = "fixture-remount-registration-paths";
@@ -279,66 +234,7 @@ test("same-slot and moved-slot mounts preserve the entry while authorization is 
     await disposeSurface(id);
     dom.window.close();
   }
-});
-
-test("a rejected view listener registration releases successful listeners and rejects the mount", { timeout: 5000 }, async (t) => {
-  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
-  globalThis.document = dom.window.document;
-  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
-  dom.window.requestAnimationFrame = () => 1;
-  dom.window.cancelAnimationFrame = () => {};
-  const registrationError = new Error("view-process-ended registration failed");
-  const removed = [];
-  // Resolves when the five successful registrations are released.
-  const allReleased = Promise.withResolvers();
-  // A rejection that escapes as an unhandled promise fails the test through the test runner, which reports each unhandled
-  // rejection of the run as a failure, whenever Node emits it.
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended") return Promise.resolve().then(() => { throw registrationError; });
-        return Promise.resolve(() => {
-          removed.push(name);
-          if (removed.length === 5) allReleased.resolve();
-        });
-      }, call: async () => null } };
-    },
-  } });
-  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?view-listener-registration-failure");
-  const id = "fixture-view-listener-registration-failure";
-  const pluginId = id;
-  recordOrigin(id, null, "test fixture");
-  registerPlugin({ id: pluginId, surface: () => null });
-  const slot = document.querySelector("#slot");
-  slot.dataset.nativeSurfaceId = id;
-  const surface = {
-    module: null, surfaceId: id, pluginId,
-    declarations: { status: [], commands: [], element: [] }, sidecars: [],
-    composition: { kind: "view", page: "ui/page.html" },
-  };
-
-  try {
-    const mount = mountSurface(slot, surface);
-    const wait = waitSurfaceCompositionDeclared(id);
-    const [mountResult, waitResult] = await Promise.allSettled([mount, wait]);
-    assert.equal(mountResult.status, "rejected", "listener setup failure must reject mount");
-    assert.equal(mountResult.reason, registrationError, "mount must preserve the original listener error");
-    assert.equal(waitResult.status, "rejected", "listener setup failure must reject composition wait");
-    assert.equal(waitResult.reason, registrationError, "composition wait must preserve the original listener error");
-    await allReleased.promise;
-    assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort(),
-      "every successful listener registration must be released");
-    assert.equal(mountedSurface(id), null, "failed mount retained its mounted entry");
-    assert.equal(slot.querySelector(".surface-module-host"), null, "failed mount retained its host");
-  } finally {
-    await disposeSurface(id);
-    dom.window.close();
-  }
+  wire.finish();
 });
 
 test("disposing a mount releases resolved listeners before pending registration settles", { timeout: 5000 }, async (t) => {
@@ -423,40 +319,57 @@ test("disposing a mount releases resolved listeners before pending registration 
   }
 });
 
-test("a listener failure before readiness reports an error and releases the view", { timeout: 5000 }, async (t) => {
+test("a rejected view listener registration releases successful listeners and rejects the mount", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-listener-refused");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  let rejectProcessEnded;
-  // Resolves when the view-process-ended registration starts.
-  const processEndedStarted = Promise.withResolvers();
-  const registrationError = new Error("view-process-ended registration failed before ready");
-  const removed = [];
+  const { mountSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?view-listener-registration-failure");
+  const id = "fixture-view-listener-registration-failure";
+  const pluginId = id;
+  recordOrigin(id, null, "test fixture");
+  registerPlugin({ id: pluginId, surface: () => null });
+  const slot = document.querySelector("#slot");
+  slot.dataset.nativeSurfaceId = id;
+  const surface = {
+    module: null, surfaceId: id, pluginId,
+    declarations: { status: [], commands: [], element: [] }, sidecars: [],
+    composition: { kind: "view", page: "ui/page.html" },
+  };
+
+  try {
+    const mount = mountSurface(slot, surface);
+    const wait = waitSurfaceCompositionDeclared(id);
+    const [mountResult, waitResult] = await Promise.allSettled([mount, wait]);
+    assert.equal(mountResult.status, "rejected", "listener setup failure must reject mount");
+    assert.equal(mountResult.reason.message, "view-process-ended registration failed", "mount must preserve the original listener error");
+    assert.equal(waitResult.status, "rejected", "listener setup failure must reject composition wait");
+    assert.equal(waitResult.reason, mountResult.reason, "composition wait must preserve the original listener error");
+    // The release of the successful registrations runs in the microtasks that follow the failure.
+    await drained();
+    assert.deepEqual([...wire.unsubscribed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort(),
+      "every successful listener registration must be released");
+    assert.equal(mountedSurface(id), null, "failed mount retained its mounted entry");
+    assert.equal(slot.querySelector(".surface-module-host"), null, "failed mount retained its host");
+    await flushEvents();
+  } finally {
+    await disposeSurface(id);
+    dom.window.close();
+  }
+  wire.finish();
+});
+
+
+test("a listener failure before readiness reports an error and releases the view", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-listener-before-ready");
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
   const states = [];
-  let compositionCalls = 0;
-  // A rejection that escapes as an unhandled promise fails the test through the test runner, which reports each unhandled
-  // rejection of the run as a failure, whenever Node emits it.
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended") {
-          processEndedStarted.resolve();
-          return new Promise((_, reject) => { rejectProcessEnded = reject; });
-        }
-        return Promise.resolve(() => removed.push(name));
-      }, call: async (name) => {
-        if (name === "compositionDeclare") compositionCalls += 1;
-        return null;
-      } } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, mountedSurface } = await import("../surface-modules.js?view-listener-after-ready");
   const id = "fixture-view-listener-after-ready";
   recordOrigin(id, null, "test fixture");
@@ -472,48 +385,31 @@ test("a listener failure before readiness reports an error and releases the view
   try {
     authorizeSurface(id);
     const mounting = mountSurface(slot, surface, { onState: (state) => states.push(state) });
-    await processEndedStarted.promise;
-    rejectProcessEnded(registrationError);
-    await assert.rejects(mounting, /view-process-ended registration failed before ready/);
+    const failure = await mounting.then(() => assert.fail("the mount of the failed registration resolved"), (error) => error);
+    assert.match(failure.message, /view-process-ended registration failed before ready/);
     await assert.rejects(waitSurfaceCompositionDeclared(id), /view-process-ended registration failed before ready/);
     assert.equal(states.at(-1).phase, "error", "a post-readiness listener failure must reach surface status");
-    assert.equal(states.at(-1).error, registrationError);
-    assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort());
-    assert.equal(compositionCalls, 0, "a view with an incomplete listener setup declared its composition");
+    assert.equal(states.at(-1).error, failure);
+    await drained();
+    assert.deepEqual([...wire.unsubscribed].sort(), ["view-call", "view-presentation-abandoned", "view-reply", "view-responsiveness", "view-stopped"].sort());
+    assert.equal(wire.calls.filter(({ name }) => name === "compositionDeclare").length, 0, "a view with an incomplete listener setup declared its composition");
     assert.equal(mountedSurface(id), null, "post-readiness failure retained the mounted entry");
+    await flushEvents();
   } finally {
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("disposing a surface ends its already-waiting composition declaration", { timeout: 5000 }, async (t) => {
+test("disposing a surface ends its already-waiting composition declaration", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-declaration-held");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  let beginDeclaration;
-  let finishDeclaration;
-  const declarationStarted = new Promise((resolve) => { beginDeclaration = resolve; });
-  const declaration = new Promise((resolve) => { finishDeclaration = resolve; });
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: async () => () => {}, call: (name) => {
-        if (name === "compositionDeclare") {
-          beginDeclaration();
-          return declaration;
-        }
-        return Promise.resolve(null);
-      } } };
-    },
-  } });
-  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?composition-wait-dispose");
+  const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared, compositionState } = await import("../surface-modules.js?composition-wait-dispose");
   const id = "fixture-composition-wait-dispose";
   recordOrigin(id, null, "test fixture");
   registerPlugin({ id, surface: () => null });
@@ -524,11 +420,14 @@ test("disposing a surface ends its already-waiting composition declaration", { t
     declarations: { status: [], commands: [], element: [] }, sidecars: [],
     composition: { kind: "view", page: "ui/page.html" },
   };
+  let answered = false;
 
   try {
     authorizeSurface(id);
     const mount = mountSurface(slot, surface);
-    await declarationStarted;
+    // The mount reaches the composition declaration in the microtasks that follow the authorization, and the case holds its answer.
+    await drained();
+    assert.equal(compositionState(id).state, "declaring", "the surface did not send its composition declaration");
     let waitOutcome;
     const wait = waitSurfaceCompositionDeclared(id).then(
       () => { waitOutcome = { status: "fulfilled" }; },
@@ -539,57 +438,28 @@ test("disposing a surface ends its already-waiting composition declaration", { t
     assert.equal(waitOutcome?.status, "rejected", "dispose did not end the existing composition wait");
     assert.match(waitOutcome.error.message, new RegExp(`surface ${id} was disposed before declaring composition`));
 
-    finishDeclaration(null);
+    wire.release();
+    answered = true;
     await Promise.allSettled([mount, wait]);
   } finally {
-    finishDeclaration(null);
+    if (!answered && wire.calls.some(({ name }) => name === "compositionDeclare")) wire.release();
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("a drawn wait records a listener failure before the native view is declared", { timeout: 5000 }, async (t) => {
+test("a drawn wait records a listener failure before the native view is declared", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-drawn-retry");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const registrationError = new Error("view-process-ended registration failed before ready");
-  const events = [];
-  let rejectProcessEnded;
-  let holdNextComposition = false;
-  let finishComposition;
-  let compositionStarted;
-  const heldCompositionStarted = new Promise((resolve) => { compositionStarted = resolve; });
+  const registrationMessage = "view-process-ended registration failed before ready";
   let resolveErrorState;
   const errorReported = new Promise((resolve) => { resolveErrorState = resolve; });
-  const actualPageLog = await import("../page-log.js");
-  t.mock.module("../page-log.js", { exports: {
-    ...actualPageLog,
-    emitEvent: (level, event, fields) => events.push({ level, event, fields }),
-    eventEnabled: () => true,
-  } });
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended" && !rejectProcessEnded) return new Promise((_, reject) => { rejectProcessEnded = reject; });
-        return Promise.resolve(() => {});
-      }, call: async (name) => {
-        if (name === "compositionDeclare" && holdNextComposition) {
-          holdNextComposition = false;
-          compositionStarted();
-          return new Promise((resolve) => { finishComposition = resolve; });
-        }
-        return null;
-      } } };
-    },
-  } });
-  const { mountSurface, authorizeSurface, disposeSurface, mountedSurface } = await import("../surface-modules.js?view-attributed-failure");
+  const { mountSurface, authorizeSurface, disposeSurface, mountedSurface, waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-attributed-failure");
   const { createPageLayout } = await import("../page-layout.js?view-attributed-failure");
   const id = "fixture-view-attributed-failure";
   recordOrigin(id, null, "test fixture");
@@ -603,30 +473,29 @@ test("a drawn wait records a listener failure before the native view is declared
   };
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
-    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered: async (surfaceId) => {
-      const { waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-attributed-failure");
-      return waitSurfaceCompositionAnswered(surfaceId);
-    },
+    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered,
   });
+  let declared = false;
 
   try {
     authorizeSurface(id);
     const failedMount = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
-    rejectProcessEnded(registrationError);
     await errorReported;
     await assert.rejects(failedMount, /view-process-ended registration failed before ready/);
     assert.equal(mountedSurface(id), null, "the failed view registration mounted a native surface");
     assert.equal(slot.dataset.nativeSurfaceId, id, "the drawn layout no longer names the failed surface");
-    assert.deepEqual(events.filter(({ event }) => event === "workbench.surface.mount.failed"), [{
+    await flushEvents();
+    assert.deepEqual(failedMounts(wire), [{
       level: "error", event: "workbench.surface.mount.failed",
-      fields: { plugin: id, surface: id, attempt: 1, phase: "mount", reason: registrationError.message },
+      fields: { plugin: id, surface: id, attempt: 1, phase: "mount", reason: registrationMessage },
     }]);
-    await assert.rejects(page.drawn(), new RegExp(`surface ${id} mount attempt 1 failed during mount: ${registrationError.message}`));
+    await assert.rejects(page.drawn(), new RegExp(`surface ${id} mount attempt 1 failed during mount: ${registrationMessage}`));
 
-    holdNextComposition = true;
     authorizeSurface(id);
     const retry = mountSurface(slot, surface);
-    await heldCompositionStarted;
+    // The retry reaches its composition declaration in the microtasks that follow the authorization, and the case holds its answer.
+    await drained();
+    assert.equal(wire.calls.filter(({ name }) => name === "compositionDeclare").length, 1, "the retry did not send its composition declaration");
     // The retry draws after the composition finished, and not with the earlier failed attempt. The draw runs in microtasks until it
     // waits for the answer of the composition, so after the end of the microtask queue a draw that did not wait for it has ended.
     const order = [];
@@ -634,41 +503,31 @@ test("a drawn wait records a listener failure before the native view is declared
     await drained();
     assert.deepEqual(order, [], "the retry drew before its composition finished");
     order.push("finished");
-    finishComposition(null);
+    wire.release();
+    declared = true;
     await Promise.all([retry, retryDraw]);
     assert.deepEqual(order, ["finished", "ready"], "a pending retry inherited the earlier failed attempt");
     await disposeSurface(id);
     await assert.rejects(page.drawn(), new RegExp(`surface ${id} is not mounted`),
       "normal disposal retained the completed mount registration");
   } finally {
+    if (!declared && wire.calls.some(({ name }) => name === "compositionDeclare")) wire.release();
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("removing a pre-readiness listener failure from the desired plane clears its retained failure", { timeout: 5000 }, async (t) => {
+test("removing a pre-readiness listener failure from the desired plane clears its retained failure", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-plane-cleanup");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  let rejectProcessEnded;
   let resolveErrorState;
   const errorStateSeen = new Promise((resolve) => { resolveErrorState = resolve; });
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended") return new Promise((_, reject) => { rejectProcessEnded = reject; });
-        return Promise.resolve(() => {});
-      }, call: async () => null } };
-    },
-  } });
-  const { mountSurface, authorizeSurface, disposeSurface, disposeSurfacesExcept } = await import("../surface-modules.js?view-failure-plane-cleanup");
+  const { mountSurface, authorizeSurface, disposeSurface, disposeSurfacesExcept, waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-failure-plane-cleanup");
   const { createPageLayout } = await import("../page-layout.js?view-failure-plane-cleanup");
   const id = "fixture-view-failure-plane-cleanup";
   recordOrigin(id, null, "test fixture");
@@ -682,64 +541,34 @@ test("removing a pre-readiness listener failure from the desired plane clears it
   };
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
-    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered: async (surfaceId) => {
-      const { waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-failure-plane-cleanup");
-      return waitSurfaceCompositionAnswered(surfaceId);
-    },
+    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered,
   });
   try {
     authorizeSurface(id);
     const mounting = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(); } });
-    rejectProcessEnded(new Error("listener failed before plane departure"));
     await errorStateSeen;
     await assert.rejects(mounting, /listener failed before plane departure/);
     await assert.rejects(page.drawn(), /listener failed before plane departure/);
     await disposeSurfacesExcept(new Set());
     await assert.rejects(page.drawn(), new RegExp(`surface ${id} is not mounted`));
+    await flushEvents();
   } finally {
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("a disposed pending listener setup cannot replace a newer attempt", { timeout: 5000 }, async (t) => {
+test("a disposed pending listener setup cannot replace a newer attempt", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-old-listener");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  const events = [];
-  let registrations = 0;
-  let rejectOld;
-  let rejectNew;
   let resolveErrorState;
   const errorReported = new Promise((resolve) => { resolveErrorState = resolve; });
-  const actualPageLog = await import("../page-log.js");
-  t.mock.module("../page-log.js", { exports: {
-    ...actualPageLog,
-    emitEvent: (level, event, fields) => events.push({ level, event, fields }),
-    eventEnabled: () => true,
-  } });
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended") {
-          registrations++;
-          return new Promise((_, reject) => {
-            if (registrations === 1) rejectOld = reject;
-            else rejectNew = reject;
-          });
-        }
-        return Promise.resolve(() => {});
-      }, call: async () => null } };
-    },
-  } });
-  const { mountSurface, authorizeSurface, disposeSurface, mountedSurface } = await import("../surface-modules.js?view-old-failure");
+  const { mountSurface, authorizeSurface, disposeSurface, mountedSurface, waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-old-failure");
   const { createPageLayout } = await import("../page-layout.js?view-old-failure");
   const id = "fixture-view-old-failure";
   // Resolves when the handler of the old listener failure reports it after the dispose.
@@ -760,10 +589,7 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
   };
   const page = createPageLayout({
     document, showError: () => {}, setVerify: () => {}, log: () => {}, surfaces: {}, plane: {}, compositor: {},
-    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered: async (surfaceId) => {
-      const { waitSurfaceCompositionAnswered } = await import("../surface-modules.js?view-old-failure");
-      return waitSurfaceCompositionAnswered(surfaceId);
-    },
+    textSize: () => 1, rendered: async () => {}, surfaceUnloaded: () => false, waitSurfaceCompositionAnswered,
   });
   try {
     authorizeSurface(id);
@@ -773,15 +599,18 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
     authorizeSurface(id);
     const newMount = mountSurface(slot, surface, { onState: (state) => { if (state.phase === "error") resolveErrorState(state); } });
     const current = mountedSurface(id);
-    rejectOld(new Error("old disposed listener failed"));
+    // The case holds the registration of each mount; the first held registration is the old one, which the host refuses now.
+    wire.release();
     await oldFailureReported.promise;
     assert.equal(mountedSurface(id), current, "an old listener failure removed the newer mounted attempt");
-    assert.deepEqual(events.filter(({ event }) => event === "workbench.surface.mount.failed"), [],
+    await flushEvents();
+    assert.deepEqual(failedMounts(wire), [],
       "a listener rejection after normal dispose was classified as a failed mount");
-    rejectNew(new Error("new listener failed before readiness"));
+    wire.release();
     await errorReported;
     await assert.rejects(newMount, /new listener failed before readiness/);
-    assert.equal(events.filter(({ event }) => event === "workbench.surface.mount.failed").at(-1)?.fields.attempt, 2,
+    await flushEvents();
+    assert.equal(failedMounts(wire).at(-1)?.fields.attempt, 2,
       "the new mount failure was attributed to the old attempt");
     await assert.rejects(page.drawn(), /mount attempt 2 failed during mount: new listener failed before readiness/);
   } finally {
@@ -789,37 +618,16 @@ test("a disposed pending listener setup cannot replace a newer attempt", { timeo
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });
 
-test("a disposing surface leaves the tabs with attached regions before its exposure disposal ends", { timeout: 5000 }, async (t) => {
+test("a disposing surface leaves the tabs with attached regions before its exposure disposal ends", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-regions");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  let announceDisposal;
-  let releaseDisposal;
-  const disposalStarted = new Promise((resolve) => { announceDisposal = resolve; });
-  const disposalGate = new Promise((resolve) => { releaseDisposal = resolve; });
-  let holdDispose = false;
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      const exposure = runtime.exposure;
-      return { ...runtime, exposure: { ...exposure, dispose: async () => {
-        if (holdDispose) {
-          announceDisposal();
-          await disposalGate;
-        }
-        return exposure.dispose();
-      } }, native: { ...runtime.native, on: async () => () => {}, call: async () => null } };
-    },
-  } });
-  const { documentRegions } = await import("../document-regions.js");
   const { mountSurface, authorizeSurface, disposeSurface, waitSurfaceCompositionDeclared } = await import("../surface-modules.js?dispose-regions");
   const id = "fixture-dispose-regions";
   recordOrigin(id, null, "test fixture");
@@ -837,17 +645,15 @@ test("a disposing surface leaves the tabs with attached regions before its expos
     await waitSurfaceCompositionDeclared(id);
     documentRegions.attached(id, "page");
     assert.ok(documentRegions.tabs().includes(id), "the fixture region did not attach");
-    holdDispose = true;
     const disposal = disposeSurface(id, { released: true });
-    await disposalStarted;
-    // The host closes the regions with the released surface, so a session write that starts now must not ask them.
+    // The host closes the regions with the released surface, so a session write that starts now must not ask them. The disposal
+    // releases the regions in the call, before its cleanup continues in the microtasks that follow, so the exposure disposal has not ended here.
     assert.ok(!documentRegions.tabs().includes(id),
       `a disposing surface still lists attached regions: ${JSON.stringify(documentRegions.tabs())}`);
-    releaseDisposal();
     await disposal;
   } finally {
-    releaseDisposal();
     await disposeSurface(id);
     dom.window.close();
   }
+  wire.finish();
 });

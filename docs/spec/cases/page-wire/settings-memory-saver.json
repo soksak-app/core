@@ -1,0 +1,21 @@
+{
+  "name": "settings-memory-saver",
+  "description": "The page applies the settings of the start document of a project twice, and it sends the theme and the menu language of each application to the host in the order of the applications; a project that holds a common-only key and a write of an out-of-range value are refused without a call.",
+  "replay": false,
+  "reason": "The calls setTheme and setMenuLanguage apply to the window of the native host, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "theme-2": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setTheme", "payload": "$theme-2" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } }
+  ]
+}

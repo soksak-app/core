@@ -1,0 +1,11 @@
+{
+  "name": "settings-gone-sets",
+  "description": "The host answers a snapshot whose common links name a set that the common sets lack; the page refuses the snapshot, sends no write of the settings, writes no record to the application log and sends no other call.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "sets": [ { "id": "set-kept", "title": "남은 세트", "sections": [], "layout": "list" } ], "links": [ { "place": "left", "plugin": null, "set": "set-kept" }, { "place": "right", "plugin": null, "set": "set-gone" } ] }, "projects": [] } } }
+  ]
+}

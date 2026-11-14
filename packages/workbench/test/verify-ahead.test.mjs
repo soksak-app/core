@@ -1,121 +1,109 @@
 // When verification V7c fails, it names the surface that is off the most and its two places so that the cause can be found (F33).
+// The plane, the compositor and the host module are the modules of the page; the host answers each preparation with the page-wire case
+// of the test (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
-import test from "node:test";
-import { JSDOM } from "jsdom";
-import { Soksak } from "soksak";
+import { after, test } from "node:test";
+import { selectPageWire } from "@soksak/runtime";
+import { openVerifyPlane, rect } from "./support/verify-plane.mjs";
 
-const rect = (x, y, w, h) => ({ x, y, width: w, height: h, left: x, top: y, right: x + w, bottom: y + h });
+// The host module reads the wire when it is imported, so the case of the first test is selected before the page opens.
+const firstWire = selectPageWire("verify-ahead-v7c-named");
+const page = await openVerifyPlane();
+after(() => page.close());
+const { compositor, verify } = page;
 
-test("a failed V7c names the surface and both of its rectangles", async (t) => {
-  const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="probe"></div></article></div></div>');
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  t.after(() => dom.window.close());
-  const plane = document.querySelector("#plane");
-  plane.getBoundingClientRect = () => rect(6, 6, 400, 300);
-  document.querySelector(".slot").getBoundingClientRect = () => rect(36, 40, 370, 240);
-  // The place and style of a drawn card and the device pixel ratio of the page are the measured values that the failure sentence states (F90).
-  const card = document.querySelector(".card");
-  card.getBoundingClientRect = () => rect(6, 6, 400, 300);
-  card.style.width = "400px";
-  card.style.height = "300px";
+/** Prepares the layout of the card with the seat of the surface "probe" and waits for the answer of the host. */
+const prepare = ({ card, inset, bands, grid }) => {
+  const cardId = page.card.dataset.cardId;
+  return compositor.publishAhead(new Map([[cardId, card]]), new Map([[cardId, { id: "probe", dim: false, inset, bands, grid }]]), 40);
+};
+
+/** The V7c row of a plane whose card slot "probe" is drawn at 0,34 400×240 after the preparation, with the element that the drawing added. */
+async function verifyAhead(wire, extra) {
   globalThis.devicePixelRatio = 1;
-  t.after(() => { delete globalThis.devicePixelRatio; });
-  const grid = new Soksak(undefined, { width: 400, height: 300 });
-  const declared = { x: 0, y: 34, w: 400, h: 240 };
-  card.style.setProperty("--pt", "36px");
-  const bands = { top: 6, bottom: 0, left: 0, right: 0 };
-  const guess = { seq: 12, deferred: [], surfaces: [{ id: "probe", dim: false, declared, applied: declared, bands, grid: 1 }] };
-  t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => guess, placementPending: () => false, seated: () => null } });
-  t.mock.module("../plane.js", { exports: {
-    currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
-    railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
-  } });
-  const { verify } = await import("../verify.js");
-  const row = verify().find((item) => item.name.startsWith("V7c "));
-  assert.equal(row.ok, false);
-  assert.match(row.note, /최대 30\.00px/);
-  assert.match(row.note, /probe drawn 30,34 370×240 declared 0,34 400×240 · bands 6\/0\/0\/0 drawn 36px\/0\/0\/0/);
-  assert.match(row.note, / · card 0,0 400×300 inset 30,34,0,26 · plane 6,6 400×300 · card style 400px×300px · devicePixelRatio 1$/);
-});
-
-/** Runs verify over a plane with one card slot "probe" at its predicted place and the extra slots of html. */
-async function verifyAhead(t, extra, guessed) {
-  const dom = new JSDOM(`<div class="chrome-bar"></div><div id="stage"><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="probe"></div></article>${extra}</div></div>`);
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  globalThis.devicePixelRatio = 1;
-  t.after(() => { dom.window.close(); delete globalThis.devicePixelRatio; });
-  const plane = document.querySelector("#plane");
-  plane.getBoundingClientRect = () => rect(0, 0, 400, 300);
-  for (const slot of document.querySelectorAll(".slot")) slot.getBoundingClientRect = () => rect(0, 34, 400, 240);
-  const declared = { x: 0, y: 34, w: 400, h: 240 };
-  const guess = { seq: 7, surfaces: guessed.map((id) => ({ id, dim: false, declared, applied: declared, bands: null, grid: 1 })) };
-  t.mock.module("../compositor.js", { exports: { ahead: () => guess, latest: () => null, placementPending: () => false, seated: () => null } });
-  t.mock.module("../plane.js", { exports: {
-    currentGrid: () => new Soksak(undefined, { width: 400, height: 300 }), dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane,
-    presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
-  } });
-  const { verify } = await import(`../verify.js?ahead-${Math.random()}`);
-  return verify().find((item) => item.name.startsWith("V7c "));
+  page.measure(page.planeEl, rect(0, 0, 400, 300));
+  page.measure(page.slot, rect(0, 34, 400, 240));
+  page.mark();
+  try {
+    await prepare({ card: { x: 0, y: 0, w: 400, h: 300 }, inset: { left: 0, top: 34, width: 0, height: 60 }, grid: 1 });
+    page.append(extra);
+    return verify().find((item) => item.name.startsWith("V7c "));
+  } finally {
+    page.reset();
+    wire.finish();
+  }
 }
 
-test("V7c compares the predicted card surfaces and does not count a section surface that the drawing added", async (t) => {
+test("a failed V7c names the surface and both of its rectangles", { timeout: 5000 }, async () => {
+  globalThis.devicePixelRatio = 1;
+  // The place and style of a drawn card and the device pixel ratio of the page are the measured values that the failure sentence states (F90).
+  page.measure(page.planeEl, rect(6, 6, 400, 300));
+  page.measure(page.slot, rect(36, 40, 370, 240));
+  page.measure(page.card, rect(6, 6, 400, 300));
+  page.card.style.width = "400px";
+  page.card.style.height = "300px";
+  page.card.style.setProperty("--pt", "36px");
+  page.mark();
+  try {
+    await prepare({
+      card: { x: 0, y: 0, w: 400, h: 300 }, inset: { left: 0, top: 34, width: 0, height: 60 },
+      bands: { top: 6, bottom: 0, left: 0, right: 0 }, grid: 1,
+    });
+    const row = verify().find((item) => item.name.startsWith("V7c "));
+    assert.equal(row.ok, false);
+    assert.match(row.note, /최대 30\.00px/);
+    assert.match(row.note, /probe drawn 30,34 370×240 declared 0,34 400×240 · bands 6\/0\/0\/0 drawn 36px\/0\/0\/0/);
+    assert.match(row.note, / · card 0,0 400×300 inset 30,34,0,26 · plane 6,6 400×300 · card style 400px×300px · devicePixelRatio 1$/);
+  } finally {
+    page.reset();
+  }
+  firstWire.finish();
+});
+
+test("V7c compares the predicted card surfaces and does not count a section surface that the drawing added", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("verify-ahead-v7c-section");
   // A section surface is measured after the drawing (docs/spec/native-surfaces.md#section-seats), so the prediction never holds it.
-  const row = await verifyAhead(t, '<div class="set__body slot" data-native-surface="view" data-native-surface-id="spc-aaaaaa/left/probe.tree"></div>', ["probe"]);
+  const row = await verifyAhead(wire, '<div class="set__body slot" data-native-surface="view" data-native-surface-id="spc-aaaaaa/left/probe.tree"></div>');
   assert.equal(row.ok, true, row.note);
 });
 
-test("a failed V7c names the drawn card surface that the prediction missed", async (t) => {
-  const row = await verifyAhead(t, '<article class="card" data-card-id="two"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="tab-late"></div></article>', ["probe"]);
+test("a failed V7c names the drawn card surface that the prediction missed", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("verify-ahead-v7c-missed");
+  const row = await verifyAhead(wire, '<article class="card" data-card-id="two"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="tab-late"></div></article>');
   assert.equal(row.ok, false);
   assert.match(row.note, /누락 1 \[tab-late\]/);
 });
 
-test("a failed V7b names the surface and its declared and applied rectangles", async (t) => {
-  const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"></div></div>');
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  t.after(() => dom.window.close());
-  const plane = document.querySelector("#plane");
-  plane.getBoundingClientRect = () => rect(6, 6, 400, 300);
-  const grid = new Soksak(undefined, { width: 400, height: 300 });
+test("a failed V7b names the surface and its declared and applied rectangles", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("verify-ahead-v7b-named");
   // At 2 device pixels per point the host fits the declared rectangle inward to 10,45.5 380×199.5, so the applied height of 200
   // is off by half a point.
   globalThis.devicePixelRatio = 2;
-  t.after(() => { delete globalThis.devicePixelRatio; });
-  const placed = { seq: 39, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, scale: 2,
-    declared: { x: 10, y: 45.25, w: 380, h: 200 }, applied: { x: 10, y: 45.5, w: 380, h: 200 } }] };
-  t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => placed } });
-  t.mock.module("../plane.js", { exports: {
-    currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
-    railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
-  } });
-  const { verify } = await import("../verify.js?v7b");
-  const row = verify().find((item) => item.name.startsWith("V7b "));
-  assert.equal(row.ok, false);
-  assert.match(row.note, /probe declared 10,45\.25 380×200 applied 10,45\.5 380×200/);
+  page.measure(page.planeEl, rect(6, 6, 400, 300));
+  page.mark();
+  try {
+    await prepare({ card: { x: 0, y: 0, w: 400, h: 300 }, inset: { left: 10, top: 45.25, width: 20, height: 100 }, grid: 2 });
+    const row = verify().find((item) => item.name.startsWith("V7b "));
+    assert.equal(row.ok, false);
+    assert.match(row.note, /probe declared 10,45\.25 380×200 applied 10,45\.5 380×200/);
+  } finally {
+    page.reset();
+  }
+  wire.finish();
 });
 
-test("V7b compares the applied rectangle with the declared rectangle fitted inward to the device pixels", async (t) => {
-  const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"></div></div>');
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  t.after(() => dom.window.close());
+test("V7b compares the applied rectangle with the declared rectangle fitted inward to the device pixels", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("verify-ahead-v7b-fitted");
   // A display of one device pixel per point cannot show half a point: the host fits a declared height of 580.5 to 580.
   globalThis.devicePixelRatio = 1;
-  t.after(() => { delete globalThis.devicePixelRatio; });
-  const plane = document.querySelector("#plane");
-  plane.getBoundingClientRect = () => rect(6, 6, 2400, 700);
-  const grid = new Soksak(undefined, { width: 2400, height: 700 });
-  const placed = { seq: 9, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, scale: 1,
-    declared: { x: 203, y: 33, w: 2120, h: 580.5 }, applied: { x: 203, y: 33, w: 2120, h: 580 } }] };
-  t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => placed } });
-  t.mock.module("../plane.js", { exports: {
-    currentGrid: () => grid, dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane, presentedCardRect: () => undefined,
-    railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
-  } });
-  const { verify } = await import("../verify.js?v7b-fitted");
-  const row = verify().find((item) => item.name.startsWith("V7b "));
-  assert.equal(row.ok, true, row.note);
+  page.measure(page.planeEl, rect(6, 6, 2400, 700));
+  page.mark();
+  try {
+    await prepare({ card: { x: 0, y: 0, w: 2400, h: 700 }, inset: { left: 203, top: 33, width: 77, height: 119.5 }, grid: 1 });
+    const row = verify().find((item) => item.name.startsWith("V7b "));
+    assert.equal(row.ok, true, row.note);
+  } finally {
+    page.reset();
+  }
+  wire.finish();
 });

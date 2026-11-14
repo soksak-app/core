@@ -1,0 +1,74 @@
+{
+  "name": "verify-device-grid-v7b-thirds",
+  "description": "The page prepares one layout of one DOM surface of a plugin on thirds of a point in a plane at 7,83 on a display of three device pixels per point, and the host answers the syncSurfaces call with the placement that it applied on the device pixels.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {
+    "sync-request": {
+      "type": "object",
+      "example": {
+        "surfaces": []
+      },
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 210,
+              "y": 470.3333333333333,
+              "w": 760,
+              "h": 259.6666666666667
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": true,
+              "scale": 3,
+              "x": 210,
+              "y": 470.3333333333333,
+              "w": 760,
+              "h": 259.6666666666667
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

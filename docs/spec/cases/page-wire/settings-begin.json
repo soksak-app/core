@@ -1,0 +1,16 @@
+{
+  "name": "settings-begin",
+  "description": "The page applies the settings of its start document: it sends the theme and then the menu language to the host once, and it refuses the documents with an unknown setting without a call.",
+  "replay": false,
+  "reason": "The calls setTheme and setMenuLanguage apply to the window of the native host, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "settings-earlier-form",
+  "description": "The host answers a snapshot whose common settings hold a key of an earlier form; the page refuses the snapshot, sends no write of the settings, writes no record to the application log and sends no other call.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {},
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "gap": 8, "cardSidebar": "inset" }, "projects": [] } } }
+  ]
+}

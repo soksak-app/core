@@ -1,0 +1,7 @@
+{
+  "name": "window-sidecar-send-none",
+  "description": "A page that has not sent a window sidecar send yet sends no call when its modules are imported.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

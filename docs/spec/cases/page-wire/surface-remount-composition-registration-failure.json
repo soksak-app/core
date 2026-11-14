@@ -1,0 +1,163 @@
+{
+  "name": "surface-remount-composition-registration-failure",
+  "description": "A surface whose state callback throws before its listeners are registered sends no host call but the event that records its failed mount, and a callback that throws a falsy value records the failure with the reason null.",
+  "replay": false,
+  "reason": "The page writes its events through the host call log with its own clock readings, which the Go producer cannot reproduce without the page (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "identity": {
+      "type": "string",
+      "example": "3f2c9a6e-0b1d-4c7e-9a52-6d1e8b4f0a21",
+      "source": "page"
+    },
+    "event-1-ts-us": {
+      "type": "integer",
+      "example": 1791000000000790,
+      "source": "page"
+    },
+    "event-1-mono-ns": {
+      "type": "integer",
+      "example": 5000001000,
+      "source": "page"
+    },
+    "event-2-ts-us": {
+      "type": "integer",
+      "example": 1791000000000791,
+      "source": "page"
+    },
+    "event-2-mono-ns": {
+      "type": "integer",
+      "example": 5000001001,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000108325,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5107869227,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "4b1b6ee4-0427-4cdf-a6f3-068b0554a482",
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000109917,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5109461310,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000091928,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5091472601,
+      "source": "page"
+    },
+    "time-origin": {
+      "type": "number",
+      "example": 1794617107328.546,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000093448,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5092992560,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000093493,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5093037726,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000093657,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5093201768,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.surface.mount.failed",
+              "fields": {
+                "plugin": "fixture-remount-registration-failure",
+                "surface": "fixture-remount-registration-failure",
+                "attempt": 1,
+                "phase": "mount",
+                "reason": "initial state callback failed"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.surface.mount.failed",
+              "fields": {
+                "plugin": "fixture-remount-falsy-failure",
+                "surface": "fixture-remount-falsy-failure",
+                "attempt": 2,
+                "phase": "mount",
+                "reason": "null"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

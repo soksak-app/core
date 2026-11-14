@@ -1,0 +1,20 @@
+{
+  "name": "projects-tab-state-readiness-failed",
+  "description": "The page starts at the library, reads the empty registry, and the read of the tab state file fails with the text tab-state startup fixture failed, so the start of the project list ends with that error.",
+  "replay": false,
+  "reason": "The page start sends the theme of the window, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#000" } }, "source": "page" },
+    "language": { "type": "string", "example": "en", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": "$theme" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } },
+    { "call": { "name": "workspace", "payload": { "kind": "tabState" } } },
+    { "reply": { "error": "tab-state startup fixture failed" } }
+  ]
+}

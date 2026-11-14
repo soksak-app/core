@@ -1,0 +1,238 @@
+{
+  "name": "window-sidecar-send-failure",
+  "description": "The page sends each window sidecar send in order. A send that the host fails is reported as an error record of its sidecar, and the next send to the same sidecar is still sent; the log batch that carries the record leaves after it.",
+  "replay": false,
+  "reason": "The case calls sidecarSend, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "page-identity": {
+      "type": "string",
+      "example": "318966c7-8558-4dc2-88c6-e84cb6f9b51b",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 16,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000036,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999580414,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@x/side",
+          "surface": "tab-a",
+          "body": {
+            "n": 1
+          },
+          "cids": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "gone"
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarSend",
+        "payload": {
+          "sidecar": "@x/side",
+          "surface": "tab-a",
+          "body": {
+            "n": 2
+          },
+          "cids": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "sidecar @x/side",
+                "text": "send failed: gone"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

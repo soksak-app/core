@@ -1,0 +1,69 @@
+{
+  "name": "verify-empty-declaration-deferred",
+  "description": "The page sends the theme of the host, then prepares one layout whose surface of a plugin is a view that has not declared its composition; the syncSurfaces call carries no surface, and the host answers it with no placement, so the placement of the page defers the view.",
+  "replay": false,
+  "reason": "setTheme and syncSurfaces apply the theme and the placement of a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {
+    "theme": {
+      "type": "object",
+      "example": {
+        "scheme": "light",
+        "tokens": {
+          "--bg": "#fff"
+        }
+      },
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "light",
+          "tokens": {
+            "--bg": "#fff"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

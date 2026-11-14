@@ -1,0 +1,96 @@
+{
+  "name": "verify-empty-declaration-no-area",
+  "description": "The page reads the notification authorization of the host when the plane is imported, prepares one layout whose DOM surface of a plugin has no width and no height, and the host answers the syncSurfaces call with the surface as invisible.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "$authorization",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": false,
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

@@ -23,6 +23,7 @@ export function selectPageWire(name) {
   windows = hostWindows(host);
   return {
     calls: wire.calls,
+    unsubscribed: wire.unsubscribed,
     release: wire.release,
     deliverNotice: wire.deliverNotice,
     finish() {

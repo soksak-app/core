@@ -1,0 +1,171 @@
+{
+  "name": "placement-retained-views-active-view",
+  "description": "An undrawn placement sends no request for an active view that is not mounted; after the plane mounts the view and the host authorizes it, the drawn placement sends the view and presents it.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "placement-probe",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "surface": "active-view"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "active-view",
+              "dim": false,
+              "plugin": "placement-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20,
+              "start": {
+                "origin": {
+                  "directory": null
+                },
+                "declarations": 0
+              }
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [
+            {
+              "status": [],
+              "commands": [],
+              "element": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "active-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "active-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "active-view",
+            "visible": true,
+            "scale": 2,
+            "x": 0,
+            "y": 0,
+            "w": 20,
+            "h": 20
+          }
+        ]
+      }
+    }
+  ]
+}

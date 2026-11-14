@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const behaviorName = "modified tabs require a clean save before tab or window closure";
 const pluginId = "fixture-close-modified";
@@ -41,33 +40,34 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
+  // The page has no host in this test, so it is not native. Without a host, report writes the error to console.error and stores no record, so
+  // the test keeps this replacement of the report to observe the lines that the plane writes to the application log.
   const logged = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => logged.push(line) } });
-  const surface = (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId,
-    pluginId, declarations: {}, sidecars: [] });
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null, surfaceForTab: (tab) => surface(tab.id),
-    mountSurface: async () => {}, disposeSurface: async () => {}, focusSurface: () => true,
-    placePluginPlaceholder: (slot, id, placeholder) => slot.append(placeholder),
-  } });
-  t.mock.module("../environment.js", { exports: {
-    refusedPlugins: () => new Set(),
-    environment: () => ({ workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
+  // The environment of the page: the plugin with the command that saves its tabs (surface.save), and the card with two tabs.
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
       { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
         { plugin: pluginId, title: "document" }, { plugin: pluginId, title: "other" },
       ] },
-    ] } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "Fixture surface.", surface: true, sections: [] }],
-  } });
-  registerPlugin({ id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null,
-    background: null, drop: null, save: saveName, surface });
+    ] } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [{ id: pluginId, package: "@fixture/close-modified", version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "Fixture surface.", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/index.html" }, save: saveName },
+    exposes: { commands: [{ name: saveName, description: "Saves the tab.", params: { type: "object", properties: {} }, result: { type: "null" } }] },
+  } }] }), [], "the fixture environment refused a plugin");
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const reports = await import("../tab-reports.js");
   const plane = await import("../plane.js");
   let reply = null;
   const saves = [];
+  // The save command of a surface runs in the document of its view, and the registry of a page without a host cannot forward a command to a
+  // surface (exposureForward is a host call), so the reply of the save command is controlled here.
   t.mock.method(registry, "run", (name, params, tab) => {
     assert.equal(name, saveName);
     assert.deepEqual(params, {});

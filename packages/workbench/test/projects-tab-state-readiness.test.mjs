@@ -1,48 +1,33 @@
+// The readiness of the tab state store of the start of the project list (docs/spec/projects.md#persistence). The host calls of the page
+// are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). The case of the first test is selected before the
+// modules are imported, because the page reads the host when it imports them.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
 import { memoryPlacement } from "../memory-placement.js";
 
 const failure = new Error("tab-state startup fixture failed");
-mock.module("@soksak/runtime", { namedExports: { windows: {
-  onActivate: async () => {}, onCloseRequest: async () => {}, onRemoveProjectRequest: async () => {}, ready: async () => {},
-} } });
-mock.module("../page-log.js", { namedExports: { flushEvents: async () => {}, emitEvent: () => {} } });
-mock.module("../host.js", { namedExports: {
-  log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null,
-} });
-mock.module("../plugin-data.js", { namedExports: {
-  configureData: () => {}, compareProjectData: () => {},
-} });
-mock.module("../settings.js", { namedExports: { projectSidebars: () => ({ sets: [], links: [] }),
-  beginSettings: () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {},
-} });
-mock.module("../tab-state.js", { namedExports: {
-  openTabStates: async ({ store }) => {
-    if (store.failTabState) throw failure;
-    return { reconcile: async () => {}, flush: async () => {} };
-  },
-} });
-mock.module("../tab-session.js", { namedExports: {
-  createTabSessions: () => ({ read: () => null, reconcile: async () => {}, flush: async () => {} }),
-} });
-mock.module("../document-regions.js", { namedExports: { documentRegions: { useSessions: () => {} } } });
+const EMPTY = { common: {}, projects: [], open: [] };
+let wire = selectPageWire("projects-tab-state-readiness-failed");
 
-globalThis.location = new URL("http://soksak.test/index.html");
-globalThis.history = { replaceState: () => {} };
-globalThis.dispatchEvent = () => true;
-
-mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+// The window of the page: its address, its history and the error event that the page reports failures through.
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://soksak.test/index.html" });
+globalThis.document = dom.window.document;
+globalThis.location = dom.window.location;
+globalThis.history = dom.window.history;
+globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
+globalThis.ErrorEvent = dom.window.ErrorEvent;
 
 const projects = await import("../projects.js");
 const successfulProjects = await import("../projects.js?tab-state-open-success");
+const { orderedCallsAnswered } = await import("../host.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
 
 test("a failed tab-state open rejects drawn placement waiters while the existing tried signal resolves", async () => {
-  projects.begin({ common: {}, projects: [], open: [] });
-  const store = {
-    snapshot: async () => ({ common: {}, projects: [], open: [] }),
-    onChange: () => {},
-    failTabState: true,
-  };
+  projects.begin(structuredClone(EMPTY));
+  await orderedCallsAnswered();
+  const store = new HostWorkspaceStore(host);
   const initialising = projects.initialise(store, () => true);
   const ready = projects.tabStatesOpened().then((result) => {
     if (!result.opened) throw result.error;
@@ -64,15 +49,16 @@ test("a failed tab-state open rejects drawn placement waiters while the existing
     [["rejected", failure], ["rejected", failure]], "tab-state open failure left a drawn placement pending");
   assert.equal(observed, false, "failed startup classified placement candidates");
   assert.equal(placed, false, "failed startup invoked memory saver placement");
+  wire.finish();
 });
 
 test("a successful tab-state open resolves the placement readiness result", async () => {
-  successfulProjects.begin({ common: {}, projects: [], open: [] });
-  const store = {
-    snapshot: async () => ({ common: {}, projects: [], open: [] }),
-    onChange: () => {},
-  };
+  wire = selectPageWire("projects-tab-state-readiness-opened");
+  successfulProjects.begin(structuredClone(EMPTY));
+  await orderedCallsAnswered();
+  const store = new HostWorkspaceStore(host);
   await successfulProjects.initialise(store, () => true);
   assert.deepEqual(await successfulProjects.tabStatesOpened(), { opened: true });
   await successfulProjects.tabStatesReady();
+  wire.finish();
 });

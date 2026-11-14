@@ -1,0 +1,29 @@
+{
+  "name": "surface-view-path-keep",
+  "description": "A view sets and clears its busy keep and its modified mark through view calls, and the page refuses an unknown keep reason and a busy keep that is not a boolean.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-keep"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-keep", "plugin": "fixture-plain", "generation": 1, "id": 1, "command": "tab.keep", "params": {"reason": "busy", "on": true}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 1, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-keep"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-keep", "plugin": "fixture-plain", "generation": 1, "id": 2, "command": "tab.modified", "params": true}}},
+    {"call": {"name": "viewReply", "payload": {"id": 2, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-keep"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-keep", "plugin": "fixture-plain", "generation": 1, "id": 3, "command": "tab.keep", "params": {"reason": "busy", "on": false}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 3, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-keep"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-keep", "plugin": "fixture-plain", "generation": 1, "id": 4, "command": "tab.keep", "params": {"reason": "busy", "on": true}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 4, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-keep"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-keep", "plugin": "fixture-plain", "generation": 1, "id": 5, "command": "tab.keep", "params": {"reason": "other", "on": true}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 5, "error": {"code": -32000, "message": "unknown keep reason: other"}, "page": "$page-identity", "generation": 1, "surface": "view-keep"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-keep", "plugin": "fixture-plain", "generation": 1, "id": 6, "command": "tab.keep", "params": {"reason": "busy", "on": 1}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 6, "error": {"code": -32000, "message": "keep busy must be true or false"}, "page": "$page-identity", "generation": 1, "surface": "view-keep"}}},
+    {"reply": {"result": null}}
+  ]
+}

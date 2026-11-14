@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- 38 further workbench test files run the real host, plane, compositor, projects, settings, page log and surface modules of the page over page-wire cases, a case records the registrations of the listeners of the page as listen steps that can refuse or hold a registration, and the library test sorts the incompatible plugins as the page does (F795-10).
 - A stored view tab without its start origin is refused, written to the application log and shown on its tab: the stored layout check reads the composition kind of the plugin unit (F808).
 - The test runtime of the workbench is a workspace package that declares its dependency on the workbench and the page-wire cases as its spec files, the emit sites of the tab session, tab state and memory saver name the events they emit, and the page-wire cases give the clock replies of the host as host variables and name why the producer does not replay the performance and closed-host cases (F795-10).
 - The Go host plays the scripted-page endpoint cases, and the endpoint inputs are functions of their params; the stall watch of both hosts decides each beat in a loop step that a table tests and runs the real run loop with SOKSAK_FAULT_STALL_SAMPLE; the native event ring tests store through the producer function of the native library; the view lifecycle and the surface dispatch take their instants as data; and the sidecar tests record the messages and failures of a window (F795-8, F795-9).

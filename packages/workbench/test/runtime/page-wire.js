@@ -9,7 +9,7 @@ import { isDeepStrictEqual } from "node:util";
 const CASE_DIRECTORY = new URL("../../../../docs/spec/cases/page-wire/", import.meta.url);
 
 const VARIABLE = /^\$[a-z][a-z0-9-]*$/;
-const STEP_KINDS = ["call", "reply", "notice"];
+const STEP_KINDS = ["call", "reply", "notice", "listen"];
 const TYPES = ["string", "number", "integer", "boolean", "object", "array", "null"];
 const SOURCES = ["host", "page"];
 
@@ -60,7 +60,7 @@ function checkCase(kase, name, file) {
   kase.steps.forEach((step, index) => {
     const where = `step ${index}`;
     const kinds = step && typeof step === "object" ? STEP_KINDS.filter((kind) => kind in step) : [];
-    if (kinds.length !== 1 || Object.keys(step).length !== 1) fail(`${where} must have exactly one of call, reply and notice`);
+    if (kinds.length !== 1 || Object.keys(step).length !== 1) fail(`${where} must have exactly one of call, reply, notice and listen`);
     if (kinds[0] === "call") {
       const { call } = step;
       if (!call || typeof call !== "object" || Array.isArray(call)) fail(`${where} call must be an object`);
@@ -81,6 +81,13 @@ function checkCase(kase, name, file) {
       if ("held" in reply && reply.held !== true) fail(`${where} held must be true when it is present`);
       if ("error" in reply && (typeof reply.error !== "string" || reply.error === "")) fail(`${where} error must be a non-empty string`);
       variablesIn(reply, used);
+    } else if (kinds[0] === "listen") {
+      const { listen } = step;
+      if (!listen || typeof listen !== "object" || Array.isArray(listen)) fail(`${where} listen must be an object`);
+      if (typeof listen.event !== "string" || listen.event === "") fail(`${where} listen must name an event`);
+      for (const key of Object.keys(listen)) if (!["event", "error", "held"].includes(key)) fail(`${where} listen has the undeclared field ${key}`);
+      if ("error" in listen && (typeof listen.error !== "string" || listen.error === "")) fail(`${where} error must be a non-empty string`);
+      if ("held" in listen && listen.held !== true) fail(`${where} held must be true when it is present`);
     } else {
       const { notice } = step;
       if (!notice || typeof notice !== "object" || Array.isArray(notice)) fail(`${where} notice must be an object`);
@@ -120,7 +127,10 @@ function onTheWire(name, payload, cids) {
  * test compares it with the calls it expects. A call that differs from the next step of the case rejects with the difference and is kept
  * in the failures. A value of a call that names a page variable matches any value of the type of the variable; the first value binds the
  * variable, and each later use must equal it. A held reply settles when the test calls release. deliverNotice plays the next step, which
- * must be a notice, and calls each listener that the page registered for its event with its payload. finish throws when a failure
+ * must be a notice, and calls each listener that the page registered for its event with its payload. A case without a listen step
+ * answers each registration of the page at once; a case with a listen step answers each registration with the next step, which must be
+ * the listen step of the event: it resolves with the unsubscribe, or it rejects with the error of the step, and a held step settles when the test calls release. unsubscribed
+ * lists the events whose listener the page removed. finish throws when a failure
  * happened, when a step of the case was not played or when a held reply was not released.
  */
 export function openPageWire(name) {
@@ -207,17 +217,40 @@ export function openPageWire(name) {
     return new Promise(settle);
   };
 
+  // A case that records a registration of a listener records every registration of the page.
+  const recordsListeners = steps.some((step) => "listen" in step);
+
+  // The events whose listener the page removed, in the order of the removals.
+  const unsubscribed = [];
+
   const on = (event, listener) => {
-    if (!listeners.has(event)) listeners.set(event, new Set());
-    listeners.get(event).add(listener);
-    return Promise.resolve(() => listeners.get(event).delete(listener));
+    if (process.env.PAGE_WIRE_TRACE === "1") process.stderr.write(`page-wire ${name} step ${cursor}: listen ${JSON.stringify(event)}\n`);
+    const register = () => {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event).add(listener);
+      return () => {
+        listeners.get(event).delete(listener);
+        unsubscribed.push(event);
+      };
+    };
+    if (!recordsListeners) return Promise.resolve(register());
+    const step = steps[cursor];
+    if (!step) return Promise.reject(fail(`the page registered a listener of ${JSON.stringify(event)} after the last step of the case`));
+    if (!("listen" in step)) return Promise.reject(fail(`the page registered a listener of ${JSON.stringify(event)} where the case has ${JSON.stringify(step)}`));
+    if (step.listen.event !== event) return Promise.reject(fail(`step ${cursor}: the case expects a listener of ${JSON.stringify(step.listen.event)}, the page registered ${JSON.stringify(event)}`));
+    cursor += 1;
+    const { listen } = step;
+    const settle = (resolve, reject) => ("error" in listen ? reject(new Error(listen.error)) : resolve(register()));
+    if (listen.held) return new Promise((resolve, reject) => held.push(() => settle(resolve, reject)));
+    return new Promise(settle);
   };
 
   return {
     call,
     on,
     calls,
-    /** Settles the oldest held reply. */
+    unsubscribed,
+    /** Settles the oldest held reply or held registration. */
     release() {
       const next = held.shift();
       if (!next) throw fail("release found no held reply");

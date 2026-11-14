@@ -1,0 +1,20 @@
+{
+  "name": "surface-view-path-tab-reports",
+  "description": "A view reports its title, its modified mark and its error through view calls, and the page answers each call with null.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-report-a"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-report-a", "plugin": "fixture-plain", "generation": 1, "id": 1, "command": "tab.title", "params": "Notes"}}},
+    {"call": {"name": "viewReply", "payload": {"id": 1, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-report-a"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-report-a", "plugin": "fixture-plain", "generation": 1, "id": 2, "command": "tab.modified", "params": true}}},
+    {"call": {"name": "viewReply", "payload": {"id": 2, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-report-a"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-report-a", "plugin": "fixture-plain", "generation": 1, "id": 3, "command": "tab.error", "params": "disk full"}}},
+    {"call": {"name": "viewReply", "payload": {"id": 3, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-report-a"}}},
+    {"reply": {"result": null}}
+  ]
+}

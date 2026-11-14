@@ -1,0 +1,27 @@
+{
+  "name": "settings-log-policy",
+  "description": "The page reads stored settings with no log policy and writes none, because the default policy is already written; a change of the log policy sends the policy with the identifiers of the change before the settings write, and the write carries the same identifiers.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits), and the calls setTheme, setMenuLanguage and performance apply to the window of the native host, which the producer does not run.",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" },
+    "cid": { "type": "string", "example": "p0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e.1", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "info", "io": "error", "frame": "error" }, "cids": ["$cid"] } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "diagnostics.log": { "call": "info" } }, "remove": [] }, "cids": ["$cid"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "diagnostics.log": { "call": "info" } }, "projects": [] } } }
+  ]
+}

@@ -1,0 +1,153 @@
+{
+  "name": "verify-fullscreen-hidden-retained",
+  "description": "The page reads the notification authorization of the host when the plane is imported and prepares two layouts of one DOM surface of a plugin; the host answers the first syncSurfaces call with the surface as invisible at the native frame that it retains, and the second with the same frame as visible.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "$authorization",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 100,
+              "h": 100
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": false,
+              "x": 10,
+              "y": 10,
+              "w": 80,
+              "h": 80
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 120,
+              "h": 120
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": true,
+              "scale": 1,
+              "x": 10,
+              "y": 10,
+              "w": 80,
+              "h": 80
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

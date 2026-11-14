@@ -1,0 +1,14 @@
+{
+  "name": "surface-view-path-no-tab-state",
+  "description": "A view of a plugin without surface.unload reads its tab state, and the page answers the call with the refusal that the tab state is not declared.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-state-plain"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-state-plain", "plugin": "fixture-plain", "generation": 1, "id": 1, "command": "tab.state.read"}}},
+    {"call": {"name": "viewReply", "payload": {"id": 1, "error": {"code": -32000, "message": "view call tab.state.read: the tab state is not declared"}, "page": "$page-identity", "generation": 1, "surface": "view-state-plain"}}},
+    {"reply": {"result": null}}
+  ]
+}

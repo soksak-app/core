@@ -1,7 +1,12 @@
 // Renaming a space of the active project (core.space.rename): a known id takes the title, and an id that is no space of the project
 // is an error that names it (docs/spec/projects.md#persistence).
+// The host calls of the page are answered by the page-wire case space-rename-session (docs/spec/cases/page-wire/README.md). The case is
+// selected before the modules are imported, because the page reads the host when it imports them.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { drained } from "./support/drained.mjs";
 
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 2, activeSpaceId: "spc-one",
@@ -11,43 +16,28 @@ const PROJECT = {
   ],
   settings: {},
 };
+// The stored settings store the operations of the page (the class call) and the start of the document (the class lifecycle).
+const COMMON = { "diagnostics.log": { lifecycle: "info", call: "info" } };
+const SNAPSHOT = { common: COMMON, projects: [PROJECT], open: [] };
 
-mock.module("@soksak/runtime", {
-  exports: {
-    windows: {
-      folder: async (root) => ({ root, identity: PROJECT.identity }),
-      openProject: async () => ({ local: true }),
-      projectShown: async () => {},
-      releaseProject: async () => {},
-      state: async () => null,
-      close: async () => {},
-      onRemoveProjectRequest: async () => {},
-      askRemoveProject: async () => true,
-      answerRemoveProject: async () => {},
-      ready: async () => {},
-      onActivate: async () => {},
-      onCloseRequest: async () => {},
-    },
-  },
-});
-mock.module("../page-log.js", { exports: { flushEvents: async () => {}, emitEvent: () => {} } });
-mock.module("../host.js", {
-  exports: {
-    log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null, documents: null, report: () => {},
-  },
-});
-mock.module("../settings.js", {
-  exports: { projectSidebars: () => ({ sets: [], links: [] }), beginSettings: async () => {}, selectProject: async () => {}, value: () => "tabs", flushSettings: async () => {} },
-});
-mock.module("../environment.js", { exports: { pluginUnits: () => [] } });
+const wire = selectPageWire("space-rename-session");
 
+// The window of the page: its address, its history and the error event that the page reports failures through.
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://soksak.test/index.html" });
+globalThis.document = dom.window.document;
+globalThis.location = dom.window.location;
+globalThis.history = dom.window.history;
+globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
+globalThis.ErrorEvent = dom.window.ErrorEvent;
 // The failures reported through the window error event.
 const reported = [];
-globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
-globalThis.location = new URL("http://soksak.test/index.html");
-globalThis.history = { replaceState: (state, title, url) => { globalThis.location = new URL(url, globalThis.location); } };
+dom.window.addEventListener("error", (event) => reported.push(event.message));
 
 const projects = await import("../projects.js");
+const { orderedCallsAnswered } = await import("../host.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
+const { connectSettings } = await import("../settings.js");
+const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
 
 // A plane that holds the layout it loads.
 const plane = { layout: null };
@@ -62,22 +52,17 @@ projects.onSwitch({
   empty: async (show) => { plane.layout = null; show?.(); },
 });
 
-const patches = [];
-const store = {
-  snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT)], open: [] }),
-  tabState: async () => null,
-  tabStatePut: async () => 0,
-  tabSession: async () => null,
-  tabSessionPut: async () => null,
-  tabSessions: async () => [],
-  add: async () => { throw new Error("not used"); },
-  patch: async (id, patch) => { patches.push({ id, patch }); },
-  remove: async () => {},
-  onChange: () => {},
-};
+// The start of the page: the first screen is the library, the settings and the project list connect to the store of the host, and the
+// start of the document is the first event that leaves the log.
+projects.begin(structuredClone(SNAPSHOT));
+await orderedCallsAnswered();
+const store = new HostWorkspaceStore(host);
+await connectSettings(store);
+recordWorkbenchStart(location, performance.timeOrigin);
+await flushEvents();
+await projects.initialise(store);
 
 test("a space of the active project takes its new title, and an unknown space id is an error that names it", async () => {
-  await projects.initialise(store);
   await projects.activate(PROJECT.id);
   projects.renameSpace("spc-two", "Work");
   assert.deepEqual(projects.active().spaces.map((space) => [space.id, space.title]), [["spc-one", "SPACE1"], ["spc-two", "Work"]]);
@@ -85,4 +70,7 @@ test("a space of the active project takes its new title, and an unknown space id
     (error) => error.constructor === Error && error.message === "Unknown space: spc-missing");
   assert.deepEqual(projects.active().spaces.map((space) => space.title), ["SPACE1", "Work"]);
   assert.deepEqual(reported, []);
+  // The rename stores the layout of the project with the new title: the case holds that write, which the page sends after the turn.
+  await drained();
+  wire.finish();
 });

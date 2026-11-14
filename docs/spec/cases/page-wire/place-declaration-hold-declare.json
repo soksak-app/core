@@ -1,0 +1,112 @@
+{
+  "name": "place-declaration-hold-declare",
+  "description": "The page sets the theme, declares the view composition of the surface that is mounted, and sends a layout of that surface while it leaves the surface that is not mounted out; the host answers the layout with its ticket and the chrome row, and only after that answer the page declares the view composition of the surface that was left out.",
+  "replay": false,
+  "reason": "setTheme, compositionDeclare and syncSurfaces apply the theme, the views and the placement of the native window, and only the native host with a window produces their replies (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "sync-request": {
+      "type": "object",
+      "example": {
+        "surfaces": []
+      },
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "probe",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "surface": "mounted-view"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "mounted-view",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 3,
+              "h": 4
+            }
+          ],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [],
+          "chrome": {
+            "controls": {
+              "x": 13,
+              "y": 13,
+              "w": 54,
+              "h": 14
+            },
+            "row": 40
+          }
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "probe",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "surface": "cold-view"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

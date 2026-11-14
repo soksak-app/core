@@ -1,0 +1,27 @@
+{
+  "name": "settings-external-performance",
+  "description": "The page reports the stored trace switch as off at its start and writes the default log policy, which differs from the policy that the page wrote last; when the host notifies a change of the settings files and the snapshot holds the switch on, the page applies the theme, sends the switch on to the host and then sends the menu language.",
+  "replay": false,
+  "reason": "The case delivers the workspace-changed notice of the host, and the Go producer runs no window and refuses a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error" } } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "workspace-changed" } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "diagnostics.performance": true }, "projects": [] } } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "performance", "payload": { "action": "on" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } }
+  ]
+}

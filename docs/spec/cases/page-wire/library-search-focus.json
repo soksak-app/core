@@ -1,0 +1,456 @@
+{
+  "name": "library-search-focus",
+  "description": "The page reads the notification state of the host when it imports the library, reads the plugin state, the outdated sidecars and the application state when the library shows the plugin page, and applies the theme and the menu language when the start document names a project; the three command requests are events of the class call that the gate counts, and the count of each level leaves in one log batch after the clock answers of the host.",
+  "replay": false,
+  "reason": "The case calls notificationState, pluginsState, sidecarsOutdated, appUpdateState, setTheme and setMenuLanguage, which only the native host with a window answers (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    },
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "theme-request": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#111"
+        }
+      },
+      "source": "page"
+    },
+    "menu-language": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "4f19c177-b0bc-4991-9f93-d9efc4a800a1",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "anchor-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "anchor-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000232,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999776456,
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 9,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000230,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 4999774873,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000228,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 4999773081,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000203,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 4999747373,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000003074,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5002618998,
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000003063,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5002607623,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "$authorization",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "core": "0.0.40",
+          "registry": "file:///registry/index.json",
+          "index": null,
+          "installed": {
+            "format": 3,
+            "plugins": {
+              "tty": {
+                "version": "0.1.0",
+                "path": "plugins/tty/0.1.0",
+                "enabled": true,
+                "sidecars": {}
+              }
+            },
+            "sidecars": {}
+          },
+          "firstRun": false,
+          "starter": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsOutdated"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "appUpdateState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "version": "0.0.40",
+          "available": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {
+            "--bg": "#101117",
+            "--card": "#191b24",
+            "--fg": "#ececf5",
+            "--muted": "#8f92a4",
+            "--edge": "#2b2e3d",
+            "--rule": "#22242f",
+            "--rail": "#7279ff",
+            "--focus": "#ffb36b",
+            "--no": "#ff7c7c",
+            "--r": "10px",
+            "--half-gap": "6px",
+            "--bw": "1px",
+            "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+            "--size": "13px"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "en"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "lifecycle",
+                "level": "info",
+                "count": 3
+              }
+            },
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 4
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 2
+              }
+            },
+            {
+              "ts_us": "$ts-us-5",
+              "mono_ns": "$mono-ns-5",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "warn",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "settings-change-read",
+  "description": "The page writes the default log policy, which differs from the policy that the page wrote last; when the host notifies a change of the settings files, the listeners of the page that read the snapshot share one call of it: the page reads the snapshot once for the change, applies the changed value, and sends the theme and the menu language.",
+  "replay": false,
+  "reason": "The case delivers the workspace-changed notice of the host, and the Go producer runs no window and refuses a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [] } } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error" } } } },
+    { "reply": { "result": null } },
+    { "notice": { "event": "workspace-changed" } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "gap": 9 }, "projects": [] } } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } }
+  ]
+}

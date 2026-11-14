@@ -1,0 +1,30 @@
+{
+  "name": "settings-absent-plugin",
+  "description": "The page applies a snapshot whose common and project settings hold a key of a plugin that is not loaded, reports the trace switch as off, and writes a change of another setting with its own key only: the write names no key of the plugin that is not loaded and no project.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits), and the calls setTheme, setMenuLanguage and performance apply to the window of the native host, which the producer does not run.",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "theme-2": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" },
+    "cid": { "type": "string", "example": "p0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e.1", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "gap": 8, "absent.option": 3 }, "projects": [ { "id": "prj-a", "settings": { "absent.option": 4 } } ] } } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setTheme", "payload": "$theme-2" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "gap": 9 }, "remove": [] }, "cids": ["$cid"] } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "gap": 9, "absent.option": 3 }, "projects": [ { "id": "prj-a", "settings": { "absent.option": 4 } } ] } } }
+  ]
+}

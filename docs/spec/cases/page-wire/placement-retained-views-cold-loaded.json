@@ -1,0 +1,142 @@
+{
+  "name": "placement-retained-views-cold-loaded",
+  "description": "A drawn placement mounts the cold hidden view that the disabled memory saver keeps loaded: the view declares its composition, and the request carries it as a hidden surface.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "placement-probe",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "surface": "cold-loaded-view"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "cold-loaded-view",
+              "dim": false,
+              "plugin": "placement-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": false,
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0,
+              "start": {
+                "origin": {
+                  "directory": null
+                },
+                "declarations": 0
+              }
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [
+            {
+              "status": [],
+              "commands": [],
+              "element": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "cold-loaded-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "cold-loaded-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "cold-loaded-view",
+            "visible": true,
+            "scale": 2,
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        ]
+      }
+    }
+  ]
+}

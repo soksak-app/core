@@ -5,32 +5,32 @@ import { JSDOM } from "jsdom";
 
 // The plugin section of the settings window holds only the settings of loaded plugins. Installation and description belong to the plugin page of the library
 // (plugin section in docs/spec/settings.md).
-test("the plugins section lists only loaded plugins by name and leaves operations to the plugin screen", async (t) => {
+test("the plugins section lists only loaded plugins by name and leaves operations to the plugin screen", async () => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  t.mock.module("../compositor.js", { exports: {
-    ...await import("../compositor.js"), standIn: () => {},
-  } });
-  t.mock.module("../environment.js", { exports: { pluginUnits: () => [
-    { id: "alpha", name: "알파", description: "알파 표면.", version: "1.0.0", surface: true, sections: [], dependencies: {} },
-    { id: "beta", name: "베타", description: "베타 목록.", version: "1.0.0", surface: false, sections: [], dependencies: {} },
-  ] } });
-  // A plugin that exists only in the registry does not appear in the settings window.
-  const status = {
-    registry: "file:///registry/index.json", error: null, restart: false, operation: null,
-    plugins: [
-      { id: "alpha", name: "알파", description: "알파 표면.", state: "loaded", installed: { version: "1.0.0", enabled: true }, latest: "1.0.0", sidecars: [] },
-      { id: "beta", name: "베타", description: "베타 목록.", state: "loaded", installed: { version: "1.0.0", enabled: true }, latest: null, sidecars: [] },
-      { id: "db", name: "DB", description: "DB 설명.", state: "available", installed: null, latest: "2.0.0", sidecars: [] },
-    ],
-  };
-  t.mock.module("../installed-plugins.js", { namedExports: {
-    pluginOperations: { hosted: true, status: () => status, failure: () => null, refresh: async () => {} },
-    onPluginOperations: () => {},
-  } });
+  // The loaded plugins are the installed manifests that the environment registers. The registry lists no plugin that is not installed, so
+  // a plugin that exists only in the registry has no unit and no row.
+  const { installEnvironment } = await import("../environment.js");
+  const surface = { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } };
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [
+      { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "alpha", title: "알파" }] },
+    ] } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [
+    { id: "alpha", package: "@fixture/alpha", version: "1.0.0", manifest: {
+      id: "alpha", name: "알파", description: "알파 표면.", mark: "a", icon: "<path/>", surface,
+    } },
+    // A plugin declares a surface, sections or contributions (validateManifest), so the plugin without a surface declares one section.
+    { id: "beta", package: "@fixture/beta", version: "1.0.0", manifest: {
+      id: "beta", name: "베타", description: "베타 목록.",
+      sections: [{ id: "beta.list", name: "목록", height: "fill", composition: { kind: "view", page: "ui/list.html" } }],
+    } },
+  ] }), [], "the fixture environment refused a plugin");
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const ui = await import("../settings-ui.js");

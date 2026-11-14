@@ -1,6 +1,12 @@
 // Checks the project switch against the native project-open and project-shown notifications.
+// The host calls of the page are answered by the page-wire case project-data-order-session (docs/spec/cases/page-wire/README.md): the
+// tests of this file run in the order of the case, and each test plays its steps. The case is selected before the modules are imported,
+// because the page reads the host when it imports them.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { drained } from "./support/drained.mjs";
 
 const layout = { state: { cards: [] } };
 const projectsSnapshot = [
@@ -11,74 +17,29 @@ const projectsSnapshot = [
     activeSpaceId: "spc-beta", spaces: [{ id: "spc-beta", title: "SPACE1", layout }],
     plugins: { probe: { label: { format: 1, value: "beta data" } } }, settings: {} },
 ];
+// The stored settings store the operations of the page (the class call) and the start of the document (the class lifecycle).
+const COMMON = { "diagnostics.log": { lifecycle: "info", call: "info" } };
+const snapshotOf = () => ({ common: structuredClone(COMMON), projects: structuredClone(projectsSnapshot), open: [] });
 
-const hostCalls = [];
-const released = [];
-let failOpen = false;
-let failShown = false;
-let failTabStateOpen = false;
-let failTabStateOpenWithUndefined = false;
-let failSelection = null;
-let selectedProject = null;
-let openLocal = true;
-let activateTarget = null;
-let nativeShown = null;
-let contextPendingAtLibraryEmpty = false;
-mock.module("@soksak/runtime", {
-  namedExports: {
-    windows: {
-      folder: async (root) => ({ root, identity: root === "/work/alpha" ? "alpha" : "beta" }),
-      openProject: async ({ id }) => {
-        if (failOpen) throw new Error("native project open failed");
-        return { local: openLocal, staged: openLocal && nativeShown?.id !== id };
-      },
-      projectShown: async (project) => {
-        if (failShown) throw new Error("native project publication failed");
-        nativeShown = project;
-        hostCalls.push({ id: project?.id ?? null, source: "project shown notification" });
-      },
-      ready: async () => {},
-      releaseProject: async (id) => { released.push(id); },
-      state: async () => null,
-      close: async () => {},
-      onRemoveProjectRequest: async () => {},
-      askRemoveProject: async () => true,
-      answerRemoveProject: async () => {},
-      onActivate: async (fn) => { activateTarget = fn; },
-      onCloseRequest: async () => {},
-    },
-  },
-});
-mock.module("../page-log.js", { namedExports: { flushEvents: async () => {}, emitEvent: () => {} } });
-mock.module("../host.js", {
-  namedExports: { log: () => {}, retainSidecarSessions: async () => ({ closed: 0 }), windowSidecar: () => null,
-    documents: null, report: () => {} },
-});
-mock.module("../settings.js", {
-  namedExports: { projectSidebars: () => ({ sets: [], links: [] }), beginSettings: (_snapshot, id) => { selectedProject = id; }, selectProject: async (id) => {
-    selectedProject = id;
-    if (id === failSelection) throw new Error("settings project selection failed");
-  }, value: () => "tabs", flushSettings: async () => {} },
-});
-mock.module("../tab-state.js", {
-  namedExports: { openTabStates: async () => {
-    if (failTabStateOpenWithUndefined) throw undefined;
-    if (failTabStateOpen) throw new Error("tab-state store open failed");
-    return { reconcile: async () => {}, flush: async () => {} };
-  } },
-});
-mock.module("../tab-session.js", {
-  namedExports: { createTabSessions: () => ({ read: () => null, reconcile: async () => {}, flush: async () => {} }) },
-});
+const wire = selectPageWire("project-data-order-session");
 
-globalThis.dispatchEvent = () => true;
-globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
-globalThis.history = { replaceState: (state, title, url) => { globalThis.location = new URL(url, globalThis.location); } };
-
-mock.module("../environment.js", { namedExports: { pluginUnits: () => [] } });
+// The window of the page: its address, its history and the error event that the page reports failures through.
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://soksak.test/index.html" });
+globalThis.document = dom.window.document;
+globalThis.location = dom.window.location;
+globalThis.history = dom.window.history;
+globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
+globalThis.ErrorEvent = dom.window.ErrorEvent;
+/** Gives the window the address of a test: the page of a project names it in its search, the library has none. */
+const locate = (search) => history.replaceState(null, "", `/index.html${search}`);
 
 const projects = await import("../projects.js");
+const { orderedCallsAnswered } = await import("../host.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
+const { connectSettings, settingProject } = await import("../settings.js");
+const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
 
+let contextPendingAtLibraryEmpty = false;
 const plane = { layout: null };
 let loadsBeforeInitialContextCommit = 0;
 projects.onSwitch({
@@ -98,41 +59,35 @@ projects.onSwitch({
   },
 });
 
-const store = {
-  snapshot: async () => ({ common: {}, projects: structuredClone(projectsSnapshot), open: [] }),
-  tabState: async () => null,
-  tabStatePut: async () => 0,
-  tabSession: async () => null,
-  tabSessionPut: async () => null,
-  tabSessions: async () => [],
-  patch: async () => {},
-  add: async () => {},
-  remove: async () => {},
-  onChange: () => {},
-};
+// The start of the page: the first screen is the library, the settings connect to the store of the host, and the start of the document
+// is the first event that leaves the log.
+projects.begin(snapshotOf());
+await orderedCallsAnswered();
+const store = new HostWorkspaceStore(host);
+await connectSettings(store);
+recordWorkbenchStart(location, performance.timeOrigin);
+await flushEvents();
+
+/** The calls of the page that a host call name selects, from the call at index `from` on. */
+const callsOf = (name, from = 0) => wire.calls.slice(from).filter((call) => call.name === name);
+/** The ids of the projects that the calls from index `from` on published as shown, null for the library. */
+const shownIn = (from) => callsOf("projectShown", from).map(({ payload }) => payload.project?.id ?? null);
 
 test("a page start without a project does not wait for project context", async () => {
-  const previousLocation = globalThis.location;
-  try {
-    globalThis.location = new URL("http://soksak.test/index.html");
-    projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
-    assert.equal(projects.initialProjectContextReady(), true);
-    await projects.waitForInitialProjectContext();
-  } finally {
-    globalThis.location = previousLocation;
-  }
+  locate("");
+  projects.begin(snapshotOf());
+  await orderedCallsAnswered();
+  assert.equal(projects.initialProjectContextReady(), true);
+  await projects.waitForInitialProjectContext();
 });
 
 test("a failed first activation releases startup waiters after the preview is cleared", async () => {
-  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
-  failSelection = "never";
-  failShown = true;
-  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  locate("?project=prj-alpha");
+  projects.begin(snapshotOf());
+  await orderedCallsAnswered();
   const initialContext = projects.waitForInitialProjectContext();
   await projects.initialise(store);
   await initialContext;
-  failShown = false;
-  failSelection = null;
 
   assert.equal(contextPendingAtLibraryEmpty, true,
     "the initial context gate opened before leaveBegun cleared the preview layout");
@@ -141,24 +96,29 @@ test("a failed first activation releases startup waiters after the preview is cl
 });
 
 test("a failed initialisation rejects the startup context without marking it ready", async () => {
-  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
-  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  locate("?project=prj-alpha");
+  projects.begin(snapshotOf());
+  await orderedCallsAnswered();
   const initialContext = projects.waitForInitialProjectContext();
-  failTabStateOpen = true;
   await assert.rejects(projects.initialise(store), /tab-state store open failed/);
-  failTabStateOpen = false;
   await assert.rejects(initialContext, /tab-state store open failed/);
   assert.equal(projects.initialProjectContextReady(), false,
     "a rejected startup context was exposed as ready to later view and background-session work");
 });
 
+// The host answers a read of the tab state file with an error, and the wire gives the page only the text of that error; the page
+// stores nothing of the error it receives, so the one failure that the wire cannot give is a rejection with undefined. This store
+// is the store of the host except for that read, which is the named point of the fault.
+class UndefinedRejection extends HostWorkspaceStore {
+  tabState() { return Promise.reject(undefined); }
+}
+
 test("an initialisation rejected with undefined does not resolve the startup context", async () => {
-  globalThis.location = new URL("http://soksak.test/index.html?project=prj-alpha");
-  projects.begin({ common: {}, projects: structuredClone(projectsSnapshot), open: [] });
+  locate("?project=prj-alpha");
+  projects.begin(snapshotOf());
+  await orderedCallsAnswered();
   const initialContext = projects.waitForInitialProjectContext();
-  failTabStateOpenWithUndefined = true;
-  await assert.rejects(projects.initialise(store), (reason) => reason === undefined);
-  failTabStateOpenWithUndefined = false;
+  await assert.rejects(projects.initialise(new UndefinedRejection(host)), (reason) => reason === undefined);
   await assert.rejects(initialContext, (reason) => reason === undefined);
   assert.equal(projects.initialProjectContextReady(), false,
     "an initialisation rejected with undefined was exposed as ready");
@@ -169,48 +129,45 @@ test("an initialisation rejected with undefined does not resolve the startup con
 test("a remote open leaves publication to the owning window", async () => {
   const previous = projects.active().id;
   const remote = previous === "prj-alpha" ? "prj-beta" : "prj-alpha";
-  openLocal = false;
-  const before = hostCalls.length;
+  const before = wire.calls.length;
   await projects.activate(remote);
-  const callerNotifications = hostCalls.slice(before);
-  assert.ok(callerNotifications.every(({ id }) => id !== remote),
+  assert.ok(shownIn(before).every((id) => id !== remote),
     "the requesting window published the project owned by another window");
   assert.equal(projects.active()?.id, previous);
 
-  openLocal = true;
-  await activateTarget(remote);
+  // The owning window tells this window to show the project: the host sends the activation notice.
+  wire.deliverNotice();
+  await drained();
 });
 
 test("a failed project publication restores the previous project-data owner", async () => {
   const previous = projects.active().id;
-  failShown = true;
   const next = previous === "prj-alpha" ? "prj-beta" : "prj-alpha";
+  const before = wire.calls.length;
   await assert.rejects(projects.activate(next), /native project publication failed/);
   assert.equal(projects.active()?.id, previous, "a failed publication changed the active project");
-  assert.ok(released.includes(next), "a failed publication left its staged native owner registered");
-  failShown = false;
+  assert.ok(callsOf("projectRelease", before).some(({ payload }) => payload === next), "a failed publication left its staged native owner registered");
 });
 
 test("a failed settings selection does not publish or replace the previous project context", async () => {
   const previous = projects.active().id;
   const next = previous === "prj-alpha" ? "prj-beta" : "prj-alpha";
-  const before = hostCalls.length;
-  failSelection = next;
+  const before = wire.calls.length;
   await assert.rejects(projects.activate(next), /settings project selection failed/);
-  failSelection = null;
   assert.equal(projects.active()?.id, previous, "a failed settings selection changed the active project");
-  assert.equal(selectedProject, previous, "a failed settings selection was not rolled back");
-  assert.equal(nativeShown?.id, previous, "a failed settings selection changed the native shown project");
-  assert.equal(hostCalls.slice(before).some(({ id, source }) => id === next && source === "project shown notification"), false,
+  assert.equal(settingProject(), previous, "a failed settings selection was not rolled back");
+  assert.deepEqual(shownIn(before), [], "a failed settings selection changed the native shown project");
+  assert.equal(shownIn(before).includes(next), false,
     "a failed settings selection published the project before the Workbench was ready");
-  assert.ok(released.includes(next), "a failed settings selection left its staged native owner registered");
+  assert.ok(callsOf("projectRelease", before).some(({ payload }) => payload === next), "a failed settings selection left its staged native owner registered");
 });
 
 test("a native open failure keeps the previous project-data owner", async () => {
   const previous = projects.active().id;
-  failOpen = true;
   const next = previous === "prj-alpha" ? "prj-beta" : "prj-alpha";
   await assert.rejects(projects.activate(next), /native project open failed/);
   assert.equal(projects.active()?.id, previous, "a failed native open changed the page's active project");
   await projects.flush();
+  await drained();
+  wire.finish();
 });

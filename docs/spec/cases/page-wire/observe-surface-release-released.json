@@ -1,0 +1,181 @@
+{
+  "name": "observe-surface-release-released",
+  "description": "The host sends the event diagnostics-surface-released for the surface tab-1, and the page ends the hold of that surface and logs the observation of the hold in a log batch, after the clock answers of the host.",
+  "replay": false,
+  "reason": "The case delivers the diagnostics-surface-released notice of the host, and the Go producer runs no window and refuses a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000481,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000821,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "diagnostics-surface-released",
+        "payload": {
+          "surface": "tab-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": 1791000000000456,
+              "mono_ns": 5000000789,
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.record.info",
+              "fields": {
+                "where": "workbench",
+                "text": "held exposure replies of surface \"tab-1\" were sent after their hold ended (0)"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

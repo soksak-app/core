@@ -1,0 +1,19 @@
+{
+  "name": "command-answer-undeclared-view-declare",
+  "description": "The page declares the view composition of the one surface that the host authorized, with the plugin of the surface and the page of its view, and the host answers the declaration with no value; the page sends no declaration for the surface that the host did not authorize.",
+  "replay": false,
+  "reason": "compositionDeclare creates the native view of a surface in a window, and only the native host with a window answers it (docs/operations/examples.md#test-kinds).",
+  "steps": [
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "fixture-command-declared",
+          "composition": { "kind": "view", "page": "ui/page.html" },
+          "surface": "fixture-command-declared"
+        }
+      }
+    },
+    { "reply": { "result": null } }
+  ]
+}

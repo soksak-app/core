@@ -1,0 +1,186 @@
+{
+  "name": "placement-retained-views-lazy-import",
+  "description": "A placement of a view and the next placement of an empty layout reach the host in the order of their calls: the request of the view, its presentation, the request of the empty layout and its presentation.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "retained-race-plugin",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "surface": "retained-race-view"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "retained-race-view",
+              "dim": false,
+              "plugin": "retained-race-plugin",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20,
+              "start": {
+                "origin": {
+                  "directory": null
+                },
+                "declarations": 0
+              }
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [
+            {
+              "status": [],
+              "commands": [],
+              "element": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "retained-race-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "retained-race-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "retained-race-view",
+            "visible": true,
+            "scale": 2,
+            "x": 0,
+            "y": 0,
+            "w": 20,
+            "h": 20
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 2,
+          "placements": [],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 2,
+          "placements": [],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    }
+  ]
+}

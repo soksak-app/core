@@ -2,41 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
 import { logGate } from "../log-gate.js";
+import { drained } from "./support/drained.mjs";
 
 const pluginId = "fixture-start-handoff";
 
-test("core.file.open parameters reach the host placement request", { timeout: 5000 }, async (t) => {
-  const hostCalls = [];
-  let heldSync = null;
-  const syncReply = (request) => ({
-    placements: request.surfaces.map(({ id, visible, x, y, w, h }) => ({ id, visible, x, y, w, h })),
-    chrome: { controls: { x: 0, y: 0, w: 0, h: 0 }, row: request.titlebar },
-  });
-  const bridge = {
-    on: () => () => {},
-    page: (path) => path,
-    reload: () => {},
-    call: async (name, request) => {
-      hostCalls.push({ name, request });
-      if (name === "log" && request.action === "clock") return { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
-      if (name === "log") return null;
-      if (name === "syncSurfaces") {
-        if (heldSync !== null) {
-          const pending = heldSync;
-          heldSync = null;
-          pending.start(request);
-          return pending.answer;
-        }
-        return syncReply(request);
-      }
-      if (name === "presentSurfaces") return request.placements;
-      if (name === "notificationState") return { authorization: "notDetermined", error: null };
-      return null;
-    },
-  };
-  t.mock.module("@soksak/runtime", { exports: { host: bridge, page: null, windows: null,
-    openStore: () => { throw new Error("the fixture does not open a store"); } } });
+// The host calls of the test are answered by its page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the
+// first module that imports host.js is imported, because host.js reads the host when it is imported. A reply that the test holds is
+// released at the point where the test lets the host answer.
+test("core.file.open parameters reach the host placement request", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("view-start-handoff-file-open");
+  // The calls of the page to the host, as {name, request}.
+  const hostCalls = () => wire.calls.map(({ name, payload }) => ({ name, request: payload }));
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
   dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
@@ -80,15 +58,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   const { surfaces: hostSurfaces } = await import("../host.js");
   // The records of the frame gate are queued and relayed in batches; flushEvents ends when every queued record was relayed.
   const { flushEvents } = await import("../page-log.js");
-  const holdNextSync = () => {
-    let resolveAnswer;
-    let resolveStarted;
-    const answer = new Promise((resolve) => { resolveAnswer = resolve; });
-    const started = new Promise((resolve) => { resolveStarted = resolve; });
-    heldSync = { answer, start: resolveStarted };
-    return { started, resolve: resolveAnswer };
-  };
-  const surfaceSyncEvents = () => hostCalls.filter(({ name }) => name === "log")
+  const surfaceSyncEvents = () => hostCalls().filter(({ name }) => name === "log")
     .flatMap(({ request }) => request.events ?? [])
     .filter(({ event }) => event === "workbench.trace.surface.sync");
   try {
@@ -99,6 +69,8 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
         composition: { kind: "view", page: "ui/index.html" },
       } };
     });
+    // The count of the reads of the declaration registry cannot be seen from its results, so the method of the registry counts its reads
+    // for this block, and the block restores it.
     const currentDeclarations = registry.surfaceDeclarations;
     let declarationReads = 0;
     registry.surfaceDeclarations = () => {
@@ -143,13 +115,13 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       logGate.set(previousLogPolicy);
     }
     await flushEvents();
-    const initialSync = hostCalls.filter(({ name }) => name === "syncSurfaces").at(-1);
+    const initialSync = hostCalls().filter(({ name }) => name === "syncSurfaces").at(-1);
     assert.ok(Array.isArray(initialSync.request.declarations), "the wire request omitted its declaration table");
     assert.equal(Number.isSafeInteger(initialSync.request.surfaces[0].start.declarations), true,
       "the host request did not replace nested declarations with a table index");
     assert.ok(initialSync.request.declarations[initialSync.request.surfaces[0].start.declarations],
       "the request-local declaration index does not resolve to an object");
-    const syncTrace = hostCalls.filter(({ name }) => name === "log")
+    const syncTrace = hostCalls().filter(({ name }) => name === "log")
       .flatMap(({ request }) => request.events ?? [])
       .find(({ event }) => event === "workbench.trace.surface.sync");
     assert.ok(syncTrace, "the frame gate did not record surface sync while the performance trace was off");
@@ -161,12 +133,13 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     const priorTracePolicy = logGate.classes();
     try {
       logGate.set({ ...priorTracePolicy, frame: "off" });
-      const opensBeforeCompletion = holdNextSync();
       const openingPlacement = hostSurfaces.place({ ...initial, settled: false,
         surfaces: surfacePlacementsForHost(initial.surfaces, null, () => "the drawn record") });
-      const openingRequest = await opensBeforeCompletion.started;
+      // The host holds the reply of the request, and the end of the microtask queue follows the call that sends it.
+      await drained();
+      assert.equal(wire.calls.at(-1).name, "syncSurfaces", "the placement did not send its request");
       logGate.set({ ...priorTracePolicy, frame: "trace" });
-      opensBeforeCompletion.resolve(syncReply(openingRequest));
+      wire.release();
       await openingPlacement;
       await flushEvents();
       const afterOpening = surfaceSyncEvents();
@@ -175,12 +148,12 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
       assert.deepEqual([afterOpening[1].fields.declarationInlineBytes, afterOpening[1].fields.declarationTableBytes], [0, 2],
         "a request with start values that the host holds did not measure an empty declaration table");
 
-      const closesBeforeCompletion = holdNextSync();
       const closingPlacement = hostSurfaces.place({ ...initial, settled: true,
         surfaces: surfacePlacementsForHost(initial.surfaces, null, () => "the drawn record") });
-      const closingRequest = await closesBeforeCompletion.started;
+      await drained();
+      assert.equal(wire.calls.at(-1).name, "syncSurfaces", "the placement did not send its request");
       logGate.set({ ...priorTracePolicy, frame: "off" });
-      closesBeforeCompletion.resolve(syncReply(closingRequest));
+      wire.release();
       await closingPlacement;
       await flushEvents();
       assert.equal(surfaceSyncEvents().length, 2,
@@ -204,7 +177,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     authorizeSurface(opened.tab);
     await hostSurfaces.theme({ scheme: "light", tokens: {} });
     await hostSurfaces.place({ ...record, surfaces });
-    const dispatched = hostCalls.filter(({ name }) => name === "syncSurfaces")
+    const dispatched = hostCalls().filter(({ name }) => name === "syncSurfaces")
       .flatMap(({ request }) => request.surfaces.map((surface) => ({ request, surface })))
       .find(({ surface }) => surface.id === opened.tab);
     assert.ok(dispatched, "the host did not receive the file-open surface");
@@ -228,7 +201,10 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     const explicitNull = surfaceForTab({ id: "tab-null", plugin: pluginId, params: null });
     assert.strictEqual(explicitNull.params, null, "a dormant tab without params lost explicit null");
     assert.strictEqual(surfacePlacementsForHost([{ id: explicitNull.surfaceId, surface: explicitNull }], null, () => "the drawn record")[0].start.params, null);
+    // The records that the last calls queued are relayed before the page closes, so the case holds each call of the page.
+    await flushEvents();
   } finally {
     dom.window.close();
   }
+  wire.finish();
 });

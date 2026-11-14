@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test, { mock } from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-keyboard";
 
@@ -37,6 +36,9 @@ async function page() {
   // The surface of each decided surfaceFocus.
   const ends = [];
   const modal = { open: null, listeners: new Set() };
+  // The page has no host in this test, so it is not native: surfaces.focus sends no call, no modal document reports a state, and report writes to
+  // console.error. The test keeps this replacement of host.js to observe the keyboard calls and to open and close the modal state; a native page
+  // would answer them through a page-wire case, but its plane mounts the views of the native host, which no case describes yet.
   const actualHost = await import("../host.js");
   mock.module("../host.js", { exports: {
     ...actualHost,
@@ -46,31 +48,25 @@ async function page() {
     modalState: () => modal.open,
     onModalState: (fn) => { modal.listeners.add(fn); return () => modal.listeners.delete(fn); },
   } });
+  // Without a host the page log stores no event, so the decisions of the keyboard are observed through emitEvent.
   const actualLog = await import("../page-log.js");
   mock.module("../page-log.js", { exports: {
     ...actualLog,
     emitEvent: (level, event, fields) => { if (event === "workbench.keyboard.follow") decisions.push({ level, ...fields }); },
   } });
-  mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: () => Promise.resolve(),
-    disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
-  } });
-  mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment of the page: the plugin with its tab in the card. The surfaces of a page without a host are placeholders.
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "fixture", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
+    } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [{ id: pluginId, package: "@fixture/keyboard", version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "fixture", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/index.html" } },
+  } }] }), [], "the fixture environment refused a plugin");
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");

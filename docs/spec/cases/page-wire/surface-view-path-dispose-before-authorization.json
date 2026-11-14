@@ -1,0 +1,7 @@
+{
+  "name": "surface-view-path-dispose-before-authorization",
+  "description": "A view mount that a dispose ends before the host authorizes its surface sends no call to the host.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

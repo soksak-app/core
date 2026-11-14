@@ -1,0 +1,11 @@
+{
+  "name": "surface-view-path-retained-placement-order",
+  "description": "A view that a placement mounts for retention declares its composition once.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-retained-placement-order"}}},
+    {"reply": {"result": null}}
+  ]
+}

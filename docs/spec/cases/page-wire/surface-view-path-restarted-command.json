@@ -1,0 +1,23 @@
+{
+  "name": "surface-view-path-restarted-command",
+  "description": "A view registers a command of its plugin, the second registration of the same source generation is refused, and the replacement view of the next source generation registers the command again once.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-restarted-command"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-restarted-command", "plugin": "fixture-plain", "generation": 1, "id": 1, "command": "runtime.command.register", "params": {"name": "fixture-plain.run"}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 1, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-restarted-command"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-restarted-command", "plugin": "fixture-plain", "generation": 1, "id": 2, "command": "runtime.command.register", "params": {"name": "fixture-plain.run"}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 2, "error": {"code": -32000, "message": "command fixture-plain.run is already registered"}, "page": "$page-identity", "generation": 1, "surface": "view-restarted-command"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-restarted-command", "plugin": "fixture-plain", "generation": 2, "id": 3, "command": "runtime.command.register", "params": {"name": "fixture-plain.run"}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 3, "result": null, "page": "$page-identity", "generation": 2, "surface": "view-restarted-command"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-restarted-command", "plugin": "fixture-plain", "generation": 2, "id": 4, "command": "runtime.command.register", "params": {"name": "fixture-plain.run"}}}},
+    {"call": {"name": "viewReply", "payload": {"id": 4, "error": {"code": -32000, "message": "command fixture-plain.run is already registered"}, "page": "$page-identity", "generation": 2, "surface": "view-restarted-command"}}},
+    {"reply": {"result": null}}
+  ]
+}

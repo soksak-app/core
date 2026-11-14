@@ -1,0 +1,67 @@
+{
+  "name": "placement-retained-views-cold-unload",
+  "description": "A placement of a record without surfaces sends an empty request for the undrawn record, and the drawn record presents that request without a second request, because the memory saver classified the cold view as unloaded and no view was mounted.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 1,
+          "placements": [],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    }
+  ]
+}

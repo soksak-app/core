@@ -1,0 +1,324 @@
+{
+  "name": "projects-close-window-remove-elsewhere",
+  "description": "The page shows the library and removes a project that another window shows: the host asks the owner window, which refuses first and allows second; the allowed removal releases the project, removes it from the registry and reads the registry.",
+  "replay": false,
+  "reason": "The steps send the theme of the window and the window calls of a project (windowReady, projectFolder, projectOpen, projectShown, windowState and the calls that close the window and release or answer the removal of a project), which reach only a window, and the notices of the window reach only the listeners of a window; the Go producer runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs). The registry of the host lists the project after its remove call, as the stored registry of the test did; the Go producer does not build that state.",
+  "variables": {
+    "snapshot": {
+      "type": "object",
+      "example": {
+        "common": {
+          "diagnostics.log": {
+            "lifecycle": "info",
+            "call": "info"
+          }
+        },
+        "projects": [
+          {
+            "id": "prj-one",
+            "root": "/work/one",
+            "identity": "1:1",
+            "title": "one",
+            "color": "#fff",
+            "named": 1,
+            "activeSpaceId": "spc-one",
+            "spaces": [
+              {
+                "id": "spc-one",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "cards": [],
+                    "name": "one"
+                  }
+                }
+              }
+            ],
+            "settings": {}
+          }
+        ],
+        "open": []
+      }
+    },
+    "cid-ask-refused": {
+      "type": "string",
+      "example": "p0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e.3",
+      "source": "page"
+    },
+    "ts-us-ask-refused": {
+      "type": "integer",
+      "example": 1791000000000471,
+      "source": "page"
+    },
+    "mono-ns-ask-refused": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e",
+      "source": "page"
+    },
+    "cid-ask-allowed": {
+      "type": "string",
+      "example": "p0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e.7",
+      "source": "page"
+    },
+    "ts-us-ask-allowed": {
+      "type": "integer",
+      "example": 1791000000000472,
+      "source": "page"
+    },
+    "mono-ns-ask-allowed": {
+      "type": "integer",
+      "example": 5000000802,
+      "source": "page"
+    },
+    "snapshot-empty": {
+      "type": "object",
+      "example": {
+        "common": {
+          "diagnostics.log": {
+            "lifecycle": "info",
+            "call": "info"
+          }
+        },
+        "projects": [],
+        "open": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabState"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessions"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "windowReady"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "projectShown",
+        "payload": {
+          "project": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "projectRemoveAsk",
+        "payload": "prj-one",
+        "cids": [
+          "$cid-ask-refused"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": false
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-ask-refused",
+              "mono_ns": "$mono-ns-ask-refused",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.project.operation",
+              "fields": {
+                "action": "remove",
+                "project": "prj-one"
+              },
+              "cids": [
+                "$cid-ask-refused"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "projectRemoveAsk",
+        "payload": "prj-one",
+        "cids": [
+          "$cid-ask-allowed"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-ask-allowed",
+              "mono_ns": "$mono-ns-ask-allowed",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.project.operation",
+              "fields": {
+                "action": "remove",
+                "project": "prj-one"
+              },
+              "cids": [
+                "$cid-ask-allowed"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "projectRelease",
+        "payload": "prj-one",
+        "cids": [
+          "$cid-ask-allowed"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "remove",
+          "id": "prj-one"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot-empty"
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsRetain",
+        "payload": {
+          "surfaces": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "closed": 0
+        }
+      }
+    }
+  ]
+}

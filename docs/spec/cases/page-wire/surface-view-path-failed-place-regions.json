@@ -1,0 +1,13 @@
+{
+  "name": "surface-view-path-failed-place-regions",
+  "description": "A view declares its composition, and a state query of its region that waits for a failed place reads the interactionState of the region from the host after the place.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-failed-place-regions"}}},
+    {"reply": {"result": null}},
+    {"call": {"name": "documentInteractionState", "payload": {"surface": "view-failed-place-regions", "document": "page"}}},
+    {"reply": {"result": "AAAA"}}
+  ]
+}

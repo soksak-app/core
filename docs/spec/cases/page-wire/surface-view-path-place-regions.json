@@ -1,0 +1,11 @@
+{
+  "name": "surface-view-path-place-regions",
+  "description": "A view declares its composition, and the region queries that start while a place that leaves the view out runs send no call to the host after the place released the view.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-plain", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-place-regions"}}},
+    {"reply": {"result": null}}
+  ]
+}

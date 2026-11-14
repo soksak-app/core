@@ -1,0 +1,7 @@
+{
+  "name": "surface-view-path-rejected-placement",
+  "description": "A rejected placement of the surface modules sends no call to the host.",
+  "replay": true,
+  "variables": {},
+  "steps": []
+}

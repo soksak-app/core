@@ -1,0 +1,212 @@
+{
+  "name": "projects-close-window-start",
+  "description": "The page starts at the library with no project, and its first log batch states the clock of the document and the start of the document after five clock answers of the host.",
+  "replay": false,
+  "reason": "The first step sends the theme of the window, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#000"
+        }
+      },
+      "source": "page"
+    },
+    "language": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e",
+      "source": "page"
+    },
+    "anchor-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "anchor-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "start-ts-us": {
+      "type": "integer",
+      "example": 1791000000000461,
+      "source": "page"
+    },
+    "start-mono-ns": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    },
+    "started-at": {
+      "type": "number",
+      "example": 1791500000000.5,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$anchor-ts-us",
+              "mono_ns": "$anchor-mono-ns",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$start-ts-us",
+              "mono_ns": "$start-mono-ns",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.start",
+              "fields": {
+                "started_at": "$started-at",
+                "url": "http://soksak.test/index.html"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "surface-view-path-label-cache",
+  "description": "A view of a plugin with surface.unload reports a title and then removes it, and the store writes the removal of the entry of the tab to the host.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity": {"type": "string", "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e", "source": "page"}, "bytes": {"type": "integer", "example": 62}},
+  "steps": [
+    {"call": {"name": "workspace", "payload": {"kind": "snapshot"}}},
+    {"reply": {"result": {"common": {}, "projects": [], "open": []}}},
+    {"call": {"name": "workspace", "payload": {"kind": "tabState"}}},
+    {"reply": {"result": null}},
+    {"call": {"name": "workspace", "payload": {"kind": "tabSessions"}}},
+    {"reply": {"result": []}},
+    {"call": {"name": "windowReady"}},
+    {"reply": {"result": null}},
+    {"call": {"name": "compositionDeclare", "payload": {"plugin": "fixture-unload", "composition": {"kind": "view", "page": "ui/page.html", "regions": [], "overlays": []}, "surface": "view-label-cache"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-label-cache", "plugin": "fixture-unload", "generation": 1, "id": 1, "command": "tab.title", "params": "Cached"}}},
+    {"call": {"name": "viewReply", "payload": {"id": 1, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-label-cache"}}},
+    {"reply": {"result": null}},
+    {"notice": {"event": "view-call", "payload": {"surface": "view-label-cache", "plugin": "fixture-unload", "generation": 1, "id": 2, "command": "tab.title", "params": null}}},
+    {"call": {"name": "viewReply", "payload": {"id": 2, "result": null, "page": "$page-identity", "generation": 1, "surface": "view-label-cache"}}},
+    {"reply": {"result": null}},
+    {"call": {"name": "workspace", "payload": {"kind": "tabStatePut", "tab": "view-label-cache", "entry": null}}},
+    {"reply": {"result": "$bytes"}}
+  ]
+}

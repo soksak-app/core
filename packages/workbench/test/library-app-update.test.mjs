@@ -1,37 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
-import { installExposure } from "../exposure.js";
+import { selectPageWire } from "@soksak/runtime";
 import exposureFile from "../exposure.json" with { type: "json" };
 
-installExposure(exposureFile);
-
 // The core update is the first row of the update list of the plugin page (docs/spec/installation.md#application-update).
-test("the update list shows the core update first with its release link, its action and the steps of the operation", async (t) => {
-  const dom = new JSDOM("<body><div id=library></div></body>");
+test("the update list shows the core update first with its release link, its action and the steps of the operation", async () => {
+  // The host calls and events of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the
+  // modules of the library are imported, because the page reads the host when its modules are imported.
+  const wire = selectPageWire("library-app-update-operations");
+  const dom = new JSDOM(readFileSync(new URL("../index.html", import.meta.url), "utf8"), { url: "http://localhost/" });
+  dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
+  globalThis.window = dom.window;
   globalThis.document = dom.window.document;
-  t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
-  let app = {
-    version: "0.0.8",
-    available: { version: "0.0.9", release: "https://github.com/soksak-app/core/releases/tag/v0.0.9" },
-    operation: null, error: null,
-    incompatible: [
-      { id: "tty", installed: "0.2.0", range: "0.0.8", compatible: "0.3.0" },
-      { id: "notes", installed: "1.0.0", range: "0.0.8", compatible: null },
-    ],
-  };
-  const status = { registry: "file:///registry/index.json", error: null, reload: false, outdated: [], plugins: [],
-    updates: [{ id: "tty", installed: "0.1.0", latest: "0.2.0" }], operation: null };
-  const operations = { hosted: true, status: () => status, failure: () => null, refresh: async () => {}, refreshOutdated: async () => {} };
-  t.mock.module("../installed-plugins.js", { namedExports: {
-    pluginOperations: operations, onPluginOperations: () => {}, appUpdate: { status: () => app, refresh: async () => {} },
-  } });
+  globalThis.devicePixelRatio = dom.window.devicePixelRatio;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  globalThis.CSS = dom.window.CSS;
+  globalThis.PointerEvent = dom.window.PointerEvent;
+  globalThis.MouseEvent = dom.window.MouseEvent;
+  // The operation of the update is an info event of the class call, which the gate stores for this test; the other classes store errors only.
+  const { logGate } = await import("../log-gate.js");
+  logGate.set({ lifecycle: "error", input: "error", call: "info", io: "error", frame: "error" });
+  const { installExposure } = await import("../exposure.js");
+  installExposure(exposureFile);
+  const { appUpdate } = await import("../installed-plugins.js");
   const { createLibrary } = await import("../library.js?app-update");
-  const root = document.getElementById("library");
+  const { flushEvents } = await import("../page-log.js");
+  const root = document.createElement("div");
+  document.body.append(root);
   const library = createLibrary(root);
+  // The replies of the host are settled after the turn of the page that sent their calls.
+  const settled = () => new Promise((resolve) => setImmediate(resolve));
   try {
     library.actions.page("plugins");
+    await settled();
     const row = () => root.querySelector('[data-expose="core.library.app.row"]');
     const list = root.querySelector(".library-updates");
     assert.equal(list.firstElementChild, row(), "the core update is not the first row of the update list");
@@ -42,33 +45,42 @@ test("the update list shows the core update first with its release link, its act
       ["업데이트", "core.library.app.update", "core.app.update"],
     ]);
     assert.equal(root.querySelector('[data-expose="core.library.app.operation"]'), null);
-    // A plugin that the candidate does not contain is listed under the row with its newest version that does.
+    // A plugin that the candidate does not contain is listed under the row with its newest version that does, in the order of its id.
     const incompatible = [...row().querySelectorAll('[data-expose="core.library.app.incompatible"]')].map((item) => item.textContent);
     assert.deepEqual(incompatible, [
-      "tty 0.2.0 (0.0.8): 0.0.9에 맞는 최신 버전 0.3.0",
       "notes 1.0.0 (0.0.8): 0.0.9에 맞는 버전 없음",
+      "tty 0.2.0 (0.0.8): 0.0.9에 맞는 최신 버전 0.3.0",
     ]);
 
-    // The steps of the operation and its error are shown on the row.
-    app = { ...app, operation: { state: "staging", version: "0.0.9", error: null } };
+    // A candidate without a release page offers no link.
+    await appUpdate.refresh();
+    library.render();
+    assert.deepEqual([...row().querySelectorAll("button")].map((b) => b.dataset.expose), ["core.library.app.update"]);
+    // Without a candidate the list has no core row.
+    await appUpdate.refresh();
+    library.render();
+    assert.equal(row(), null);
+    await appUpdate.refresh();
+    library.render();
+
+    // The steps of the operation and its error are shown on the row. The stage call is held until the test releases it.
+    const staged = appUpdate.update();
+    await settled();
     library.render();
     assert.equal(root.querySelector('[data-expose="core.library.app.operation"]').textContent, "0.0.9 받는 중");
-    app = { ...app, operation: { state: "applying", version: "0.0.9", error: null } };
+    wire.release();
+    await settled();
     library.render();
     assert.equal(root.querySelector('[data-expose="core.library.app.operation"]').textContent, "0.0.9 적용하는 중");
-    app = { ...app, operation: { state: "failed", version: "0.0.9", error: "application update: sha256 differs" } };
+    wire.release();
+    await assert.rejects(staged, /application update: sha256 differs/);
+    await settled();
     library.render();
     const failed = root.querySelector('[data-expose="core.library.app.operation"]');
     assert.equal(failed.textContent, "0.0.9 업데이트하지 못했습니다: application update: sha256 differs");
     assert.equal(failed.getAttribute("role"), "alert");
-
-    // A candidate without a release page offers no link, and without a candidate the list has no core row.
-    app = { ...app, operation: null, available: { version: "0.0.9", release: null } };
-    library.render();
-    assert.deepEqual([...row().querySelectorAll("button")].map((b) => b.dataset.expose), ["core.library.app.update"]);
-    app = { ...app, available: null, incompatible: [] };
-    library.render();
-    assert.equal(row(), null);
+    await flushEvents();
+    wire.finish();
   } finally {
     dom.window.close();
   }

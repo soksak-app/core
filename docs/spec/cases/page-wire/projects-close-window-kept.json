@@ -1,0 +1,325 @@
+{
+  "name": "projects-close-window-kept",
+  "description": "A close request of the window that shows a modified tab that the person keeps reports the kept close to the host, and the operation of the kept close leaves in one log batch; the page stores nothing and does not close.",
+  "replay": false,
+  "reason": "The steps send the theme of the window and the window calls of a project (windowReady, projectFolder, projectOpen, projectShown, windowState and the calls that close the window and release or answer the removal of a project), which reach only a window, and the notices of the window reach only the listeners of a window; the Go producer runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "snapshot": {
+      "type": "object",
+      "example": {
+        "common": {
+          "diagnostics.log": {
+            "lifecycle": "info",
+            "call": "info"
+          }
+        },
+        "projects": [
+          {
+            "id": "prj-one",
+            "root": "/work/one",
+            "identity": "1:1",
+            "title": "one",
+            "color": "#fff",
+            "named": 1,
+            "activeSpaceId": "spc-one",
+            "spaces": [
+              {
+                "id": "spc-one",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "cards": [],
+                    "name": "one"
+                  }
+                }
+              }
+            ],
+            "settings": {}
+          }
+        ],
+        "open": []
+      }
+    },
+    "cid-kept": {
+      "type": "string",
+      "example": "p0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e.3",
+      "source": "page"
+    },
+    "ts-us-kept": {
+      "type": "integer",
+      "example": 1791000000000471,
+      "source": "page"
+    },
+    "mono-ns-kept": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e",
+      "source": "page"
+    },
+    "cid": {
+      "type": "string",
+      "example": "pa48d174c-bc80-4a19-90ad-d9ca4054792c.3",
+      "source": "page"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000020904,
+      "source": "page"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5020448769,
+      "source": "page"
+    },
+    "page-identity-2": {
+      "type": "string",
+      "example": "5f2a056e-1c6f-4891-9f3d-6af92b59dd4c",
+      "source": "page"
+    },
+    "cid-2": {
+      "type": "string",
+      "example": "p5f2a056e-1c6f-4891-9f3d-6af92b59dd4c.3",
+      "source": "page"
+    },
+    "opened-at": {
+      "type": "integer",
+      "example": 1794617943279,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabState"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessions"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "windowState"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "projectFolder",
+        "payload": "/work/one"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "root": "/work/one",
+          "identity": "1:1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "projectOpen",
+        "payload": {
+          "id": "prj-one",
+          "root": "/work/one",
+          "separate": true,
+          "geometry": null
+        },
+        "cids": [
+          "$cid"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "local": true
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us",
+              "mono_ns": "$mono-ns",
+              "start": "$page-identity-2",
+              "level": "info",
+              "event": "workbench.project.operation",
+              "fields": {
+                "action": "open",
+                "project": "prj-one"
+              },
+              "cids": [
+                "$cid-2"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "projectShown",
+        "payload": {
+          "project": {
+            "id": "prj-one",
+            "root": "/work/one",
+            "title": "one"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "lastOpened": "$opened-at"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "windowReady"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "project-close-request"
+      }
+    },
+    {
+      "call": {
+        "name": "windowCloseKept",
+        "cids": [
+          "$cid-kept"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-kept",
+              "mono_ns": "$mono-ns-kept",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.window.operation",
+              "fields": {
+                "action": "close_kept"
+              },
+              "cids": [
+                "$cid-kept"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

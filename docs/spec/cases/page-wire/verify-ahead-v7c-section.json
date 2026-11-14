@@ -1,0 +1,66 @@
+{
+  "name": "verify-ahead-v7c-section",
+  "description": "The page prepares one layout of one DOM surface of a plugin in a plane at 0,0, and the host answers the syncSurfaces call with the placement that it applied at the declared place.",
+  "replay": false,
+  "reason": "syncSurfaces places native surfaces in a window, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "probe",
+              "dim": false,
+              "plugin": "probe",
+              "composition": {
+                "kind": "dom"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 34,
+              "w": 400,
+              "h": 240
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [],
+          "viewport": {
+            "width": 1024,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "probe",
+              "visible": true,
+              "scale": 1,
+              "x": 0,
+              "y": 34,
+              "w": 400,
+              "h": 240
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    }
+  ]
+}

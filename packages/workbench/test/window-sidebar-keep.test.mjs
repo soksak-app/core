@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin, registerSection } from "../registry.js";
 
 const pluginId = "fixture-keep";
 const setId = "fixture-keep-set";
@@ -29,47 +28,32 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
+  // The page has no host in this test, so it is not native: a surface is drawn as a placeholder. Without a host, report writes the
+  // error to console.error and stores no record, so the test keeps this replacement of the report to observe the errors that the plane reports.
   const reports = [];
-  const disposed = [];
   const actualHost = await import("../host.js");
   t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: () => Promise.resolve(),
-    // The sidebar never ends a surface itself; a call is recorded so that the test shows it.
-    disposeSurface: (id) => { disposed.push(id); return Promise.resolve(); }, placePluginPlaceholder: () => {},
-  } });
-  t.mock.module("../compositor.js", { exports: { ...(await import("../compositor.js")), setSlotSurface: () => {}, clearSlotSurface: () => {} } });
-  t.mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // The environment of the page: the plugin with its tab and its section, and the set that the left and the right side show.
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-  } });
-  // The left and the right side show the same set, and their switches are the settings left and right.
-  const changed = {
-    sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }],
-    links: [{ place: "left", plugin: null, set: setId }, { place: "right", plugin: null, set: setId }],
-    left: true, right: true, sidebarWidth: 120,
-  };
-  const actualSettings = await import("../settings.js");
-  const { resolveSidebar } = await import("../sidebar-sets.js");
-  t.mock.module("../settings.js", { exports: { projectSidebars: () => ({ sets: [], links: [] }), ...actualSettings,
-    value: (key) => (Object.hasOwn(changed, key) ? changed[key] : actualSettings.value(key)),
-    linkedSet: (place, plugin) => resolveSidebar(changed.links, changed.sets, place, plugin) } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
-  const composition = { kind: "view", page: "ui/tree.html" };
-  registerSection({ id: `${pluginId}.tree`, name: "Tree", composition, height: "fill", plugin: pluginId,
-    surface: (surfaceId, start) => ({ composition, surfaceId, pluginId, declarations: {}, sidecars: [], diagnostics: null,
-      unload: false, params: null, section: start }) });
+    } },
+    sidebars: {
+      sets: [{ id: setId, title: "Fixture", layout: "list", sections: [`${pluginId}.tree`] }],
+      links: [{ place: "left", plugin: null, set: setId }, { place: "right", plugin: null, set: setId }],
+    },
+  }, { plugins: [{ id: pluginId, package: "@fixture/keep", version: "0.0.1", manifest: {
+    id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/index.html" } },
+    sections: [{ id: `${pluginId}.tree`, name: "Tree", height: "fill", composition: { kind: "view", page: "ui/tree.html" } }],
+  } }] }), [], "the fixture environment refused a plugin");
+  // The switches of the two sides are the settings left and right; the start document of the window gives them.
+  const { beginSettings } = await import("../settings.js");
+  const begin = (sides) => beginSettings({ common: { ...sides, sidebarWidth: 120 }, projects: [] }, null);
+  begin({ left: true, right: true });
 
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
@@ -82,7 +66,9 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw?.(); };
     const slotsOf = (id) => [...planeEl.querySelectorAll(`[data-native-surface][data-native-surface-id="${id}"]`)];
-    const switchTo = (side, on) => { changed[side] = on; plane.settle(); drawHeld(); };
+    // A surface that the page ends loses its placeholder in the document (disposeSurface), so the placeholders show the surfaces that stand.
+    const placeholdersOf = (id) => [...planeEl.querySelectorAll(`.surface-placeholder[data-surface-id="${id}"]`)];
+    const switchTo = (side, on) => { begin({ left: side === "left" ? on : true, right: side === "right" ? on : true }); plane.settle(); drawHeld(); };
     plane.adopt(plane.fresh(), "spc-aaaaaa");
     drawHeld();
     for (const side of ["left", "right"]) {
@@ -90,6 +76,8 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
       assert.equal(slotsOf(treeId(side)).length, 1, `the ${side} sidebar seats its section once`);
     }
     const leftSlot = slotsOf(treeId("left"))[0];
+    const [leftPlaceholder] = placeholdersOf(treeId("left"));
+    assert.ok(leftPlaceholder, "the left section stands as a placeholder");
 
     // An arrangement that closes and inserts the window sidebars again keeps the slot of the sidebar that stays.
     switchTo("right", false);
@@ -106,6 +94,8 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     assert.deepEqual(sidebarsState().map(({ sidebar }) => sidebar), ["left"], "core.sidebars reports the hidden sidebar");
     // The kept set is not drawn, so its controls are inert and the audit of the workbench lists none of them.
     assert.deepEqual(audit(document.body), [], "the audit lists the controls of the kept set");
+    // Without a native host a hidden section is seated and not mounted (sidebar-sections.js, mountPlacedSections), so no placeholder of it
+    // stands until the show; the surface that is not mounted cannot be observed as ended here.
 
     // A show places the kept surface in the sidebar again.
     switchTo("right", true);
@@ -115,7 +105,8 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     assert.equal(shown[0].closest("[hidden]"), null, "the shown section stays hidden");
     assert.ok(sectionSurfaceShown(treeId("right")));
     assert.deepEqual(audit(document.body), [], "the audit lists a control of the shown sidebar");
-    assert.deepEqual(disposed, [], "the sidebar ended a surface");
+    assert.equal(placeholdersOf(treeId("right")).length, 1, "the sidebar ended a surface");
+    assert.deepEqual(placeholdersOf(treeId("left")), [leftPlaceholder], "the sidebar ended the surface of the sidebar that stays");
     assert.deepEqual(reports, []);
   } finally {
     delete globalThis.devicePixelRatio;

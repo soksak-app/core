@@ -1,0 +1,16 @@
+{
+  "name": "settings-text-size-common",
+  "description": "The page applies the settings of a start document of a project that holds the common text size, and it sends the theme and then the menu language to the host once; it refuses the document whose project holds the text size and a project write of the text size without a call.",
+  "replay": false,
+  "reason": "The calls setTheme and setMenuLanguage apply to the window of the native host, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } }
+  ]
+}

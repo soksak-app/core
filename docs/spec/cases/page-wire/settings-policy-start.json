@@ -1,0 +1,11 @@
+{
+  "name": "settings-policy-start",
+  "description": "The page writes the default policy of the event log, which stores only the errors of every class, and the host answers nothing.",
+  "replay": true,
+  "writer": { "policy": true },
+  "variables": {},
+  "steps": [
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error" } } } },
+    { "reply": { "result": null } }
+  ]
+}

@@ -1,0 +1,466 @@
+{
+  "name": "page-layout-trace",
+  "description": "A layout whose draw fails by the armed diagnostic fault records its trace phases queued, prepare, prepared, draw and cancelled as events of the class frame, which the policy stores at the level debug; the events reach the host in batches after the clock anchor, and the failed presentation is recorded as an error.",
+  "replay": false,
+  "reason": "The performance switch is a call of the host that the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "writer": {
+    "policy": true
+  },
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 120,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 100,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "98a3424d-24d8-48ed-9442-b2fdeb8c0718",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 12,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999997843,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4997387789,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1790999999998194,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 4997738581,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000229,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 4999773872,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000001687,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5001231331,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000002030,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5001574997,
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000003876,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5003420914,
+      "source": "page"
+    },
+    "t-1": {
+      "type": "number",
+      "example": 431.200292,
+      "source": "page"
+    },
+    "t-2": {
+      "type": "number",
+      "example": 431.837959,
+      "source": "page"
+    },
+    "t-3": {
+      "type": "number",
+      "example": 433.866042,
+      "source": "page"
+    },
+    "t-4": {
+      "type": "number",
+      "example": 435.320292,
+      "source": "page"
+    },
+    "t-5": {
+      "type": "number",
+      "example": 435.679917,
+      "source": "page"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "policy",
+          "classes": {
+            "lifecycle": "error",
+            "input": "error",
+            "call": "error",
+            "io": "error",
+            "frame": "debug"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "on"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.layout",
+              "fields": {
+                "phase": "queued",
+                "id": 1,
+                "t": "$t-1"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.layout",
+              "fields": {
+                "phase": "prepare",
+                "id": 1,
+                "t": "$t-2"
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.layout",
+              "fields": {
+                "phase": "prepared",
+                "id": 1,
+                "t": "$t-3"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-5",
+              "mono_ns": "$mono-ns-5",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.layout",
+              "fields": {
+                "phase": "draw",
+                "id": 1,
+                "t": "$t-4"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-6",
+              "mono_ns": "$mono-ns-6",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.layout",
+              "fields": {
+                "phase": "cancelled",
+                "id": 1,
+                "t": "$t-5"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-7",
+              "mono_ns": "$mono-ns-7",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "workbench",
+                "text": "surface presentation failed: diagnostic layout fault"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

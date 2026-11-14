@@ -1,0 +1,472 @@
+{
+  "name": "placement-retained-views-held-start",
+  "description": "A view placement carries the start values of the view until the host holds them, omits them while the host holds them, carries them again when they change, and carries them again after the host refused a request.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": {
+          "scheme": "dark",
+          "tokens": {}
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "held-start-probe",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          },
+          "surface": "held-start-view"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "held-start-view",
+              "dim": false,
+              "plugin": "held-start-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20,
+              "start": {
+                "params": null,
+                "origin": {
+                  "directory": null
+                },
+                "declarations": 0
+              }
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [
+            {
+              "status": [],
+              "commands": [],
+              "element": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 1,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 0,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "held-start-view",
+            "visible": true,
+            "scale": 2,
+            "x": 0,
+            "y": 0,
+            "w": 20,
+            "h": 20
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "held-start-view",
+              "dim": false,
+              "plugin": "held-start-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 1,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 1,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 2,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 1,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "held-start-view",
+            "visible": true,
+            "scale": 2,
+            "x": 1,
+            "y": 0,
+            "w": 20,
+            "h": 20
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "held-start-view",
+              "dim": false,
+              "plugin": "held-start-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 1,
+              "y": 0,
+              "w": 20,
+              "h": 20,
+              "start": {
+                "params": {
+                  "path": "a.md"
+                },
+                "origin": {
+                  "directory": null
+                },
+                "declarations": 0
+              }
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [
+            {
+              "status": [],
+              "commands": [],
+              "element": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 3,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 1,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 3,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 1,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "held-start-view",
+            "visible": true,
+            "scale": 2,
+            "x": 1,
+            "y": 0,
+            "w": 20,
+            "h": 20
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "held-start-view",
+              "dim": false,
+              "plugin": "held-start-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 2,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "titlebar": 40,
+          "declarations": []
+        }
+      }
+    },
+    {
+      "reply": {
+        "error": "surface refused"
+      }
+    },
+    {
+      "call": {
+        "name": "syncSurfaces",
+        "payload": {
+          "settled": true,
+          "overlays": [],
+          "surfaces": [
+            {
+              "id": "held-start-view",
+              "dim": false,
+              "plugin": "held-start-probe",
+              "composition": {
+                "kind": "view",
+                "page": "ui/page.html"
+              },
+              "visible": true,
+              "x": 3,
+              "y": 0,
+              "w": 20,
+              "h": 20,
+              "start": {
+                "params": {
+                  "path": "a.md"
+                },
+                "origin": {
+                  "directory": null
+                },
+                "declarations": 0
+              }
+            }
+          ],
+          "titlebar": 40,
+          "declarations": [
+            {
+              "status": [],
+              "commands": [],
+              "element": []
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ticket": 5,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 3,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "chrome": {
+            "controls": {
+              "x": 0,
+              "y": 0,
+              "w": 0,
+              "h": 0
+            },
+            "row": 40
+          }
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "presentSurfaces",
+        "payload": {
+          "ticket": 5,
+          "placements": [
+            {
+              "id": "held-start-view",
+              "visible": true,
+              "scale": 2,
+              "x": 3,
+              "y": 0,
+              "w": 20,
+              "h": 20
+            }
+          ],
+          "settled": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "id": "held-start-view",
+            "visible": true,
+            "scale": 2,
+            "x": 3,
+            "y": 0,
+            "w": 20,
+            "h": 20
+          }
+        ]
+      }
+    }
+  ]
+}
