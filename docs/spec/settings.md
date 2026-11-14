@@ -40,6 +40,7 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 언어 | 언어 `language` |
 | 메모리 (common scope only) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
+| 에이전트 (common scope only) | the setup parts of [agents](#에이전트), with 설치 and 다시 확인 |
 
 Window choices select content for one fixed sidebar on each side, left, right, top and bottom. The focused active plugin overrides the general side choice in the same place without adding a sidebar. A visibility switch affects the fixed sidebar of its side, and 사이드바 순서 sets which sidebar takes the room of the plane first ([external window sidebars](external-sidebars.md#fixed-placement-and-persistence)). The group states this under its name: 한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다. Card sidebars remain inside their cards; the obsolete `cardSidebar` positioning setting is rejected. No plugin setting appears in 일반.
 
@@ -51,6 +52,14 @@ Window choices select content for one fixed sidebar on each side, left, right, t
 
 The switch 디버그 of the settings window turns both on and off together through `core.settings.debug {on}`: on sets `diagnostics.performance` to true and `diagnostics.log` to `trace` in every class, off sets `diagnostics.performance` to false and `diagnostics.log` to `{}`. The switch shows on when `diagnostics.performance` is true and every class is `trace`. While both are off no layer builds or stores an event of the trace or an event below `error`.
 
+
+### 에이전트
+
+The group 에이전트 shows the setup parts that let an agent on the machine learn and reach the application ([agents](cli.md#agents)). The parts belong to the machine and the person, not to a project, so the group is shown in the common scope only. It reads the parts through the host call `setupState()`, which reports what `sok setup check` of the application's `sok` reports in the environment of the person's login shell, when the group is shown, when the window becomes the key window (`window-active`), after each `setup-changed` event and when `core.setup.check` runs; no timer reads them again.
+
+Each part is one row (element name `core.settings-modal.setup`, in the order of the parts): its name, 명령 경로 for `path`, 스킬 for `skill` and MCP 등록 for `mcp`, its file, and its state: 설치됨 for `ok`, 설치 안 됨 for `missing` with `absent`, 다름 for `differs`, "다른 애플리케이션에 등록됨: <command>" for `other`, and the error text for `error`. A missing `path` row also shows its install step, the `sudo` command that a person runs in a terminal, because the application does not ask for administrator rights. 설치 (`core.settings-modal.setup-install`) runs `core.setup.install` with the kinds among `skill` and `mcp` that have a row that is not `ok`; it is shown only while such a row exists, and while the `mcp` row is `other` it reads "<command> 대신 이 애플리케이션 등록", because the install replaces the registration of the other application. 다시 확인 (`core.settings-modal.setup-check`) runs `core.setup.check`. A part that does not apply has no row; without any row the group shows "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."
+
+`core.setup.check` takes no parameters, reads the parts again and answers `{parts}`. `core.setup.install` takes `{parts}`, a non-empty list of `skill` and `mcp` without repetition, runs the host call `setupInstall` and answers its `{parts}`; it fails with -32602 (invalid params) for another list, with the host error when the install fails or another runs, and with "setup operations need a native host" without a host. A failed read or install is shown through the error display, which writes it to the application log, and the rows keep the last parts read.
 
 ### 플러그인
 
@@ -227,6 +236,8 @@ A scroll pane of the workbench follows the scroller style of the system. Under t
 
 [Plugin screen](installation.md#plugin-screen) defines `core.plugins`.
 
+`core.setup` reports `{parts, running}`: the parts of the last read or install as `setupState()` returns them, `[]` before the first read, and `running`, the kind list of the install that runs, or `null`.
+
 `core.settings` reports every effective value, including `sets`, `links`, and the layout values, in `values`, and the common value of every key in `common`: the stored common value, or the default when the common settings store none. A key that the selected project overrides has its project value in `values` and its common value in `common`. `core.themes` reports the theme catalog in order: each theme's `name`, `shape` values, and the color tokens of its `dark` and `light` modes.
 
 ## Acceptance
@@ -236,6 +247,7 @@ A scroll pane of the workbench follows the scroller style of the system. Under t
 - 사이드바 holds only the set list, 새 세트, and the editor. The editor has no control per registered section: its section controls are one select box and ▲ ▼ − per row, and one +.
 - The section rows choose, move, remove, and add sections through `core.settings.sets.row`; a repeated section is rejected.
 - 플러그인 shows a filtered list of the loaded plugins by name; a row opens the plugin page with its settings, sections, and sidebar choices, and 목록 returns to the list. The section shows no plugin description, version, sidecar or plugin operation; 플러그인 관리 closes the window and shows the plugin screen.
+- 에이전트 shows each setup part that applies with the state that `sok setup check` reports, 설치 installs the missing skill files and registration and changes nothing that is in place, and the path entry shows its step without running it.
 - General, plugin-window and internal card choices remain independent through focus and tab changes. A disabled window column does not replace another plugin column.
 - The layout values change internal sidebar limits and initial size and the initial size of a window sidebar on its axis.
 - The order rows move a side up and down through `core.settings.change` with the whole order, and the window sidebars arrange in the new order.

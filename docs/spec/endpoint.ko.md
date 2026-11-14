@@ -164,7 +164,7 @@ Still은 새 drawable을 식별하지 않으므로 두 still의 pixel이 같을 
 | --- | --- |
 | `packages/client` | `endpoint.json`을 읽고 연결해 요청을 보내는 라이브러리 |
 | `packages/sok/<name>` | 각 애플리케이션의 command line `sok`. Wails는 Go, Tauri는 Rust다([command line](cli.ko.md)). 자기 애플리케이션 설정 폴더나 `--config-dir`의 `endpoint.json`을 읽고, 모든 endpoint method와 선언된 command를 실행한다 |
-| `packages/mcp` | stdio MCP 서버. `exposure.list`로 도구를 생성하며 네트워크 포트를 열지 않는다 |
+| `sok mcp` | 각 `sok`의 stdio MCP 서버다([MCP server](cli.ko.md#mcp-server)). 도구는 호출마다 `exposure.list`를 읽는 고정된 집합이며, 네트워크 포트를 열지 않는다. Node package `packages/mcp`를 대신하며, 그 package는 제거된다 |
 
 창 검사는 `packages/client`를 사용한다.
 
@@ -180,7 +180,7 @@ Still은 새 drawable을 식별하지 않으므로 두 still의 pixel이 같을 
 - 수신 전에 같은 애플리케이션의 끝난 프로세스 소켓을 제거한다.
 - 같은 설정 디렉터리의 두 번째 프로세스를 거부하고 정상 종료 때 `process.lock`을 삭제한다.
 
-엔드포인트의 client(`packages/client`, `packages/mcp`, window-check session, `sok`)는 `docs/spec/cases/endpoint/`의 엔드포인트 계약 사례에 대해 시험한다. 사례는 client가 보내는 frame과 호스트가 돌려보내는 응답과 알림의 순서이며, 호스트가 값을 정하는 field(창 id, 시각, 순번)는 변수로 이름 붙인다. window check `e2e/endpoint-contract.test.mjs`는 실행 중인 애플리케이션에 모든 사례를 보내고 받은 frame을 사례와 비교하므로, 사례의 모든 응답은 실제 호스트가 주는 응답이다. 전송의 사례(framing, 선언되지 않은 메서드, 잘못된 frame)는 각 호스트의 unit test에서도 그 엔드포인트에 대해 실행한다. client test는 사례의 응답을 그 파일에서 읽고 자기 응답을 쓰지 않는다.
+엔드포인트의 client(`packages/client`, window-check session, MCP 서버 `sok mcp`를 포함한 `sok`)는 `docs/spec/cases/endpoint/`의 엔드포인트 계약 사례에 대해 시험한다. 사례는 client가 보내는 frame과 호스트가 돌려보내는 응답과 알림의 순서이며, 호스트가 값을 정하는 field(창 id, 시각, 순번)는 변수로 이름 붙인다. window check `e2e/endpoint-contract.test.mjs`는 실행 중인 애플리케이션에 모든 사례를 보내고 받은 frame을 사례와 비교하므로, 사례의 모든 응답은 실제 호스트가 주는 응답이다. 전송의 사례(framing, 선언되지 않은 메서드, 잘못된 frame)는 각 호스트의 unit test에서도 그 엔드포인트에 대해 실행한다. client test는 사례의 응답을 그 파일에서 읽고 자기 응답을 쓰지 않는다.
 
 ### 창 활성화 관찰
 

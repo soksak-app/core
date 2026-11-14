@@ -7,3 +7,5 @@
 용어 목록은 kit `soksak-app/kit`의 `terms.json`이다. 각 항목은 용어, 그 정의, 같은 개념을 부르는 거부 동의어를 가진다. 모든 저장소가 그 kit의 release를 pin하므로 각 저장소의 기록 검사는 같은 목록을 읽고, 새 용어는 저장소가 pin한 kit release와 함께 그 저장소에 닿는다([기록](../../AGENTS.ko.md#문서)).
 
 Request-local declaration table은 [native surfaces](native-surfaces.ko.md)에서 정의한다.
+
+Agent, agent skill, agent folder, setup part, MCP registration은 [command line](cli.ko.md#에이전트)에서 정의한다.

@@ -7,3 +7,5 @@ Each concept has one term in the code, specifications and records of every repos
 The term list is `terms.json` of the kit `soksak-app/kit`. Each entry has the term, its definition and the rejected synonyms that name the same concept. Every repository pins the release of that kit, so the records check of each repository reads the same list, and a new term reaches a repository with the kit release that it pins ([records](../../AGENTS.md#documentation)).
 
 The request-local declaration table is defined in [native surfaces](native-surfaces.md).
+
+The agent, the agent skill, the agent folder, the setup part and the MCP registration are defined in [command line](cli.md#agents).

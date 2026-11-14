@@ -493,10 +493,12 @@ Wails 바인딩 서비스 이름은 `github.com/soksak-app/core/packages/host/wa
 ## Command line 트리
 
 ```
+packages/sok/agents/      SKILL.md, mcp.json: 두 구현의 agent 글
 packages/sok/go/          packages/sok/rust/
   src/sok.go  (package sok)      src/sok.rs  (library root)
   src/<role>.go                  src/<role>.rs
   src/cmd/sok/main.go            src/main.rs           차이 C1
+  src/SKILL.md, src/mcp.json     (Go 사본, 검사됨)
   tests/<role>_test.go           tests/<role>_test.rs
   go.mod, go.sum                 Cargo.toml            차이 C8
 ```

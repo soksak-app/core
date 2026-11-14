@@ -2,7 +2,7 @@
 
 [한국어](README.ko.md)
 
-An endpoint case records one conversation between a client and the endpoint of the host ([endpoint](../../endpoint.md#checks)): the frames that a client sends, and the replies and notifications that the host sends back. The clients (`packages/client`, `packages/mcp`, the window-check session and `sok`) are the consumers, and the hosts are the producers: the window check `e2e/endpoint-contract.test.mjs` sends each case with `replay: true` to a running application, and the unit tests of the hosts play the cases that the endpoint answers alone.
+An endpoint case records one conversation between a client and the endpoint of the host ([endpoint](../../endpoint.md#checks)): the frames that a client sends, and the replies and notifications that the host sends back. The clients (`packages/client`, the window-check session and `sok` with its MCP server `sok mcp`) are the consumers, and the hosts are the producers: the window check `e2e/endpoint-contract.test.mjs` sends each case with `replay: true` to a running application, and the unit tests of the hosts play the cases that the endpoint answers alone.
 
 A case is one tracked JSON file in this directory. The file name is `<name>.json`, and the `name` member equals the file name without `.json`.
 

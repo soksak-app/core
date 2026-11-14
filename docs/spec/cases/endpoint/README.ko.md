@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-endpoint case는 client와 host endpoint([endpoint](../../endpoint.ko.md#검사)) 사이의 대화 하나를 기록한다. client가 보내는 frame과 host가 돌려보내는 reply, notification이 기록된다. consumer는 client(`packages/client`, `packages/mcp`, window-check session, `sok`)이고 producer는 host다. window check `e2e/endpoint-contract.test.mjs`는 `replay: true`인 case를 실행 중인 application에 보내고, host의 unit test는 endpoint가 혼자 답하는 case를 실행한다.
+endpoint case는 client와 host endpoint([endpoint](../../endpoint.ko.md#검사)) 사이의 대화 하나를 기록한다. client가 보내는 frame과 host가 돌려보내는 reply, notification이 기록된다. consumer는 client(`packages/client`, window-check session, MCP 서버 `sok mcp`를 포함한 `sok`)이고 producer는 host다. window check `e2e/endpoint-contract.test.mjs`는 `replay: true`인 case를 실행 중인 application에 보내고, host의 unit test는 endpoint가 혼자 답하는 case를 실행한다.
 
 case는 이 디렉터리의 추적되는 JSON 파일 하나다. 파일 이름은 `<name>.json`이며, `name` 멤버는 `.json`을 뺀 파일 이름과 같다.
 

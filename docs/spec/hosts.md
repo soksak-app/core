@@ -493,10 +493,12 @@ The Wails binding service name is `github.com/soksak-app/core/packages/host/wail
 ## Command line tree
 
 ```
+packages/sok/agents/      SKILL.md, mcp.json: the agent texts of both implementations
 packages/sok/go/          packages/sok/rust/
   src/sok.go  (package sok)      src/sok.rs  (library root)
   src/<role>.go                  src/<role>.rs
   src/cmd/sok/main.go            src/main.rs           difference C1
+  src/SKILL.md, src/mcp.json     (Go copies, checked)
   tests/<role>_test.go           tests/<role>_test.rs
   go.mod, go.sum                 Cargo.toml            difference C8
 ```

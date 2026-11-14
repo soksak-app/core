@@ -164,7 +164,7 @@ Without `native`, `diagnostics.drag` drives the page's existing surface-input ro
 | --- | --- |
 | `packages/client` | Library that reads `endpoint.json`, connects, and sends requests |
 | `packages/sok/<name>` | Command line `sok` of each application, in Go for Wails and Rust for Tauri ([command line](cli.md)). It reads `endpoint.json` of its application's configuration directory or of `--config-dir`, and runs every endpoint method and declared command |
-| `packages/mcp` | stdio MCP server. It generates its tools from `exposure.list` and opens no network port |
+| `sok mcp` | stdio MCP server of each `sok` ([MCP server](cli.md#mcp-server)). Its tools are a fixed set that reads `exposure.list` at each call, and it opens no network port. It replaces the Node package `packages/mcp`, which is removed |
 
 Window checks use `packages/client`.
 
@@ -180,7 +180,7 @@ Each platform runs these checks against the endpoint:
 - sockets of ended processes of the same application are removed before listening.
 - a second process using the same configuration directory is refused, and normal close removes `process.lock`.
 
-The clients of the endpoint (`packages/client`, `packages/mcp`, the window-check session and `sok`) are tested against the endpoint contract cases in `docs/spec/cases/endpoint/`. A case is a sequence of the frames that a client sends and of the replies and notifications that the host sends back, with the fields whose value the host chooses (a window id, a time, a sequence number) named as variables. The window check `e2e/endpoint-contract.test.mjs` sends every case to the running application and compares the frames that it receives with the case, so every reply of a case is a reply that the real host gives; the cases of the transport (framing, an undeclared method, an invalid frame) also run against the endpoint of each host in its unit tests. A client test reads the replies of a case from that file and does not write replies of its own.
+The clients of the endpoint (`packages/client`, the window-check session and `sok` with its MCP server `sok mcp`) are tested against the endpoint contract cases in `docs/spec/cases/endpoint/`. A case is a sequence of the frames that a client sends and of the replies and notifications that the host sends back, with the fields whose value the host chooses (a window id, a time, a sequence number) named as variables. The window check `e2e/endpoint-contract.test.mjs` sends every case to the running application and compares the frames that it receives with the case, so every reply of a case is a reply that the real host gives; the cases of the transport (framing, an undeclared method, an invalid frame) also run against the endpoint of each host in its unit tests. A client test reads the replies of a case from that file and does not write replies of its own.
 
 ### Window activation observation
 
