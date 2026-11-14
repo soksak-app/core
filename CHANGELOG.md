@@ -5,6 +5,7 @@
 ## Unreleased
 
 - The Go host tests end each WebKit data store under their shared folder through the native store end before they remove the folder, so the network process no longer writes into a folder that is being removed (#F821).
+- A cancelled supervised or bounded command, or one at its limit, receives SIGTERM first; a group that still runs after 5000 ms, or a second cancellation, gets SIGKILL, and the result names it (#F820).
 - The fixture registry tests judge the end of the held pack by the process table, where a zombie has ended, instead of signal 0, which succeeds for a zombie; `processRuns` of process-group.mjs holds the rule (#F819).
 - The test library takes the production functions from the host, the fault releases name their process, and the tests that need macOS tools run only on macOS (F818).
 - The release procedure runs the activation tier of candidate acceptance last and alone (F817).

@@ -12,7 +12,18 @@ import { runCommand } from '../test-command.mjs';
 const node = process.execPath;
 // A descendant of a command under test: the tracked fixture program that writes the file of its argument at SIGTERM.
 const DESCENDANT = fileURLToPath(new URL('./fixtures/test-command/descendant.cjs', import.meta.url));
+// A command under test: the tracked fixture program that writes `ready` once it handles SIGTERM and `term` at SIGTERM, and then
+// exits or stays.
+const LEADER = fileURLToPath(new URL('./fixtures/test-command/leader.cjs', import.meta.url));
 const task = (source) => [node, ['-e', source]];
+
+// Waits for the file `name` of `folder` and resolves with its text; the wait fails when the command `running` ends first.
+function untilFile(folder, name, running) {
+  const ended = new AbortController();
+  running.then(() => ended.abort(new Error(`the command ended before it wrote ${name}`)));
+  const path = join(folder, name);
+  return untilFolderState(folder, () => (existsSync(path) ? readFileSync(path, 'utf8') : undefined), { signal: ended.signal });
+}
 // A command that ends on its own gets this limit, so the limit only bounds a hang and never decides the result under load.
 const hangMs = 60_000;
 // The per-test limit of such a test is above the command limit and also only bounds a hang.
@@ -86,8 +97,8 @@ test('reports an absent executable as fail with an error', { timeout: testHangMs
   assert.equal(events.at(-1).error.code, 'ENOENT');
 });
 
-test('a refused SIGKILL at the limit to a group that holds only zombies still reports timeout', { timeout: 10000 }, async (t) => {
-  // Injects the refusal of macOS for a group without a running member at the limit: the signal ends the leader, and the system answers
+test('a refused SIGTERM at the limit to a group that holds only zombies still reports timeout', { timeout: 10000 }, async (t) => {
+  // Injects the refusal of macOS for a group without a running member at the limit: the SIGTERM ends the leader, and the system answers
   // EPERM because the group then holds only the zombie that the process table shows. The group has nothing to end, so the refusal is no
   // signal failure.
   const originalKill = process.kill;
@@ -98,7 +109,7 @@ test('a refused SIGKILL at the limit to a group that holds only zombies still re
   });
   let group;
   process.kill = (pid, signal) => {
-    if (pid < 0 && signal === 'SIGKILL') {
+    if (pid < 0 && signal === 'SIGTERM') {
       group = -pid;
       originalKill(pid, signal);
       const error = new Error('kill EPERM');
@@ -124,7 +135,7 @@ test('times out and reports timeout', { timeout: 2000 }, async () => {
   assert.equal(result.status, 'timeout');
   assert.equal(events.at(-1).type, 'timeout');
   assert.equal(events.at(-1).exitCode, null);
-  assert.equal(events.at(-1).signal, 'SIGKILL');
+  assert.equal(events.at(-1).signal, 'SIGTERM');
   assert.equal(events.at(-1).error, null);
 });
 
@@ -140,6 +151,61 @@ test('cancels and reports cancelled', { timeout: testHangMs }, async () => {
   assert.equal(result.status, 'cancelled');
   assert.equal(events.at(-1).type, 'cancelled');
   assert.equal(events.at(-1).error, null);
+});
+
+test('a cancellation sends SIGTERM to the group and the command ends by it', { timeout: testHangMs }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'test-command-term-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const controller = new AbortController();
+  const events = [];
+  const running = runCommand({ id: 'term', command: node, args: [LEADER, directory, 'exit'], timeoutMs: hangMs, signal: controller.signal, onEvent: (event) => events.push(event) });
+  await untilFile(directory, 'ready', running);
+  controller.abort();
+  const result = await running;
+  assert.equal(result.status, 'cancelled', JSON.stringify(result));
+  assert.equal(existsSync(join(directory, 'term')), true, 'the command received no SIGTERM before its end');
+  assert.equal(result.exitCode, 0, JSON.stringify(result));
+  assert.equal(result.kill, null, JSON.stringify(result));
+  assert.deepEqual(events.filter((event) => event.type === 'kill'), []);
+});
+
+test('a command that ignores SIGTERM gets SIGKILL after the grace, and the result names the members that still ran', { timeout: testHangMs }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'test-command-grace-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const controller = new AbortController();
+  const events = [];
+  const running = runCommand({ id: 'grace', command: node, args: [LEADER, directory, 'stay'], timeoutMs: hangMs, signal: controller.signal, onEvent: (event) => events.push(event) });
+  const pid = Number(await untilFile(directory, 'ready', running));
+  controller.abort();
+  const result = await running;
+  assert.equal(result.status, 'cancelled', JSON.stringify(result));
+  assert.equal(existsSync(join(directory, 'term')), true, 'the command received no SIGTERM before its end');
+  assert.equal(result.signal, 'SIGKILL', JSON.stringify(result));
+  assert.equal(result.kill?.reason, 'grace', JSON.stringify(result));
+  assert.deepEqual(result.kill.running.map((member) => member.pid), [pid]);
+  const killEvents = events.filter((event) => event.type === 'kill');
+  assert.deepEqual(killEvents.map((event) => ({ reason: event.reason, running: event.running })), [result.kill]);
+  assertEnded(pid);
+});
+
+test('a second cancellation sends SIGKILL without waiting for the grace', { timeout: testHangMs }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'test-command-second-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const cancel = new AbortController();
+  const kill = new AbortController();
+  const running = runCommand({ id: 'second', command: node, args: [LEADER, directory, 'stay'], timeoutMs: hangMs, signal: cancel.signal, kill: kill.signal, onEvent: () => {} });
+  const pid = Number(await untilFile(directory, 'ready', running));
+  cancel.abort();
+  // The second cancellation comes at the record of the SIGTERM, which starts the grace; the reason of the kill tells whether the
+  // second cancellation or the grace sent SIGKILL.
+  await untilFile(directory, 'term', running);
+  kill.abort();
+  const result = await running;
+  assert.equal(result.status, 'cancelled', JSON.stringify(result));
+  assert.equal(result.signal, 'SIGKILL', JSON.stringify(result));
+  assert.equal(result.kill?.reason, 'second-cancellation', JSON.stringify(result));
+  assert.deepEqual(result.kill.running.map((member) => member.pid), [pid]);
+  assertEnded(pid);
 });
 
 test('cleans descendants after the leader exits', { timeout: testHangMs }, async (t) => {
@@ -167,8 +233,8 @@ test('cleans a descendant that inherits supervisor stdio before close', { timeou
 });
 
 // The command ends when the descendant reports readiness, so its timeout only bounds process startup under load and is not the behavior under test.
-// The cleanup sends SIGKILL, which no process can ignore, so the descendant ends without a grace time.
-test('ends a descendant that ignores SIGTERM', { timeout: testHangMs }, async (t) => {
+// The cleanup sends SIGTERM to the members that the leader left, and SIGKILL to the descendant that still runs after the grace.
+test('ends a descendant that ignores SIGTERM with SIGKILL after the grace and names it', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-resistant-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'pid');
@@ -187,7 +253,9 @@ test('ends a descendant that ignores SIGTERM', { timeout: testHangMs }, async (t
   const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
   descendantPid = Number(await readFile(pidFile, 'utf8'));
-  assert.equal(existsSync(markerFile), false, 'the descendant received SIGTERM before its end');
+  assert.equal(existsSync(markerFile), true, 'the descendant received no SIGTERM before its end');
+  assert.equal(result.kill?.reason, 'grace', JSON.stringify(result));
+  assert.deepEqual(result.kill.running.map((member) => member.pid), [descendantPid]);
   assertEnded(descendantPid);
 });
 
@@ -229,7 +297,7 @@ test('reports process-group signal failure without an unhandled timer error', { 
   assert.equal(result.status, 'fail');
   assert.equal(result.error.code, 'EPERM');
   // Keeps the failed signal and the process group. The next occurrence shows which step's signal it was.
-  assert.match(result.error.message, /^SIGKILL to process group \d+: blocked process-group signal; running: pid \d+ /);
+  assert.match(result.error.message, /^SIGTERM to process group \d+: blocked process-group signal; running: pid \d+ /);
 });
 
 test('ends its own leader when every process-group signal is refused', { timeout: testHangMs }, async () => {
@@ -269,7 +337,7 @@ test('ends its own leader when every process-group signal is refused', { timeout
   assert.deepEqual(childrenAfter, childrenBefore, `the leader is still a child of this process: ${JSON.stringify(childrenAfter)}`);
 });
 
-test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: testHangMs }, async (t) => {
+test('forwards a CLI SIGTERM as a cancellation and a second one as SIGKILL without the grace', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-cli-signal-'));
   const pidFile = join(directory, 'pid');
   const markerFile = join(directory, 'term');
@@ -300,11 +368,20 @@ test('forwards CLI SIGTERM to command cancellation and cleanup', { timeout: test
   // The rename of the pid file is the readiness event.
   descendantPid = Number(await ready);
   assert.ok(Number.isInteger(descendantPid) && descendantPid > 0, `pid file holds ${descendantPid}`);
+  const closed = new Promise((resolve) => cli.once('close', (code, signal) => resolve({ code, signal })));
   cli.kill('SIGTERM');
-  const closeResult = await new Promise((resolve) => cli.once('close', (code, signal) => resolve({ code, signal })));
+  // The descendant writes its marker at the SIGTERM of the group and stays; the second SIGTERM to the command then sends SIGKILL,
+  // and the reason of the kill tells whether the second SIGTERM or the grace sent it.
+  const termEnded = new AbortController();
+  closed.then(() => termEnded.abort(new Error(`the command ended before ${markerFile} was written`)));
+  await untilFolderState(directory, () => (existsSync(markerFile) ? true : undefined), { signal: termEnded.signal });
+  cli.kill('SIGTERM');
+  const closeResult = await closed;
   assert.equal(closeResult.code, 1);
   assert.match(stdout, /"type":"cancelled"/);
-  assert.equal(existsSync(markerFile), false, 'the descendant received SIGTERM before its end');
+  const kills = stdout.split('\n').filter((line) => line.startsWith('{"type":"kill"')).map((line) => JSON.parse(line));
+  assert.deepEqual(kills.map((event) => event.reason), ['second-cancellation'], stdout);
+  assert.ok(kills[0].running.some((member) => member.pid === descendantPid), stdout);
   assertEnded(descendantPid);
 });
 
@@ -319,9 +396,9 @@ test('rejects invalid arguments', { timeout: 2000 }, () => {
   assert.throws(() => runCommand({ id: 'bad-signal', command: node, args: [], timeoutMs: 1, signal: {} }), /signal/);
 });
 
-test('reports a refused SIGKILL of the cleanup while a member of the group runs', { timeout: testHangMs }, async (t) => {
-  // Injects a member that this user cannot signal: the group signal is refused with EPERM while the process table shows it running, so the
-  // cleanup after the exit of the leader cannot end the group, and the result names the member.
+test('reports a refused group signal of the cleanup while a member of the group runs', { timeout: testHangMs }, async (t) => {
+  // Injects a member that this user cannot signal: the SIGTERM of the cleanup is refused with EPERM while the process table shows it
+  // running, so the cleanup after the exit of the leader cannot end the group, and the result names the member.
   const originalKill = process.kill;
   const originalExecFileSync = childProcess.execFileSync;
   let group;
@@ -335,7 +412,7 @@ test('reports a refused SIGKILL of the cleanup while a member of the group runs'
   };
   process.kill = (pid, signal) => {
     if (pid < 0) group = -pid;
-    if (pid < 0 && signal === 'SIGKILL') {
+    if (pid < 0 && signal === 'SIGTERM') {
       const error = new Error('kill EPERM');
       error.code = 'EPERM';
       throw error;
@@ -346,7 +423,7 @@ test('reports a refused SIGKILL of the cleanup while a member of the group runs'
   const result = await runCommand({ id: 'refused-cleanup', command: node, args: ['-e', 'process.exit(0)'], timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'fail', JSON.stringify(result));
   assert.equal(result.error.code, 'EPERM');
-  assert.match(result.error.message, new RegExp(`^SIGKILL to process group ${group}: kill EPERM; running: pid ${group} S$`));
+  assert.match(result.error.message, new RegExp(`^SIGTERM to process group ${group}: kill EPERM; running: pid ${group} S$`));
 });
 
 test('ends at its limit with the cause when a process outside its group keeps the output open', { timeout: testHangMs }, async (t) => {
@@ -430,7 +507,7 @@ test('reads the members of a group from the real process table after a denied pr
 test('keeps a process error and a cleanup error together when both occur', async () => {
   const { combineFailures } = await import('../test-command.mjs');
   const processError = new Error('spawn failed');
-  const cleanupError = Object.assign(new Error('SIGKILL to process group 10: kill EPERM; running: pid 10 S'), { code: 'EPERM' });
+  const cleanupError = Object.assign(new Error('SIGTERM to process group 10: kill EPERM; running: pid 10 S'), { code: 'EPERM' });
   const both = combineFailures(processError, cleanupError);
   assert.ok(both instanceof AggregateError, 'the cleanup error replaced the process error');
   assert.deepEqual(both.errors, [processError, cleanupError]);

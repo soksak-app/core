@@ -20,11 +20,15 @@ import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findUnimplementedMarke
 import { auditPlatformSource } from "../check-platform-files.mjs";
 import { GATE_SOURCES } from "../check-boundaries.mjs";
 import { auditUnboundNames, auditE2ESource, auditedSources } from "../check-app-tests.mjs";
+import { untilFolderState } from "@soksak/window-check/folder-wait.mjs";
+import { runBounded } from "../../packages/soksak/scripts/bounded.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
 const node = process.execPath;
 const typescriptRequire = createRequire(join(packageRoot, "package.json"));
+// A command under test that writes `ready` once it handles SIGTERM and `term` at SIGTERM, and then exits or stays.
+const LEADER = fileURLToPath(new URL("./fixtures/test-command/leader.cjs", import.meta.url));
 const { API: TypeScriptAPI } = await import(pathToFileURL(typescriptRequire.resolve("typescript/unstable/sync")).href);
 
 function run(command, args, options = {}) {
@@ -81,6 +85,64 @@ test("bounded command propagates success and reports its deadline", { timeout: 5
     "setInterval(() => {}, 1000)",
   ]);
   assert.equal(timedOut.code, 124, timedOut.stderr);
+});
+
+// Waits for the file `name` of `folder` and resolves with its text; the wait fails when the command `running` ends first.
+function untilFile(folder, name, running) {
+  const ended = new AbortController();
+  running.then(() => ended.abort(new Error(`the command ended before it wrote ${name}`)));
+  const path = join(folder, name);
+  return untilFolderState(folder, () => (existsSync(path) ? readFileSync(path, "utf8") : undefined), { signal: ended.signal });
+}
+
+test("a cancelled bounded command receives SIGTERM and ends by it", { timeout: 60000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "bounded-term-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const controller = new AbortController();
+  const running = runBounded(node, [LEADER, directory, "exit"], { timeout: 600000, stdout: "ignore", stderr: "ignore", signal: controller.signal });
+  await untilFile(directory, "ready", running);
+  controller.abort();
+  const result = await running;
+  assert.equal(existsSync(join(directory, "term")), true, "the command received no SIGTERM before its end");
+  assert.deepEqual({ reason: result.reason, code: result.code, signal: result.signal, error: result.error, kill: result.kill },
+    { reason: "cancelled", code: 0, signal: null, error: null, kill: null });
+});
+
+test("a bounded command that ignores SIGTERM gets SIGKILL after the grace, and the result names it", { timeout: 60000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "bounded-grace-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const controller = new AbortController();
+  const running = runBounded(node, [LEADER, directory, "stay"], { timeout: 600000, stdout: "ignore", stderr: "ignore", signal: controller.signal });
+  const pid = Number(await untilFile(directory, "ready", running));
+  controller.abort();
+  const result = await running;
+  assert.equal(existsSync(join(directory, "term")), true, "the command received no SIGTERM before its end");
+  assert.deepEqual({ reason: result.reason, signal: result.signal, error: result.error, kill: result.kill?.reason },
+    { reason: "cancelled", signal: "SIGKILL", error: null, kill: "grace" });
+  assert.deepEqual(result.kill.running.map((member) => member.pid), [pid]);
+});
+
+test("a second signal to the bounded command sends SIGKILL without waiting for the grace", { timeout: 60000 }, async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "bounded-second-"));
+  let cli;
+  t.after(async () => {
+    if (cli?.exitCode === null && cli.signalCode === null) cli.kill("SIGKILL");
+    await rm(directory, { recursive: true, force: true });
+  });
+  cli = spawn(node, [join(packageRoot, "scripts/bounded.mjs"), "600000", node, LEADER, directory, "stay"], { stdio: ["ignore", "ignore", "pipe"] });
+  let stderr = "";
+  cli.stderr.on("data", (chunk) => { stderr += chunk; });
+  const closed = new Promise((resolve) => cli.once("close", (code, signal) => resolve({ code, signal })));
+  const pid = Number(await untilFile(directory, "ready", closed));
+  cli.kill("SIGTERM");
+  // The second signal comes at the record of the SIGTERM, which starts the grace; the reason of the kill tells whether the
+  // second signal or the grace sent SIGKILL.
+  await untilFile(directory, "term", closed);
+  cli.kill("SIGTERM");
+  const result = await closed;
+  assert.equal(result.code, 125, stderr);
+  assert.match(stderr, /^signal:SIGTERM: SIGKILL$/m);
+  assert.match(stderr, new RegExp(`^SIGKILL \\(second-cancellation\\): pid ${pid} `, "m"));
 });
 
 test("deliberate breaks are uniquely anchored and actionable", { timeout: 2000 }, () => {

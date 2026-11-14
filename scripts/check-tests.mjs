@@ -666,13 +666,13 @@ const FEATURE_LINKS = [
   {
     id: "F767-2-1",
     implementation: [
-      { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid) {" },
+      { file: "packages/window-check/process-group.mjs", symbol: "export function terminateGroup(pgid, onKill = () => {}) {" },
     ],
     tests: [
       { file: "scripts/test/test-command.test.mjs", id: "ends at its limit with the cause when a process outside its group keeps the output open" },
       { file: "scripts/test/test-command.test.mjs", id: "times out and reports timeout" },
     ],
-    expected: "The supervisor sends SIGKILL at the limit, waits for the close of the output and the end of the group, and names a process outside the group that holds the output.",
+    expected: "The supervisor sends SIGTERM at the limit and SIGKILL to a group that still runs after the grace, waits for the close of the output and the end of the group, and names a process outside the group that holds the output.",
     levels: ["unit"],
   },
 
@@ -1446,6 +1446,25 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F820",
+    implementation: [
+      { file: "packages/window-check/process-group.mjs", symbol: "export function terminateGroup(pgid, onKill = () => {}) {" },
+      { file: "scripts/test-command.mjs", symbol: "const cancelAgain = () => {" },
+      { file: "packages/soksak/scripts/bounded.mjs", symbol: "const stop = (cause, again) => {" },
+    ],
+    tests: [
+      { file: "scripts/test/test-command.test.mjs", id: "a cancellation sends SIGTERM to the group and the command ends by it" },
+      { file: "scripts/test/test-command.test.mjs", id: "a command that ignores SIGTERM gets SIGKILL after the grace, and the result names the members that still ran" },
+      { file: "scripts/test/test-command.test.mjs", id: "a second cancellation sends SIGKILL without waiting for the grace" },
+      { file: "scripts/test/test-command.test.mjs", id: "forwards a CLI SIGTERM as a cancellation and a second one as SIGKILL without the grace" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "a cancelled bounded command receives SIGTERM and ends by it" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "a bounded command that ignores SIGTERM gets SIGKILL after the grace, and the result names it" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "a second signal to the bounded command sends SIGKILL without waiting for the grace" },
+    ],
+    expected: "The command supervisor and the bounded command send SIGTERM to the group of a cancelled command or of a command at its limit, send SIGKILL only to a group that still runs after TERMINATION_GRACE_MS or at a second cancellation, and name each SIGKILL with its reason and the members that still ran.",
+    levels: ["unit"],
+  },
+  {
     id: "F794",
     implementation: [{ file: "native/darwin/Makefile", symbol: "repeat-suite: $(addprefix $(BUILD)/,$(NATIVE_TEST_EXECUTABLES))" }],
     tests: [{ file: "scripts/test/native-repeat.test.mjs", id: "make repeat-suite shows the runner output of every run of the suite, and passes when each test passes" }],
@@ -1754,14 +1773,14 @@ const FEATURE_LINKS = [
   {
     id: "F669",
     implementation: [
-      { file: "packages/soksak/scripts/bounded.mjs", symbol: "try { killGroup(child.pid); }" },
+      { file: "packages/soksak/scripts/bounded.mjs", symbol: "ending = terminateGroup(child.pid, (killed) => { kill = killed; });" },
       { file: "packages/window-check/process-group.mjs", symbol: "export function killGroup(pgid, send = sendToGroup, members = groupMembers) {" },
     ],
     tests: [
       { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a command group whose last member has ended but is not reaped ends without an error" },
       { file: "packages/soksak/test/mutation-runner.test.mjs", id: "a mutant deadline is distinguished from cancellation of the experiment" },
     ],
-    expected: "A bounded command whose process group holds only members that ended but are not reaped ends without an execution error, because its group is ended through killGroup, which fails only while a member runs; a mutant deadline is therefore classified as mutant-timeout whenever its test processes are reaped.",
+    expected: "A bounded command whose process group holds only members that ended but are not reaped ends without an execution error, because its group is ended through terminateGroup, whose group signals fail only while a member runs; a mutant deadline is therefore classified as mutant-timeout whenever its test processes are reaped.",
     levels: ["unit"],
   },
   {
@@ -1884,16 +1903,16 @@ const FEATURE_LINKS = [
       { file: "scripts/language-test-adapters.mjs", symbol: "function validateBuild(build, id) {" },
       { file: "scripts/language-test-adapters.mjs", symbol: "function unbuiltResult(caseSpec, build) {" },
       { file: "scripts/language-test-cases.json", symbol: "\"build\": { \"command\": \"cargo\"" },
-      { file: "scripts/test-command.mjs", symbol: "async function cleanupGroup(pid) {" },
+      { file: "scripts/test-command.mjs", symbol: "const beginCleanup = () => {" },
     ],
     tests: [
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "a case builds before its test runs, so the limit of the case measures only the test" },
       { file: "scripts/test/test-language-test-adapters.test.mjs", id: "refuses a build without its own limit and names the case" },
       { file: "scripts/test/test-language-test-manifest.test.mjs", id: "each committed case of a compiled language declares its build, so the limit of the case measures only the test" },
-      { file: "scripts/test/test-command.test.mjs", id: "a refused SIGKILL at the limit to a group that holds only zombies still reports timeout" },
+      { file: "scripts/test/test-command.test.mjs", id: "a refused SIGTERM at the limit to a group that holds only zombies still reports timeout" },
       { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
     ],
-    expected: "Each language case of a compiled language runs its declared build before its tests under a limit of its own, a failed build runs no test and reports its status, the limit of the case measures only the tests, and the command supervisor judges each group signal and probe by the rule of killGroup.",
+    expected: "Each language case of a compiled language runs its declared build before its tests under a limit of its own, a failed build runs no test and reports its status, the limit of the case measures only the tests, and the command supervisor judges each group signal and probe by the rule of signalGroup.",
     levels: ["unit"],
   },
   {
@@ -10175,7 +10194,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/test-command.test.mjs", id: "counts a process group that holds only zombies as gone after a denied probe" },
       { file: "scripts/test/test-command.test.mjs", id: "reads the members of a group from the real process table after a denied probe" },
-      { file: "scripts/test/test-command.test.mjs", id: "reports a refused SIGKILL of the cleanup while a member of the group runs" },
+      { file: "scripts/test/test-command.test.mjs", id: "reports a refused group signal of the cleanup while a member of the group runs" },
     ],
     expected: "A refused cleanup probe is decided from the process table: a group with no running member is cleaned, and a running member keeps the EPERM failure.",
     levels: ["unit"],

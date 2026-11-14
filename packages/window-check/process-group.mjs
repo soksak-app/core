@@ -1,6 +1,6 @@
 // Signals the process group of a test or of a command and reads its members from the process table, by one rule for every caller:
-// the command supervisor (scripts/test-command.mjs), the test runner (scripts/test-runner.mjs) and the commands of the harness
-// (test-app.mjs).
+// the command supervisor (scripts/test-command.mjs), the bounded command (packages/soksak/scripts/bounded.mjs), the test runner
+// (scripts/test-runner.mjs) and the commands of the harness (test-app.mjs).
 import childProcess from "node:child_process";
 
 // kill(-pgid, sig) of macOS returns EPERM when the group has no member that can receive the signal. A member that has ended but whose parent has not yet reaped it
@@ -98,7 +98,53 @@ export function stopGroup(pgid, send = sendToGroup, members = groupMembers) {
   signalGroup(pgid, "SIGSTOP", send, members);
 }
 
-/** Ends every process of the group pgid, the group of a test or of a bounded command. A group that no longer exists has nothing to end. */
+/**
+ * Sends SIGKILL to every process of the group pgid: the leftovers of a test, or a command group that did not end at SIGTERM
+ * (terminateGroup). A group that no longer exists has nothing to end.
+ */
 export function killGroup(pgid, send = sendToGroup, members = groupMembers) {
   signalGroup(pgid, "SIGKILL", send, members);
+}
+
+/**
+ * The time that a group has to end after SIGTERM before it gets SIGKILL. No event reports the end of a process that ignores SIGTERM
+ * and is not a child of this process, so this bound ends the wait for it. The bound stops a command; it never judges a result. A
+ * program removes its partial output, releases its locks and ends its children in milliseconds, and 5 s holds that work also at the
+ * load of the pre-push checks, which run beside the builds of both hosts.
+ */
+export const TERMINATION_GRACE_MS = 5000;
+
+/**
+ * Ends the group pgid of a command by the rule of a stop: SIGTERM to the group, so each member can remove its partial output, release
+ * its locks and end its children, and then a wait until the group runs nothing. A group that still runs TERMINATION_GRACE_MS after
+ * the SIGTERM gets SIGKILL with the reason `grace`; `kill(reason)` sends SIGKILL at once, for an event such as a second cancellation,
+ * and does nothing after the end of the group.
+ * Each SIGKILL calls `onKill({ reason, running })` with the members that still ran, so the escalation is reported. The SIGTERM is sent
+ * before the function returns, and a refusal of it throws. `ended` resolves with the record of the SIGKILL, or with null when SIGTERM
+ * ended the group, and rejects with a refused SIGKILL. No event reports the end of a process that is not a child of this process, so
+ * the wait reads the group at each 10 ms step.
+ */
+export function terminateGroup(pgid, onKill = () => {}) {
+  let killed = null;
+  let groupEnded = false;
+  const kill = (reason) => {
+    if (killed || groupEnded) return killed;
+    const running = runningMembers(pgid);
+    killGroup(pgid);
+    killed = { reason, running };
+    onKill(killed);
+    return killed;
+  };
+  if (!groupRuns(pgid)) return { ended: Promise.resolve(null), kill: () => null };
+  signalGroup(pgid, "SIGTERM");
+  const killAt = performance.now() + TERMINATION_GRACE_MS;
+  const ended = (async () => {
+    while (groupRuns(pgid)) {
+      if (!killed && performance.now() >= killAt) kill("grace");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    groupEnded = true;
+    return killed;
+  })();
+  return { ended, kill };
 }

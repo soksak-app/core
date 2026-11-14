@@ -5,6 +5,7 @@
 ## 미배포
 
 - Go host test는 공유 폴더를 지우기 전에 그 아래 각 WebKit data store를 native store 종료로 끝내므로, network process가 지워지는 폴더에 더는 쓰지 않는다 (#F821).
+- 취소되거나 limit에 걸린 supervised command와 bounded command는 먼저 SIGTERM을 받는다. 5000 ms 뒤에도 실행 중인 group이나 두 번째 취소에는 SIGKILL을 보내고, 결과가 이를 적는다 (#F820).
 - fixture registry test가 held pack의 종료를 zombie에도 성공하는 signal 0 대신 zombie를 끝난 것으로 보는 process table로 판정한다. 규칙은 process-group.mjs의 `processRuns`가 가진다 (#F819).
 - test library 가 host 에서 production 함수를 받고, fault release 가 자기 process 를 이름에 담으며, macOS 도구가 필요한 시험은 macOS 에서만 실행된다 (F818).
 - release 절차가 candidate acceptance 의 activation tier 를 마지막에 단독으로 실행한다 (F817).

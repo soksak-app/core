@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { groupRuns, killGroup, named, runningMembers } from '@soksak/window-check/process-group.mjs';
+import { groupRuns, named, runningMembers, terminateGroup } from '@soksak/window-check/process-group.mjs';
 
 const supportedPlatforms = new Set(['aix', 'darwin', 'freebsd', 'linux', 'openbsd']);
 
@@ -18,7 +18,10 @@ function validate(options) {
   if (options.heartbeatMs !== undefined && (!Number.isInteger(options.heartbeatMs) || options.heartbeatMs <= 0 || options.heartbeatMs > 5000)) throw new TypeError('heartbeatMs must be an integer from 1 through 5000');
   if (options.cwd !== undefined && typeof options.cwd !== 'string') throw new TypeError('cwd must be a string');
   if (options.onEvent !== undefined && typeof options.onEvent !== 'function') throw new TypeError('onEvent must be a function');
-  if (options.signal !== undefined && (typeof options.signal?.addEventListener !== 'function' || typeof options.signal?.removeEventListener !== 'function' || typeof options.signal.aborted !== 'boolean')) throw new TypeError('signal must be an AbortSignal');
+  for (const name of ['signal', 'kill']) {
+    const value = options[name];
+    if (value !== undefined && (typeof value?.addEventListener !== 'function' || typeof value?.removeEventListener !== 'function' || typeof value.aborted !== 'boolean')) throw new TypeError(`${name} must be an AbortSignal`);
+  }
 }
 
 function errorData(error) {
@@ -34,21 +37,15 @@ export function combineFailures(processError, cleanupError) {
   return processError ?? cleanupError ?? null;
 }
 
-
 /**
- * Ends the group pid of a supervised command after its leader ended, at its limit or at its cancellation: SIGKILL to the group, which no
- * process can catch or ignore, and then a wait until the group runs nothing. No event reports the end of a process that is not a child of
- * this process, so the wait reads the group at each 10 ms step until the system has ended every member; the wait has no limit of its own.
+ * Runs a command in a process group of its own. At its limit or at the abort of `signal` the group gets SIGTERM, and SIGKILL only when
+ * it still runs after the grace of terminateGroup; the abort of `kill`, a second cancellation, sends SIGKILL at once. The members that
+ * the leader leaves when it exits are ended by the same rule. Each SIGKILL is a `kill` event and the `kill` field of the result, with
+ * its reason (`grace` or `second-cancellation`) and the members that still ran.
  */
-async function cleanupGroup(pid) {
-  if (!groupRuns(pid)) return;
-  killGroup(pid);
-  while (groupRuns(pid)) await new Promise((resolve) => setTimeout(resolve, 10));
-}
-
 export function runCommand(options) {
   validate(options);
-  const { id, command, args, cwd, timeoutMs, signal, onEvent } = options;
+  const { id, command, args, cwd, timeoutMs, signal, kill, onEvent } = options;
   const heartbeatMs = options.heartbeatMs ?? 5000;
   const emit = onEvent ?? ((event) => process.stdout.write(`${JSON.stringify(event)}\n`));
   const startedAt = performance.now();
@@ -79,22 +76,37 @@ export function runCommand(options) {
     let leaderEnding = false;
     let exited = false;
     let requestedStatus;
-    let cleanupPromise;
+    let ending;
+    let killed = null;
     let exitCode;
     let exitSignal;
     const stdoutChunks = [];
     const stderrChunks = [];
 
+    // One ending per command: the SIGTERM of a limit or a cancellation and the end of the members that the leader leaves share its grace.
+    // A refused SIGKILL at the grace while the leader runs is a refused group signal; after the exit of the leader the cleanup reports it.
+    const beginEnding = () => {
+      if (ending) return ending;
+      ending = terminateGroup(child.pid, (record) => {
+        killed = record;
+        send('kill', record);
+      });
+      ending.ended.catch((error) => { if (!exited) reportSignalError(error); });
+      return ending;
+    };
     const beginCleanup = () => {
-      if (child?.pid && !cleanupPromise) cleanupPromise = cleanupGroup(child.pid);
-      return cleanupPromise ?? Promise.resolve();
+      if (!child?.pid) return Promise.resolve();
+      try {
+        return beginEnding().ended;
+      } catch (error) {
+        return Promise.reject(error);
+      }
     };
     const finish = async (finishedExitCode, finishedSignal, processError, skipCleanup = false) => {
       if (finishing) return;
       finishing = true;
       clearTimeout(timer);
       clearInterval(heartbeat);
-      if (signal) signal.removeEventListener('abort', cancel);
       let cleanupError = null;
       if (!skipCleanup) {
         try {
@@ -103,9 +115,12 @@ export function runCommand(options) {
           cleanupError = error;
         }
       }
+      // A cancellation during the end of the group still sends SIGKILL at once, so the listeners stay until the group has ended.
+      if (signal) signal.removeEventListener('abort', cancel);
+      if (kill) kill.removeEventListener('abort', cancelAgain);
       const error = combineFailures(processError, cleanupError) ?? callbackError;
       const status = error ? 'fail' : (requestedStatus ?? (finishedExitCode !== 0 ? 'fail' : 'pass'));
-      const result = { id, status, exitCode: finishedExitCode ?? null, signal: finishedSignal ?? null, elapsedMs: elapsed(), stdout: Buffer.concat(stdoutChunks).toString('utf8'), stderr: Buffer.concat(stderrChunks).toString('utf8'), error: error ? errorData(error) : null };
+      const result = { id, status, exitCode: finishedExitCode ?? null, signal: finishedSignal ?? null, kill: killed, elapsedMs: elapsed(), stdout: Buffer.concat(stdoutChunks).toString('utf8'), stderr: Buffer.concat(stderrChunks).toString('utf8'), error: error ? errorData(error) : null };
       const observerError = send(status, { exitCode: result.exitCode, signal: result.signal, error: result.error }, true);
       if (observerError) {
         result.status = 'fail';
@@ -127,30 +142,45 @@ export function runCommand(options) {
       else child.once('close', () => finish(exitCode, exitSignal, error, true));
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
     };
-    const cancel = () => terminate('cancelled');
+    // A second cancellation is the event that the first one did not end the command, so it sends SIGKILL without the grace. A
+    // cancellation that comes while the members that the leader left end after their SIGTERM is such an event too.
+    const cancelAgain = () => {
+      requestedStatus ??= 'cancelled';
+      if (!child?.pid) return;
+      try {
+        beginEnding().kill('second-cancellation');
+      } catch (error) {
+        reportSignalError(error);
+      }
+    };
+    const cancel = () => {
+      if (requestedStatus || finishing) cancelAgain();
+      else terminate('cancelled');
+    };
     terminate = (status) => {
       if (finishing || requestedStatus) return;
       requestedStatus = status;
       if (!child?.pid) return;
       if (exited) {
-        // The group ended after the exit of the leader and the output stays open: a process outside the group holds it. The limit ends
-        // the wait for its end, and the result names the cause.
+        // The output stays open at the limit after the exit of the leader: the members that the leader left still end within the grace,
+        // or a process outside the group holds the output. The limit ends the wait for the close, the result names the cause, and it
+        // returns after the end of the group.
         child.stdout.destroy();
         child.stderr.destroy();
         const running = groupRuns(child.pid) ? `; the group still runs: ${named(runningMembers(child.pid))}` : '; a process outside the group holds it';
         const error = new Error(`the output of the command stayed open until its limit after its leader exited${running}`);
         error.code = 'OUTPUT_HELD_OUTSIDE_GROUP';
-        finish(exitCode, exitSignal, error, true);
+        finish(exitCode, exitSignal, error);
         return;
       }
       try {
-        killGroup(child.pid);
+        beginEnding();
       } catch (error) {
         reportSignalError(error);
       }
     };
 
-    if (signal?.aborted) {
+    if (signal?.aborted || kill?.aborted) {
       requestedStatus = 'cancelled';
       finish(null, null);
       return;
@@ -186,6 +216,7 @@ export function runCommand(options) {
     timer = setTimeout(() => terminate('timeout'), timeoutMs);
     heartbeat = setInterval(() => { if (!finishing) send('progress'); }, heartbeatMs);
     signal?.addEventListener('abort', cancel, { once: true });
+    kill?.addEventListener('abort', cancelAgain, { once: true });
   });
 }
 
@@ -207,12 +238,14 @@ function parseCli(argv) {
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  // The first SIGINT or SIGTERM cancels the command, and the next one is the second cancellation, which sends SIGKILL at once.
   const controller = new AbortController();
-  const cancel = () => controller.abort();
-  process.once('SIGINT', cancel);
-  process.once('SIGTERM', cancel);
+  const killController = new AbortController();
+  const cancel = () => (controller.signal.aborted ? killController.abort() : controller.abort());
+  process.on('SIGINT', cancel);
+  process.on('SIGTERM', cancel);
   try {
-    const result = await runCommand({ ...parseCli(process.argv.slice(2)), signal: controller.signal });
+    const result = await runCommand({ ...parseCli(process.argv.slice(2)), signal: controller.signal, kill: killController.signal });
     process.exitCode = result.status === 'pass' ? 0 : 1;
   } catch (error) {
     process.stderr.write(`${error.message}\n`);
