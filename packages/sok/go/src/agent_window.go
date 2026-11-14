@@ -18,11 +18,11 @@ import (
 	"unicode/utf8"
 )
 
-// surfaceVariable is the variable that names the surface whose process started the agent.
-const surfaceVariable = "SOKSAK_SURFACE"
+// SurfaceVariable is the variable that names the surface whose process started the agent.
+const SurfaceVariable = "SOKSAK_SURFACE"
 
 // agentSurface is the surface that SOKSAK_SURFACE names, or "" when the variable is not set or empty.
-func agentSurface() string { return os.Getenv(surfaceVariable) }
+func agentSurface() string { return os.Getenv(SurfaceVariable) }
 
 // requester sends one endpoint request and returns its result.
 type requester func(method string, params any) (json.RawMessage, error)
@@ -40,7 +40,7 @@ func surfaceWindow(request requester, surface string) (surfaceHome, error) {
 	result, err := request("surface.window", map[string]any{"surface": surface})
 	var endpointErr *EndpointError
 	if errors.As(err, &endpointErr) && endpointErr.Code == 1012 {
-		return surfaceHome{}, fmt.Errorf("%s names surface %s, which is in no window of the application", surfaceVariable, surface)
+		return surfaceHome{}, fmt.Errorf("%s names surface %s, which is in no window of the application", SurfaceVariable, surface)
 	}
 	if err != nil {
 		return surfaceHome{}, err

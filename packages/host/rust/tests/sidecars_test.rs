@@ -110,6 +110,106 @@ fn echo_sidecars() -> (Sidecars<SidecarRecorder>, folder::Folder) {
     (sidecars, directory)
 }
 
+/// The environment variable that tells that the process is the child that inherits the variables of an agent.
+const AGENT_ENVIRONMENT_CHILD: &str = "SOKSAK_SIDECAR_AGENT_ENVIRONMENT_CHILD";
+
+/// The control text of the sidecar fixture that records the values of SOKSAK_CONFIG_DIR and SOKSAK_SURFACE in the files
+/// `config-dir` and `surface` of `folder`.
+fn record_agent_environment(folder: &Path) -> String {
+    format!(
+        "record-env SOKSAK_CONFIG_DIR {}\nrecord-env SOKSAK_SURFACE {}\n",
+        folder.join("config-dir").display(),
+        folder.join("surface").display()
+    )
+}
+
+/// The values that the sidecar fixture recorded in `folder`: SOKSAK_CONFIG_DIR and SOKSAK_SURFACE.
+fn recorded_agent_environment(folder: &Path) -> (String, String) {
+    (
+        std::fs::read_to_string(folder.join("config-dir")).unwrap(),
+        std::fs::read_to_string(folder.join("surface")).unwrap(),
+    )
+}
+
+// A test of the harness runs on a thread of its own and does not change the environment of its process, so the test runs in a
+// child of the same binary whose environment holds the values of another application, which an application started from its
+// process inherits.
+// contract: sidecars.environment.names-the-configuration-directory
+#[test]
+fn sidecars_start_with_the_configuration_directory_and_without_a_surface() {
+    const NAME: &str = "sidecars_start_with_the_configuration_directory_and_without_a_surface";
+    if std::env::var_os(AGENT_ENVIRONMENT_CHILD).is_none() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
+            .env(AGENT_ENVIRONMENT_CHILD, "1")
+            .env("SOKSAK_CONFIG_DIR", "/other/config")
+            .env("SOKSAK_SURFACE", "other-surface")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed"),
+            "child ended with {:?}\noutput: {stdout}\nerror output: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let config_directory = folder::Folder::new();
+    let config = config_directory.path().canonicalize().unwrap();
+    let config_text = config.to_str().unwrap().to_string();
+    // A sidecar on standard input and output records its environment before it answers the first request.
+    let stdio = folder::Folder::new();
+    stdio.fixture(
+        "echo",
+        &format!(
+            "{}on 1 reply {{\"surface\":\"s1\",\"body\":\"ok\"}}\non any echo\n",
+            record_agent_environment(stdio.path())
+        ),
+    );
+    let sidecars = Sidecars::new(
+        &declare(
+            &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
+            stdio.path(),
+        ),
+        config.clone(),
+    )
+    .unwrap();
+    let (first, events) = owner("environment", "/projects/a");
+    sidecars.send_as(&first, ECHO, "s1", &raw("{}")).unwrap();
+    events.recv().unwrap();
+    assert_eq!(
+        recorded_agent_environment(stdio.path()),
+        (config_text.clone(), String::new()),
+        "standard input and output sidecar: SOKSAK_CONFIG_DIR and SOKSAK_SURFACE"
+    );
+    sidecars.stop();
+    // A persistent service records its environment and ends before it prints an endpoint, so its start fails after the record.
+    let service = folder::Folder::new();
+    service.fixture("echo", &record_agent_environment(service.path()));
+    let persistent = Sidecars::new(
+        &declare(
+            &files(
+                r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+            ),
+            service.path(),
+        ),
+        config,
+    )
+    .unwrap();
+    let (second, _events) = owner("environment-service", "/projects/b");
+    let error = persistent
+        .send_as(&second, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
+    assert!(error.contains("service exited before endpoint"), "{error}");
+    assert_eq!(
+        recorded_agent_environment(service.path()),
+        (config_text, String::new()),
+        "persistent service: SOKSAK_CONFIG_DIR and SOKSAK_SURFACE"
+    );
+    persistent.stop();
+}
+
 // contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 #[test]
 fn messages_reach_the_owning_window_only() {

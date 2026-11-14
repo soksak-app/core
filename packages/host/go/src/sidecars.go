@@ -38,6 +38,7 @@ import (
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 )
 
 // SidecarMessage is the event value that passes a message sent by a sidecar to the page.
@@ -1956,6 +1957,7 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: %w", name, err)
 	}
 	cmd := exec.Command(program, arguments...)
+	cmd.Env = c.environment()
 	// The sidecar leads a process group of its own, which the host ends when the sidecar exits
 	// (docs/spec/sidecars.md#declaration-and-startup).
 	if err := current.NewProcessGroup(cmd); err != nil {
@@ -2131,6 +2133,23 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, stop <-chan struct{}) 
 	return nil, true, nil
 }
 
+// environment is the environment of a sidecar: the environment of the host without SOKSAK_SURFACE and with SOKSAK_CONFIG_DIR set to
+// the configuration directory, whatever values of both the host holds; a host without a configuration directory starts its sidecars
+// without SOKSAK_CONFIG_DIR (docs/spec/sidecars.md#processes-of-a-surface).
+func (c *Sidecars) environment() []string {
+	environment := []string{}
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if name != sok.ConfigDirVariable && name != sok.SurfaceVariable {
+			environment = append(environment, entry)
+		}
+	}
+	if c.configDir != "" {
+		environment = append(environment, sok.ConfigDirVariable+"="+c.configDir)
+	}
+	return environment
+}
+
 // processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
 // it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
 // there (docs/spec/persistent-services.md#service-transport).
@@ -2164,6 +2183,7 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 			}
 		}
 		cmd = exec.Command(program, "--service-dir", serviceDir, "--log-dir", filepath.Join(c.configDir, "logs"))
+		cmd.Env = c.environment()
 		// A persistent service belongs to the lifetime of the configuration
 		// directory and not of this application process. A new session is started so that the recovery service does not
 		// end together with the application when it exits abnormally.

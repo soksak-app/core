@@ -1630,6 +1630,14 @@ pub struct OutdatedSidecar {
     pub sessions: usize,
 }
 
+/// Sets the environment of a sidecar: the environment of the host without SOKSAK_SURFACE and with SOKSAK_CONFIG_DIR set to the
+/// configuration directory, whatever values of both the host holds (docs/spec/sidecars.md#processes-of-a-surface).
+fn sidecar_environment(command: &mut Command, config_directory: &Path) {
+    command
+        .env(soksak_sok::CONFIG_DIR_VARIABLE, config_directory)
+        .env_remove(soksak_sok::SURFACE_VARIABLE);
+}
+
 #[cfg(feature = "diagnostics")]
 impl<O: Owner> Sidecars<O> {
     /// Returns the sidecar sessions of the surfaces that owner owns, ordered by sidecar and surface. A surface that sent
@@ -3503,6 +3511,7 @@ impl<O: Owner> Core<O> {
         command
             .arg("--log-dir")
             .arg(core.config_directory.join("logs"));
+        sidecar_environment(&mut command, &core.config_directory);
         let platform = current()?;
         // The sidecar leads a process group of its own, which the host ends when the sidecar exits
         // (docs/spec/sidecars.md#declaration-and-startup).
@@ -3706,6 +3715,7 @@ impl<O: Owner> Core<O> {
                 )
                 .map_err(|error| format!("sidecar {name}: service log: {error}"))?;
                 let mut command = Command::new(program);
+                sidecar_environment(&mut command, config);
                 command
                     .arg("--service-dir")
                     .arg(&service_dir)

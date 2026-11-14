@@ -36,7 +36,7 @@ func configDirOf(values map[string]string, options Options) (string, error) {
 		return dir, nil
 	}
 	// A process that a surface started names the configuration directory of its application (docs/spec/cli.md#the-window-of-an-agent).
-	if dir := os.Getenv("SOKSAK_CONFIG_DIR"); dir != "" {
+	if dir := os.Getenv(ConfigDirVariable); dir != "" {
 		return dir, nil
 	}
 	base, err := os.UserConfigDir()

@@ -60,6 +60,85 @@ func TestSidecarProcessDoesNotReceiveItsDisplayNameFromTheHost(t *testing.T) {
 	}
 }
 
+// agentEnvironment is the control text of the sidecar fixture that records the values of SOKSAK_CONFIG_DIR and SOKSAK_SURFACE in
+// the files config-dir and surface of directory, and reads them after the sidecar recorded them.
+type agentEnvironment struct{ directory string }
+
+func (e agentEnvironment) control() string {
+	return "record-env SOKSAK_CONFIG_DIR " + filepath.Join(e.directory, "config-dir") + "\n" +
+		"record-env SOKSAK_SURFACE " + filepath.Join(e.directory, "surface") + "\n"
+}
+
+func (e agentEnvironment) values(t *testing.T) (string, string) {
+	t.Helper()
+	config, err := os.ReadFile(filepath.Join(e.directory, "config-dir"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	surface, err := os.ReadFile(filepath.Join(e.directory, "surface"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(config), string(surface)
+}
+
+// contract: sidecars.environment.names-the-configuration-directory
+func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing.T) {
+	// The environment of the host holds the values of another application, which an application started from its process inherits.
+	t.Setenv("SOKSAK_CONFIG_DIR", "/other/config")
+	t.Setenv("SOKSAK_SURFACE", "other-surface")
+	config, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A sidecar on standard input and output records its environment before it answers the first request.
+	stdio := agentEnvironment{t.TempDir()}
+	support.Fixture(t, stdio.directory, "fixture", stdio.control()+`on 1 reply {"surface":"s1","body":"ok"}`+"\non any echo\n")
+	sidecars, err := host.NewSidecars(support.Declare(stdio.directory, `{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}`), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.Next(t)
+	if directory, surface := stdio.values(t); directory != config || surface != "" {
+		t.Fatalf("standard input and output sidecar: SOKSAK_CONFIG_DIR %q, SOKSAK_SURFACE %q, want %q and none", directory, surface, config)
+	}
+	// A persistent service records its environment and ends before it prints an endpoint, so its start fails after the record.
+	service := agentEnvironment{t.TempDir()}
+	support.Fixture(t, service.directory, "service", service.control())
+	persistent, err := host.NewSidecars(support.HarnessDeclarations(service.directory), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(persistent.Stop)
+	if err := support.SendOpen(persistent, support.NewSidecarRecorder(t, "/projects/b")); err == nil || !strings.Contains(err.Error(), "service exited before endpoint") {
+		t.Fatalf("persistent start = %v, want the end before the endpoint", err)
+	}
+	if directory, surface := service.values(t); directory != config || surface != "" {
+		t.Fatalf("persistent service: SOKSAK_CONFIG_DIR %q, SOKSAK_SURFACE %q, want %q and none", directory, surface, config)
+	}
+	// A host without a configuration directory starts its sidecars without SOKSAK_CONFIG_DIR.
+	unnamed := agentEnvironment{t.TempDir()}
+	support.Fixture(t, unnamed.directory, "fixture", unnamed.control()+`on 1 reply {"surface":"s1","body":"ok"}`+"\non any echo\n")
+	without, err := host.NewSidecars(support.Declare(unnamed.directory, `{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}`), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(without.Stop)
+	other := support.NewSidecarRecorder(t, "/projects/c")
+	if err := other.Send(without, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	other.Next(t)
+	if directory, surface := unnamed.values(t); directory != "" || surface != "" {
+		t.Fatalf("sidecar of a host without a configuration directory: SOKSAK_CONFIG_DIR %q, SOKSAK_SURFACE %q, want none", directory, surface)
+	}
+}
+
 // contract: sidecars.protocol.message-at-limit-is-delivered
 func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
 	// The body is the string of x characters that fills the line limit beside the surface and the quotes of the message.

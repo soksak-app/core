@@ -73,7 +73,7 @@ sidecar가 surface를 위해 시작하는 프로세스(탭의 session의 shell �
 
 surface를 위해 프로세스를 시작하는 모든 sidecar는 자기 환경이 가진 값을 대신해 두 변수를 모두 설정하고, 어느 surface에도 속하지 않는 프로세스는 `SOKSAK_SURFACE` 없이 시작한다. 그래서 어떤 프로세스도 자기가 속하지 않은 surface를 가리키지 않는다. session이 재연결을 넘어 유지하는 프로세스는 시작 때의 값을 유지하며, surface는 식별자를 유지하므로 그 값은 맞는 값으로 남는다. 각 sidecar는 surface를 위해 시작한 프로세스로 이 의무를 자기 repository에서 테스트한다.
 
-호스트는 표준 입출력 sidecar와 지속 서비스를 모두 `SOKSAK_CONFIG_DIR`를 자기 설정 디렉터리로 설정하고 `SOKSAK_SURFACE` 없이 시작한다. 호스트의 환경이 무엇을 가졌든 그렇다. 다른 애플리케이션의 프로세스에서 시작한 애플리케이션은 그 프로세스의 변수를 물려받기 때문이다. 호스트는 fixture sidecar(`docs/spec/cases/sidecars/fixture.sh`)의 환경을 테스트한다.
+호스트는 표준 입출력 sidecar와 지속 서비스를 모두 `SOKSAK_CONFIG_DIR`를 자기 설정 디렉터리로 설정하고 `SOKSAK_SURFACE` 없이 시작한다. 호스트의 환경이 무엇을 가졌든 그렇다. 다른 애플리케이션의 프로세스에서 시작한 애플리케이션은 그 프로세스의 변수를 물려받기 때문이다. 설정 디렉터리 없이 만든 호스트는 `logs` 폴더도 없으며([로그](#로그)), 자기 sidecar를 `SOKSAK_CONFIG_DIR` 없이 시작한다. 호스트는 fixture sidecar(`docs/spec/cases/sidecars/fixture.sh`)의 환경을 테스트한다.
 
 ## 실패
 

@@ -25,6 +25,10 @@ func TestMain(m *testing.M) {
 		quitAfterTheStart(directory)
 		return
 	}
+	if directory := os.Getenv(agentVariablesStart); directory != "" {
+		environmentAfterTheStart(directory)
+		return
+	}
 	if scenario := os.Getenv(memoryPressureChild); scenario != "" {
 		if err := runMemoryPressureChild(scenario); err != nil {
 			fmt.Println(err)

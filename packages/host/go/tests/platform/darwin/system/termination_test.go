@@ -112,11 +112,7 @@ func TestATerminationSignalAfterTheStartQuitsTheFramework(t *testing.T) {
 // framework received the quit. The start of the host runs on the main thread, so TestMain calls it.
 func quitAfterTheStart(directory string) {
 	quit := make(chan struct{})
-	session, err := host.Prepare(quitFramework{quit: quit}, fstest.MapFS{
-		"frontend/background.js":                            {},
-		"frontend/modules/@soksak/plugin-api/view-start.js": {},
-		"frontend/view-imports.json":                        {Data: []byte("{}")},
-	}, host.Options{ConfigDir: directory})
+	session, err := host.Prepare(quitFramework{quit: quit}, startAssets(), host.Options{ConfigDir: directory})
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(2)
@@ -144,6 +140,15 @@ func quitAfterTheStart(directory string) {
 	// A framework that receives no quit leaves the child waiting, and the check of its parent stops at the limit of its runner.
 	<-quit
 	fmt.Println("quit requested")
+}
+
+// startAssets are the files of the frontend that the start of the host reads.
+func startAssets() fstest.MapFS {
+	return fstest.MapFS{
+		"frontend/background.js":                            {},
+		"frontend/modules/@soksak/plugin-api/view-start.js": {},
+		"frontend/view-imports.json":                        {Data: []byte("{}")},
+	}
 }
 
 // quitFramework is the framework of the start of the host without an application. A step of the main thread is a native call that

@@ -45,6 +45,7 @@ pub mod routine;
 pub mod setup;
 pub mod skill;
 pub mod version;
+pub use agent_window::{CONFIG_DIR_VARIABLE, SURFACE_VARIABLE};
 pub use logged::{Command, logged, run_logged, start_tool_event_log};
 pub use output::current_platform;
 pub use routine::PANIC_STATUS;

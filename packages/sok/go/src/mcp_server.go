@@ -813,7 +813,7 @@ func skillFailure(err error) map[string]any {
 
 // isNoWindowOf tells whether err is the error of a surface in no window.
 func isNoWindowOf(err error) bool {
-	return err != nil && err.Error() == fmt.Sprintf("%s names surface %s, which is in no window of the application", surfaceVariable, agentSurface())
+	return err != nil && err.Error() == fmt.Sprintf("%s names surface %s, which is in no window of the application", SurfaceVariable, agentSurface())
 }
 
 // watchOnce is status_watch_once: the calls that wait on one status of a window and surface share one endpoint watch, and the

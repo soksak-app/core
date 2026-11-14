@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A host removes `SOKSAK_CONFIG_DIR` and `SOKSAK_SURFACE` of its environment before it starts a process, and starts each sidecar with its configuration directory as `SOKSAK_CONFIG_DIR` and without `SOKSAK_SURFACE` (F846).
 - An agent on the machine learns and reaches the application through `sok`: `sok skill install` writes a static skill that teaches discovery, `sok mcp` serves eleven tools that read the exposure of the running application on each call, `sok mcp install` registers it through the `claude` command, `sok setup check|install` reports and installs these parts, and the settings window shows them; `core.layout.open`, `core.layout.select` and `core.layout.close` open, select and close tabs by one idempotent rule, and the window snapshot holds the window and its layout (F831).
 - Release acceptance requires one run of the window checks and native end-to-end entries that the candidate adds or changes since the previous release, on every candidate host, in place of two runs of every check of every script; CI proves the whole candidate (F845).
 - The mygo host keeps the cursor of its content when a page answers an earlier pointer move later, and injected moves of window checks set the cursor through the cursor rects of AppKit (F844).

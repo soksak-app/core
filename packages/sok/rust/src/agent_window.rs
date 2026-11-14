@@ -16,6 +16,9 @@ use serde_json::value::RawValue;
 use crate::endpoint::{Client, Failure};
 use crate::{Arguments, Error, Options, indent, select_window};
 
+/// The variable that names the configuration directory of the application whose surface started the process.
+pub const CONFIG_DIR_VARIABLE: &str = "SOKSAK_CONFIG_DIR";
+
 /// The variable that names the surface whose process started the agent.
 pub const SURFACE_VARIABLE: &str = "SOKSAK_SURFACE";
 

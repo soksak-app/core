@@ -73,7 +73,7 @@ A process that a sidecar starts for a surface, such as the shell of a session of
 
 Every sidecar that starts processes for surfaces sets both, replacing a value that its own environment holds, and starts a process that belongs to no surface without `SOKSAK_SURFACE`, so no process names a surface that it does not belong to. A process that a session keeps across a reconnection keeps the values of its start, which stay right because a surface keeps its identifier. Each sidecar tests this obligation in its own repository with a process that it starts for a surface.
 
-The host starts every sidecar, on standard input and output or persistent, with `SOKSAK_CONFIG_DIR` set to its configuration directory and without `SOKSAK_SURFACE`, whatever the environment of the host held, because an application started from a process of another application inherits the variables of that process. The host tests the environment of the fixture sidecar (`docs/spec/cases/sidecars/fixture.sh`).
+The host starts every sidecar, on standard input and output or persistent, with `SOKSAK_CONFIG_DIR` set to its configuration directory and without `SOKSAK_SURFACE`, whatever the environment of the host held, because an application started from a process of another application inherits the variables of that process. A host created without a configuration directory, which has no folder `logs` either ([log](#log)), starts its sidecars without `SOKSAK_CONFIG_DIR`. The host tests the environment of the fixture sidecar (`docs/spec/cases/sidecars/fixture.sh`).
 
 ## Failure
 

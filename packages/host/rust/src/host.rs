@@ -170,10 +170,12 @@ fn run_menu_command(app: &AppHandle, command: &str) -> Result<(), String> {
     Err("no main window".into())
 }
 
-/// Starts the process before the framework runs: the panic hook and the application arguments.
+/// Starts the process before the framework runs: the variables of an agent, the panic hook and the application arguments.
 pub fn start_process() {
-    // The panic hook is the first action of the process, so a panic before the writer exists is recorded in the start buffer
-    // and stored when the writer opens (docs/spec/hosts.md#process-lifecycle).
+    // The host removes the variables of an agent before it starts any process or thread (docs/spec/cli.md#the-window-of-an-agent).
+    remove_agent_variables();
+    // The panic hook is the first action of the process after that removal, which cannot panic, so a panic before the writer
+    // exists is recorded in the start buffer and stored when the writer opens (docs/spec/hosts.md#process-lifecycle).
     application_log::install_panic_hook();
     // The arguments are read before a window opens. An invalid argument ends with status 2
     // (docs/spec/hosts.md#application-arguments).
@@ -189,6 +191,20 @@ pub fn start_process() {
             eprintln!("{error}");
             std::process::exit(2);
         }
+    }
+}
+
+/// Removes SOKSAK_CONFIG_DIR and SOKSAK_SURFACE from the environment of the process. An application started from a process of
+/// another application inherits them, and a sok that the host starts, such as the sok of an application update, would act on the
+/// configuration directory of that application.
+fn remove_agent_variables() {
+    for name in [
+        soksak_sok::CONFIG_DIR_VARIABLE,
+        soksak_sok::SURFACE_VARIABLE,
+    ] {
+        // SAFETY: start_process runs at the start of main before the panic hook starts the first thread of the process, so no
+        // other thread reads or writes the environment during the removal.
+        unsafe { std::env::remove_var(name) };
     }
 }
 

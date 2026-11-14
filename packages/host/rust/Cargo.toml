@@ -65,6 +65,13 @@ harness = false
 name = "stall_watch_test"
 harness = false
 
+# The start of the process reads the arguments of the process, so this target runs its test without the harness, whose arguments the
+# start would refuse, and the test runs the start in a child of the same binary without arguments; it answers --list and --exact as
+# the harness does.
+[[test]]
+name = "host_test"
+harness = false
+
 # A measurement prints numbers and asserts nothing (docs/spec/logging.md#writers).
 [[bench]]
 name = "event_log_benchmark"

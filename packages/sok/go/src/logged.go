@@ -248,8 +248,8 @@ func Main(args []string, stdout, stderr io.Writer, options Options) int {
 // reaches can belong to another installed application of another release, and the application's own sok is the one whose methods
 // and core version match it.
 
-// configDirVariable names the configuration directory of the application whose surface started the process.
-const configDirVariable = "SOKSAK_CONFIG_DIR"
+// ConfigDirVariable names the configuration directory of the application whose surface started the process.
+const ConfigDirVariable = "SOKSAK_CONFIG_DIR"
 
 // configFromEnvironment tells whether the configuration directory of the arguments comes from SOKSAK_CONFIG_DIR: no --config-dir
 // before an argument `--`, and the variable set and not empty.
@@ -262,7 +262,7 @@ func configFromEnvironment(args []string) bool {
 			return false
 		}
 	}
-	return os.Getenv(configDirVariable) != ""
+	return os.Getenv(ConfigDirVariable) != ""
 }
 
 // handoffTarget returns the running sok and the canonical path of the sok of the application whose endpoint.json the configuration

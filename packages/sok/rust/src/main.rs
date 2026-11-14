@@ -21,8 +21,8 @@ fn main() {
             std::process::exit(1);
         }
     };
-    let config_dir_variable = variable("SOKSAK_CONFIG_DIR");
-    let surface_variable = variable("SOKSAK_SURFACE");
+    let config_dir_variable = variable(soksak_sok::CONFIG_DIR_VARIABLE);
+    let surface_variable = variable(soksak_sok::SURFACE_VARIABLE);
     let options = soksak_sok::Options {
         identifier,
         paths_dir: paths.as_deref().map_err(Clone::clone),
