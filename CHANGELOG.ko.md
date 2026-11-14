@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- ci.yml의 toolchain 단계 주석이 core package의 setup test를 적으므로, 어떤 workflow도 end-to-end check 폴더를 적지 않는다 (#F823-1).
 - tauriv2 host contract check가 다시 통과한다: 각 endpoint case는 Rust owner가 하나이고, wire test의 이름이 서로 다르며, hold test가 자기 case를 선언하고, dialog watch case는 모든 host를 덮고, 정적 check가 중복 leaf를 보고하며, window race fixture는 main thread의 close 뒤에 closing 상태를 읽는다 (#F824).
 - resize의 layout probe test는 composition이 영역을 배치하는 animation frame을 기다리고, 그 wire case가 그 배치를 선언한다 (#F822).
 - core-node CI job은 e2e setup test가 cargo metadata를 실행하는 core package test 전에 Rust toolchain을 설치하고, darwin setup test는 실패한 cargo를 그 출력과 함께 보고한다 (#F823).

@@ -20,8 +20,8 @@ jobs:
       - uses: ./core/.github/actions/setup-node
         with:
           root: core
-      # The setup tests of e2e run cargo metadata; the job installs the toolchain that rust-toolchain.toml declares, so no test
-      # installs it through the rustup proxy while another test does.
+      # Setup tests of the core packages run cargo metadata; the job installs the toolchain that rust-toolchain.toml declares,
+      # so no test installs it through the rustup proxy while another test does.
       - uses: ./core/.github/actions/setup-rust
         with:
           root: core
