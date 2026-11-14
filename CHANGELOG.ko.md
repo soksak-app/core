@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 녹화 check가 host의 거부를 window check session의 error 형식으로 비교한다 (F833).
 - `fixtureRegistry`가 check의 version과 range를 받고, 받지 않는 option을 거부한다 (F832).
 - 두 host가 양의 부호 있는 32-bit 수가 아닌 process group id를 signal 전에 거부한다 (F830-3).
 - 두 host의 process group 오류가 system 오류를 `errno <n>`로 적는다 (F830-2).

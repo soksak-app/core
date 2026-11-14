@@ -18,7 +18,8 @@ for (const app of Object.values(APPS)) {
     const s = await open(t, app);
     await fresh(s);
     // A refused request is an error that the requester receives; the hosts write an error line only for a request that ended without
-    // its result (endpoint no result), so these refusals declare no expected application error.
+    // its result (endpoint no result), so these refusals declare no expected application error. The session reports a refusal as
+    // `<application> <method>: <text of the host>` (packages/window-check/test/capture-refused.test.mjs).
     const { refreshRate } = await s.get("host.window");
     const gap = 1000 / refreshRate;
     // Window, display, then the same window again: each start prepares its target again.
@@ -27,7 +28,7 @@ for (const app of Object.values(APPS)) {
       assert.ok(existsSync(recording.frames), `the folder ${recording.frames} of the running recording is absent`);
       await assert.rejects(
         s.request("diagnostics.capture.start", { gap, frames: 1 }),
-        (error) => error.message === `a capture into ${recording.frames} is running`,
+        (error) => error.message === `${app.name} diagnostics.capture.start: a capture into ${recording.frames} is running`,
         "a second start was accepted while a recording ran",
       );
       const stopped = await recording.stop();
@@ -41,7 +42,7 @@ for (const app of Object.values(APPS)) {
         `the stop names the window ${JSON.stringify(stopped.window)} for a recording ${params.display ? "of the display" : "of a window"}`);
       await assert.rejects(
         s.request("diagnostics.capture.stop", {}),
-        (error) => error.message === "no capture is running",
+        (error) => error.message === `${app.name} diagnostics.capture.stop: no capture is running`,
         "a second stop of one recording was accepted",
       );
     }

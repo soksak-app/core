@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The recording check compares the refusals of the hosts in the error form of the window check session (F833).
 - `fixtureRegistry` takes the versions and ranges of a check and refuses an option that it does not take (F832).
 - Both hosts refuse a process group id that is not a positive signed 32-bit number before any signal (F830-3).
 - The process group errors of both hosts name the system error as `errno <n>` (F830-2).
