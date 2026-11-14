@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Picker가 자신을 닫는 Escape의 default를 막아, document region이 그 key를 받지 않는다 (F843).
 - Tab press key check가 자신이 만드는 race의 presentation error를 선언한다 (F842).
 - `core.debug.viewing`이 debug view의 image가 load되었는지 보고한다 (F841).
 - 거부된 notification authorization이 error 없이 denied 상태를 보고한다 (F840).

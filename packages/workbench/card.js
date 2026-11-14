@@ -22,10 +22,13 @@ export function onAnswer(root, send) {
     const el = e.target.closest("[data-set]");
     if (el) send(el.dataset.set, el.type === "checkbox" ? String(el.checked) : el.value);
   });
-  // A menu is canceled with Escape. A dialog is closed only by its own close button.
+  // A menu is canceled with Escape. A dialog is closed only by its own close button. The handled Escape prevents its default, because
+  // WebKit sends a key whose default was not prevented again through the application, and the document region could receive it.
   root.addEventListener("keydown", (e) => {
     const menu = '[data-native-modal="menu"]';
-    if (e.key === "Escape" && root.querySelector(menu)) send(MODAL_DISMISS, "");
+    if (e.key !== "Escape" || !root.querySelector(menu)) return;
+    e.preventDefault();
+    send(MODAL_DISMISS, "");
   });
 }
 

@@ -33,6 +33,23 @@ test("Escape in an open native menu answers core.modal.dismiss and the answer ru
   assert.deepEqual(calls, ["dismiss"]);
 });
 
+test("Escape in an open native menu prevents the default of the key event and answers the dismiss once", () => {
+  const root = document.createElement("div");
+  root.innerHTML = '<div data-native-modal="menu" aria-label="Menu"></div>';
+  document.body.appendChild(root);
+  try {
+    const answers = [];
+    onAnswer(root, (key, value) => { answers.push([key, value]); });
+    const event = new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    root.firstElementChild.dispatchEvent(event);
+    // An unhandled key is sent again through the application, so the handled Escape must not reach the document region.
+    assert.equal(event.defaultPrevented, true, "the Escape that dismissed the menu kept its default");
+    assert.deepEqual(answers, [["core.modal.dismiss", ""]]);
+  } finally {
+    root.remove();
+  }
+});
+
 test("an answer that names no item of the picker and no dismiss command is refused", async () => {
   const { pickerAnswer } = await import("../picker-layer.js");
   assert.throws(() => pickerAnswer(["a:t1"], run)("missing:key"), /is not an item of the menu/);
