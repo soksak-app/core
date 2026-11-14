@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { installContributions } from "../contributions.js";
 import { installExposure } from "../exposure.js";
@@ -10,10 +11,18 @@ installExposure(exposureFile);
 // The plugin page of the library shows the name, description, state, version, sidecars, and operation buttons of each plugin
 // (Plugin screen in docs/spec/installation.md).
 test("the plugin page of the library lists each plugin with its description, versions, sidecars and actions", async (t) => {
-  const dom = new JSDOM("<body><div id=library></div></body>");
+  // The plane reads the elements of the page of the window when it is imported, so the library is drawn into that page.
+  const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8")
+    .replace("</body>", "<div id=library></div></body>");
+  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
+  globalThis.window = dom.window;
   globalThis.document = dom.window.document;
-  t.mock.module("../plane.js", { namedExports: { fresh: () => ({}) } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: null, windows: { createsFolders: false, folder: async (root) => ({ root }) } } });
+  globalThis.devicePixelRatio = dom.window.devicePixelRatio;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  globalThis.CSS = dom.window.CSS;
+  globalThis.PointerEvent = dom.window.PointerEvent;
+  globalThis.MouseEvent = dom.window.MouseEvent;
   // The tty plugin connects its item to the extension point items of the db plugin, which declares it with the version 1.0.0.
   installContributions([
     { id: "db", version: "2.0.0", package: "@x/db", manifest: { extends: { items: { version: "1.0.0", schema: {} } } } },

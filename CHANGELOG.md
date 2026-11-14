@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The picker close, stale layout and sidebar section tests of the workbench run the real host, plugin and console modules of the page: the picker close test plays a page-wire case and the stale layout test reads the errors of the page from a real console on a stream; the library plugin test reads the document of index.html and still replaces the installed plugin module (F795-10).
 - The script tests copy their input programs and files from tracked folders under scripts/test/fixtures, and the process identity build test lists the commands with the dry run of make and builds with the real clang and ar instead of commands that recorded their arguments (F795-4).
 - The tab session, performance trace, page log, theme placement, keyboard placement and layout failure tests of the workbench run the real host, store and log modules of the page on page-wire cases; a case records the count of the log gate in the batch that the flush of the page sends (F795-10).
 - 40 further workbench test files run the real host, window, log and trace modules of the page and play page-wire cases instead of replacing those modules, the test runtime gives the page the window interface of the native runtime over the selected case, and the page-wire reader writes each call of the page when `PAGE_WIRE_TRACE=1` is set (F795-10).

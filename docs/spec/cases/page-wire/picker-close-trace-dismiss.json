@@ -1,0 +1,309 @@
+{
+  "name": "picker-close-trace-dismiss",
+  "description": "The page sets the policy that stores the debug level of the call class, turns the performance trace on, shows the tab list of a card as a menu view, and closes it with the reason dismiss; the close is written as the trace event workbench.trace.picker.close in the log batch after the clock answers of the host; after the flush the counts of the log gate leave in a second batch as the record workbench.log.gated.",
+  "replay": false,
+  "reason": "The case shows and hides a menu view through the overlay calls of the host, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "page-identity": {
+      "type": "string",
+      "example": "3db0745e-2d7c-46f8-9773-ba46f81d4b33",
+      "source": "page"
+    },
+    "picker-html": {
+      "type": "string",
+      "example": "<div class=\"picker__head\">탭 1개</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"tab-osryw5\" data-active=\"true\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"></svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">main</span><small>?</small></button>",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 19,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999999607,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999151497,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000797,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000341622,
+      "source": "page"
+    },
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "$authorization",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "policy",
+          "classes": {
+            "lifecycle": "error",
+            "input": "error",
+            "call": "debug",
+            "io": "error",
+            "frame": "error"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "on"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "탭 1개",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "$picker-html",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(7, 8, 9)",
+          "radius": 4
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": 1791000000000456,
+          "mono_ns": 5000000789
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.trace.picker.close",
+              "fields": {
+                "reason": "dismiss"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

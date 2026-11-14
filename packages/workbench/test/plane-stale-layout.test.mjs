@@ -4,8 +4,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { Console } from "node:console";
+import { PassThrough } from "node:stream";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
 
 const pluginId = "fixture-stale-layout";
 
@@ -32,38 +33,34 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // A page without a host bridge. The test records the reports so that it can read them.
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The test does not load surface modules. It handles only the drawing of the plane. It records the surfaces that are mounted.
-  const mounts = [];
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, declarations: {}, sidecars: [] }),
-    mountSurface: (slot, surface) => { mounts.push(surface.surfaceId); return Promise.resolve(); },
-    disposeSurface: () => Promise.resolve(), placePluginPlaceholder: () => {},
-  } });
-  // The layout of a new space: one card that cannot be closed.
-  t.mock.module("../environment.js", { exports: {
-    environment: () => ({ workspace: { focus: "main", grid: {
+  // A page without a host bridge writes each reported failure to the error stream of its console, which the test reads.
+  const reported = new PassThrough();
+  // The lines written so far; a write to the stream is readable at once.
+  const reports = () => (reported.read()?.toString() ?? "").split("\n").filter((line) => line !== "");
+  const pageConsole = globalThis.console;
+  globalThis.console = new Console({ stdout: reported, stderr: reported });
+  // The layout of a new space: one card that cannot be closed. Its tab is a view of the installed plugin of the test.
+  const { installEnvironment } = await import("../environment.js");
+  installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: pluginId, title: "main" }] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", description: "검사용 표면.", surface: true, sections: [] }],
-    refusedPlugins: () => new Set(),
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    surface: (surfaceId) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
+    } },
+    sidebars: { sets: [], links: [] },
+  }, {
+    plugins: [{ id: pluginId, package: "@fixture/surface", version: "0.0.1", manifest: {
+      id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+      surface: { composition: { kind: "view", page: "ui/page.html" } },
+    } }],
   });
 
   // The card elements connect only to declared core commands.
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
+  // The view of a tab is drawn as a placeholder in its slot, because this page has no native host (surface-modules.js).
+  const placeholderOf = (surfaceId) => planeEl.querySelector(`.surface-placeholder[data-surface-id="${surfaceId}"]`);
   try {
     // The receiver keeps the drawing function and does not draw immediately. This is the same as a page that waits for the native preparation.
     let held = null;
@@ -72,7 +69,7 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     held.draw();
     // The drawing of a live card mounts the surface of its tab.
     const mainTab = plane.currentGrid().card("main").data.activeId;
-    assert.ok(mounts.includes(mainTab), `the first draw did not mount the main tab ${mainTab}`);
+    assert.ok(placeholderOf(mainTab), `the first draw did not mount the main tab ${mainTab}`);
     const stableCard = planeEl.querySelector('.card[data-card-id="main"]');
     const stableSlot = stableCard.querySelector(".slot");
     const stableAttributes = ["data-role", "data-focused", "data-native-surface", "data-native-surface-id",
@@ -156,12 +153,14 @@ test("a held layout draw survives the close of a card it contains", { timeout: 5
     assert.equal(shown.holds(), false, "the layout held before the active tab closed must not hold");
     await plane.closeTabById(tab);
     assert.equal(plane.currentGrid().card(card), undefined, "closing the last tab left the card on the plane");
-    mounts.length = 0;
+    // The next commit releases the surface of the closed tab, so its view is still in its slot, and a mount would replace it.
+    const viewBefore = placeholderOf(tab);
     assert.doesNotThrow(() => stale.draw(), "drawing a layout held before the card closed must not throw");
-    // The surface of the closed tab is already released, so drawing the earlier layout does not mount it again.
-    assert.ok(!mounts.includes(tab), `the closed tab ${tab} was mounted again by the stale draw`);
-    assert.deepEqual(reports, []);
+    // The drawing of the earlier layout does not mount the closed tab again.
+    assert.equal(placeholderOf(tab), viewBefore, `the closed tab ${tab} was mounted again by the stale draw`);
+    assert.deepEqual(reports(), []);
   } finally {
+    globalThis.console = pageConsole;
     dom.window.close();
   }
 });
