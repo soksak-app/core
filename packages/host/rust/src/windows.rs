@@ -1097,15 +1097,19 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             crate::window_events::record_window_event(window_events_label.as_str(), kind);
         }
     });
+    let close = WindowClose {
+        label: window.label().to_string(),
+        data: context.clone(),
+        platform,
+        owner,
+        responder_observation,
+        cursor_observation,
+        sheet_observation,
+    };
     let closing_host = window.clone();
-    let closing_context = context.clone();
+    let closing = close.clone();
     window.on_closing(move || {
-        let ready = closing_context.ready.load(Ordering::Relaxed);
-        crate::window_events::record_window_event(
-            closing_host.label(),
-            if ready { "close_requested" } else { "closed" },
-        );
-        close_requested(&closing_context, ready, || {
+        closing.requested(|| {
             if let Err(error) = emit_window(&closing_host, "project-close-request", ()) {
                 log_error("project-close-request", error);
             }
@@ -1120,54 +1124,8 @@ pub(crate) fn register(window: Window) -> Result<(), String> {
             // A window that ends keeps no tab, so a removal that asked it is allowed.
             host.state::<Windows>().removals.abandon(host.label());
             crate::exposure::window_closed(&host);
-            let natives = context.clone();
             // The records of the window are removed below, before the main-thread step runs, so the step takes them now.
-            let closing = window_data(&host);
-            log_failure(
-                "window close",
-                platform.enqueue_ui(Box::new(move || {
-                    if let Ok(data) = &closing {
-                        log_failure(
-                            "surface layout cancel",
-                            data.documents.presentation().abandon_all(),
-                        );
-                    }
-                    log_failure("surface layout cancel", platform.cancel_layout(owner));
-                    platform.end_responder_observation(responder_observation);
-                    platform.end_cursor_observation(cursor_observation);
-                    platform.end_sheet_observation(sheet_observation);
-                    // A logical surface holds the main webview, so if it is not closed, the main webview and its web
-                    // content process remain.
-                    let surfaces = std::mem::take(
-                        &mut *natives
-                            .surface_hosts
-                            .lock()
-                            // default: a lock that a panicking thread poisoned still holds the surface registrations,
-                            // which the close of the window takes and closes; the panic hook records the panic.
-                            .unwrap_or_else(PoisonError::into_inner),
-                    );
-                    log_failure(
-                        "window close",
-                        crate::surfaces::close_window_surfaces(
-                            surfaces,
-                            &natives.documents,
-                            &natives.streams,
-                            &natives.images,
-                            &mut |native| match native {
-                                crate::surfaces::WindowNative::Document(handle) => {
-                                    platform.close_document(handle)
-                                }
-                                crate::surfaces::WindowNative::Image(handle) => {
-                                    platform.close_image(handle)
-                                }
-                                crate::surfaces::WindowNative::Surface(handle) => {
-                                    platform.close_surface(handle)
-                                }
-                            },
-                        ),
-                    );
-                })),
-            );
+            log_failure("window close", close.end_natives(window_data(&host)));
             let monitor = context
                 .watching
                 .0
@@ -1926,6 +1884,97 @@ pub fn close_requested(data: &WindowData, ready: bool, ask: impl FnOnce()) -> bo
     data.closing.store(true, Ordering::Relaxed);
     data.documents.views().forget_all();
     false
+}
+
+/// The close of a registered window: the records of the window, its native window and the observations that its registration
+/// began, which the request to close the window and the destruction of the window end. The framework calls `requested` from the
+/// hook of the close request and `end_natives` from the destruction of the window, on the main thread.
+#[derive(Clone)]
+pub struct WindowClose {
+    pub label: String,
+    pub data: Arc<WindowData>,
+    pub platform: &'static dyn platform::Platform,
+    pub owner: Handle,
+    pub responder_observation: Handle,
+    pub cursor_observation: Handle,
+    pub sheet_observation: Handle,
+}
+
+impl WindowClose {
+    /// Answers a request to close the window as `close_requested` does, with ask asking the ready page, records the request and
+    /// cancels the layouts of a window that closes. Returns whether the window stays open.
+    pub fn requested(&self, ask: impl FnOnce()) -> bool {
+        let ready = self.data.ready.load(Ordering::Relaxed);
+        crate::window_events::record_window_event(
+            &self.label,
+            if ready { "close_requested" } else { "closed" },
+        );
+        if close_requested(&self.data, ready, ask) {
+            return true;
+        }
+        // The close cancels the layouts of the window in its own step, while the framework still holds the window: the framework
+        // closes and releases the window after this hook, and a work queued for a later turn would name a window whose address can
+        // then belong to a later window, whose transaction the work would cancel (docs/spec/native-surfaces.md#layout-transaction).
+        log_failure(
+            "surface layout cancel",
+            self.platform.cancel_layout(self.owner),
+        );
+        false
+    }
+
+    /// Queues the main-thread step that ends the natives of the destroyed window: the presentation waits of the records that
+    /// closing took, the observations of the window and its logical surfaces with their regions. The step names no window, because
+    /// the framework may have released the window before it runs.
+    pub fn end_natives(&self, closing: Result<Arc<WindowData>, String>) -> Result<(), String> {
+        let platform = self.platform;
+        let natives = self.data.clone();
+        let (responder_observation, cursor_observation, sheet_observation) = (
+            self.responder_observation,
+            self.cursor_observation,
+            self.sheet_observation,
+        );
+        platform.enqueue_ui(Box::new(move || {
+            if let Ok(data) = &closing {
+                log_failure(
+                    "surface layout cancel",
+                    data.documents.presentation().abandon_all(),
+                );
+            }
+            platform.end_responder_observation(responder_observation);
+            platform.end_cursor_observation(cursor_observation);
+            platform.end_sheet_observation(sheet_observation);
+            // A logical surface holds the main webview, so if it is not closed, the main webview and its web
+            // content process remain.
+            let surfaces = std::mem::take(
+                &mut *natives
+                    .surface_hosts
+                    .lock()
+                    // default: a lock that a panicking thread poisoned still holds the surface registrations,
+                    // which the close of the window takes and closes; the panic hook records the panic.
+                    .unwrap_or_else(PoisonError::into_inner),
+            );
+            log_failure(
+                "window close",
+                crate::surfaces::close_window_surfaces(
+                    surfaces,
+                    &natives.documents,
+                    &natives.streams,
+                    &natives.images,
+                    &mut |native| match native {
+                        crate::surfaces::WindowNative::Document(handle) => {
+                            platform.close_document(handle)
+                        }
+                        crate::surfaces::WindowNative::Image(handle) => {
+                            platform.close_image(handle)
+                        }
+                        crate::surfaces::WindowNative::Surface(handle) => {
+                            platform.close_surface(handle)
+                        }
+                    },
+                ),
+            );
+        }))
+    }
 }
 
 /// Ends the generation of the main page of the window in the turn of the end of the process of its page

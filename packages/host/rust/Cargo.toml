@@ -39,6 +39,13 @@ name = "view_binary_test"
 harness = false
 required-features = ["host-test"]
 
+# The close of a window ends its native layout transactions, which run only on the main thread, so this target runs its tests on the
+# main thread of its process with a real window; it answers --list and --exact as the harness does.
+[[test]]
+name = "window_close_layout_test"
+harness = false
+required-features = ["host-test"]
+
 # The reports of the memory pressure source belong to the main thread, so this target runs its tests on the main thread of its
 # process; it answers --list and --exact as the harness does.
 [[test]]

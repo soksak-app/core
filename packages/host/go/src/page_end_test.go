@@ -249,6 +249,7 @@ func TestThePageEndFixtureRunsTheUIWorksOfTheHostBeforeItEnds(t *testing.T) {
 // release would cancel the transaction of a later window that the operating system placed at the same address
 // (docs/spec/native-surfaces.md#layout-transaction). The native window of the fixture stays open after the close, so its address stands
 // for that later window, and the UI queue of the test holds the works that the close queued until that window began its layout.
+// contract: window-close.layout.cancelled-in-close-step
 func TestTheCloseOfAWindowCancelsItsLayoutInTheStepOfTheClose(t *testing.T) {
 	h, s, window := pageEndFixture(t)
 	native := window.native
