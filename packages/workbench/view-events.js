@@ -98,9 +98,12 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
     }
     return result;
   };
+  // The registrations in progress, by key: a call for a key that is being registered waits for that registration and registers nothing.
+  const registering = new Map();
   const subscribe = (key, register) => {
     if (closed) return Promise.reject(new Error("view subscriptions are closed"));
     if (registered.has(key)) return Promise.resolve(null);
+    if (registering.has(key)) return registering.get(key);
     const owner = generation;
     const pending = registration(key, register).then((off) => {
       if (owner !== generation || closed) {
@@ -109,8 +112,10 @@ export function createViewSubscriptions({ native, sidecar, textSize, settings, d
       registered.set(key, off);
       return null;
     });
+    registering.set(key, pending);
+    const settled = () => { if (registering.get(key) === pending) registering.delete(key); };
     // A refused registration is forgotten, so that a later call for the key registers again.
-    pending.catch(() => registered.delete(key));
+    pending.then(settled, () => { settled(); registered.delete(key); });
     return pending;
   };
   // default: subscriptions without a run state have no start to push.

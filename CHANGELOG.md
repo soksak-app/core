@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A view subscription that a page asks for again while its registration is pending registers once, so each change reaches the view once (F811).
 - The Go test runner links the native library that pkg-config names at the time of the run, also after another location held the same content (F810).
 - The Rust host refuses a page log event of another plugin with the text of the Go host (F813).
 - 38 further workbench test files run the real host, plane, compositor, projects, settings, page log and surface modules of the page over page-wire cases, a case records the registrations of the listeners of the page as listen steps that can refuse or hold a registration, and the library test sorts the incompatible plugins as the page does (F795-10).
