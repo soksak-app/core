@@ -55,6 +55,8 @@
     {"reply":{"result":null}},
     {"call":{"command":"document.load","params":{"name":"page","url":"soksak://layoutprobe/ui/document.html?key=tab-7"}}},
     {"reply":{"result":null}},
+    {"call":{"command":"composition.place","params":{"regions":[{"name":"page","left":8,"top":8,"right":308,"bottom":408,"visible":true}],"overlays":[]}}},
+    {"reply":{"result":null}},
     {"notice":{"event":"exposure-request","data":{"id":1001,"method":"status.get","params":{"name":"layoutprobe.surface"}}}},
     {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1001,"result":{"width":300,"height":400,"scale":2,"region":{"x":8,"y":8,"width":284,"height":384},"visibility":"visible","theme":{"scheme":"dark","background":"rgb(30, 30, 30)"}}}}}},
     {"reply":{"result":null}},

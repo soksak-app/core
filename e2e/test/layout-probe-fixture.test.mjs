@@ -223,6 +223,10 @@ test("the surface status follows a resize and a theme of the view", { timeout: 5
   const view = await startTab("layout-probe-fixture-surface-status");
   view.window.innerWidth = 300;
   view.window.dispatchEvent(new view.window.Event("resize"));
+  // The composition places its regions at the animation frame after a resize; frame callbacks run in the order of their requests,
+  // so this frame runs after the one of the composition, and the turn lets its placement call reach the wire.
+  await new Promise((resolve) => view.window.requestAnimationFrame(resolve));
+  await turn();
   assert.deepEqual((await view.status("layoutprobe.surface")).region, { x: 8, y: 8, width: 284, height: 384 });
   view.window.document.body.style.background = "rgb(250, 250, 250)";
   view.deliverNotice("theme", { scheme: "light", tokens: {} });

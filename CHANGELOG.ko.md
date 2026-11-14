@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- resize의 layout probe test는 composition이 영역을 배치하는 animation frame을 기다리고, 그 wire case가 그 배치를 선언한다 (#F822).
 - core-node CI job은 e2e setup test가 cargo metadata를 실행하는 core package test 전에 Rust toolchain을 설치하고, darwin setup test는 실패한 cargo를 그 출력과 함께 보고한다 (#F823).
 - Go host test는 공유 폴더를 지우기 전에 그 아래 각 WebKit data store를 native store 종료로 끝내므로, network process가 지워지는 폴더에 더는 쓰지 않는다 (#F821).
 - 취소되거나 limit에 걸린 supervised command와 bounded command는 먼저 SIGTERM을 받는다. 5000 ms 뒤에도 실행 중인 group이나 두 번째 취소에는 SIGKILL을 보내고, 결과가 이를 적는다 (#F820).
