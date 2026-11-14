@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Tab press key check가 자신이 만드는 race의 presentation error를 선언한다 (F842).
 - `core.debug.viewing`이 debug view의 image가 load되었는지 보고한다 (F841).
 - 거부된 notification authorization이 error 없이 denied 상태를 보고한다 (F840).
 - Notification check가 tab notice가 그 tab의 system notification을 대체하는지 확인한다 (F839).
