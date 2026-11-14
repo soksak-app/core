@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -239,7 +240,21 @@ func (implementation) TerminateProcessGroup(pid int) error {
 // runs is the end of the group, as ESRCH is; EPERM while one runs, which the kernel does for a process that the host may not
 // signal, is an error that names the processes that run.
 func signalProcessGroup(pid int, signal syscall.Signal) error {
-	return groupSignalResult(syscall.Kill(-pid, signal), func() ([]int, error) { return runningGroupProcesses(pid) })
+	group, err := processGroupID(pid)
+	if err != nil {
+		return err
+	}
+	return groupSignalResult(syscall.Kill(-group, signal), func() ([]int, error) { return runningGroupProcesses(group) })
+}
+
+// processGroupID returns the id of the process group of the leader pid as the system takes it: a positive signed 32-bit number,
+// because the system reads the negated id as 32 bits and signals the group of the caller for 0, one process for a negative id
+// and every process for -1.
+func processGroupID(pid int) (int, error) {
+	if pid <= 0 || pid > math.MaxInt32 {
+		return 0, errors.New("out of range")
+	}
+	return pid, nil
 }
 
 // groupSignalResult judges the answer err of a signal to a process group (signalProcessGroup); running reads the processes of the

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Both hosts refuse a process group id that is not a positive signed 32-bit number before any signal (F830-3).
 - The process group errors of both hosts name the system error as `errno <n>` (F830-2).
 - The Go host ends the process group of an exited sidecar before it reaps the leader and sends no group signal after the end, as the Rust host does (F830-1).
 - A process group whose members are all zombies or exiting has ended in both hosts, which read the members from the process table when the group signal answers EPERM (F830).

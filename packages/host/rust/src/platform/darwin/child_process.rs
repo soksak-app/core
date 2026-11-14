@@ -32,13 +32,22 @@ pub fn terminate_process_group(pid: u32) -> Result<(), String> {
 /// none of them runs is the end of the group, as ESRCH is; EPERM while one runs, which the kernel does for a process that
 /// the host may not signal, is an error that names the processes that run.
 fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
-    let group = i32::try_from(pid).map_err(|_| "out of range".to_string())?;
+    let group = process_group_id(pid)?;
     let answer = if unsafe { libc::kill(-group, signal) } == 0 {
         Ok(())
     } else {
         Err(std::io::Error::last_os_error())
     };
     group_signal_result(answer, || running_group_processes(group))
+}
+
+/// The id of the process group of the leader `pid` as the system takes it: a positive signed 32-bit number, because the
+/// system signals the group of the caller for 0.
+pub(super) fn process_group_id(pid: u32) -> Result<i32, String> {
+    match i32::try_from(pid) {
+        Ok(group) if group > 0 => Ok(group),
+        _ => Err("out of range".to_string()),
+    }
 }
 
 /// Judges the answer of a signal to a process group (signal_process_group); `running` reads the processes of the group
