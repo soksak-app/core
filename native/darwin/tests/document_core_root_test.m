@@ -40,7 +40,7 @@ static bool resolveCoreRoot(void *context, const char *plugin, const char *path,
     if (strcmp(plugin, "probe") != 0 || strcmp(path, "/modules/probe/m.js") != 0) return false;
     const char *text = "export default 42;\n";
     *length = strlen(text);
-    *bytes = malloc(*length);
+    *bytes = sp_core_root_buffer_create(*length);
     memcpy(*bytes, text, *length);
     *type = strdup("text/javascript");
     return true;

@@ -1,7 +1,8 @@
 // Checks the memory of a document response (docs/spec/native-surfaces.md#document-regions): the host holds no whole copy of a
 // plugin file while it answers a request, so the page receives every byte of a large file, no single allocation of the process
 // reaches the size of the file, and the footprint of the process neither peaks nor stays at the size of the file. A core root
-// answer sends the bytes of the resolver without a second whole copy.
+// answer releases the pages of the buffer of the resolver as it sends them, so the buffer and the chunks in transit hold at most
+// the file and one chunk, and nothing of the file stays after the load.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
@@ -22,7 +23,10 @@ static const uint32_t typeAllocate = 2;
 static const uint32_t typeDeallocate = 4;
 // The size of a large file that a plugin ships.
 static const size_t kFileBytes = 24 * 1024 * 1024;
-static const size_t kCoreBytes = 16 * 1024 * 1024;
+// The size of a core root file. The answer may hold the file, the chunk that it copies and the chunk that WebKit copies, plus the
+// memory of one load, which does not grow with the file; an eighth of this file is far above that memory and far below a second
+// copy of the file in transit, which the receiver's timing makes up to the size of the file.
+static const size_t kCoreBytes = 64 * 1024 * 1024;
 // An allocation of this size or more is far above the bytes of one chunk of a response.
 static const size_t kWholeCopyBytes = 1024 * 1024;
 static atomic_size_t largest = 0;
@@ -116,7 +120,7 @@ static bool resolveCore(void *context, const char *plugin, const char *path, voi
     (void)context; (void)plugin;
     if (strcmp(path, "/modules/probe/large.bin") != 0) return false;
     *length = kCoreBytes;
-    uint8_t *written = malloc(kCoreBytes);
+    uint8_t *written = sp_core_root_buffer_create(kCoreBytes);
     for (size_t index = 0; index < kCoreBytes; index++) written[index] = patternByte(index);
     *bytes = written;
     *type = strdup("application/octet-stream");
@@ -217,17 +221,22 @@ int main(void) { @autoreleasepool {
         [latest release];
         latest = nil;
         roundTrip(view, @"the new view answers");
-        double corePeakBefore = footprintMiB(YES);
+        // The rise is judged from the footprint before the load, which is at most the earlier peak, so the earlier loads cannot
+        // hide a part of the rise.
+        double coreBefore = footprintMiB(NO);
         check(sp_document_load(view, "soksak://probe/ui/app/core.html"), @"the page of a core file starts a load");
-        eventWait(@"the page reads a core file", ^BOOL{ return [latest[@"title"] hasPrefix:@"read 16"]; });
+        eventWait(@"the page reads a core file", ^BOOL{ return [latest[@"title"] hasPrefix:@"read 6"]; });
         NSString *expectedCore = [NSString stringWithFormat:@"read %zu %u", kCoreBytes, patternSum(kCoreBytes)];
         check([latest[@"title"] isEqual:expectedCore],
             [NSString stringWithFormat:@"the page receives every byte of the core file: %@, expected %@", latest[@"title"], expectedCore]);
         roundTrip(view, @"the view answers after the core file");
-        double coreRise = footprintMiB(YES) - corePeakBefore;
+        double coreRise = footprintMiB(YES) - coreBefore;
+        double coreAfter = footprintMiB(NO) - coreBefore;
         double coreMiB = kCoreBytes / 1048576.0;
-        check(coreRise < coreMiB * 1.75,
-            [NSString stringWithFormat:@"the peak footprint rises by %.1f MiB for the %.0f MiB of the resolver, so they have no second whole copy", coreRise, coreMiB]);
+        check(coreRise < coreMiB * 1.125,
+            [NSString stringWithFormat:@"the peak footprint rises by %.1f MiB for the %.0f MiB of the resolver, below the file and an eighth of it", coreRise, coreMiB]);
+        check(coreAfter < coreMiB / 8,
+            [NSString stringWithFormat:@"the footprint stays %.1f MiB above its start after a core file of %.0f MiB", coreAfter, coreMiB]);
         sp_document_close(view);
     }
     sp_surface_close(surface);

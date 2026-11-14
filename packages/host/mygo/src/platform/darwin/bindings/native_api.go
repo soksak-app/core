@@ -32,6 +32,26 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.Calloc, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "coreRootBufferCreate")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API coreRootBufferCreate: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API coreRootBufferCreate: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.CoreRootBufferCreate, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "coreRootBufferRelease")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API coreRootBufferRelease: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API coreRootBufferRelease: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.CoreRootBufferRelease, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "coreRootSet")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API coreRootSet: %w", err)

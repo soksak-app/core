@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The resolver of a core file fills a buffer that the native side allocates, and the response releases the pages of each chunk before it sends that chunk, so a page load holds at most the file plus one chunk (F826).
 - A Go host test retires its view through the end of a failed view, which closes its document, and the page-end fixture waits for the UI works of the host before its window and platform end (#F825).
 - A command that the supervisor or the bounded command ends gets SIGTERM; the harness waits for the exit event of the leader, a timer that reports the escalation sends SIGKILL after the grace, the members that the leader leaves get SIGKILL, and the step wait for the end of the group stays in the command supervisor (#F820-1).
 - The comment of the toolchain step in ci.yml names the setup tests of the core packages, so no workflow names the folder of the end-to-end checks (#F823-1).

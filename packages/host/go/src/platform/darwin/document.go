@@ -59,14 +59,21 @@ var coreRootSet bool
 var coreRootHandle handles.Handle
 
 // goHost_core_root_serve answers one request of the core root of a view with the resolver that SetCoreRoot registered. It returns false
-// for a path that the resolver does not serve. The file is copied to memory that the native scheme releases.
+// for a path that the resolver does not serve. The file is copied into a core root buffer (coreRootBufferCreate), which the native
+// scheme releases page by page while it sends the file. A buffer that is not allocated is written to the application log by the
+// native side, and the request is not found.
 func goHost_core_root_serve(context uintptr, plugin, urlPath *byte, bytes *unsafe.Pointer, length *uint64, contentType **byte) bool {
 	resolve := handles.Handle(uintptr(context)).Value().(platform.CoreRootResolver)
 	data, kind, found := resolve(native.GoString(plugin), native.GoString(urlPath))
 	if !found {
 		return false
 	}
-	*bytes = native.CBytes(data)
+	buffer := native.CoreRootBufferCreate(uint64(len(data)))
+	if buffer == nil {
+		return false
+	}
+	copy(unsafe.Slice((*byte)(buffer), len(data)), data)
+	*bytes = buffer
 	*length = uint64(len(data))
 	*contentType = native.CString(kind)
 	return true

@@ -112,6 +112,8 @@ var (
 type NativeFunctions struct {
 	ActivateWindowAt                       func(uintptr, float64, float64, uintptr)
 	Calloc                                 func(uint64, uint64) unsafe.Pointer
+	CoreRootBufferCreate                   func(uint64) unsafe.Pointer
+	CoreRootBufferRelease                  func(unsafe.Pointer, uint64)
 	CoreRootSet                            func(uintptr)
 	DocumentAddScript                      func(unsafe.Pointer, *byte)
 	DocumentBinaryPut                      func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
@@ -293,6 +295,12 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.Calloc == nil {
 		return fmt.Errorf("native API function is missing: calloc")
+	}
+	if functions.CoreRootBufferCreate == nil {
+		return fmt.Errorf("native API function is missing: coreRootBufferCreate")
+	}
+	if functions.CoreRootBufferRelease == nil {
+		return fmt.Errorf("native API function is missing: coreRootBufferRelease")
 	}
 	if functions.CoreRootSet == nil {
 		return fmt.Errorf("native API function is missing: coreRootSet")

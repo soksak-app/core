@@ -47,7 +47,7 @@ unsafe extern "C" {
     fn sp_document_last_error() -> *const c_char;
     fn sp_core_root_set_resolver(resolver: CoreRoot, context: *mut c_void);
     fn sp_view_import_map_set(map: *const c_char);
-    fn malloc(size: usize) -> *mut c_void;
+    fn sp_core_root_buffer_create(length: usize) -> *mut c_void;
     fn strdup(text: *const c_char) -> *mut c_char;
     fn sp_document_set_event(document: *mut c_void, event: Event, context: *mut c_void);
     fn sp_document_set_message(document: *mut c_void, message: Event, context: *mut c_void);
@@ -341,8 +341,9 @@ pub fn set_view_import_map(map: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Answers one request of the core root of a view. It copies the file into memory that the native scheme releases with free.
-/// It returns false for a path that the resolver does not serve.
+/// Answers one request of the core root of a view. It copies the file into a core root buffer (sp_core_root_buffer_create),
+/// which the native scheme releases page by page while it sends the file. It returns false for a path that the resolver does
+/// not serve.
 extern "C" fn core_root(
     context: *mut c_void,
     plugin: *const c_char,
@@ -366,14 +367,18 @@ extern "C" fn core_root(
         log_error("core root", format!("{path}: the content type is not text"));
         return false;
     };
-    let data = unsafe { malloc(file.data.len().max(1)) } as *mut u8;
     let kind_copy = unsafe { strdup(kind.as_ptr()) };
-    if data.is_null() || kind_copy.is_null() {
-        log_error("core root", format!("{path}: the file cannot be copied"));
-        unsafe {
-            free(data as *mut c_void);
-            free(kind_copy as *mut c_void);
-        }
+    if kind_copy.is_null() {
+        log_error(
+            "core root",
+            format!("{path}: the content type cannot be copied"),
+        );
+        return false;
+    }
+    // The native side writes a buffer that is not allocated to the application log.
+    let data = unsafe { sp_core_root_buffer_create(file.data.len()) } as *mut u8;
+    if data.is_null() {
+        unsafe { free(kind_copy as *mut c_void) };
         return false;
     }
     unsafe {

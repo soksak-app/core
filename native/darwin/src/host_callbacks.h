@@ -8,7 +8,8 @@
 // One declaration source for the native-to-host ABI. V callbacks return no value; R callbacks return a value.
 // Contexts are integer handle tokens, never Go pointers. Generic native void* cookies are converted in C before dispatch.
 // Pointer arguments are borrowed for the call, except the ownership transfers below:
-// - core_root_serve returns malloc-compatible bytes and content_type for native code to free.
+// - core_root_serve returns bytes in a buffer of sp_core_root_buffer_create, which the native scheme releases, and a malloc-compatible
+//   content_type for native code to free.
 // - native_settled_done transfers its nullable malloc-compatible message to the host, which frees it.
 // - native_settled_present transfers a copied completion block; the host consumes it exactly once through
 //   sp_host_presentation_complete, after which that pointer is invalid.

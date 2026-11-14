@@ -13,6 +13,7 @@
 #import <objc/runtime.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <mach/mach.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -508,6 +509,56 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
     [task didFinish];
 }
 
+// The size of the virtual memory of a core root buffer of length bytes: whole pages, and one page for an empty file, so every
+// buffer is an allocation of its own.
+static mach_vm_size_t coreBufferSize(size_t length) {
+    return mach_vm_round_page(MAX(length, (size_t)1));
+}
+
+void *sp_core_root_buffer_create(size_t length) {
+    mach_vm_address_t address = 0;
+    kern_return_t result = mach_vm_allocate(mach_task_self(), &address, coreBufferSize(length), VM_FLAGS_ANYWHERE);
+    if (result != KERN_SUCCESS) {
+        sp_log_error("document view", [NSString stringWithFormat:@"core root buffer of %zu bytes is not allocated: %s",
+            length, mach_error_string(result)].UTF8String);
+        return NULL;
+    }
+    return (void *)address;
+}
+
+// Releases the pages of a core root buffer from offset to the end of the range of size bytes. A failure is a defect of the
+// buffer's owner, so it is written to the application log.
+static void releaseCoreBufferPages(void *buffer, mach_vm_size_t offset, mach_vm_size_t size) {
+    if (size == 0) return;
+    kern_return_t result = mach_vm_deallocate(mach_task_self(), (mach_vm_address_t)buffer + offset, size);
+    if (result != KERN_SUCCESS) {
+        sp_log_error("document view", [NSString stringWithFormat:@"core root buffer pages at %llu of %llu bytes are not released: %s",
+            (unsigned long long)offset, (unsigned long long)size, mach_error_string(result)].UTF8String);
+    }
+}
+
+void sp_core_root_buffer_release(void *buffer, size_t length) {
+    releaseCoreBufferPages(buffer, 0, coreBufferSize(length));
+}
+
+// Sends the core root buffer as the body of the task in chunks, finishes the task and releases the buffer. Each chunk is copied
+// into its own data, because WebKit keeps a chunk of a synchronous load, and the pages of the chunk are released before the
+// chunk is sent. WebKit copies a sent chunk into memory that this process owns until the web content process takes it, so the
+// unsent pages and the chunks in transit together hold at most the file and one chunk, whatever the timing of the receiver.
+static void sendCoreBuffer(id<WKURLSchemeTask> task, void *buffer, size_t length) {
+    mach_vm_size_t released = 0;
+    for (size_t offset = 0; offset < length; offset += kResponseChunkBytes) @autoreleasepool {
+        size_t count = MIN(length - offset, kResponseChunkBytes);
+        NSData *chunk = [NSData dataWithBytes:(uint8_t *)buffer + offset length:count];
+        mach_vm_size_t end = offset + count == length ? coreBufferSize(length) : mach_vm_trunc_page(offset + count);
+        releaseCoreBufferPages(buffer, released, end - released);
+        released = end;
+        [task didReceiveData:chunk];
+    }
+    releaseCoreBufferPages(buffer, released, coreBufferSize(length) - released);
+    [task didFinish];
+}
+
 @implementation SPPluginScheme
 - (void)webView:(WKWebView *)view startURLSchemeTask:(id<WKURLSchemeTask>)task {
     (void)view;
@@ -621,17 +672,15 @@ static void sendBody(id<WKURLSchemeTask> task, NSData *data) {
             userInfo:@{ NSLocalizedDescriptionKey: [NSString stringWithFormat:@"%@ is not found", url.absoluteString] }]];
         return;
     }
-    // The data takes the buffer of the resolver, so the file has no second whole copy here.
-    NSData *data = [NSData dataWithBytesNoCopy:bytes length:length freeWhenDone:YES];
     NSString *contentType = [NSString stringWithUTF8String:type];
     free(type);
     NSHTTPURLResponse *response = [[[NSHTTPURLResponse alloc] initWithURL:url statusCode:200 HTTPVersion:@"HTTP/1.1" headerFields:@{
         @"Content-Type": contentType,
-        @"Content-Length": @(data.length).stringValue,
+        @"Content-Length": @(length).stringValue,
         @"Access-Control-Allow-Origin": [NSString stringWithFormat:@"soksak://%@", self.plugin],
     }] autorelease];
     [task didReceiveResponse:response];
-    sendBody(task, data);
+    sendCoreBuffer(task, bytes, length);
 }
 
 // Answers a request of the binary store. An upload answers {id, length}; a download answers the stored bytes and releases

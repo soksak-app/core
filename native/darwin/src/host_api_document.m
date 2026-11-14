@@ -18,6 +18,14 @@ void coreRootSet(uintptr_t context) {
     hostRunOnMain(^{ sp_core_root_set_resolver(coreRootBridge, (void *)context); });
 }
 
+// The core root resolver of the host fills its buffer on the worker, so these calls run on the calling thread.
+void *coreRootBufferCreate(size_t length) {
+    return sp_core_root_buffer_create(length);
+}
+void coreRootBufferRelease(void *buffer, size_t length) {
+    sp_core_root_buffer_release(buffer, length);
+}
+
 static void documentChangedBridge(void *context, const char *state) {
     hostRunOnWorker(^{ sp_host_callback_document_changed((uintptr_t)context, (char *)state); });
 }

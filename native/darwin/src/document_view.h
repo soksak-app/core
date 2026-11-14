@@ -84,11 +84,21 @@ void sp_document_add_user_script(void *document, const char *source);
 void sp_document_set_view_message(void *document, sp_view_message message, void *context);
 
 // Resolves a request of the core root (docs/spec/plugin-processes.md, rule 4) of a view of plugin for the URL path path,
-// which names a file of the core host. When the path is served, it returns true and sets bytes to a copy of the file that
-// the caller releases with free, length to its size, and type to its content type that the caller releases with free. It
-// returns false for a path that is not served. Called on the main thread.
+// which names a file of the core host. When the path is served, it returns true and sets bytes to a buffer of
+// sp_core_root_buffer_create that holds the file, length to the size of the file, and type to its content type that the caller
+// releases with free; the caller owns the buffer. It returns false for a path that is not served, and a resolver that created a
+// buffer and then fails releases it with sp_core_root_buffer_release first. Called on the main thread.
 typedef bool (*sp_core_root_resolver)(void *context, const char *plugin, const char *path, void **bytes, size_t *length,
     char **type);
+
+// Creates the buffer of a core root file of length bytes as its own virtual memory, so the scheme releases the pages of the
+// file that it has sent while it sends the rest (docs/spec/native-surfaces.md#document-regions). It returns NULL when the
+// memory is not allocated and writes the reason to the application log. Any thread may call it.
+void *sp_core_root_buffer_create(size_t length);
+
+// Releases a buffer of sp_core_root_buffer_create of length bytes that a resolver does not hand to the scheme. Any thread may
+// call it.
+void sp_core_root_buffer_release(void *buffer, size_t length);
 
 // Sets the core root resolver of the application. NULL serves no core file. The caller keeps context while the application
 // runs. Called on the main thread.

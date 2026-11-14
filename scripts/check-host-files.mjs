@@ -432,6 +432,8 @@ export const MAIN_THREAD_FREE = {
   sp_input_source_identifier_role: "the identifier lookup reads a constant table of role and input source identifier strings without accessing AppKit or Text Input Sources",
   sp_observe_flush: "the observation counters are atomic, and the flush writes them to the event ring",
   sp_phys_footprint: "the footprint reads task_info of the own task, a Mach call of any thread",
+  sp_core_root_buffer_create: "the resolver buffer is allocated with mach_vm_allocate in the own task, a Mach call of any thread, and its error goes to the event ring",
+  sp_core_root_buffer_release: "the resolver buffer is released with mach_vm_deallocate in the own task, a Mach call of any thread, and its error goes to the event ring",
   sp_diagnostic_reports_directory: "the directory is a path of the file system that NSFileManager resolves on any thread",
   "sp_capture_*": "the window recording and the still capture keep their state in capture.m under its own lock and queues, take the stills of the window server on their own queues and wait for them, and hand their AppKit work to the main queue, so a step that called them would hold the main thread while those stills complete",
   sp_facts_free: "the function frees a string that a native function returned",

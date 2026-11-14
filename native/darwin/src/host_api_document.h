@@ -6,6 +6,8 @@
 
 // Host binding entry points. Window and callback tokens retain their uintptr_t representation.
 void coreRootSet(uintptr_t context);
+void *coreRootBufferCreate(size_t length);
+void coreRootBufferRelease(void *buffer, size_t length);
 void documentQuery(void *document, uintptr_t context);
 void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, uintptr_t context);
 void documentSetMessage(void *document, uintptr_t context);
