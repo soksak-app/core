@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Both hosts write the reply of a `status.watch` before the notifications of its status that arrive while it is unanswered (F835).
 - The picker prevents the default of the Escape that dismisses it, so the document region does not receive that key (F843).
 - The tab press key check declares the presentation error of the race that it makes (F842).
 - `core.debug.viewing` reports whether the image of the debug view has loaded (F841).

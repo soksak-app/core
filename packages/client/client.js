@@ -162,7 +162,9 @@ class Client {
         }
         if (ok) finish(null, value);
       };
-      // Registers first so that a notification that arrives before the status.watch response is also received.
+      // Registers before the status.watch is sent: the host sends the current value right after the reply of the first watch
+      // (status.watch in docs/spec/exposure.md), and a notification read in the same turn as the reply comes before the turn
+      // that status.get waits for.
       const off = this.on("status.changed", (params) => {
         if (params?.window === window && params?.name === name && params?.surface === surface) check(params.value);
       });
@@ -241,9 +243,11 @@ class Client {
   }
 
   /**
-   * Ends one use of entry. The last use sends status.unwatch after the subscription, in the order of the subscription requests of
-   * the target. A failed subscription is not unsubscribed. An entry that is no longer the watch of its key ended at the host
-   * already: its failure removed it, or status.ended did, and a later watch of the key holds a new entry that this use does not
+   * Ends one use of entry. The last use sends status.unwatch after the answer of the subscription, in the order of the subscription
+   * requests of the target. A use ends only after the answer of its subscription has arrived, because the host writes no
+   * notification of the target before that answer, so a failed subscription, whose failure removed its entry, is not
+   * unsubscribed. An entry that is no longer the watch of its key ended at the host already: its failure removed it, or
+   * status.ended did, and a later watch of the key holds a new entry that this use does not
    * count in. The host ends the subscription of the connection before it asks the page, so a refusal of the unwatch, with any
    * code, ends the watch as well (status.watch in docs/spec/exposure.md): it ends nothing else, the connection stays open, and
    * the caller of the watch has its result already.
@@ -254,7 +258,7 @@ class Client {
     if (entry.count > 0) return;
     this.#watches.delete(key);
     if (this.#closed) return;
-    const released = this.#subscribe(key, () => entry.ready.then(() => this.request("status.unwatch", target), () => null));
+    const released = this.#subscribe(key, () => this.request("status.unwatch", target));
     released.then(undefined, (error) => {
       // A refusal of the host, with any code, ended the watch on the host, and the connection stays open.
       if (error instanceof EndpointError) return;

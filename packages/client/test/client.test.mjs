@@ -155,19 +155,14 @@ test("concurrent watches of one name unwatch only after the last one ends", asyn
   assert.equal(server.requests.filter((m) => m.method === "status.watch").length, 1);
 });
 
-test("a watch that ends before its subscription is confirmed is unsubscribed before the next watch", async (t) => {
-  const server = await play(t, "watch-ended-before-confirm");
+test("a watch whose predicate fails on the current value is unsubscribed before the next watch", async (t) => {
+  const server = await play(t, "watch-failed-then-watch-again");
   const client = await connect({ configDir: server.configDir });
   t.after(() => client.close());
-  const received = server.nextRequest("status.watch");
   const unwatch = requested(server, (message) => message.method === "status.unwatch");
   const failure = new Error("the predicate failed");
-  const ended = client.watch("main", "core.screen", () => { throw failure; });
-  const failed = assert.rejects(ended, (error) => error === failure);
-  await received;
-  await client.request("windows.list");
+  await assert.rejects(client.watch("main", "core.screen", () => { throw failure; }), (error) => error === failure);
   await unwatch;
-  await failed;
   const unwatchedAgain = requested(server, (message) => message.method === "status.unwatch");
   const next = client.watch("main", "core.screen", screenIs("workspace"));
   assert.equal((await next).screen, "workspace");

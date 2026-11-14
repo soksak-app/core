@@ -363,6 +363,15 @@ fn scripted_watch_arrival_order() {
     endpoint_case::play("scripted_watch_arrival_order", "watch-arrival-order");
 }
 
+// contract: endpoint.watch.reply-before-current-value
+#[test]
+fn scripted_watch_reply_before_current_value() {
+    endpoint_case::play(
+        "scripted_watch_reply_before_current_value",
+        "watch-reply-before-current-value",
+    );
+}
+
 // contract: endpoint.watch.other-requests-not-blocked-by-pending-subscription
 #[test]
 fn scripted_watch_pending_subscription() {
@@ -446,6 +455,7 @@ const SCRIPTED: &[&str] = &[
     "watch-host-dialog",
     "watch-pending-subscription",
     "watch-per-connection",
+    "watch-reply-before-current-value",
     "watch-surface-separate",
     "window-param-missing",
 ];

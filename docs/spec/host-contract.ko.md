@@ -448,6 +448,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.watch.surface-unwatch-forwarded-with-surface` | 표면 구독을 해제하면 surface를 담은 status.unwatch를 workbench에 보낸다. | all |
 | `endpoint.watch.surface-unwatch-keeps-plain-watch` | 표면 구독을 해제해도 같은 이름의 일반 구독은 유지된다. | all |
 | `endpoint.watch.subscription-arrival-order` | 연달아 보낸 watch, unwatch, watch는 느린 workbench에 그 순서로 도착하고 연결은 계속 구독한다. | all |
+| `endpoint.watch.reply-before-current-value` | 연결의 status에 대한 `status.watch`가 답을 받지 못한 동안 host에 도착한 그 status의 `status.changed` notification은 watch의 reply 뒤에 그 연결에 쓰이므로, page가 첫 watch에 답하기 전에 보낸 현재 값은 reply 뒤에 온다. | all |
 | `status.window.rewatch-notifies` | host.window의 마지막 watch가 끝난 뒤 시작한 watch는, 앞선 watch 종료 전에 보낸 값과 같더라도 창의 다음 값을 받는다. Tauri host는 마지막 watch가 끝날 때 마지막으로 보낸 값의 기록을 지우고, Wails host는 기록을 두지 않는다. | all |
 | `status.window.latest-value-last` | 읽는 동안 들어온 host.window 변경은 그 마지막 변경 뒤에 시작하는 읽기 하나로 합쳐지므로, 변경이 몰려도 읽기는 하나이고 새 값 뒤에 옛 값을 보내지 않는다. | all |
 | `status.window.latest-reads-run-on-one-thread` | 창들의 latest read는 유지되는 thread 하나에서 돈다. 각 창은 자기 latest read를 가지고, burst가 끝난 뒤의 요청은 그 thread를 쓴다. | tauriv2 only: Go의 읽기는 goroutine에서 돌므로 유지되는 thread가 필요 없다 |

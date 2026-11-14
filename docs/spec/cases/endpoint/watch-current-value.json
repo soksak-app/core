@@ -1,6 +1,6 @@
 {
   "name": "watch-current-value",
-  "description": "status.watch subscribes, status.get reads the current value, and status.unwatch ends the subscription after the client has its value.",
+  "description": "status.watch subscribes and the host sends the current value as a status.changed notification after the reply, status.get reads the current value, and status.unwatch ends the subscription after the client has its value.",
   "replay": true,
   "variables": {
     "screen": { "type": "object", "keys": ["screen", "modal"], "example": { "screen": "workspace", "modal": null } }
@@ -9,6 +9,7 @@
     { "send": { "jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": { "window": "main", "name": "core.screen" } } },
     { "reply": { "jsonrpc": "2.0", "id": 1, "result": null } },
     { "send": { "jsonrpc": "2.0", "id": 2, "method": "status.get", "params": { "window": "main", "name": "core.screen" } } },
+    { "notify": { "jsonrpc": "2.0", "method": "status.changed", "params": { "window": "main", "name": "core.screen", "value": "$screen" } } },
     { "reply": { "jsonrpc": "2.0", "id": 2, "result": "$screen" } },
     { "send": { "jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": { "window": "main", "name": "core.screen" } } },
     { "reply": { "jsonrpc": "2.0", "id": 3, "result": null } }

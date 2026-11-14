@@ -435,6 +435,18 @@ struct Peer {
     #[cfg(feature = "diagnostics")]
     transcript: HashSet<String>,
     changes: HashMap<Topic, u64>,
+    /// The notifications of each watch whose `status.watch` of this connection is unanswered; they are written after the
+    /// reply of the last of those watches (`send_held`).
+    held: HashMap<Watch, Held>,
+}
+
+/// The notifications of one watch of a connection that wait for the reply of its `status.watch`.
+#[derive(Default)]
+struct Held {
+    /// The number of the `status.watch` requests of the watch whose reply is not written yet.
+    pending: usize,
+    /// The frames of the notifications, with their method, in the order in which they arrived.
+    frames: Vec<(&'static str, Vec<u8>)>,
 }
 
 /// The target that a connection subscribes to. The subscription changes sent to the page run in the order received for
@@ -719,6 +731,32 @@ impl Notifier {
         let ends = |watch: &Watch| {
             watch.window == window && (surface.is_none() || watch.surface.as_deref() == surface)
         };
+        #[derive(Serialize)]
+        struct Params<'a> {
+            window: &'a str,
+            name: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            surface: Option<&'a str>,
+            reason: &'a str,
+        }
+        #[derive(Serialize)]
+        struct Notification<'a> {
+            jsonrpc: &'static str,
+            method: &'static str,
+            params: Params<'a>,
+        }
+        let ended_frame = |watch: &Watch| {
+            frame_of(&Notification {
+                jsonrpc: "2.0",
+                method: "status.ended",
+                params: Params {
+                    window: &watch.window,
+                    name: &watch.name,
+                    surface: watch.surface.as_deref(),
+                    reason,
+                },
+            })
+        };
         let mut notices = Vec::new();
         {
             // default: a lock that a panicking thread poisoned still holds the peers and the lines, which the end of
@@ -743,7 +781,21 @@ impl Notifier {
                     // A start of this watch that the page refuses later finds no change of this connection to revert.
                     state.changes.remove(&Topic::Status(watch.clone()));
                 }
-                notices.push((state.writer.clone(), watches));
+                // The end of a watch whose status.watch is unanswered follows its reply and its held notifications
+                // (send_held).
+                watches.retain(|watch| match state.held.get_mut(watch) {
+                    Some(held) => {
+                        match ended_frame(watch) {
+                            Ok(frame) => held.frames.push(("status.ended", frame)),
+                            Err(error) => log_error("endpoint notification", error),
+                        }
+                        false
+                    }
+                    None => true,
+                });
+                if !watches.is_empty() {
+                    notices.push((state.writer.clone(), watches));
+                }
             }
             lines.retain(|topic, line| match topic {
                 Topic::Status(watch) if ends(watch) => {
@@ -753,20 +805,6 @@ impl Notifier {
                 }
                 _ => true,
             });
-        }
-        #[derive(Serialize)]
-        struct Params<'a> {
-            window: &'a str,
-            name: &'a str,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            surface: Option<&'a str>,
-            reason: &'a str,
-        }
-        #[derive(Serialize)]
-        struct Notification<'a> {
-            jsonrpc: &'static str,
-            method: &'static str,
-            params: Params<'a>,
         }
         if notices.is_empty() {
             return;
@@ -860,11 +898,37 @@ impl Notifier {
                 value,
             },
         };
-        self.send(
-            "status.changed",
-            |peer| peer.watches.contains(&key),
-            &message,
-        );
+        let frame = match frame_of(&message) {
+            Ok(frame) => frame,
+            Err(error) => {
+                log_error("endpoint notification", error);
+                return;
+            }
+        };
+        let writers: Vec<_> = self
+            .0
+            .peers
+            .lock()
+            // default: a lock that a panicking thread poisoned still holds the peers, which select the writers and keep
+            // the held notifications; the panic hook records the panic.
+            .unwrap_or_else(PoisonError::into_inner)
+            .values_mut()
+            .filter(|peer| peer.watches.contains(&key))
+            .filter_map(|peer| match peer.held.get_mut(&key) {
+                // The watch of the connection is unanswered: the notification follows its reply (send_held).
+                Some(held) => {
+                    held.frames.push(("status.changed", frame.clone()));
+                    None
+                }
+                None => Some(peer.writer.clone()),
+            })
+            .collect();
+        for writer in writers {
+            // default: a lock that a panicking thread poisoned still holds the connection, which is written as before;
+            // the panic hook records the panic.
+            let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
+            write_notification(&mut *writer, "status.changed", &frame);
+        }
     }
 
     /// Sends `diagnostics.log` to the connections that requested the record of the window window.
@@ -879,6 +943,7 @@ impl Notifier {
         );
     }
 
+    #[cfg(feature = "diagnostics")]
     fn send<T: Serialize + ?Sized>(
         &self,
         method: &str,
@@ -1370,8 +1435,13 @@ fn write_to_peer<W: Write + ?Sized, T: Serialize + ?Sized>(
     message: &T,
 ) -> Result<(), Unsent> {
     let frame = frame_of(message).map_err(Unsent::Failed)?;
+    write_peer_frame(writer, &frame)
+}
+
+/// Writes one frame to a connection.
+fn write_peer_frame<W: Write + ?Sized>(writer: &mut W, frame: &[u8]) -> Result<(), Unsent> {
     writer
-        .write_all(&frame)
+        .write_all(frame)
         .and_then(|()| writer.flush())
         .map_err(|error| match error.kind() {
             ErrorKind::BrokenPipe | ErrorKind::ConnectionReset => Unsent::PeerClosed,
@@ -1546,6 +1616,7 @@ fn serve(shared: Arc<Shared>, mut connection: Box<dyn Connection>) {
                 #[cfg(feature = "diagnostics")]
                 transcript: HashSet::new(),
                 changes: HashMap::new(),
+                held: HashMap::new(),
             },
         );
         if peers.len() == 1 {
@@ -1731,6 +1802,10 @@ fn change(
             if let Some(state) = peers.get_mut(&peer) {
                 topic.set(state, on);
                 state.changes.insert(topic.clone(), order);
+                // The notifications of the watch wait until the reply of this request is written (send_held).
+                if let (Topic::Status(watch), true, true) = (&topic, on, answer.is_some()) {
+                    state.held.entry(watch.clone()).or_default().pending += 1;
+                }
             }
             let last = !on && !peers.values().any(|other| topic.held(other));
             let line = lines.entry(topic.clone()).or_default();
@@ -1836,7 +1911,59 @@ fn drain(shared: &Shared, topic: Topic) {
         drop(lines);
         if let Some(answer) = next.answer {
             answer.send(outcome);
+            if let (Topic::Status(watch), true) = (&topic, next.on) {
+                send_held(shared, next.peer, watch);
+            }
         }
+    }
+}
+
+/// Writes the notifications of watch that were held for the connection peer while its `status.watch` of the watch was
+/// unanswered, after the reply of that watch, and ends the hold when no other `status.watch` of the watch of the
+/// connection waits for its reply (docs/spec/exposure.md#methods). A notification that arrives while the held ones are
+/// written joins the hold, so the notifications keep their order without a write under the lock of the connections.
+fn send_held(shared: &Shared, peer: u64, watch: &Watch) {
+    loop {
+        let (writer, frames) = {
+            // default: a lock that a panicking thread poisoned still holds the peers and their held notifications,
+            // which are taken in order; the panic hook records the panic.
+            let mut peers = shared.peers.lock().unwrap_or_else(PoisonError::into_inner);
+            let Some(state) = peers.get_mut(&peer) else {
+                return;
+            };
+            let Some(held) = state.held.get_mut(watch) else {
+                return;
+            };
+            if held.pending > 1 {
+                held.pending -= 1;
+                return;
+            }
+            if held.frames.is_empty() {
+                state.held.remove(watch);
+                return;
+            }
+            (state.writer.clone(), std::mem::take(&mut held.frames))
+        };
+        // default: a lock that a panicking thread poisoned still holds the connection, which is written as before; the
+        // panic hook records the panic.
+        let mut writer = writer.lock().unwrap_or_else(PoisonError::into_inner);
+        for (method, frame) in frames {
+            write_notification(&mut *writer, method, &frame);
+        }
+    }
+}
+
+/// Writes the frame of a notification of method to a connection and records a frame that is not written.
+fn write_notification<W: Write + ?Sized>(writer: &mut W, method: &str, frame: &[u8]) {
+    match write_peer_frame(writer, frame) {
+        Ok(()) => {}
+        Err(Unsent::PeerClosed) => {
+            log_info(
+                "endpoint",
+                format!("notification {method} not sent: peer closed"),
+            );
+        }
+        Err(Unsent::Failed(error)) => log_error("endpoint notification", error),
     }
 }
 
@@ -2003,7 +2130,15 @@ fn forget(shared: &Arc<Shared>, peer: u64) {
             // default: a lock that a panicking thread poisoned still holds the peers, and the connection that ended is
             // removed from them; the panic hook records the panic.
             .unwrap_or_else(PoisonError::into_inner);
-        peers.remove(&peer);
+        // The notifications that waited for the reply of a watch of the closed connection are not written.
+        if let Some(state) = peers.remove(&peer) {
+            for (method, _) in state.held.into_values().flat_map(|held| held.frames) {
+                log_info(
+                    "endpoint",
+                    format!("notification {method} not sent: connection closed"),
+                );
+            }
+        }
         if peers.is_empty() && shared.activity.load(Ordering::Relaxed) {
             shared
                 .activity

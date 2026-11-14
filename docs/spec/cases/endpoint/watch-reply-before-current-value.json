@@ -1,0 +1,17 @@
+{
+  "name": "watch-reply-before-current-value",
+  "description": "The page sends the current value of a status that its first status.watch follows before it answers that watch; the connection receives the reply of the watch first and the notification of the current value after it.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null, "held": true}}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "core.layout", "value": 5}}}},
+    {"page": {"release": true}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "core.layout", "value": 5}}}
+  ]
+}

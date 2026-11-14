@@ -678,13 +678,49 @@ func (e *Endpoint) publish(t topic, method string, params any) {
 	e.mu.Lock()
 	targets := make([]*endpointConn, 0)
 	for c := range e.conns {
-		if c.topics[t] {
-			targets = append(targets, c)
+		if !c.topics[t] {
+			continue
 		}
+		if held, ok := c.held[t]; ok {
+			c.held[t] = append(held, data)
+			continue
+		}
+		targets = append(targets, c)
 	}
 	e.mu.Unlock()
 	for _, c := range targets {
 		c.send(data, "notification "+method)
+	}
+}
+
+// hold makes the status.changed notifications of status topic t for connection c wait until sendHeld, which the status.watch of
+// c for t calls after its reply is queued. A diagnostic topic is not held.
+func (e *Endpoint) hold(c *endpointConn, t topic) {
+	if _, diagnostic := diagnosticTopics[t.name]; diagnostic {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if c.held == nil {
+		c.held = map[topic][][]byte{}
+	}
+	c.held[t] = nil
+}
+
+// sendHeld writes the status.changed notifications of status topic t that were held for connection c while its status.watch of t
+// was unanswered, and ends the hold. The caller has queued the reply of that watch, so the notifications follow the reply
+// (docs/spec/exposure.md#methods). c.send does not block, so the notifications are queued under Endpoint.mu, and a later
+// notification of t queues after them.
+func (e *Endpoint) sendHeld(c *endpointConn, t topic) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	held, ok := c.held[t]
+	if !ok {
+		return
+	}
+	delete(c.held, t)
+	for _, data := range held {
+		c.send(data, "notification status.changed")
 	}
 }
 
@@ -827,11 +863,14 @@ func (a *replyAnswer) failed(reason string) {
 // Abandon finishes an answer whose request produced no response.
 func (a *replyAnswer) Abandon() { a.finish(ReplyOutcome{Kind: ReplyAbandoned}) }
 
-// endpointConn is one connection and its subscriptions. topics is protected by Endpoint.mu.
+// endpointConn is one connection and its subscriptions. topics and held are protected by Endpoint.mu.
 type endpointConn struct {
 	conn   net.Conn
 	topics map[topic]bool
-	out    chan endpointFrame
+	// held are the status.changed notifications of each status topic whose status.watch of this connection is unanswered; they
+	// are written after the reply of the watch (sendHeld).
+	held map[topic][][]byte
+	out  chan endpointFrame
 	// queued is the number of bytes of the frames in out and in the write that is in progress.
 	queued atomic.Int64
 	done   chan struct{}
@@ -1098,10 +1137,16 @@ func (e *Endpoint) changeInOrder(c *endpointConn, req request, parse subscriptio
 		return
 	}
 	queued, entered := e.enqueueChange(c, t, on, func() {
+		if on {
+			e.hold(c, t)
+		}
 		err := e.change(c, t, on)
 		e.changeEnded(c, t)
 		recordEndpointCall(req, started, err)
 		e.reply(c, req, nil, err)
+		if on {
+			e.sendHeld(c, t)
+		}
 	})
 	if !entered {
 		recordEndpointCall(req, started, nil)

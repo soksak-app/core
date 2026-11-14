@@ -121,6 +121,7 @@ fn peer(writer: Arc<Mutex<Box<dyn Connection>>>, watches: &[Watch]) -> Peer {
         #[cfg(feature = "diagnostics")]
         transcript: HashSet::new(),
         changes: HashMap::new(),
+        held: HashMap::new(),
     }
 }
 
