@@ -214,6 +214,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/tests/input_reference_test.m",
     "native/darwin/tests/input_inject_test.m",
     "native/darwin/tests/input_virtual_test.m",
+    "native/darwin/tests/input_cursor_rect_test.m",
     "native/darwin/tests/webview_focus_test.m",
     "native/darwin/tests/webview_virtual_typing_test.m",
     "native/darwin/tests/webview_input_test.m",
@@ -9482,7 +9483,7 @@ const FEATURE_LINKS = [
     id: "F756-4",
     implementation: [
       { file: "native/darwin/src/input_virtual.m", symbol: "static void keepCursor(NSCursor *self, SEL selector) {" },
-      { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_cursor_rect(void *handle, double x, double y) {" },
+      { file: "native/darwin/src/input_inject.m", symbol: "static bool moveTo(NSWindow *window, NSPoint point) {" },
       { file: "packages/host/go/src/windows.go", symbol: "s.cursorObservation, observed = system.ObserveCursor(win.NativeWindow(), s.windowChanged)" },
       { file: "packages/host/rust/src/exposure.rs", symbol: "fn window_cursor(facts: &Value) -> Result<Value, String> {" },
     ],
@@ -14488,6 +14489,19 @@ const FEATURE_LINKS = [
       { file: "e2e/test/split-load-case.test.mjs", id: "the split load limit is the bound of SPLIT_LOAD_GROWTH_BOUND_KB in the performance goals, and a growth at or above it fails the benchmark" },
     ],
     expected: "The host RSS growth limit over the split, resize, reload and WebView churn rounds, which the split load case reads from SPLIT_LOAD_GROWTH_BOUND_KB of docs/spec/performance-goals.json, is judged by the benchmark case; the window check runs one round and judges only the behavior.",
+    levels: ["unit"],
+  },
+  {
+    id: "F844",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static bool moveTo(NSWindow *window, NSPoint point) {" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_cursor_rect_test.m", id: "a page cursor that answers an earlier move after the move onto the cursor rect leaves the cursor of the rect (%@)" },
+      { file: "native/darwin/tests/input_cursor_rect_test.m", id: "a move onto a cursor rect sets its cursor (%@)" },
+      { file: "native/darwin/tests/input_virtual_test.m", id: "the change of the cursor is recorded with its setter (%@)" },
+    ],
+    expected: "An injected move of the virtual key window sets the cursor of the cursor rect under the point through AppKit, which keeps it as the cursor of the cursor rect, so a page cursor that answers an earlier move later leaves it, and over a page the page sets its cursor again.",
     levels: ["unit"],
   },
 ];

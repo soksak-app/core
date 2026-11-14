@@ -23,5 +23,6 @@ require (
 // of a frame, lets the application own its activation, its signals and the
 // notification center delegate, draws while a window is occluded, and builds
 // a frame that an open transaction of the application keeps from a drawable
-// to draw it after the commit.
-replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.13
+// to draw it after the commit, and declares the cursor of its content as a
+// cursor rect so that a cursor that a page sets later yields to it.
+replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.14

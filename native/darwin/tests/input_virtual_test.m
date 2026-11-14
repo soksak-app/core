@@ -628,8 +628,8 @@ int main(void) { @autoreleasepool {
     [shown release];
     drainMainQueue(@"the blocks that the close of the shown window queued run");
 
-    // The cursor of a window without a page: a move sets the cursor of the cursor rect under the point and gives cursorUpdate: to
-    // the owner of a tracking area that it enters, in a covered window, and AppKit keeps its own cursor rects.
+    // The cursor of a window without a page: in a covered window a move gives cursorUpdate: to the owner of a tracking area that
+    // it enters, and AppKit sets the cursor of the cursor rect under the point.
     NSWindow *rects = makeWindow(0);
     SPCursorRectView *rectView = [[[SPCursorRectView alloc] initWithFrame:NSMakeRect(0, 0, 200, 300)] autorelease];
     SPCursorUpdateView *updateView = [[[SPCursorUpdateView alloc] initWithFrame:NSMakeRect(220, 0, 200, 300)] autorelease];
@@ -648,12 +648,13 @@ int main(void) { @autoreleasepool {
     NSArray<NSDictionary *> *cursorEvents = capturedEvents(^{ movedBack = sp_input_pointer(rects, 100, 150, 0, 0, 0, 0); });
     check(movedBack == SP_INPUT_DELIVERED && cursorIs(rects, @"crosshair"),
         [NSString stringWithFormat:@"the cursor rect sets its cursor again (%s)", sp_input_virtual_cursor(rects)]);
-    // Each change of the cursor of the virtual key window names the cursor and the code that set it.
+    // Each change of the cursor of the virtual key window names the cursor and the code that set it: the cursor update of AppKit
+    // for the cursor rect.
     NSMutableArray<NSString *> *cursorReasons = [NSMutableArray array];
     for (NSDictionary *event in cursorEvents) {
         if ([event[@"name"] isEqual:@"native.input.virtual"] && [event[@"fields"][@"phase"] isEqual:@"cursor"]) [cursorReasons addObject:event[@"fields"][@"reason"]];
     }
-    check(cursorReasons.count == 1 && [cursorReasons[0] hasPrefix:@"crosshair from input_virtual_test "],
+    check(cursorReasons.count == 1 && [cursorReasons[0] hasPrefix:@"crosshair from AppKit "],
         [NSString stringWithFormat:@"the change of the cursor is recorded with its setter (%@)", cursorReasons]);
     sp_input_virtual_end("no state");
     check(sp_input_virtual_cursor(rects) == NULL, @"a window that is no longer the virtual key window has no cursor");

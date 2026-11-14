@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- mygo host는 page가 앞선 pointer 이동에 늦게 답해도 content의 cursor를 유지하고, window check의 주입된 이동은 AppKit의 cursor rect로 cursor를 정한다 (F844).
 - 두 host가 `status.watch`의 reply를, 답하기 전에 도착한 그 status의 notification보다 먼저 쓴다 (F835).
 - Picker가 자신을 닫는 Escape의 default를 막아, document region이 그 key를 받지 않는다 (F843).
 - Tab press key check가 자신이 만드는 race의 presentation error를 선언한다 (F842).

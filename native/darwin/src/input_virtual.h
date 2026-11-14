@@ -42,11 +42,9 @@ void sp_input_virtual_real_mouse_location(double *x, double *y);
 // +[NSEvent mouseLocation] answers that point in screen coordinates, and +[NSWindow windowNumberAtPoint:belowWindowWithWindowNumber:]
 // answers the window for it, so WebKit sets the cursor of the page under it. -[NSCursor set] keeps the cursor for the window
 // instead of passing it to the system, and +[NSCursor currentCursor] answers it, so the cursor of a person does not change.
+// -[NSWindow mouseLocationOutsideOfEventStream] converts +[NSEvent mouseLocation], so AppKit sets the cursor of a cursor rect of the
+// window at the injected point as well (input_inject.m).
 //
-// Sets the cursor of the cursor rect of the deepest view under x, y, in window coordinates, of window, the virtual key window, and
-// reports whether a cursor rect holds the point. Each view from the view at the point up to the content view answers
-// resetCursorRects into a collection instead of AppKit, so the rects of the window that AppKit keeps do not change. Main thread.
-bool sp_input_virtual_cursor_rect(void *window, double x, double y);
 // The name of the cursor that the application set for window while it is the virtual key window: arrow, pointingHand, iBeam,
 // openHand, closedHand, crosshair, resizeLeftRight, resizeUpDown, columnResize, rowResize, operationNotAllowed or other; NULL
 // when window is not the virtual key window or no cursor was set for it. The string is valid until the turn ends. Main thread.

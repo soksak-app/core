@@ -516,8 +516,8 @@ static NSEvent *crossing(NSWindow *window, NSEventType type, NSPoint point, NSTr
 // Delivers a move as a person's move arrives: the web view routing runs as for an event that AppKit dispatches, each tracking area
 // that the point leaves or enters hears that, and the owner of each area that holds the point and tracks moves hears the move,
 // also under a view that covers it. In the virtual key window the cursor follows as AppKit sets it for a person's pointer: the
-// owner of each area with NSTrackingCursorUpdate that the point enters hears cursorUpdate:, and the cursor rect of the deepest
-// view under the point sets its cursor (input_virtual.h). It reports whether any owner or cursor rect heard anything.
+// owner of each area with NSTrackingCursorUpdate that the point enters hears cursorUpdate:, and in a window whose cursor rects are
+// on AppKit sets the cursor of its cursor rects at the point (input_virtual.h). It reports whether any owner or view heard anything.
 static bool moveTo(NSWindow *window, NSPoint point) {
     NSEvent *event = mouseEvent(window, NSEventTypeMouseMoved, point, 0, 0);
     webviewInputRoutePointer(event);
@@ -555,7 +555,18 @@ static bool moveTo(NSWindow *window, NSPoint point) {
         [area.owner mouseMoved:event];
         heard = true;
     }
-    if (cursor && sp_input_virtual_cursor_rect((__bridge void *)window, point.x, point.y)) heard = true;
+    // -[NSWindow resetCursorRects] builds the cursor rects of the window again and, in a key window, sets the cursor at the pointer
+    // as AppKit does when a window becomes key: it forgets the cursor of the last cursor rect ([NSApp _cursorRectCursor]) and gives
+    // a cursor update at the pointer to the view that hitTest: finds, whose -[NSView cursorUpdate:] sets the cursor of its cursor
+    // rect that holds the point, or passes the update to the view above it, and keeps that cursor as the cursor of the cursor rect.
+    // The pointer of the virtual key window is the injected point (-[NSWindow mouseLocationOutsideOfEventStream] converts
+    // +[NSEvent mouseLocation]). WebKit sets the cursor of a page only while AppKit keeps no such cursor (PageClientImpl::setCursor),
+    // so a page that answers an earlier move with its cursor after this move does not replace the cursor of the rect, and over a
+    // page AppKit keeps none and the page sets its cursor. A window whose cursor rects are off sets no cursor of a cursor rect.
+    if (cursor && window.areCursorRectsEnabled) {
+        [window resetCursorRects];
+        if (hitView(window, point)) heard = true;
+    }
     return heard;
 }
 

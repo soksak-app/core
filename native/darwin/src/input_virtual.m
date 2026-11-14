@@ -47,12 +47,9 @@ static void (*appKitCursorSet)(id, SEL);
 static NSCursor *(*appKitCurrentCursor)(id, SEL);
 static NSPoint (*appKitMouseLocation)(id, SEL);
 static NSInteger (*appKitWindowNumberAtPoint)(id, SEL, NSPoint, NSInteger);
-static void (*appKitAddCursorRect)(id, SEL, NSRect, NSCursor *);
 // The cursor that the application set for the virtual key window, and the observations of the cursor of a window. Main thread.
 static NSCursor *virtualCursor;
 static NSHashTable *cursorObservers;
-// The cursor rects that resetCursorRects of a view adds while they are collected, or nil. Main thread.
-static NSMutableArray<NSArray *> *collectedRects;
 static NSTextInputContext *(*appKitInputContext)(id, SEL);
 // The web view that takes a key down without its input context while the key is delivered. Main thread.
 static WKWebView *keyWebView;
@@ -257,11 +254,6 @@ static NSCursor *answerCurrentCursor(id self, SEL selector) {
     return appKitCurrentCursor(self, selector);
 }
 
-static void collectCursorRect(NSView *self, SEL selector, NSRect rect, NSCursor *cursor) {
-    if (collectedRects && cursor) { [collectedRects addObject:@[[NSValue valueWithRect:rect], cursor]]; return; }
-    appKitAddCursorRect(self, selector, rect, cursor);
-}
-
 // The input method of the system does not serve the virtual key window, so a web view that takes a key down of it answers without
 // an input context while the key is delivered. WebKit reads the input context of a web view through the method of NSView, which
 // -[WKWebView inputContext] calls too, so the replacement of that method answers every reader of it. WebKit then interprets the
@@ -304,7 +296,6 @@ static void install(void) {
             class_getClassMethod(NSEvent.class, @selector(mouseLocation)), (IMP)answerMouseLocation);
         appKitWindowNumberAtPoint = (NSInteger (*)(id, SEL, NSPoint, NSInteger))method_setImplementation(
             class_getClassMethod(NSWindow.class, @selector(windowNumberAtPoint:belowWindowWithWindowNumber:)), (IMP)answerWindowNumberAtPoint);
-        appKitAddCursorRect = (void (*)(id, SEL, NSRect, NSCursor *))replace(NSView.class, @selector(addCursorRect:cursor:), (IMP)collectCursorRect);
         sp_observe_notification("input_virtual.app_active", SP_OBSERVE_RECORD, NSApplicationDidBecomeActiveNotification, NSApp, nil,
             ^(NSNotification *note) {
                 if (!sp_input_virtual_real_active()) return;
@@ -422,28 +413,6 @@ void sp_input_virtual_real_mouse_location(double *x, double *y) {
     NSPoint at = appKitMouseLocation ? appKitMouseLocation(NSEvent.class, @selector(mouseLocation)) : NSEvent.mouseLocation;
     *x = at.x;
     *y = at.y;
-}
-
-bool sp_input_virtual_cursor_rect(void *handle, double x, double y) {
-    NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
-    NSWindow *window = (__bridge NSWindow *)handle;
-    if (!sp_input_virtual_is(handle) || !window.contentView) return false;
-    NSPoint point = NSMakePoint(x, y);
-    NSView *content = window.contentView;
-    NSView *hit = [content hitTest:content.superview ? [content.superview convertPoint:point fromView:nil] : point];
-    for (NSView *view = hit; view; view = view == content ? nil : view.superview) {
-        collectedRects = [NSMutableArray array];
-        [view resetCursorRects];
-        NSArray<NSArray *> *rects = collectedRects;
-        collectedRects = nil;
-        NSPoint local = [view convertPoint:point fromView:nil];
-        for (NSArray *entry in rects.reverseObjectEnumerator) {
-            if (!NSPointInRect(local, [entry[0] rectValue])) continue;
-            [(NSCursor *)entry[1] set];
-            return true;
-        }
-    }
-    return false;
 }
 
 // The names of the standard cursors, which a cursor matches by identity or by its image.
