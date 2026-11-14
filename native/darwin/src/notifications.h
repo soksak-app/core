@@ -1,5 +1,9 @@
 #include <stdbool.h>
 
+#ifdef __OBJC__
+@class NSError;
+#endif
+
 // Notification center of the operating system (docs/spec/plugins.md#tab-reports). The notification center accepts only
 // a process that runs in an application bundle. event receives a JSON string on the main thread.
 //   {"type":"state","authorization":"notDetermined|denied|authorized|provisional","error":null|"<last failure>"}
@@ -16,3 +20,15 @@ void sp_notifications_post(const char *identifier, const char *title, const char
 void sp_notifications_remove(const char *identifier);
 // Diagnostics only. Passes the notifications remaining in the notification center to done on the main thread as the JSON [{"identifier","title","body"}].
 void sp_notifications_delivered(void (*done)(void *context, const char *json), void *context);
+
+// What the module does after an authorization request completed with granted and error, and the authorization that the
+// notification center reported after the completion (a UNAuthorizationStatus value). The refusal UNErrorCodeNotificationsNotAllowed
+// only reports the state, unless the authorization is still undetermined; every other error is a failure.
+typedef enum {
+    SP_NOTIFICATIONS_REQUEST_POST = 0,   // report the state and post the notification
+    SP_NOTIFICATIONS_REQUEST_REPORT = 1, // report the state
+    SP_NOTIFICATIONS_REQUEST_FAILED = 2, // report the state with the error as the last failure
+} sp_notifications_request_outcome;
+#ifdef __OBJC__
+sp_notifications_request_outcome sp_notifications_request_classify(bool granted, NSError *error, long authorization);
+#endif

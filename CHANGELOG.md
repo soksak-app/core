@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A refused notification authorization reports the denied state without an error (F840).
 - The notification check asserts that a tab notice replaces the system notification of its tab (F839).
 - The mygo workbench reserves the window button area of the `windowControls` answer as the page does (F838).
 - Undo and redo keep the menu titles that the system sets, and the menu check names the host of each difference (F837).

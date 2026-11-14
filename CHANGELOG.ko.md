@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 거부된 notification authorization이 error 없이 denied 상태를 보고한다 (F840).
 - Notification check가 tab notice가 그 tab의 system notification을 대체하는지 확인한다 (F839).
 - mygo workbench가 page처럼 `windowControls` 답의 window button 영역을 비워 둔다 (F838).
 - Undo와 redo가 system이 정하는 menu 제목을 유지하고, menu check는 각 차이의 host를 밝힌다 (F837).

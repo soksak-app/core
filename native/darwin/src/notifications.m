@@ -31,24 +31,49 @@ static NSString *authorizationName(UNAuthorizationStatus status) {
     return [NSString stringWithFormat:@"unknown %ld", (long)status];
 }
 
-// Reports the current authorization and the last failure of the notification center. then receives the authorization and runs on the main thread.
-static void reportState(void (^then)(UNAuthorizationStatus)) {
+// Reports the current authorization and the last failure of the notification center. prepare receives the authorization on the
+// main thread before the state event, and then receives it after the state event.
+static void reportStateAfter(void (^prepare)(UNAuthorizationStatus), void (^then)(UNAuthorizationStatus)) {
+    void (^before)(UNAuthorizationStatus) = [[prepare copy] autorelease];
     void (^next)(UNAuthorizationStatus) = [[then copy] autorelease];
     [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
         UNAuthorizationStatus status = settings.authorizationStatus;
         dispatch_async(dispatch_get_main_queue(), ^{
+            if (before) before(status);
             emit(@{@"type": @"state", @"authorization": authorizationName(status), @"error": lastError ?: NSNull.null});
             if (next) next(status);
         });
     }];
 }
 
+// Reports the current authorization and the last failure of the notification center. then receives the authorization and runs on the main thread.
+static void reportState(void (^then)(UNAuthorizationStatus)) {
+    reportStateAfter(nil, then);
+}
+
+// Records the failure of operation as the last failure. Runs on the main thread.
+static void recordFailure(NSString *operation, NSError *error) {
+    [lastError release];
+    lastError = [[NSString stringWithFormat:@"%@: %@", operation, error.localizedDescription] retain];
+}
+
 static void fail(NSString *operation, NSError *error) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        [lastError release];
-        lastError = [[NSString stringWithFormat:@"%@: %@", operation, error.localizedDescription] retain];
+        recordFailure(operation, error);
         reportState(nil);
     });
+}
+
+sp_notifications_request_outcome sp_notifications_request_classify(bool granted, NSError *error, long authorization) {
+    // The notification center answers a refused authorization with UNErrorCodeNotificationsNotAllowed ("the app isn't authorized to
+    // schedule notifications"), and the state event reports a denial through its authorization. granted is also false while the
+    // authorization stays undetermined, and then the authorization does not show the refusal, so the error stays a failure.
+    if (error && [error.domain isEqualToString:UNErrorDomain] && error.code == UNErrorCodeNotificationsNotAllowed
+        && authorization != UNAuthorizationStatusNotDetermined) {
+        return SP_NOTIFICATIONS_REQUEST_REPORT;
+    }
+    if (error) return SP_NOTIFICATIONS_REQUEST_FAILED;
+    return granted ? SP_NOTIFICATIONS_REQUEST_POST : SP_NOTIFICATIONS_REQUEST_REPORT;
 }
 
 @implementation SPNotificationDelegate
@@ -122,13 +147,12 @@ void sp_notifications_post(const char *identifier, const char *title, const char
             // Authorization is requested once at the first notification. The result is reported again as a state event.
             [[UNUserNotificationCenter currentNotificationCenter] requestAuthorizationWithOptions:UNAuthorizationOptionAlert
                 completionHandler:^(BOOL granted, NSError *error) {
-                if (error) {
-                    fail(@"request permission", error);
-                    return;
-                }
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    reportState(nil);
-                    if (granted) add(name, heading, text);
+                __block sp_notifications_request_outcome outcome = SP_NOTIFICATIONS_REQUEST_REPORT;
+                reportStateAfter(^(UNAuthorizationStatus after) {
+                    outcome = sp_notifications_request_classify(granted, error, after);
+                    if (outcome == SP_NOTIFICATIONS_REQUEST_FAILED) recordFailure(@"request permission", error);
+                }, ^(UNAuthorizationStatus after) {
+                    if (outcome == SP_NOTIFICATIONS_REQUEST_POST) add(name, heading, text);
                 });
             }];
             return;

@@ -384,7 +384,8 @@ NATIVE_TESTS = observe_test \
   dock_menu_test \
   appearance_test \
   notifications_test \
-  notifications_test.app/Contents/MacOS/notifications_test,--bundled
+  notifications_test.app/Contents/MacOS/notifications_test,--bundled \
+  notifications_authorization_test
 
 # The native end-to-end tests: they need the presentation times and the window server images of a display, so they run only
 # locally through e2e (docs/operations/examples.md#test-kinds). test runs the unit tests of NATIVE_TESTS.
