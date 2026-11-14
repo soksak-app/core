@@ -412,14 +412,16 @@ for (const app of Object.values(APPS)) {
     await s.run("core.debug.view", { path: opened.recorded });
     // A text opens scrolled to its end, where its newest lines are; the state file is taller than the view.
     const viewed = await s.until("core.debug", (debug) => debug.viewing !== null && debug.scroll > 0, "the debug view did not show the end of the file");
-    assert.deepEqual(viewed.viewing, { path: opened.recorded, size: Buffer.byteLength(stateText), truncated: false, kind: "text", length: stateText.length });
+    assert.deepEqual(viewed.viewing, { path: opened.recorded, size: Buffer.byteLength(stateText), truncated: false, kind: "text", length: stateText.length, loaded: true });
     await s.run("core.debug.list");
     await s.until("core.debug", (debug) => debug.viewing === null, "the debug view did not return to the list");
     // A diagnostic build writes a still capture of each window when the view opens; viewing it shows an image.
     const capture = opened.entries.find((file) => file.path.endsWith(".png"));
     assert.ok(capture, `no capture is listed: ${JSON.stringify(opened.entries.map((file) => file.path))}`);
     await s.run("core.debug.view", { path: capture.path });
-    const image = await s.until("core.debug", (debug) => debug.viewing?.kind === "image", "the debug view did not show the capture");
+    // The image is shown when it has loaded, and only then the card has its height (docs/spec/debug.md#status).
+    const image = await s.until("core.debug", (debug) => debug.viewing?.kind === "image" && debug.viewing.loaded,
+      "the debug view did not show the loaded capture");
     assert.deepEqual({ path: image.viewing.path, size: image.viewing.size, length: image.viewing.length }, { path: capture.path, size: capture.size, length: 0 });
     // The modal has the height of the card with the loaded image: the image is shown whole (at its width of the card) inside the
     // modal and not cut to the first rows of pixels. The frame of the modal follows the load of the image, so the check waits for it.

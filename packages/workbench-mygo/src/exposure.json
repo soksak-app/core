@@ -1174,6 +1174,9 @@
                 },
                 "length": {
                   "type": "number"
+                },
+                "loaded": {
+                  "type": "boolean"
                 }
               }
             },

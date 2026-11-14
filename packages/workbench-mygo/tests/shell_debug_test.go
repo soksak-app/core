@@ -275,7 +275,7 @@ func TestViewShowsATextFileAndListReturns(t *testing.T) {
 	if !f.tester.HasText("first line") {
 		t.Fatalf("no text in %q", f.tester.Texts())
 	}
-	if status := f.status("core.debug"); !strings.Contains(status, `"viewing":{"path":"logs/app.log","size":10,"truncated":false,"kind":"text","length":10}`) {
+	if status := f.status("core.debug"); !strings.Contains(status, `"viewing":{"path":"logs/app.log","size":10,"truncated":false,"kind":"text","length":10,"loaded":true}`) {
 		t.Fatalf("the status is %s", status)
 	}
 	f.run("core.debug.list", nil)
@@ -298,7 +298,8 @@ func TestViewShowsAnImageOfTheDataURL(t *testing.T) {
 	f, stored := debugShell(t)
 	stored.debug.files["logs/captures/a.png"] = string(onePixel(t))
 	f.do("core.debug.view", map[string]string{"path": "logs/captures/a.png"})
-	if status := f.status("core.debug"); !strings.Contains(status, `"kind":"image"`) {
+	// The image is decoded before the view shows it, so the status reports it loaded at once.
+	if status := f.status("core.debug"); !strings.Contains(status, `"kind":"image","length":0,"loaded":true`) {
 		t.Fatalf("the status is %s", status)
 	}
 	positional(t, f.tester, "core.debug.image", 0)

@@ -1107,6 +1107,8 @@ type debugViewingStatus struct {
 	Truncated bool   `json:"truncated"`
 	Kind      string `json:"kind"`
 	Length    int    `json:"length"`
+	// Loaded is true at once: shown decodes an image before the view shows it.
+	Loaded bool `json:"loaded"`
 }
 
 type debugStatus struct {
@@ -1133,7 +1135,7 @@ func (s *Shell) debugStatusOf() debugStatus {
 	}
 	if d.viewing != nil {
 		status.Viewing = &debugViewingStatus{Path: d.viewing.Path, Size: d.viewing.Size, Truncated: d.viewing.Truncated, Kind: d.viewing.Kind,
-			Length: len(utf16.Encode([]rune(d.viewing.Text)))}
+			Length: len(utf16.Encode([]rune(d.viewing.Text))), Loaded: true}
 	}
 	if t := d.timeline; t != nil {
 		status.Timeline = &debugTimelineStatus{Following: t.following, Appended: t.appended, Held: len(t.rows), Older: t.older, Omitted: t.omitted,

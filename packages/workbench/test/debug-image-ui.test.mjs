@@ -19,12 +19,14 @@ test("the modal is placed again with the height of the card when the image has l
     await ui.viewDebugFile(IMAGE);
     await calls();
     assert.equal(places(wire).at(-1).payload.card.h, 300, "before the load the card holds the height without the image");
+    assert.equal(ui.debugState().viewing.loaded, false, "the status reports the image loaded before its load event");
     const before = places(wire).length;
     loaded = true;
     document.querySelector(".dbg-card__image").dispatchEvent(new document.defaultView.Event("load"));
     await calls();
     assert.ok(places(wire).length > before, "the modal was not placed again after the image loaded");
     assert.equal(places(wire).at(-1).payload.card.h, 700, "the modal does not have the height of the card with its image");
+    assert.equal(ui.debugState().viewing.loaded, true, "the status does not report the image loaded after its load event");
   } finally {
     await close();
   }

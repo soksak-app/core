@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- `core.debug.viewing`이 debug view의 image가 load되었는지 보고한다 (F841).
 - 거부된 notification authorization이 error 없이 denied 상태를 보고한다 (F840).
 - Notification check가 tab notice가 그 tab의 system notification을 대체하는지 확인한다 (F839).
 - mygo workbench가 page처럼 `windowControls` 답의 window button 영역을 비워 둔다 (F838).

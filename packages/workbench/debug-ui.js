@@ -427,8 +427,11 @@ export async function openDebug() {
   image = view.querySelector(".dbg-card__image");
   // An image has no height before it loads, so the card measured at the first draw is too low for the native modal. The load of
   // the image places the modal again with the height of the card that holds it; an image that the list replaced is not drawn.
+  // The status reports the load, so a reader of the status waits for the image instead of measuring the card without it.
   image.addEventListener("load", () => {
-    if (viewing?.kind === "image") draw();
+    if (viewing?.kind !== "image") return;
+    viewing = { ...viewing, loaded: true };
+    draw();
   });
   timelineView = card.querySelector(".dbg-card__timeline");
   timelineRows = timelineView.querySelector(".dbg-card__rows");
@@ -507,7 +510,8 @@ export async function viewDebugFile(path) {
     image.hidden = read.kind !== "image";
     if (read.kind === "image") image.src = read.image;
     else image.removeAttribute("src");
-    viewing = { path: read.path, size: read.size, truncated: read.truncated, kind: read.kind, length: read.text.length };
+    // A text is shown when it is assigned; an image is shown when its load event comes.
+    viewing = { path: read.path, size: read.size, truncated: read.truncated, kind: read.kind, length: read.text.length, loaded: read.kind !== "image" };
   } catch (reason) {
     fail("view", reason);
     throw reason;
