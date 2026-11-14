@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 두 host는 group signal이 EPERM으로 답하면 process table에서 member를 읽고, member가 모두 zombie이거나 종료 중인 process group을 끝난 것으로 본다 (F830).
 - Go host의 page end fixture test가 native test 지원의 verification case를 선언한다 (F825-1).
 - host test discovery의 각 test list는 시작, 결과, 경과 시간, test마다의 제한을 가진 runner 단계이고, 실패하거나 제한에 닿은 list는 pattern, binary 또는 executable 이름과 함께 discovery를 실패시킨다 (F829).
 - Rust host가 닫히는 window의 layout을 close hook에서 cancel하고, window 파괴가 queue에 넣는 작업은 더 이상 window를 가리키지 않는다 (F827-1).

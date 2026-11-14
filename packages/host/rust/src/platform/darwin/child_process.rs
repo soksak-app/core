@@ -10,26 +10,27 @@ pub fn new_process_group(command: &mut std::process::Command) {
     command.process_group(0);
 }
 
-/// Sends SIGKILL to the process group pid; ESRCH, or EPERM while the leader has exited and is not reaped, means that no
-/// process of the group remains (signal_process_group).
+/// Sends SIGKILL to the process group pid; ESRCH, or EPERM while no process of the group runs, means that the group has
+/// ended (signal_process_group).
 pub fn end_process_group(pid: u32) -> Result<(), String> {
     signal_process_group(pid, libc::SIGKILL)
         .map_err(|error| format!("end process group {pid}: {error}"))
 }
 
-/// Sends SIGTERM to the process group pid; ESRCH, or EPERM while the leader has exited and is not reaped, means that no
-/// process of the group remains (signal_process_group).
+/// Sends SIGTERM to the process group pid; ESRCH, or EPERM while no process of the group runs, means that the group has
+/// ended (signal_process_group).
 pub fn terminate_process_group(pid: u32) -> Result<(), String> {
     signal_process_group(pid, libc::SIGTERM)
         .map_err(|error| format!("terminate process group {pid}: {error}"))
 }
 
-/// Sends `signal` to the process group of the leader `pid`, a child of the host that the caller has not reaped: the host
-/// reaps a sidecar only after the end of its group (ProcessExit of sidecars.rs) and a service after its own signal. The
-/// wait for the exit of the leader (wait_process_exit) leaves it unreaped, and Darwin answers kill of a group whose
-/// processes are all zombies with EPERM, not ESRCH; a group with a process that runs is signalled. So EPERM while the
-/// unreaped leader has exited is the end of the group, as ESRCH is; EPERM while the leader runs, or for a process that is
-/// not an unreaped child, is an error.
+/// Sends `signal` to the process group `pid`. Darwin answers ESRCH only for a group that no longer exists, and a group
+/// exists until its last process is reaped. It signals each process of the group that is neither a zombie nor exiting
+/// (the kernel finds no reference to an exiting process), and answers EPERM when it signalled none: so EPERM also answers
+/// a group whose processes have all ended, whether or not its leader was reaped, and a group whose leader has closed its
+/// descriptors in its exit but is not yet a zombie. The refusal is therefore judged by the states of the processes of the group: EPERM while
+/// none of them runs is the end of the group, as ESRCH is; EPERM while one runs, which the kernel does for a process that
+/// the host may not signal, is an error that names the processes that run.
 fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
     let group = i32::try_from(pid).map_err(|_| "out of range".to_string())?;
     if unsafe { libc::kill(-group, signal) } == 0 {
@@ -38,36 +39,71 @@ fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
     let error = std::io::Error::last_os_error();
     match error.raw_os_error() {
         Some(libc::ESRCH) => Ok(()),
-        Some(libc::EPERM) if leader_exited(group) => Ok(()),
+        Some(libc::EPERM) => {
+            let running = running_group_processes(group)
+                .map_err(|error| format!("read the processes of the group: {error}"))?;
+            if running.is_empty() {
+                return Ok(());
+            }
+            let running: Vec<String> = running.iter().map(|pid| format!("pid {pid}")).collect();
+            Err(format!(
+                "operation not permitted; running: {}",
+                running.join(", ")
+            ))
+        }
         _ => Err(error.to_string()),
     }
 }
 
-/// Whether the child `pid` has exited, without reaping it.
-fn leader_exited(pid: i32) -> bool {
-    let Ok(id) = libc::id_t::try_from(pid) else {
-        return false;
-    };
-    loop {
-        let mut info: libc::siginfo_t = unsafe { std::mem::zeroed() };
-        if unsafe {
-            libc::waitid(
-                libc::P_PID,
-                id,
-                &mut info,
-                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
-            )
-        } == 0
-        {
-            // WNOHANG leaves si_pid zero while the child runs.
-            return info.si_pid == pid;
-        }
-        if std::io::Error::last_os_error().raw_os_error() != Some(libc::EINTR) {
-            // default: a process that is not a child of the host, or one already reaped, is not taken as ended here; the
-            // EPERM of its group stays an error.
-            return false;
+/// `PROC_FLAG_INEXIT` of <sys/proc_info.h>, which the libc crate does not declare: the process is in its exit.
+const PROC_FLAG_INEXIT: u32 = 4;
+
+/// The processes of the group `group` that run: those that are neither zombies (SZOMB) nor exiting (PROC_FLAG_INEXIT), from
+/// the process table of libproc, which lists the zombies and the exiting processes of the group as well.
+fn running_group_processes(group: i32) -> std::io::Result<Vec<i32>> {
+    // A buffer of null size answers the size in bytes that holds the pids of every process of the system.
+    let size = unsafe { libc::proc_listpgrppids(group, std::ptr::null_mut(), 0) };
+    if size <= 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let mut pids = vec![0 as libc::pid_t; size as usize / size_of::<libc::pid_t>()];
+    // libproc answers an error and a group without processes both with 0 and sets errno only for the error.
+    unsafe { *libc::__error() = 0 };
+    let filled = unsafe { libc::proc_listpgrppids(group, pids.as_mut_ptr().cast(), size) };
+    if filled <= 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(0) {
+            return Err(error);
         }
     }
+    pids.truncate(filled.max(0) as usize / size_of::<libc::pid_t>());
+    let mut running = Vec::new();
+    for pid in pids {
+        let mut info: libc::proc_bsdshortinfo = unsafe { std::mem::zeroed() };
+        let info_size = size_of::<libc::proc_bsdshortinfo>() as i32;
+        // The argument 1 makes the call also answer a zombie or an exiting process.
+        let read = unsafe {
+            libc::proc_pidinfo(
+                pid,
+                libc::PROC_PIDT_SHORTBSDINFO,
+                1,
+                std::ptr::from_mut(&mut info).cast(),
+                info_size,
+            )
+        };
+        if read != info_size {
+            let error = std::io::Error::last_os_error();
+            // A process that its parent reaped after the listing has ended.
+            if error.raw_os_error() == Some(libc::ESRCH) {
+                continue;
+            }
+            return Err(error);
+        }
+        if info.pbsi_status != libc::SZOMB && info.pbsi_flags & PROC_FLAG_INEXIT == 0 {
+            running.push(pid);
+        }
+    }
+    Ok(running)
 }
 
 /// Whether an ended process ended by SIGTERM.

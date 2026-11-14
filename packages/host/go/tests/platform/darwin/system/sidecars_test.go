@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"testing"
 
 	host "github.com/soksak-app/core/packages/host/go/src"
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
@@ -352,6 +354,56 @@ func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
 	// A stop that waits for the end of the output does not return, and the check stops at the limit of its runner.
 	sidecars.Stop()
 	requireGone(t, child)
+}
+
+// Darwin answers a signal to a process group whose processes have all ended (zombies, or processes that are exiting) with EPERM, not
+// ESRCH, because the group exists until its last process is reaped. The end of such a group is no error, also when its leader was
+// already reaped: the host judges the group by the states of its processes, not by its leader
+// (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.a-group-of-ended-processes-has-ended
+func TestTheEndOfAGroupWhoseProcessesHaveEndedIsNoError(t *testing.T) {
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatalf("platform failed: %v", err)
+	}
+	// The leader reads its input, whose write end the test holds, so it runs until the test kills it.
+	leader := exec.Command("cat")
+	if _, err := leader.StdinPipe(); err != nil {
+		t.Fatal(err)
+	}
+	leader.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := leader.Start(); err != nil {
+		t.Fatalf("start the leader: %v", err)
+	}
+	group := leader.Process.Pid
+	// The member joins the group of the leader and ends at once; the test reaps it last, so it stays in the group as a zombie.
+	member := exec.Command("true")
+	member.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pgid: group}
+	if err := member.Start(); err != nil {
+		t.Fatalf("start the member: %v", err)
+	}
+	if ended, err := current.WaitServiceProcessEnd(member.Process.Pid, nil); err != nil || !ended {
+		t.Fatalf("the member did not end: ended %v, %v", ended, err)
+	}
+	if err := leader.Process.Kill(); err != nil {
+		t.Fatalf("kill the leader: %v", err)
+	}
+	if err := leader.Wait(); err == nil {
+		t.Fatal("the killed leader exited successfully")
+	}
+	// The premise: the group holds only the zombie member, and Darwin refuses a signal to it with EPERM.
+	if err := syscall.Kill(-group, syscall.SIGKILL); !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("the signal to a group of a zombie: %v, want EPERM", err)
+	}
+	if err := current.EndProcessGroup(group); err != nil {
+		t.Fatalf("end: %v", err)
+	}
+	if err := current.TerminateProcessGroup(group); err != nil {
+		t.Fatalf("terminate: %v", err)
+	}
+	if err := member.Wait(); err != nil {
+		t.Fatalf("reap the member: %v", err)
+	}
 }
 
 // A stop other than the quit returns before the process exits: a declaration that removes a running sidecar returns while the

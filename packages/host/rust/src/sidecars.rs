@@ -1240,8 +1240,8 @@ struct Started {
 /// The exit of the process of a standard-I/O sidecar, which orders the end of its process group before its reap
 /// (docs/spec/sidecars.md#declaration-and-startup). The exit wait reads the exit without reaping it and then ends the group;
 /// the process is reaped only after that end. So until the end of the group its leader is a process of the host that no
-/// one reaped, and its pid names its group in every signal: a group that holds only zombies is told by the exited leader
-/// (end_process_group). After the end of the group no process of the group runs, and a signal has nothing to end.
+/// one reaped, and its pid names its group in every signal and no other process. After the end of the group no process of
+/// the group runs, and a signal has nothing to end.
 struct ProcessExit {
     state: Mutex<ExitState>,
     group_ended: Condvar,

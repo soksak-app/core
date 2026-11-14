@@ -2835,3 +2835,42 @@ drain /dev/null
     sidecars.stop();
     require_gone(child);
 }
+
+// Darwin answers a signal to a process group whose processes have all ended (zombies, or processes that are exiting) with EPERM,
+// not ESRCH, because the group exists until its last process is reaped. The end of such a group is no error, also when its
+// leader was already reaped: the host judges the group by the states of its processes, not by its leader
+// (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.a-group-of-ended-processes-has-ended
+#[test]
+fn the_end_of_a_group_whose_processes_have_ended_is_no_error() {
+    use std::os::unix::process::CommandExt;
+    let platform = soksak_host::platform::current().expect("platform");
+    // The leader reads its input, whose write end the Child holds, so it runs until the test kills it.
+    let mut leader = std::process::Command::new("cat")
+        .stdin(std::process::Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .expect("spawn the leader");
+    let group = leader.id();
+    // The member joins the group of the leader and ends at once; the test reaps it last, so it stays in the group as a zombie.
+    let mut member = std::process::Command::new("true")
+        .process_group(i32::try_from(group).expect("group id"))
+        .spawn()
+        .expect("spawn the member");
+    platform
+        .wait_process_exit(member.id())
+        .expect("wait for the exit of the member");
+    leader.kill().expect("kill the leader");
+    leader.wait().expect("reap the leader");
+    // The premise: the group holds only the zombie member, and Darwin refuses a signal to it with EPERM.
+    let answer = unsafe { libc::kill(-i32::try_from(group).expect("group id"), libc::SIGKILL) };
+    let error = std::io::Error::last_os_error().raw_os_error();
+    assert_eq!(
+        (answer, error),
+        (-1, Some(libc::EPERM)),
+        "the signal to a group of a zombie"
+    );
+    assert_eq!(platform.end_process_group(group), Ok(()), "end");
+    assert_eq!(platform.terminate_process_group(group), Ok(()), "terminate");
+    member.wait().expect("reap the member");
+}

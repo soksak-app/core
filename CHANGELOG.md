@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A process group whose members are all zombies or exiting has ended in both hosts, which read the members from the process table when the group signal answers EPERM (F830).
 - The page end fixture test of the Go hosts declares its verification case of the native test support (F825-1).
 - Each test list of the host test discovery is a runner step with its start, its result, its elapsed time and the per-test limit, and a list that fails or reaches its limit fails discovery with the patterns, binary or executable named (F829).
 - The Rust host cancels the layouts of a closing window in its close hook, and the work that the destruction of the window queues no longer names the window (F827-1).

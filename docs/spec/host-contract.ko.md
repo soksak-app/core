@@ -1085,6 +1085,7 @@ fn invalid_json_closes_connection() {
 | `project-removal.abandon.records-each-allowed-removal` | 제거에 대한 질문을 받은 창이 끝나면 제거를 허용하고, 그 요청마다 `window`와 `project`를 가진 event `host.project.removal_allowed`를 저장한다. 다른 창의 요청에는 저장하지 않는다. | all |
 | `project-removal.ask.ends-with-the-owner-page` | 제거 요청은 요청받은 창의 페이지가 끝나면(WebContent process가 끝나거나 다음 페이지가 시작하면) 끝난다. host는 그 끝의 turn에 제거해도 된다고 답한다. | all |
 | `sidecars.end.is-the-process-exit` | 표준 입출력 사이드카는 새 프로세스 그룹의 leader로 시작한다. 그 종료가 프로세스 그룹과 읽기를 끝내므로, 출력을 열어 둔 프로세스가 실행 중인 사이드카의 실패나 중지를 붙잡지 않는다. | all |
+| `sidecars.end.a-group-of-ended-processes-has-ended` | 프로세스가 모두 끝나 시스템이 신호를 EPERM으로 거절하는 프로세스 그룹에 보내는 강제 종료 신호와 종료 신호는 leader가 reap된 뒤에도 성공한다. 호스트는 그 거절을 그룹 프로세스들의 상태로 판단하고, 실행 중인 프로세스만 그것을 error로 만든다. | all |
 | `sidecars-transport.stop.waits-for-no-room` | 중지는 영속 서비스의 `close-owner`와 `shutdown`을 그 queue에 자리를 기다리지 않고 보낸다. 가득 찬 queue는 닫기를 그 자리에서 실패시키고 연결을 끝낸다. | all |
 | `project.open-ready-shown-order` | project를 열 때 workbench가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | all |
 | `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 workbench가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | all |

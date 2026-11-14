@@ -16,6 +16,7 @@ import (
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
+	"golang.org/x/sys/unix"
 )
 
 // privateDirectory makes path a directory that only the current user can access. When it already exists, it
@@ -212,20 +213,75 @@ func (implementation) NewProcessGroup(command *exec.Cmd) error {
 	return nil
 }
 
-// EndProcessGroup sends SIGKILL to the process group pid; ESRCH means that no process of the group remains.
+// EndProcessGroup sends SIGKILL to the process group pid; ESRCH, or EPERM while no process of the group runs, means that the group
+// has ended (signalProcessGroup).
 func (implementation) EndProcessGroup(pid int) error {
-	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+	if err := signalProcessGroup(pid, syscall.SIGKILL); err != nil {
 		return fmt.Errorf("end process group %d: %w", pid, err)
 	}
 	return nil
 }
 
-// TerminateProcessGroup sends SIGTERM to the process group pid; ESRCH means that no process of the group remains.
+// TerminateProcessGroup sends SIGTERM to the process group pid; ESRCH, or EPERM while no process of the group runs, means that the
+// group has ended (signalProcessGroup).
 func (implementation) TerminateProcessGroup(pid int) error {
-	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+	if err := signalProcessGroup(pid, syscall.SIGTERM); err != nil {
 		return fmt.Errorf("terminate process group %d: %w", pid, err)
 	}
 	return nil
+}
+
+// signalProcessGroup sends signal to the process group pid. Darwin answers ESRCH only for a group that no longer exists, and a
+// group exists until its last process is reaped. It signals each process of the group that is neither a zombie nor exiting (the
+// kernel finds no reference to an exiting process), and answers EPERM when it signalled none: so EPERM also answers a group whose
+// processes have all ended, whether or not its leader was reaped, and a group whose leader has closed its descriptors in its exit
+// but is not yet a zombie. The refusal is therefore judged by the states of the processes of the group: EPERM while none of them
+// runs is the end of the group, as ESRCH is; EPERM while one runs, which the kernel does for a process that the host may not
+// signal, is an error that names the processes that run.
+func signalProcessGroup(pid int, signal syscall.Signal) error {
+	err := syscall.Kill(-pid, signal)
+	switch {
+	case err == nil, errors.Is(err, syscall.ESRCH):
+		return nil
+	case !errors.Is(err, syscall.EPERM):
+		return err
+	}
+	running, err := runningGroupProcesses(pid)
+	if err != nil {
+		return fmt.Errorf("read the processes of the group: %w", err)
+	}
+	if len(running) == 0 {
+		return nil
+	}
+	names := make([]string, len(running))
+	for i, member := range running {
+		names[i] = fmt.Sprintf("pid %d", member)
+	}
+	return fmt.Errorf("operation not permitted; running: %s", strings.Join(names, ", "))
+}
+
+// sZomb and pWExit are SZOMB and P_WEXIT of <sys/proc.h>, which golang.org/x/sys/unix does not declare: the process is a zombie,
+// and the process is in its exit.
+const (
+	sZomb  = 5
+	pWExit = 0x2000
+)
+
+// runningGroupProcesses answers the processes of the group group that run: those that are neither zombies (SZOMB) nor exiting
+// (P_WEXIT), from the process table of the kern.proc.pgrp sysctl, which lists the zombies and the exiting processes of the group
+// as well.
+func runningGroupProcesses(group int) ([]int, error) {
+	processes, err := unix.SysctlKinfoProcSlice("kern.proc.pgrp", group)
+	if err != nil {
+		return nil, err
+	}
+	var running []int
+	for _, process := range processes {
+		if process.Proc.P_stat != sZomb && process.Proc.P_flag&pWExit == 0 {
+			running = append(running, int(process.Proc.P_pid))
+		}
+	}
+	return running, nil
 }
 
 // ExitedByTermination answers whether the wait status of state is the end by SIGTERM.
