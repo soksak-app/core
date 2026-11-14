@@ -419,3 +419,24 @@ test("surface.window answers the space null for a section surface that a sidebar
   }
   assert.deepEqual(await ask({ surface }), { result: null });
 });
+
+// The part of the main page in a window snapshot takes its layout and its plugins from the window (snapshotParts of core-exposure.js).
+// contract: endpoint.exposure-snapshot.groups-the-window
+test("exposure.snapshot holds the layout of the description as a tree of splits and cards and the plugins with their surface params and opens", { timeout: 5000 }, async () => {
+  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", EDITOR, { path: "a.html" })] }], "b");
+  const { result } = await registry.handle({ id: 1, method: "exposure.snapshot", params: {} });
+  assert.deepEqual(result.layout, layout());
+  const { space, focused, root } = result.layout;
+  assert.deepEqual({ space, focused, direction: root.direction, cards: cardIds(root) }, { space: "spc-aaaaaa", focused: "b", direction: "row", cards: ["a", "b"] });
+  for (const card of ["a", "b"]) assert.deepEqual(Object.keys(cardNode(root, card).frame), ["x", "y", "width", "height"], card);
+  assert.deepEqual(cardNode(root, "b").tabs.map(({ tab, plugin, active, params }) => ({ tab, plugin, active, params })),
+    [{ tab: "tab-aaaaa2", plugin: EDITOR, active: true, params: { path: "a.html" } }]);
+  const description = "검사용 표면.";
+  assert.deepEqual(result.plugins, [
+    { plugin: SESSION, name: SESSION, description, surface: { params: { type: "object", properties: { name: { type: "string" }, size: { type: "number" },
+      flags: { type: "object" } } }, opens: [] } },
+    { plugin: EDITOR, name: EDITOR, description, surface: { params: { type: "object", properties: { path: { type: "string" } } }, opens: ["html"] } },
+    { plugin: PLAIN, name: PLAIN, description, surface: { params: null, opens: [] } },
+  ]);
+});

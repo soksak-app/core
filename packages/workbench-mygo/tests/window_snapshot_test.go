@@ -6,6 +6,7 @@ package workbench_test
 import (
 	"encoding/json"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -43,6 +44,50 @@ func unregisteredOf(r *relay) []any {
 	return entries
 }
 
+// entryNames are the entries as "<kind> <name>", each once, in text order.
+func entryNames(entries []string) []string {
+	seen := map[string]bool{}
+	names := []string{}
+	for _, entry := range entries {
+		if !seen[entry] {
+			seen[entry] = true
+			names = append(names, entry)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// listedNames are the entries of the exposure.list of the relay.
+func listedNames(r *relay) []string {
+	list := r.ask("exposure.list", `{}`)["result"].(map[string]any)
+	entries := []string{}
+	for _, pair := range [][2]string{{"status", "status"}, {"commands", "command"}, {"element", "element"}} {
+		for _, entry := range list[pair[0]].([]any) {
+			entries = append(entries, pair[1]+" "+entry.(map[string]any)["name"].(string))
+		}
+	}
+	return entryNames(entries)
+}
+
+// snapshotNames are the entries of the groups and the unregistered entries of a snapshot.
+func snapshotNames(result map[string]any) []string {
+	entries := []string{}
+	for _, group := range result["groups"].([]any) {
+		read := group.(map[string]any)
+		for _, pair := range [][2]string{{"status", "status"}, {"commands", "command"}, {"element", "element"}} {
+			for _, entry := range read[pair[0]].([]any) {
+				entries = append(entries, pair[1]+" "+entry.(map[string]any)["name"].(string))
+			}
+		}
+	}
+	for _, entry := range result["unregistered"].([]any) {
+		read := entry.(map[string]any)
+		entries = append(entries, read["kind"].(string)+" "+read["name"].(string))
+	}
+	return entryNames(entries)
+}
+
 // asJSON is value as the host receives it.
 func asJSON(t *testing.T, value any) any {
 	t.Helper()
@@ -57,6 +102,7 @@ func asJSON(t *testing.T, value any) any {
 	return read
 }
 
+// contract: endpoint.exposure-snapshot.groups-the-window, endpoint.exposure-snapshot.surface-parts
 func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries(t *testing.T) {
 	f := newSurfaceRequests(t)
 	f.plugins["tab-d"] = "textprobe"
@@ -168,6 +214,10 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 	if got, want := result["unregistered"], unregisteredOf(f.relay); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the unregistered entries are %v, want %v", got, want)
 	}
+	// The groups and the unregistered entries hold exactly the entries of exposure.list of the window.
+	if got, want := snapshotNames(result), listedNames(f.relay); !reflect.DeepEqual(got, want) {
+		t.Fatalf("the snapshot holds the entries %v, exposure.list %v", got, want)
+	}
 	if forwards := len(f.forwards); forwards != 2 {
 		t.Fatalf("the snapshot forwarded %d requests, want one to tab-a and one to tab-b: %v", forwards, f.forwards)
 	}
@@ -206,6 +256,7 @@ func orderedAs(t *testing.T, r *relay, key string, entries []any) []any {
 
 // The snapshot of a window holds the layout of its description, its loaded plugins with their surface params and opens, and a group per
 // surface of core.surfaces.
+// contract: endpoint.exposure-snapshot.groups-the-window
 func TestTheSnapshotOfAWindowHoldsItsLayoutItsPluginsAndItsSurfaces(t *testing.T) {
 	f := layoutShell(t, oneCard(paramTab("t1", "notes", map[string]any{"path": "a.md"}), tab("t2", "plain")))
 	var result map[string]any

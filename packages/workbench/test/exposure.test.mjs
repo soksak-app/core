@@ -922,6 +922,7 @@ test("an open dialog refuses an action on a core element and a surface element, 
   }  wire.finish();
 });
 
+// contract: endpoint.exposure-snapshot.groups-the-window, endpoint.exposure-snapshot.surface-parts
 test("a window snapshot holds the layout, the plugins, the group of the main document, one group per surface and the unregistered entries", async () => {
   const made = coreRegistry(open("exposure-registry-snapshot"));
   const unmark = markViewSurface("tab-a");
@@ -937,6 +938,9 @@ test("a window snapshot holds the layout, the plugins, the group of the main doc
   made.configure({ surfacePlugin: () => "probe", snapshotParts: () => ({ layout, plugins, surfaces }),
     surfaceFrame: (surface) => (surface === "tab-a" ? { x: 100, y: 50, w: 400, h: 300 } : null), elementInert: (element) => element === null });
   made.status("core.fixture.count", () => 3, () => () => {});
+  // A status whose read fails is listed with the text of the failure as its error.
+  made.declare("core", { status: [{ name: "core.fixture.unread", description: "Unread.", schema: { type: "integer" } }], commands: [], element: [] });
+  made.status("core.fixture.unread", () => { throw new Error("the value is unread"); }, () => () => {});
   made.command("core.fixture.add", ({ n }) => n + 1);
   made.element("core.fixture.button");
   made.element("core.fixture.row");
@@ -956,7 +960,8 @@ test("a window snapshot holds the layout, the plugins, the group of the main doc
     assert.deepEqual(result.layout, layout);
     assert.deepEqual(result.plugins, plugins);
     const [main, ...rest] = result.groups;
-    assert.deepEqual(main.status, [{ name: "core.fixture.count", description: "Count.", schema: { type: "integer" }, value: 3 }]);
+    assert.deepEqual(main.status, [{ name: "core.fixture.count", description: "Count.", schema: { type: "integer" }, value: 3 },
+      { name: "core.fixture.unread", description: "Unread.", schema: { type: "integer" }, error: "the value is unread" }]);
     assert.deepEqual(main.commands.map(({ name, params }) => ({ name, params })),
       [{ name: "core.fixture.add", params: { type: "object", properties: { n: { type: "integer" } } } }]);
     assert.deepEqual(main.element.map(({ name, items }) => [name, items.map(({ index, role, text, visible, inert, command, params }) =>
@@ -977,6 +982,13 @@ test("a window snapshot holds the layout, the plugins, the group of the main doc
     assert.deepEqual(result.unregistered, [
       { kind: "status", name: "core.surface.document" }, { kind: "command", name: "probe.send" }, { kind: "element", name: "core.fixture.missing" },
     ]);
+    // The groups and the unregistered entries hold exactly the entries of exposure.list of the window.
+    const named = (kind) => ({ name }) => `${kind} ${name}`;
+    const listed = (await made.handle({ id: 10, method: "exposure.list", params: {} })).result;
+    const listedNames = [...listed.status.map(named("status")), ...listed.commands.map(named("command")), ...listed.element.map(named("element"))];
+    const snapshotNames = [...result.groups.flatMap((group) => [...group.status.map(named("status")), ...group.commands.map(named("command")),
+      ...group.element.map(named("element"))]), ...result.unregistered.map(({ kind, name }) => `${kind} ${name}`)];
+    assert.deepEqual([...new Set(snapshotNames)].sort(), [...new Set(listedNames)].sort());
     // With surface, the groups hold only the group of that surface.
     const only = (await made.handle({ id: 8, method: "exposure.snapshot", params: { surface: "tab-a" } })).result;
     assert.deepEqual(only.groups.map(({ owner, surface }) => [owner, surface]), [["surface", "tab-a"]]);
