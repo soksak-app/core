@@ -244,6 +244,57 @@ func TestThePageEndFixtureRunsTheUIWorksOfTheHostBeforeItEnds(t *testing.T) {
 	}
 }
 
+// The close of a window cancels every layout transaction of the window in the step of the close, while the framework still holds the
+// native window, and queues no work that names the window: the framework releases a closed window, and a work that runs after that
+// release would cancel the transaction of a later window that the operating system placed at the same address
+// (docs/spec/native-surfaces.md#layout-transaction). The native window of the fixture stays open after the close, so its address stands
+// for that later window, and the UI queue of the test holds the works that the close queued until that window began its layout.
+func TestTheCloseOfAWindowCancelsItsLayoutInTheStepOfTheClose(t *testing.T) {
+	h, s, window := pageEndFixture(t)
+	native := window.native
+	t.Cleanup(func() { runOnMainThread(func() { system.CancelLayout(native) }) })
+	h.mu.Lock()
+	s.ready = false
+	h.mu.Unlock()
+	calls := &layoutEndCalls{Platform: system, cancelled: make(chan platform.Window, 8)}
+	queue := &heldUI{Platform: calls, holding: true}
+	previous := system
+	system = queue
+	t.Cleanup(func() { system = previous })
+	begin := func(ticket uint64) {
+		began := make(chan bool, 1)
+		runOnMainThread(func() {
+			if err := system.BeginLayout(native, ticket, func(allowed bool) { began <- allowed }); err != nil {
+				t.Errorf("begin the layout %d: %v", ticket, err)
+				began <- false
+			}
+		})
+		if !<-began {
+			t.Fatalf("the layout %d of the window did not begin", ticket)
+		}
+	}
+	begin(1)
+	if window.closing() {
+		t.Fatal("a window whose page is not ready kept its close")
+	}
+	if commitLayout(native, 1) {
+		t.Error("the close of the window left its layout 1 open after the step of the close")
+	}
+	begin(2)
+	queue.release()
+	served := make(chan struct{})
+	if err := system.EnqueueUI(func() { close(served) }); err != nil {
+		t.Fatalf("queue the end of the UI works of the test: %v", err)
+	}
+	<-served
+	if !commitLayout(native, 2) {
+		t.Error("a work that the close of the window queued cancelled the layout 2 that a later window began at the address of the closed window")
+	}
+	if queued, ran, held := queue.end(); held != 0 || ran != queued {
+		t.Fatalf("the test ended with %d of %d UI works not run, %d of them held by the queue", queued-ran, queued, held)
+	}
+}
+
 // The reload request ends the page: a request to the page ends in the turn of the request, so the calls of the page that wait for
 // it answer and the page can reload (docs/spec/native-host.md#page-reload).
 // contract: application.page-end.answers-the-requests-of-the-page

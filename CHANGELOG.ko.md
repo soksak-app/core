@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Go host가 닫히는 window의 layout을 나중 window가 다시 쓸 수 있는 주소로 window를 가리키던 queue 작업 대신 close step 안에서 cancel한다 (F827).
 - Rust host test가 test target마다 공유 support 파일을 한 번만 load하고 `make check-rust-clippy`를 통과한다 (F828).
 - core 파일의 resolver가 native 쪽이 할당한 buffer를 채우고, response는 각 chunk를 보내기 전에 그 page를 해제하므로 page load가 쥐는 양은 파일에 chunk 하나를 더한 값 이하다 (F826).
 - Go host test는 document를 닫는 실패한 view의 종료로 view를 퇴역시키고, page-end fixture는 window와 platform이 끝나기 전에 host의 UI 작업을 기다린다 (#F825).

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The Go host cancels the layouts of a closing window in the step of the close instead of a later queued work that named the window by an address that a later window could reuse (F827).
 - The Rust host tests load each shared support file once per test target and pass `make check-rust-clippy` (F828).
 - The resolver of a core file fills a buffer that the native side allocates, and the response releases the pages of each chunk before it sends that chunk, so a page load holds at most the file plus one chunk (F826).
 - A Go host test retires its view through the end of a failed view, which closes its document, and the page-end fixture waits for the UI works of the host before its window and platform end (#F825).

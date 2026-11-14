@@ -313,18 +313,6 @@ func prepareWindow(win Frontend) {
 	}
 }
 
-// cancelLayout cancels the surface layout in progress in the window. Call it on the UI thread.
-func cancelLayout(s *Surfaces, win Frontend) {
-	owner := win.NativeWindow()
-	if err := system.EnqueueUI(func() {
-		if err := s.cancelAllLayoutPresentations(owner); err != nil {
-			LogError("surface layout cancel", err)
-		}
-	}); err != nil {
-		LogError("surface layout cancel", err)
-	}
-}
-
 // An app DOM reload replaces all plugin documents but does not end the sessions.
 func (s *Surfaces) reloadSurfaceDocuments() ([]imageDetachTarget, error) {
 	// The new main document registers its own sidecar receivers, and its views subscribe again.
@@ -823,8 +811,13 @@ func (s *Surfaces) close() {
 	s.host.removals.Abandon(s.name)
 	mainThreadStep(func() {
 		s.closed = true
-		cancelLayout(s, s.window)
-		// The close ends the observation and not the window, which Wails may have released.
+		// The close cancels the layouts of the window in its own step, while the framework still holds the window: a work queued for a
+		// later turn would name a window that the framework may have released, and the address of that window can then belong to a
+		// later window, whose transaction the work would cancel (docs/spec/native-surfaces.md#layout-transaction).
+		if err := s.cancelAllLayoutPresentations(s.window.NativeWindow()); err != nil {
+			LogError("surface layout cancel", err)
+		}
+		// The close ends the observation and not the window: the framework closes and releases the window after this step.
 		system.EndResponderObservation(s.responderObservation)
 		s.responderObservation = nil
 		system.EndCursorObservation(s.cursorObservation)
