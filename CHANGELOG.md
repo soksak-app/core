@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Release acceptance requires one run of the window checks and native end-to-end entries that the candidate adds or changes since the previous release, on every candidate host, in place of two runs of every check of every script; CI proves the whole candidate (F845).
 - The mygo host keeps the cursor of its content when a page answers an earlier pointer move later, and injected moves of window checks set the cursor through the cursor rects of AppKit (F844).
 - Both hosts write the reply of a `status.watch` before the notifications of its status that arrive while it is unanswered (F835).
 - The picker prevents the default of the Escape that dismisses it, so the document region does not receive that key (F843).

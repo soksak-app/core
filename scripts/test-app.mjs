@@ -90,7 +90,7 @@ export function parseDefaults(entries) {
  * (docs/spec/hosts.md#application-arguments), so the value holds for that process alone, and the window checks read the entries as
  * the JSON object SOKSAK_DEFAULTS.
  */
-export async function e2ePlan({ root, configRoot, script, native, candidate, artifacts, only, runFolder, platform,
+export async function e2ePlan({ root, configRoot, script, native, nativeEntries = [], candidate, artifacts, only, runFolder, platform,
   fixtures = fixturePluginIds(), defaults = [] }) {
   // `only` is one file selector or the list of a repeated --only, which scripts/node-tests.mjs widens to the files that hold any of them.
   const onlies = only === undefined ? [] : [only].flat();
@@ -148,7 +148,8 @@ export async function e2ePlan({ root, configRoot, script, native, candidate, art
       },
     },
     ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'native', target: native, platform,
-      env: { ...env, ...(candidate ? { SOKSAK_NATIVE_TEST_RUN_FOLDER: join(runFolder, 'native') } : {}) } }]),
+      env: { ...env, ...(candidate ? { SOKSAK_NATIVE_TEST_RUN_FOLDER: join(runFolder, 'native'),
+        SOKSAK_NATIVE_TEST_ENTRIES: nativeEntries.map((entry) => entry.replaceAll(' ', ',')).join(' ') } : {}) } }]),
     ...(inputs ? [{ name: 'acceptance after', phase: 'cleanup', kind: 'capture', capture: 'after' }] : []),
     // A person quits through the quit item of the application menu or through the quit key: each application ends by the item and the
     // last one by the key, and the run, the parent of each process, checks that it exits with status 0.
@@ -167,10 +168,10 @@ const artifactOf = (inputs, app) => inputs.hosts.find((host) => host.app === app
  * The required terminal steps use placeholder locations so the publication gate needs no workstation path, and the platform of the
  * candidate artifacts, so the gate gives the same steps on every platform that it runs on.
  */
-export async function candidatePlanNames(script) {
+export async function candidatePlanNames(script, { native }) {
   const candidate = { hosts: CANDIDATE_HOSTS.map((app) => ({ app, bundle: `/candidate/${app}` })) };
   const plan = await e2ePlan({ root: '/source', configRoot: '/configuration', runFolder: '/run', script,
-    native: nativeTarget(script), candidate, platform: CANDIDATE_PLATFORM.platform });
+    native: native ? nativeTarget(script) : undefined, nativeEntries: [], candidate, platform: CANDIDATE_PLATFORM.platform });
   return [...plan.map(({ name }) => name), 'acceptance after cleanup', 'reference cleanup', 'configuration cleanup'];
 }
 
@@ -467,11 +468,17 @@ async function main(argv) {
     });
   }
   let prepared;
+  let nativeEntries = [];
   if (values.candidate) {
     if (!candidateScripts(ROOT).includes(values.script)) throw new Error(`candidate acceptance does not declare script ${values.script}`);
-    if (process.env.SOKSAK_APP || process.env.NATIVE_TEST_ONLY) throw new Error('candidate acceptance requires every candidate host and every native test');
+    if (process.env.SOKSAK_APP || process.env.NATIVE_TEST_ONLY) throw new Error('candidate acceptance requires every candidate host and the changed native tests');
     if (values.native !== undefined && values.native !== nativeTarget(values.script)) throw new Error('candidate acceptance native target differs from the declared tier');
-    values.native = nativeTarget(values.script);
+    // The run holds the checks of the script that the candidate changes since the previous release (candidatePolicy).
+    const { candidatePolicy } = await import('./candidate-acceptance.mjs');
+    const policy = (await candidatePolicy(ROOT)).find((entry) => entry.script === values.script);
+    if (!policy) throw new Error(`candidate acceptance requires no run of ${values.script}: none of its checks changed since the previous release`);
+    nativeEntries = policy.native;
+    values.native = nativeEntries.length ? nativeTarget(values.script) : undefined;
     prepared = await prepareCandidate(JSON.parse(readFileSync(values.candidate, 'utf8')));
   } else if (ordinary) {
     // A focused ordinary run reuses the context validation and deliberately does not produce candidate acceptance.
@@ -494,7 +501,7 @@ async function main(argv) {
   const runFolder = values.candidate ? join(ROOT, 'target', 'test-runs', `candidate-${initializationId}`) : undefined;
   write(`run ${configRoot}`);
   const inputs = {}, steps = [];
-  const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native,
+  const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, nativeEntries,
     candidate: values.candidate ? prepared?.context : undefined,
     artifacts: ordinary ? prepared.context : undefined, only: values.only, defaults: values.defaults ?? [], runFolder }),
   { write, interrupted: interrupt.signal, outcome: (value) => steps.push(value),

@@ -20,19 +20,32 @@ const put = (root, path, text) => {
   writeFileSync(join(root, path), text);
 };
 
-test("candidate selection requires every declared case and every candidate host", { timeout: 5000 }, () => {
+test("candidate selection takes the changed checks of the script on every candidate host and refuses another selection", { timeout: 10000 }, (t) => {
+  const root = mkdtempSync(join(tmpdir(), "soksak-candidate-selection-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => spawnSync("git", ["-c", "user.name=test", "-c", "user.email=test@example.invalid", ...args], { cwd: root, encoding: "utf8" });
+  mkdirSync(join(root, "e2e"));
+  for (const name of ["changed", "same"]) writeFileSync(join(root, `e2e/${name}.test.mjs`), "one\n");
+  git("init", "-q");
+  git("add", ".");
+  git("commit", "-q", "-m", "release");
+  git("tag", "v0.0.1");
+  writeFileSync(join(root, "e2e/changed.test.mjs"), "two\n");
+  git("commit", "-q", "-am", "candidate");
   const values = { only: "", exclude: [] };
-  const tests = [{ args: ["--test", "required.test.mjs"] }];
-  assert.deepEqual(candidateSelection(values, tests, {}),
-    { only: null, exclude: [], changed: false, namePattern: null, apps: ["mygo", "tauriv2", "wailsv3"] });
+  const tests = ["e2e/changed.test.mjs", "e2e/same.test.mjs"].map((name) => ({ name, args: ["--test", name] }));
+  const options = { root, script: "benchmark:fixture", env: {} };
+  assert.deepEqual(candidateSelection(values, tests, options),
+    { since: "v0.0.1", tests: ["e2e/changed.test.mjs"], native: [], apps: ["mygo", "tauriv2", "wailsv3"] });
+  assert.throws(() => candidateSelection(values, tests.slice(1), options), /no window check that changed since v0\.0\.1/);
   for (const changed of [{ only: "one" }, { exclude: ["required"] }, { changed: "HEAD~1" }]) {
-    assert.throws(() => candidateSelection({ ...values, ...changed }, tests, {}), /complete declared script/);
+    assert.throws(() => candidateSelection({ ...values, ...changed }, tests, options), /without another test selection/);
   }
   for (const env of [{ SOKSAK_APP: "wailsv3" }, { NATIVE_TEST_ONLY: "one" }, { NODE_OPTIONS: "--test-name-pattern=one" }]) {
-    assert.throws(() => candidateSelection(values, tests, env), /complete declared script/);
+    assert.throws(() => candidateSelection(values, tests, { ...options, env }), /without another test selection/);
   }
   for (const arg of ["--test-name-pattern=one", "--test-skip-pattern=one", "--test-only", "--test-shard=1/2"]) {
-    assert.throws(() => candidateSelection(values, [{ args: [arg] }], {}), /complete declared script/);
+    assert.throws(() => candidateSelection(values, [{ name: "e2e/changed.test.mjs", args: [arg] }], options), /without another test selection/);
   }
 });
 

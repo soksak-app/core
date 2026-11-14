@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateNativeTests, candidateScripts } from './candidate-policy.mjs';
+import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateScripts, changedChecks, previousRelease } from './candidate-policy.mjs';
 import { applicationExecutables, releaseKey } from './platform/platform.js';
 import { hashFile, hashTree } from './candidate-identity.mjs';
 import { decodeAcceptanceReport, MAX_REPORT_BYTES } from './candidate-report.mjs';
@@ -46,9 +46,8 @@ export function validateCandidateReport(report, { candidate, assets, bundles, so
     const label = `${run.script}/${run.id}`;
     need(Array.isArray(run.errors) && run.errors.length === 0, `${label}: candidate collection is incomplete or reported a failure`);
     need(text(run.id) && text(run.initializationId), `${label}: missing independent initialization identity`);
-    const selection = run.selection;
-    need(selection && selection.only === null && Array.isArray(selection.exclude) && selection.exclude.length === 0
-      && selection.changed === false && selection.namePattern === null && sameSet(selection.apps, CANDIDATE_HOSTS), `${label}: partial or missing acceptance selection`);
+    need(isDeepStrictEqual(run.selection, { since: policy.since, tests: policy.tests, native: policy.native, apps: [...CANDIDATE_HOSTS] }),
+      `${label}: the selection differs from the checks that changed since ${policy.since} on every candidate host`);
     for (const phase of ['before', 'after', 'afterCleanup']) {
       const snapshot = run[phase];
       const snapshotSource = snapshot && Object.fromEntries(Object.keys(source).map((key) => [key, snapshot[key]]));
@@ -73,9 +72,7 @@ export function validateCandidateReport(report, { candidate, assets, bundles, so
     else need(run.native === null, `${label}: unexpected native result`);
   }
   for (const policy of required) {
-    const runs = report.runs.filter((run) => run.script === policy.script);
-    need(runs.length === 2 && new Set(runs.map((run) => run.initializationId)).size === 2,
-      `${policy.script}: exactly two independent initial states are required`);
+    need(report.runs.filter((run) => run.script === policy.script).length === 1, `${policy.script}: exactly one run of the changed checks is required`);
   }
   return errors;
 }
@@ -122,15 +119,25 @@ export async function candidateAssetNames(root) {
 }
 
 /** Reuses canonical scripts and native runner arguments; the report cannot choose its required subset. */
+/**
+ * The scripts that acceptance requires, each with the checks that the candidate adds or changes since the previous release
+ * (changedChecks): CI proves the unit tests and structure checks of the whole candidate, and a check that no change touches
+ * repeats an earlier result. A script with no such check is not required. A native end-to-end test runs in the run of its tier,
+ * which the window checks of that tier start, so a tier whose native tests change and whose window checks do not is refused.
+ */
 export async function candidatePolicy(root) {
   const { discoverNodeTests } = await import('./node-tests.mjs');
   const { candidatePlanNames } = await import('./test-app.mjs');
-  return Promise.all(candidateScripts(root).map(async (script) => {
-    const native = candidateNativeTests(root, script);
-    const tests = discoverNodeTests({ root, packages: ['e2e'], script }).tests.map((item) => item.name);
-    if (!tests.length) throw new Error(`${script}: candidate policy declares no test files`);
-    return { script, tests, native, steps: await candidatePlanNames(script) };
-  }));
+  const since = previousRelease(root);
+  const required = [];
+  for (const script of candidateScripts(root)) {
+    const declared = discoverNodeTests({ root, packages: ['e2e'], script }).tests.map((item) => item.name);
+    if (!declared.length) throw new Error(`${script}: candidate policy declares no test files`);
+    const { tests, native } = changedChecks(root, script, { since, tests: declared });
+    if (!tests.length && native.length) throw new Error(`${script}: native end-to-end tests ${native.join(', ')} changed since ${since} without a changed window check of the tier`);
+    if (tests.length) required.push({ script, since, tests, native, steps: await candidatePlanNames(script, { native: native.length > 0 }) });
+  }
+  return required;
 }
 
 /** Hashes the downloaded files and their complete extracted bundles; no candidate is rebuilt for publication. */

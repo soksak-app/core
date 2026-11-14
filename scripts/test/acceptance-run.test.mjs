@@ -164,10 +164,11 @@ test('candidate input identity follows installed dependency bytes and links beyo
   await assert.rejects(collectAcceptanceInputs(f.root, prepared.context, f.configRoot, { platform: system, identify: f.identify }), /dependency.*outside|outside.*dependency/);
 });
 
-async function writeRun(f, prepared, { fileStatus = 'pass', auditStatus = 'pass', findings = [], judgmentRun = 'run', cleanup = 'pass', afterChange } = {}) {
+async function writeRun(f, prepared, { fileStatus = 'pass', auditStatus = 'pass', findings = [], judgmentRun = 'run', cleanup = 'pass', afterChange,
+  selectedTests = ['e2e/benchmark.test.mjs'] } = {}) {
   const runFolder = join(f.folder, 'run');
   await put(join(runFolder, 'manifest.json'), { schema: 1, run: 'run', started_us: 1, finished_us: 2,
-    script: 'benchmark:fixture', selection: { only: null, exclude: [], changed: false, namePattern: null, apps: hosts },
+    script: 'benchmark:fixture', selection: { since: 'v0.0.38', tests: selectedTests, native: [], apps: hosts },
     tests: [{ name: 'e2e/benchmark.test.mjs', status: fileStatus }] });
   await put(join(runFolder, 'judgment.json'), { schema: 1, run: judgmentRun,
     tests: hosts.map((app) => ({ app, name: `${app}: required`, result: 'pass' })), audit: { status: auditStatus, findings } });
@@ -191,7 +192,7 @@ test('candidate acceptance keeps real manifest results and rejects failed audits
   assert.deepEqual(valid.run.audit, { status: 'pass', findings: [], apps: hosts });
   for (const invalid of [
     { fileStatus: 'skip' }, { fileStatus: 'fail' }, { auditStatus: 'fail', findings: ['between-test error'] },
-    { judgmentRun: 'another-run' }, { cleanup: 'fail' },
+    { judgmentRun: 'another-run' }, { cleanup: 'fail' }, { selectedTests: ['e2e/other.test.mjs'] },
     { afterChange: (value) => { value.hosts[0].bundleSha256 = 'f'.repeat(64); } },
   ]) {
     const { run } = await writeRun(f, prepared, invalid);

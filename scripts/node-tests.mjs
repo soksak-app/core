@@ -13,7 +13,7 @@ import { parseShell, stringifyCommand } from '@yarnpkg/parsers';
 import { auditRunWithCatalog } from './audit-run.mjs';
 import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
 import { NODE_TEST_REPORTERS } from './node-test-evidence.mjs';
-import { CANDIDATE_HOSTS, candidateScripts } from './candidate-policy.mjs';
+import { CANDIDATE_HOSTS, candidateScripts, changedChecks, previousRelease } from './candidate-policy.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -274,14 +274,20 @@ export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalo
   return findings.length === 0 ? 0 : 1;
 }
 
-/** A candidate run is the complete declared script on every candidate host, without an inherited selection. */
-export function candidateSelection(values, tests, env = process.env) {
+/**
+ * A candidate run is the window checks of the script that the candidate adds or changes since the previous release and its changed
+ * native end-to-end entries (changedChecks of scripts/candidate-policy.mjs), on every candidate host, without an inherited selection.
+ */
+export function candidateSelection(values, tests, { root = ROOT, script, env = process.env } = {}) {
   if (onlyList(values.only ?? '').length || values.exclude?.length || values['exclude-folder']?.length || values.changed !== undefined || env.SOKSAK_APP || env.NATIVE_TEST_ONLY
     || /--test-(?:name-pattern|skip-pattern|only|shard)\b/.test(env.NODE_OPTIONS ?? '')
     || tests.some(({ args }) => args.some((arg) => /^--test-(?:name-pattern|skip-pattern|only|shard)(?:=|$)/.test(arg)))) {
-    throw new Error('candidate acceptance requires the complete declared script and every candidate host without test selection');
+    throw new Error('candidate acceptance selects the changed checks of the declared script on every candidate host without another test selection');
   }
-  return { only: null, exclude: [], changed: false, namePattern: null, apps: [...CANDIDATE_HOSTS] };
+  const since = previousRelease(root);
+  const changed = changedChecks(root, script, { since, tests: tests.map(({ name }) => name) });
+  if (!changed.tests.length) throw new Error(`candidate acceptance of ${script} has no window check that changed since ${since}`);
+  return { since, tests: changed.tests, native: changed.native, apps: [...CANDIDATE_HOSTS] };
 }
 
 async function main(argv) {
@@ -312,9 +318,10 @@ async function main(argv) {
     : execFileSync('git', ['diff', '--name-only', values.changed], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed, testTimeoutMs: limitMs });
   const candidateFolder = process.env.SOKSAK_CANDIDATE_RUN_FOLDER;
-  const selection = candidateFolder ? candidateSelection(values, all) : null;
   if (candidateFolder && !candidateScripts(ROOT).includes(scriptName)) throw new Error(`candidate acceptance does not declare script ${scriptName}`);
-  const plan = planNodeRun(all, { range: values.changed, only, exclude: values.exclude, excludeFolder: values['exclude-folder'] });
+  const selection = candidateFolder ? candidateSelection(values, all, { script: scriptName }) : null;
+  const plan = selection ? { tests: all.filter(({ name }) => selection.tests.includes(name)) }
+    : planNodeRun(all, { range: values.changed, only, exclude: values.exclude, excludeFolder: values['exclude-folder'] });
   if (plan.skip !== undefined) {
     write(plan.skip);
     return 0;

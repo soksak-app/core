@@ -14,6 +14,8 @@ import { applicationExecutables } from './platform/platform.js';
 const json = async (path) => JSON.parse(await readFile(path, 'utf8'));
 const byComponent = (a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`);
 const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+/** The selected names and the names of the results, as sets. */
+const sameNames = (names, results) => same([...names].sort(), results.map(({ name }) => name).sort());
 const requireValue = (condition, message) => { if (!condition) throw new Error(`candidate acceptance: ${message}`); };
 const configDir = (root, app) => join(root, `soksak-check-${app}`);
 // `platform` names the system whose application layout the bundles have; undefined selects the running system.
@@ -202,8 +204,8 @@ export async function finishAcceptanceRun({ runFolder, context, script, initiali
   if (!manifest?.finished_us || !tests.length || tests.some(({ status }) => status !== 'pass')) findings.push('window test execution is incomplete or failed');
   if (manifest?.script !== script) findings.push('window test script differs from the requested candidate script');
   const selection = manifest?.selection ?? null;
-  if (!selection || selection.only !== null || selection.exclude?.length !== 0 || selection.changed !== false
-    || selection.namePattern !== null || !same(selection.apps, CANDIDATE_HOSTS)) findings.push('candidate execution selected only part of the required cases or hosts');
+  if (typeof selection?.since !== 'string' || !Array.isArray(selection.tests) || !sameNames(selection.tests, tests)
+    || !Array.isArray(selection.native) || !same(selection.apps, CANDIDATE_HOSTS)) findings.push('candidate execution ran other checks than the changed checks of its selection or not every host');
   const audit = { status: judgment?.audit?.status ?? 'fail', findings: judgment?.audit?.findings ?? ['complete audit result is missing'],
     apps: [...new Set(judgment?.tests?.map(({ app }) => app) ?? [])].sort() };
   if (judgment?.run !== manifest?.run) findings.push('manifest and judgment belong to different runs');
@@ -213,10 +215,11 @@ export async function finishAcceptanceRun({ runFolder, context, script, initiali
     || !same(immutableInputs(before), immutableInputs(afterCleanup))) findings.push('candidate inputs changed or could not be verified through cleanup');
   if (plan.status !== 'pass' || !plan.steps?.length || plan.steps.some(({ status }) => status !== 'pass')) findings.push('candidate preparation, checks or cleanup failed');
   let native = null;
-  if (script === 'test-app' || script === 'test-app:activation') {
+  if (selection?.native?.length) {
     const evidence = await read('native/manifest.json');
     native = { tests: evidence?.tests?.map(({ name, status }) => ({ name, status })) ?? [] };
-    if (!evidence?.finished_us || !native.tests.length || native.tests.some(({ status }) => status !== 'pass')) findings.push('native acceptance is incomplete or failed');
+    if (!evidence?.finished_us || !sameNames(selection.native, native.tests)
+      || native.tests.some(({ status }) => status !== 'pass')) findings.push('native acceptance is incomplete, failed or ran other entries than its selection');
   }
   // A finalizer sees validation failures before deciding whether successful-run evidence may be removed.
   if (finalize) await finalize(findings);

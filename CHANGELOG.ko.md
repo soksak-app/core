@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Release acceptance는 모든 script의 모든 check를 두 번 실행하는 대신, 후보가 직전 release 이후 추가하거나 바꾼 window check와 native end-to-end 항목을 모든 후보 host에서 한 번 실행하도록 요구한다. 후보 전체는 CI가 증명한다(F845).
 - mygo host는 page가 앞선 pointer 이동에 늦게 답해도 content의 cursor를 유지하고, window check의 주입된 이동은 AppKit의 cursor rect로 cursor를 정한다 (F844).
 - 두 host가 `status.watch`의 reply를, 답하기 전에 도착한 그 status의 notification보다 먼저 쓴다 (F835).
 - Picker가 자신을 닫는 Escape의 default를 막아, document region이 그 key를 받지 않는다 (F843).

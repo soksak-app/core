@@ -214,7 +214,10 @@ jobs:
       contents: write
       actions: read
     steps:
+      # The acceptance policy compares the candidate with the newest version tag that it contains, so the checkout holds the history and the tags.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup-node
         with:
           root: .

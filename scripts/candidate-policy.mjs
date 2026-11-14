@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -28,4 +29,22 @@ export function candidateNativeTests(root, script) {
   if (entries === '$(NATIVE_E2E_TESTS)') entries = /^NATIVE_E2E_TESTS\s*=\s*((?:[^\n]*\\\n)*[^\n]*)/m.exec(makefile)?.[1].replace(/\\\n/g, ' ');
   if (!entries || entries.includes('$')) throw new Error(`native/darwin/Makefile: cannot identify the complete ${target} runner entries`);
   return entries.trim().split(/\s+/).map((entry) => entry.replaceAll(',', ' '));
+}
+
+/** The release that a candidate follows: the newest version tag that the candidate commit contains. */
+export function previousRelease(root) {
+  return execFileSync('git', ['describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+}
+
+/**
+ * The checks that acceptance requires of `script`: its window check files (`tests`, from the discovered files of the script) and its
+ * native end-to-end entries whose files the candidate adds or changes since the release `since`. A removed file runs no check.
+ * A native entry is changed when its source `native/darwin/tests/<name>.m` is.
+ */
+export function changedChecks(root, script, { since, tests }) {
+  const changed = new Set(execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', since, 'HEAD'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean));
+  return {
+    tests: tests.filter((name) => changed.has(name)).sort(),
+    native: candidateNativeTests(root, script).filter((entry) => changed.has(`native/darwin/tests/${entry.split(' ')[0]}.m`)),
+  };
 }
