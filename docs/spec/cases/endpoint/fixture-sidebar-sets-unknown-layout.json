@@ -1,0 +1,12 @@
+{
+  "name": "fixture-sidebar-sets-unknown-layout",
+  "description": "A set of a layout that the layout probe declares no set of fails after the sets are read.",
+  "replay": false,
+  "reason": "The case plays the requests of the start state of a check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"common":{},"values":{"sets":[{"id":"set-grid","title":"격자","sections":["files.tree"],"layout":"grid"}]}}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"common":{},"values":{"sets":[{"id":"set-grid","title":"격자","sections":["files.tree"],"layout":"grid"}]}}}}
+  ]
+}

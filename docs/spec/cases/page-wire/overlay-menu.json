@@ -1,12 +1,12 @@
 {
   "name": "overlay-menu",
-  "description": "The page opens the menu modal of the picker element at its rectangle in the page, with its markup, title, border colour and corner radius, and the host answers the call with null; the page closes the modal by its element id, and the host answers the call with null.",
+  "description": "The page opens the menu modal of the picker element at its rectangle in the page, with its markup, title, border colour and corner radius, and the host answers the call with the rectangle that it fitted to the device pixels; the page closes the modal by its element id, and the host answers the call with null.",
   "replay": false,
   "reason": "overlayShow opens a native modal view in the window, and only the native host with a window produces its answer (the native tier of docs/operations/examples.md#test-kinds).",
   "variables": {},
   "steps": [
     { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 10, "y": 10, "w": 100, "h": 60 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "<button id=\"item\"></button>", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
-    { "reply": { "result": null } },
+    { "reply": { "result": { "x": 10, "y": 10, "w": 100, "h": 60 } } },
     { "call": { "name": "overlayHide", "payload": "menu" } },
     { "reply": { "result": null } }
   ]

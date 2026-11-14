@@ -91,6 +91,11 @@ func registeredViewRecordSurfaces(t *testing.T) *Surfaces {
 	}
 	handle := unsafe.Pointer(new(int))
 	s.documents.registerView("probe-surface", "probe", generation, handle)
+	key := DocumentKey{Surface: "probe-surface", Name: viewRegionName}
+	if err := s.documents.Reserve(key); err != nil || !s.documents.Set(key, handle) {
+		t.Fatalf("the document of the registered view: %v", err)
+	}
+	s.invoke = func(task func()) { task() }
 	s.views["probe-surface"] = &nativeWebview{handle: handle}
 	return s
 }
@@ -133,40 +138,65 @@ func viewRecordEvents(t *testing.T, config string) []map[string]any {
 
 const viewLogDeliveryChild = "SOKSAK_VIEW_LOG_DELIVERY_CHILD"
 
+// readyViewLogSurfaces returns the registered view of the test surface with a ready document doc-1 and the event writer log.
+func readyViewLogSurfaces(t *testing.T, log *EventLog) *Surfaces {
+	t.Helper()
+	s := registeredViewRecordSurfaces(t)
+	s.host = &Host{events: log}
+	if !s.documents.setReadyDocument("probe-surface", probeGeneration(s), "doc-1", 1234.5) {
+		t.Fatal("the ready document was not recorded")
+	}
+	return s
+}
+
+// viewLogReplyForTest carries out the runtime.log call id with params for the view of the test surface and returns the reply message
+// that the host posts to the document that made the call, as the page reads it.
+func viewLogReplyForTest(t *testing.T, s *Surfaces, id uint64, params any) map[string]any {
+	t.Helper()
+	data, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := map[string]any{"id": id, "command": "runtime.log", "params": json.RawMessage(data)}
+	answer, err := s.answerViewLog("probe-surface", "probe", probeGeneration(s), call)
+	if err != nil || answer == nil {
+		t.Fatalf("runtime.log call %d: answer %v, error %v", id, answer, err)
+	}
+	text, err := json.Marshal(answer.message)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reply map[string]any
+	if err := json.Unmarshal(text, &reply); err != nil {
+		t.Fatalf("runtime.log reply %q is not JSON: %v", text, err)
+	}
+	return reply
+}
+
 // contract: log.view-clock-answers-without-policy-or-event-write, view.log.uses-direct-writer, log.view-request-accepts-only-declared-clock-and-batch-fields, view.log.same-id-replies, log.view-batch.binds-ready-page-and-native-surface, log.view-batch.rejects-foreign-source-without-partial-write, log.view-batch-requires-page-start-to-match-ready-origin, log.view-batch-requires-a-nonempty-page-start-url, log.view-batch-refuses-a-caller-supplied-surface, log.view-batch-rejects-a-foreign-plugin-prefix
 func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
-		s, fake := newViewChannelSurfaces(t)
-		s.host = &Host{events: log}
+		s := readyViewLogSurfaces(t, log)
 		var events []hostEvent
 		s.events = func(name string, data any) { events = append(events, hostEvent{name, data}) }
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-			t.Fatalf("view ready: %v", err)
-		}
-		fake.posted = nil
-		events = nil
 		if err := log.Flush(); err != nil {
 			t.Fatalf("flush before runtime.log clock: %v", err)
 		}
 		clockRecordCount := len(viewRecordEvents(t, config))
+		// The reply post is refused by the fault point, so the call reaches the end of its path without the native post.
+		t.Setenv(faultViewPost, "post")
 		message := `{"message":{"sok":1,"id":7,"command":"runtime.log","params":{"action":"clock"}}}`
-		if err := s.ViewMessage("probe-surface", message); err != nil {
-			t.Fatalf("runtime.log clock: %v", err)
+		if err := s.ViewMessage("probe-surface", message); err == nil || !strings.Contains(err.Error(), "post runtime.log reply") {
+			t.Fatalf("runtime.log clock with a refused post: %v, want the post failure", err)
 		}
 		if len(events) != 0 {
 			t.Fatalf("runtime.log clock reached the workbench: %+v, want no relayed event", events)
 		}
-		if len(fake.posted) != 1 {
-			t.Fatalf("native replies to runtime.log clock: %d, want one direct reply", len(fake.posted))
-		}
-		var reply map[string]any
-		if err := json.Unmarshal([]byte(fake.posted[0]), &reply); err != nil {
-			t.Fatalf("runtime.log clock reply %q is not JSON: %v", fake.posted[0], err)
-		}
+		reply := viewLogReplyForTest(t, s, 7, map[string]any{"action": "clock"})
 		result, ok := reply["result"].(map[string]any)
 		if !ok || reply["id"] != float64(7) || result["ts_us"] == nil || result["mono_ns"] == nil {
-			t.Fatalf("runtime.log clock native reply: %v, want id 7 and host clocks", reply)
+			t.Fatalf("runtime.log clock reply: %v, want id 7 and host clocks", reply)
 		}
 		if err := log.Flush(); err != nil {
 			t.Fatalf("flush after runtime.log clock: %v", err)
@@ -184,12 +214,8 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.measurement",
 				"fields": map[string]any{"sample": "accepted"}},
 		}}
-		s.viewRuntimeLogForTest(t, fake, &events, 8, batch)
-		if got := viewLogReplyForTest(t, fake).(map[string]any); got["id"] != float64(8) || got["result"] != nil {
-			t.Fatalf("runtime.log batch native reply: %v, want id 8 and null result", got)
-		}
-		if len(events) != 0 {
-			t.Fatalf("runtime.log batch reached the workbench: %+v, want no relayed event", events)
+		if got := viewLogReplyForTest(t, s, 8, batch); got["id"] != float64(8) || got["result"] != nil {
+			t.Fatalf("runtime.log batch reply: %v, want id 8 and null result", got)
 		}
 		if err := log.Flush(); err != nil {
 			t.Fatal(err)
@@ -222,13 +248,12 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 			map[string]any{"ts_us": 1234571, "mono_ns": 1234571890, "page": "doc-1", "level": "info", "event": "plugin.other.foreign",
 				"fields": map[string]any{"sample": "foreign"}},
 		}}
-		s.viewRuntimeLogForTest(t, fake, &events, 9, invalid)
-		failure, ok := viewLogReplyForTest(t, fake).(map[string]any)
-		if !ok || failure["id"] != float64(9) || failure["error"].(map[string]any)["code"] != float64(viewLogFailureCode) {
-			t.Fatalf("foreign batch native reply: %v, want id 9 with error code %d", failure, viewLogFailureCode)
+		failure := viewLogReplyForTest(t, s, 9, invalid)
+		if failure["id"] != float64(9) || failure["error"].(map[string]any)["code"] != float64(viewLogFailureCode) {
+			t.Fatalf("foreign batch reply: %v, want id 9 with error code %d", failure, viewLogFailureCode)
 		}
 		if !strings.Contains(failure["error"].(map[string]any)["message"].(string), `event "plugin.other.foreign"`) {
-			t.Fatalf("foreign batch native error: %v, want the offending event name", failure)
+			t.Fatalf("foreign batch error: %v, want the offending event name", failure)
 		}
 		if err := log.Flush(); err != nil {
 			t.Fatal(err)
@@ -263,9 +288,8 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 		}
 		for index, request := range invalidRequests {
 			id := uint64(10 + index)
-			s.viewRuntimeLogForTest(t, fake, &events, id, request)
-			failure, ok := viewLogReplyForTest(t, fake).(map[string]any)
-			if !ok || failure["id"] != float64(id) || failure["error"].(map[string]any)["code"] != float64(viewLogFailureCode) {
+			failure := viewLogReplyForTest(t, s, id, request)
+			if failure["id"] != float64(id) || failure["error"].(map[string]any)["code"] != float64(viewLogFailureCode) {
 				t.Fatalf("invalid runtime.log request %d reply: %v, want same id and error code %d", index, failure, viewLogFailureCode)
 			}
 			if err := log.Flush(); err != nil {
@@ -294,12 +318,7 @@ func TestViewRuntimeLogClockRepliesWithoutWorkbenchRelay(t *testing.T) {
 func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
-		s, fake := newViewChannelSurfaces(t)
-		s.host = &Host{events: log}
-		var events []hostEvent
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-			t.Fatal(err)
-		}
+		s := readyViewLogSurfaces(t, log)
 		fields := map[string]any{"payload": strings.Repeat("x", 65520)}
 		input, err := json.Marshal(fields)
 		if err != nil {
@@ -319,7 +338,7 @@ func TestViewRuntimeLogSurfaceKeepsPluginFieldsWithinPageBound(t *testing.T) {
 		batch := map[string]any{"action": "batch", "events": []any{
 			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.near-limit", "fields": fields},
 		}}
-		s.viewRuntimeLogForTest(t, fake, &events, 31, batch)
+		viewLogReplyForTest(t, s, 31, batch)
 		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
@@ -368,7 +387,7 @@ func TestViewReadyRequiresDocumentAndPositiveTimeOrigin(t *testing.T) {
 		"text time origin": {"document": "doc-1", "time_origin": "1234.5"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			s, fake := newViewChannelSurfaces(t)
+			s, _, _ := newLifecycleSurfaces(t)
 			ready := map[string]any{"event": "view.ready", "plugin": "probe"}
 			for key, value := range fields {
 				ready[key] = value
@@ -381,8 +400,12 @@ func TestViewReadyRequiresDocumentAndPositiveTimeOrigin(t *testing.T) {
 				t.Fatalf("view.ready %v was accepted", fields)
 			}
 			channel, ok := s.documents.view("probe-surface")
-			if !ok || channel.document != "" || channel.timeOrigin != 0 || len(fake.posted) != 0 {
-				t.Fatalf("view channel after view.ready %v: %+v, posts %v", fields, channel, fake.posted)
+			if !ok || channel.document != "" || channel.timeOrigin != 0 {
+				t.Fatalf("view channel after view.ready %v: %+v", fields, channel)
+			}
+			generation := channel.generation
+			if _, ready, _, err := s.planViewPost("probe-surface", &generation, map[string]any{"event": "theme"}); err != nil || ready {
+				t.Fatalf("the view is ready to receive a post after view.ready %v: ready %v, error %v", fields, ready, err)
 			}
 		})
 	}
@@ -392,31 +415,26 @@ func TestViewReadyRequiresDocumentAndPositiveTimeOrigin(t *testing.T) {
 func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
-		s, fake := newViewChannelSurfaces(t)
-		s.host = &Host{events: log}
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-			t.Fatal(err)
-		}
-		fake.posted = nil
-		generation := viewGeneration(s, "probe-surface")
-		fake.beforeUITask = func() {
-			if !s.documents.setReadyDocument("probe-surface", generation, "doc-2", 2345.5) {
-				t.Error("could not replace the ready document before its reply post")
-			}
-		}
+		s := readyViewLogSurfaces(t, log)
+		generation := probeGeneration(s)
 		request := map[string]any{"action": "batch", "events": []any{
 			map[string]any{"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.before-navigation",
 				"fields": map[string]any{"sample": "processed-before-navigation"}},
 		}}
-		message, err := json.Marshal(map[string]any{"message": map[string]any{"sok": 1, "id": 17, "command": "runtime.log", "params": request}})
+		data, err := json.Marshal(request)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := s.ViewMessage("probe-surface", string(message)); err != nil {
-			t.Fatalf("runtime.log before navigation: %v", err)
+		answer, err := s.answerViewLog("probe-surface", "probe", generation, map[string]any{"id": uint64(17), "command": "runtime.log", "params": json.RawMessage(data)})
+		if err != nil || answer == nil {
+			t.Fatalf("runtime.log before navigation: answer %v, error %v", answer, err)
 		}
-		if len(fake.posted) != 0 {
-			t.Fatalf("old-document runtime.log replies: %v, want no post to the replacement document", fake.posted)
+		// The document navigates after the call was answered and before the reply is posted.
+		if !s.documents.setReadyDocument("probe-surface", generation, "doc-2", 2345.5) {
+			t.Fatal("could not replace the ready document before its reply post")
+		}
+		if post, stale, err := s.planViewDocumentPost("probe-surface", answer.generation, answer.document, answer.message); err != nil || !stale || post.handle != nil {
+			t.Fatalf("the reply of the old document: post %+v, stale %v, error %v; want no post to the replacement document", post, stale, err)
 		}
 		if err := log.Flush(); err != nil {
 			t.Fatal(err)
@@ -445,17 +463,14 @@ func TestViewRuntimeLogReplyDoesNotReachANavigatedDocument(t *testing.T) {
 func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
-		s, fake := newViewChannelSurfaces(t)
-		s.host = &Host{events: log}
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-			t.Fatal(err)
-		}
-		fake.rejectPost = true
+		s := readyViewLogSurfaces(t, log)
+		// The fault point refuses the post that the native layer would take.
+		t.Setenv(faultViewPost, "post")
 		handle, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName})
 		if err != nil {
 			t.Fatal(err)
 		}
-		s.viewReceived("probe-surface", handle, "probe", viewGeneration(s, "probe-surface"),
+		s.viewReceived("probe-surface", handle, "probe", probeGeneration(s),
 			`{"message":{"sok":1,"id":18,"command":"runtime.log","params":{"action":"clock"}}}`)
 		if err := log.Flush(); err != nil {
 			t.Fatal(err)
@@ -482,12 +497,12 @@ func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
-		s, fake, _ := newLifecycleSurfaces(t)
+		s, views, _ := newLifecycleSurfaces(t)
 		s.host.events = log
-		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-			t.Fatal(err)
+		if !s.documents.setReadyDocument("probe-surface", probeGeneration(s), "doc-1", 1234.5) {
+			t.Fatal("the ready document was not recorded")
 		}
-		retired, oldGeneration := retireAndReplaceView(t, s, fake)
+		retired, oldGeneration := retireAndReplaceView(t, s, views)
 		if err := log.Flush(); err != nil {
 			t.Fatal(err)
 		}
@@ -514,30 +529,4 @@ func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("child retired generation: %v: %s", err, output)
 	}
-}
-
-func (s *Surfaces) viewRuntimeLogForTest(t *testing.T, fake *channelPlatform, events *[]hostEvent, id uint64, params any) {
-	t.Helper()
-	data, err := json.Marshal(map[string]any{"message": map[string]any{"sok": 1, "id": id, "command": "runtime.log", "params": params}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.ViewMessage("probe-surface", string(data)); err != nil {
-		t.Fatalf("runtime.log batch: %v", err)
-	}
-	if len(*events) != 0 {
-		t.Fatalf("runtime.log reached the workbench: %+v", *events)
-	}
-	if len(fake.posted) == 0 {
-		t.Fatal("runtime.log produced no native reply")
-	}
-}
-
-func viewLogReplyForTest(t *testing.T, fake *channelPlatform) any {
-	t.Helper()
-	var reply map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &reply); err != nil {
-		t.Fatalf("runtime.log reply %q is not JSON: %v", fake.posted[len(fake.posted)-1], err)
-	}
-	return reply
 }

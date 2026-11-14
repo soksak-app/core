@@ -1,0 +1,14 @@
+{
+  "name": "fixture-sidebar-sets",
+  "description": "The sidebar sets of the configuration are read and stored again with the sections of the layout probe set of their layout.",
+  "replay": false,
+  "reason": "The case plays the requests of the start state of a check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"common":{},"values":{"sets":[{"id":"set-install","title":"탐색기","sections":["files.tree","files.bookmarks"],"layout":"list"},{"id":"set-browser","title":"브라우저","sections":["browser.tabs","browser.history"],"layout":"tabs"}]}}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"common":{},"values":{"sets":[{"id":"set-install","title":"탐색기","sections":["files.tree","files.bookmarks"],"layout":"list"},{"id":"set-browser","title":"브라우저","sections":["browser.tabs","browser.history"],"layout":"tabs"}]}}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"sets":[{"id":"set-install","title":"탐색기","sections":["layoutprobe.alpha","layoutprobe.fill","layoutprobe.follow"],"layout":"list"},{"id":"set-browser","title":"브라우저","sections":["layoutprobe.alpha","layoutprobe.beta"],"layout":"tabs"}]},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}}
+  ]
+}

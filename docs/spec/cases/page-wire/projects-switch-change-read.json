@@ -1,0 +1,22 @@
+{
+  "name": "projects-switch-change-read",
+  "description": "Placeholder of change-read.",
+  "replay": false,
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"workspace-changed"}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-one","root":"/work/one","identity":"1:1","title":"renamed by the change","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}}],"settings":{}}],"open":[]},"held":true}}
+  ]
+}

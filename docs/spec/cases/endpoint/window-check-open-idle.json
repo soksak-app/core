@@ -1,0 +1,9 @@
+{
+  "name": "window-check-open-idle",
+  "description": "A client that connects to the endpoint and sends no request: a session that opens and ends without a request leaves the connection to be closed by the client.",
+  "replay": false,
+  "reason": "The case has no frame, and the replay would send none.",
+  "steps": [
+
+  ]
+}

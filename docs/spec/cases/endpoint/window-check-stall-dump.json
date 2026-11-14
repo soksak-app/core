@@ -1,0 +1,30 @@
+{
+  "name": "window-check-stall-dump",
+  "description": "The host stores the path of a stall dump as an event and names the position of its line and the running host calls of the window.",
+  "replay": false,
+  "reason": "The case sends a dump path that the replaying host would write goroutine stacks beside, so the replay cannot arrange it.",
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "diagnostics.stall.dump",
+        "params": {
+          "window": "main",
+          "path": "/x/logs/stall-10-7.txt"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "boot": "b1",
+          "seq": 9,
+          "running": "wait_presented 3.5s, surface_focus 2.5s"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "plugin-operations-starter-offline",
+  "description": "The page reads the plugin state of a first run without a registry and sets the default registry, which the host cannot fetch.",
+  "replay": false,
+  "reason": "The starter pack is installed from the registry into the configuration directory by the plugin operations of the host, whose state the Go producer does not build (docs/spec/cases/page-wire/README.md#limits).",
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}}},
+    {"call":{"name":"pluginsUseRegistry","payload":{"index":"https://soksak-app.github.io/registry/index.json"}}},
+    {"reply":{"error":"https://soksak-app.github.io/registry/index.json: cannot connect: offline"}}
+  ]
+}

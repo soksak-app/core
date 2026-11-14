@@ -152,19 +152,18 @@ func TestTheStartBufferHoldsAtMostFourMebibytesAndTheWriterCountsTheRest(t *test
 // contract: bounds.endpoint.topic-changes-hold-at-most-256
 func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounted(t *testing.T) {
 	log := support.UseEventLog(t)
-	backend := newFakeBackend()
-	backend.held = make(chan struct{})
-	backend.holdMethod = "status.watch"
-	backend.entered = make(chan struct{}, 1)
-	backend.unwatched = make(chan struct{}, 512)
-	_, address, _ := serve(t, backend)
+	// The page holds the reply of the first watch: the other watches wait behind it, and only the first subscription of a topic
+	// reaches the page.
+	_, address, _, page := servePage(t, heldPageExchange("status.watch", `{"name":"core.layout"}`, `null`))
 	conn := dial(t, address)
 	watch := map[string]any{"window": "main", "name": "core.layout"}
 	request := func(id int, method string) {
 		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": watch})
 	}
 	request(1, "status.watch")
-	<-backend.entered
+	if !page.awaitCall() {
+		t.Fatal("the page received no status.watch")
+	}
 	const pending, refused = 256, 10
 	// The bound refuses the changes other than status.unwatch, so the queue is filled with watches.
 	for id := 2; id <= 1+pending+refused; id++ {
@@ -184,7 +183,9 @@ func TestTheSubscriptionChangesOfATopicHoldAtMost256AndTheRestIsRefusedAndCounte
 			t.Fatalf("request %d was not refused: %v", id, refusedIDs)
 		}
 	}
-	close(backend.held)
+	if err := page.release(); err != nil {
+		t.Fatal(err)
+	}
 	for index := range 1 + pending {
 		got, err := receive(t, conn)
 		if err != nil || got.Error != nil {
@@ -235,18 +236,17 @@ func receiveInTurn(t *testing.T, conn net.Conn) message {
 // answers, every accepted change succeeds and the page receives the one status.unwatch of the last release.
 // contract: bounds.endpoint.topic-changes-hold-at-most-256
 func TestAnUnwatchIsNotRefusedByTheBoundAndEndsTheSubscriptionInItsQueue(t *testing.T) {
-	backend := newFakeBackend()
-	backend.held = make(chan struct{})
-	backend.holdMethod = "status.watch"
-	backend.entered = make(chan struct{}, 1)
-	_, address, _ := serve(t, backend)
+	_, address, _, page := servePage(t, heldPageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
 	conn := dial(t, address)
 	watch := map[string]any{"window": "main", "name": "core.layout"}
 	request := func(id int, method string) {
 		send(t, conn, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": watch})
 	}
 	request(1, "status.watch")
-	<-backend.entered
+	if !page.awaitCall() {
+		t.Fatal("the page received no status.watch")
+	}
 	const pending = 256
 	for id := 2; id <= 1+pending; id++ {
 		request(id, "status.watch")
@@ -258,7 +258,9 @@ func TestAnUnwatchIsNotRefusedByTheBoundAndEndsTheSubscriptionInItsQueue(t *test
 	if got := receiveInTurn(t, conn); got.ID == nil || *got.ID != refusedWatch || got.Error == nil || !strings.Contains(got.Error.Message, "256") {
 		t.Fatalf("reply %+v, want the refusal of the watch %d", got, refusedWatch)
 	}
-	close(backend.held)
+	if err := page.release(); err != nil {
+		t.Fatal(err)
+	}
 	for index := range 2 + pending {
 		got := receiveInTurn(t, conn)
 		if got.Error != nil {
@@ -268,15 +270,17 @@ func TestAnUnwatchIsNotRefusedByTheBoundAndEndsTheSubscriptionInItsQueue(t *test
 			t.Fatalf("the unwatch answered %s, want null", got.Result)
 		}
 	}
-	if got := len(backend.unwatched); got != 1 {
-		t.Fatalf("the page received %d status.unwatch, want the 1 of the last release", got)
+	// The page receives the one status.unwatch of the last release; the exchange of the page fails the test when it does not.
+	if !page.awaitCall() {
+		t.Fatal("the page received no status.unwatch")
 	}
 }
 
 // contract: bounds.endpoint.output-queue-holds-at-most-sixteen-mebibytes
 func TestTheOutputQueueOfAConnectionHoldsAtMostSixteenMebibytesAndTheRefusalIsCounted(t *testing.T) {
 	log := support.UseEventLog(t)
-	endpoint, address, _ := serve(t, newFakeBackend())
+	endpoint, address, _, _ := servePage(t, pageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
 	conn := dial(t, address)
 	reply := call(t, conn, 1, "status.watch", map[string]any{"window": "main", "name": "core.layout"})
 	if reply.Error != nil {

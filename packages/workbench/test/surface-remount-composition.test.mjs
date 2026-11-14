@@ -237,18 +237,14 @@ test("same-slot and moved-slot mounts preserve the entry while authorization is 
   wire.finish();
 });
 
-test("disposing a mount releases resolved listeners before pending registration settles", { timeout: 5000 }, async (t) => {
+test("disposing a mount releases resolved listeners before pending registration settles", { timeout: 5000 }, async () => {
+  const wire = selectPageWire("surface-remount-composition-listener-pending-dispose");
   const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   dom.window.ResizeObserver = class { observe() {} disconnect() {} };
   dom.window.requestAnimationFrame = () => 1;
   dom.window.cancelAnimationFrame = () => {};
-  let rejectProcessEnded;
-  let resolveReply;
-  let registrationStarted;
-  const started = new Promise((resolve) => { registrationStarted = resolve; });
   const registrationError = new Error("view-process-ended registration failed after dispose");
-  const removed = [];
   const reports = [];
   // Waiters of the reports: each report calls the waiters, and until resolves when the predicate holds.
   const reportWaiters = [];
@@ -262,25 +258,6 @@ test("disposing a mount releases resolved listeners before pending registration 
     for (const check of reportWaiters.splice(0)) check();
     return originalDispatchEvent?.call(globalThis, event) ?? true;
   };
-  // A rejection that escapes as an unhandled promise fails the test through the test runner, which reports each unhandled
-  // rejection of the run as a failure, whenever Node emits it.
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: {
-    ...actualHost,
-    native: true,
-    onSurfacePrepared: () => () => {},
-    surfaceContextRuntime: (surface, declarations) => {
-      const runtime = actualHost.surfaceContextRuntime(surface, declarations);
-      return { ...runtime, native: { ...runtime.native, on: (name) => {
-        if (name === "view-process-ended") return new Promise((_, reject) => {
-          rejectProcessEnded = reject;
-          registrationStarted();
-        });
-        if (name === "view-reply") return new Promise((resolve) => { resolveReply = resolve; });
-        return Promise.resolve(() => removed.push(name));
-      }, call: async () => null } };
-    },
-  } });
   const { mountSurface, authorizeSurface, disposeSurface } = await import("../surface-modules.js?view-listener-pending-dispose");
   const id = "fixture-view-listener-pending-dispose";
   recordOrigin(id, null, "test fixture");
@@ -296,13 +273,13 @@ test("disposing a mount releases resolved listeners before pending registration 
   try {
     authorizeSurface(id);
     const mount = mountSurface(slot, surface);
-    await started;
+    await drained();
     await disposeSurface(id);
     assert.equal(slot.querySelector(".surface-module-host"), null, "the surface was not removed before its mount ended");
-    assert.deepEqual([...removed].sort(), ["view-call", "view-presentation-abandoned", "view-responsiveness", "view-stopped"].sort(),
+    assert.deepEqual([...wire.unsubscribed].sort(), ["view-call", "view-presentation-abandoned", "view-responsiveness", "view-stopped"].sort(),
       "dispose must release resolved listeners without waiting for pending registrations");
-    resolveReply(() => { throw new Error("late listener cleanup failed"); });
-    rejectProcessEnded(registrationError);
+    wire.release();
+    wire.release();
     const [mountResult] = await Promise.allSettled([mount]);
     assert.equal(mountResult.status, "fulfilled", "disposing the mount must retain its cancellation result");
     assert.equal(mountResult.value, null, "a mount that the dispose cancelled resolved with a value");
@@ -317,6 +294,7 @@ test("disposing a mount releases resolved listeners before pending registration 
     globalThis.dispatchEvent = originalDispatchEvent;
     dom.window.close();
   }
+  wire.finish();
 });
 
 test("a rejected view listener registration releases successful listeners and rejects the mount", { timeout: 5000 }, async () => {

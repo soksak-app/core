@@ -394,30 +394,53 @@ func configureDocument(document unsafe.Pointer, setup documentSetup) error {
 	return err
 }
 
-// configureSteps runs the steps of configureDocument, in their order.
+// configureSteps runs the steps of configureDocument, in their order. Each step passes the diagnostics fault point of the document steps
+// after its platform call.
 func configureSteps(document unsafe.Pointer, setup documentSetup) error {
 	// The history is restored before anything else uses the new region, so it loads the restored entry first.
 	if setup.restore != "" {
-		if refusal := system.RestoreDocument(document, setup.restore); refusal != nil {
+		refusal := system.RestoreDocument(document, setup.restore)
+		if refusal == nil {
+			refusal = documentStepFault("restore")
+		}
+		if refusal != nil {
 			return fmt.Errorf("document %s: %w", setup.name, refusal)
 		}
 	}
 	system.SetDocumentAppearance(document, setup.dark)
+	recordDocumentStep("appearance")
 	system.SetDocumentBackground(document, setup.dialog)
-	if err := system.SetDocumentMessage(document, setup.message); err != nil {
+	recordDocumentStep("background")
+	err := system.SetDocumentMessage(document, setup.message)
+	if err == nil {
+		err = documentStepFault("message")
+	}
+	if err != nil {
 		return err
 	}
-	if err := system.SetDocumentStream(document, setup.stream); err != nil {
+	err = system.SetDocumentStream(document, setup.stream)
+	if err == nil {
+		err = documentStepFault("stream")
+	}
+	if err != nil {
 		return err
 	}
 	// The region collects its requests from the start of its first document: native applies the collection when the document script reports
 	// that it is ready, which happens after this task.
 	for _, effect := range setup.effects {
-		if !system.SetDocumentStreamOn(document, effect.Stream, effect.On) {
+		accepted := system.SetDocumentStreamOn(document, effect.Stream, effect.On)
+		if accepted && documentStepFault("stream on") != nil {
+			accepted = false
+		}
+		if !accepted {
 			return fmt.Errorf("document %q does not accept stream %q", setup.name, effect.Stream)
 		}
 	}
-	return system.SetDocumentEvent(document, setup.event)
+	err = system.SetDocumentEvent(document, setup.event)
+	if err == nil {
+		err = documentStepFault("event")
+	}
+	return err
 }
 
 // viewRegionName is the document name of the view web view of a view surface. No composition region has an empty name, so the view
@@ -433,17 +456,56 @@ func ProcessLabel(plugin, region string) string {
 	return "soksak://plugin/" + plugin + "/" + region
 }
 
-// attachView creates the view web view of a view surface with the view configuration (isView) and loads soksak://<plugin>/<page> into it.
-// The view state is not reported by this step. It runs on the UI thread.
-func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string, start ViewStart) error {
+// reserveView takes the name of the view of surface and opens the source origin of its generation. The generation is the one that the
+// view carries until it ends. It runs on the UI thread.
+func (s *Surfaces) reserveView(surfaceID string) (uint64, error) {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
 	if err := s.documents.Reserve(key); err != nil {
-		return err
+		return 0, err
 	}
 	generation, err := s.sourceOriginState().create(surfaceID)
 	if err != nil {
 		s.takeBackDocumentName(key)
-		return fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
+		return 0, fmt.Errorf("view of surface %q cannot start: %w", surfaceID, err)
+	}
+	return generation, nil
+}
+
+// mountView records the created view handle of surface under its generation: the channel of the view, the project of its mount and the
+// name of the document, and tells the page that the source is registered. A failure leaves the registry without the view, and the
+// caller closes the handle. It runs on the UI thread.
+func (s *Surfaces) mountView(surfaceID, plugin string, generation uint64, handle unsafe.Pointer, start ViewStart) error {
+	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	s.documents.registerView(surfaceID, plugin, generation, handle)
+	if !s.documents.bindViewProject(surfaceID, generation, start.Project) {
+		s.documents.unregisterView(surfaceID, generation)
+		s.sourceOriginState().retire(surfaceID, generation)
+		s.takeBackDocumentName(key)
+		return fmt.Errorf("surface %q lost its mount before project binding", surfaceID)
+	}
+	if !s.documents.Set(key, handle) {
+		s.documents.unregisterView(surfaceID, generation)
+		s.sourceOriginState().retire(surfaceID, generation)
+		return fmt.Errorf("surface %q closed while its view was created", surfaceID)
+	}
+	s.windowEvent("view-source-registered", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
+	return nil
+}
+
+// viewLoaded records the created and loaded view of surface: the element that the surface holds and the trace of the request of its
+// process. It runs on the UI thread.
+func (s *Surfaces) viewLoaded(surfaceID string, surface unsafe.Pointer, plugin string, handle unsafe.Pointer) {
+	s.setElement(surfaceID, SurfaceElement{Surface: surface, Key: handle})
+	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
+}
+
+// attachView creates the view web view of a view surface with the view configuration (isView) and loads soksak://<plugin>/<page> into it.
+// The view state is not reported by this step. It runs on the UI thread.
+func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, directory, folder, plugin, page, channel string, start ViewStart) error {
+	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
+	generation, err := s.reserveView(surfaceID)
+	if err != nil {
+		return err
 	}
 	var handle unsafe.Pointer
 	handle, err = system.CreateDocument(surface, platform.DocumentOptions{
@@ -459,23 +521,10 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	})
 	registeredEvent := false
 	if err == nil {
-		s.documents.registerView(surfaceID, plugin, generation, handle)
-		if !s.documents.bindViewProject(surfaceID, generation, start.Project) {
-			s.documents.unregisterView(surfaceID, generation)
-			s.sourceOriginState().retire(surfaceID, generation)
+		if err = s.mountView(surfaceID, plugin, generation, handle, start); err != nil {
 			system.CloseDocument(handle)
-			s.takeBackDocumentName(key)
-			return fmt.Errorf("surface %q lost its mount before project binding", surfaceID)
+			return err
 		}
-		if !s.documents.Set(key, handle) {
-			s.documents.unregisterView(surfaceID, generation)
-			s.sourceOriginState().retire(surfaceID, generation)
-			system.CloseDocument(handle)
-			return fmt.Errorf("surface %q closed while its view was created", surfaceID)
-		}
-	}
-	if err == nil {
-		s.windowEvent("view-source-registered", map[string]any{"plugin": plugin, "surface": surfaceID, "generation": generation})
 		registeredEvent = true
 		err = system.SetViewMessage(handle, func(value string) {
 			s.viewReceived(surfaceID, handle, plugin, generation, value)
@@ -526,8 +575,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 		}
 		return err
 	}
-	s.setElement(surfaceID, SurfaceElement{Surface: surface, Key: handle})
-	EmitHost(LevelDebug, "host.trace.view.process-request", map[string]any{"plugin": plugin, "surface": surfaceID})
+	s.viewLoaded(surfaceID, surface, plugin, handle)
 	return nil
 }
 
@@ -640,8 +688,41 @@ func (s *Surfaces) viewResponsiveness(surface, plugin string, generation uint64,
 	})
 }
 
+// viewSync is the step that the synchronization of a view takes next.
+type viewSync int
+
+const (
+	// viewSyncSkip creates and places nothing: the view failed beyond the restart limit.
+	viewSyncSkip viewSync = iota
+	// viewSyncCreate creates the view from its record.
+	viewSyncCreate
+	// viewSyncPlace places the existing view.
+	viewSyncPlace
+)
+
 // syncView creates the view of a view surface when the surface has none, and places the view over the whole surface. It runs on the UI thread.
 func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool, start ViewStart) error {
+	step, handle, err := s.planViewSync(surfaceID, surface, plugin, page, visible, start)
+	if err != nil || step == viewSyncSkip {
+		return err
+	}
+	if step == viewSyncCreate {
+		spec := s.viewRecords().specs[surfaceID]
+		if err := s.attachView(surfaceID, surface, spec.directory, spec.folder, plugin, page, viewChannelScript, spec.start); err != nil {
+			return err
+		}
+		if handle, err = s.documents.Get(DocumentKey{Surface: surfaceID, Name: viewRegionName}); err != nil {
+			return err
+		}
+	}
+	system.PlaceDocument(handle, 0, 0, 0, 0, visible)
+	return nil
+}
+
+// planViewSync records the view of surfaceID and decides the step of its synchronization: no step for a view that failed beyond the
+// restart limit, the creation of a view that does not exist, and the placement of the view that exists, which is returned. A view that
+// is not shown ends its presentation wait. It runs on the UI thread.
+func (s *Surfaces) planViewSync(surfaceID string, surface unsafe.Pointer, plugin, page string, visible bool, start ViewStart) (viewSync, unsafe.Pointer, error) {
 	key := DocumentKey{Surface: surfaceID, Name: viewRegionName}
 	if !visible {
 		// A view that is not shown ends its presentation wait, because its presentation cannot come (presentation_wait.go).
@@ -655,27 +736,21 @@ func (s *Surfaces) syncView(surfaceID string, surface unsafe.Pointer, plugin, pa
 	spec.start = start
 	// A view that failed beyond the restart limit is not created again until its surface is removed (view_lifecycle.go).
 	if s.viewRecords().isStopped(surfaceID) {
-		return nil
+		return viewSyncSkip, nil, nil
 	}
 	handle, err := s.documents.Get(key)
-	if err != nil {
-		if spec.folder == "" {
-			folder, folderErr := PluginFolder(s.host.configDir, plugin)
-			if folderErr != nil {
-				return folderErr
-			}
-			spec.folder = folder
-			spec.directory = filepath.Join(s.host.configDir, documentData)
-		}
-		if err := s.attachView(surfaceID, surface, spec.directory, spec.folder, plugin, page, viewChannelScript, spec.start); err != nil {
-			return err
-		}
-		if handle, err = s.documents.Get(key); err != nil {
-			return err
-		}
+	if err == nil {
+		return viewSyncPlace, handle, nil
 	}
-	system.PlaceDocument(handle, 0, 0, 0, 0, visible)
-	return nil
+	if spec.folder == "" {
+		folder, folderErr := PluginFolder(s.host.configDir, plugin)
+		if folderErr != nil {
+			return viewSyncSkip, nil, folderErr
+		}
+		spec.folder = folder
+		spec.directory = filepath.Join(s.host.configDir, documentData)
+	}
+	return viewSyncCreate, nil, nil
 }
 
 // documentChanged sends the document state only to the owning surface and notifies the host.window watchers. It is called on the UI thread.
@@ -943,6 +1018,13 @@ func (s *Surfaces) surfaceTerminated(viewID uint64) {
 
 // closeSurfaceDocuments closes all document regions of a surface. Call it on the UI thread.
 func (s *Surfaces) closeSurfaceDocuments(surface string) {
+	s.closeSurfaceDocumentsWith(surface, system.CloseDocument)
+}
+
+// closeSurfaceDocumentsWith ends the view and the documents of surface in the host state and closes each document region with
+// closeDocument, which is the native close of the platform. The documents close before the window change is announced. Call it on the
+// UI thread.
+func (s *Surfaces) closeSurfaceDocumentsWith(surface string, closeDocument func(unsafe.Pointer)) {
 	// The view of the surface closes with its documents (docs/spec/logging.md#principles), so no presentation can end its wait.
 	s.viewRecords().recordEnd(surface)
 	s.endPresentationWait(surface, "closed")
@@ -953,7 +1035,7 @@ func (s *Surfaces) closeSurfaceDocuments(surface string) {
 	s.streams.RemoveSurface(surface)
 	handles := s.documents.RemoveSurface(surface)
 	for _, handle := range handles {
-		system.CloseDocument(handle)
+		closeDocument(handle)
 	}
 	if len(handles) > 0 {
 		s.windowChanged()
@@ -1681,28 +1763,34 @@ func (d *Documents) currentGeneration(surface string, plugin string, generation 
 }
 
 // viewReceived handles one message of the sok-view handler of the view handle of surface and writes its failure to the application log.
-// It runs on the UI thread.
+// A view that lost messages is closed and created again. It runs on the UI thread.
 func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, plugin string, generation uint64, value string) {
+	if s.viewReceive(surface, handle, plugin, generation, value) {
+		// The view has lost messages, so it is closed and created again (docs/spec/plugin-processes.md, rule 4).
+		s.viewFailed(surface, handle, generation, time.Now())
+	}
+}
+
+// viewReceive dispatches one message of the sok-view handler of the view handle of surface, writes its failure to the application log
+// and reports whether the view lost messages, which ends the view.
+func (s *Surfaces) viewReceive(surface string, handle unsafe.Pointer, plugin string, generation uint64, value string) (overflowed bool) {
 	if !s.documents.currentView(surface, handle, generation) {
 		s.recordRetiredViewMessage(surface, plugin, value)
 		s.traceStaleViewCallback(surface, "message")
-		return
+		return false
 	}
 	accepted, err := s.viewMessageFrom(surface, plugin, generation, value)
 	if !accepted && err == nil {
 		s.recordRetiredViewMessage(surface, plugin, value)
 		s.traceStaleViewCallback(surface, "message")
-		return
+		return false
 	}
 	if err == nil {
-		return
+		return false
 	}
 	LogError("view channel", err)
 	var overflow viewOverflow
-	if errors.As(err, &overflow) {
-		// The view has lost messages, so it is closed and created again (docs/spec/plugin-processes.md, rule 4).
-		s.viewFailed(surface, handle, generation, time.Now())
-	}
+	return errors.As(err, &overflow)
 }
 
 func (s *Surfaces) traceStaleViewCallback(surface, reason string) {
@@ -1753,15 +1841,38 @@ func (s *Surfaces) viewProcessEnded(surface string, handle unsafe.Pointer, gener
 }
 
 // viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view, which the
-// failure counts at the instant now. It runs on the UI thread.
+// failure counts at the instant now. It closes the native objects that the end leaves and creates the view again when its record
+// allows. It runs on the UI thread.
 func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation uint64, now time.Time) {
+	restart, ok := s.endView(surface, handle, generation, now, viewClosers{document: system.CloseDocument, image: system.CloseImage})
+	if !ok || restart == nil {
+		return
+	}
+	if err := s.syncView(surface, restart.native, restart.plugin, restart.page, restart.visible, restart.start); err != nil {
+		LogError("view channel", err)
+	}
+}
+
+// viewClosers are the native closes that the end of a view runs, each in its place among the changes of the host state: the close of a
+// document and the close of an image.
+type viewClosers struct {
+	document func(unsafe.Pointer)
+	image    func(unsafe.Pointer)
+}
+
+// endView ends the view handle of surface, which the failure counts at the instant now: it changes the host state, closes the native
+// documents and images of the view and its regions with closers, and returns the record from which the view is created again, which is
+// nil when the restarts are stopped. It reports false for a handle of a view that was already closed or replaced. The process end ends the
+// presentation wait of the view before its documents close, so the wait ends with the reason process-ended and not with the close of the
+// documents. It runs on the UI thread.
+func (s *Surfaces) endView(surface string, handle unsafe.Pointer, generation uint64, now time.Time, closers viewClosers) (*viewSpec, bool) {
 	key := DocumentKey{Surface: surface, Name: viewRegionName}
 	current, err := s.documents.Get(key)
 	channel, ok := s.documents.view(surface)
 	if err != nil || current != handle || !ok || channel.generation != generation {
 		// The handle belongs to a view that was already closed or replaced, so its failure is already counted.
 		s.traceStaleViewCallback(surface, "ended")
-		return
+		return nil, false
 	}
 	// The view ends here, whether its process ended or its queue overflowed (docs/spec/logging.md#principles).
 	s.viewRecords().recordEnd(surface)
@@ -1772,16 +1883,16 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 	openCalls := s.documents.endViewCalls(surface)
 	if _, err := s.documents.Remove(key); err != nil {
 		LogError("view channel", err)
-		return
+		return nil, false
 	}
-	system.CloseDocument(handle)
+	closers.document(handle)
 	// The process end ends the presentation wait of the view before its documents close, so the wait ends with the reason
 	// process-ended and not with the close of the documents.
 	s.endPresentationWaitFor(surface, 0, generation, "process-ended")
 	// The regions of the view belong to the composition of the ended document, so they close with it, and the view that is created
 	// again attaches them again (docs/spec/native-surfaces.md#view-surfaces, regions).
-	s.closeSurfaceDocuments(surface)
-	s.closeSurfaceImages(surface)
+	s.closeSurfaceDocumentsWith(surface, closers.document)
+	s.images.CloseSurface(surface, closers.image)
 	s.images.BeginGeneration(surface)
 	// Each call that the view had open ends with the reason process-ended, and the host writes its peer-lost event.
 	for _, call := range openCalls {
@@ -1796,18 +1907,16 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 		LogError("view channel", fmt.Errorf("%s: %s", surface, reason))
 		if spec == nil {
 			LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view-stopped event is not sent", surface))
-			return
+			return nil, true
 		}
 		s.emitToSurface(surface, "view-stopped", viewStoppedEvent(surface, spec.plugin, reason))
-		return
+		return nil, true
 	}
 	if spec == nil {
 		LogError("view channel", fmt.Errorf("%s: the view record is missing, so the view is not created again", surface))
-		return
+		return nil, true
 	}
-	if err := s.syncView(surface, spec.native, spec.plugin, spec.page, spec.visible, spec.start); err != nil {
-		LogError("view channel", err)
-	}
+	return spec, true
 }
 
 // viewMessage dispatches one message of the sok-view handler of the view of surface. The message is {"message": value} for a message
@@ -1902,14 +2011,8 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 	}
 	switch event.Event {
 	case "view.ready":
-		if event.Plugin != plugin || event.Document == "" || event.TimeOrigin == nil || !validViewTimeOrigin(*event.TimeOrigin) {
-			return true, fmt.Errorf("%s: view.ready names plugin %q, document %q and time origin %s, want plugin %q, a document and a positive finite time origin", surface, event.Plugin, event.Document, viewTimeOriginText(event.TimeOrigin), plugin)
-		}
-		if !s.documents.setReadyDocument(surface, generation, event.Document, *event.TimeOrigin) {
-			return false, nil
-		}
-		if s.documents.firstReady(surface, generation) {
-			EmitHost(LevelDebug, "host.trace.view.process-ready", map[string]any{"plugin": event.Plugin, "surface": surface})
+		if accepted, err := s.viewReady(surface, plugin, generation, event.Plugin, event.Document, event.TimeOrigin); !accepted || err != nil {
+			return accepted, err
 		}
 		// The current theme is the first message to a ready document (docs/spec/native-surfaces.md#view-surfaces).
 		return true, s.postViewGeneration(surface, generation, map[string]any{"event": "theme", "data": s.Theme()})
@@ -1926,6 +2029,22 @@ func (s *Surfaces) viewMessageFrom(surface, plugin string, generation uint64, va
 		return true, nil
 	}
 	return true, fmt.Errorf("%s: view event %q is unknown", surface, event.Event)
+}
+
+// viewReady records the ready document of the view of surface from a view.ready message of eventPlugin, and writes the trace of the
+// first ready message of the view. It reports false for a view of another generation, and an error for a message that names another
+// plugin, no document or no positive finite time origin.
+func (s *Surfaces) viewReady(surface, plugin string, generation uint64, eventPlugin, document string, timeOrigin *float64) (bool, error) {
+	if eventPlugin != plugin || document == "" || timeOrigin == nil || !validViewTimeOrigin(*timeOrigin) {
+		return true, fmt.Errorf("%s: view.ready names plugin %q, document %q and time origin %s, want plugin %q, a document and a positive finite time origin", surface, eventPlugin, document, viewTimeOriginText(timeOrigin), plugin)
+	}
+	if !s.documents.setReadyDocument(surface, generation, document, *timeOrigin) {
+		return false, nil
+	}
+	if s.documents.firstReady(surface, generation) {
+		EmitHost(LevelDebug, "host.trace.view.process-ready", map[string]any{"plugin": eventPlugin, "surface": surface})
+	}
+	return true, nil
 }
 
 // validateViewMessageEnvelope rejects malformed message shapes before a retired view callback is canceled. It does not validate
@@ -2037,36 +2156,51 @@ func (s *Surfaces) sendToView(surface string, message map[string]any) (bool, err
 }
 
 func (s *Surfaces) sendToViewGeneration(surface string, generation *uint64, message map[string]any) (bool, bool, error) {
-	message["sok"] = viewChannelMarker
-	data, err := json.Marshal(message)
-	if err != nil {
-		return false, false, err
-	}
 	// The lookup and the post run as one task of the UI thread, as withDocument does: the native post needs the main thread, and
 	// the view is closed on the UI thread, so it is not closed between the generation check, lookup and post.
 	var postErr error
 	var ready, stale bool
 	s.invoke(func() {
-		channel, ok := s.documents.view(surface)
-		if !ok || (generation != nil && channel.generation != *generation) {
-			stale = generation != nil
+		var post viewPost
+		post, ready, stale, postErr = s.planViewPost(surface, generation, message)
+		if postErr != nil || !ready {
 			return
 		}
-		if channel.document == "" {
-			return
-		}
-		handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
-		if err != nil {
-			postErr = err
-			return
-		}
-		if !system.PostDocument(handle, string(data)) {
+		if viewPostFault() || !system.PostDocument(post.handle, post.text) {
+			ready = false
 			postErr = fmt.Errorf("%s: the view document refused the message", surface)
-			return
 		}
-		ready = true
 	})
 	return ready, stale, postErr
+}
+
+// viewPost is one message that the host posts to the document of the view of a surface.
+type viewPost struct {
+	handle unsafe.Pointer
+	text   string
+}
+
+// planViewPost returns the post of message to the ready document of the view of surface, with the field sok 1. ready is false for a
+// view without a ready document, and stale is true when generation is given and the view of the surface is of another generation or has
+// none; neither is an error, and neither has a post. It runs on the UI thread.
+func (s *Surfaces) planViewPost(surface string, generation *uint64, message map[string]any) (post viewPost, ready, stale bool, err error) {
+	message["sok"] = viewChannelMarker
+	data, err := json.Marshal(message)
+	if err != nil {
+		return viewPost{}, false, false, err
+	}
+	channel, ok := s.documents.view(surface)
+	if !ok || (generation != nil && channel.generation != *generation) {
+		return viewPost{}, false, generation != nil, nil
+	}
+	if channel.document == "" {
+		return viewPost{}, false, false, nil
+	}
+	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
+	if err != nil {
+		return viewPost{}, false, false, err
+	}
+	return viewPost{handle: handle, text: string(data)}, true, false, nil
 }
 
 // postThemeToViews posts the current theme to each view that has a ready document. It runs after the theme changed.

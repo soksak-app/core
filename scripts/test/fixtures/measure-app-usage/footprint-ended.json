@@ -1,0 +1,14 @@
+{
+  "recorded": "The footprint of the process ender after it ended. Command: footprint -p 64442 -f bytes. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "footprint",
+    "-p",
+    "64442",
+    "-f",
+    "bytes"
+  ],
+  "status": 66,
+  "stdout": "",
+  "stderr": "footprint: Unable to find pid for process matching '64442'\nfootprint: Unable to find any processes matching the supplied process names or pids (try as root?)\n",
+  "pid": 64442
+}

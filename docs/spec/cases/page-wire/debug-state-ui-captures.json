@@ -1,0 +1,301 @@
+{
+  "name": "debug-state-ui-captures",
+  "description": "The page opens the debug view, which records the state and lists the logs folder; the host names two captures of the recording. The page sets the entries of a diagnostic list, which closes the view, and opens the view again, which records the state again and takes its list from the entries without asking the host to list the logs folder.",
+  "replay": false,
+  "reason": "The case shows, updates, places and hides a modal view of a window through the overlay calls, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "show-request": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "statuses": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "update": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "statuses-2": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "show-request-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": "$show-request"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": "$statuses"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-2.json",
+          "captures": [
+            "/config/logs/captures/still-main-1/window.png",
+            "/config/logs/captures/still-project-2/window.png"
+          ]
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFiles"
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "path": "logs/state-1.json",
+            "size": 98,
+            "modified": 1
+          },
+          {
+            "path": "logs/state-2.json",
+            "size": 101,
+            "modified": 1
+          },
+          {
+            "path": "logs/host-a.stderr",
+            "size": 9,
+            "modified": 1
+          },
+          {
+            "path": "logs/host-a.crash",
+            "size": 12,
+            "modified": 1
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-2"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": "$statuses-2"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-2.json",
+          "captures": [
+            "/config/logs/captures/still-main-1/window.png",
+            "/config/logs/captures/still-project-2/window.png"
+          ]
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": "$show-request-2"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-3"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-4"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-4"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

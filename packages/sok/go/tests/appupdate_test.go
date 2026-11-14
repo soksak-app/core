@@ -87,15 +87,18 @@ func bundleZip(t *testing.T, version string) (path, sum string) {
 	t.Helper()
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
-	plist := `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>` + version + `</string></dict></plist>`
-	for name, body := range map[string]string{"soksak.app/Contents/Info.plist": plist, "soksak.app/Contents/MacOS/soksak": "#!/bin/sh\n"} {
-		file, err := writer.Create(name)
+	// The bundle is the tracked fixture folder; its Info.plist names BUNDLE_VERSION, which the zip replaces with the version.
+	for _, name := range []string{"Info.plist", "MacOS/soksak"} {
+		body, err := os.ReadFile(filepath.Join("fixtures", "bundle", "Contents", filepath.FromSlash(name)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := file.Write([]byte(body)); err != nil {
+		body = bytes.ReplaceAll(body, []byte("BUNDLE_VERSION"), []byte(version))
+		file, err := writer.Create("soksak.app/Contents/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := file.Write(body); err != nil {
 			t.Fatal(err)
 		}
 	}

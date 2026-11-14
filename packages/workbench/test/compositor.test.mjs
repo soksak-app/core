@@ -142,9 +142,8 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["deferred-probe"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-deferred-preparation");
   const card = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
   card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
@@ -176,6 +175,7 @@ test("a deferred preparation is not recorded as an applied or predicted view", a
   assert.equal(compositor.seated().surfaces.length, 1, "the drawn view did not receive its real host placement");
   assert.deepEqual(compositor.seated().deferred, [], "a placed view is held as deferred");
   dom.window.close();
+  wire.finish();
 });
 
 test("a retained dormant view is validated with the host superset and projected off the compositor record", async (t) => {
@@ -186,9 +186,8 @@ test("a retained dormant view is validated with the host superset and projected 
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["placement-superset-probe"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-retained-dormant-view");
   const card = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
   card.getBoundingClientRect = () => ({ left: 0, top: 0, width: 200, height: 150 });
@@ -273,6 +272,7 @@ test("a retained dormant view is validated with the host superset and projected 
   assert.deepEqual(emptyRecordResult, [], "the dormant-only host response entered the empty compositor result");
   assert.deepEqual(record.surfaces, [], "the dormant tab entered an empty compositor record");
   dom.window.close();
+  wire.finish();
 });
 
 test("placement results reject missing, extra, and duplicate surfaces, and a drawn placement defers a view", async (t) => {
@@ -283,9 +283,8 @@ test("placement results reject missing, extra, and duplicate surfaces, and a dra
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["placement-contract"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-placement-result-contract");
   const slot = document.querySelector("[data-native-surface]");
   slot.getBoundingClientRect = () => ({ left: 1, top: 2, width: 30, height: 40 });
   const { registerPlugin } = await import("../registry.js");
@@ -308,6 +307,7 @@ test("placement results reject missing, extra, and duplicate surfaces, and a dra
   } finally {
     dom.window.close();
   }
+  wire.finish();
 });
 
 test("a visible native placement carries the scale that seated it, and the seat records that scale", async (t) => {
@@ -318,9 +318,8 @@ test("a visible native placement carries the scale that seated it, and the seat 
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["scale-contract"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-scale-contract");
   const slot = document.querySelector("[data-native-surface]");
   slot.getBoundingClientRect = () => ({ left: 1, top: 2, width: 30, height: 40 });
   const { registerPlugin } = await import("../registry.js");
@@ -341,6 +340,7 @@ test("a visible native placement carries the scale that seated it, and the seat 
   } finally {
     dom.window.close();
   }
+  wire.finish();
 });
 
 test("a preparation hides a section surface whose offsets do not fit the target card", async (t) => {
@@ -352,9 +352,8 @@ test("a preparation hides a section surface whose offsets do not fit the target 
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["small-section-probe"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-section-small");
   const place = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
   document.getElementById("plane").getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 600 });
@@ -378,6 +377,7 @@ test("a preparation hides a section surface whose offsets do not fit the target 
     { visible: false, declared: { x: 0, y: 0, w: 0, h: 0 } },
     "a preparation sent a section surface that does not fit its target card");
   dom.window.close();
+  wire.finish();
 });
 
 test("a preparation places a section surface without a box like its drawn commit, so the layout prepares once", async (t) => {
@@ -389,9 +389,8 @@ test("a preparation places a section surface without a box like its drawn commit
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["boxless-section-probe"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-section-boxless");
   const place = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
   let width = 196;
@@ -418,6 +417,7 @@ test("a preparation places a section surface without a box like its drawn commit
   assert.deepEqual(placed(prepared.surfaces[0]), placed(drawn.surfaces[0]),
     "the preparation of a section surface without a box differs from its drawn commit, so the layout prepares twice");
   dom.window.close();
+  wire.finish();
 });
 
 test("a preparation keeps a section surface at its offsets, so the drawn commit of a width change is the same request", async (t) => {
@@ -429,9 +429,8 @@ test("a preparation keeps a section surface at its offsets, so the drawn commit 
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
-  t.mock.module(new URL("../host.js", import.meta.url).href, {
-    namedExports: { native: true, surfaces: { kinds: ["section-probe"] } },
-  });
+  // The page sends no call: the case selects the window host, so that the page draws native surfaces of the plugins that it registers.
+  const wire = selectPageWire("compositor-section-seat");
   const place = document.querySelector("[data-card-id]");
   const slot = document.querySelector("[data-native-surface]");
   let width = 196;
@@ -460,4 +459,5 @@ test("a preparation keeps a section surface at its offsets, so the drawn commit 
   assert.deepEqual(placed(prepared.surfaces[0]), placed(drawn.surfaces[0]),
     "the drawn commit differs from the preparation, so the layout prepares twice");
   dom.window.close();
+  wire.finish();
 });

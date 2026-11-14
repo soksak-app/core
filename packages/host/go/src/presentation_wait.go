@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -291,22 +292,23 @@ func (w *presentationWait) finishIfReady(ticket uint64) {
 
 // joinViewsForPresentRequest attaches changed, newly shown, or recreated root views to the request's layout transaction.
 func (s *Surfaces) joinViewsForPresentRequest(window platform.Window, req PresentRequest, placements []Placement) error {
+	return s.joinShownViews(window, req.Ticket, s.presentationJoins(req, placements))
+}
+
+// presentationJoins records the placements of the request and returns the visible root views whose placement or generation changed.
+func (s *Surfaces) presentationJoins(req PresentRequest, placements []Placement) []Placement {
 	generations := make(map[string]uint64, len(placements))
 	for _, placement := range placements {
 		if view, ok := s.documents.view(placement.ID); ok {
 			generations[placement.ID] = view.generation
 		}
 	}
-	changed := s.presentation.prepare(req.Ticket, placements, generations)
-	return s.joinShownViews(window, req.Ticket, changed)
+	return s.presentation.prepare(req.Ticket, placements, generations)
 }
 
 // joinShownViews joins each changed shown root view that waits for no presentation yet to the open layout transaction of window.
 func (s *Surfaces) joinShownViews(window platform.Window, ticket uint64, placements []Placement) error {
-	for _, p := range placements {
-		if !p.Visible || s.presentation.waits(p.ID) || s.viewRecords().specs[p.ID] == nil {
-			continue
-		}
+	for _, p := range s.joinablePlacements(placements) {
 		if _, _, err := s.joinViewForPresentation(window, ticket, p); err != nil {
 			return err
 		}
@@ -314,40 +316,103 @@ func (s *Surfaces) joinShownViews(window platform.Window, ticket uint64, placeme
 	return nil
 }
 
-func (s *Surfaces) joinViewForPresentation(window platform.Window, ticket uint64, placement Placement) (uint64, bool, error) {
-	view, err := s.documents.Get(DocumentKey{Surface: placement.ID, Name: viewRegionName})
-	if err != nil {
-		return 0, false, nil
+// joinablePlacements returns the shown placements of root views that wait for no presentation yet.
+func (s *Surfaces) joinablePlacements(placements []Placement) []Placement {
+	var joinable []Placement
+	for _, p := range placements {
+		if !p.Visible || s.presentation.waits(p.ID) || s.viewRecords().specs[p.ID] == nil {
+			continue
+		}
+		joinable = append(joinable, p)
 	}
-	channel, ok := s.documents.view(placement.ID)
+	return joinable
+}
+
+// viewJoinRequest is the join of one root view to a layout transaction as the native layer receives it: the window, the ticket, the
+// view and the two receivers of the native join, which the native layer calls outside the UI thread. signal is the one that the
+// presentation of the join completes.
+type viewJoinRequest struct {
+	window     platform.Window
+	ticket     uint64
+	view       unsafe.Pointer
+	surface    string
+	generation uint64
+	signal     *presentationSignal
+	presented  func()
+	ended      func(reason string)
+}
+
+// viewJoinAnswer is the answer of the native layer to a join: the function that abandons the native join, whether the view joined, and
+// the failure.
+type viewJoinAnswer struct {
+	abandon func() error
+	joined  bool
+	err     error
+}
+
+// joinViewForPresentation joins the root view of placement to the open transaction of window.
+func (s *Surfaces) joinViewForPresentation(window platform.Window, ticket uint64, placement Placement) (uint64, bool, error) {
+	request, ok := s.requestViewJoin(window, ticket, placement)
 	if !ok {
 		return 0, false, nil
 	}
-	surface, generation := placement.ID, channel.generation
-	tracePresentationJoin("requested", surface, generation, ticket, false, "")
-	presented := &presentationSignal{}
-	abandon, joined, err := system.JoinView(window, ticket, view, func() {
-		tracePresentationJoin("presented", surface, generation, ticket, false, "")
-		presented.complete()
-		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(surface, ticket, generation, "presented") }); err != nil {
-			LogError("view channel", err)
-		}
-	}, func(reason string) {
-		// The native join ended by itself, by a press or key event that ended the hold or by the close of the view, so the end
-		// abandons no native join.
-		if err := system.EnqueueUI(func() { s.endNativePresentationWait(surface, ticket, generation, reason) }); err != nil {
-			LogError("view channel", err)
-		}
-	})
-	tracePresentationJoin("result", surface, generation, ticket, err == nil && joined, "")
+	abandon, joined, err := system.JoinView(request.window, request.ticket, request.view, request.presented, request.ended)
+	return s.viewJoined(request, viewJoinAnswer{abandon: abandon, joined: joined, err: err})
+}
+
+// requestViewJoin returns the join of the root view of placement to the transaction ticket, and false for a surface without a view.
+func (s *Surfaces) requestViewJoin(window platform.Window, ticket uint64, placement Placement) (viewJoinRequest, bool) {
+	view, err := s.documents.Get(DocumentKey{Surface: placement.ID, Name: viewRegionName})
 	if err != nil {
-		return generation, false, fmt.Errorf("joining view %s to the layout transaction: %w", surface, err)
+		return viewJoinRequest{}, false
 	}
-	if !joined {
+	channel, ok := s.documents.view(placement.ID)
+	if !ok {
+		return viewJoinRequest{}, false
+	}
+	request := viewJoinRequest{
+		window: window, ticket: ticket, view: view, surface: placement.ID, generation: channel.generation, signal: &presentationSignal{},
+	}
+	tracePresentationJoin("requested", request.surface, request.generation, ticket, false, "")
+	request.presented = func() {
+		s.viewJoinPresented(request)
+		if err := system.EnqueueUI(func() { s.endPresentationWaitFor(request.surface, ticket, request.generation, "presented") }); err != nil {
+			LogError("view channel", err)
+		}
+	}
+	request.ended = func(reason string) {
+		if err := system.EnqueueUI(func() { s.viewJoinEnded(request, reason) }); err != nil {
+			LogError("view channel", err)
+		}
+	}
+	return request, true
+}
+
+// viewJoinPresented records that the native presentation of the join completed. The native layer reports it outside the UI thread, and
+// it can run before the join returned.
+func (s *Surfaces) viewJoinPresented(request viewJoinRequest) {
+	tracePresentationJoin("presented", request.surface, request.generation, request.ticket, false, "")
+	request.signal.complete()
+}
+
+// viewJoinEnded ends the wait of the join by an end that the native join reported of itself, by a press or key event that ended the
+// hold or by the close of the view, so the end abandons no native join. It runs on the UI thread.
+func (s *Surfaces) viewJoinEnded(request viewJoinRequest, reason string) {
+	s.endNativePresentationWait(request.surface, request.ticket, request.generation, reason)
+}
+
+// viewJoined records the answer of the native layer to the join of request and returns the generation of the view and whether it joined.
+func (s *Surfaces) viewJoined(request viewJoinRequest, answer viewJoinAnswer) (uint64, bool, error) {
+	surface, generation, ticket := request.surface, request.generation, request.ticket
+	tracePresentationJoin("result", surface, generation, ticket, answer.err == nil && answer.joined, "")
+	if answer.err != nil {
+		return generation, false, fmt.Errorf("joining view %s to the layout transaction: %w", surface, answer.err)
+	}
+	if !answer.joined {
 		return generation, false, nil
 	}
-	if !s.presentation.beginFor(surface, ticket, generation, presented, abandon) {
-		if err := abandon(); err != nil {
+	if !s.presentation.beginFor(surface, ticket, generation, request.signal, answer.abandon) {
+		if err := answer.abandon(); err != nil {
 			return generation, false, fmt.Errorf("view %s already waits and its extra native join could not be abandoned: %w", surface, err)
 		}
 		return generation, false, fmt.Errorf("view %s joined the layout transaction while it already waits", surface)

@@ -1,0 +1,17 @@
+{
+  "name": "surface-view-responsive",
+  "description": "A view surface declares its composition and the host reports its responsiveness: unresponsive and responsive of the generation 1, a delayed notice of the retired generation 1, and unresponsive of the generation 2.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"ts-us-1":{"type":"integer","example":1791000000000001,"source":"page"},"mono-ns-1":{"type":"integer","example":5000000001,"source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-responsive-view","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-responsive-view-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-responsiveness","payload":{"surface":"fixture-responsive-view-surface","plugin":"fixture-responsive-view","generation":1,"responsive":false}}},
+    {"notice":{"event":"view-responsiveness","payload":{"surface":"fixture-responsive-view-surface","plugin":"fixture-responsive-view","generation":1,"responsive":true}}},
+    {"notice":{"event":"view-responsiveness","payload":{"surface":"fixture-responsive-view-surface","plugin":"fixture-responsive-view","generation":1,"responsive":false}}},
+    {"notice":{"event":"view-responsiveness","payload":{"surface":"fixture-responsive-view-surface","plugin":"fixture-responsive-view","generation":2,"responsive":false}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"debug","event":"workbench.view.event.cancel","fields":{"plugin":"fixture-responsive-view","surface":"fixture-responsive-view-surface","event":"view-responsiveness"}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

@@ -1,5 +1,6 @@
 //! The record of the endpoint methods (docs/spec/logging.md#entrances): every request of a client is the event
-//! `host.endpoint.call` with the performance trace off. The same cases run in the Go host.
+//! `host.endpoint.call` with the performance trace off. The same cases run in the Go host. The page of the window is the page of
+//! an endpoint case (support/endpoint_case.rs).
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -9,69 +10,41 @@ mod endpoint_client;
 
 use endpoint_client::Connection;
 
+#[path = "support/endpoint_case.rs"]
+mod endpoint_case;
+
+use endpoint_case::{Exchange, exchange, serve_page};
+
 #[path = "support/records.rs"]
 mod records;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use serde_json::value::RawValue;
-use serde_json::{Map, Value, json};
-use soksak_host::endpoint::{self, Endpoint, Failure, Service, raw};
+use serde_json::{Value, json};
+use soksak_host::endpoint;
 use soksak_host::event_log::EventLog;
 use soksak_host::event_record::use_host_event_log;
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
 
-/// A service that has only the window main and replies null.
-struct Fake;
-
-impl Service for Fake {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([{"window": "main", "title": "Main", "project": null, "key": true}]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "main"
-    }
-
-    fn call(
-        &self,
-        _window: &str,
-        _method: &str,
-        _params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        raw(&Value::Null)
-    }
-}
-
-/// Runs `body` with a writer attached, an endpoint with a connection, and the performance trace off; it returns the events
-/// `host.endpoint.call` that the writer stored.
-fn calls_of(body: impl FnOnce(&mut Connection)) -> Vec<Value> {
+/// Runs `body` with a writer attached, an endpoint with a connection whose page follows `exchanges`, and the performance trace
+/// off; it returns the events `host.endpoint.call` that the writer stored. The test fails when the endpoint deviates from the
+/// exchanges.
+fn calls_of(exchanges: Vec<Exchange>, body: impl FnOnce(&mut Connection)) -> Vec<Value> {
     let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     assert!(
         !soksak_host::performance::enabled(),
         "the performance trace is on"
     );
-    let config = folder::Folder::new();
-    let log: Arc<EventLog> = records::start_writer(config.path());
-    let endpoint = Endpoint::start(
-        &config.path().join("sockets"),
-        config.path(),
-        "test-record",
-        Arc::new(Fake),
-    )
-    .unwrap();
-    endpoint.publish("main").unwrap();
-    let mut connection = endpoint_client::connect(endpoint.address());
+    let served = serve_page("test-record", exchanges);
+    let log: Arc<EventLog> = records::start_writer(served.config.path());
+    let mut connection = served.open();
     body(&mut connection);
-    endpoint.stop();
+    served.finish();
     log.flush().unwrap();
-    let calls = events_of(config.path());
+    let calls = events_of(served.config.path());
     use_host_event_log(None);
     calls
 }
@@ -97,21 +70,27 @@ fn request(connection: &mut Connection, id: u64, method: &str, params: Value) ->
 // contract: endpoint.record.call-is-an-event
 #[test]
 fn an_endpoint_request_is_an_event_while_the_trace_is_off() {
-    let calls = calls_of(|connection| {
-        request(connection, 1, "windows.list", Value::Null);
-        request(
-            connection,
-            2,
-            "status.get",
-            json!({"window": "main", "name": "core.layout"}),
-        );
-        request(
-            connection,
-            3,
-            "status.watch",
-            json!({"window": "main", "name": "core.layout"}),
-        );
-    });
+    let calls = calls_of(
+        vec![
+            exchange("status.get", json!({"name": "core.layout"}), Value::Null),
+            exchange("status.watch", json!({"name": "core.layout"}), Value::Null),
+        ],
+        |connection| {
+            request(connection, 1, "windows.list", Value::Null);
+            request(
+                connection,
+                2,
+                "status.get",
+                json!({"window": "main", "name": "core.layout"}),
+            );
+            request(
+                connection,
+                3,
+                "status.watch",
+                json!({"window": "main", "name": "core.layout"}),
+            );
+        },
+    );
     assert_eq!(calls.len(), 3, "{calls:?}");
     let want = [
         ("windows.list", "null"),
@@ -135,7 +114,7 @@ fn an_endpoint_request_is_an_event_while_the_trace_is_off() {
 #[test]
 fn a_failed_endpoint_request_is_a_warning_with_its_error_text() {
     let mut reply = Value::Null;
-    let calls = calls_of(|connection| {
+    let calls = calls_of(Vec::new(), |connection| {
         reply = request(
             connection,
             1,
@@ -160,7 +139,7 @@ fn a_failed_endpoint_request_is_a_warning_with_its_error_text() {
 // contract: endpoint.record.arguments-are-cut-before-copying
 #[test]
 fn the_arguments_of_an_endpoint_event_are_cut_at_the_bound() {
-    let calls = calls_of(|connection| {
+    let calls = calls_of(Vec::new(), |connection| {
         // Multi-byte characters put the bound inside a character.
         let name = format!("core.{}", "é".repeat(3000));
         request(

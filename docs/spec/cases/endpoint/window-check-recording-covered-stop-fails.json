@@ -1,0 +1,19 @@
+{
+  "name": "window-check-recording-covered-stop-fails",
+  "description": "The stop of a recording that fails ends the hold of the covered drawing.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "variables": {"frames":{"type":"string","example":"/captures/capture-1"}},
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"refreshRate":120}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":true}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.capture.start","params":{"window":"main","gap":8.333333333333334,"frames":4096}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"frames":"$frames","window":7}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"diagnostics.capture.stop","params":{"window":"main","after":0}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"error":{"code":1004,"message":"the capture failed"}}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":false}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":null}}
+  ]
+}

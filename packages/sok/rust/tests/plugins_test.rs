@@ -826,7 +826,11 @@ fn file_errors_name_the_path_and_the_reason() {
     );
     let installed = config.path().join("plugins/installed.json");
     std::fs::create_dir_all(installed.parent().unwrap()).unwrap();
-    std::fs::write(&installed, "{}").unwrap();
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/plugins/installed.json"),
+        &installed,
+    )
+    .unwrap();
     std::fs::set_permissions(&installed, std::fs::Permissions::from_mode(0o0)).unwrap();
     let error =
         soksak_sok::plugins::read_plugins_state(config.path(), soksak_sok::version::CORE_VERSION)

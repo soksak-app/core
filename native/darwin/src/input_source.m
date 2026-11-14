@@ -104,10 +104,20 @@ char *sp_input_source_current(void) {
 - (NSString *)targetContextSource {
     return self.context.selectedKeyboardInputSource;
 }
+// The fault point of the selection (docs/operations/examples.md#test-kinds): SOKSAK_FAULT_IME_SELECT=<identifier> makes the
+// selection of that identifier report the refusal of the system after the real selection ran, so the source changed and the
+// caller is told that it did not. A real refusal leaves the source unchanged, and the system gives no refusal on demand after a
+// change.
+static BOOL selectionFaultNames(NSString *identifier) {
+    const char *fault = getenv("SOKSAK_FAULT_IME_SELECT");
+    return fault != NULL && fault[0] != '\0' && strcmp(fault, identifier.UTF8String) == 0;
+}
+
 - (BOOL)selectGlobalSource:(NSString *)identifier error:(NSString **)error {
     NSArray *sources = (NSArray *)TISCreateInputSourceList(
         (CFDictionaryRef)@{(id)kTISPropertyInputSourceID: identifier}, false);
     OSStatus status = sources.count > 0 ? TISSelectInputSource((TISInputSourceRef)sources[0]) : paramErr;
+    if (status == noErr && selectionFaultNames(identifier)) status = paramErr;
     if (status != noErr) {
         NSString *reason = [NSString stringWithFormat:@"selecting %@ failed: %@ (status %d)", identifier,
             sources.count > 0 ? @"the system refused it" : @"no input source has this identifier", (int)status];

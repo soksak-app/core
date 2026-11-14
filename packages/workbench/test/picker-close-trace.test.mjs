@@ -9,7 +9,7 @@ import { selectPageWire } from "@soksak/runtime";
 
 // The page of the window is drawn in this document, which the modules read when they are imported.
 const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const dom = new JSDOM(markup, { url: "http://localhost/" });
+const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
 dom.window.matchMedia = (query) => ({ media: query, matches: true,
   addEventListener: () => {}, removeEventListener: () => {} });
 globalThis.window = dom.window;

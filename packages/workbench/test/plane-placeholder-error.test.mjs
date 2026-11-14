@@ -5,14 +5,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
 const pluginId = "fixture-placeholder-error";
 const missingId = "fixture-not-registered";
-const readFailure = "read failed";
 
-test("a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves", { timeout: 5000 }, async (t) => {
+test("a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves", { timeout: 5000 }, async () => {
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
+  // are imported, because host.js reads the host when it is imported. The host answers the read of the install state with the error of an installed.json that is not valid JSON.
+  const wire = selectPageWire("plane-placeholder-error");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   // matchMedia, which JSDOM does not have. The view uses it only to subscribe to resolution changes, and this test does not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
@@ -33,17 +37,12 @@ test("a placeholder whose install state cannot be read is an error shown once, a
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // The page without a host bridge records the reports, so the test reads the lines that the error display path writes to the application log.
-  // This mock is set before the error display module is imported, so that module reports through the mock.
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The plugin state cannot be read, so the placeholder of a tab whose plugin is not loaded has the reason unread. A read of the plugin state needs
-  // the host, which this page does not have without a page-wire case; the failure is therefore given by this replacement.
-  const actualInstalled = await import("../installed-plugins.js");
-  t.mock.module("../installed-plugins.js", { exports: { ...actualInstalled,
-    pluginOperations: { hosted: true, failure: () => ({ kind: "state", message: readFailure }), status: () => ({ plugins: [] }) },
-  } });
+  // The lines that the error display path writes to the application log reach the host as records of the batches of the call log.
+  const reports = () => wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord));
+  const { flushEvents } = await import("../page-log.js");
+  // The read of the plugin state fails, so the placeholder of a tab whose plugin is not loaded has the reason unread.
+  const { pluginOperations } = await import("../installed-plugins.js");
+  await pluginOperations.refresh();
   // The card of the layout holds a tab of a plugin that is not installed and a tab of an installed plugin.
   const { installEnvironment } = await import("../environment.js");
   installEnvironment({
@@ -68,7 +67,9 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };
-    plane.adopt(plane.fresh(), "spc-aaaaaa");
+    // The ids of the tabs are drawn from the bytes of this source, which counts, so the lines of the page name the same tabs in every run: the first tab is tab-bbbbbb.
+    let draws = 0;
+    plane.adopt(plane.fresh((bytes) => bytes.fill(++draws)), "spc-aaaaaa");
     drawHeld();
     // The first tab is active, so its placeholder is drawn and the tab of the registered plugin is not.
     const tabs = plane.currentGrid().card("main").data.tabs;
@@ -78,7 +79,8 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     assert.equal(plane.currentGrid().card("main").data.activeId, missingTab, "the placeholder tab is not the active tab");
     // The error of the placeholder is shown on its surface once, and the line is written to the application log once.
     assert.equal(document.querySelectorAll(`[data-error="${where}"]`).length, 1, "the unread placeholder did not show exactly one error for its surface");
-    assert.deepEqual(reports, [`${where}: ${text}`], "the unread placeholder did not write its error to the application log");
+    await flushEvents();
+    assert.deepEqual(reports(), [`error workbench ${where}: ${text}`], "the unread placeholder did not write its error to the application log");
     const shownLine = document.querySelector(`[data-error="${where}"]`);
     assert.equal(shownLine?.textContent, text, "the unread placeholder is not shown on the screen");
 
@@ -88,7 +90,12 @@ test("a placeholder whose install state cannot be read is an error shown once, a
     assert.notEqual(held, null, "closing the tab did not hold a layout draw");
     drawHeld();
     assert.equal(document.querySelector(`[data-error="${where}"]`), null, "closing the surface did not withdraw its error");
-    assert.deepEqual(reports, [`${where}: ${text}`], "withdrawing the error wrote it again");
+    await flushEvents();
+    assert.deepEqual(reports(), [`error workbench ${where}: ${text}`], "withdrawing the error wrote it again");
+    dom.window.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
+    wire.finish();
   } finally {
     dom.window.close();
   }

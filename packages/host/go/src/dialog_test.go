@@ -218,10 +218,11 @@ func TestTheEndOfTheCallRemovesItsRequest(t *testing.T) {
 // contract: dialog.answer.rules
 func TestAnAnswerPassesTheChecksOfThePanel(t *testing.T) {
 	folder := t.TempDir()
-	existing := filepath.Join(folder, "existing")
-	if err := os.WriteFile(existing, []byte("kept"), 0o600); err != nil {
+	// The existing file is the tracked fixture testdata/dialog/existing.
+	if err := os.CopyFS(folder, os.DirFS(filepath.Join("testdata", "dialog"))); err != nil {
 		t.Fatal(err)
 	}
+	existing := filepath.Join(folder, "existing")
 	inner := filepath.Join(folder, "inner")
 	if err := os.Mkdir(inner, 0o700); err != nil {
 		t.Fatal(err)

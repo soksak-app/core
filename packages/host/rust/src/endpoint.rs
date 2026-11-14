@@ -1858,7 +1858,59 @@ fn run(
     if method == "diagnostics.clock" {
         return raw(&crate::diagnostics::clock()?);
     }
+    // The endpoint answers the names of the host and the invalid input itself, before the window service receives the request
+    // (docs/spec/exposure.md#methods); the service delivers the input and runs the commands of the host.
+    match method {
+        "exposure.list" => {
+            return crate::exposure::exposure_list(&params, || {
+                shared.service.call(&window, method, Map::new(), reply)
+            });
+        }
+        "status.get" | "command.run" | "element.rect" | "element.act" => {
+            host_request(method, &params)?;
+        }
+        "input.pointer" => {
+            crate::exposure::pointer(&params)?;
+        }
+        "input.key" => {
+            crate::exposure::key(&params)?;
+        }
+        "input.text" => {
+            crate::exposure::text_input(&params)?;
+        }
+        "input.dialog.answer" => {
+            crate::exposure::dialog_answer(&params)?;
+        }
+        _ => {}
+    }
     shared.service.call(&window, method, params, reply)
+}
+
+/// Checks a request whose name has the owner `host` against the entries that the host declares: an undeclared name is 1001, the
+/// host declares no element entry, and the params of a host command are an object.
+fn host_request(method: &str, params: &Map<String, Value>) -> Result<(), Failure> {
+    let name = name(params)?;
+    if !name.starts_with("host.") {
+        return Ok(());
+    }
+    if matches!(method, "element.rect" | "element.act") {
+        return Err(Failure::new(
+            UNKNOWN_NAME,
+            format!("the host declares no element entry {name}"),
+        ));
+    }
+    crate::exposure::check_host_name(method, &name)?;
+    if method == "command.run"
+        && !matches!(
+            params.get("params"),
+            None | Some(Value::Null | Value::Object(_))
+        )
+    {
+        return Err(Failure::params(format!(
+            "params of {name} must be an object"
+        )));
+    }
+    Ok(())
 }
 
 /// Returns name of params.
@@ -1885,14 +1937,25 @@ pub fn valid_name(name: &str) -> bool {
 
 /// Builds the watch key from name and surface of params.
 fn watch_key(window: &str, params: &Map<String, Value>) -> Result<Watch, Failure> {
+    let name = name(params)?;
+    // A status of the host has no surface: its watch is the watch of the window.
+    if name.starts_with("host.") {
+        crate::exposure::check_host_name("status.watch", &name)?;
+        return Ok(Watch {
+            window: window.into(),
+            name,
+            surface: None,
+        });
+    }
     let surface = match params.get("surface") {
         None => None,
         Some(Value::String(surface)) if !surface.is_empty() => Some(surface.clone()),
-        Some(_) => return Err(Failure::params("surface must be a non-empty string")),
+        Some(Value::String(_)) => return Err(Failure::params("surface must not be empty")),
+        Some(_) => return Err(Failure::params("surface must be a string")),
     };
     Ok(Watch {
         window: window.into(),
-        name: name(params)?,
+        name,
         surface,
     })
 }

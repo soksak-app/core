@@ -1,0 +1,22 @@
+{
+  "name": "exposure-registry-surface-pages",
+  "description": "The page forwards status reads, two watches and an unwatch of the core surface document to two surfaces and sends the values of the watches to the host.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.get","params":{"name":"core.surface.document"}}}},
+    {"reply":{"result":{"result":"core.surface.document@tab-a"}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-b","method":"status.get","params":{"name":"core.surface.document","surface":"tab-b"}}}},
+    {"reply":{"result":{"result":"core.surface.document@tab-b"}}},
+    {"call":{"name":"exposureForward","payload":{"id":3,"surface":"tab-b","method":"status.watch","params":{"name":"core.surface.document"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"surface":"tab-a","method":"status.watch","params":{"name":"core.surface.document"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureChanged","payload":{"name":"core.surface.document","surface":"tab-b","value":"tab-b"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureChanged","payload":{"name":"core.surface.document","value":"tab-a"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureForward","payload":{"id":5,"surface":"tab-b","method":"status.unwatch","params":{"name":"core.surface.document"}}}},
+    {"reply":{"result":{"result":null}}}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "exposure-registry-open-dialog",
+  "description": "The page forwards the rectangle and one action of a surface element, which the dialog does not cover.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"element.rect","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":{"x":12,"y":24,"width":80,"height":30}}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"element.act","params":{"name":"probe.lines","action":"click"}}}},
+    {"reply":{"result":{"result":{"x":12,"y":24,"width":80,"height":30}}}}
+  ]
+}

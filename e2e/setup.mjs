@@ -6,9 +6,9 @@ import { debugBinaries } from "./platform/platform.js";
 
 export { debugBinaries };
 
-/** Build output folder that cargo decides. If it is not found, the run fails with that reason. `cargo` gives the cargo to run. */
-export function targetDirectory(run = (command, args) => spawnSync(command, args, { encoding: "utf8" }), cargo = cargoCommand) {
-  const result = run(cargo(), ["metadata", "--format-version", "1", "--no-deps"]);
+/** Build output folder that cargo decides for the current folder. If it is not found, the run fails with that reason. */
+export function targetDirectory() {
+  const result = spawnSync(cargoCommand(), ["metadata", "--format-version", "1", "--no-deps"], { encoding: "utf8" });
   if (result.error) throw new Error(`cargo metadata: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`cargo metadata exited with ${result.status}: ${String(result.stderr).trim()}`);
   const directory = JSON.parse(result.stdout).target_directory;

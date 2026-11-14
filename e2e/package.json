@@ -31,5 +31,8 @@
     "@soksak/plugin-api": "workspace:*",
     "@soksak/window-check": "workspace:*",
     "@soksak/workbench": "workspace:*"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1"
   }
 }

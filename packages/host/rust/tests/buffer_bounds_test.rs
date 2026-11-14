@@ -7,6 +7,8 @@ mod folder;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/sidecar_recorder.rs"]
+mod sidecar_recorder;
 
 use std::io::Write;
 use std::path::Path;
@@ -15,34 +17,16 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use serde_json::value::RawValue;
+use sidecar_recorder::{Messages, SidecarRecorder, owner};
 use soksak_host::event_log::{EventLog, Options};
 use soksak_host::event_record::{emit_host, use_host_event_log};
 use soksak_host::exposure::Relay;
-use soksak_host::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
+use soksak_host::sidecars::{SidecarDeclaration, Sidecars};
 
 /// The records of the host are process-wide, so the tests of this file run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
 
 const ECHO: &str = "@fixture/sidecar-echo";
-
-#[derive(Clone)]
-struct FakeOwner {
-    root: String,
-}
-
-impl Owner for FakeOwner {
-    fn key(&self) -> String {
-        "a".into()
-    }
-    fn root(&self) -> Result<String, String> {
-        Ok(self.root.clone())
-    }
-
-    fn deliver(&self, _message: Message) {}
-    fn deliver_failure(&self, failure: Failure) {
-        eprintln!("sidecar failure: {failure:?}");
-    }
-}
 
 fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
@@ -74,14 +58,15 @@ fn roomy_writer(config: &Path) -> Arc<EventLog> {
 
 /// A sidecar that reads nothing until it is released, with a full write queue and the surfaces s1 to s<surfaces> registered.
 struct Blocked {
-    sidecars: Sidecars<FakeOwner>,
+    sidecars: Sidecars<SidecarRecorder>,
     fifo: std::path::PathBuf,
     released: bool,
     _directory: folder::Folder,
+    _messages: Messages,
 }
 
 impl Blocked {
-    fn new(root: &str, surfaces: usize) -> (Blocked, FakeOwner) {
+    fn new(root: &str, surfaces: usize) -> (Blocked, SidecarRecorder) {
         Blocked::clocked(root, surfaces, Instant::now, false)
     }
 
@@ -94,7 +79,7 @@ impl Blocked {
         surfaces: usize,
         clock: impl Fn() -> Instant + Send + Sync + 'static,
         input_end_stops: bool,
-    ) -> (Blocked, FakeOwner) {
+    ) -> (Blocked, SidecarRecorder) {
         let directory = folder::Folder::new();
         let fifo = directory.path().join("go");
         let made = std::process::Command::new("mkfifo")
@@ -125,7 +110,7 @@ impl Blocked {
         let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
             .unwrap()
             .with_clock(clock);
-        let owner = FakeOwner { root: root.into() };
+        let (owner, messages) = owner("a", root);
         for index in 1..=surfaces {
             sidecars
                 .send(&owner, ECHO, &format!("s{index}"), &raw("{}"))
@@ -153,6 +138,7 @@ impl Blocked {
                 fifo,
                 released: false,
                 _directory: directory,
+                _messages: messages,
             },
             owner,
         )
@@ -484,7 +470,7 @@ fn a_line_that_is_written_at_once_stores_no_write_wait() {
     let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf())
         .unwrap()
         .with_clock(move || still);
-    let owner = FakeOwner { root: "/p".into() };
+    let (owner, _messages) = owner("a", "/p");
     for _ in 0..10 {
         sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();
     }

@@ -5,14 +5,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { registerPlugin } from "../registry.js";
+import { selectPageWire } from "@soksak/runtime";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
 const pluginId = "fixture-placeholder-params";
 const version = "0.0.1";
 
-test("a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves", { timeout: 5000 }, async (t) => {
+test("a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves", { timeout: 5000 }, async () => {
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
+  // are imported, because host.js reads the host when it is imported.
+  const wire = selectPageWire("plane-placeholder-params");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   // matchMedia, which JSDOM does not have. The view uses it only to subscribe to resolution changes, and this test does not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
@@ -33,59 +37,30 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // The page without a host bridge records the reports, so the test reads the lines that the error display path writes to the application log.
-  // The mocks are set before the error display module is imported, so that module reports through the mock.
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The calls of the error display path, so the test sees each show and each withdrawal of a place.
-  const errorCalls = [];
-  const actualErrors = await import("../shown-errors.js");
-  t.mock.module("../shown-errors.js", { exports: {
-    showError: (element, where, text, detail) => {
-      errorCalls.push({ kind: "show", where, text });
-      return actualErrors.showError(element, where, text, detail);
-    },
-    hideError: (element, where) => {
-      errorCalls.push({ kind: "hide", where });
-      return actualErrors.hideError(element, where);
-    },
-  } });
-  const actualInstalled = await import("../installed-plugins.js");
-  t.mock.module("../installed-plugins.js", { exports: { ...actualInstalled,
-    pluginOperations: { hosted: true, failure: () => null, status: () => ({ plugins: [] }) },
-    onPluginOperations: () => {},
-  } });
-  // The test does not load surface modules. The placeholder joins the slot of its tab, and the mounted surface of the valid tab is only recorded.
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    mountSurface: (slot, surface) => { mountedSurfaces.push(surface); return Promise.resolve(); },
-    disposeSurface: () => Promise.resolve(), focusSurface: () => true,
-    surfaceForTab: (tab) => ({ composition: { kind: "view", page: "ui/index.html" }, surfaceId: tab.id,
-      pluginId: tab.plugin, params: tab.params ?? null, declarations: {}, sidecars: [] }),
-    placePluginPlaceholder: (slot, surfaceId, element) => slot.append(element),
-  } });
-  // The card holds a tab whose stored params do not match the declaration, and a tab whose params match it.
+  // The lines that the error display path writes to the application log reach the host as records of the batches of the call log.
+  const reports = () => wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord));
+  const { flushEvents } = await import("../page-log.js");
+  // The environment of the page: the card holds a tab whose stored params do not match the declaration, and a tab whose params match it.
   const mismatched = { path: 5 };
-  const mountedSurfaces = [];
-  t.mock.module("../environment.js", { exports: { refusedPlugins: () => new Set(),
-    environment: () => ({ workspace: { focus: "main", grid: {
+  const { installEnvironment } = await import("../environment.js");
+  assert.deepEqual(installEnvironment({
+    runtime: "runtime",
+    workspace: { focus: "main", grid: {
       xs: [0, 1], ys: [0, 1],
       cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [
         { plugin: pluginId, title: "bad" },
         { plugin: pluginId, title: "good" },
       ] }],
-    } } }),
-    pluginUnits: () => [{ id: pluginId, name: "Fixture", version, description: "검사용 표면.", surface: true, sections: [] }],
-    pluginDiagnostics: async () => null,
-  } });
-  registerPlugin({
-    id: pluginId, name: "Fixture", mark: "f", svg: "<path/>", ink: null, background: null, drop: null,
-    params: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
-    opens: ["txt"],
-    surface: (surfaceId) => ({ composition: { kind: "view", page: "ui/index.html" }, surfaceId, pluginId,
-      declarations: {}, sidecars: [] }),
-  });
+    } },
+    sidebars: { sets: [], links: [] },
+  }, { plugins: [{ id: pluginId, package: "@fixture/placeholder-params", version, manifest: {
+    id: pluginId, name: "Fixture", description: "검사용 표면.", mark: "f", icon: "<path/>",
+    surface: {
+      composition: { kind: "view", page: "ui/index.html" },
+      params: { type: "object", properties: { path: { type: "string" } } },
+      opens: { extensions: ["txt"] },
+    },
+  } }] }), [], "the fixture environment refused a plugin");
 
   // The card elements connect only to declared core commands.
   const { registry } = await import("../exposure.js");
@@ -96,7 +71,9 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw(); };
     // A saved space keeps the params of its tabs. The environment layout starts tabs without params, so the test stores them in the saved state.
-    const kept = plane.fresh();
+    // The ids of the tabs are drawn from the bytes of this source, which counts, so the lines of the page name the same tabs in every run: the first tab is tab-bbbbbb.
+    let draws = 0;
+    const kept = plane.fresh((bytes) => bytes.fill(++draws));
     for (const tab of kept.state.cards.find((card) => card.id === "main").data.tabs) {
       tab.params = tab.title === "bad" ? mismatched : { path: "ok" };
     }
@@ -109,28 +86,34 @@ test("a stored tab whose params do not match its plugin is an error shown once, 
     assert.equal(plane.currentGrid().card("main").data.activeId, badTab.id, "the placeholder tab is not the active tab");
     const where = `surface ${badTab.id} placeholder`;
     const text = `${pluginId} ${version} 탭의 인자가 선언과 맞지 않습니다: params do not match ${pluginId} surface.params`;
-    const shows = errorCalls.filter((call) => call.kind === "show");
-    assert.deepEqual(shows, [{ kind: "show", where, text }], "the mismatched params did not show exactly one error for their surface");
-    assert.deepEqual(reports, [`${where}: ${text}`], "the mismatched params did not write their error to the application log");
+    assert.equal(document.querySelectorAll(`[data-error="${where}"]`).length, 1, "the mismatched params did not show exactly one error for their surface");
+    assert.equal(document.querySelector(`[data-error="${where}"]`).textContent, text, "the mismatched params did not show their text");
+    await flushEvents();
+    assert.deepEqual(reports(), [`error workbench ${where}: ${text}`], "the mismatched params did not write their error to the application log");
 
     // Closing the placeholder tab removes its surface, so the error of its place is withdrawn.
     await plane.closeTabById(badTab.id);
     assert.notEqual(held, null, "closing the tab did not hold a layout draw");
     drawHeld();
-    assert.ok(errorCalls.some((call) => call.kind === "hide" && call.where === where), "closing the surface did not withdraw its error");
-    assert.equal(errorCalls.filter((call) => call.kind === "show").length, 1, "withdrawing the error wrote it again");
+    assert.equal(document.querySelector(`[data-error="${where}"]`), null, "closing the surface did not withdraw its error");
+    await flushEvents();
+    assert.equal(reports().length, 1, "withdrawing the error wrote it again");
 
-    const { viewStartValues } = await import("../surface-modules.js?view-file-open-params");
+    const { surfaceForTab, viewStartValues } = await import("../surface-modules.js");
     const opened = plane.openFile("sample.txt");
     assert.equal(opened.tab, plane.currentGrid().card("main").data.activeId);
     assert.deepEqual(plane.currentGrid().card("main").data.tabs.find(({ id }) => id === opened.tab).params, { path: "sample.txt" });
     assert.notEqual(held, null, "opening the file did not schedule a layout draw");
     drawHeld();
-    const surface = mountedSurfaces.find(({ surfaceId }) => surfaceId === opened.tab);
-    assert.ok(surface, "core.file.open did not produce a mounted view surface");
-    assert.deepEqual(surface.params, { path: "sample.txt" }, "the mounted surface did not receive the tab params");
+    const surface = surfaceForTab(plane.currentGrid().card("main").data.tabs.find(({ id }) => id === opened.tab));
+    assert.equal(surface.composition.kind, "view", "core.file.open did not produce a view surface");
+    assert.deepEqual(surface.params, { path: "sample.txt" }, "the surface of the tab did not receive the tab params");
     assert.deepEqual(viewStartValues(surface, { id: "prj-open", root: "/work/project" }).params, { path: "sample.txt" },
       "the producer start values did not preserve the file-open path");
+    dom.window.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
+    wire.finish();
   } finally {
     dom.window.close();
   }

@@ -1,6 +1,7 @@
 // The application update state and operation of the plugin screen (docs/spec/installation.md#application-update).
 import test from "node:test";
 import assert from "node:assert/strict";
+import { host, selectPageWire } from "@soksak/runtime";
 import { createAppUpdate, releasePage } from "../app-update.js";
 
 const available = {
@@ -8,19 +9,16 @@ const available = {
   release: { url: "https://github.com/soksak-app/core/releases/download/v0.0.9/soksak-0.0.9-darwin-arm64-wailsv3.zip", sha256: "0".repeat(64) },
 };
 
-/** A host whose calls are answered by `replies` and recorded in `calls`. */
-function fakeHost(replies) {
-  const calls = [];
-  return {
-    calls,
-    async call(name, params) {
-      calls.push([name, params ?? null]);
-      const reply = replies[name];
-      if (reply instanceof Error) throw reply;
-      return reply;
-    },
-  };
+// The host calls of each test are answered by its page-wire case (docs/spec/cases/page-wire/README.md); the update reads the host of the
+// runtime that the test selected.
+let wire;
+/** Selects the case of the test and returns the host of the page. */
+function open(name) {
+  wire = selectPageWire(`app-update-${name}`);
+  return host;
 }
+/** The calls of the page as [name, payload]. */
+const sent = () => wire.calls.map(({ name, payload }) => [name, payload ?? null]);
 
 test("the release page of a version is derived from the release URL of a published release only", () => {
   assert.equal(releasePage(available.release.url), "https://github.com/soksak-app/core/releases/tag/v0.0.9");
@@ -29,7 +27,7 @@ test("the release page of a version is derived from the release URL of a publish
 });
 
 test("the status names the running version, the candidate with its release page and no operation", async () => {
-  const host = fakeHost({ appUpdateState: { version: "0.0.8", available } });
+  const host = open("status");
   let changes = 0;
   const update = createAppUpdate({ host, changed: () => { changes += 1; } });
   assert.deepEqual(update.status(), { version: null, available: null, operation: null, error: null, incompatible: [] });
@@ -42,55 +40,60 @@ test("the status names the running version, the candidate with its release page 
     incompatible: [],
   });
   assert.equal(changes, 1);
+  wire.finish();
 });
 
 test("a state that cannot be read is the error of the status and leaves no candidate", async () => {
-  const host = fakeHost({ appUpdateState: new Error("registry: unreachable") });
+  const host = open("state-error");
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
   assert.deepEqual(update.status(), { version: null, available: null, operation: null, error: "registry: unreachable", incompatible: [] });
+  wire.finish();
 });
 
 test("updating stages the candidate, then applies the staged bundle, and reports each step", async () => {
-  const host = fakeHost({ appUpdateState: { version: "0.0.8", available }, appUpdateStage: { bundle: "/config/updates/0.0.9/soksak.app" }, appUpdateApply: null });
+  const host = open("update-steps");
   const steps = [];
   const update = createAppUpdate({ host, changed: () => { steps.push(update.status().operation?.state ?? null); } });
   await update.refresh();
   await update.update();
-  assert.deepEqual(host.calls.slice(1), [
+  assert.deepEqual(sent().slice(1), [
     ["appUpdateStage", { version: "0.0.9" }],
     ["appUpdateApply", { bundle: "/config/updates/0.0.9/soksak.app" }],
   ]);
   assert.deepEqual(steps, [null, "staging", "applying"]);
+  wire.finish();
 });
 
 test("a failed step is the error of the operation and stops the update", async () => {
-  const host = fakeHost({ appUpdateState: { version: "0.0.8", available }, appUpdateStage: new Error("application update: sha256 differs"), appUpdateApply: null });
+  const host = open("stage-failed");
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
   await assert.rejects(update.update(), /sha256 differs/);
   assert.deepEqual(update.status().operation, { state: "failed", version: "0.0.9", error: "application update: sha256 differs" });
-  assert.equal(host.calls.some(([name]) => name === "appUpdateApply"), false);
+  assert.equal(sent().some(([name]) => name === "appUpdateApply"), false);
+  wire.finish();
 });
 
 test("updating without a candidate fails before any host call", async () => {
-  const host = fakeHost({ appUpdateState: { version: "0.0.9", available: null } });
+  const host = open("no-candidate");
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
   await assert.rejects(update.update(), /no application update is available/);
-  assert.equal(host.calls.length, 1);
+  assert.equal(wire.calls.length, 1);
+  wire.finish();
 });
 
 test("opening the release page asks the host to open the page of the candidate and fails without one", async () => {
-  const host = fakeHost({ appUpdateState: { version: "0.0.8", available }, linkOpen: null });
+  const host = open("open-release");
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
   await update.openRelease();
-  assert.deepEqual(host.calls.at(-1), ["linkOpen", { url: "https://github.com/soksak-app/core/releases/tag/v0.0.9" }]);
-  const local = fakeHost({ appUpdateState: { version: "0.0.8", available: { ...available, release: { ...available.release, url: "file:///releases/soksak.zip" } } } });
-  const other = createAppUpdate({ host: local, changed: () => {} });
+  assert.deepEqual(sent().at(-1), ["linkOpen", { url: "https://github.com/soksak-app/core/releases/tag/v0.0.9" }]);
+  const other = createAppUpdate({ host, changed: () => {} });
   await other.refresh();
   await assert.rejects(other.openRelease(), /no release page/);
+  wire.finish();
 });
 
 /** A plugin state whose index lists plugin versions with their `engines.soksak` ranges. */
@@ -108,7 +111,7 @@ const pluginState = {
 };
 
 test("a plugin whose range does not contain the candidate is listed with its newest version that does", async () => {
-  const host = fakeHost({ appUpdateState: { version: "0.0.8", available: { ...available, version: "0.0.9" } } });
+  const host = open("incompatible-plugins");
   const update = createAppUpdate({ host, changed: () => {}, plugins: () => pluginState });
   await update.refresh();
   // tty 0.2.0 needs 0.0.8; 0.4.0 is revoked, so 0.3.0 is the newest version for 0.0.9. notes has no version for 0.0.9.
@@ -117,52 +120,49 @@ test("a plugin whose range does not contain the candidate is listed with its new
     { id: "notes", installed: "1.0.0", range: "0.0.8", compatible: null },
     { id: "tty", installed: "0.2.0", range: "0.0.8", compatible: "0.3.0" },
   ]);
+  wire.finish();
 });
 
 test("without a candidate or a plugin state no plugin is incompatible", async () => {
-  const none = createAppUpdate({ host: fakeHost({ appUpdateState: { version: "0.0.9", available: null } }), changed: () => {}, plugins: () => pluginState });
+  const none = createAppUpdate({ host: open("incompatible-none"), changed: () => {}, plugins: () => pluginState });
   await none.refresh();
   assert.deepEqual(none.status().incompatible, []);
-  const unread = createAppUpdate({ host: fakeHost({ appUpdateState: { version: "0.0.8", available } }), changed: () => {}, plugins: () => null });
+  const unread = createAppUpdate({ host, changed: () => {}, plugins: () => null });
   await unread.refresh();
   assert.deepEqual(unread.status().incompatible, []);
+  wire.finish();
 });
 
 test("the release page of a command that carries the cids of its cause opens it with those cids", async () => {
-  const calls = [];
-  const host = { async call(name, params, options) { calls.push({ name, params, options }); return name === "appUpdateState" ? { version: "0.0.8", available } : null; } };
+  const host = open("open-release-cids");
   const update = createAppUpdate({ host, changed: () => {} });
   await update.refresh();
   await update.openRelease({ cids: ["p1700000000000.6"] });
-  assert.deepEqual(calls.at(-1), { name: "linkOpen", params: { url: "https://github.com/soksak-app/core/releases/tag/v0.0.9" }, options: { cids: ["p1700000000000.6"] } });
+  assert.deepEqual(wire.calls.at(-1), { name: "linkOpen", payload: { url: "https://github.com/soksak-app/core/releases/tag/v0.0.9" }, cids: ["p1700000000000.6"] });
+  wire.finish();
 });
 
 test("an update state read that ended after a newer read does not replace its state", async () => {
-  const replies = [];
-  const host = { call: (name) => {
-    assert.equal(name, "appUpdateState");
-    return new Promise((resolve) => replies.push(resolve));
-  } };
+  const host = open("read-order");
   const update = createAppUpdate({ host, changed: () => {} });
+  // The reply of the older read is held, and the newer read is answered first.
   const older = update.refresh();
   const newer = update.refresh();
-  replies[1]({ current: "0.0.8", available });
   await newer;
-  replies[0]({ current: "0.0.8", available: null });
+  wire.release();
   await older;
   assert.equal(update.status().available?.version, "0.0.9", "the older read replaced the state of the newer read");
+  wire.finish();
 });
 
 test("a read that finds what the page holds calls no listener, and a read that finds a change calls it once", async () => {
-  const replies = { appUpdateState: { version: "0.0.8", available } };
   let changes = 0;
-  const update = createAppUpdate({ host: fakeHost(replies), changed: () => { changes += 1; } });
+  const update = createAppUpdate({ host: open("changed-once"), changed: () => { changes += 1; } });
   const counted = async () => { const before = changes; await update.refresh(); return changes - before; };
   assert.equal(await counted(), 1, "the first state");
   assert.equal(await counted(), 0, "the same state");
-  replies.appUpdateState = { version: "0.0.8", available: null };
   assert.equal(await counted(), 1, "another state");
-  replies.appUpdateState = new Error("the index cannot be read");
   assert.equal(await counted(), 1, "a failed read");
   assert.equal(await counted(), 0, "the same failure");
+  wire.finish();
 });

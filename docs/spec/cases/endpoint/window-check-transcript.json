@@ -1,0 +1,12 @@
+{
+  "name": "window-check-transcript",
+  "description": "A transcript turns the transcript of the workbench on and, when it stops, off.",
+  "replay": false,
+  "reason": "The case turns the transcript of the workbench of the application on and off, which the replay leaves unchanged.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"diagnostics.transcript","params":{"window":"main","on":true}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"diagnostics.transcript","params":{"window":"main","on":false}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}}
+  ]
+}

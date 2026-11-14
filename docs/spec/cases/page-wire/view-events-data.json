@@ -1,0 +1,10 @@
+{
+  "name": "view-events-data",
+  "description": "The page pushes the key of a changed project data of the plugin.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"data","data":{"key":"marks"},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

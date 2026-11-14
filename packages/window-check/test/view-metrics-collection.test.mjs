@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { Session } from "../app.mjs";
+import { playClient, playSession } from "../fixtures/endpoint-player.mjs";
 import { stillFrame, stillFields } from "../still-recording.mjs";
 import { policyOfSetting, readPolicy } from "../log-policy.mjs";
 import * as viewMetrics from "../view-metrics-collection.mjs";
-import { closeViewGroup, collectViewProcessGroups, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
+import { closeViewGroup, processFates, processGroupSteps, retainedRecordingLines, validateFootprintSample, collectViewReclaimMeasurements, collectViewStartAndMemory, openRecordedView,
   processStartSamples, TAB_PLACEMENT, viewContentFrameEvents, viewCardWithDifferentPluginTab,
   viewStartClockBracket, waitForViewReadiness, withDragTraceMode, withViewContentTrace } from "../view-metrics-collection.mjs";
 
@@ -28,31 +30,30 @@ function startBracket({ surface = "view-1", documentTimeOriginMs = 1999, sourceN
   return viewStartClockBracket(surface, result, clockReading(beforeMonoNs), clockReading(afterMonoNs), { hostPid, window });
 }
 
-// Each clock read advances 10 ms unless clockValues names the readings; the document clock reads 0.2 ms of time origin 1999.
-function traceSession(root, calls, { clockValues, hostPid = 41, window = "main", documentClock = () => ({ page: "page-1", timeOrigin: 1999, now: 0.2 }) } = {}) {
-  const client = { endpoint: { pid: hostPid } };
-  let nextClock = 0;
-  return {
-    app: { configDir: root }, client, window,
-    async request(method, params) {
-      calls.push("clock");
-      assert.equal(method, "diagnostics.clock");
-      assert.deepEqual(params, {});
-      const value = clockValues ? clockValues[nextClock++] : String(1_000_000_000 + 10_000_000 * nextClock++);
-      if (value instanceof Error) throw value;
-      return { mono_ns: value };
-    },
-    async run(name, params, surface) {
-      calls.push("read");
-      assert.deepEqual([name, params, surface], ["core.surface.clock", {}, "view-1"]);
-      return documentClock();
-    },
-    async flushLog() { calls.push("flush"); },
-  };
-}
+// The descriptor of a plugin starts and stops the trace of its view with commands of the view, and the host answers them in the case.
+const traceDescriptor = {
+  plugin: "fixture",
+  startContentTrace: (session, surface) => session.run("fixture.trace.start", {}, surface),
+  stopContentTrace: (session, surface) => session.run("fixture.trace.stop", {}, surface),
+};
 
-// The five clock reads after the start of a trace, each between two native clock reads.
-const CLOCK_READS = Array.from({ length: 5 }, () => ["clock", "read", "clock"]).flat();
+/** A trace descriptor whose start changes the session as an application that is relaunched, or a window that is replaced, would. */
+const changingStart = (change) => ({
+  ...traceDescriptor,
+  async startContentTrace(session, surface) {
+    const start = await session.run("fixture.trace.start", {}, surface);
+    change(session);
+    return start;
+  },
+});
+
+/** The event log of the host that the session reads. */
+const hostLog = (session) => join(session.app.configDir, "logs", `host-1-${session.client.endpoint.pid}.jsonl`);
+
+const contentFrameLine = () => `${JSON.stringify({ level: "debug", event:
+  "plugin.fixture.view.content_frame", ts_us: 2_000_000, mono_ns: 3_000_000, page: "view-document-opaque", seq: 1,
+  surface: "view-1", fields: { sequence: 1, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1,
+    frameTimeMs: 0.5, width: 300, height: 200 } })}\n`;
 
 /** Writes still `index` of a recording, requested at `time` (ms) and completed 0.5ms later. */
 function writeCapturedFrame(directory, index, time) {
@@ -112,114 +113,44 @@ test("shared width drag plan rejects invalid card boundaries", { timeout: 5000 }
 });
 
 test("the exported lifecycle collector forwards the selected card ID to its first recording", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-card-forwarding-"));
-  const logDirectory = join(root, "logs");
-  mkdirSync(logDirectory);
-  writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const sentinel = new Error("record sentinel reached with the selected card");
-  let recordCalls = 0;
-  const card = { id: "selected-card", active: "anchor", tabs: [
-    { id: "anchor", plugin: "other-fixture" }, { id: "old-target", plugin: "fixture" },
-  ] };
-  const s = {
-    app: { configDir: root },
-    async get(name) { assert.equal(name, "core.grid"); return { cards: [card] }; },
-    async record() { recordCalls++; throw sentinel; },
-  };
-  await assert.rejects(collectViewStartAndMemory(t, s, {
+  // The case holds the read of the grid, the start of the recording (which the display of the window refuses) and the open of the view in
+  // the card that the grid selects: the host refuses the open, and the request names the selected card.
+  const { session } = await playSession(t, Session, "window-check-view-start-card", "mygo");
+  await assert.rejects(collectViewStartAndMemory(t, session, {
     plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "target text", readContent: async () => "target text",
-  }), (error) => error === sentinel);
-  assert.equal(recordCalls, 1, "the selected card ID did not reach openRecordedView before recording");
+  }), /the host stops the open at the selected card/);
 });
 
-test("view totals are sampled at their declared count before extra process-start views open", { timeout: 5000 }, async () => {
-  let openedCount = 0;
-  const timeline = [];
-  const sampleClock = (number) => ({
-    before: clockReading(number * 1_000_000),
-    after: clockReading((number + 1) * 1_000_000),
-  });
-  const collected = await collectViewProcessGroups({
-    viewCount: 3,
-    processStartCount: 5,
-    diagnostic: () => {},
-    async openView() {
-      const ordinal = ++openedCount;
-      const surface = `view-${ordinal}`;
-      timeline.push(`live:${ordinal}`);
-      const base = ordinal * 10;
-      return { surface, events: [
-        { event: "host.trace.view.process-request", ts_us: base, mono_ns: base * 1_000_000,
-          fields: { plugin: "fixture", surface } },
-        { event: "host.trace.view.process-ready", ts_us: base + 1, mono_ns: (base + 1) * 1_000_000,
-          fields: { plugin: "fixture", surface } },
-      ], verifyContent: async () => { timeline.push(`content:${ordinal}`);
-        return { contentFrame: { frameIndex: 0, timeMs: base } }; } };
-    },
-    async readFootprints(surfaces) {
-      timeline.push(`footprint:${openedCount}`);
-      assert.deepEqual(surfaces, Array.from({ length: openedCount }, (_, index) => `view-${index + 1}`));
-      return { processes: surfaces.map((surface, index) => ({ pid: index + 1, footprintBytes: 100 })),
-        sampleClock: sampleClock(openedCount) };
-    },
-  });
-
-  assert.deepEqual(timeline, ["live:1", "footprint:1", "live:2", "live:3", "footprint:3",
-    "live:4", "live:5", "content:1", "content:2", "content:3", "content:4", "content:5"],
-  "the content frame selection must follow both total-footprint samples and the five process-start view opens");
-  assert.deepEqual(collected.oneViewSampleClock, sampleClock(1));
-  assert.deepEqual(collected.allViewSampleClock, sampleClock(3));
-  assert.deepEqual(collected.opened.map(({ contentFrame }) => contentFrame.frameIndex), [0, 0, 0, 0, 0]);
-  assert.equal(collected.opened.length, 5, "the collector must retain all five process-start samples");
-  assert.equal(processStartSamples(collected.events, collected.opened.map(({ surface }) => surface), "fixture").length, 5,
-    "the extra views must still provide all five process-start samples");
+test("view totals are sampled at their declared count before extra process-start views open", { timeout: 5000 }, () => {
+  // The one-view footprint comes before the other views open, the N-view footprint before the extra process-start views open, and the
+  // content frames after both footprints.
+  assert.deepEqual(processGroupSteps(3, 5).map(({ step, views }) => views === undefined ? step : `${step} ${views}`),
+    ["open", "footprint 1", "open", "open", "footprint 3", "open", "open", "verify"]);
+  assert.deepEqual(processGroupSteps(3, 2).map(({ step, views }) => views === undefined ? step : `${step} ${views}`),
+    ["open", "footprint 1", "open", "open", "footprint 3", "verify"]);
+  assert.throws(() => processGroupSteps(1, 5), /view count must be at least two/);
+  assert.throws(() => processGroupSteps(3, 0), /process start sample count must be positive/);
 });
 
-test("footprint failure retains recording paths and skips the deferred content frame", { timeout: 5000 }, async () => {
-  const sentinel = new Error("footprint read failed");
-  const diagnostics = [];
-  let contentCalls = 0;
-  await assert.rejects(collectViewProcessGroups({
-    viewCount: 3,
-    processStartCount: 5,
-    diagnostic: (message) => diagnostics.push(message),
-    async openView() {
-      return { surface: "view-1", events: [], recording: { directory: "/retained/view-1" },
-        async verifyContent() { contentCalls++; return { contentFrame: {} }; } };
-    },
-    async readFootprints() { throw sentinel; },
-  }), (error) => error === sentinel);
-  assert.equal(contentCalls, 0, "footprint failure must not select the content frame");
-  assert.match(diagnostics[0], /footprint read failed/);
-  assert.deepEqual(diagnostics.slice(1), ["view recording retained at /retained/view-1 after one-view footprint sample failure"]);
+test("a footprint sample needs process rows and ordered native clock bounds that match their times", { timeout: 5000 }, () => {
+  const sample = { processes: [{ pid: 1, footprintBytes: 100 }], sampleClock: { before: clockReading(1_000_000), after: clockReading(2_000_000) } };
+  assert.equal(validateFootprintSample(sample, "one-view"), sample);
+  const refused = [
+    [{ ...sample, processes: [] }, /one-view footprint sample must include at least one process/],
+    [{ processes: sample.processes }, /one-view footprint sample must include monotonic clock bounds/],
+    [{ ...sample, sampleClock: { before: sample.sampleClock.after, after: sample.sampleClock.before } }, /clock bounds are reversed/],
+    [{ ...sample, sampleClock: { ...sample.sampleClock, after: { monoNs: "2000000", timeMs: 5 } } }, /after timeMs does not match monoNs/],
+  ];
+  for (const [value, message] of refused) assert.throws(() => validateFootprintSample(value, "one-view"), message);
 });
 
-test("deferred content frame failure retains its recording path and rejects the collector", { timeout: 5000 }, async () => {
-  const sentinel = new Error("content frame selection failed");
-  const diagnostics = [];
-  let ordinal = 0;
-  await assert.rejects(collectViewProcessGroups({
-    viewCount: 2,
-    processStartCount: 2,
-    diagnostic: (message) => diagnostics.push(message),
-    async openView() {
-      const surface = `view-${++ordinal}`;
-      return { surface, events: [], recording: { directory: `/retained/${surface}` },
-        async verifyContent() {
-          if (surface === "view-1") throw sentinel;
-          return { contentFrame: { frameIndex: 0 } };
-        } };
-    },
-    async readFootprints(surfaces) {
-      return { processes: surfaces.map((_, index) => ({ pid: index + 1, footprintBytes: 100 })),
-        sampleClock: { before: clockReading(1_000_000), after: clockReading(2_000_000) } };
-    },
-  }), (error) => error === sentinel);
-  assert.match(diagnostics[0], /content frame selection failed/);
-  assert.deepEqual(diagnostics.slice(1), ["view recording retained at /retained/view-1 after deferred content verification failure",
-    "view recording retained at /retained/view-2 after deferred content verification failure"]);
+test("a failed phase names its failure and the recording that each opened view retains", { timeout: 5000 }, () => {
+  const failure = new Error("footprint read failed");
+  const [first, ...retained] = retainedRecordingLines([{ surface: "view-1", recording: { directory: "/retained/view-1" } },
+    { surface: "view-2", recording: { directory: null } }, { surface: "view-3" }], "one-view footprint sample", failure);
+  assert.match(first, /^one-view footprint sample failed: Error: footprint read failed/);
+  assert.deepEqual(retained, ["view recording retained at /retained/view-1 after one-view footprint sample failure"]);
 });
 
 test("view content-frame events preserve coalesced resize provenance", { timeout: 5000 }, () => {
@@ -310,51 +241,20 @@ test("view cadence uses source frame times instead of variable host IPC arrival 
   assert.equal(frames[1].source.eventMonoNs - frames[0].source.eventMonoNs, 100_000_000);
 });
 
+// Each case holds the requests of the trace in their order: the read of the document clock, the native clock reads around the start
+// and around five more reads of the document clock, the trace commands, and the flush of the log. The test writes the event log of
+// the host that the gesture would have written.
 test("generic content trace brackets the successful start command with native clock reads", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const calls = [];
-  let clock = 1_000_000_000n;
-  const client = { endpoint: { pid: 41 } };
-  const s = { app: { configDir: root }, client, window: "main",
-    async request(method, params) {
-      assert.equal(method, "diagnostics.clock");
-      assert.deepEqual(params, {});
-      calls.push(["clock", client, s.window]);
-      const monoNs = String(clock);
-      clock += 10_000_000n;
-      return { mono_ns: monoNs };
-    },
-    async run(name, params, surface) {
-      calls.push(["read", name, params, surface]);
-      return { page: "page-1", timeOrigin: 1999, now: 0.2 };
-    }, async flushLog() { calls.push(["flush"]); } };
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace(session, surface) {
-      calls.push(["start", session, surface]);
-      const result = { marker: { color: [255, 0, 255] }, sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
-      return result;
-    },
-    async stopContentTrace(session, surface) { calls.push(["stop", session, surface]); return { sequence: 1 }; },
-  };
-  const result = await withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async (start) => {
+  const { session } = await playSession(t, Session, "window-check-trace-brackets", "mygo");
+  const result = await withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async (start) => {
     assert.deepEqual(start, { marker: { color: [255, 0, 255] },
       sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } });
-    calls.push(["action"]);
-    appendFileSync(join(logs, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
-      "plugin.fixture.view.content_frame", ts_us: 2_000_000, mono_ns: 3_000_000, page: "view-document-opaque", seq: 1,
-      surface: "view-1", fields: { sequence: 1, documentTimeOriginMs: 1999, firstResizeAtMs: 0.2, resizeAtMs: 0.2, resizeCount: 1,
-        frameTimeMs: 0.5, width: 300, height: 200 } })}\n`);
+    appendFileSync(hostLog(session), contentFrameLine());
     return { gestureEndedAtMs: 2 };
   });
-  assert.deepEqual(calls.map(([name]) => name), ["read", "clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
   assert.equal(result.startBracket.surface, "view-1");
   assert.equal(result.startBracket.window, "main");
-  assert.equal(result.startBracket.hostPid, 41);
+  assert.equal(result.startBracket.hostPid, session.client.endpoint.pid);
   assert.deepEqual(result.startBracket.before, { monoNs: "1000000000", timeMs: 1000 });
   assert.deepEqual(result.startBracket.after, { monoNs: "1010000000", timeMs: 1010 });
   assert.deepEqual(result.action, { gestureEndedAtMs: 2 });
@@ -366,240 +266,89 @@ test("generic content trace brackets the successful start command with native cl
 });
 
 test("content trace maps document times through the narrowest clock bracket of the same document", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-narrowest-"));
-  mkdirSync(join(root, "logs"));
-  writeFileSync(join(root, "logs", "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  // The start bracket is 30 ms wide; the third clock read is 2 ms wide and reads 40.5 ms on the document clock.
-  const clockValues = ["1000000000", "1030000000",
-    "1040000000", "1050000000", "1060000000", "1070000000", "1080000000", "1082000000",
-    "1090000000", "1100000000", "1110000000", "1120000000"];
-  const nows = [20, 30, 40.5, 50, 60];
-  let read = 0;
-  const calls = [];
-  // WebKit derives performance.timeOrigin from the current wall clock at each read and reduces it to whole milliseconds, so one
-  // document can report time origins one millisecond apart; the page identity names the document.
-  const s = traceSession(root, calls, { clockValues,
-    documentClock: () => (read === 0 && !calls.includes("start") ? { page: "page-1", timeOrigin: 1999, now: 19 }
-      : { page: "page-1", timeOrigin: 1999 + (read % 2), now: nows[read++] }) });
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace() { calls.push("start"); return sourceResult(1999, 0.2); },
-    async stopContentTrace() { calls.push("stop"); return {}; },
-  };
-  const result = await withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => { calls.push("action"); });
+  // The start bracket is 30 ms wide; the third clock read is 2 ms wide and reads 40.5 ms on the document clock. WebKit derives
+  // performance.timeOrigin from the current wall clock at each read and reduces it to whole milliseconds, so one document can
+  // report time origins one millisecond apart; the page identity names the document.
+  const { session } = await playSession(t, Session, "window-check-trace-narrowest", "mygo");
+  const result = await withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async () => {});
   assert.deepEqual(result.startBracket.before, clockReading(1080000000));
   assert.deepEqual(result.startBracket.after, clockReading(1082000000));
   assert.equal(result.startBracket.sourceClock.sourceNowMs, 40.5);
   assert.equal(result.startBracket.sourceClock.documentTimeOriginMs, 1999, "the bracket left the time origin of the trace start");
 
-  const otherCalls = [];
-  let otherRead = 0;
-  const other = traceSession(root, otherCalls, { documentClock: () => ({ page: otherRead++ === 0 ? "page-1" : "page-2", timeOrigin: 1999, now: 1 }) });
-  await assert.rejects(withViewContentTrace({ diagnostic() {} }, other, { ...descriptor,
-    async startContentTrace() { otherCalls.push("start"); return sourceResult(1999, 0.2); },
-    async stopContentTrace() { otherCalls.push("stop"); return {}; } }, "view-1", async () => {}),
-  /core.surface.clock read another document than the trace start/);
-  assert.deepEqual(otherCalls, ["read", "clock", "start", "clock", "clock", "read", "clock", "stop"], "a failed clock read stops the observer");
+  const other = await playSession(t, Session, "window-check-trace-other-document", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, other.session, traceDescriptor, "view-1", async () => {}),
+    /core.surface.clock read another document than the trace start/);
 });
 
 test("content trace stops its diagnostic marker when the recorded action fails", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-failure-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const calls = [];
-  const s = traceSession(root, calls);
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace() {
-      calls.push("start");
-      const result = { marker: "active", sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
-      return result;
-    },
-    async stopContentTrace() { calls.push("stop"); return { marker: null }; },
-  };
-  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
-    calls.push("action");
+  const { session } = await playSession(t, Session, "window-check-trace-action-fails", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async () => {
     throw new Error("controlled action failure");
   }), /controlled action failure/);
-  assert.deepEqual(calls, ["read", "clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
 });
 
 test("content trace stops after a successful start returns invalid marker evidence", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-invalid-start-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const calls = [];
-  const s = traceSession(root, calls);
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace() {
-      calls.push("start");
-      const result = { marker: null, sourceClock: { documentTimeOriginMs: 1999, sourceNowMs: 0.2, sourceResolutionMs: 1 } };
-      return result;
-    },
-    async stopContentTrace() { calls.push("stop"); return { marker: null }; },
-  };
-  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async (start) => {
-    calls.push("action");
+  const { session } = await playSession(t, Session, "window-check-trace-invalid-marker", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async (start) => {
     assert.ok(start.marker, "marker reply is invalid");
   }), /marker reply is invalid/);
-  assert.deepEqual(calls, ["read", "clock", "start", "clock", ...CLOCK_READS, "action", "stop", "flush"]);
 });
 
 test("content trace stops when a successful start reply has no valid source clock anchor", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-invalid-clock-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const calls = [];
-  const s = traceSession(root, calls);
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace() {
-      calls.push("start");
-      return { enabled: true };
-    },
-    async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
-  };
-  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
-    calls.push("action");
-  }), /no sourceClock anchor/);
-  assert.deepEqual(calls, ["read", "clock", "start", "clock", "stop"]);
+  const { session } = await playSession(t, Session, "window-check-trace-invalid-clock", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async () => {}), /no sourceClock anchor/);
 });
 
 test("content trace stops its observer when the post-start native clock read fails", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-clock-failure-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const calls = [];
-  const s = traceSession(root, calls, { clockValues: ["1000000000", new Error("controlled post-start clock failure")] });
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace() {
-      calls.push("start");
-      return sourceResult();
-    },
-    async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
-  };
-
-  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
-    calls.push("action");
-  }), /controlled post-start clock failure/);
-  assert.deepEqual(calls, ["read", "clock", "start", "clock", "stop"]);
+  const { session } = await playSession(t, Session, "window-check-trace-clock-fails", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async () => {}),
+    /controlled post-start clock failure/);
 });
 
 test("content trace start failure does not read an after clock or stop an unstarted observer", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-start-failure-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const calls = [];
-  const s = traceSession(root, calls);
-  const descriptor = {
-    plugin: "fixture",
-    async startContentTrace() { calls.push("start"); throw new Error("controlled start failure"); },
-    async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
-  };
-  await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
-    calls.push("action");
-  }), /controlled start failure/);
-  assert.deepEqual(calls, ["read", "clock", "start"]);
+  const { session } = await playSession(t, Session, "window-check-trace-start-fails", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, session, traceDescriptor, "view-1", async () => {}), /controlled start failure/);
 });
 
 test("content trace bracket rejects a replaced client, changed host process or target window", { timeout: 5000 }, async (t) => {
-  const root = mkdtempSync(join(tmpdir(), "view-content-trace-identity-change-"));
-  const logs = join(root, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(logs, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const changes = [
-    { name: "client", update(session) { session.client = { endpoint: { pid: 42 } }; }, error: /changed the session host client/ },
-    { name: "host PID", update(session) { session.client.endpoint.pid = 42; }, error: /changed the host process/ },
-    { name: "window", update(session) { session.window = "other-window"; }, error: /changed the target window/ },
-  ];
-  for (const { name, update, error } of changes) {
-    const calls = [];
-    const s = traceSession(root, calls);
-    const descriptor = {
-      plugin: "fixture",
-      async startContentTrace(session) {
-        calls.push("start");
-        update(session);
-        return sourceResult();
-      },
-      async stopContentTrace() { calls.push("stop"); return { enabled: false }; },
-    };
-    await assert.rejects(withViewContentTrace({ diagnostic() {} }, s, descriptor, "view-1", async () => {
-      calls.push("action");
-    }), (failure) => {
-      assert.match(failure.message, error, `${name} change must fail its bracket`);
-      return true;
-    });
-    assert.deepEqual(calls, ["read", "clock", "start", "clock", "stop"], `${name} change cleans up the observer`);
-  }
+  // The replaced client is a connection to another host, which sees the clock read after the start and the stop of the observer.
+  const { session: replaced } = await playSession(t, Session, "window-check-trace-identity-client", "mygo");
+  const { client: other } = await playClient(t, "window-check-trace-identity-client-replaced", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, replaced, changingStart((session) => { session.client = other; }), "view-1", async () => {}),
+    /changed the session host client/);
+  const { session: process } = await playSession(t, Session, "window-check-trace-identity-process", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, process, changingStart((session) => { session.client.endpoint.pid = 42; }), "view-1", async () => {}),
+    /changed the host process/);
+  const { session: window } = await playSession(t, Session, "window-check-trace-identity-window", "mygo");
+  await assert.rejects(withViewContentTrace({ diagnostic() {} }, window, changingStart((session) => { session.window = "other-window"; }), "view-1", async () => {}),
+    /changed the target window/);
 });
 
-test("shared readiness wrapper waits for the declared status exposure before reading it", { timeout: 5000 }, async () => {
-  const calls = [];
-  let registered = false;
-  let releaseExposure;
-  let signalWaitStarted;
-  let signalReadinessStarted;
-  const exposureNotification = new Promise((resolve) => { releaseExposure = resolve; });
-  const waitStarted = new Promise((resolve) => { signalWaitStarted = resolve; });
-  const readinessStarted = new Promise((resolve) => { signalReadinessStarted = resolve; });
-  const session = {
-    async until(name, predicate, message) {
-      calls.push(`until:${name}`);
-      signalWaitStarted();
-      await exposureNotification;
-      registered = true;
-      const surfaces = [{ surface: "view-a", exposes: ["status fixture.ready"] }];
-      assert.ok(predicate(surfaces), message);
-      return surfaces;
-    },
-  };
-  const readiness = waitForViewReadiness(session, "view-a", {
+test("shared readiness wrapper waits for the declared status exposure before reading it", { timeout: 5000 }, async (t) => {
+  // The first reading of core.surfaces lists the view without the exposure of its status; the notification that follows registers
+  // it, and only then does the readiness of the plugin read the status. The player fails a request that is not at its place.
+  const { session } = await playSession(t, Session, "window-check-readiness-exposure", "mygo");
+  const ready = await waitForViewReadiness(session, "view-a", {
     readinessStatus: "fixture.ready",
-    async readiness() {
-      calls.push("readiness");
-      signalReadinessStarted();
-      assert.equal(registered, true, "readiness ran before the exposed status notification");
-      return "ready";
-    },
+    readiness: (s) => s.get("fixture.ready"),
   });
-  const outcome = readiness.then((value) => ({ value }), (error) => ({ error }));
-  const firstStep = await Promise.race([waitStarted.then(() => "wait"), readinessStarted.then(() => "readiness")]);
-  assert.equal(firstStep, "wait", "readiness ran before waiting for status exposure");
-  assert.deepEqual(calls, ["until:core.surfaces"]);
-  releaseExposure();
-  const { value, error } = await outcome;
-  if (error) throw error;
-  assert.equal(value, "ready");
-  assert.deepEqual(calls, ["until:core.surfaces", "readiness"]);
+  assert.equal(ready, "ready");
 });
 
-test("recorded views require a reader of the content value", { timeout: 5000 }, async () => {
-  let recorded = false;
-  await assert.rejects(openRecordedView({}, { async record() { recorded = true; } }, {
+test("recorded views require a reader of the content value", { timeout: 5000 }, async (t) => {
+  // The case window-check-open-idle holds no request: a view without a content reader that started its recording would fail the player.
+  const { session } = await playSession(t, Session, "window-check-open-idle", "mygo");
+  await assert.rejects(openRecordedView({}, session, {
     card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
     expectedContent: "fixture",
   }), /view content reader callback is required/);
-  assert.equal(recorded, false, "a view without a content reader started its recording");
 });
 
-test("recorded view observation window rejects nonpositive and nonfinite durations", { timeout: 5000 }, async () => {
+test("recorded view observation window rejects nonpositive and nonfinite durations", { timeout: 5000 }, async (t) => {
+  const { session } = await playSession(t, Session, "window-check-open-idle", "mygo");
   for (const captureObservationWindowMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-    await assert.rejects(openRecordedView({}, {}, {
+    await assert.rejects(openRecordedView({}, session, {
       card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
       expectedContent: "fixture", readContent: async () => "fixture", captureObservationWindowMs,
     }), /finite positive duration/);
@@ -607,78 +356,43 @@ test("recorded view observation window rejects nonpositive and nonfinite duratio
 });
 
 /**
- * A session that opens view-1 in card-1 under a recording of stills planned and requested at frameTimes, then `missed` more
- * stills that failed, and presents it at displayed.
+ * A session on the case `caseName`, in which the application opens view-1 in card-1 under a recording of stills planned and requested
+ * at frameTimes and presents it. The writer of the recording leaves the frames and the list of stills in the folder that the case
+ * names, and the application writes the events of the open of the view when it handles the request to open it.
  */
-function recordedViewSession(t, { frameTimes, displayed, missed = 0, calls = [] }) {
-  const root = mkdtempSync(join(tmpdir(), "view-recorded-content-"));
-  const logDirectory = join(root, "logs");
-  const recordingDirectory = join(root, "recording");
-  mkdirSync(logDirectory);
-  mkdirSync(recordingDirectory);
-  writeFileSync(join(logDirectory, "host-1-1.jsonl"), "");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  let viewOpen = false;
-  const s = {
-    app: { configDir: root },
-    cleanups: [],
-    async record() {
-      calls.push("record");
-      return { stop: async ({ after }) => {
-        calls.push(`stop after ${after}`);
-        for (const [index, time] of frameTimes.entries()) writeCapturedFrame(recordingDirectory, index, time);
-        const ns = (ms) => String(Math.round(ms * 1e6));
-        const row = (index, time, written) => ({ index, planned: ns(time), requested: ns(time), completed: ns(time + 0.5),
-          outcome: written ? "written" : "failed", error: written ? null : "the window server returned no image",
-          frame: written ? `frame-${String(index).padStart(4, "0")}.bgra` : null, windows: [7], requestedGap: 1000,
-          machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillFields(written, ns(time + 0.5)) });
-        const last = frameTimes.at(-1);
-        const rows = [...frameTimes.map((time, index) => row(index, time, true)),
-          ...Array.from({ length: missed }, (_, k) => row(frameTimes.length + k, last + k + 1, false))];
-        const stills = join(recordingDirectory, "stills.jsonl");
-        writeFileSync(stills, rows.map((item) => JSON.stringify(item)).join("\n") + "\n");
-        return { frames: recordingDirectory, stills, count: frameTimes.length, missed, late: 0 };
-      } };
-    },
-    async request(method) { calls.push(method); return { mono_ns: "5000000" }; },
-    async run(method, params) {
-      calls.push(method);
-      if (method === "core.tab.close") { viewOpen = false; return { closed: true }; }
-      assert.equal(method, "core.card.add-tab");
-      assert.equal(params.card, "card-1");
-      appendFileSync(join(logDirectory, "host-1-1.jsonl"), `${JSON.stringify({ level: "debug", event:
-        "host.trace.view.process-request", ts_us: 10, mono_ns: 6_000_000, seq: 1,
-        fields: { plugin: "fixture", surface: "view-1" } })}\n${JSON.stringify({ level: "debug", event:
-        "host.trace.view.process-ready", ts_us: 20, mono_ns: 7_000_000, seq: 2,
-        fields: { plugin: "fixture", surface: "view-1" } })}\n`);
-      viewOpen = true;
-      return { tab: "view-1" };
-    },
-    async until(name, predicate, message) {
-      calls.push(`until ${name}`);
-      const value = viewOpen ? [{ surface: "view-1", exposes: ["status fixture.ready"] }] : [];
-      assert.ok(predicate(value), message);
-      return value;
-    },
-    async presented() { calls.push("presented"); return { displayed }; },
-    async get(name) {
-      if (name === "core.surfaces") return viewOpen ? [{ surface: "view-1" }] : [];
-      assert.equal(name, "host.window");
-      return { documents: [
-        { surface: "view-1", document: "", visible: true, process: 3141, frame: { x: 0, y: 0, width: 1, height: 1 } },
-      ] };
-    },
-    cleanup(fn) { calls.push("cleanup"); this.cleanups.push(fn); },
-  };
-  return s;
+async function recordedViewSession(t, caseName, frameTimes) {
+  const frames = realpathSync(mkdtempSync(join(tmpdir(), "view-recorded-content-")));
+  t.after(() => rmSync(frames, { recursive: true, force: true }));
+  for (const [index, time] of frameTimes.entries()) writeCapturedFrame(frames, index, time);
+  const ns = (ms) => String(Math.round(ms * 1e6));
+  const row = (index, time) => ({ index, planned: ns(time), requested: ns(time), completed: ns(time + 0.5),
+    outcome: "written", error: null, frame: `frame-${String(index).padStart(4, "0")}.bgra`, windows: [7], requestedGap: 1000,
+    machTimebaseNumerator: 1, machTimebaseDenominator: 1, ...stillFields(true, ns(time + 0.5)) });
+  const stills = join(frames, "stills.jsonl");
+  writeFileSync(stills, frameTimes.map((time, index) => JSON.stringify(row(index, time))).join("\n") + "\n");
+  const { session, player } = await playSession(t, Session, caseName, "mygo", { values: { frames, stills } });
+  player.events.on("request", (message) => {
+    if (message.method !== "command.run" || message.params.name !== "core.card.add-tab") return;
+    assert.equal(message.params.params.card, "card-1");
+    appendFileSync(hostLog(session), `${JSON.stringify({ level: "debug", event:
+      "host.trace.view.process-request", ts_us: 10, mono_ns: 6_000_000, seq: 1,
+      fields: { plugin: "fixture", surface: "view-1" } })}\n${JSON.stringify({ level: "debug", event:
+      "host.trace.view.process-ready", ts_us: 20, mono_ns: 7_000_000, seq: 2,
+      fields: { plugin: "fixture", surface: "view-1" } })}\n`);
+  });
+  return session;
 }
 
+// The plugin of the view reads the status of its readiness and the content of its view with a status and a command of its view.
+const fixtureView = {
+  card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready",
+  readiness: (session, surface) => session.get("fixture.ready", surface),
+  readContent: (session, surface) => session.run("fixture.view.read", {}, surface),
+};
+
 test("direct recorded views take the display time of the presentation of the value as the content frame", { timeout: 5000 }, async (t) => {
-  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5 });
-  const result = await openRecordedView({ diagnostic() {} }, s, {
-    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-    expectedContent: "target content", readContent: async () => "the target content line", captureObservationWindowMs: 1,
-  });
+  const s = await recordedViewSession(t, "window-check-recorded-view-direct", [4, 6]);
+  const result = await openRecordedView({ diagnostic() {} }, s, { ...fixtureView, expectedContent: "target content", captureObservationWindowMs: 1 });
   // The content frame is a number that the host reports, the display time of the presentation after the value holds the content; the
   // recording is the log of the open and no time of a still is read.
   assert.deepEqual(result.contentFrame, { timeMs: 5,
@@ -688,176 +402,70 @@ test("direct recorded views take the display time of the presentation of the val
 });
 
 test("a recorded view whose value lacks the expected content stops its recording and fails", { timeout: 5000 }, async (t) => {
-  const calls = [];
-  const s = recordedViewSession(t, { frameTimes: [4, 6], displayed: 5, calls });
-  await assert.rejects(openRecordedView({ diagnostic() {} }, s, {
-    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, readinessStatus: "fixture.ready", readiness: async () => {},
-    expectedContent: "target content", readContent: async () => "loading",
-  }), /fixture view view-1 does not show "target content": "loading"/);
-  assert.equal(calls.includes("presented"), false, "the window presentation was read for a view without its content");
-  assert.ok(calls.includes("stop after 0"), `the failed view left its recording running: ${calls}`);
+  // The case holds no presentation of the window: it holds the stop of the recording after the failure, at time 0.
+  const s = await recordedViewSession(t, "window-check-recorded-view-content-lacks", [4, 6]);
+  await assert.rejects(openRecordedView({ diagnostic() {} }, s, { ...fixtureView, expectedContent: "target content" }),
+    /fixture view view-1 does not show "target content": "loading"/);
 });
 
 test("one recording reads the content value after readiness and defers the content frame past the footprint sample", { timeout: 5000 }, async (t) => {
-  const calls = [];
-  const s = recordedViewSession(t, { frameTimes: [0.5, 5.5, 10, 13], displayed: 12, calls });
-  let readinessCalls = 0;
-  const opening = openRecordedView({ diagnostic: () => {} }, s, {
-    card: "card-1", plugin: "fixture", placement: TAB_PLACEMENT, params: { path: "file.txt" },
-    readinessStatus: "fixture.ready",
-    readiness: async (_session, surface) => {
-      calls.push("readiness");
-      readinessCalls++;
-      assert.equal(surface, "view-1");
-    },
-    readContent: async (_session, surface) => {
-      calls.push("read");
-      assert.equal(surface, "view-1");
-      return "SOKSAK FIXTURE";
-    },
-    expectedContent: "SOKSAK FIXTURE", captureObservationWindowMs: 20,
-    deferContentVerification: true,
-  });
-  const result = await opening;
-  assert.equal(readinessCalls, 1);
+  // The case holds one recording, the status exposure, the readiness, the content value, the presentation, the stop of the recording
+  // 20 ms after it, the reads of the view, and the close of the view by its cleanup.
+  const s = await recordedViewSession(t, "window-check-recorded-view-deferred", [0.5, 5.5, 10, 13]);
+  const result = await openRecordedView({ diagnostic: () => {} }, s, { ...fixtureView, params: { path: "file.txt" },
+    expectedContent: "SOKSAK FIXTURE", captureObservationWindowMs: 20, deferContentVerification: true });
   assert.equal("contentFrame" in result, false, "the deferred content frame was selected before the footprint sample");
-  calls.push("footprint sample");
   Object.assign(result, await result.verifyContent());
-  const at = (name) => calls.indexOf(name);
-  assert.ok(at("until core.surfaces") < at("readiness"), "status readiness began before waiting for its exposure");
-  assert.ok(at("readiness") < at("read"), "the content value was read before the view was ready");
-  assert.ok(at("read") < at("presented"), "the presentation that bounds the content frame preceded the value read");
-  assert.ok(at("presented") < at("stop after 32"), `the observation window was not retained through its deadline: ${calls}`);
-  assert.equal(at("record"), calls.lastIndexOf("record"), "one view lifecycle started multiple recordings");
   assert.equal(result.surface, "view-1");
   assert.equal(result.openedPid, 3141);
   assert.deepEqual(result.contentFrame, { timeMs: 12,
     proof: { method: "value", expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE" } });
-  assert.equal(s.cleanups.length, 1, "the opened view had no cleanup owner");
-  await s.cleanups[0]();
-  assert.ok(calls.includes("core.tab.close"), "the cleanup did not close the opened view");
+  // The opened view has a cleanup owner, the last of the cleanups of the session, which closes the view.
+  await s.cleanups.at(-1)();
 });
 
-test("view process-group close records observed history and every original PID", { timeout: 5000 }, async () => {
-  const calls = [];
-  let clock = 1_000_000_000;
-  const s = {
-    async get(name) {
-      assert.equal(name, "host.window");
-      return { documents: [{ surface: "view-1", document: "", process: 4101 }] };
-    },
-    async request(method, params) {
-      calls.push([method, params]);
-      if (method === "diagnostics.clock") { clock += 1_000_000; return { mono_ns: String(clock) }; }
-      assert.equal(method, "diagnostics.process.exit");
-      return null;
-    },
-    async run(method, params) { calls.push([method, params]); return { closed: true }; },
-    async until(name, predicate) {
-      if (name === "host.window") {
-        const value = { documents: [], pagelessProcesses: [{ pid: 4101, ending: true }] };
-        assert.ok(predicate(value));
-        return value;
-      }
-      assert.equal(name, "core.surfaces"); assert.ok(predicate([])); return [];
-    },
-  };
+test("view process-group close records observed history and every original PID", { timeout: 5000 }, async (t) => {
+  // The case holds the requests of the close in their order: the read of the processes, the clock, the close of the view, the waits for
+  // the registry and host.window without the view, the exit of the process that the host reports ending, and the clock. The same close
+  // is read twice.
+  const { session } = await playSession(t, Session, "window-check-close-group", "mygo");
   const beforeProcesses = [{ pid: 4101, footprintBytes: 1_000_000 }];
   const closedViews = [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }];
-  const result = await closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses, closedViews });
+  const result = await closeViewGroup({ diagnostic() {} }, session, { placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses, closedViews });
   assert.deepEqual(result, { beforeProcesses, afterProcesses: [{ pid: 4101, footprintBytes: 0 }],
     elapsedMs: 1, engineCacheHeld: false, closedViews });
-  await assert.rejects(closeViewGroup({ diagnostic() {} }, s, {
+  await assert.rejects(closeViewGroup({ diagnostic() {} }, session, {
     placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses,
     closedViews: [{ surface: "view-1", rootHistoryEntries: 2, documents: [] }],
   }), /root session history/);
 });
 
-test("the reclaim close reads the processes that remain and awaits only the exit of the processes that host.window reports ending", { timeout: 5000 }, async () => {
-  const calls = [];
-  let clock = 1_000_000_000;
-  const before = { documents: [{ surface: "view-1", document: "", process: 4101 }, { surface: "view-1", document: "doc-1", process: 4102 },
-    { surface: "view-1", document: "doc-2", process: 4103 }, { surface: "view-1", document: "doc-3", process: 4104 }] };
-  // After the close, host.window first still lists the closed view. Then 4101 is ending, 4102 holds a page of another surface,
-  // 4103 remains without a page and 4104 has exited.
-  const after = [before, { documents: [{ surface: "other", document: "", process: 4102 }],
-    pagelessProcesses: [{ pid: 4101, ending: true }, { pid: 4103, ending: false }] }];
-  const s = {
-    async get(name) { assert.equal(name, "host.window"); return before; },
-    async request(method, params) {
-      calls.push(method === "diagnostics.process.exit" ? `exit ${params.pid}` : method);
-      if (method === "diagnostics.clock") { clock += 1_000_000; return { mono_ns: String(clock) }; }
-      assert.equal(method, "diagnostics.process.exit");
-      return null;
-    },
-    async run(method) { calls.push(method); return { closed: true }; },
-    async until(name, predicate) {
-      if (name === "core.surfaces") { assert.ok(predicate([])); return []; }
-      assert.equal(name, "host.window");
-      const value = after.find((candidate) => predicate(candidate));
-      calls.push("host.window without the closed views");
-      return value;
-    },
-  };
-  const beforeProcesses = [4101, 4102, 4103, 4104].map((pid) => ({ pid, footprintBytes: 1_000_000 }));
-  const closedViews = [{ surface: "view-1", rootHistoryEntries: 1, documents: ["doc-1", "doc-2", "doc-3"]
-    .map((document) => ({ document, historyEntries: 1 })) }];
-  const measured = [];
-  const result = await closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses,
-    closedViews, measureFootprint: (pid) => { measured.push(pid); return 3_000_000; } });
-  assert.deepEqual(result.afterProcesses, [{ pid: 4101, footprintBytes: 0 },
-    { pid: 4102, footprintBytes: 3_000_000, remained: "page" }, { pid: 4103, footprintBytes: 3_000_000, remained: "no page" },
-    { pid: 4104, footprintBytes: 0 }]);
-  assert.equal(result.engineCacheHeld, true);
-  assert.deepEqual(measured.sort(), [4102, 4103], "the processes that remained were not read at the time of the measurement");
-  assert.deepEqual(calls.filter((call) => call.startsWith("exit ")), ["exit 4101"],
-    "the close awaited the exit of a process that host.window did not report ending");
-  assert.ok(calls.indexOf("core.tab.close") < calls.indexOf("host.window without the closed views")
-    && calls.indexOf("host.window without the closed views") < calls.indexOf("exit 4101"),
-    `the exit wait did not follow the close and its host.window reading: ${calls}`);
+test("the reclaim close reads the processes that remain and awaits only the exit of the processes that host.window reports ending", { timeout: 5000 }, () => {
+  // After the close, 4101 is ending, 4102 holds a page of another surface, 4103 remains without a page and 4104 has exited.
+  const closed = { documents: [{ surface: "other", document: "", process: 4102 }],
+    pagelessProcesses: [{ pid: 4101, ending: true }, { pid: 4103, ending: false }] };
+  assert.deepEqual(processFates([4101, 4102, 4103, 4104].map((pid) => ({ pid, footprintBytes: 1_000_000 })), closed), [
+    { pid: 4101, fate: "ending" }, { pid: 4102, fate: "page" }, { pid: 4103, fate: "no page" }, { pid: 4104, fate: "exited" }]);
 });
 
-test("the reclaim close refuses a host.window that does not report the processes without a page", { timeout: 5000 }, async () => {
-  const s = {
-    async get() { return { documents: [{ surface: "view-1", document: "", process: 4101 }] }; },
-    async request() { return { mono_ns: "1000000000" }; },
-    async run() { return { closed: true }; },
-    async until(name, predicate) {
-      const value = name === "host.window" ? { documents: [], pagelessProcesses: null } : [];
-      assert.ok(predicate(value));
-      return value;
-    },
-  };
-  await assert.rejects(closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"],
+test("the reclaim close refuses a host.window that does not report the processes without a page", { timeout: 5000 }, () => {
+  assert.throws(() => processFates([{ pid: 4101, footprintBytes: 1 }], { documents: [], pagelessProcesses: null }),
+    /does not report the processes without a page/);
+});
+
+test("the end of a reclaim exit wait fails the close with its reason", { timeout: 5000 }, async (t) => {
+  const { session } = await playSession(t, Session, "window-check-close-group-exit-fails", "mygo");
+  await assert.rejects(closeViewGroup({ diagnostic() {} }, session, { placement: TAB_PLACEMENT, surfaces: ["view-1"],
     beforeProcesses: [{ pid: 4101, footprintBytes: 1 }], closedViews: [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }] }),
-  /does not report the processes without a page/);
-});
-
-test("the end of a reclaim exit wait fails the close with its reason", { timeout: 5000 }, async () => {
-  const s = {
-    async get() { return { documents: [{ surface: "view-1", document: "", process: 4101 }] }; },
-    async request(method) {
-      if (method === "diagnostics.clock") return { mono_ns: "1000000000" };
-      throw new Error("process 4101 did not exit before the endpoint connection of the request closed");
-    },
-    async run() { return { closed: true }; },
-    async until(name, predicate) {
-      const value = name === "host.window" ? { documents: [], pagelessProcesses: [{ pid: 4101, ending: true }] } : [];
-      assert.ok(predicate(value));
-      return value;
-    },
-  };
-  await assert.rejects(closeViewGroup({ diagnostic() {} }, s, { placement: TAB_PLACEMENT, surfaces: ["view-1"],
-    beforeProcesses: [{ pid: 4101, footprintBytes: 1 }], closedViews: [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }],
-    measureFootprint: () => assert.fail("an ended exit wait read a footprint") }),
-  { message: "process 4101 did not exit before the endpoint connection of the request closed" });
+  { message: "mygo diagnostics.process.exit: process 4101 did not exit before the endpoint connection of the request closed" });
 });
 
 test("a view descriptor without a placement is refused by every collector with an error that names the descriptor", { timeout: 5000 }, async (t) => {
   const descriptor = { plugin: "fixture", readinessStatus: "fixture.ready", readiness: async () => {}, expectedContent: "fixture",
     language: "en-US" };
   const refused = { message: "view descriptor fixture has no placement with the functions card, open and close" };
-  const untouched = new Proxy({}, { get(_, name) { throw new Error(`the session was used for ${String(name)}`); } });
+  // The case window-check-open-idle holds no request: a collector that used the session before it refused the descriptor fails the player.
+  const { session: untouched } = await playSession(t, Session, "window-check-open-idle", "mygo");
   await assert.rejects(openRecordedView(t, untouched, { card: "card-1", ...descriptor }), refused);
   await assert.rejects(collectViewStartAndMemory(t, untouched, descriptor), refused);
   await assert.rejects(collectViewReclaimMeasurements(t, untouched, descriptor, [{ surface: "view-1" }]), refused);
@@ -867,70 +475,33 @@ test("a view descriptor without a placement is refused by every collector with a
   { message: "view close has no placement with the functions card, open and close" });
 });
 
-test("the tab placement chooses a card with a tab of another plugin, adds the view as a tab and closes it as a tab", { timeout: 5000 }, async () => {
+test("the tab placement chooses a card with a tab of another plugin, adds the view as a tab and closes it as a tab", { timeout: 5000 }, async (t) => {
   const grid = { cards: [{ id: "card-1", tabs: [{ id: "other", plugin: "other-fixture" }] }] };
   assert.equal(TAB_PLACEMENT.card(grid, "fixture", "card-1"), viewCardWithDifferentPluginTab(grid, "fixture", "card-1"));
-  const calls = [];
-  let registered = true;
-  const s = {
-    async run(method, params) {
-      calls.push([method, params]);
-      if (method === "core.card.add-tab") return { tab: "view-1" };
-      registered = false;
-      return { closed: true };
-    },
-    async until(name, predicate, message) {
-      calls.push([name, message]);
-      const surfaces = registered ? [{ surface: "view-1" }] : [];
-      assert.ok(predicate(surfaces), message);
-      return surfaces;
-    },
-  };
-  assert.equal(await TAB_PLACEMENT.open(s, { card: "card-1", plugin: "fixture", params: { path: "a.txt" } }), "view-1");
-  await TAB_PLACEMENT.close(s, "view-1", { cleanup: false });
-  assert.deepEqual(calls, [
-    ["core.card.add-tab", { card: "card-1", plugin: "fixture", params: { path: "a.txt" } }],
-    ["core.tab.close", { tab: "view-1" }],
-    ["core.surfaces", "view view-1 remained registered after close"],
-  ]);
-  s.run = async () => ({ closed: false });
-  await assert.rejects(TAB_PLACEMENT.close(s, "view-1", { cleanup: true }), { message: /^view view-1 did not close during cleanup\n/ });
+  // The case holds the add of the tab, its close and the wait until the registry lists no view, and then a close that the host
+  // reports as not closed.
+  const { session } = await playSession(t, Session, "window-check-tab-placement", "mygo");
+  assert.equal(await TAB_PLACEMENT.open(session, { card: "card-1", plugin: "fixture", params: { path: "a.txt" } }), "view-1");
+  await TAB_PLACEMENT.close(session, "view-1", { cleanup: false });
+  await assert.rejects(TAB_PLACEMENT.close(session, "view-1", { cleanup: true }), { message: /^view view-1 did not close during cleanup\n/ });
   assert.ok(Object.isFrozen(TAB_PLACEMENT));
 });
 
-function dragTraceModeSession(t, { performanceTrace, logPolicy }) {
-  const configDir = mkdtempSync(join(tmpdir(), "drag-trace-mode-"));
-  t.after(() => rmSync(configDir, { recursive: true, force: true }));
-  const values = { "diagnostics.performance": performanceTrace, "diagnostics.log": structuredClone(logPolicy) };
-  const writePolicy = () => writeFileSync(join(configDir, "log-policy.json"), JSON.stringify(policyOfSetting(values["diagnostics.log"])));
-  writePolicy();
-  const calls = [];
-  return {
-    calls,
-    values,
-    session: {
-      app: { configDir },
-      // The connection of the fixture stays open, so the policy wait ends only by the policy file.
-      client: { ended: new Promise(() => {}) },
-      async get(name) {
-        assert.equal(name, "core.settings");
-        return { values: structuredClone(values) };
-      },
-      async run(name, params) {
-        calls.push({ name, params });
-        assert.equal(name, "core.settings.set");
-        assert.equal(params.scope, "common");
-        Object.assign(values, structuredClone(params.patch));
-        writePolicy();
-        return null;
-      },
-    },
-  };
+// The host writes the policy file of the setting diagnostics.log when it handles core.settings.set, and the measured drag waits for it;
+// a test writes the file as the host does when the player has received the command.
+async function dragTraceSession(t, caseName, logPolicy) {
+  const { session, player } = await playSession(t, Session, caseName, "mygo");
+  const write = (log) => writeFileSync(join(session.app.configDir, "log-policy.json"), JSON.stringify(policyOfSetting(log)));
+  write(logPolicy);
+  player.events.on("request", (message) => {
+    if (message.method === "command.run" && message.params.name === "core.settings.set") write(message.params.params.patch["diagnostics.log"]);
+  });
+  return session;
 }
 
 test("a measured drag stores only the frame class without the performance trace and restores both settings", { timeout: 5000 }, async (t) => {
   const logPolicy = { frame: "trace", call: "debug" };
-  const { session, calls, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy });
+  const session = await dragTraceSession(t, "window-check-drag-mode", logPolicy);
   const result = await withDragTraceMode(session, async () => {
     const during = (await session.get("core.settings")).values;
     assert.equal(during["diagnostics.performance"], false);
@@ -945,98 +516,59 @@ test("a measured drag stores only the frame class without the performance trace 
       logPolicy: { before: logPolicy, during: { frame: "trace" }, after: logPolicy },
     },
   });
-  assert.deepEqual(calls.map(({ params }) => params.patch), [
-    { "diagnostics.performance": false, "diagnostics.log": { frame: "trace" } },
-    { "diagnostics.performance": true, "diagnostics.log": logPolicy },
-  ]);
-  assert.equal(values["diagnostics.performance"], true);
   assert.deepEqual(readPolicy(session.app.configDir).classes, policyOfSetting(logPolicy).classes);
 });
 
 test("a measured drag keeps the failure of its action and of the restoration", { timeout: 5000 }, async (t) => {
-  const { session, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy: { frame: "trace" } });
-  const restoreError = new Error("trace setting restoration failed");
+  const session = await dragTraceSession(t, "window-check-drag-mode-restore-fails", { frame: "trace" });
   const actionError = new Error("drag evidence failed");
-  const originalRun = session.run;
-  session.run = async (name, params) => {
-    if (params.patch["diagnostics.performance"] === true) {
-      values["diagnostics.performance"] = true;
-      throw restoreError;
-    }
-    return originalRun(name, params);
-  };
   await assert.rejects(withDragTraceMode(session, async () => { throw actionError; }), (error) => {
     assert.ok(error instanceof AggregateError);
-    assert.deepEqual(error.errors, [actionError, restoreError]);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.errors[0], actionError);
+    assert.match(error.errors[1].message, /trace setting restoration failed/);
     return true;
   });
-  assert.equal(values["diagnostics.performance"], true);
 });
 
 test("a measured drag restores the settings when the settings cannot be read after it", { timeout: 5000 }, async (t) => {
-  const logPolicy = { frame: "trace", call: "debug" };
-  const { session, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy });
-  const stateError = new Error("post-action settings read failed");
-  const originalGet = session.get;
-  let reads = 0;
-  session.get = async (name) => {
-    reads++;
-    if (reads === 3) throw stateError;
-    return originalGet(name);
-  };
-  await assert.rejects(withDragTraceMode(session, async () => "captured"), (error) => error === stateError);
-  assert.equal(values["diagnostics.performance"], true);
-  assert.deepEqual(values["diagnostics.log"], logPolicy);
+  const session = await dragTraceSession(t, "window-check-drag-mode-read-fails", { frame: "trace", call: "debug" });
+  await assert.rejects(withDragTraceMode(session, async () => "captured"), /post-action settings read failed/);
 });
 
 test("a measured drag refuses a log policy without the frame trace and changes nothing", { timeout: 5000 }, async (t) => {
-  const { session, calls } = dragTraceModeSession(t, { performanceTrace: true, logPolicy: {} });
+  const session = await dragTraceSession(t, "window-check-drag-mode-no-frame-trace", {});
   await assert.rejects(withDragTraceMode(session, async () => "captured"), /drag requires the frame trace log policy/);
-  assert.deepEqual(calls, []);
 });
 
 test("a measured drag keeps a falsy rejection of its action", { timeout: 5000 }, async (t) => {
   for (const failure of [null, undefined, 0]) {
-    const { session, values } = dragTraceModeSession(t, { performanceTrace: true, logPolicy: { frame: "trace" } });
+    const session = await dragTraceSession(t, "window-check-drag-mode-action-throws", { frame: "trace" });
     await assert.rejects(withDragTraceMode(session, async () => { throw failure; }), (error) => error === failure);
-    assert.equal(values["diagnostics.performance"], true);
   }
 });
 
-test("reclaim finishes the content verification of the same live recorded view before its footprint/close interval begins", { timeout: 5000 }, async () => {
-  const calls = ["normal recording stopped"];
-  let alive = true;
-  let verified = false;
-  const view = { surface: "recorded-original", async verifyContent() {
-    assert.equal(alive, true, "an ended view cannot have its content verified");
-    calls.push("verification started");
-    await Promise.resolve();
-    verified = true;
-    calls.push("verification finished");
-    return { contentFrame: { frameIndex: 2, timeMs: 3, proof: { method: "value", expected: "x", actual: "x" } } };
-  } };
-  assert.equal(typeof viewMetrics.closeVerifiedRecordedViewGroup, "function", "reclaim must own verification before it closes the target");
-  const result = await viewMetrics.closeVerifiedRecordedViewGroup([view], async () => {
-    assert.equal(verified, true);
-    assert.equal(alive, true);
-    calls.push("before footprint");
-    alive = false;
-    calls.push("original target closed", "after footprint");
-    return { exactSample: true };
-  });
-  assert.deepEqual(result, { exactSample: true });
-  assert.deepEqual(calls, ["normal recording stopped", "verification started", "verification finished",
-    "before footprint", "original target closed", "after footprint"]);
-  assert.equal(view.surface, "recorded-original");
+test("reclaim finishes the content verification of the same live recorded view before its footprint/close interval begins", { timeout: 5000 }, async (t) => {
+  // The case holds the open of the view with its content verification deferred, and then the measured close of its process group: the
+  // view is open when its content frame is kept, and the close of the group follows.
+  const s = await recordedViewSession(t, "window-check-recorded-view-verified-close", [0.5, 5.5, 10, 13]);
+  const view = await openRecordedView({ diagnostic: () => {} }, s, { ...fixtureView, expectedContent: "SOKSAK FIXTURE",
+    captureObservationWindowMs: 20, deferContentVerification: true });
+  assert.equal("contentFrame" in view, false);
+  const result = await viewMetrics.closeVerifiedRecordedViewGroup([view], () => closeViewGroup({ diagnostic() {} }, s, {
+    placement: TAB_PLACEMENT, surfaces: ["view-1"], beforeProcesses: [{ pid: 3141, footprintBytes: 1_000_000 }],
+    closedViews: [{ surface: "view-1", rootHistoryEntries: 1, documents: [] }] }));
+  assert.deepEqual(view.contentFrame, { timeMs: 12, proof: { method: "value", expected: "SOKSAK FIXTURE", actual: "SOKSAK FIXTURE" } });
+  assert.deepEqual(result.afterProcesses, [{ pid: 3141, footprintBytes: 0 }]);
+  assert.equal(view.surface, "view-1");
 });
 
-test("reclaim preserves a failed content verification without closing or substituting a target", { timeout: 5000 }, async () => {
-  const failure = new Error("original content verification failed");
-  let closed = false;
-  assert.equal(typeof viewMetrics.closeVerifiedRecordedViewGroup, "function", "reclaim admission must precede close");
-  await assert.rejects(viewMetrics.closeVerifiedRecordedViewGroup([{ surface: "original", verifyContent: async () => { throw failure; } }],
-    async () => { closed = true; }), error => error === failure);
-  assert.equal(closed, false);
+test("reclaim preserves a failed content verification without closing or substituting a target", { timeout: 5000 }, async (t) => {
+  // The case window-check-open-idle holds no request: a close of the group would fail the player. A view without its deferred
+  // verifier is refused before the close.
+  const { session } = await playSession(t, Session, "window-check-open-idle", "mygo");
+  await assert.rejects(viewMetrics.closeVerifiedRecordedViewGroup([{ surface: "original" }], () => session.run("core.tab.close", { tab: "original" })),
+    /view original has no deferred content verifier/);
 });
 
 test("actual reclaim collector verifies content before the existing measured close group", { timeout: 5000 }, async () => {

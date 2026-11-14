@@ -1,0 +1,10 @@
+{
+  "name": "section-view-read-document-no-length",
+  "description": "A history answer without a length fails the read of the document.",
+  "replay": false,
+  "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"command.run","params":{"window":"main","name":"probeplain.view.history","params":{},"surface":"spc-1/card-4:left/probeplain.section"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{}}}
+  ]
+}

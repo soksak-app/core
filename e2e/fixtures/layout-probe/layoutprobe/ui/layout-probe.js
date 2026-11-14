@@ -1,9 +1,9 @@
-// The views of the layout probe, a core fixture that stands in for real plugins in the layout checks of core
+// The views of the layout probe, a core fixture that serves the layout checks of core
 // (docs/spec/plugin-processes.md#verification-boundaries). The tab view reports what core gives a view (its start values, its tab
 // reports, its size and theme, the document region and the settings of the plugin) through the statuses layoutprobe.view,
 // layoutprobe.surface and layoutprobe.document, and runs the tab reports and the document changes as commands. A section view
 // reports its section and size as layoutprobe.section; the follow section follows the surface that core.sidebars reports for it
-// (docs/spec/plugins.md#sections). Both views run core.file.open from themselves as layoutprobe.open. The module imports nothing, so the owner test runs it with a fake bridge.
+// (docs/spec/plugins.md#sections). Both views run core.file.open from themselves as layoutprobe.open. The module imports nothing: its owner test runs it on the view bridge and the exposure of core.
 
 /** The footer text that the tab view declares at its start (docs/spec/plugins.md#tab-reports). */
 export const FOOTER = "Layout probe";

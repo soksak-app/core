@@ -1,0 +1,11 @@
+{
+  "recorded": "A pattern that is not a regular expression: pgrep exits with 2. Command: pgrep -f (.",
+  "command": [
+    "pgrep",
+    "-f",
+    "("
+  ],
+  "status": 2,
+  "stdout": "",
+  "stderr": "pgrep: Cannot compile regular expression `(' (parentheses not balanced)\n"
+}

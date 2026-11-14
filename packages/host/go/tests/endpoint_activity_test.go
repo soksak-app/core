@@ -61,7 +61,7 @@ func recordedActivity(log *host.EventLog, config string) activityState {
 // activityBackend is the window of the endpoint, which reads, at the delivery of the release of each press, the state of the
 // activity that the event log records.
 type activityBackend struct {
-	*fakeBackend
+	*casePage
 	log    *host.EventLog
 	config string
 	ups    chan activityState
@@ -71,7 +71,7 @@ func (b *activityBackend) Pointer(window string, input host.PointerInput) error 
 	if input.Phase == "up" {
 		b.ups <- recordedActivity(b.log, b.config)
 	}
-	return b.fakeBackend.Pointer(window, input)
+	return b.casePage.Pointer(window, input)
 }
 
 // The host holds the connection activity while a connection of its endpoint is open, so the system does not run it in the
@@ -107,7 +107,7 @@ func TestTheEndpointHoldsTheActivityWhileAConnectionIsOpen(t *testing.T) {
 			t.Errorf("restore the default native policy: %v", err)
 		}
 	})
-	backend := &activityBackend{fakeBackend: newFakeBackend(), log: log, config: config, ups: make(chan activityState, 4)}
+	backend := &activityBackend{casePage: newTierBackend([]string{"main"}), log: log, config: config, ups: make(chan activityState, 4)}
 	_, address, _ := serve(t, backend)
 	if state := recordedActivity(log, config); state.err != nil || state.held {
 		t.Fatalf("before a connection the log records the activity %+v", state)

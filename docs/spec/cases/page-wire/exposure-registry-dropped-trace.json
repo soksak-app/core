@@ -1,0 +1,21 @@
+{
+  "name": "exposure-registry-dropped-trace",
+  "description": "The exposure of a page turns the trace on, forwards a watch to a surface, sends the first accepted value of the watch to the host and sends the trace records of the values that no watch takes.",
+  "replay": false,
+  "reason": "performance turns the trace of the host on and off, and the Go producer runs only log and workspace calls without a window.",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000000011263,"source":"page"},"mono-ns-1":{"type":"integer","example":5010807602,"source":"page"},"page-identity":{"type":"string","example":"40d423ee-20cc-4003-a967-c64a77e628b0","source":"page"},"time-origin":{"type":"number","example":1794612053926.292,"source":"page"},"ts-us-2":{"type":"integer","example":1791000000011483,"source":"page"},"mono-ns-2":{"type":"integer","example":5011027477,"source":"page"},"ts-us-3":{"type":"integer","example":1791000000012310,"source":"page"},"mono-ns-3":{"type":"integer","example":5011854560,"source":"page"}},
+  "steps": [
+    {"call":{"name":"performance","payload":{"action":"on"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"debug","event":"workbench.trace.surface.registration","fields":{"phase":"registered","surface":"tab-a","timeOrigin":"$time-origin","hasPort":false,"kind":"status","name":"probe.lines","names":["status probe.lines"]}},{"ts_us":"$ts-us-2","mono_ns":"$mono-ns-2","start":"$page-identity","level":"debug","event":"workbench.trace.surface.change.dropped","fields":{"surface":"tab-a","name":"probe.lines","version":1,"reason":"no watch"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureChanged","payload":{"name":"probe.lines","value":["b"]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-3","mono_ns":"$mono-ns-3","start":"$page-identity","level":"debug","event":"workbench.trace.surface.change.dropped","fields":{"surface":"tab-a","name":"probe.lines","version":1,"reason":"older than version 2"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"performance","payload":{"action":"off"}}},
+    {"reply":{"result":null}}
+  ]
+}

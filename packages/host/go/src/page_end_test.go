@@ -8,17 +8,31 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
 // pageEndWindow is a window whose page a test ends: it holds the listeners of its window events and the hook of its close, and
 // sends each event that the host sends to its page, each close and each start of its workbench to sent.
 type pageEndWindow struct {
-	closingWindow
+	settlingWindow
 	listeners map[WindowEvent][]func()
 	sent      chan string
 	mu        sync.Mutex
 	closes    int
+	// settled is nil for a window whose screen presents through the main web view of the platform. Otherwise the screen never presents:
+	// its presentation is a function of the window, as the presentation of a framework that draws its workbench itself is, and settled
+	// receives one signal each time a settled wait asks it to present.
+	settled chan struct{}
+}
+
+func (w *pageEndWindow) SettledPresentation() (unsafe.Pointer, error) {
+	if w.settled == nil {
+		return w.settlingWindow.SettledPresentation()
+	}
+	return system.FunctionPresentation(func(func(error)) error {
+		w.settled <- struct{}{}
+		return nil
+	})
 }
 
 func (w *pageEndWindow) OnWindowEvent(event WindowEvent, listener func()) {
@@ -59,25 +73,34 @@ func (w *pageEndWindow) waitSent(name string) {
 	}
 }
 
-// pageEndPlatform answers the native calls of a window whose page starts, ends and closes.
-type pageEndPlatform struct{ closingPlatform }
-
-func (p *pageEndPlatform) ModalHoldEnd(platform.Window) {}
-
-// pageEndFixture is a host with one window whose page is ready.
-func pageEndFixture(t *testing.T) (*Host, *Surfaces, *pageEndWindow) {
+// newPageEndWindow creates the host of one window of the platform of the operating system whose page is ready. The window has the title
+// bar of a framework window and no main web view, and its framework runs its steps on the main thread of the native library. The
+// observations of the window end with the test.
+func newPageEndWindow(t *testing.T, screen bool) (*Host, *Surfaces, *pageEndWindow) {
 	t.Helper()
-	window := &pageEndWindow{closingWindow: closingWindow{elementWindow: elementWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}}},
+	useCurrentPlatformForViews(t)
+	native := support.TitledWindow(t, runOnMainThread, 400, 300)
+	window := &pageEndWindow{settlingWindow: settlingWindow{pagelessWindow: pagelessWindow{native: native}},
 		listeners: map[WindowEvent][]func(){}, sent: make(chan string, 64)}
-	previousFramework, previousSystem := framework, system
-	framework, system = pagelessFramework{window: window}, &pageEndPlatform{}
-	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
+	if screen {
+		window.settled = make(chan struct{}, 4)
+	}
+	previousFramework := framework
+	framework = nativePagelessFramework{pagelessFramework{window: window}}
+	t.Cleanup(func() { framework = previousFramework })
 	h := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: &Sidecars{}, quit: &Quit{}, relay: NewRelay[relayTarget]()}
 	s := h.newWindow("main", "")
+	t.Cleanup(func() { endObservations(s) })
 	h.mu.Lock()
 	s.ready = true
 	h.mu.Unlock()
 	return h, s, window
+}
+
+// pageEndFixture is a host with one window whose page is ready.
+func pageEndFixture(t *testing.T) (*Host, *Surfaces, *pageEndWindow) {
+	t.Helper()
+	return newPageEndWindow(t, false)
 }
 
 // askPage sends a command request to the page of s without a limit and returns the channel of its error.
@@ -175,7 +198,7 @@ func TestAReloadEndsWithAFailedStart(t *testing.T) {
 	h.mu.Lock()
 	s.ready = false
 	h.mu.Unlock()
-	s.invoke = func(task func()) { task() }
+	s.invoke = stepOnMainThread
 	s.reloadCancelLayout = func() error { return errors.New("the layout cannot be cancelled") }
 	s.reloadKeysPageEnded = func() {}
 	s.reloadHideSurface = func(unsafe.Pointer, bool) {}
@@ -194,40 +217,11 @@ func TestAReloadEndsWithAFailedStart(t *testing.T) {
 	}
 }
 
-// pageCallWindow is a window whose page a test ends and whose settled presentation is a block of its own.
-type pageCallWindow struct{ *pageEndWindow }
-
-func (w pageCallWindow) SettledPresentation() (unsafe.Pointer, error) {
-	return unsafe.Pointer(w.pageEndWindow), nil
-}
-
-// pageCallPlatform answers the native calls of a window whose page ends, and its settled wait answers nothing: settled receives
-// one signal each time a wait reaches the settled step.
-type pageCallPlatform struct {
-	pageEndPlatform
-	settled chan struct{}
-}
-
-func (p *pageCallPlatform) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error {
-	p.settled <- struct{}{}
-	return nil
-}
-
 // pageCallFixture is a host with one window whose page is ready and whose screen never presents.
-func pageCallFixture(t *testing.T) (*Surfaces, *pageEndWindow, *pageCallPlatform) {
+func pageCallFixture(t *testing.T) (*Surfaces, *pageEndWindow) {
 	t.Helper()
-	window := &pageEndWindow{closingWindow: closingWindow{elementWindow: elementWindow{pagelessWindow: pagelessWindow{native: platform.Window(1)}}},
-		listeners: map[WindowEvent][]func(){}, sent: make(chan string, 64)}
-	fake := &pageCallPlatform{settled: make(chan struct{}, 4)}
-	previousFramework, previousSystem := framework, system
-	framework, system = pagelessFramework{window: pageCallWindow{window}}, fake
-	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
-	h := &Host{windows: map[uint]*Surfaces{}, owners: map[string]*Surfaces{}, sidecars: &Sidecars{}, quit: &Quit{}, relay: NewRelay[relayTarget]()}
-	s := h.newWindow("main", "")
-	h.mu.Lock()
-	s.ready = true
-	h.mu.Unlock()
-	return s, window, fake
+	_, s, window := newPageEndWindow(t, true)
+	return s, window
 }
 
 // waitResult runs wait and returns the channel of its error.
@@ -254,9 +248,9 @@ func wantEnd(t *testing.T, result <-chan error, end, what string) {
 // (docs/spec/native-host.md#page-reload).
 // contract: reload.page-end-ends-the-presented-waits-of-its-calls
 func TestTheReloadRequestEndsThePresentedWaitOfACallOfThePage(t *testing.T) {
-	s, _, fake := pageCallFixture(t)
+	s, window := pageCallFixture(t)
 	result := waitResult(s.pagePresented)
-	<-fake.settled
+	<-window.settled
 	select {
 	case err := <-result:
 		t.Fatalf("the presented wait of the page ended at its settled step before the reload request: %v", err)
@@ -269,17 +263,17 @@ func TestTheReloadRequestEndsThePresentedWaitOfACallOfThePage(t *testing.T) {
 // A presented call that reaches the host after the reload request ends at once, and a call of the new page waits again.
 // contract: reload.page-end-ends-the-presented-waits-of-its-calls
 func TestAPresentedCallAfterThePageEndedEndsUntilTheNewPageStarts(t *testing.T) {
-	s, _, fake := pageCallFixture(t)
+	s, window := pageCallFixture(t)
 	s.askPageToReload(func() {})
 	wantEnd(t, waitResult(s.pagePresented), "the page is reloading", "the presented call after the reload request")
 	select {
-	case <-fake.settled:
+	case <-window.settled:
 		t.Fatal("the presented call after the reload request waited for the screen")
 	default:
 	}
 	s.pageStarted()
 	result := waitResult(s.pagePresented)
-	<-fake.settled
+	<-window.settled
 	s.endWindow()
 	wantEnd(t, result, windowClosedEnd, "the presented call of the new page")
 }
@@ -287,9 +281,9 @@ func TestAPresentedCallAfterThePageEndedEndsUntilTheNewPageStarts(t *testing.T) 
 // The end of the page process ends the presented wait of a call of the page with that end.
 // contract: reload.page-end-ends-the-presented-waits-of-its-calls
 func TestTheEndOfThePageProcessEndsThePresentedWaitOfACallOfThePage(t *testing.T) {
-	s, window, fake := pageCallFixture(t)
+	s, window := pageCallFixture(t)
 	result := waitResult(s.pagePresented)
-	<-fake.settled
+	<-window.settled
 	window.end()
 	wantEnd(t, result, pageEndedEnd, "the presented wait of a call of the ended page process")
 }
@@ -297,9 +291,9 @@ func TestTheEndOfThePageProcessEndsThePresentedWaitOfACallOfThePage(t *testing.T
 // A new page that starts without a reload request ends the presented waits of the calls of the page before it.
 // contract: reload.page-end-ends-the-presented-waits-of-its-calls
 func TestTheStartOfANewPageEndsThePresentedWaitOfACallOfThePageBeforeIt(t *testing.T) {
-	s, _, fake := pageCallFixture(t)
+	s, window := pageCallFixture(t)
 	result := waitResult(s.pagePresented)
-	<-fake.settled
+	<-window.settled
 	s.host.answerPage(s, pageReplacedEnd)
 	wantEnd(t, result, pageReplacedEnd, "the presented wait of a call of the replaced page")
 }
@@ -308,9 +302,9 @@ func TestTheStartOfANewPageEndsThePresentedWaitOfACallOfThePageBeforeIt(t *testi
 // and the close of the window does.
 // contract: reload.page-end-ends-the-presented-waits-of-its-calls
 func TestTheEndOfThePageLeavesThePresentedWaitOfAnEndpointRequest(t *testing.T) {
-	s, _, fake := pageCallFixture(t)
+	s, window := pageCallFixture(t)
 	result := waitResult(s.presented)
-	<-fake.settled
+	<-window.settled
 	s.askPageToReload(func() {})
 	select {
 	case err := <-result:

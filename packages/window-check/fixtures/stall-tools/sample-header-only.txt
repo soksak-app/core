@@ -1,0 +1,17 @@
+Analysis of sampling sleep (pid 63853) every 1 millisecond
+Process:         sleep [63853]
+Path:            /bin/sleep
+Load Address:    0x104eec000
+Identifier:      sleep
+Version:         329
+Code Type:       ARM64E
+Platform:        macOS
+Parent Process:  zsh [63852]
+Target Type:     live task
+
+Date/Time:       2026-11-14 10:49:07.320 +0900
+Launch Time:     2026-11-14 10:49:06.976 +0900
+OS Version:      macOS 26.6.2 (25G83)
+Report Version:  7
+Analysis Tool:   /usr/bin/sample
+

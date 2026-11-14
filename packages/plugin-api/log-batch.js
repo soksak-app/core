@@ -54,6 +54,25 @@ const UNGATED = ["start", "fixture.step"];
 const named = (value) => typeof value === "string" && value !== "";
 
 /**
+ * The clock of a page as data and a timer: `now()` is the reading in milliseconds that every instant of the batcher is taken from,
+ * and `after(callback, ms)` runs the callback once when `ms` milliseconds of that clock have passed. A runtime module exports the
+ * platform clock as `clock` (docs/spec/plugins.md#runtime-module), and a test runtime exports a clock whose instants the test gives.
+ */
+export const platformClock = {
+  now: () => performance.now(),
+  after: (callback, ms) => setTimeout(callback, ms),
+};
+
+/**
+ * Whether the counts of the gate are due: a count is held (`counted`) and the interval has passed since the reading `gatedAt` of the
+ * last report. The decision is a function of the two readings, so the batch that carries a count follows from the instants that the
+ * page passes and not from the time that the code takes.
+ */
+export function gatedDue({ counted, gatedAt, at, interval = GATED_REPORT_MS }) {
+  return counted && at - gatedAt >= interval;
+}
+
+/**
  * The milliseconds until the counts of the gate are reported by a timer, or null when no timer is armed. A batch in flight holds
  * no timer: its end sends a count that is due or waits for the rest of the interval, which starts at `gatedAt`, the reading of the
  * last report. `at` is the reading now, and `interval` is the interval in milliseconds.
@@ -77,7 +96,7 @@ export function gatedWait({ counted, sending, gatedAt, at, interval = GATED_REPO
  * `{layer: "workbench", member: "start", identity}` and a view page `{layer: "page", member: "page", identity}`.
  */
 export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENTS, maxBytes = DEFAULT_MAX_BYTES,
-  now = () => performance.now(), timer = (callback, ms) => setTimeout(callback, ms), gatedReportMs = GATED_REPORT_MS,
+  now = platformClock.now, timer = platformClock.after, gatedReportMs = GATED_REPORT_MS,
   classify = () => undefined, gate = null, writer }) {
   if (!named(writer?.layer) || !named(writer?.member) || !named(writer?.identity)) {
     throw new TypeError(`createEventBatcher requires the writer {layer, member, identity} of the document as non-empty strings, found ${JSON.stringify(writer)}`);
@@ -99,7 +118,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
   // so one timer waits for it while counts are held.
   let gatedAt = now();
   let gatedTimer = false;
-  const gatedDue = () => gated.size > 0 && now() - gatedAt >= gatedReportMs;
+  const gatedIsDue = (at) => gatedDue({ counted: gated.size > 0, gatedAt, at, interval: gatedReportMs });
   let scheduled = false;
   let sending = null;
   let anchor = null;
@@ -135,7 +154,9 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
 
   const send = async (force = false) => {
     scheduled = false;
-    const reportGated = gated.size > 0 && (force || gatedDue());
+    // One reading decides the report of the counts and stamps its records, so the batch follows from that instant.
+    const reportedAt = now();
+    const reportGated = gated.size > 0 && (force || gatedIsDue(reportedAt));
     if (sending || (queue.length === 0 && lost.size === 0 && !reportGated)) return;
     // A batch carries at most BATCH_EVENTS queued events. The rest stays queued, and the chain after this call sends it at once.
     const events = queue.slice(0, BATCH_EVENTS);
@@ -154,10 +175,10 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
       if (reportGated) {
         for (const entry of [...gated.values()].reverse()) {
           // events: page.log.gated, workbench.log.gated
-          events.unshift(ownRecord(now(), "info", own.gated, { class: entry.class, level: entry.level, count: entry.count }));
+          events.unshift(ownRecord(reportedAt, "info", own.gated, { class: entry.class, level: entry.level, count: entry.count }));
         }
         gated = new Map();
-        gatedAt = now();
+        gatedAt = reportedAt;
       }
     }
     sending = (async () => {
@@ -187,7 +208,7 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     await sending;
     sending = null;
     for (const end of mine) end();
-    if (queue.length > 0 || lost.size > 0 || gatedDue()) await send();
+    if (queue.length > 0 || lost.size > 0 || gatedIsDue(now())) await send();
     awaitGated();
   };
 

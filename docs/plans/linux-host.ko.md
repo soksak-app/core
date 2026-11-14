@@ -124,7 +124,7 @@ ancillary data 를 읽는 방법은 언어마다 다르다. Go 는 표준 라이
 - **D4 프레임 전송.** 권장: seal 한 memfd 를 persistent socket 의 `SCM_RIGHTS` 로 전달. 이유: 다른 프로세스가 열 수 있는 파일 이름이 없고, descriptor 자체가 권한이며, 복사 후 `consumed` 규칙을 바꿀 필요가 없다. 비용은 Rust `recvmsg` 의존성이다 [S53].
 - **D5 표시 대기.** 권장: R2-7-4 를 prototype 으로 두고, DOM 변경 뒤 toplevel frame clock 의 `after-paint` [S24]가 WebKitGTK 의 그 변경 그리기 뒤에 오는지를 tracked test 로 측정한다. 그렇지 않으면 공개 WebKitGTK API 로는 [네이티브 표면](../spec/native-surfaces.ko.md)의 commit 계약을 충족할 수 없으며, 그 발견은 다른 Linux 호스트 항목보다 먼저 사용자에게 돌아간다.
 - **D6 창 단추.** 권장: 페이지 위의 `GtkHeaderBar` 제목줄 [S25]. Linux 에서 페이지는 단추 영역을 예약하지 않고 `WindowControls` 는 header bar 의 단추 box 를 보고한다. 이유: macOS 배치는 AppKit 이 페이지가 요청한 높이의 제목줄 안에서 단추를 가운데 두는 동작에 기대며([호스트](../spec/hosts.ko.md#창-단추)), GTK 는 이를 제공하지 않는다.
-- **D7 창 동작.** 권장: `InstantWindowResize` 를 플랫폼 공통 인터페이스에서 빼고 macOS 창 준비로 옮긴다. 이유: 줄일 GTK3 크기 변경 애니메이션을 찾지 못했고(**unverified**), 효과 없이 성공하는 연산은 [호스트](../spec/hosts.ko.md#규칙)가 금지하는 stub 이다.
+- **D7 창 동작.** 권장: `InstantWindowResize` 를 플랫폼 공통 인터페이스에서 빼고 macOS 창 준비로 옮긴다. 이유: 줄일 GTK3 크기 변경 애니메이션을 찾지 못했고(**unverified**), 효과 없이 성공하는 연산은 [호스트](../spec/hosts.ko.md#규칙)가 금지한다.
 - **D8 reload 메모리.** 권장: main-frame 문서를 읽을 때마다 app DOM `WebKitWebView` 를 새 web process 의 새 view 로 바꾸고, 새 view 가 commit 할 때까지 이전 view 를 화면에 둔다. 이유: 공개 API 만 쓰며 교체된 문서를 가진 프로세스를 끝낸다. WebKitGTK process model 에서 새 view 가 새 web process 를 받는지는 **unverified**.
 
 ## 구현 순서

@@ -1,0 +1,471 @@
+{
+  "name": "debug-state-ui-errors",
+  "description": "The page opens the debug view and reads a file that holds no state object, which it shows as an error; the files that are no state files and the comparison without a shown state ask the host nothing.",
+  "replay": false,
+  "reason": "The case shows, updates, places and hides a modal view of a window through the overlay calls, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "show-request": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "statuses": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "update": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "6571a40e-6d32-4c55-9632-3f4f321f53e5",
+      "source": "page"
+    },
+    "place-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "update-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "update-5": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-5": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-6": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-6": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": "$show-request"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": "$statuses"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-2.json"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFiles"
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "path": "logs/state-1.json",
+            "size": 98,
+            "modified": 1
+          },
+          {
+            "path": "logs/state-2.json",
+            "size": 101,
+            "modified": 1
+          },
+          {
+            "path": "logs/host-a.stderr",
+            "size": 9,
+            "modified": 1
+          },
+          {
+            "path": "logs/host-a.crash",
+            "size": 12,
+            "modified": 1
+          },
+          {
+            "path": "logs/state-3.json",
+            "size": 3,
+            "modified": 1
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-2"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRead",
+        "payload": {
+          "path": "logs/state-3.json"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-3.json",
+          "size": 3,
+          "truncated": false,
+          "kind": "text",
+          "text": "[1]"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us",
+              "mono_ns": "$mono-ns",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "debug",
+                "text": "state: logs/state-3.json: not a state object: [1]"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-3"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "debug",
+                "text": "state: logs/host-a.stderr is not a state file of the list"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "debugRead",
+        "payload": {
+          "path": "logs/state-1.json"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-1.json",
+          "size": 98,
+          "truncated": false,
+          "kind": "text",
+          "text": "{\"time\":\"t\",\"host\":\"tauriv2\",\"versions\":{\"core\":\"0.0.10\"},\"windows\":[],\"workbench\":{\"modal\":null}}"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-4"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-4"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "debug",
+                "text": "compare: logs/state-9.json is not a state file of the list"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-5"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-5"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-6"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-6"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

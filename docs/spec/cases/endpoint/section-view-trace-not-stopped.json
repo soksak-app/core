@@ -1,0 +1,10 @@
+{
+  "name": "section-view-trace-not-stopped",
+  "description": "A frames command that leaves the observer enabled fails the stop.",
+  "replay": false,
+  "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"command.run","params":{"window":"main","name":"probeplain.view.frames","params":{"action":"stop"},"surface":"spc-1/card-4:left/probeplain.section"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"enabled":true}}}
+  ]
+}

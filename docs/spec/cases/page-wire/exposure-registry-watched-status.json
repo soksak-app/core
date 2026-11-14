@@ -1,0 +1,16 @@
+{
+  "name": "exposure-registry-watched-status",
+  "description": "The page forwards a watch to a surface, sends each newer value of the surface to the host, and forwards the end of the watch.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureChanged","payload":{"name":"probe.lines","value":["a"]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureChanged","payload":{"name":"probe.lines","value":["b"]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}}
+  ]
+}

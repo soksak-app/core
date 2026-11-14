@@ -1,0 +1,16 @@
+{
+  "name": "window-check-view-start-card",
+  "description": "The collector of a view reads the grid, selects the card with a tab of another plugin and opens the view as a tab of that card; the host refuses the open.",
+  "replay": false,
+  "reason": "The case opens a view of a plugin under a recording, which needs a plugin and a display that the replay does not have.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"selected-card","active":"anchor","tabs":[{"id":"anchor","plugin":"other-fixture"},{"id":"old-target","plugin":"fixture"}]}]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"refreshRate":null}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.clock","params":{"window":"main"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"mono_ns":"1000000000"}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"command.run","params":{"window":"main","name":"core.card.add-tab","params":{"card":"selected-card","plugin":"fixture"}}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"error":{"code":1004,"message":"the host stops the open at the selected card"}}}
+  ]
+}

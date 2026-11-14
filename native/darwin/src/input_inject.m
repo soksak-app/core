@@ -1448,6 +1448,8 @@ static bool stampNow(CGEventRef event) {
     return true;
 }
 
+// Whether the web view that took the last key down answered without an input context while it took the key (logKey records it).
+static bool keyInputContextAbsent;
 // equivalent is set when a key down of the virtual key window is taken as a key equivalent, and typed when a key down of the
 // virtual key window types its stated text through the text input of a web view.
 static sp_input_result keyInput(void *handle, const char *key, const char *text, unsigned modifiers, bool down,
@@ -1456,6 +1458,7 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
     *why = "";
     *equivalent = false;
     *typed = false;
+    keyInputContextAbsent = false;
     if (!window || !key || !NSThread.isMainThread) { *why = "no window, no key or not the main thread"; return SP_INPUT_REJECTED; }
     window = keyWindowOf(window);
     if (systemPanelOf(window)) { *why = systemPanelRefusal; return SP_INPUT_REJECTED; }
@@ -1526,7 +1529,8 @@ static sp_input_result keyInput(void *handle, const char *key, const char *text,
         if (down && (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl))) {
             *equivalent = [NSApp.mainMenu performKeyEquivalent:event] || [window performKeyEquivalent:event];
         }
-        bool toWebView = !*equivalent && down && (named || text) && sp_input_virtual_send_key_to_web_view(window, event);
+        bool toWebView = !*equivalent && down && (named || text)
+            && sp_input_virtual_send_key_to_web_view(window, event, &keyInputContextAbsent);
         *typed = toWebView && text && !named;
         if (!*equivalent && !toWebView) [NSApp sendEvent:event];
         return SP_INPUT_DELIVERED;
@@ -1618,8 +1622,9 @@ static void logKey(NSWindow *window, const char *key, const char *text, unsigned
     const char *why, NSString *responderName, bool equivalent, bool typed, bool held) {
     NSString *record = [NSString stringWithFormat:
         @"{\"kind\":\"key\",\"key\":%@,\"text\":%@,\"modifiers\":%u,\"down\":%s,\"result\":\"%s\",\"reason\":\"%s\","
-        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s,\"virtualKeyText\":%s,\"held\":%s}",
+        "\"responder\":\"%@\",\"keyWindow\":%s,\"equivalent\":%s,\"virtualKeyText\":%s,\"inputContextAbsent\":%s,\"held\":%s}",
         jsonText(key), jsonText(text), modifiers, down ? "true" : "false", resultName(result), why, responderName,
-        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false", typed ? "true" : "false", held ? "true" : "false"];
+        window.isKeyWindow ? "true" : "false", equivalent ? "true" : "false", typed ? "true" : "false",
+        keyInputContextAbsent ? "true" : "false", held ? "true" : "false"];
     sp_log_info("input inject", record.UTF8String);
 }

@@ -1,0 +1,18 @@
+{
+  "name": "window-check-common-settings-restored",
+  "description": "The cleanup of keepCommonSettings writes back the common values that the check changed and no value of the project.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"values":{"mode":"dark","gap":8},"common":{"mode":"dark","gap":8},"saving":false}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"mode":"light"}}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"gap":10},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":{"values":{"mode":"light","gap":10},"common":{"mode":"dark","gap":10},"saving":false}}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"gap":8},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":null}}
+  ]
+}

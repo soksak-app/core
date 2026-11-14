@@ -47,12 +47,12 @@ impl Owner for SupplierOwner {
     fn deliver(&self, message: Message) {
         self.messages
             .send(message)
-            .expect("the fake supplier test keeps its message receiver alive");
+            .expect("the detach test keeps its message receiver alive");
     }
     fn deliver_failure(&self, failure: Failure) {
         self.failures
             .send(failure)
-            .expect("the fake supplier test keeps its failure receiver alive");
+            .expect("the detach test keeps its failure receiver alive");
     }
     fn image_detach_ack(
         &self,

@@ -1,0 +1,18 @@
+{
+  "name": "host-chrome-unmounted-view",
+  "description": "A preparation before the draw leaves an unmounted view out; the view mounts, declares, and the drawn commit sends it and presents it.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":true,"overlays":[],"surfaces":[],"titlebar":40,"declarations":[]}}},
+    {"reply":{"result":{"ticket":1,"placements":[],"chrome":{"controls":{"x":13,"y":13,"w":54,"h":14},"row":40}}}},
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"surface":"view-mount-order"}}},
+    {"reply":{"result":null,"held":true}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":true,"overlays":[],"surfaces":[{"id":"view-mount-order","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":true,"x":1,"y":2,"w":30,"h":40,"start":{"origin":{"directory":null},"declarations":0}}],"titlebar":40,"declarations":[{"status":[],"commands":[],"element":[]}]}}},
+    {"reply":{"result":{"ticket":2,"placements":[{"id":"view-mount-order","visible":true,"scale":2,"x":1,"y":2,"w":30,"h":40}],"chrome":{"controls":{"x":13,"y":13,"w":54,"h":14},"row":40}}}},
+    {"call":{"name":"presentSurfaces","payload":{"ticket":2,"placements":[{"id":"view-mount-order","visible":true,"scale":2,"x":1,"y":2,"w":30,"h":40}],"settled":true}}},
+    {"reply":{"result":[{"id":"view-mount-order","visible":true,"scale":2,"x":1,"y":2,"w":30,"h":40}]}}
+  ]
+}

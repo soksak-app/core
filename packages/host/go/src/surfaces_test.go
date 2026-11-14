@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
 // contract: surface-layout.joins-root-views-before-awaiting-app-dom
@@ -427,60 +428,18 @@ func TestUnregisteredNativeSurfaceViewFailsWithItsAddress(t *testing.T) {
 	}
 }
 
-// viewPlatform is the platform of the view tests. It records the document web views that are created with their configuration and
-// the addresses that they load. Every other operation of the platform interface is not implemented by it.
-type viewPlatform struct {
-	platform.Platform
-	created []platform.DocumentOptions
-	loaded  []string
-}
-
-func (p *viewPlatform) CreateDocument(surface unsafe.Pointer, options platform.DocumentOptions, changed func(state string)) (unsafe.Pointer, error) {
-	p.created = append(p.created, options)
-	return unsafe.Pointer(new(int)), nil
-}
-
-func (p *viewPlatform) LoadDocument(document unsafe.Pointer, url string) bool {
-	p.loaded = append(p.loaded, url)
-	return true
-}
-
-func (p *viewPlatform) PlaceDocument(document unsafe.Pointer, left, top, right, bottom float64, visible bool) {
-}
-
-func (p *viewPlatform) CloseDocument(document unsafe.Pointer) {}
-
-func (p *viewPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
-	return nil
-}
-
-func (p *viewPlatform) SetViewEnded(document unsafe.Pointer, ended func()) error {
-	return nil
-}
-
-func (p *viewPlatform) SetViewResponsiveness(document unsafe.Pointer, responsiveness func(responsive bool)) error {
-	return nil
-}
-
-func (p *viewPlatform) AddDocumentScript(document unsafe.Pointer, source string) error { return nil }
-
 // contract: view.create-loads-page, document.process-label
 func TestViewSurfaceCreatesViewConfigurationAndLoadsItsPage(t *testing.T) {
-	fake := &viewPlatform{}
-	saved := system
-	system = fake
-	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments(), events: func(string, any) {}}
-	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
-		t.Fatalf("attach view: %v", err)
+	p := realViewProbe(t, Theme{}, nullOriginStart())
+	opened := p.waitCall(t, "probe.opened")
+	// The page of the plugin loaded from its address, and the view configuration ran the channel script before the page.
+	if opened["href"] != "soksak://probe/ui/page.html" || opened["channel"] != true {
+		t.Fatalf("the page of the view opened with %v, want the address soksak://probe/ui/page.html and the channel script run", opened)
 	}
-	if len(fake.created) != 1 || fake.created[0].Channel != "channel-script" || fake.created[0].Plugin != "probe" || fake.created[0].Folder != "/plugins/probe" || fake.created[0].Label != "soksak://plugin/probe" {
-		t.Fatalf("created documents: %+v, want one view configuration of plugin probe in its folder with its process label and the channel script", fake.created)
+	if label := ProcessLabel("probe", viewRegionName); label != "soksak://plugin/probe" {
+		t.Fatalf("the process label of the view is %q, want soksak://plugin/probe", label)
 	}
-	if want := []string{"soksak://probe/ui/page.html"}; !reflect.DeepEqual(fake.loaded, want) {
-		t.Fatalf("loaded addresses: %v, want %v", fake.loaded, want)
-	}
-	if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
+	if _, err := p.s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
 		t.Fatalf("the view is not recorded for its surface: %v", err)
 	}
 }
@@ -552,60 +511,6 @@ func TestImageRegionDeclaresItsPresentationMode(t *testing.T) {
 	}
 }
 
-// channelPlatform is the platform of the view channel tests. It keeps the receiver of the sok-view messages of each document and
-// records each message that the host posts to a document.
-type channelPlatform struct {
-	viewPlatform
-	receive       func(string)
-	posted        []string
-	postedOnUI    []bool
-	messageOnLoad string
-	beforeUITask  func()
-	afterPost     func()
-	rejectPost    bool
-	// tasks is the number of UI-thread tasks running now, which runUITask counts.
-	tasks int
-}
-
-// uiFake is a test platform whose native posts record whether they run within a UI-thread task.
-type uiFake interface {
-	platform.Platform
-	runUITask(task func())
-}
-
-// runUITask is the UI-thread runner of a test Surfaces. It runs the task on the calling goroutine and counts the task while it runs.
-func (p *channelPlatform) runUITask(task func()) {
-	p.tasks++
-	defer func() { p.tasks-- }()
-	if before := p.beforeUITask; before != nil {
-		p.beforeUITask = nil
-		before()
-	}
-	task()
-}
-
-func (p *channelPlatform) LoadDocument(document unsafe.Pointer, url string) bool {
-	p.viewPlatform.LoadDocument(document, url)
-	if p.messageOnLoad != "" && p.receive != nil {
-		p.receive(p.messageOnLoad)
-	}
-	return true
-}
-
-func (p *channelPlatform) SetViewMessage(document unsafe.Pointer, message func(value string)) error {
-	p.receive = message
-	return nil
-}
-
-func (p *channelPlatform) PostDocument(document unsafe.Pointer, value string) bool {
-	p.posted = append(p.posted, value)
-	p.postedOnUI = append(p.postedOnUI, p.tasks > 0)
-	if p.afterPost != nil {
-		p.afterPost()
-	}
-	return !p.rejectPost
-}
-
 // hostEvent is one window event that the host sent to the main page in a test.
 type hostEvent struct {
 	name string
@@ -619,23 +524,11 @@ func hostMessage(value string) string {
 
 // contract: view.source-registration-precedes-provider-messages
 func TestViewSourceRegistrationPrecedesFirstStatusRegistration(t *testing.T) {
-	fake := &channelPlatform{
-		messageOnLoad: hostMessage(`{"id":1,"command":"runtime.native.call","plugin":"probe","params":{"name":"registered","payload":{"kind":"status","name":"probe.lines"}}}`),
-	}
-	saved := system
-	system = fake
-	t.Cleanup(func() { system = saved })
-	events := []hostEvent{}
-	s := &Surfaces{
-		documents: NewDocuments(),
-		views:     map[string]*nativeWebview{"probe-surface": {}},
-		events:    func(name string, data any) { events = append(events, hostEvent{name, data}) },
-	}
-	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
-		t.Fatal(err)
-	}
+	p := realViewProbe(t, Theme{}, nullOriginStart())
+	p.waitCall(t, "probe.opened")
+	events := p.eventsNow()
 	if len(events) < 2 || events[0].name != "view-source-registered" || events[1].name != "view-call" {
-		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, then status registration call", events)
+		t.Fatalf("source lifecycle and first provider messages were ordered %v, want registration, then the first call of the page", events)
 	}
 	generation := events[0].data.(map[string]any)["generation"]
 	for i, event := range events[:2] {
@@ -644,21 +537,6 @@ func TestViewSourceRegistrationPrecedesFirstStatusRegistration(t *testing.T) {
 			t.Fatalf("event %d does not carry the registered view identity: %+v", i, event)
 		}
 	}
-}
-
-// newViewChannelSurfaces returns the surfaces of one attached view of plugin probe and the platform that records its messages.
-func newViewChannelSurfaces(t *testing.T) (*Surfaces, *channelPlatform) {
-	t.Helper()
-	fake := &channelPlatform{}
-	var _ platform.Platform = fake
-	saved := system
-	system = fake
-	t.Cleanup(func() { system = saved })
-	s := &Surfaces{documents: NewDocuments(), invoke: fake.runUITask, views: map[string]*nativeWebview{"probe-surface": {}}, events: func(string, any) {}}
-	if err := s.attachView("probe-surface", unsafe.Pointer(new(int)), "/config/document-data", "/plugins/probe", "probe", "ui/page.html", "channel-script", nullOriginStart()); err != nil {
-		t.Fatalf("attach view: %v", err)
-	}
-	return s, fake
 }
 
 func viewGeneration(s *Surfaces, surface string) uint64 {
@@ -671,33 +549,29 @@ func viewGeneration(s *Surfaces, surface string) uint64 {
 
 // contract: view.channel.ready
 func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	s.theme = Theme{Scheme: "dark", Tokens: map[string]string{"bg": "#000000"}}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	if len(fake.posted) != 1 {
-		t.Fatalf("messages posted after ready: %d, want the current theme", len(fake.posted))
-	}
-	var theme map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[0]), &theme); err != nil {
-		t.Fatalf("theme message is not JSON: %v", err)
-	}
+	p := echoViewProbe(t)
+	p.ready(t)
+	theme := p.received()[0]
 	if theme["sok"] != float64(1) || theme["event"] != "theme" {
 		t.Fatalf("theme message %v, want sok 1 and event theme", theme)
 	}
 	if _, has := theme["theme"]; has || theme["data"] == nil {
 		t.Fatalf("theme message %v, want the theme in its data field", theme)
 	}
-	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err != nil {
-		t.Fatalf("post to a ready view: %v", err)
+	if len(p.received()) != 1 {
+		t.Fatalf("messages posted after ready: %d, want the current theme", len(p.received()))
 	}
+	var posted error
+	p.main(func() { posted = p.s.postView("probe-surface", map[string]any{"event": "probe"}) })
+	if posted != nil {
+		t.Fatalf("post to a ready view: %v", posted)
+	}
+	p.waitReceived(t, 2)
 	next := strings.Replace(strings.Replace(nativeViewState, `"loading":false`, `"loading":true`, 1), `"navigations":1`, `"navigations":2`, 1)
-	if err := s.viewState("probe-surface", next); err != nil {
+	if err := p.s.viewState("probe-surface", next); err != nil {
 		t.Fatalf("new navigation state: %v", err)
 	}
-	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err == nil {
+	if err := p.s.postView("probe-surface", map[string]any{"event": "probe"}); err == nil {
 		t.Fatalf("post after navigation is accepted, want the ready record cleared")
 	}
 }
@@ -705,28 +579,27 @@ func TestViewChannelRecordsReadyDocumentPostsThemeAndClearsOnNavigation(t *testi
 // contract: view.channel.progress-keeps-ready
 // The view reports the progress of its load after its ready message: the navigation is the same, so the ready record stays.
 func TestViewStateKeepsTheReadyDocumentThroughProgressOfTheSameNavigation(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
+	p := echoViewProbe(t)
 	// The navigation starts before the page script runs, so its state arrives before the ready message.
 	start := strings.Replace(nativeViewState, `"loading":false`, `"loading":true`, 1)
-	if err := s.viewState("probe-surface", start); err != nil {
+	if err := p.s.viewState("probe-surface", start); err != nil {
 		t.Fatalf("start state: %v", err)
 	}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
+	p.ready(t)
 	loading := strings.Replace(nativeViewState, `"loading":false`, `"loading":true`, 1)
-	if err := s.viewState("probe-surface", loading); err != nil {
+	if err := p.s.viewState("probe-surface", loading); err != nil {
 		t.Fatalf("progress state: %v", err)
 	}
-	if err := s.postView("probe-surface", map[string]any{"event": "probe"}); err != nil {
-		t.Fatalf("post after the progress of the same navigation: %v, want the ready record kept", err)
+	var posted error
+	p.main(func() { posted = p.s.postView("probe-surface", map[string]any{"event": "probe"}) })
+	if posted != nil {
+		t.Fatalf("post after the progress of the same navigation: %v, want the ready record kept", posted)
 	}
 }
 
 // contract: view.channel.state-navigations-required
 func TestViewStateRefusesAStateWithoutNavigationsAndALowerCount(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
+	s, _, _ := newLifecycleSurfaces(t)
 	without := strings.Replace(nativeViewState, `,"navigations":1`, ``, 1)
 	if err := s.viewState("probe-surface", without); err == nil || err.Error() != "probe-surface: view state has no navigations" {
 		t.Fatalf("state without navigations: %v, want the refusal with its text", err)
@@ -746,7 +619,7 @@ const nativeViewState = `{"url":"soksak://probe/ui/page.html","title":"probe","l
 
 // contract: view.channel.state-boolean
 func TestViewStateAcceptsTheNativePayloadWithABooleanLoading(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
+	s, _, _ := newLifecycleSurfaces(t)
 	if err := s.viewState("probe-surface", nativeViewState); err != nil {
 		t.Fatalf("native view state: %v", err)
 	}
@@ -754,7 +627,7 @@ func TestViewStateAcceptsTheNativePayloadWithABooleanLoading(t *testing.T) {
 
 // contract: view.channel.state-numeric-refused
 func TestViewStateRefusesANumericLoadingWithTheSurfaceAndTheTypeError(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
+	s, _, _ := newLifecycleSurfaces(t)
 	payload := strings.Replace(nativeViewState, `"loading":false`, `"loading":1`, 1)
 	err := s.viewState("probe-surface", payload)
 	if err == nil || !strings.HasPrefix(err.Error(), "probe-surface: view state is not JSON: json: cannot unmarshal number into Go struct field") {
@@ -764,19 +637,17 @@ func TestViewStateRefusesANumericLoadingWithTheSurfaceAndTheTypeError(t *testing
 
 // contract: view.channel.post-before-ready
 func TestViewChannelRefusesPostBeforeReadyWithItsText(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
+	// A view that has not reported its ready document has no document to post to: the host refuses before any native post.
+	s, _, _ := newLifecycleSurfaces(t)
 	err := s.postView("probe-surface", map[string]any{"event": "probe"})
 	if err == nil || err.Error() != "probe-surface has no ready document" {
 		t.Fatalf("post before ready: %v, want probe-surface has no ready document", err)
-	}
-	if len(fake.posted) != 0 {
-		t.Fatalf("posted before ready: %v", fake.posted)
 	}
 }
 
 // contract: view.channel.queue-full
 func TestViewChannelReportsQueueFullAndForeignFrameWithTheirReasons(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
+	s, _, _ := newLifecycleSurfaces(t)
 	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
 	if err := s.viewMessage("probe-surface", full); err == nil || err.Error() != "queue full for probe" {
 		t.Fatalf("queue full: %v, want queue full for probe", err)
@@ -789,12 +660,12 @@ func TestViewChannelReportsQueueFullAndForeignFrameWithTheirReasons(t *testing.T
 
 // contract: view.restart.limit
 func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *testing.T) {
-	s, fake, native := newLifecycleSurfaces(t)
+	s, views, native := newLifecycleSurfaces(t)
 	for _, offset := range []time.Duration{0, 60 * time.Second, 120 * time.Second, 180 * time.Second} {
-		endView(t, s, fake, viewTestEpoch.Add(offset))
+		endView(t, s, views, viewTestEpoch.Add(offset))
 	}
-	if len(fake.created) != 4 || len(fake.closed) != 4 {
-		t.Fatalf("created %d views and closed %d, want the first view and three restarts, each failure closing its view", len(fake.created), len(fake.closed))
+	if len(views.created) != 4 || len(views.closed) != 4 {
+		t.Fatalf("created %d views and closed %d, want the first view and three restarts, each failure closing its view", len(views.created), len(views.closed))
 	}
 	if _, err := s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err == nil {
 		t.Fatalf("a view is recorded after the restart limit")
@@ -804,11 +675,11 @@ func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *
 	// The reopened surface resolves its folder again; the test replaces the installed-plugin lookup with the same folder.
 	reopened := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	reopened.directory, reopened.folder = "/config/document-data", "/plugins/probe"
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
-		t.Fatalf("sync after the tab is reopened: %v", err)
+	if step := views.sync(t, s, native, true, nullOriginStart()); step != viewSyncCreate {
+		t.Fatalf("the synchronization after the tab is reopened planned step %d, want the creation of the view", step)
 	}
-	if len(fake.created) != 5 {
-		t.Fatalf("views created after the reopen: %d, want the view created again", len(fake.created))
+	if len(views.created) != 5 {
+		t.Fatalf("views created after the reopen: %d, want the view created again", len(views.created))
 	}
 }
 
@@ -831,125 +702,98 @@ func TestViewCallIsForwardedWithItsPluginAndSurface(t *testing.T) {
 
 // contract: view.message.unknown-event
 func TestViewMessageRefusesAnUnknownEventAndForwardsNothing(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
-	events := []hostEvent{}
-	s.events = func(name string, data any) { events = append(events, hostEvent{name, data}) }
-	if err := s.viewMessage("probe-surface", hostMessage(`{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}`)); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	before := len(events)
-	err := s.viewMessage("probe-surface", hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
+	p := echoViewProbe(t)
+	p.ready(t)
+	before := len(p.eventsNow())
+	err := p.message(hostMessage(`{"event":"declared-ui.snapshot","plugin":"probe","status":"probe.lines","seq":1,"value":null,"skipped":0}`))
 	if err == nil || err.Error() != `probe-surface: view event "declared-ui.snapshot" is unknown` {
 		t.Fatalf("unknown event: %v, want probe-surface: view event \"declared-ui.snapshot\" is unknown", err)
 	}
-	if len(events) != before {
+	if events := p.eventsNow(); len(events) != before {
 		t.Fatalf("an unknown event forwarded %v", events[before:])
 	}
 }
 
 // contract: view.call.reply
 func TestViewCallReplyReturnsThroughTheChannelPost(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
+	p := echoViewProbe(t)
+	p.ready(t)
+	before := len(p.received())
+	var replied error
+	p.main(func() {
+		replied = p.s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: 7, Result: json.RawMessage(`{"count":2}`)})
+	})
+	if replied != nil {
+		t.Fatalf("reply: %v", replied)
 	}
-	before := len(fake.posted)
-	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 7, Result: json.RawMessage(`{"count":2}`)}); err != nil {
-		t.Fatalf("reply: %v", err)
-	}
-	if len(fake.posted) != before+1 {
-		t.Fatalf("replies posted: %d, want 1", len(fake.posted)-before)
-	}
-	var reply map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &reply); err != nil {
-		t.Fatalf("reply is not JSON: %v", err)
-	}
+	reply := p.waitReceived(t, before+1)[before]
 	if reply["sok"] != float64(1) || reply["id"] != float64(7) || !reflect.DeepEqual(reply["result"], map[string]any{"count": float64(2)}) {
 		t.Fatalf("reply %v, want sok 1, id 7 and the result", reply)
 	}
-	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}}); err != nil {
-		t.Fatalf("error reply: %v", err)
+	p.main(func() {
+		replied = p.s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: 8, Error: &ViewReplyError{Code: -32000, Message: "tab.state is not declared"}})
+	})
+	if replied != nil {
+		t.Fatalf("error reply: %v", replied)
 	}
-	var failed map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &failed); err != nil {
-		t.Fatalf("error reply is not JSON: %v", err)
-	}
+	failed := p.waitReceived(t, before+2)[before+1]
 	if failed["id"] != float64(8) || failed["error"] == nil {
 		t.Fatalf("error reply %v, want id 8 and the error", failed)
 	}
-	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 9}); err == nil || err.Error() != "view reply 9 has neither a result nor an error" {
-		t.Fatalf("reply without result or error: %v", err)
+	p.main(func() {
+		replied = p.s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: 9})
+	})
+	if replied == nil || replied.Error() != "view reply 9 has neither a result nor an error" {
+		t.Fatalf("reply without result or error: %v", replied)
 	}
 }
 
 // contract: view.call.reply
 func TestViewReplyRecordsTheNativePostResultAfterPosting(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	s.name = "main"
+	isolateTraceRecords(t)
+	p := echoViewProbe(t)
+	p.s.name = "main"
 	const id = uint64(991)
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-		t.Fatalf("ready message: %v", err)
+	p.ready(t)
+	before := len(p.received())
+	req := ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)}
+	var replied error
+	p.main(func() { replied = p.s.replyView(req) })
+	if replied != nil {
+		t.Fatalf("reply: %v", replied)
 	}
-	before := len(fake.posted)
-	postReturned := false
-	fake.afterPost = func() {
-		records.Lock()
-		defer records.Unlock()
-		for _, record := range records.buffer {
-			if record.event == "host.view.reply.dispatch" && strings.Contains(string(record.fields), `"id":991`) {
-				t.Fatalf("dispatch was recorded before native PostDocument returned")
-			}
-		}
-		postReturned = true
+	if reply := p.waitReceived(t, before+1)[before]; reply["id"] != float64(id) {
+		t.Fatalf("the page received %v, want the reply %d", reply, id)
 	}
-	req := ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)}
-	if err := s.replyView(req); err != nil {
-		t.Fatalf("reply: %v", err)
-	}
-	if !postReturned {
-		t.Fatal("native PostDocument callback did not run")
-	}
-	if len(fake.posted) != before+1 {
-		t.Fatalf("native posts: %d, want one additional post", len(fake.posted)-before)
-	}
-	var found []map[string]any
-	records.Lock()
-	for _, record := range records.buffer {
-		if record.event != "host.view.reply.dispatch" {
-			continue
-		}
-		var fields map[string]any
-		if err := json.Unmarshal(record.fields, &fields); err != nil {
-			records.Unlock()
-			t.Fatal(err)
-		}
-		if fields["id"] == float64(id) {
-			found = append(found, fields)
-		}
-	}
-	records.Unlock()
 	want := map[string]any{"window": "main", "page": "page-1", "surface": "probe-surface", "generation": float64(req.Generation), "id": float64(id), "outcome": "result", "disposition": "posted"}
-	if !reflect.DeepEqual(found, []map[string]any{want}) {
-		t.Fatalf("dispatch records %v, want %v after native post", found, want)
+	if !hasViewReplyDispatch(t, id, want) {
+		t.Fatalf("the dispatch record of the reply that the native post accepted is missing or differs from %v", want)
 	}
 }
 
 // contract: view.call.reply
 func TestStaleViewReplyRecordsDiscardWithoutPosting(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	s.name = "main"
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	before := len(fake.posted)
+	isolateTraceRecords(t)
+	p := echoViewProbe(t)
+	p.s.name = "main"
+	p.ready(t)
+	before := len(p.received())
 	const id = uint64(992)
-	current := viewGeneration(s, "probe-surface")
-	if err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: current + 1, ID: id, Result: json.RawMessage(`null`)}); err != nil {
-		t.Fatalf("stale reply: %v", err)
+	current := viewGeneration(p.s, "probe-surface")
+	var replied error
+	p.main(func() {
+		replied = p.s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: current + 1, ID: id, Result: json.RawMessage(`null`)})
+	})
+	if replied != nil {
+		t.Fatalf("stale reply: %v", replied)
 	}
-	if len(fake.posted) != before {
-		t.Fatalf("stale reply posted %d messages", len(fake.posted)-before)
+	// The posts of the host reach the page in order, so the message that follows the stale reply reaches it first if the reply posted nothing.
+	p.main(func() { replied = p.s.postView("probe-surface", map[string]any{"event": "marker"}) })
+	if replied != nil {
+		t.Fatalf("marker: %v", replied)
+	}
+	if got := p.waitReceived(t, before+1); len(got) != before+1 || got[before]["event"] != "marker" {
+		t.Fatalf("the page received %v after the stale reply, want only the marker", got[before:])
 	}
 	if !hasViewReplyDispatch(t, id, map[string]any{
 		"window": "main", "page": "page-1", "surface": "probe-surface",
@@ -963,31 +807,29 @@ func TestStaleViewReplyRecordsDiscardWithoutPosting(t *testing.T) {
 // contract: view.call.reply
 func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake := newViewChannelSurfaces(t)
-	s.name = "main"
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
+	p := echoViewProbe(t)
+	p.s.name = "main"
+	p.ready(t)
 	const id = uint64(994)
-	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":994,"command":"probe.run","params":null}}`); err != nil {
+	if err := p.message(`{"message":{"sok":1,"id":994,"command":"probe.run","params":null}}`); err != nil {
 		t.Fatalf("view call: %v", err)
 	}
-	generation := viewGeneration(s, "probe-surface")
-	before := len(fake.posted)
+	generation := viewGeneration(p.s, "probe-surface")
+	// The view retires: its calls end as the process end ends them, and a view of the next generation replaces it in the registry. The
+	// document of the retired view stays open to the end of the test, which closes the surface.
 	var callsAtProcessEnd []openViewCall
-	fake.beforeUITask = func() {
-		callsAtProcessEnd = s.documents.endViewCalls("probe-surface")
-		if _, err := s.documents.Remove(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
-			t.Fatalf("retire old view: %v", err)
+	var replied error
+	p.main(func() {
+		callsAtProcessEnd = p.openCalls()
+		if _, err := p.s.documents.Remove(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
+			t.Errorf("retire old view: %v", err)
+			return
 		}
-		s.documents.registerView("probe-surface", "probe", generation+1, unsafe.Pointer(new(int)))
-	}
-	err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: generation, ID: id, Result: json.RawMessage(`null`)})
-	if err != nil {
-		t.Fatalf("reply to retired view: %v", err)
-	}
-	if len(fake.posted) != before {
-		t.Fatalf("stale reply posted %d messages, want no native post", len(fake.posted)-before)
+		p.s.documents.registerView("probe-surface", "probe", generation+1, unsafe.Pointer(new(int)))
+		replied = p.s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: generation, ID: id, Result: json.RawMessage(`null`)})
+	})
+	if replied != nil {
+		t.Fatalf("reply to retired view: %v", replied)
 	}
 	if !reflect.DeepEqual(callsAtProcessEnd, []openViewCall{{plugin: "probe", command: "probe.run", id: id}}) {
 		t.Fatalf("open calls available to process-ended settlement: %+v, want the unanswered view call", callsAtProcessEnd)
@@ -1003,7 +845,7 @@ func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
 
 // contract: view.call.reply-generation-scoped-cleanup
 func TestLateOldGenerationReplyKeepsReplacementSameIDCall(t *testing.T) {
-	s, _ := newViewChannelSurfaces(t)
+	s, _, _ := newLifecycleSurfaces(t)
 	old, ok := s.documents.view("probe-surface")
 	if !ok {
 		t.Fatal("the initial view has no channel")
@@ -1023,44 +865,6 @@ func TestLateOldGenerationReplyKeepsReplacementSameIDCall(t *testing.T) {
 	want := []openViewCall{{plugin: old.plugin, command: "replacement.run", id: id}}
 	if !reflect.DeepEqual(calls, want) {
 		t.Fatalf("open calls after the old reply: %+v, want the replacement same-ID call %+v", calls, want)
-	}
-}
-
-// contract: view.call.reply
-func TestViewReplyPostRefusalLeavesCallOpenForProcessEnd(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	const id = uint64(995)
-	if err := s.viewMessage("probe-surface", `{"message":{"sok":1,"id":995,"command":"probe.run","params":null}}`); err != nil {
-		t.Fatalf("view call: %v", err)
-	}
-	fake.rejectPost = true
-	err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)})
-	if err == nil || err.Error() != "probe-surface: the view document refused the message" {
-		t.Fatalf("refused view reply error: %v", err)
-	}
-	if calls := s.documents.endViewCalls("probe-surface"); !reflect.DeepEqual(calls, []openViewCall{{plugin: "probe", command: "probe.run", id: id}}) {
-		t.Fatalf("open calls after refused post: %+v, want the unanswered view call", calls)
-	}
-}
-
-// contract: view.call.reply
-func TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	s.name = "main"
-	if err := s.viewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	fake.rejectPost = true
-	const id = uint64(993)
-	err := s.replyView(ViewReplyRequest{Page: "page-1", Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: id, Result: json.RawMessage(`null`)})
-	if err == nil || err.Error() != "probe-surface: the view document refused the message" {
-		t.Fatalf("refused post error: %v", err)
-	}
-	if hasViewReplyDispatch(t, id, nil) {
-		t.Fatalf("refused native post emitted a dispatch record")
 	}
 }
 
@@ -1176,9 +980,9 @@ func TestViewCallInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
 
 // contract: view.source-generation
 func TestStaleViewCommandsAreCancelledAfterTheViewRestarts(t *testing.T) {
-	s, fake, _ := newLifecycleSurfaces(t)
+	s, views, _ := newLifecycleSurfaces(t)
 	oldGeneration := viewGeneration(s, "probe-surface")
-	endView(t, s, fake, viewTestEpoch)
+	endView(t, s, views, viewTestEpoch)
 	newGeneration := viewGeneration(s, "probe-surface")
 	if newGeneration <= oldGeneration {
 		t.Fatalf("replacement generation %d, want newer than %d", newGeneration, oldGeneration)
@@ -1196,24 +1000,22 @@ func TestStaleViewCommandsAreCancelledAfterTheViewRestarts(t *testing.T) {
 
 // contract: view.event.push
 func TestViewEventKeepsANullDataAsItsValue(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	raw := fmt.Sprintf(`{"surface":"probe-surface","generation":%d,"event":"run-start","data":null}`, viewGeneration(s, "probe-surface"))
+	p := echoViewProbe(t)
+	p.ready(t)
+	before := len(p.received())
+	raw := fmt.Sprintf(`{"surface":"probe-surface","generation":%d,"event":"run-start","data":null}`, viewGeneration(p.s, "probe-surface"))
 	req, err := argument[ViewEventRequest]("request", json.RawMessage(raw))
 	if err != nil {
 		t.Fatalf("event with null data: %v", err)
 	}
-	if accepted, err := s.pushViewEvent(req); err != nil || !accepted {
-		t.Fatalf("push: accepted %v, error %v", accepted, err)
+	var accepted bool
+	var pushed error
+	p.main(func() { accepted, pushed = p.s.pushViewEvent(req) })
+	if pushed != nil || !accepted {
+		t.Fatalf("push: accepted %v, error %v", accepted, pushed)
 	}
-	if got, want := fake.posted[len(fake.posted)-1], `{"data":null,"event":"run-start","sok":1}`; got != want {
-		var posted, expected any
-		if json.Unmarshal([]byte(got), &posted) != nil || json.Unmarshal([]byte(want), &expected) != nil || !reflect.DeepEqual(posted, expected) {
-			t.Fatalf("event message %s, want %s", got, want)
-		}
+	if got, want := p.waitReceived(t, before+1)[before], map[string]any{"data": nil, "event": "run-start", "sok": float64(1)}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("event message %v, want %v", got, want)
 	}
 	if request, err := argument[ViewRequestRequest]("request", json.RawMessage(`{"surface":"probe-surface","generation":1,"id":1,"command":"probe.run","params":null}`)); err != nil || string(request.Params) != "null" {
 		t.Fatalf("request with null params: %s, error %v", request.Params, err)
@@ -1225,33 +1027,36 @@ func TestViewEventKeepsANullDataAsItsValue(t *testing.T) {
 
 // contract: view.event.push
 func TestViewEventPostsTheEventWithItsDataToTheReadyDocument(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)}); err == nil || err.Error() != "probe-surface has no ready document" {
-		t.Fatalf("event before ready: %v, want probe-surface has no ready document", err)
+	p := echoViewProbe(t)
+	var accepted bool
+	var pushed error
+	push := func(request ViewEventRequest) {
+		p.main(func() { accepted, pushed = p.s.pushViewEvent(request) })
 	}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
+	push(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":1}`)})
+	if pushed == nil || pushed.Error() != "probe-surface has no ready document" {
+		t.Fatalf("event before ready: %v, want probe-surface has no ready document", pushed)
 	}
-	before := len(fake.posted)
-	if accepted, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":2}`)}); err != nil || !accepted {
-		t.Fatalf("event: %v", err)
+	p.ready(t)
+	before := len(p.received())
+	push(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), Event: "probe.changed", Data: json.RawMessage(`{"count":2}`)})
+	if pushed != nil || !accepted {
+		t.Fatalf("event: %v", pushed)
 	}
-	if len(fake.posted) != before+1 {
-		t.Fatalf("events posted: %d, want 1", len(fake.posted)-before)
-	}
-	var posted map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &posted); err != nil {
-		t.Fatalf("event message is not JSON: %v", err)
+	posted := p.waitReceived(t, before+1)[before]
+	if len(p.received()) != before+1 {
+		t.Fatalf("events posted: %d, want 1", len(p.received())-before)
 	}
 	if posted["sok"] != float64(1) || posted["event"] != "probe.changed" || !reflect.DeepEqual(posted["data"], map[string]any{"count": float64(2)}) {
 		t.Fatalf("event message %v, want sok 1, event probe.changed and the data", posted)
 	}
-	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "", Data: json.RawMessage(`null`)}); err == nil || err.Error() != "view event has an empty event name" {
-		t.Fatalf("event without a name: %v, want view event has an empty event name", err)
+	push(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), Event: "", Data: json.RawMessage(`null`)})
+	if pushed == nil || pushed.Error() != "view event has an empty event name" {
+		t.Fatalf("event without a name: %v, want view event has an empty event name", pushed)
 	}
-	if _, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "probe.changed"}); err == nil || err.Error() != "view event probe.changed has no data" {
-		t.Fatalf("event without data: %v, want view event probe.changed has no data", err)
+	push(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), Event: "probe.changed"})
+	if pushed == nil || pushed.Error() != "view event probe.changed has no data" {
+		t.Fatalf("event without data: %v, want view event probe.changed has no data", pushed)
 	}
 }
 
@@ -1271,21 +1076,20 @@ func TestViewStatusWatchIsForwardedAndStatusValueIsPosted(t *testing.T) {
 	if string(forwarded) != `{"command":"runtime.status.watch","id":3,"params":{"name":"core.grid"},"plugin":"probe","surface":"probe-surface"}` {
 		t.Fatalf("forwarded call %s, want the command and params of the watch", forwarded)
 	}
-	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
+	p := echoViewProbe(t)
+	p.ready(t)
+	before := len(p.received())
+	var accepted bool
+	var pushed error
+	p.main(func() {
+		accepted, pushed = p.s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), Event: "status", Data: json.RawMessage(`{"name":"core.grid","value":{"tabs":2}}`)})
+	})
+	if pushed != nil || !accepted {
+		t.Fatalf("status event: %v", pushed)
 	}
-	before := len(fake.posted)
-	if accepted, err := s.pushViewEvent(ViewEventRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), Event: "status", Data: json.RawMessage(`{"name":"core.grid","value":{"tabs":2}}`)}); err != nil || !accepted {
-		t.Fatalf("status event: %v", err)
-	}
-	if len(fake.posted) != before+1 {
-		t.Fatalf("events posted: %d, want 1", len(fake.posted)-before)
-	}
-	var posted map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &posted); err != nil {
-		t.Fatalf("event message is not JSON: %v", err)
+	posted := p.waitReceived(t, before+1)[before]
+	if len(p.received()) != before+1 {
+		t.Fatalf("events posted: %d, want 1", len(p.received())-before)
 	}
 	if posted["sok"] != float64(1) || posted["event"] != "status" || !reflect.DeepEqual(posted["data"], map[string]any{"name": "core.grid", "value": map[string]any{"tabs": float64(2)}}) {
 		t.Fatalf("event message %v, want sok 1, event status and the name and value", posted)
@@ -1294,58 +1098,52 @@ func TestViewStatusWatchIsForwardedAndStatusValueIsPosted(t *testing.T) {
 
 // contract: view.command.request
 func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	request := ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 7, Command: "probe.run", Params: json.RawMessage(`{"a":1}`)}
-	if _, err := s.pushViewRequest(request); err == nil || err.Error() != "probe-surface has no ready document" {
-		t.Fatalf("request before ready: %v, want probe-surface has no ready document", err)
+	p := echoViewProbe(t)
+	request := ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: 7, Command: "probe.run", Params: json.RawMessage(`{"a":1}`)}
+	var pushed error
+	push := func(request ViewRequestRequest) {
+		p.main(func() { _, pushed = p.s.pushViewRequest(request) })
 	}
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
+	push(request)
+	if pushed == nil || pushed.Error() != "probe-surface has no ready document" {
+		t.Fatalf("request before ready: %v, want probe-surface has no ready document", pushed)
 	}
-	before := len(fake.posted)
-	if _, err := s.pushViewRequest(request); err != nil {
-		t.Fatalf("request: %v", err)
+	p.ready(t)
+	before := len(p.received())
+	push(request)
+	if pushed != nil {
+		t.Fatalf("request: %v", pushed)
 	}
-	if len(fake.posted) != before+1 {
-		t.Fatalf("requests posted: %d, want 1", len(fake.posted)-before)
-	}
-	var posted map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &posted); err != nil {
-		t.Fatalf("request message is not JSON: %v", err)
-	}
+	posted := p.waitReceived(t, before+1)[before]
 	if posted["sok"] != float64(1) || posted["id"] != float64(7) || posted["command"] != "probe.run" || !reflect.DeepEqual(posted["params"], map[string]any{"a": float64(1)}) {
 		t.Fatalf("request message %v, want sok 1, id 7, command probe.run and the params", posted)
 	}
-	if _, err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 0, Command: "probe.run"}); err == nil || err.Error() != "view request has no id" {
-		t.Fatalf("request without an id: %v, want view request has no id", err)
+	push(ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: 0, Command: "probe.run"})
+	if pushed == nil || pushed.Error() != "view request has no id" {
+		t.Fatalf("request without an id: %v, want view request has no id", pushed)
 	}
-	if _, err := s.pushViewRequest(ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(s, "probe-surface"), ID: 8, Command: ""}); err == nil || err.Error() != "view request 8 has an empty command" {
-		t.Fatalf("request without a command: %v, want view request 8 has an empty command", err)
+	push(ViewRequestRequest{Surface: "probe-surface", Generation: viewGeneration(p.s, "probe-surface"), ID: 8, Command: ""})
+	if pushed == nil || pushed.Error() != "view request 8 has an empty command" {
+		t.Fatalf("request without a command: %v, want view request 8 has an empty command", pushed)
 	}
 	// A request that carries the cids of its cause posts them with the request, and a request without cids posts no member.
 	var caused ViewRequestRequest
 	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","generation":1,"id":9,"command":"probe.run","params":null,"cids":["p1700000000000.7"]}`), &caused); err != nil {
 		t.Fatalf("request with cids: %v", err)
 	}
-	before = len(fake.posted)
-	if _, err := s.pushViewRequest(caused); err != nil {
-		t.Fatalf("request with cids: %v", err)
+	push(caused)
+	if pushed != nil {
+		t.Fatalf("request with cids: %v", pushed)
 	}
-	var withCids map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &withCids); err != nil {
-		t.Fatalf("request message with cids is not JSON: %v", err)
-	}
+	withCids := p.waitReceived(t, before+2)[before+1]
 	if !reflect.DeepEqual(withCids["cids"], []any{"p1700000000000.7"}) {
 		t.Fatalf("request message %v, want the cids of its cause", withCids)
 	}
-	if _, err := s.pushViewRequest(request); err != nil {
-		t.Fatalf("request without cids: %v", err)
+	push(request)
+	if pushed != nil {
+		t.Fatalf("request without cids: %v", pushed)
 	}
-	var withoutCids map[string]any
-	if err := json.Unmarshal([]byte(fake.posted[len(fake.posted)-1]), &withoutCids); err != nil {
-		t.Fatalf("request message without cids is not JSON: %v", err)
-	}
+	withoutCids := p.waitReceived(t, before+3)[before+2]
 	if _, ok := withoutCids["cids"]; ok {
 		t.Fatalf("request message %v carries cids without a cause", withoutCids)
 	}
@@ -1353,8 +1151,9 @@ func TestViewCommandRequestPostsTheRequestToTheReadyDocument(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"surface":"probe-surface","generation":1,"id":10,"command":"probe.run","cids":["p1.7\"x"]}`), &refused); err != nil {
 		t.Fatalf("request with an invalid cid: %v", err)
 	}
-	if _, err := s.pushViewRequest(refused); err == nil || err.Error() != "view request 10 cids must be non-empty strings without a quote, a backslash or a control character" {
-		t.Fatalf("request with an invalid cid: %v, want the cids refusal", err)
+	push(refused)
+	if pushed == nil || pushed.Error() != "view request 10 cids must be non-empty strings without a quote, a backslash or a control character" {
+		t.Fatalf("request with an invalid cid: %v, want the cids refusal", pushed)
 	}
 }
 
@@ -1444,114 +1243,71 @@ type stepFramework struct{ frameworkRecord }
 
 func (stepFramework) Step(task func()) { task() }
 
-// realMonotonicNanos reads the monotonic clock of the registered platform.
-func realMonotonicNanos() (uint64, error) {
-	real, err := platform.Current()
-	if err != nil {
-		return 0, err
+// nestedMainFramework is the framework of a test whose steps run on the main thread and may nest, as the step of a framework does: a step
+// that a task of the main thread starts runs at once in that task.
+type nestedMainFramework struct{ frameworkRecord }
+
+// mainGoroutine is the identity of the goroutine that runs the steps of the main thread, read once by the first step.
+var mainGoroutine struct {
+	sync.Once
+	id string
+}
+
+// goroutineID returns the identity of the calling goroutine, the number in the first line of its stack.
+func goroutineID() string {
+	buffer := make([]byte, 64)
+	buffer = buffer[:runtime.Stack(buffer, false)]
+	fields := strings.Fields(string(buffer))
+	return fields[1]
+}
+
+func (nestedMainFramework) Step(task func()) {
+	mainGoroutine.Do(func() { runOnMainThread(func() { mainGoroutine.id = goroutineID() }) })
+	if goroutineID() == mainGoroutine.id {
+		task()
+		return
 	}
-	return real.MonotonicNanos()
+	runOnMainThread(task)
 }
 
-// layoutPlatform is the platform of a layout test: it runs each task at once and records the commits and the cancels.
-type layoutPlatform struct {
-	platform.Platform
-	commits, cancels chan uint64
-	// noticed is set by a test before it calls the presentation notice, and early records a commit that ran before it.
-	noticed, early atomic.Bool
-	// running counts the tasks that run, so a test ends after the work of its tasks that follows the result they hand on.
-	running sync.WaitGroup
-}
-
-func (p *layoutPlatform) EnqueueUI(task func()) error {
-	p.running.Add(1)
-	defer p.running.Done()
-	task()
-	return nil
-}
-
-// MonotonicNanos reads the monotonic clock of the real platform, so the instants of the dispatch records are real instants.
-func (*layoutPlatform) MonotonicNanos() (uint64, error) { return realMonotonicNanos() }
-
-func (p *layoutPlatform) CommitLayout(_ platform.Window, ticket uint64) bool {
-	if !p.noticed.Load() {
-		p.early.Store(true)
-	}
-	p.commits <- ticket
-	return true
-}
-
-func (p *layoutPlatform) CancelLayoutTicket(_ platform.Window, ticket uint64) error {
-	p.cancels <- ticket
-	return nil
-}
-
-// presentThroughFixture starts a present of ticket through a fixture Frontend and returns the notice that the library asked
-// for, the platform and the end of the present.
-func presentThroughFixture(t *testing.T, ticket uint64) (func(error), *layoutPlatform, chan error) {
+// realLayoutSurfaces returns the surfaces of a real window with its main page, whose window hands each presentation notice that the
+// library asks for to the test, and the native window. The layouts are real transactions of the native layer, the steps run on the main
+// thread, and the window cancels its open layout when the test ends.
+func realLayoutSurfaces(t *testing.T) (*Surfaces, *openFrontend, platform.Window) {
 	t.Helper()
-	fake := &layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 1)}
-	saved, savedFramework := system, framework
-	system, framework = fake, stepFramework{}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
-	// A task hands its result on before it ends: the commit and the cancel write their dispatch record after it (returned_ns), so
-	// the test ends with the end of every task, and no record of its ticket reaches the buffer of a later test.
-	t.Cleanup(fake.running.Wait)
-	window := &noticeFrontend{notices: make(chan func(error), 1)}
+	useCurrentPlatformForViews(t)
+	savedFramework := framework
+	framework = mainThreadFramework{}
+	t.Cleanup(func() { framework = savedFramework })
+	native := support.TitledWindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	t.Cleanup(func() { runOnMainThread(func() { system.CancelLayout(native) }) })
+	window := &openFrontend{noticeFrontend: noticeFrontend{notices: make(chan func(error), 1)}, native: native}
 	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
+	// The page of the window is ready, so the preparation emits no page-ready.
+	s.first.Do(func() {})
+	return s, window, native
+}
+
+// presentPrepared prepares a layout of s and starts the present of its ticket. It returns the notice that the library asked for, the ticket
+// and the end of the present.
+func presentPrepared(t *testing.T, s *Surfaces, window *openFrontend) (func(error), uint64, chan error) {
+	t.Helper()
+	prepared, err := s.SyncSurfaces(SyncRequest{Titlebar: 40, Settled: true})
+	if err != nil {
+		t.Fatalf("the preparation failed: %v", err)
+	}
 	finished := make(chan error, 1)
 	go func() {
-		_, err := s.PresentSurfaces(PresentRequest{Ticket: ticket})
+		_, err := s.PresentSurfaces(PresentRequest{Ticket: prepared.Ticket, Settled: true})
 		finished <- err
 	}()
 	select {
 	case notice := <-window.notices:
-		return notice, fake, finished
+		return notice, prepared.Ticket, finished
 	case err := <-finished:
 		t.Fatalf("the present ended without the presentation notice of the Frontend: %v", err)
 	}
-	return nil, nil, nil
-}
-
-// The layout transaction commits only after the presentation notice of the Frontend calls back.
-// contract: surface-layout.commits-after-the-presentation-notice
-func TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend(t *testing.T) {
-	notice, fake, finished := presentThroughFixture(t, 7)
-	// The commit records whether it ran before the notice; a failed notice ends the present without a commit
-	// (TestAFailedPresentationNoticeCancelsTheLayout).
-	fake.noticed.Store(true)
-	notice(nil)
-	ticket := <-fake.commits
-	if ticket != 7 {
-		t.Fatalf("the layout committed ticket %d, want 7", ticket)
-	}
-	if err := <-finished; err != nil {
-		t.Fatalf("the present failed: %v", err)
-	}
-	if fake.early.Load() {
-		t.Fatal("the layout committed before the presentation notice")
-	}
-}
-
-// A presentation notice that fails cancels the layout transaction and ends the present with its error.
-// contract: surface-layout.commits-after-the-presentation-notice
-func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
-	notice, fake, finished := presentThroughFixture(t, 8)
-	notice(errors.New("the window holds its frames"))
-	select {
-	case ticket := <-fake.cancels:
-		if ticket != 8 {
-			t.Fatalf("the layout cancelled ticket %d, want 8", ticket)
-		}
-	}
-	if err := <-finished; err == nil || !strings.Contains(err.Error(), "the window holds its frames") {
-		t.Fatalf("the present ended with %v, want the error of the notice", err)
-	}
-	select {
-	case ticket := <-fake.commits:
-		t.Fatalf("a failed notice committed ticket %d", ticket)
-	default:
-	}
+	return nil, 0, nil
 }
 
 // contract: performance.surface.dispatch-records-the-raster-wait
@@ -1563,16 +1319,25 @@ func TestAFailedPresentationNoticeCancelsTheLayout(t *testing.T) {
 func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
 	isolateTraceRecords(t)
 	performanceOn.Store(false)
-	notice, fake, finished := presentThroughFixture(t, 9)
+	s, window, _ := realLayoutSurfaces(t)
+	notice, ticket, finished := presentPrepared(t, s, window)
 	notice(nil)
-	<-fake.commits
 	if err := <-finished; err != nil {
 		t.Fatalf("the present failed: %v", err)
 	}
 	want := []string{"present-prepare-ui", "present-dom-register-ui", "present-dom-callback", "present-raster-wait", "present-commit-ui"}
 	// The callback and the commit write their records after they hand their result on, so the check waits until the buffer
 	// holds a record of every stage.
-	records := awaitTraces(t, "host.frame.surface.dispatch", len(want))
+	// The records of the preparation of the ticket are in the buffer too: the stages of the present are the records of that operation.
+	var records []map[string]any
+	for count := len(want); len(records) < len(want); count++ {
+		records = nil
+		for _, record := range awaitTraces(t, "host.frame.surface.dispatch", count) {
+			if record["operation"] == "present" {
+				records = append(records, record)
+			}
+		}
+	}
 	entered := func(record map[string]any) uint64 {
 		text, _ := record["entered_ns"].(string)
 		value, err := strconv.ParseUint(text, 10, 64)
@@ -1584,7 +1349,7 @@ func TestAPresentationRecordsEachOfItsStagesInOrder(t *testing.T) {
 	slices.SortStableFunc(records, func(a, b map[string]any) int { return cmp.Compare(entered(a), entered(b)) })
 	var stages []string
 	for _, record := range records {
-		if record["operation"] != "present" || record["ticket"] != float64(9) {
+		if record["operation"] != "present" || fmt.Sprint(record["ticket"]) != fmt.Sprint(ticket) {
 			t.Fatalf("a presentation record names another operation or ticket: %#v", record)
 		}
 		stages = append(stages, record["stage"].(string))
@@ -1708,168 +1473,5 @@ func TestASurfaceAlignedInAWindowWithoutABackingScaleFails(t *testing.T) {
 		if _, _, err := fittedRect(fitted, scale); err == nil || !strings.Contains(err.Error(), "backing scale") {
 			t.Fatalf("the region fitted at scale %v ended with %v, want a failure naming the backing scale", scale, err)
 		}
-	}
-}
-
-// layoutOrderPlatform is the platform of the layout order test: it runs each task at once, begins each layout at once and records, in
-// their order, the layouts that begin, the frames that it sets on the surface hosts and the commits and cancels of the layouts.
-type layoutOrderPlatform struct {
-	platform.Platform
-	mu     sync.Mutex
-	events []string
-	frames map[unsafe.Pointer]platform.Rect
-}
-
-func (p *layoutOrderPlatform) record(event string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.events = append(p.events, event)
-}
-
-func (p *layoutOrderPlatform) recorded() []string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return append([]string(nil), p.events...)
-}
-
-func (p *layoutOrderPlatform) EnqueueUI(task func()) error {
-	task()
-	return nil
-}
-
-// MonotonicNanos reads the monotonic clock of the real platform.
-func (*layoutOrderPlatform) MonotonicNanos() (uint64, error) { return realMonotonicNanos() }
-
-func (*layoutOrderPlatform) MainWebview(platform.Window) (unsafe.Pointer, error) {
-	return unsafe.Pointer(new(byte)), nil
-}
-
-func (*layoutOrderPlatform) SetWindowOverlays(unsafe.Pointer, []platform.WindowOverlay) error {
-	return nil
-}
-
-func (*layoutOrderPlatform) TitlebarHeight(platform.Window) (float64, error) { return 40, nil }
-
-func (*layoutOrderPlatform) SetTitlebarHeight(platform.Window, float64) error { return nil }
-
-func (*layoutOrderPlatform) WindowControls(platform.Window) (platform.Rect, error) {
-	return platform.Rect{X: 8, Y: 8, W: 60, H: 16}, nil
-}
-
-func (*layoutOrderPlatform) WatchInput(platform.Window, platform.Input) (uintptr, error) {
-	return 1, nil
-}
-
-func (p *layoutOrderPlatform) BeginLayout(_ platform.Window, ticket uint64, ready func(bool)) error {
-	p.record(fmt.Sprintf("begin %d", ticket))
-	ready(true)
-	return nil
-}
-
-func (*layoutOrderPlatform) CreateSurface(platform.Window) (unsafe.Pointer, error) {
-	return unsafe.Pointer(new(byte)), nil
-}
-
-func (*layoutOrderPlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, float64, error) {
-	return at, 2, nil
-}
-
-func (p *layoutOrderPlatform) SetSurfaceBounds(surface unsafe.Pointer, x, y, w, h float64) {
-	p.mu.Lock()
-	p.frames[surface] = platform.Rect{X: x, Y: y, W: w, H: h}
-	p.mu.Unlock()
-	p.record(fmt.Sprintf("frame %g,%g %gx%g", x, y, w, h))
-}
-
-func (p *layoutOrderPlatform) SurfaceFrame(surface unsafe.Pointer) platform.Rect {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.frames[surface]
-}
-
-func (*layoutOrderPlatform) SetSurfaceHiddenHandle(unsafe.Pointer, bool)                            {}
-func (*layoutOrderPlatform) SetSurfaceAlphaHandle(unsafe.Pointer, float64)                          {}
-func (*layoutOrderPlatform) PlaceDocument(unsafe.Pointer, float64, float64, float64, float64, bool) {}
-
-func (p *layoutOrderPlatform) CommitLayout(_ platform.Window, ticket uint64) bool {
-	p.record(fmt.Sprintf("commit %d", ticket))
-	return true
-}
-
-func (p *layoutOrderPlatform) CancelLayoutTicket(_ platform.Window, ticket uint64) error {
-	p.record(fmt.Sprintf("cancel %d", ticket))
-	return nil
-}
-
-// The native content and the page of one layout reach the screen in one transaction: the preparation begins the layout of its
-// ticket and sets the frame of each surface in it, the page draws that layout, and the presentation of the ticket commits it only
-// after the presentation notice of the page called back, with the frame of the preparation unchanged
-// (docs/spec/native-surfaces.md#acceptance-criteria).
-// contract: surface-layout.commits-the-prepared-geometry-with-its-ticket
-func TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNotice(t *testing.T) {
-	fake := &layoutOrderPlatform{frames: map[unsafe.Pointer]platform.Rect{}}
-	saved, savedFramework := system, framework
-	system, framework = fake, stepFramework{}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
-	window := &noticeFrontend{notices: make(chan func(error), 1)}
-	s := &Surfaces{window: window, invoke: func(task func()) { task() }, views: map[string]*nativeWebview{}, named: map[uintptr]string{},
-		compositions: map[string]SurfaceComposition{}, surfacePlugins: map[string]string{}, images: NewImages(), documents: NewDocuments(),
-		sidecars: &Sidecars{}, sourceOrigins: newSourceOrigins()}
-	composition := SurfaceComposition{Kind: "view", Page: "ui/page.html"}
-	s.compositions["tab"] = composition
-	// The page of the window is ready, so the preparation emits no page-ready.
-	s.first.Do(func() {})
-	s.surfacePlugins["tab"] = "p"
-	key := DocumentKey{Surface: "tab", Name: viewRegionName}
-	if err := s.documents.Reserve(key); err != nil {
-		t.Fatal(err)
-	}
-	s.documents.Set(key, unsafe.Pointer(new(byte)))
-	slot := Rect{X: 10, Y: 20, W: 300, H: 200}
-	prepared, err := s.SyncSurfaces(SyncRequest{Titlebar: 40, Settled: true, Surfaces: []Surface{
-		{ID: "tab", Visible: true, Plugin: "p", Rect: slot, Composition: composition, Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`)}},
-	}})
-	if err != nil {
-		t.Fatalf("the preparation failed: %v", err)
-	}
-	frame := "frame 10,20 300x200"
-	if want := []string{fmt.Sprintf("begin %d", prepared.Ticket), frame}; !reflect.DeepEqual(fake.recorded(), want) {
-		t.Fatalf("the preparation made %v, want the begin of its ticket and then the frame of its surface %v", fake.recorded(), want)
-	}
-	if len(prepared.Placements) != 1 || prepared.Placements[0].Rect != slot {
-		t.Fatalf("the preparation answers the placements %v, want the slot %v", prepared.Placements, slot)
-	}
-	finished := make(chan []Placement, 1)
-	failed := make(chan error, 1)
-	go func() {
-		placed, err := s.PresentSurfaces(PresentRequest{Ticket: prepared.Ticket, Placements: prepared.Placements, Settled: true})
-		if err != nil {
-			failed <- err
-			return
-		}
-		finished <- placed
-	}()
-	var notice func(error)
-	select {
-	case notice = <-window.notices:
-	case err := <-failed:
-		t.Fatalf("the presentation ended before it asked for the presentation notice: %v", err)
-	}
-	// The presentation waits for the notice: until it calls back, the layout of the ticket is neither committed nor placed again.
-	if got := fake.recorded(); len(got) != 2 {
-		t.Fatalf("before the presentation notice the layout made %v", got[2:])
-	}
-	notice(nil)
-	var placed []Placement
-	select {
-	case placed = <-finished:
-	case err := <-failed:
-		t.Fatalf("the presentation failed: %v", err)
-	}
-	if want := []string{fmt.Sprintf("begin %d", prepared.Ticket), frame, fmt.Sprintf("commit %d", prepared.Ticket)}; !reflect.DeepEqual(fake.recorded(), want) {
-		t.Fatalf("the layout made %v, want %v: the commit of the prepared ticket after the notice, with the frame of the preparation", fake.recorded(), want)
-	}
-	if len(placed) != 1 || placed[0].Rect != slot {
-		t.Fatalf("the presentation answers the frames %v read at its commit, want the prepared slot %v", placed, slot)
 	}
 }

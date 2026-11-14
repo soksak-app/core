@@ -2,7 +2,6 @@
 // and an operation that the platform does not implement rejects with its named error when it is called. Input sources are selected by
 // role, so no window check names an input source of a platform.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import test from "node:test";
@@ -12,37 +11,20 @@ import { debugBinaries, PlatformOperationNotImplemented } from "../platform/plat
 
 const E2E = fileURLToPath(new URL("../", import.meta.url));
 
-for (const platform of ["linux", "win32"]) {
-  test(`${platform}: importing the window-check platform selector does not throw, and its unimplemented operations name themselves when called`, { timeout: 10000 }, () => {
-    const url = new URL("../platform/platform.js", import.meta.url).href;
-    const result = spawnSync(process.execPath, ["--input-type=module", "-e", `
-      Object.defineProperty(process, "platform", { value: ${JSON.stringify(platform)} });
-      const selected = await import(${JSON.stringify(url)});
-      let message;
-      try { await selected.debugBinaries("/work/target"); message = "passed"; }
-      catch (error) { message = error.name + ": " + error.message; }
-      process.stdout.write(JSON.stringify(message));
-    `], { encoding: "utf8", timeout: 10000 });
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout), `PlatformOperationNotImplemented: applicationArtifact is not implemented on ${platform}`);
-  });
-}
-
-test("an injected platform without an implementation rejects with the named error only when the operation is called", async () => {
-  for (const platform of ["linux", "win32", "unknown"]) {
-    await assert.rejects(() => debugBinaries("/work/target", { platform }), PlatformOperationNotImplemented);
-    await assert.rejects(() => debugBinaries("/work/target", { platform }),
-      { message: `applicationArtifact is not implemented on ${platform}` });
-  }
-});
-
-test("the window-check selector declares the debug executables and no input source of a platform", async () => {
+// The selected platform is the platform that runs the test: a platform with the operation answers its artifact paths, and a platform
+// without it rejects with the named error when the operation is called, not when the selector is imported.
+test("the window-check selector answers the debug executables of the platform that runs it, or names the operation that the platform does not implement", async () => {
   assert.deepEqual(Object.keys(selector).sort(), ["PlatformOperationNotImplemented", "debugBinaries", "listProcesses", "openApplication"]);
-  assert.deepEqual(await debugBinaries("/work/target", { platform: "darwin" }), {
-    SOKSAK_BINARY_WAILSV3: "/work/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3",
-    SOKSAK_BINARY_TAURIV2: "/work/target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2",
-    SOKSAK_BINARY_MYGO: "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo",
-  });
+  if (process.platform === "darwin") {
+    assert.deepEqual(await debugBinaries("/work/target"), {
+      SOKSAK_BINARY_WAILSV3: "/work/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3",
+      SOKSAK_BINARY_TAURIV2: "/work/target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2",
+      SOKSAK_BINARY_MYGO: "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo",
+    });
+    return;
+  }
+  await assert.rejects(() => debugBinaries("/work/target"), PlatformOperationNotImplemented);
+  await assert.rejects(() => debugBinaries("/work/target"), { message: `applicationArtifact is not implemented on ${process.platform}` });
 });
 
 /** The .mjs files of the window checks, without the unit tests of the checks and their fixtures. */

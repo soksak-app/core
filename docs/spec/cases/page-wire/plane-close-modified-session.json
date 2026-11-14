@@ -1,0 +1,1021 @@
+{
+  "name": "plane-close-modified-session",
+  "description": "The page asks for the notification state; each question about a modified tab shows the native modal and hides it on the answer; a save that the person chooses is forwarded to the surface as the command of its plugin, and the surface answers it with a result or with the error of the command after the test releases the reply; the page writes the failures of the saves as workbench error records in its log batches.",
+  "replay": false,
+  "reason": "The calls show and hide a native modal and forward a command to a surface of a window, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "a31d459a-7ccd-48f8-89d7-79acb5166b94",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 6,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999970647,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4970191831,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000637,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000181247,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000632,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5000177081,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000141295,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5140840039,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000204153,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5203697206,
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000223920,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5223464456,
+      "source": "page"
+    },
+    "ts-us-8": {
+      "type": "integer",
+      "example": 1791000000223910,
+      "source": "page"
+    },
+    "mono-ns-8": {
+      "type": "integer",
+      "example": 5223454414,
+      "source": "page"
+    },
+    "ts-us-9": {
+      "type": "integer",
+      "example": 1791000000576797,
+      "source": "page"
+    },
+    "mono-ns-9": {
+      "type": "integer",
+      "example": 5576341872,
+      "source": "page"
+    },
+    "ts-us-10": {
+      "type": "integer",
+      "example": 1791000000675809,
+      "source": "page"
+    },
+    "mono-ns-10": {
+      "type": "integer",
+      "example": 5675353997,
+      "source": "page"
+    },
+    "ts-us-11": {
+      "type": "integer",
+      "example": 1791000000675794,
+      "source": "page"
+    },
+    "mono-ns-11": {
+      "type": "integer",
+      "example": 5675338247,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 1,
+          "surface": "tab-cccccc",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-cccccc"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us",
+              "mono_ns": "$mono-ns",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "tab error tab-cccccc",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save left the tab modified"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 6
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 2,
+          "surface": "tab-eeeeee",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-eeeeee"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "error": {
+            "code": -32000,
+            "message": "write refused"
+          }
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-5",
+              "mono_ns": "$mono-ns-5",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "tab error tab-eeeeee",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save: write refused"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 3,
+          "surface": "tab-gggggg",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-gggggg"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "error": {
+            "code": -32000,
+            "message": "first write refused"
+          }
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-6",
+              "mono_ns": "$mono-ns-6",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "tab error tab-gggggg",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save: first write refused"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-7",
+              "mono_ns": "$mono-ns-7",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 6
+              }
+            },
+            {
+              "ts_us": "$ts-us-8",
+              "mono_ns": "$mono-ns-8",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "warn",
+                "count": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 4,
+          "surface": "tab-gggggg",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-gggggg"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 5,
+          "surface": "tab-iiiiii",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-iiiiii"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 6,
+          "surface": "tab-mmmmmm",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-mmmmmm"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-9",
+              "mono_ns": "$mono-ns-9",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "tab error tab-mmmmmm",
+                "text": "저장하지 못했습니다 · fixture-close-modified.save left the tab modified"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "exposureForward",
+        "payload": {
+          "id": 7,
+          "surface": "tab-oooooo",
+          "method": "command.run",
+          "params": {
+            "name": "fixture-close-modified.save",
+            "params": {},
+            "surface": "tab-oooooo"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "result": null
+        },
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"save\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:2}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(0, 0, 0)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-10",
+              "mono_ns": "$mono-ns-10",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 12
+              }
+            },
+            {
+              "ts_us": "$ts-us-11",
+              "mono_ns": "$mono-ns-11",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

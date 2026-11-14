@@ -12,7 +12,7 @@ export function recordsOf(name, request) {
 /** The clocks of the host as the request `{action: "clock"}` of the log call is answered; the batcher of the page needs this answer before its first batch. */
 export const hostClock = { ts_us: 1_791_000_000_000_456, mono_ns: 5_000_000_789 };
 
-/** The answer of a fake host to the clock request, or undefined when the call is another one. */
+/** The reply of the host to the clock request, or undefined when the call is another one. */
 export const clockAnswer = (name, request) => (name === "log" && request?.action === "clock" ? hostClock : undefined);
 
 /** A batch request without the statement of the anchor (workbench.log.clock), which leads the first batch of a page and has its own test in log-batch.test.mjs. */

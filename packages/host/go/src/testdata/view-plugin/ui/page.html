@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>probe view</title>
+<script>
+// The view reports to the host through the sok-view handler, as the channel script of the application does: a call carries sok 1, an id, a
+// command and its params, and the ready message names the plugin and the document.
+const send = (message) => window.webkit.messageHandlers['sok-view'].postMessage(message);
+let calls = 0;
+// The first call reports the address of the page and what its first script reads: the theme and the start values of its surface.
+send({ sok: 1, id: ++calls, command: 'probe.opened', params: { href: location.href, theme: window.sokTheme ?? null, surface: window.sokSurface ?? null, channel: window.sokChannel ?? null } });
+send({ event: 'view.ready', plugin: 'probe', document: 'doc-1', time_origin: performance.timeOrigin });
+// Each message that the host posts to the document is reported back as a call with the message as its params.
+window.addEventListener('message', (event) => send({ sok: 1, id: ++calls, command: 'probe.received', params: event.data }));
+</script>
+</head>
+<body></body>
+</html>

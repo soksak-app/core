@@ -3,20 +3,15 @@ package host
 import "testing"
 
 // contract: view.channel.ui-thread
+// A theme change comes from the binding of the main page, which runs outside the UI thread, and the post of the host to the document runs
+// in a step of the UI thread: the native post asserts the main thread, so a post that ran on the goroutine of the change would end the
+// process.
 func TestViewPostsRunOnTheUIThread(t *testing.T) {
-	s, fake := newViewChannelSurfaces(t)
-	ready := `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
-	if err := s.viewMessage("probe-surface", ready); err != nil {
-		t.Fatalf("ready message: %v", err)
-	}
-	// A theme change comes from the binding of the main page, which runs outside the UI thread.
-	s.postThemeToViews()
-	if len(fake.postedOnUI) != 2 {
-		t.Fatalf("posts %d, want the theme after ready and the theme change", len(fake.postedOnUI))
-	}
-	for i, onUI := range fake.postedOnUI {
-		if !onUI {
-			t.Fatalf("post %d reached the native document outside a UI-thread task", i)
-		}
+	p := echoViewProbe(t)
+	p.ready(t)
+	p.s.invoke = mainThreadStep
+	p.s.postThemeToViews()
+	if theme := p.waitReceived(t, 2)[1]; theme["event"] != "theme" {
+		t.Fatalf("the page received %v after the theme change, want the theme", theme)
 	}
 }

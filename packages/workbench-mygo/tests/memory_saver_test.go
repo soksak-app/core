@@ -27,7 +27,7 @@ type savedTimer struct {
 	canceled bool
 }
 
-// saverHarness is the memory saver over fakes of its ports, with a clock that only tick moves.
+// saverHarness is the memory saver over ports that read the keeps, regions and settings that the test holds as data, with an instant that only tick moves.
 type saverHarness struct {
 	saver    *workbench.MemorySaver
 	now      int64

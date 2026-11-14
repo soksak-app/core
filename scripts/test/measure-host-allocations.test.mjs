@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { B3_MEASUREMENTS, b3Output, heapTotals, measure, parseOptions, prepare, windowFrames } from "../measure-host-allocations.mjs";
-import { SETTLE_RULE } from "../footprints.mjs";
+import { SETTLE_RULE, settleStep, settleWaitMs } from "../footprints.mjs";
+import { B3_MEASUREMENTS, b3Output, elapsedSince, heapTotals, minuteWaitMs, parseOptions, prepare, recordPhase, windowFrames } from "../measure-host-allocations.mjs";
 
 test("the totals are the nodes and bytes of the line of all zones, and output without it is an error", () => {
   assert.deepEqual(heapTotals("Process 7: 9 zones\nAll zones: 77466 nodes malloced - Sizes: 32[1]\nAll zones: 77466 nodes (18570120 bytes)\n"),
@@ -13,37 +13,38 @@ test("the totals are the nodes and bytes of the line of all zones, and output wi
   assert.throws(() => heapTotals("heap: no such process"), /heap printed no line "All zones: N nodes \(B bytes\)": heap: no such process/);
 });
 
-test("the measurement records the totals and the footprint at start and each minute, then the footprint after it settles by the rule of G3", async () => {
+test("each phase of the measurement logs the totals and the footprint of the process at its elapsed time", async () => {
   const entries = [];
-  const waits = [];
-  let clock = 0;
   let calls = 0;
-  const footprints = [100, 200, 300, 900 * 1024, 900 * 1024 + 1000];
-  const frames = [[40], [41], [41], [41], [41], [41]];
-  const settledBytes = await measure({
-    pid: 7, minutes: 2,
+  const phase = (name, elapsedMs, footprint) => recordPhase({
+    phase: name, elapsedMs, pid: 7,
     totals: () => ({ nodes: ++calls, bytes: calls * 10 }),
-    footprint: async (pid) => {
-      assert.equal(pid, 7);
-      return footprints.shift();
-    },
+    footprint: async (pid) => { assert.equal(pid, 7); return footprint; },
     readWindows: async () => [{ window: "w1", occluded: false }],
-    readFrames: async () => frames.shift(),
-    wait: async (ms) => {
-      waits.push(ms);
-      clock += ms;
-    },
     log: (entry) => entries.push(entry),
-    now: () => clock,
   });
-  assert.equal(settledBytes, 900 * 1024 + 1000, "the settled footprint is the second of the two readings that are closer than 1,024 KB after the last frame");
+  await phase("start", 0, 100);
+  await phase("minute 1", 60000, 200);
+  await phase("minute 2", 120000, 300);
   assert.deepEqual(entries, [
     { phase: "start", elapsedMs: 0, pid: 7, nodes: 1, bytes: 10, footprint: 100 },
     { phase: "minute 1", elapsedMs: 60000, pid: 7, nodes: 2, bytes: 20, footprint: 200 },
     { phase: "minute 2", elapsedMs: 120000, pid: 7, nodes: 3, bytes: 30, footprint: 300 },
-    { phase: "settled", elapsedMs: 120000 + 2 * SETTLE_RULE.intervalMs - (SETTLE_RULE.intervalMs - SETTLE_RULE.quietMs), pid: 7, footprint: 900 * 1024 + 1000 },
   ]);
-  assert.deepEqual(waits, [60000, 60000, SETTLE_RULE.quietMs, SETTLE_RULE.intervalMs - SETTLE_RULE.quietMs, SETTLE_RULE.quietMs]);
+});
+
+test("the waits of the measurement are functions of instants: minute k is k minutes after the start, and the settle rule waits 3 and 5 seconds", () => {
+  assert.deepEqual([0, 30000, 60000, 61000].map((now) => minuteWaitMs({ startedAt: 0, now, minute: 1 })), [60000, 30000, 0, 0]);
+  assert.deepEqual([1000, 61500, 121000].map((now) => minuteWaitMs({ startedAt: 1000, now, minute: 2 })), [120000, 59500, 0]);
+  assert.equal(elapsedSince({ startedAt: 1000, now: 121000.4 }), 120000);
+  // The settle after minute 2: two readings 5 seconds apart, 3 seconds after each frames reading, whose footprints are close and quiet.
+  assert.equal(settleWaitMs({ wait: "quiet", since: 0, now: 0 }), SETTLE_RULE.quietMs);
+  assert.equal(settleWaitMs({ wait: "interval", since: 0, now: SETTLE_RULE.quietMs }), SETTLE_RULE.intervalMs - SETTLE_RULE.quietMs);
+  const first = new Map([[7, 900 * 1024]]);
+  const second = new Map([[7, 900 * 1024 + 1000]]);
+  assert.equal(settleStep({ previous: null, framesBefore: [41], frames: [41], footprints: first, reading: 1, readings: 24 }), "again");
+  assert.equal(settleStep({ previous: { footprints: first }, framesBefore: [41], frames: [41], footprints: second, reading: 2, readings: 24 }), "settled",
+    "the settled footprint is the second of the two readings that are closer than 1,024 KB after the last frame");
 });
 
 test("the frames of the windows are counts or null, and another value is an error that names the window", () => {
@@ -70,19 +71,20 @@ test("B3_MEASUREMENTS declares hostFootprintKb, the settled footprint in KB that
   assert.equal(b3Output({ settledBytes: 1024, windows, trace: 1, policy }).conditions.traceState, true);
 });
 
-test("a covered window fails the measurement at the reading that finds it: at the start, at a minute and after the settle", async () => {
+test("a covered window fails the measurement at the reading that finds it: at the start and at a minute", async () => {
   for (const [readings, phases] of [[[true], []], [[false, true], ["start"]], [[false, false, true], ["start", "minute 1"]]]) {
     const entries = [];
-    await assert.rejects(measure({
-      pid: 7, minutes: 1,
+    const phase = (name) => recordPhase({
+      phase: name, elapsedMs: 0, pid: 7,
       totals: () => ({ nodes: 1, bytes: 1 }),
       footprint: async () => 1,
-      readFrames: async () => [1],
       readWindows: async () => [{ window: "w1", occluded: readings.shift() }],
-      wait: async () => {},
       log: (entry) => entries.push(entry),
-    }), /window w1 reports occluded true; the measurement requires occluded false/);
-    assert.deepEqual(entries.map(({ phase }) => phase), phases);
+    });
+    await assert.rejects(async () => {
+      for (const name of ["start", "minute 1", "settled"]) await phase(name);
+    }, /window w1 reports occluded true; the measurement requires occluded false/);
+    assert.deepEqual(entries.map(({ phase: name }) => name), phases);
   }
 });
 

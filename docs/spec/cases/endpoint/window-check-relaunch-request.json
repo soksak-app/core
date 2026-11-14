@@ -1,0 +1,10 @@
+{
+  "name": "window-check-relaunch-request",
+  "description": "A session asks the host to relaunch with diagnostics.host.relaunch and receives its answer before the old process ends.",
+  "replay": false,
+  "reason": "The case ends the process of the host, and the replay would relaunch the application under test.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.host.relaunch", "params": {"window": "main"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}}
+  ]
+}

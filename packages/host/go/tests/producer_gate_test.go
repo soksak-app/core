@@ -65,7 +65,7 @@ func TestABindingCallThatThePolicyDoesNotStoreIsCountedAndAFailedOneIsStored(t *
 func TestAnEndpointRequestThatThePolicyDoesNotStoreIsCounted(t *testing.T) {
 	log := support.UseEventLog(t)
 	narrowCalls(t, log, "warn")
-	_, address, _ := serve(t, newFakeBackend())
+	_, address, _, _ := servePage(t)
 	conn := dial(t, address)
 	call(t, conn, 1, "windows.list", nil)
 	call(t, conn, 2, "windows.list", nil)

@@ -33,7 +33,7 @@ func TestAViewMessageAboveTheSafeIntegerLimitIsRefused(t *testing.T) {
 
 // contract: source-origin.atomic-snapshot-keeps-floor-and-only-current-sources
 func TestViewSourceOriginsReturnsCurrentWindowSnapshot(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	oldGeneration, err := surfaces.sourceOriginState().create("tab-one")
 	if err != nil {
 		t.Fatal(err)

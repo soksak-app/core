@@ -1,0 +1,23 @@
+{
+  "name": "testing-command-request",
+  "description": "A command of the view runs by a request of the host and replies with its result.",
+  "plugin": "probe",
+  "replay": false,
+  "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "steps": [
+    {"call":{"command":"runtime.command.register","params":{"name":"probe.add"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.on","params":{"name":"exposure-request"}}},
+    {"reply":{"result":null}},
+    {"request":{"id":1001,"command":"probe.add","params":{"by":2}}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.document"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.input"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.hit"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.clock"}}}},
+    {"reply":{"result":null}},
+    {"request":{"id":1002,"command":"probe.add","params":{"by":"x"}}}
+  ]
+}

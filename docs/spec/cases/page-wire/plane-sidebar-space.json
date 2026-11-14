@@ -1,0 +1,174 @@
+{
+  "name": "plane-sidebar-space",
+  "description": "The page reads the notification state of the window once at its start. A sidebar of a layout that is held while the project state shows the library sends no call; the close of the document moves the focus, and the one input event that the gate refused is reported in the batch of the flush.",
+  "replay": false,
+  "reason": "The notification state is the state of the notification center of the native host, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000501,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": 1791000000000456,
+              "mono_ns": 5000000789,
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

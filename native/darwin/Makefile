@@ -12,7 +12,8 @@
 #                         document region, image region, release of a closed window, and window object count.
 #                         It does not activate the application
 #   make test-app-activation  runs the overlapping webview input check through the local monitor of an application that is
-#                         really active, the fullscreen check, and the Korean input method composition check of the image region.
+#                         really active, the fullscreen check, the Korean input method composition check of the image region and the
+#                         input source restoration on the system.
 #                         It activates the application and takes the focus
 #   make benchmark        measures the calling thread cost of one record (the current text record and the event ring). It prints numbers and asserts nothing
 #   make benchmark-document
@@ -234,6 +235,8 @@ $(BUILD)/capture_preparation_test: src/capture.m
 
 $(BUILD)/window_show_hold_test: src/capture.m src/window_reveal.m
 
+$(BUILD)/capture_hold_error_test: src/capture.m src/window_reveal.m
+
 $(BUILD)/capture_pressure_test: src/capture.m src/host_api_capture.m
 
 $(BUILD)/capture_storage_test: src/capture.m
@@ -358,6 +361,7 @@ NATIVE_TESTS = observe_test \
   image_region_decoration_test \
   iosurface_use_count_test \
   image_region_lease_test \
+  host_test_regions_test \
   image_region_spare_test \
   image_region_scale_test \
   ime_reference_state_test \
@@ -370,10 +374,9 @@ NATIVE_TESTS = observe_test \
   capture_boundary_test \
   temporary_folder_test \
   document_store_end_test \
-  capture_stop_intake_test \
   capture_cleanup_test \
   capture_preparation_test \
-  capture_pressure_test \
+  capture_hold_error_test \
   capture_storage_test \
   capture_metadata_test \
   capture_display_link_test \
@@ -396,6 +399,8 @@ NATIVE_E2E_TESTS = window_titlebar_layout_test \
   capture_file_checker_test \
   capture_directory_checker_test \
   capture_cycles_test \
+  capture_stop_intake_test \
+  capture_pressure_test \
   window_show_hold_test
 
 comma := ,
@@ -425,8 +430,8 @@ test-capture-stop-intake: $(BUILD)/capture_stop_intake_test
 test-pressure: $(BUILD)/document_pressure_test
 	@$(BUILD)/document_pressure_test
 
-test-app-activation: $(BUILD)/webview_input_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_ime_test $(BUILD)/input_virtual_ime_test $(BUILD)/ime_person_app
-	@SOKSAK_IME_PERSON_APP="$(BUILD)/ime_person_app" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) window_fullscreen_test webview_input_test,--monitor image_region_ime_test input_virtual_ime_test
+test-app-activation: $(BUILD)/webview_input_test $(BUILD)/window_fullscreen_test $(BUILD)/image_region_ime_test $(BUILD)/input_virtual_ime_test $(BUILD)/ime_source_restore_system_test $(BUILD)/ime_person_app
+	@SOKSAK_IME_PERSON_APP="$(BUILD)/ime_person_app" node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) window_fullscreen_test webview_input_test,--monitor image_region_ime_test input_virtual_ime_test ime_source_restore_system_test
 
 # Runs only the input method check of the virtual key window, which selects Korean 2-Set for its run and starts the person's
 # application in front (tests/input_virtual_ime_test.m).
@@ -499,6 +504,10 @@ $(BUILD)/ime_person_app: tests/ime_person_app.m Makefile | $(BUILD)
 $(BUILD)/ime_source_restore_test: tests/ime_source_restore_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
 	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/event_wait.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
 
+# Runs the operations of the restoration on the system; only make test-app-activation runs it.
+$(BUILD)/ime_source_restore_system_test: tests/ime_source_restore_system_test.m tests/support/ime_source_restore.m tests/support/ime_source_restore.h $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m)
+	@clang $(CFLAGS) -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/ime_source_restore.m tests/support/event_wait.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
 test-ime-wire-document: $(BUILD)/ime_wire_document_test
 	@$(BUILD)/ime_wire_document_test
 
@@ -532,21 +541,21 @@ HOST_TEST_BUILD := $(BUILD)/host-tests
 HOST_TEST_LIBRARY := $(HOST_TEST_BUILD)/libhost_test.a
 HOST_TEST_DYNAMIC := $(HOST_TEST_BUILD)/dynamic/libhost_test.dylib
 HOST_TEST_PKGCONFIG := $(BUILD)/soksak-host-test.pc
-HOST_TEST_FRAMEWORKS := -framework CoreFoundation -framework IOSurface
+HOST_TEST_FRAMEWORKS := -framework CoreFoundation -framework IOSurface -framework AppKit -framework WebKit
 
 .PHONY: build-host-test test-host-test
 build-host-test: $(HOST_TEST_LIBRARY) $(HOST_TEST_DYNAMIC) $(HOST_TEST_PKGCONFIG)
 
-$(HOST_TEST_BUILD)/host_test_api.o: tests/support/host_test_api.m tests/support/host_test_api.h Makefile
+$(HOST_TEST_BUILD)/host_test_api.o: tests/support/host_test_api.m tests/support/host_test_api.h src/view_presentation_fault.h tests/fixtures/main-page.html Makefile
 	@mkdir -p $(@D)
-	@clang $(CFLAGS) -c $< -o $@
+	@clang $(CFLAGS) -DSP_HOST_TEST_FIXTURES='"$(CURDIR)/tests/fixtures"' -c $< -o $@
 
 $(HOST_TEST_LIBRARY): $(HOST_TEST_BUILD)/host_test_api.o
 	@libtool -static -o $@ $<
 
 $(HOST_TEST_DYNAMIC): $(HOST_TEST_BUILD)/host_test_api.o
 	@mkdir -p $(@D)
-	@clang $(CFLAGS) -dynamiclib $< $(HOST_TEST_FRAMEWORKS) -Wl,-install_name,@rpath/libhost_test.dylib -o $@
+	@clang $(CFLAGS) -dynamiclib $< $(HOST_TEST_FRAMEWORKS) -Wl,-undefined,dynamic_lookup -Wl,-install_name,@rpath/libhost_test.dylib -o $@
 
 $(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
 	@printf '%s\n' \
@@ -561,8 +570,12 @@ $(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
 	  'Libs: -L$(HOST_TEST_BUILD) -lhost_test $(HOST_TEST_FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
 
-$(BUILD)/host_test_api_test: tests/host_test_api_test.m $(HOST_TEST_LIBRARY) tests/support/host_test_api.h tests/support/run_until.h Makefile | $(BUILD)
-	@clang $(CFLAGS) -I$(CURDIR)/tests $< $(HOST_TEST_LIBRARY) $(HOST_TEST_FRAMEWORKS) -o $@
+# The reads of the production library of the host test API run in one process with the production library.
+$(BUILD)/host_test_regions_test: tests/host_test_regions_test.m tests/support/host_test_api.m tests/support/host_test_api.h tests/support/no_activation.m $(LIBRARY) $(PROCESS_IDENTITY_LIBRARY) $(wildcard src/*.h src/private/*.h tests/support/*.h tests/support/*.m) Makefile
+	@clang $(CFLAGS) -DSP_HOST_TEST_FIXTURES='"$(CURDIR)/tests/fixtures"' -I$(CURDIR)/process-identity/include -I$(CURDIR)/src -I$(CURDIR)/tests $< tests/support/host_test_api.m tests/support/no_activation.m -L$(BUILD) -lsoksak-darwin -L$(CURDIR)/process-identity/lib -lsoksak-process-identity $(FRAMEWORKS) -framework Network $(MINIMUM) -o $@
+
+$(BUILD)/host_test_api_test: tests/host_test_api_test.m $(HOST_TEST_LIBRARY) tests/support/host_test_api.h src/view_presentation_fault.h tests/support/run_until.h Makefile | $(BUILD)
+	@clang $(CFLAGS) -I$(CURDIR)/tests $< $(HOST_TEST_LIBRARY) $(HOST_TEST_FRAMEWORKS) -Wl,-undefined,dynamic_lookup -o $@
 
 test-host-test: build-host-test $(BUILD)/host_test_api_test
 	@$(BUILD)/host_test_api_test

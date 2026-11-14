@@ -5,12 +5,16 @@ import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { finishSession } from "../app.mjs";
 import { joinedFailure } from "../failure.mjs";
 import { endWatches } from "../folder-wait.mjs";
 import { currentEventOffsets, eventLine, sessionEventBoot, sessionEventStart, readEvents, traceRows, readEventErrors, readEventLines, untilEventLine, untilEventLines } from "../event-log.mjs";
+
+// The writer of the application as another process, a tracked program that appends or creates a file of the event log.
+const writer = fileURLToPath(new URL("../fixtures/write-event-line.mjs", import.meta.url));
 
 function configDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "soksak-event-log-"));
@@ -36,6 +40,7 @@ const CATALOG = { events: {
 /** The declaration of a wait on the records of the host and the workbench. */
 const RECORDS = { catalog: CATALOG, records: ["host.record.info", "workbench.record.info"] };
 /** The policy that stores every level of every class (docs/spec/logging.md#policy-file). */
+const policyFile = (dir) => join(dir, "log-policy.json");
 const EVERY = JSON.stringify({ schema: 1, classes: { lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" } });
 
 const line = (seq, level, event, fields = {}, layer = "host") =>
@@ -157,7 +162,7 @@ test("untilEventLine returns the first line after the offsets that the predicate
   const dir = configDir(t);
   const file = join(dir, "logs", "host-1-10.jsonl");
   writeFileSync(file, line(1, "info", "host.record.info", { where: "early", text: "before the offsets" }));
-  writeFileSync(join(dir, "log-policy.json"), EVERY);
+  writeFileSync(policyFile(dir), EVERY);
   const { offsets } = readEventLines(dir, {});
   // The file changes after the watch is installed: the record arrives while the check waits.
   setImmediate(() => appendFileSync(file, line(2, "info", "workbench.record.info", { where: "workbench", text: "focus in a" }, "workbench")));
@@ -184,14 +189,12 @@ test("untilEventLines sees a record that another process appends to an existing 
   const dir = configDir(t);
   const file = join(dir, "logs", "host-1-10.jsonl");
   writeFileSync(file, line(1, "info", "log.open"));
-  writeFileSync(join(dir, "log-policy.json"), EVERY);
+  writeFileSync(policyFile(dir), EVERY);
   const { offsets } = readEventLines(dir, {});
   // The writer of the application is another process: it appends to its file after the check started to wait (the child
   // process takes longer to start than the check takes to install its watchers), and no entry of the folder changes.
-  const appender = spawn(process.execPath, ["-e", `
-    const { appendFileSync } = require("node:fs");
-    appendFileSync(${JSON.stringify(file)}, ${JSON.stringify(line(2, "info", "host.record.info", { where: "w", text: "appended" }))});
-  `], { stdio: "inherit" });
+  const appender = spawn(process.execPath, [writer, "append", file, line(2, "info", "host.record.info", { where: "w", text: "appended" })],
+    { stdio: "inherit" });
   t.after(() => appender.kill());
   const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: appended"), RECORDS);
   assert.deepEqual(lines, ["info host w: appended"]);
@@ -199,13 +202,12 @@ test("untilEventLines sees a record that another process appends to an existing 
 
 test("untilEventLines sees a file that another process creates", async (t) => {
   const dir = configDir(t);
-  writeFileSync(join(dir, "logs", "host-1-10.jsonl"), line(1, "info", "log.open"));
-  writeFileSync(join(dir, "log-policy.json"), EVERY);
+  const file = join(dir, "logs", "host-1-10.jsonl");
+  writeFileSync(file, line(1, "info", "log.open"));
+  writeFileSync(policyFile(dir), EVERY);
   const { offsets } = readEventLines(dir, {});
-  const creator = spawn(process.execPath, ["-e", `
-    const { writeFileSync } = require("node:fs");
-    writeFileSync(${JSON.stringify(join(dir, "logs", "host-2-20.jsonl"))}, ${JSON.stringify(line(1, "info", "host.record.info", { where: "w", text: "new file" }))});
-  `], { stdio: "inherit" });
+  const creator = spawn(process.execPath, [writer, "create", join(dir, "logs", "host-2-20.jsonl"),
+    line(1, "info", "host.record.info", { where: "w", text: "new file" })], { stdio: "inherit" });
   t.after(() => creator.kill());
   const lines = await untilEventLines(dir, offsets, (all) => all.includes("info host w: new file"), RECORDS);
   assert.deepEqual(lines, ["info host w: new file"]);

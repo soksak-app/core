@@ -1,0 +1,19 @@
+{
+  "name": "plugin-operations-starter-format-failure",
+  "description": "The install of the plugin alpha of the starter pack is refused because its plugin.json has no surface module, and the page reads the state again.",
+  "replay": false,
+  "reason": "The starter pack is installed from the registry into the configuration directory by the plugin operations of the host, whose state the Go producer does not build (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {"op-cid-1":{"type":"string","example":"p5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901231.1","source":"page"}},
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}}},
+    {"call":{"name":"pluginsStarter","payload":{"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}},
+    {"reply":{"result":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}}},
+    {"call":{"name":"pluginsRun","payload":{"action":"install","plugin":"alpha"},"cids":["$op-cid-1"]}},
+    {"reply":{"error":"plugin.json: surface.module is required"}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}}}
+  ]
+}

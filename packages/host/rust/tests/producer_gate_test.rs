@@ -10,15 +10,18 @@ mod endpoint_client;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/tier_service.rs"]
+mod tier_service;
+
+use tier_service::TierService;
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 
-use serde_json::value::RawValue;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use soksak_host::binding_record::BindingCall;
-use soksak_host::endpoint::{self, Endpoint, Failure, Service, raw};
+use soksak_host::endpoint::{self, Endpoint};
 use soksak_host::event_log::{self, EventLog};
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::framework::InvokeBody;
@@ -83,31 +86,6 @@ fn a_binding_call_that_the_policy_does_not_store_is_counted_and_a_failed_one_is_
     assert_eq!(counts["call/debug"], 3);
 }
 
-/// A service that has only the window main and replies null.
-struct Fake;
-
-impl Service for Fake {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([{"window": "main", "title": "Main", "project": null, "key": true}]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "main"
-    }
-
-    fn call(
-        &self,
-        _window: &str,
-        _method: &str,
-        _params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        raw(&Value::Null)
-    }
-}
-
 // contract: log.policy.endpoint-call-is-gated
 #[test]
 fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
@@ -119,7 +97,7 @@ fn an_endpoint_request_that_the_policy_does_not_store_is_counted() {
         &config.path().join("sockets"),
         config.path(),
         "test-gate",
-        Arc::new(Fake),
+        Arc::new(TierService::new(&[("main", "Main")])),
     )
     .unwrap();
     endpoint.publish("main").unwrap();

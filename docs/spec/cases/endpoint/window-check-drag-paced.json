@@ -1,0 +1,14 @@
+{
+  "name": "window-check-drag-paced",
+  "description": "A drag whose reported time lies within the margin of the pace it was asked for.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":true}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"diagnostics.drag","params":{"window":"main","axis":"x","line":0,"dx":10,"dy":0,"ms":400,"times":2,"capture":false}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"took":900,"asked":800,"pressWaits":[3,5]}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":false}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}}
+  ]
+}

@@ -5,8 +5,8 @@ import { join } from "node:path";
 import test from "node:test";
 import { untilEndpoint } from "../endpoint-wait.mjs";
 
-// A fake configuration folder: the host writes endpoint.json through a temporary file that it renames, so the fake does
-// the same.
+// A configuration folder of the test: the host writes endpoint.json through a temporary file that it renames, so the test
+// does the same.
 function folder(t) {
   const dir = mkdtempSync(join(tmpdir(), "endpoint-wait-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

@@ -6,9 +6,26 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+import { Session } from "@soksak/window-check/app.mjs";
+
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
 
-import { B3_MEASUREMENTS, formatReport, frameCost, readRedrawConditions, redrawConditions, measureRegion, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, redrawMeasurements, requireRows, screenText, untilCovered } from "../measure-terminal-redraw.mjs";
+import { B3_MEASUREMENTS, formatReport, frameCost, readRedrawConditions, redrawConditions, regionCost, readRegion, requireUncovered, parseOptions, parseWindowServer, prepareRedraw, presentedFramesOf, readCovered, redrawMeasurements, requireRows, screenText, coveredWaitMs } from "../measure-terminal-redraw.mjs";
+
+/** The session of the window w1 on a client that is connected to the player of the endpoint case `name`; closing the player fails when the case was not played. */
+async function play(t, name) {
+  const server = await startCasePlayer(name);
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-measure-redraw-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const s = new Session({ name: "fixture", configDir }, client);
+  s.window = "w1";
+  return { s, server };
+}
 
 test("the text of a screen joins the characters of each row and counts an empty cell as spaces of its width", () => {
   assert.equal(screenText([[{ ch: "a", width: 1 }, { width: 1 }, { ch: "b", width: 1 }], [{ ch: "한", width: 2 }, { width: 0 }]]), "a b\n한");
@@ -88,147 +105,93 @@ test("the B3 measurements of the redraw are the cpu milliseconds per presented f
   assert.deepEqual(Object.keys(redrawMeasurements(frameCost({ rows, totals, presented: 300, seconds: 10 }))), [...B3_MEASUREMENTS]);
 });
 
-/** A session of a window check (get, run, request, until, on) whose answers come from answer(kind, window, name, params, surface). */
-function fakeSession(answer, window = "w1", calls = []) {
-  const entry = async (kind, name, params, surface) => {
-    calls.push(surface === undefined ? [kind, window, name, params] : [kind, window, name, params, surface]);
-    return answer(kind, window, name, params, surface);
-  };
-  return {
-    window,
-    calls,
-    on: (other) => fakeSession(answer, other, calls),
-    get: (name, surface) => entry("get", name, undefined, surface),
-    run: (name, params = {}, surface) => entry("run", name, params, surface),
-    request: (method, params = {}) => entry("request", method, params),
-    until: async (name, predicate, message, { surface } = {}) => {
-      const value = await entry("until", name, undefined, surface);
-      if (!predicate(value)) throw new Error(`until ${name} of ${window}: ${message}; value ${JSON.stringify(value)}`);
-      return value;
-    },
-  };
-}
+const ROOT = "/var/tester/redraw-project";
 
-test("the measurement opens one tab of the plugin in a new project window of 760 by 614 points", async () => {
-  const windows = [{ window: "w1", ready: true }];
-  const answer = (kind, window, name) => {
-    if (name === "core.window.new") {
-      windows.push({ window: "w2", ready: true });
-      return null;
-    }
-    if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
-    if (name === "core.project.open") return { id: "p2" };
-    if (name === "host.window") return redrawWindow();
-    if (name === "core.grid") return { cards: [{ id: "c1", fixed: false, tabs: [{ id: "t-old", plugin: "other" }] }] };
-    if (name === "core.card.add-tab") return { tab: "tab-1" };
-    if (name === "core.tab.close") return { closed: true };
-    if (name === "core.surfaces") {
-      return [{ kind: "tab", surface: "tab-1", plugin: "rasterprobe", exposes: ["command rasterprobe.input", "status rasterprobe.screen"], status: { phase: "ready", error: null } }];
-    }
-    return null;
-  };
-  const calls = [];
-  const s = fakeSession(answer, "w1", calls);
-  const prepared = await prepareRedraw(s, "rasterprobe", "/var/tester/redraw-project");
-  assert.deepEqual(calls.filter(([kind]) => kind !== "get"), [
-    ["run", "w1", "core.window.new", {}],
-    ["until", "w1", "host.windows", undefined],
-    ["run", "w2", "core.project.open", { root: "/var/tester/redraw-project" }],
-    ["run", "w2", "host.window.resize", { width: 760, height: 614 }],
-    ["until", "w2", "host.window", undefined],
-    ["until", "w2", "host.window", undefined],
-    ["run", "w2", "core.card.add-tab", { card: "c1", plugin: "rasterprobe" }],
-    ["run", "w2", "core.tab.close", { tab: "t-old" }],
-    ["until", "w2", "core.surfaces", undefined],
-    ["until", "w2", "core.surfaces", undefined],
+test("the measurement opens one tab of the plugin in a new project window of 760 by 614 points", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-redraw-prepare");
+  const prepared = await prepareRedraw(s, "rasterprobe", ROOT);
+  await server.played;
+  assert.deepEqual(server.requests.filter(({ method }) => method === "command.run").map(({ params }) => [params.window, params.name, params.params]), [
+    ["w1", "core.window.new", {}],
+    ["w2", "core.project.open", { root: ROOT }],
+    ["w2", "host.window.resize", { width: 760, height: 614 }],
+    ["w2", "core.card.add-tab", { card: "c1", plugin: "rasterprobe" }],
+    ["w2", "core.tab.close", { tab: "t-old" }],
   ]);
   assert.equal(prepared.s.window, "w2");
   assert.deepEqual([prepared.tab, prepared.project], ["tab-1", "p2"]);
 });
 
-test("the measurement fails with the entry that the tab of the plugin did not register", async () => {
-  const windows = [{ window: "w1", ready: true }];
-  const answer = (kind, window, name) => {
-    if (name === "core.window.new") {
-      windows.push({ window: "w2", ready: true });
-      return null;
-    }
-    if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
-    if (name === "core.project.open") return { id: "p2" };
-    if (name === "host.window") return redrawWindow();
-    if (name === "core.grid") return { cards: [{ id: "c1", fixed: false, tabs: [] }] };
-    if (name === "core.card.add-tab") return { tab: "tab-1" };
-    if (name === "core.surfaces") {
-      return [{ kind: "tab", surface: "tab-1", plugin: "rasterprobe", exposes: ["command rasterprobe.input"], status: { phase: "ready", error: null } }];
-    }
-    return null;
-  };
-  await assert.rejects(prepareRedraw(fakeSession(answer), "rasterprobe", "/var/tester/redraw-project"),
-    (error) => error.message === "the rasterprobe tab tab-1 did not register status rasterprobe.screen");
+test("the measurement fails with the entry that the tab of the plugin did not register", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-redraw-prepare-entry-missing");
+  await assert.rejects(prepareRedraw(s, "rasterprobe", ROOT), (error) => error.message === "the rasterprobe tab tab-1 did not register status rasterprobe.screen");
+  await server.played;
 });
 
-test("the measurement stops at a covered window before it opens the tab, because a covered region shows no screen of the fixture", async () => {
-  const windows = [{ window: "w1", ready: true }];
-  const answer = (kind, window, name) => {
-    if (name === "core.window.new") {
-      windows.push({ window: "w2", ready: true });
-      return null;
-    }
-    if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
-    if (name === "core.project.open") return { id: "p2" };
-    if (name === "host.window") return redrawWindow({ occluded: true });
-    return null;
-  };
-  const calls = [];
-  await assert.rejects(prepareRedraw(fakeSession(answer, "w1", calls), "rasterprobe", "/var/tester/redraw-project"), /window w2 is covered/);
-  assert.equal(calls.some(([, , name]) => name === "core.card.add-tab"), false);
+test("the measurement stops at a covered window before it opens the tab, because a covered region shows no screen of the fixture", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-redraw-prepare-covered");
+  await assert.rejects(prepareRedraw(s, "rasterprobe", ROOT), /window w2 is covered/);
+  await server.played;
+  assert.equal(server.requests.some(({ params }) => params.name === "core.card.add-tab"), false);
 });
 
-test("the region measurement reads presentedFrames right around the cpu interval and fails while the window is occluded", async () => {
-  let presented = 120;
-  const s = fakeSession((kind, window, name) => (name === "host.window" ? redrawWindow({ regions: [{ surface: "tab-1", name: "screen", presentedFrames: presented }] }) : null), "w2");
-  const measure = async (marks) => {
-    const before = await marks.before();
-    presented += 300;
-    const after = await marks.after();
-    return { seconds: 10, marks: { before, after }, apps: [{ rows: [{ role: "host", pid: 10, cpuSeconds: 1.5 }], totals: { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0 }, total: { cpuSeconds: 1.5 } } }], errors: [] };
+test("the region read returns the presentedFrames of the tab and the window value", { timeout: 30000 }, async (t) => {
+  const read = await play(t, "measure-region-read");
+  read.s.window = "w2";
+  const reading = await readRegion(read.s, "tab-1");
+  assert.equal(reading.presented, 120);
+  assert.deepEqual(reading.status.content, { x: 0, y: 28, width: 760, height: 614 });
+  await read.server.played;
+});
+
+test("the region read fails while the window is occluded", { timeout: 30000 }, async (t) => {
+  const covered = await play(t, "measure-region-occluded");
+  covered.s.window = "w2";
+  await assert.rejects(readRegion(covered.s, "tab-1"), /window w2 reports occluded true; the measurement requires occluded false/);
+  await covered.server.played;
+});
+
+test("the cost of the region divides the cpu time by the presented frames between the marks and adds the cpu time of the window server", () => {
+  const measurement = {
+    seconds: 10,
+    marks: { before: { presented: 120, status: { content: { x: 0, y: 28, width: 760, height: 614 } } }, after: { presented: 420 } },
+    apps: [{ rows: [{ role: "host", pid: 10, cpuSeconds: 1.5 }], totals: { application: { cpuSeconds: 1.5 }, sidecars: { cpuSeconds: 0 }, total: { cpuSeconds: 1.5 } } }],
+    errors: [],
   };
-  let server = 100;
-  const windowServer = async () => {
-    const reading = { pid: 77, seconds: server };
-    server += 0.9;
-    return reading;
-  };
-  const result = await measureRegion({ s, tab: "tab-1", interval: 10, measure, covered: async () => null, windowServer });
+  const result = regionCost({ measurement, first: { pid: 77, seconds: 100 }, last: { pid: 77, seconds: 100.9 } });
   assert.equal(result.cost.presented, 300);
   assert.equal(result.cost.totals.total, 5);
   assert.equal(result.cost.windowServer.pid, 77);
   assert.equal(result.cost.windowServer.cpuSeconds.toFixed(2), "0.90");
   assert.equal(result.cost.windowServer.msPerFrame.toFixed(2), "3.00");
   assert.deepEqual(result.status.content, { x: 0, y: 28, width: 760, height: 614 });
-  await assert.rejects(measureRegion({ s, tab: "tab-1", interval: 10, measure, covered: async () => redrawWindow({ occluded: true }), windowServer }),
-    /window w2 reported occluded true during the interval/);
-  const covered = fakeSession((kind, window, name) => (name === "host.window" ? redrawWindow({ occluded: true }) : null), "w2");
-  await assert.rejects(measureRegion({ s: covered, tab: "tab-1", interval: 10, measure, covered: async () => null, windowServer }),
-    /window w2 reports occluded true; the measurement requires occluded false/);
 });
 
-test("the watch for a covered window reads host.window once per second, because a status watch relays every presented frame", async () => {
-  const clock = { now: 0 };
-  const sleep = async (ms) => {
-    clock.now += ms;
-  };
-  const reads = [];
-  const read = (occludedAt) => async () => {
-    reads.push(clock.now);
-    return { occluded: clock.now >= occludedAt, at: clock.now };
-  };
-  assert.equal(await untilCovered({ read: read(Infinity), ms: 2500, sleep, now: () => clock.now }), null);
-  assert.deepEqual(reads, [1000, 2000, 2500]);
-  clock.now = 0;
-  reads.length = 0;
-  assert.deepEqual(await untilCovered({ read: read(2000), ms: 10000, sleep, now: () => clock.now }), { occluded: true, at: 2000 });
-  assert.deepEqual(reads, [1000, 2000]);
+test("a window that reported occluded true during the interval fails the measurement", () => {
+  requireUncovered("w2", null);
+  assert.throws(() => requireUncovered("w2", redrawWindow({ occluded: true })), /window w2 reported occluded true during the interval/);
+});
+
+test("the watch for a covered window waits a second or the rest of the watch and ends when the watch is over, because a status watch relays every presented frame", () => {
+  const wait = (now) => coveredWaitMs({ startedAt: 4000, now: 4000 + now, ms: 2500 });
+  assert.deepEqual([0, 1000, 2000, 2400, 2500, 2600].map(wait), [1000, 1000, 500, 100, 0, 0], "the readings at 1 s, at 2 s and at the end of 2.5 s");
+  assert.equal(coveredWaitMs({ startedAt: 0, now: 1004, ms: 10000 }), 1000, "a wait is at most a second");
+  assert.throws(() => coveredWaitMs({ startedAt: 4000, now: 3999, ms: 2500 }), /the instant 3999 ms is before the instant 4000 ms/);
+});
+
+test("a reading of a window that never reports occluded true is no covered status", { timeout: 30000 }, async (t) => {
+  const never = await play(t, "measure-covered-never");
+  never.s.window = "w2";
+  for (let reading = 0; reading < 3; reading++) assert.equal(await readCovered({ s: never.s }), null);
+  await never.server.played;
+});
+
+test("a reading of a covered window is its host.window value, and the second reading of the case is the first that reports occluded true", { timeout: 30000 }, async (t) => {
+  const covered = await play(t, "measure-covered-second-read");
+  covered.s.window = "w2";
+  assert.equal(await readCovered({ s: covered.s }), null);
+  assert.equal((await readCovered({ s: covered.s })).occluded, true);
+  await covered.server.played;
 });
 
 test("the window server is the process of that name in the process table, and a table without it is an error", () => {
@@ -287,13 +250,15 @@ test("the B3 output of the redraw takes its conditions from b3-out with the perf
   }
 });
 
-test("the conditions of the redraw read the window again after the interval, so a window that was covered or lost its activation is recorded", async () => {
+test("the conditions of the redraw read the window again after the interval, so a window that was covered or lost its activation is recorded", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-redraw-conditions");
+  s.window = "w2";
   const policy = { lifecycle: "error", input: "error", call: "debug", io: "error", frame: "debug" };
   const status = redrawWindow({ scale: 2, refreshRate: 120 });
-  const read = async (end) => readRedrawConditions({ s: { window: "w2", get: async (name) => { assert.equal(name, "host.window"); return { ...status, ...end }; } },
-    status, trace: 0, policy });
-  const { occluded, active } = await read({});
+  const read = () => readRedrawConditions({ s, status, trace: 0, policy });
+  const { occluded, active } = await read();
   assert.deepEqual({ occluded, active }, { occluded: false, active: true });
-  assert.equal((await read({ occluded: true })).occluded, true);
-  assert.equal((await read({ active: false })).active, false);
+  assert.equal((await read()).occluded, true);
+  assert.equal((await read()).active, false);
+  await server.played;
 });

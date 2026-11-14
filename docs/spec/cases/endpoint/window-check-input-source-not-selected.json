@@ -1,0 +1,12 @@
+{
+  "name": "window-check-input-source-not-selected",
+  "description": "A selection of an input source whose reply names another role than the selected one is an error that names both roles.",
+  "replay": false,
+  "reason": "The case selects the input source of the person and restores it, and the replay would change the input source of the person.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.input.source", "params": {"window": "main"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"current": null, "source": "person-source"}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.input.source", "params": {"window": "main", "select": "korean"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"current": "latin", "source": "role-latin"}}}
+  ]
+}

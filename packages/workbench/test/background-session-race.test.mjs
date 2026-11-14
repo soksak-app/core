@@ -18,7 +18,7 @@ test("a background session whose tab closes before its subscription finished end
   // The case is selected before the modules that read the host are imported.
   const wire = selectPageWire("background-session-race-subscription");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;

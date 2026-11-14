@@ -1,656 +1,973 @@
-// Checks the answers of the workbench to the call requests of a view (docs/spec/native-surfaces.md#view-surfaces). The tab state,
-// the runtime handlers and the command runners are fakes, so the test runs without a host.
+// Checks the answers of the workbench to the call requests of a view (docs/spec/native-surfaces.md#view-surfaces). A test mounts a view
+// surface with the real surface modules, and the case that it selects (docs/spec/cases/page-wire/README.md) delivers each call of the
+// view to the view-call listener of the surface as a notice and answers the host calls of the page. The reply of the page to each
+// call reaches the host as the call viewReply, which the test reads.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { answerViewCall, viewStopState } from "../view-calls.js";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { viewStopState } from "../view-calls.js";
+import { pageIdentity } from "../page-identity.js";
+import { drained } from "./support/drained.mjs";
 
-// A shortcut table in the form of packages/workbench/shortcuts.json, with rows that hold while a view has keyboard focus and a
-// row that does not.
-const SHORTCUTS = [
-  { key: "cmd+q", owner: "native menu", command: "framework role", menu: "app/quit", when: "Any focus" },
-  { key: "cmd+k", owner: "workbench", command: "core.library.search.focus", menu: null, when: "The library is shown" },
-  { key: "cmd+j", owner: "workbench", command: "core.probe.jump", menu: null, when: "Any focus" },
-  { key: "Escape", owner: "view", command: "none", menu: null, when: "A plugin view has keyboard focus" },
+// The host is read when host.js is imported, so the case of the import is selected first; the page sends no call while it imports.
+const importing = selectPageWire("view-calls-import");
+const { registerPlugin } = await import("../registry.js");
+const { seedSourceOrigins } = await import("../source-origins.js");
+const { notifyTextSize, setSurfaceTextSize } = await import("../text-size.js");
+const { contributionsOf, contributionsState, installContributions } = await import("../contributions.js");
+const { beginSettings, setPluginSettings } = await import("../settings.js");
+const { logGate } = await import("../log-gate.js");
+const reports = await import("../tab-reports.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
+const projects = await import("../projects.js");
+
+setSurfaceTextSize(() => 1);
+// The plugin probe declares surface.menu, and the plugin probe-bare declares none (null, as the declaration of a plugin without it).
+registerPlugin({ id: "probe", surface: () => null, menu: [{ label: "Run", command: "probe.run" }] });
+registerPlugin({ id: "probe-bare", surface: () => null, menu: null });
+registerPlugin({ id: "fixture-unload", surface: () => null });
+setPluginSettings([{ id: "probe", settings: { home: { label: "홈 주소", type: "address", default: "https://example.test" } } }]);
+globalThis.location = new URL("http://soksak.test/index.html");
+// The first flush of the events of the page reads the clock of the host, which belongs to the start of the page and not to a test.
+const { flushEvents, recordWorkbenchStart } = await import("../page-log.js");
+recordWorkbenchStart({ href: "http://soksak.test/index.html" }, 0);
+await flushEvents();
+importing.finish();
+
+const UNLOAD = { format: 2, maxBytes: 64 };
+
+// The registry of the window holds the declarations of the core (exposure.json) and of the plugin probe. The surfaces of the window that a
+// test registers belong to the plugin probe through the table of data that the registry reads (owners), and the applied frame of a
+// surface through the table frames, as the layout of the window gives them.
+const { registry } = await import("../exposure.js");
+const { declareProjectData } = await import("../plugin-data.js");
+registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
+const probeExposes = {
+  status: [
+    { name: "probe.lines", description: "Lines.", schema: { type: "array" } },
+    { name: "probe.count", description: "Count.", schema: { type: "integer" } },
+    { name: "probe.state", description: "State.", schema: {} },
+  ],
+  commands: [{ name: "probe.run", description: "Runs.", params: { type: "object" }, result: {} }],
+  element: [{ name: "probe.view", description: "View." }],
+};
+registry.declare("probe", probeExposes);
+declareProjectData("probe", { note: { schema: { type: "string" }, default: "default" } });
+const owners = new Map();
+const frames = new Map();
+const preferredSurfaces = [];
+registry.configure({ surfacePlugin: (surface) => owners.get(surface) ?? null, preferred: () => preferredSurfaces, surfaceFrame: (surface) => frames.get(surface) ?? null });
+// The core commands that the tests run. A core command is registered by the module that owns it; these record the params that they receive.
+const ran = { core: [] };
+const failing = new Set();
+for (const name of ["core.tab.select", "core.library.search.focus", "core.surface.menu"]) {
+  registry.command(name, async (params, context) => {
+    ran.core.push({ name, params, cids: context?.cids });
+    if (failing.has(name)) throw new Error("no focus target");
+    return null;
+  });
+}
+// The core status core.grid holds a value that its module changes; the listeners are the watches of the document.
+const grid = { value: null, listeners: new Set() };
+registry.status("core.grid", () => grid.value, (listener) => {
+  grid.listeners.add(listener);
+  return () => grid.listeners.delete(listener);
+});
+const setGrid = (value) => {
+  grid.value = value;
+  for (const listener of [...grid.listeners]) listener(value);
+};
+
+/** Registers the surfaces of the plugin probe in the registry for the entries, as the surface pages of the window do; returns the function that ends them. */
+function holdSurfaces(...entries) {
+  for (const [surface, kind, name] of entries) {
+    owners.set(surface, "probe");
+    registry.registered({ surface, kind, name });
+  }
+  return () => {
+    for (const surface of new Set(entries.map(([entry]) => entry))) {
+      registry.registered({ surface, closed: true });
+      owners.delete(surface);
+    }
+  };
+}
+
+/** The tab state store of the memory saver, which projects.initialise opens over the host store; the plugin fixture-unload declares surface.unload. */
+async function openTabStateStore() {
+  await projects.initialise(new HostWorkspaceStore(host), (plugin) => (plugin === "fixture-unload" ? UNLOAD : false));
+  return projects.tabStateStore();
+}
+
+let wire;
+let instance = 0;
+// The surfaces of the plugin probe declare what the plugin declares.
+const declarations = probeExposes;
+
+/**
+ * Mounts the view surface id of the plugin probe, which declares the sidecar fixture-sidecar, over the case of the name. store opens the project store of the window, which the document regions read their session from. unload makes the
+ * plugin declare the tab state; project places the start values of the view with that project, as the placement of the window does,
+ * and opens the project store of the window over the case.
+ */
+async function mountView(name, { id = "probe-surface", plugin = "probe", unload = false, project, regions = [], store: opensStore = false } = {}) {
+  wire = selectPageWire(`view-calls-${name}`);
+  const store = unload || project !== undefined || opensStore ? await openTabStateStore() : null;
+  const dom = new JSDOM("<main><div id=slot></div></main>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const modules = await import(`../surface-modules.js?view-calls-${++instance}`);
+  const mounted = [];
+  const origins = {};
+  // Mounts one more view of the case, which is answered by the same module instance.
+  const mount = async (surfaceId, surfacePlugin, startProject) => {
+    reports.recordOrigin(surfaceId, null, "test fixture");
+    origins[surfaceId] = 1;
+    seedSourceOrigins({ floor: 1, views: { ...origins } });
+    modules.authorizeSurface(surfaceId);
+    const surface = { surfaceId, pluginId: surfacePlugin, declarations, sidecars: ["fixture-sidecar"], unload,
+      contributions: (point) => contributionsOf(surfacePlugin, point),
+      composition: { kind: "view", page: "ui/page.html", regions, overlays: [] } };
+    owners.set(surfaceId, surfacePlugin);
+    if (startProject !== undefined) modules.surfacePlacementsForHost([{ id: surfaceId, surface }], startProject, () => "test fixture");
+    await modules.mountSurface(document.querySelector("#slot"), surface);
+    await modules.waitSurfaceCompositionDeclared(surfaceId);
+    mounted.push(surfaceId);
+  };
+  await mount(id, plugin, project);
+  // Plays the next view call of the case and resolves with the reply that the view receives; the calls of these tests run in
+  // microtasks, so after the end of the microtask queue the reply has reached the wire.
+  const deliver = async () => {
+    const before = wire.calls.length;
+    wire.deliverNotice();
+    await drained();
+    return wire.calls.slice(before).filter(({ name }) => name === "viewReply").map(({ payload }) => {
+      assert.equal(payload.page, pageIdentity);
+      return payload;
+    });
+  };
+  const call = async () => {
+    const replies = await deliver();
+    assert.equal(replies.length, 1, `the view call was answered ${replies.length} times`);
+    return replies[0];
+  };
+  const after = (from) => wire.calls.slice(from).filter(({ name }) => name !== "viewReply");
+  /** The calls of the page to the host since from, as [name, payload] of the calls that are not the replies of the view. */
+  const sent = (from, names) => after(from).filter((entry) => names.includes(entry.name)).map(({ name, payload }) => [name, payload]);
+  // The surface is mounted again after its view ended, as the restart of a view does.
+  const restart = async (surfaceId = id, surfacePlugin = plugin) => {
+    await modules.disposeSurface(surfaceId);
+    mounted.splice(mounted.indexOf(surfaceId), 1);
+    await mount(surfaceId, surfacePlugin, project);
+  };
+  return { call, deliver, after, sent, mount, restart, id, modules, store, close: async () => {
+    for (const surfaceId of mounted) {
+      await modules.disposeSurface(surfaceId);
+      owners.delete(surfaceId);
+    }
+    if (store) await store.flush();
+    await flushEvents();
+    dom.window.close();
+    wire.finish();
+  } };
+}
+
+// The project of the start values of a view: the project that the window shows, as the placement of the window names it.
+const START_PROJECT = { id: "p1", root: "/projects/p1" };
+/** The project data patches that the page sent to the host since from. */
+const patches = (h, from) => h.sent(from, ["workspace"]).map(([, payload]) => payload).filter(({ kind }) => kind === "patch");
+
+// The installed plugins whose manifests give the extension point language to probe and two contributions to it. The entry 0 of
+// the plugin two names a range that the point does not accept, so only its entry 1 is connected.
+const plugin = (id, manifest) => ({ id, package: `@scope/plugin-${id}`, version: "0.1.0", manifest: { id, name: id, description: "검사용.", ...manifest } });
+const CONTRIBUTORS = () => [
+  plugin("probe", { mark: "p", icon: "<path/>", surface: { module: "ui/probe.js", composition: { kind: "dom" } },
+    extends: { language: { version: "1.0.0", schema: { type: "object" } } } }),
+  plugin("one", { contributes: { "probe.language": [{ range: "^1.0.0", module: "ui/one.js", name: "one" }] } }),
+  plugin("two", { contributes: { "probe.language": [{ range: "^2.0.0", module: "ui/skipped.js", name: "skipped" }, { range: "^1.0.0", module: "ui/two.js", name: "two" }] } }),
 ];
 
-// The surfaces of the probe plugin that the window holds; a surface that is not listed belongs to no plugin of the window.
-const HELD = new Set(["probe spc-aaaaaa/left/files.tree", "probe tab-a"]);
+// The regions that a view declares: a document region and an image region.
+const REGIONS = [{ name: "doc", kind: "document", input: "native" }, { name: "picture", kind: "image" }];
+const REGION_HOST_NAMES = ["compositionPlace", "documentAttach", "documentLoad", "documentZoom", "documentGo", "documentPost", "documentSubscribe", "documentUnsubscribe",
+  "documentDetach", "imageAttach", "imageFocus", "imageCaret", "imageText", "imageDetach"];
+// The host calls that the page makes for them: each carries the surface of the view and only the named fields of the call, so the field
+// surface of the params of composition.place and document.attach does not reach the host.
+const EXPECTED_REGION_CALLS = [
+  ["compositionPlace", { revision: 1, regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [], surface: "probe-surface" }],
+  ["documentAttach", { document: "doc", surface: "probe-surface" }],
+  ["documentLoad", { document: "doc", url: "https://example.test/", surface: "probe-surface" }],
+  ["documentZoom", { document: "doc", zoom: 1.5, surface: "probe-surface" }],
+  ["documentGo", { document: "doc", action: "back", surface: "probe-surface" }],
+  ["documentGo", { document: "doc", action: "entry", offset: -2, surface: "probe-surface" }],
+  ["documentPost", { document: "doc", message: { a: 1 }, surface: "probe-surface" }],
+  ["documentSubscribe", { document: "doc", stream: "elements", surface: "probe-surface" }],
+  ["documentUnsubscribe", { document: "doc", handle: 3, surface: "probe-surface" }],
+  ["documentDetach", { document: "doc", surface: "probe-surface" }],
+  ["imageAttach", { name: "picture", sidecar: "@probe/sidecar", surface: "probe-surface" }],
+  ["imageFocus", { name: "picture", surface: "probe-surface" }],
+  ["imageCaret", { name: "picture", x: 1, y: 2, width: 3, height: 4, surface: "probe-surface" }],
+  ["imageText", { name: "picture", text: "probe", surface: "probe-surface" }],
+  ["imageDetach", { name: "picture", surface: "probe-surface" }],
+];
 
 // A binary id of the binary store of the view (docs/spec/plugin-processes.md#binary-path).
 const BINARY_ID = "0123456789abcdef0123456789abcdef";
 
-function fakes({ startProject = { id: "p1", root: "/projects/p1" } } = {}) {
-  const ran = { core: [], owned: [], writes: [], native: [], sidecar: [], clipboard: [], links: [], subscribed: [], declared: [],
-    reports: [], log: [], textSize: [], settings: [], registered: [], changed: [], errors: [], failed: [], events: [], composition: [], data: [] };
-  // The project data of each project and key; a key that holds no value reads its default.
-  const stored = new Map();
-  const item = (plugin, index) => Object.freeze({ plugin, index, item: { name: plugin }, module: `/modules/@scope/plugin-${plugin}/ui/${plugin}.js`,
-    fail: (reason) => { ran.failed.push({ plugin, index, reason }); } });
-  // The reply of the host to a PNG read of the view: the binary id under which the host put the PNG of the clipboard into the binary
-  // store of the view. A case sets reply to the absent reply or to a malformed one.
-  const png = { reply: { present: true, type: "png", binary: BINARY_ID } };
-  // The menu state of the surface; a case sets declared to false or frame to null.
-  const menu = { declared: true, frame: { x: 100, y: 40 } };
-  const options = {
-    plugin: "probe",
-    surface: "probe-surface",
-    pending: new Map(),
-    startProject: () => startProject,
-    tab: {
-      state: {
-        read: () => ({ count: 2 }),
-        write: (value) => { ran.writes.push(value); },
-      },
-      title: (text) => { ran.reports.push({ title: text }); },
-      footer: (text) => { ran.reports.push({ footer: text }); },
-      directory: (path) => { ran.reports.push({ directory: path }); },
-      notify: (text, policy) => { ran.reports.push({ notify: text, policy }); },
-      modified: (value) => { ran.reports.push({ modified: value }); },
-      error: (text) => { ran.reports.push({ error: text }); },
-      keep: (reason, on) => { ran.reports.push({ keep: reason, on }); },
-    },
-    contributions: (point) => {
-      if (point !== "language") throw new Error(`extension point ${point} is not declared by probe`);
-      return [item("one", 0), item("two", 1)];
-    },
-    shortcuts: SHORTCUTS,
-    emitEvent: (level, event, fields) => { ran.events.push({ level, event, fields }); },
-    runCore: async (name, params) => { ran.core.push({ name, params }); return { core: true }; },
-    runOwned: async (name, params, owner, cids, surface, caller) => {
-      ran.owned.push({ ...(surface === undefined ? { name, params, owner } : { name, params, owner, surface }), caller });
-      return { owned: true };
-    },
-    runtime: {
-      native: { call: async (name, payload) => { ran.native.push({ name, payload }); return { native: true }; } },
-      sidecar: { send: async (id, body, cids, sidecar) => { ran.sidecar.push({ id, body, cids, sidecar }); return { sidecar: true }; } },
-      clipboard: {
-        read: async (type) => { ran.clipboard.push({ read: type }); return type === "fileURLs" ? null : "text value"; },
-        writeText: async (text) => { ran.clipboard.push({ write: text }); },
-        readPNG: async () => { ran.clipboard.push({ readPNG: true }); return png.reply; },
-        persistPNG: async (binary) => { ran.clipboard.push({ persist: binary }); return { path: "/tmp/it's.png" }; },
-      },
-      links: { open: async (url) => { ran.links.push(url); } },
-      report: (line) => { ran.errors.push(line); },
-      subscribe: {
-        native: async (name) => { ran.subscribed.push({ native: name }); return null; },
-        sidecarMessage: async (id, sidecar) => { ran.subscribed.push({ sidecarMessage: id, sidecar }); return null; },
-        sidecarFailure: async (id) => { ran.subscribed.push({ sidecarFailure: id }); return null; },
-        textSize: async () => { ran.subscribed.push({ textSize: true }); return null; },
-        settings: async () => { ran.subscribed.push({ settings: true }); return null; },
-        data: async () => { ran.subscribed.push({ data: true }); return null; },
-        logLevels: async () => { ran.subscribed.push({ logLevels: true }); return null; },
-        statusWatch: async (name, surface) => { ran.subscribed.push(surface === undefined ? { statusWatch: name } : { statusWatch: name, surface }); return null; },
-        statusUnwatch: async (name, surface) => { ran.subscribed.push(surface === undefined ? { statusUnwatch: name } : { statusUnwatch: name, surface }); return null; },
-      },
-      command: {
-        register: async (name) => { ran.declared.push(name); return null; },
-      },
-      log: {
-        ...Object.fromEntries(["error", "warn", "info", "debug", "trace"].map((level) => [level,
-          (event, fields, options) => { ran.log.push({ level, event, fields, ...(options === undefined ? {} : { options }) }); }])),
-        enabled: (level) => level === "error" || level === "warn",
-      },
-      textSize: {
-        read: () => { ran.textSize.push("read"); return 1.5; },
-        on: (listener) => { ran.textSize.push("on"); return () => {}; },
-      },
-      settings: {
-        read: () => { ran.settings.push("read"); return { home: "https://example.test" }; },
-        on: (listener) => { ran.settings.push("on"); return () => {}; },
-      },
-      exposure: {
-        registered: async ({ kind, name }) => { ran.registered.push({ kind, name }); return null; },
-        changed: (payload) => { ran.changed.push(payload); return null; },
-      },
-      holdsSurface: (plugin, surface) => HELD.has(`${plugin} ${surface}`),
-      // The surface menu of the view: whether the plugin declares surface.menu for the surface, and its applied frame in the window.
-      menu: { declared: () => menu.declared, frame: () => menu.frame },
-      data: {
-        of: (project, plugin) => ({
-          declares: (key) => key === "note",
-          get: async (key) => {
-            ran.data.push({ read: key, project: project.id, plugin });
-            return stored.get(`${project.id} ${plugin} ${key}`) ?? "default";
-          },
-          replace: async (key, base, value) => {
-            ran.data.push({ replace: key, base, value, project: project.id, plugin });
-            return true;
-          },
-          set: async (key, value) => {
-            ran.data.push({ write: key, value, project: project.id, plugin });
-            stored.set(`${project.id} ${plugin} ${key}`, value);
-          },
-        }),
-      },
-    },
-    // The page operations of the surface view; each records its arguments.
-    composition: (() => {
-      const record = (name) => async (...args) => { ran.composition.push([name, ...args]); return { [name]: true }; };
-      return {
-        declaration: () => ({ kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] }),
-        place: record("place"),
-        report: record("report"),
-        document: {
-          ...Object.fromEntries(["attach", "load", "zoom", "go", "post", "unsubscribe", "detach"].map((name) => [name, record("document." + name)])),
-          // The hosts reply a subscribe with {handle}.
-          subscribe: async (...args) => { ran.composition.push(["document.subscribe", ...args]); return { handle: 3 }; },
-        },
-        image: Object.fromEntries(["attach", "focus", "caret", "text", "detach"].map((name) => [name, record("image." + name)])),
-      };
-    })(),
-  };
-  return { ran, menu, options, png };
-}
-
 test("a status watch with a surface follows the status on that surface of the view's plugin", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "probe.lines" } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.status.watch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } }, options), null);
-  assert.equal(await answerViewCall({ id: 3, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "spc-aaaaaa/left/files.tree" } }, options), null);
-  assert.deepEqual(ran.subscribed, [
-    { statusWatch: "probe.lines" },
-    { statusWatch: "probe.lines", surface: "spc-aaaaaa/left/files.tree" },
-    { statusUnwatch: "probe.lines", surface: "spc-aaaaaa/left/files.tree" },
-  ]);
+  const end = holdSurfaces(["tab-a", "status", "probe.lines"], ["spc-aaaaaa/left/files.tree", "status", "probe.lines"]);
+  preferredSurfaces.push("tab-a");
+  const h = await mountView("status-watch-surface");
+  const from = wire.calls.length;
+  try {
+    // runtime.status.watch {name}, runtime.status.watch {name, surface of the section} and runtime.status.unwatch of that surface
+    for (let n = 0; n < 3; n += 1) assert.equal((await h.call()).result, null);
+    assert.deepEqual(h.sent(from, ["exposureForward"]).map(([, forward]) => [forward.surface, forward.method, forward.params]), [
+      ["tab-a", "status.watch", { name: "probe.lines" }],
+      ["spc-aaaaaa/left/files.tree", "status.watch", { name: "probe.lines" }],
+      ["spc-aaaaaa/left/files.tree", "status.unwatch", { name: "probe.lines" }],
+    ]);
+  } finally {
+    preferredSurfaces.length = 0;
+    end();
+    await h.close();
+  }
 });
 
 test("a status watch names only a surface that the window holds for the view's plugin, and otherwise runs nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "probe.lines", surface: "other-surface" } }, options),
-    /view call runtime.status.watch surface other-surface is not a surface of probe/);
-  assert.deepEqual(ran.subscribed, []);
+  const h = await mountView("status-watch-other-surface");
+  const from = wire.calls.length;
+  // runtime.status.watch {name: "probe.lines", surface: "other-surface"}
+  assert.match((await h.call()).error.message, /view call runtime.status.watch surface other-surface is not a surface of probe/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("a status unwatch of a surface that the window no longer holds ends the view's own watch", async () => {
   // An unwatch ends only a watch of this view, whose surface was checked when it started; the surface can close before the view
-  // unwatches it.
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.status.unwatch", params: { name: "probe.lines", surface: "tab-z" } }, options), null);
-  assert.deepEqual(ran.subscribed, [{ statusUnwatch: "probe.lines", surface: "tab-z" }]);
+  // unwatches it. Here the view holds a watch of the surface tab-z, which closes before the unwatch.
+  const end = holdSurfaces(["tab-z", "status", "probe.lines"]);
+  const h = await mountView("status-unwatch-closed-surface");
+  const from = wire.calls.length;
+  // runtime.status.watch {name, surface: "tab-z"}, the close of tab-z, and runtime.status.unwatch of it
+  assert.equal((await h.call()).result, null);
+  end();
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.sent(from, ["exposureForward"]).map(([, forward]) => [forward.surface, forward.method]), [["tab-z", "status.watch"]]);
+  await h.close();
 });
 
 test("runtime.command.run runs a command of the view's plugin on a surface that the window holds for the plugin", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.command.run", params: { name: "probe.run", params: { x: 1 }, surface: "tab-a" } }, options),
-    { owned: true });
-  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { x: 1 }, owner: "probe", surface: "tab-a", caller: "probe-surface" }]);
+  const end = holdSurfaces(["tab-a", "command", "probe.run"]);
+  const h = await mountView("command-run-surface");
+  const from = wire.calls.length;
+  try {
+    // runtime.command.run {name: "probe.run", params: {x: 1}, surface: "tab-a"}
+    assert.deepEqual((await h.call()).result, { owned: true });
+    assert.deepEqual(h.sent(from, ["exposureForward"]).map(([, forward]) => [forward.surface, forward.method, forward.params]),
+      [["tab-a", "command.run", { name: "probe.run", params: { x: 1 }, surface: "tab-a" }]]);
+  } finally {
+    end();
+    await h.close();
+  }
 });
 
 test("runtime.command.run refuses a surface that the window does not hold for the plugin and a command of another owner", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.run", params: { name: "probe.run", params: null, surface: "tab-z" } }, options),
-    /^Error: view call runtime.command.run surface tab-z is not a surface of probe$/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.command.run", params: { name: "core.tab.select", params: null, surface: "tab-a" } }, options),
-    /^Error: view call runtime.command.run core.tab.select is not a command of probe$/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.command.run", params: { name: "probe.run", params: null } }, options),
-    /^TypeError: view call runtime.command.run requires a non-empty surface$/);
-  assert.deepEqual(ran.owned, []);
+  const end = holdSurfaces(["tab-a", "command", "probe.run"]);
+  const h = await mountView("command-run-refused");
+  const from = wire.calls.length;
+  try {
+    // runtime.command.run on the surface tab-z, of the command core.tab.select, and without a surface
+    assert.match((await h.call()).error.message, /^view call runtime.command.run surface tab-z is not a surface of probe$/);
+    assert.match((await h.call()).error.message, /^view call runtime.command.run core.tab.select is not a command of probe$/);
+    assert.match((await h.call()).error.message, /^view call runtime.command.run requires a non-empty surface$/);
+    assert.deepEqual(h.after(from), []);
+  } finally {
+    end();
+    await h.close();
+  }
 });
 
 test("runtime.data.get and runtime.data.set answer for the start project of the view", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "note" } }, options), "default");
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "note", value: "kept" } }, options), null);
-  assert.equal(await answerViewCall({ id: 3, command: "runtime.data.get", params: { key: "note" } }, options), "kept");
-  assert.deepEqual(ran.data, [
-    { read: "note", project: "p1", plugin: "probe" },
-    { write: "note", value: "kept", project: "p1", plugin: "probe" },
-    { read: "note", project: "p1", plugin: "probe" },
-  ]);
+  const h = await mountView("data-get-set", { project: START_PROJECT });
+  const from = wire.calls.length;
+  // runtime.data.get {key: "note"}, runtime.data.set {key: "note", value: "kept"}, runtime.data.get {key: "note"}
+  assert.equal((await h.call()).result, "default");
+  assert.equal((await h.call()).result, null);
+  assert.equal((await h.call()).result, "kept");
+  assert.deepEqual(patches(h, from), [{ kind: "patch", id: "p1", patch: { plugins: { probe: { note: { format: 1, value: "kept" } } } } }]);
+  await h.close();
 });
 
 // contract: project-data.replace.requires-base
 test("runtime.data.replace answers for the start project of the view and requires its base", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.data.replace", params: { key: "note", base: "default", value: "kept" } }, options), true);
-  assert.deepEqual(ran.data, [{ replace: "note", base: "default", value: "kept", project: "p1", plugin: "probe" }]);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.replace", params: { key: "note", value: "x" } }, options),
-    /^TypeError: view call runtime.data.replace requires base$/);
-  assert.equal(ran.data.length, 1);
+  const h = await mountView("data-replace", { project: START_PROJECT });
+  const from = wire.calls.length;
+  // runtime.data.replace {key: "note", base: "default", value: "kept"}, and the same without base
+  assert.equal((await h.call()).result, true);
+  assert.deepEqual(patches(h, from), [{ kind: "patch", id: "p1", patch: { plugins: { probe: { note: { format: 1, value: "kept" } } } } }]);
+  assert.match((await h.call()).error.message, /^view call runtime.data.replace requires base$/);
+  assert.equal(patches(h, from).length, 1);
+  await h.close();
 });
 
 test("runtime.data calls refuse a view whose start values carry no project, and run nothing", async () => {
-  const { ran, options } = fakes({ startProject: null });
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "note" } }, options), /view call runtime.data.get requires a project/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "note", value: "x" } }, options), /view call runtime.data.set requires a project/);
-  assert.deepEqual(ran.data, []);
+  const h = await mountView("data-no-project", { project: null });
+  const from = wire.calls.length;
+  // runtime.data.get {key: "note"}, runtime.data.set {key: "note", value: "x"}
+  assert.match((await h.call()).error.message, /view call runtime.data.get requires a project/);
+  assert.match((await h.call()).error.message, /view call runtime.data.set requires a project/);
+  assert.deepEqual(patches(h, from), []);
+  await h.close();
 });
 
 test("runtime.data.on subscribes to the changes of the project data of the start project, and a view without project is refused", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.data.on", params: null }, options), null);
-  assert.deepEqual(ran.subscribed, [{ data: true }]);
-  const without = fakes({ startProject: null });
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.on", params: null }, without.options), /^Error: view call runtime.data.on requires a project$/);
-  assert.deepEqual(without.ran.subscribed, []);
+  const h = await mountView("data-on", { project: START_PROJECT });
+  await h.mount("probe-surface-none", "probe", null);
+  const from = wire.calls.length;
+  // runtime.data.on, a write of the key note by the view, and runtime.data.on of a second view whose start values carry no project
+  assert.equal((await h.call()).result, null);
+  assert.equal(h.sent(from, ["viewEvent"]).length, 0);
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "data", data: { key: "note" }, surface: "probe-surface" }]]);
+  assert.match((await h.call()).error.message, /^view call runtime.data.on requires a project$/);
+  assert.equal(h.sent(from, ["viewEvent"]).length, 1);
+  await h.close();
 });
 
 test("runtime.data calls refuse a key that the plugin does not declare, and a key that is not text", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.data.get", params: { key: "secret" } }, options), /view call runtime.data.get secret is not a data key of probe/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.data.set", params: { key: "secret", value: 1 } }, options), /view call runtime.data.set secret is not a data key of probe/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.data.get", params: { key: "" } }, options), /view call runtime.data.get requires a non-empty key/);
-  assert.deepEqual(ran.data, []);
+  const h = await mountView("data-key-refused", { project: START_PROJECT });
+  const from = wire.calls.length;
+  // runtime.data.get {key: "secret"}, runtime.data.set {key: "secret", value: 1}, runtime.data.get {key: ""}
+  assert.match((await h.call()).error.message, /view call runtime.data.get secret is not a data key of probe/);
+  assert.match((await h.call()).error.message, /view call runtime.data.set secret is not a data key of probe/);
+  assert.match((await h.call()).error.message, /view call runtime.data.get requires a non-empty key/);
+  assert.deepEqual(patches(h, from), []);
+  await h.close();
 });
 
-test("a forwarded tab.state.read returns the tab state of its surface", async () => {
-  const { options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "tab.state.read", params: null }, options), { count: 2 });
+test("a forwarded tab.state.read returns the tab state of its surface", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-state-read", { id: "tab-view", plugin: "fixture-unload", unload: UNLOAD });
+  h.store.write("tab-view", { format: 2, value: { count: 2 } });
+  // tab.state.read
+  assert.deepEqual((await h.call()).result, { count: 2 });
+  await h.close();
 });
 
-test("tab.state.read is refused when the surface declares no tab state", async () => {
-  const { options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...options, tab: null }), /tab state is not declared/);
-  await assert.rejects(answerViewCall({ id: 2, command: "tab.state.read", params: null }, { ...options, tab: { ...options.tab, state: undefined } }), /tab state is not declared/);
+test("tab.state.read is refused when the surface declares no tab state", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-state-read-undeclared");
+  // tab.state.read, twice: a surface without surface.unload has no tab state handlers
+  assert.match((await h.call()).error.message, /tab state is not declared/);
+  assert.match((await h.call()).error.message, /tab state is not declared/);
+  await h.close();
 });
 
-test("a command of another plugin is refused and runs nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "other.run", params: {} }, options), /belongs to other, not probe/);
-  assert.deepEqual(ran.owned, []);
-  assert.deepEqual(ran.core, []);
+test("a command of another plugin is refused and runs nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("other-plugin-command");
+  const from = wire.calls.length;
+  // other.run {}
+  assert.match((await h.call()).error.message, /belongs to other, not probe/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("a core command runs through runCore and a command of the plugin through runOwned", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "core.surface.open", params: { a: 1 } }, options), { core: true });
-  assert.deepEqual(await answerViewCall({ id: 2, command: "probe.run", params: { b: 2 } }, options), { owned: true });
-  assert.deepEqual(ran.core, [{ name: "core.surface.open", params: { a: 1 } }]);
-  assert.deepEqual(ran.owned, [{ name: "probe.run", params: { b: 2 }, owner: "probe", caller: "probe-surface" }],
-    "a command of the plugin carries the surface of the calling view");
+  const end = holdSurfaces(["probe-surface", "command", "probe.run"]);
+  const h = await mountView("command-core-owned");
+  const from = wire.calls.length;
+  const before = ran.core.length;
+  try {
+    // core.tab.select {a: 1}... as the params of a core command, and probe.run {b: 2}
+    assert.equal((await h.call()).result, null);
+    assert.deepEqual((await h.call()).result, { owned: true });
+    assert.deepEqual(ran.core.slice(before), [{ name: "core.tab.select", params: { tab: "tab-a" }, cids: undefined }]);
+    assert.deepEqual(h.sent(from, ["exposureForward"]).map(([, forward]) => [forward.surface, forward.method, forward.params]),
+      [["probe-surface", "command.run", { name: "probe.run", params: { b: 2 }, surface: "probe-surface" }]],
+      "a command of the plugin carries the surface of the calling view");
+  } finally {
+    end();
+    await h.close();
+  }
 });
 
-test("a call request without an integer id is refused and runs nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ command: "core.surface.open", params: {} }, options), /has no integer id/);
-  assert.deepEqual(ran.core, []);
+test("a call request without an integer id is refused and runs nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("call-without-id");
+  const from = wire.calls.length;
+  // core.surface.open {}, without an id
+  const reply = (await h.call());
+  assert.match(reply.error.message, /has no integer id/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("tab.state.write stores the params as the tab state of its surface", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, options), null);
-  assert.deepEqual(ran.writes, [{ page: 3 }]);
+test("tab.state.write stores the params as the tab state of its surface", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-state-write", { id: "tab-view", plugin: "fixture-unload", unload: UNLOAD });
+  // tab.state.write {page: 3}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.store.entry("tab-view").state, { format: 2, value: { page: 3 } });
+  await h.close();
 });
 
-test("tab.state.write is refused when the surface declares no tab state", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "tab.state.write", params: {} }, { ...options, tab: null }), /tab state is not declared/);
-  await assert.rejects(answerViewCall({ id: 2, command: "tab.state.write", params: {} }, { ...options, tab: { ...options.tab, state: undefined } }), /tab state is not declared/);
-  assert.deepEqual(ran.writes, []);
+test("tab.state.write is refused when the surface declares no tab state", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-state-write-undeclared");
+  const from = wire.calls.length;
+  // tab.state.write {}, twice
+  assert.match((await h.call()).error.message, /tab state is not declared/);
+  assert.match((await h.call()).error.message, /tab state is not declared/);
+  assert.deepEqual(h.after(from), [], "a refused write reached the host");
+  await h.close();
 });
 
-test("runtime.native.call runs the host call of the surface with its name and payload", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "probeCall", payload: { value: "a" } } }, options),
-    { native: true });
-  assert.deepEqual(ran.native, [{ name: "probeCall", payload: { value: "a" } }]);
+test("runtime.native.call runs the host call of the surface with its name and payload", { timeout: 5000 }, async () => {
+  const h = await mountView("native-call");
+  const from = wire.calls.length;
+  // runtime.native.call {name: "exposureReply", payload: {id: 7, result: "a"}}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.after(from), [{ name: "exposureReply", payload: { id: 7, result: "a", surface: "probe-surface" } }]);
+  await h.close();
 });
 
-test("runtime.native.call refuses a missing or empty name and runs nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "" } }, options), /requires a non-empty name/);
-  assert.deepEqual(ran.native, []);
+test("runtime.native.call refuses a missing or empty name and runs nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("native-call-empty-name");
+  const from = wire.calls.length;
+  // runtime.native.call {name: ""}
+  assert.match((await h.call()).error.message, /requires a non-empty name/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("runtime.sidecar.send sends the body with its correlation identifiers through the named sidecar", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: { n: 1 }, cids: ["c1"] } }, options),
-    { sidecar: true });
-  assert.deepEqual(ran.sidecar, [{ id: "probe", body: { n: 1 }, cids: ["c1"], sidecar: "fixture-sidecar" }]);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.sidecar.send", params: { id: "probe", body: 1, cids: [] } }, options), /requires a non-empty sidecar/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "", body: 1, cids: [] } }, options), /requires a non-empty sidecar/);
-  assert.equal(ran.sidecar.length, 1, "a send without a sidecar name reached the runtime");
-});
-
-test("runtime.clipboard.read returns the text of the clipboard and refuses an unknown type", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "text" }, options), "text value");
-  assert.deepEqual(ran.clipboard, [{ read: "text" }]);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.read", params: "image" }, options),
-    /runtime.clipboard.read image is not served/);
-  assert.deepEqual(ran.clipboard, [{ read: "text" }]);
-});
-
-test("runtime.clipboard.read png returns the binary id of the PNG in the view store, or null when the clipboard holds none", async () => {
-  const { ran, options, png } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "png" }, options),
-    { present: true, type: "png", binary: BINARY_ID });
-  png.reply = { present: false, type: "png" };
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.clipboard.read", params: "png" }, options), null);
-  assert.deepEqual(ran.clipboard, [{ readPNG: true }, { readPNG: true }]);
-});
-
-test("runtime.clipboard.read png refuses a host reply without a binary id", async () => {
-  const { options, png } = fakes();
-  png.reply = { present: true, type: "png", data: "AQID" };
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.clipboard.read", params: "png" }, options),
-    /clipboard png reply of the host is invalid: \{"present":true,"type":"png","data":"AQID"\}/);
-});
-
-test("runtime.clipboard.persistPNG persists the PNG of a binary id of the view store and returns the shell path", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: { binary: BINARY_ID } }, options),
-    { path: "/tmp/it's.png", shellQuotedPath: "'/tmp/it'\\''s.png'" });
-  assert.deepEqual(ran.clipboard, [{ persist: BINARY_ID }]);
-});
-
-test("runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.clipboard.persistPNG", params: "AQID" }, options), /requires an object/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.clipboard.persistPNG", params: {} }, options),
-    /requires binary, the id of an upload to the binary path of the view/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.clipboard.persistPNG", params: { binary: "ABC" } }, options),
-    /requires binary, the id of an upload to the binary path of the view/);
-  await assert.rejects(answerViewCall({ id: 4, command: "runtime.clipboard.persistPNG", params: { data: "AQID" } }, options),
-    /takes the binary id of an upload, not base64 data/);
-  assert.deepEqual(ran.clipboard, []);
-});
-
-test("runtime.clipboard.writeText writes the text and replies null", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.clipboard.writeText", params: "hi" }, options), null);
-  assert.deepEqual(ran.clipboard, [{ write: "hi" }]);
-});
-
-test("runtime.links.open opens the link of its params", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.links.open", params: "https://example.test" }, options), null);
-  assert.deepEqual(ran.links, ["https://example.test"]);
-});
-
-test("the tab reports of a view reach the handlers of its surface and reply null", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "tab.title", params: "문서" }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "tab.footer", params: "1 of 3" }, options), null);
-  assert.equal(await answerViewCall({ id: 3, command: "tab.directory", params: "/tmp" }, options), null);
-  assert.equal(await answerViewCall({ id: 4, command: "tab.modified", params: true }, options), null);
-  assert.equal(await answerViewCall({ id: 5, command: "tab.error", params: "저장하지 못했습니다" }, options), null);
-  assert.deepEqual(ran.reports, [
-    { title: "문서" }, { footer: "1 of 3" }, { directory: "/tmp" }, { modified: true }, { error: "저장하지 못했습니다" },
+// The page registers its listener of the sidecar failures with the first call that needs it, and keeps it for the rest of the run. This
+// test is the first of the file that does, so its case is the one that delivers the failure of the sidecar.
+test("a subscription call of the view runs its page subscription and replies null", async () => {
+  const h = await mountView("subscription-calls");
+  const from = wire.calls.length;
+  // runtime.native.on {name: "document-state"}, runtime.sidecar.on {id: "probe", sidecar: "fixture-sidecar"} and runtime.sidecar.onFailure {id: "probe-surface"}
+  for (let n = 0; n < 3; n += 1) assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.sent(from, ["viewSidecarRoute"]), [["viewSidecarRoute", { generation: 1, sidecar: "fixture-sidecar", id: "probe", on: true, surface: "probe-surface" }]]);
+  // The host event document-state of the surface and the failure of its sidecar reach the view as events.
+  wire.deliverNotice();
+  wire.deliverNotice();
+  await drained();
+  assert.deepEqual(h.sent(from, ["viewEvent"]), [
+    ["viewEvent", { generation: 1, event: "document-state", data: { surface: "probe-surface", name: "doc", url: "https://example.test/" }, surface: "probe-surface" }],
+    ["viewEvent", { generation: 1, event: "sidecar.failure", data: { id: "probe-surface", reason: "the sidecar ended" }, surface: "probe-surface" }],
   ]);
+  await h.close();
 });
 
-test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the params", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "tab.notify", params: { text: "끝났습니다", policy: "system" } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "tab.keep", params: { reason: "busy", on: true } }, options), null);
-  assert.deepEqual(ran.reports, [{ notify: "끝났습니다", policy: "system" }, { keep: "busy", on: true }]);
+test("runtime.sidecar.send sends the body with its correlation identifiers through the named sidecar", { timeout: 5000 }, async () => {
+  const h = await mountView("sidecar-send");
+  const from = wire.calls.length;
+  // runtime.sidecar.send {id: "probe-surface", sidecar: "fixture-sidecar", body: {n: 1}, cids: ["c1"]}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.after(from), [{ name: "viewSidecarSend",
+    payload: { source: "probe-surface", generation: 1, sidecar: "fixture-sidecar", surface: "probe-surface", body: { n: 1 }, cids: ["c1"] } }]);
+  // runtime.sidecar.send without a sidecar, and with an empty one
+  assert.match((await h.call()).error.message, /requires a non-empty sidecar/);
+  assert.match((await h.call()).error.message, /requires a non-empty sidecar/);
+  assert.equal(h.after(from).length, 1, "a send without a sidecar name reached the runtime");
+  await h.close();
 });
 
-test("tab.notify and tab.keep refuse params that are not the recorded objects and run nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "tab.notify", params: "끝났습니다" }, options), /requires an object/);
-  await assert.rejects(answerViewCall({ id: 2, command: "tab.keep", params: null }, options), /requires an object/);
-  assert.deepEqual(ran.reports, []);
+test("runtime.clipboard.read returns the text of the clipboard and refuses an unknown type", { timeout: 5000 }, async () => {
+  const h = await mountView("clipboard-read-text");
+  const from = wire.calls.length;
+  // runtime.clipboard.read "text"
+  assert.equal((await h.call()).result, "text value");
+  assert.deepEqual(h.after(from), [{ name: "clipboardRead", payload: { type: "text", userInitiated: true } }]);
+  // runtime.clipboard.read "image"
+  assert.match((await h.call()).error.message, /runtime.clipboard.read image is not served/);
+  assert.equal(h.after(from).length, 1);
+  await h.close();
 });
 
-test("runtime.log writer batches are not handled by the workbench view-call relay", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(
-    answerViewCall({ id: 1, command: "runtime.log", params: { action: "batch", events: [] } }, options),
-    /^Error: view call runtime\.log is not served$/,
-  );
-  assert.deepEqual(ran.log, []);
+test("runtime.clipboard.read png returns the binary id of the PNG in the view store, or null when the clipboard holds none", { timeout: 5000 }, async () => {
+  const h = await mountView("clipboard-read-png");
+  const from = wire.calls.length;
+  // runtime.clipboard.read "png"
+  assert.deepEqual((await h.call()).result, { present: true, type: "png", binary: BINARY_ID });
+  // runtime.clipboard.read "png", answered with an absent PNG
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.after(from), [
+    { name: "clipboardReadViewPNG", payload: { userInitiated: true, surface: "probe-surface" } },
+    { name: "clipboardReadViewPNG", payload: { userInitiated: true, surface: "probe-surface" } },
+  ]);
+  await h.close();
 });
 
-test("a view call runtime.log.levels is refused as not served and runs no subscription", async () => {
+test("runtime.clipboard.read png refuses a host reply without a binary id", { timeout: 5000 }, async () => {
+  const h = await mountView("clipboard-read-png-invalid");
+  // runtime.clipboard.read "png", answered with {present: true, type: "png", data: "AQID"}
+  assert.match((await h.call()).error.message,
+    /clipboard png reply of the host is invalid: \{"present":true,"type":"png","data":"AQID"\}/);
+  await h.close();
+});
+
+test("runtime.clipboard.persistPNG persists the PNG of a binary id of the view store and returns the shell path", { timeout: 5000 }, async () => {
+  const h = await mountView("clipboard-persist-png");
+  const from = wire.calls.length;
+  // runtime.clipboard.persistPNG {binary: BINARY_ID}
+  assert.deepEqual((await h.call()).result, { path: "/tmp/it's.png", shellQuotedPath: "'/tmp/it'\\''s.png'" });
+  assert.deepEqual(h.after(from), [{ name: "clipboardPersistViewPNG", payload: { binary: BINARY_ID, surface: "probe-surface" } }]);
+  await h.close();
+});
+
+test("runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("clipboard-persist-png-refused");
+  const from = wire.calls.length;
+  // runtime.clipboard.persistPNG "AQID"
+  assert.match((await h.call()).error.message, /requires an object/);
+  // runtime.clipboard.persistPNG {}
+  assert.match((await h.call()).error.message, /requires binary, the id of an upload to the binary path of the view/);
+  // runtime.clipboard.persistPNG {binary: "ABC"}
+  assert.match((await h.call()).error.message, /requires binary, the id of an upload to the binary path of the view/);
+  // runtime.clipboard.persistPNG {data: "AQID"}
+  assert.match((await h.call()).error.message, /takes the binary id of an upload, not base64 data/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
+});
+
+test("runtime.clipboard.writeText writes the text and replies null", { timeout: 5000 }, async () => {
+  const h = await mountView("clipboard-write-text");
+  const from = wire.calls.length;
+  // runtime.clipboard.writeText "hi"
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.after(from), [{ name: "clipboardWriteText", payload: "hi" }]);
+  await h.close();
+});
+
+test("runtime.links.open opens the link of its params", { timeout: 5000 }, async () => {
+  const h = await mountView("links-open");
+  const from = wire.calls.length;
+  // runtime.links.open "https://example.test"
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.after(from), [{ name: "linkOpen", payload: { url: "https://example.test" } }]);
+  await h.close();
+});
+
+test("the tab reports of a view reach the handlers of its surface and reply null", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-reports");
+  const from = wire.calls.length;
+  // tab.title "문서", tab.footer "1 of 3", tab.directory "/tmp", tab.modified true, tab.error "저장하지 못했습니다"
+  for (let id = 1; id <= 5; id += 1) assert.equal((await h.call()).result, null);
+  assert.deepEqual([reports.tabLabel(h.id), reports.tabFooter(h.id), reports.tabModified(h.id), reports.tabError(h.id)],
+    ["문서", "1 of 3", true, "저장하지 못했습니다"]);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
+  reports.reportModified(h.id, false);
+});
+
+test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the params", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-notify-keep");
+  // tab.notify {text: "끝났습니다", policy: "system"}
+  assert.equal((await h.call()).result, null);
+  // tab.keep {reason: "busy", on: true}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(reports.tabNotices().filter(([tab]) => tab === h.id), [[h.id, "끝났습니다"]]);
+  assert.equal(reports.tabNotice(h.id), null, "a notice with the policy system is not the notice of the tab");
+  assert.deepEqual(reports.tabKeeps(h.id), ["keep:busy"]);
+  await h.close();
+});
+
+test("tab.notify and tab.keep refuse params that are not the recorded objects and run nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-notify-keep-refused");
+  // tab.notify "끝났습니다"
+  assert.match((await h.call()).error.message, /requires an object/);
+  // tab.keep null
+  assert.match((await h.call()).error.message, /requires an object/);
+  assert.deepEqual([reports.tabNotice(h.id), reports.tabKeeps(h.id)], [null, []]);
+  await h.close();
+});
+
+test("runtime.log writer batches are not handled by the workbench view-call relay", { timeout: 5000 }, async () => {
+  const h = await mountView("log-batch");
+  const from = wire.calls.length;
+  // runtime.log {action: "batch", events: []}
+  assert.equal((await h.call()).error.message, "view call runtime.log is not served");
+  assert.deepEqual(h.after(from), []);
+  await h.close();
+});
+
+test("a view call runtime.log.levels is refused as not served and runs no subscription", { timeout: 5000 }, async () => {
   // A view has no level query: the record is passed to runtime.log and the writer of the event log decides (docs/spec/native-surfaces.md).
-  const { ran, options } = fakes();
-  await assert.rejects(
-    answerViewCall({ id: 1, command: "runtime.log.levels", params: null }, options),
-    /^Error: view call runtime\.log\.levels is not served$/,
-  );
-  assert.deepEqual(ran.subscribed, []);
+  const h = await mountView("log-levels");
+  const from = wire.calls.length;
+  // runtime.log.levels
+  assert.equal((await h.call()).error.message, "view call runtime.log.levels is not served");
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("the workbench does not accept the earlier single-record runtime.log payload", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(
-    answerViewCall({ id: 1, command: "runtime.log", params: { level: "info", event: "saved", fields: {} } }, options),
-    /^Error: view call runtime\.log is not served$/,
-  );
-  assert.deepEqual(ran.log, []);
+test("the workbench does not accept the earlier single-record runtime.log payload", { timeout: 5000 }, async () => {
+  const h = await mountView("log-single");
+  const from = wire.calls.length;
+  // runtime.log {level: "info", event: "saved", fields: {}}
+  assert.equal((await h.call()).error.message, "view call runtime.log is not served");
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("runtime.error writes the error line of the view to the application log with its surface and replies null", async () => {
-  const { ran, options } = fakes();
-  const result = await answerViewCall({ id: 1, command: "runtime.error", params: { where: "save", text: "disk full" } }, options)
-    .catch((error) => error);
-  assert.equal(result, null);
-  assert.deepEqual(ran.errors, ["surface probe-surface save: disk full"]);
+test("runtime.error writes the error line of the view to the application log with its surface and replies null", { timeout: 5000 }, async () => {
+  const h = await mountView("error-line");
+  const from = wire.calls.length;
+  // runtime.error {where: "save", text: "disk full"}
+  assert.equal((await h.call()).result, null);
+  await flushEvents();
+  const batch = wire.calls.slice(from).find(({ name, payload }) => name === "log" && payload.action === "batch");
+  assert.deepEqual(batch.payload.events.filter(({ level }) => level === "error").map(({ event, fields }) => [event, fields]),
+    [["workbench.record.error", { where: "surface probe-surface save", text: "disk full" }]]);
+  await h.close();
 });
 
-test("runtime.error refuses a place or a text that the error line cannot carry and writes nothing", async () => {
-  const { ran, options } = fakes();
-  const call = (id, params) => answerViewCall({ id, command: "runtime.error", params }, options);
-  await assert.rejects(call(1, "disk full"), /view call runtime\.error requires an object/);
-  for (const [id, where] of [[2, ""], [3, "save: now"], [4, "save\nnow"], [5, 7]]) {
-    await assert.rejects(call(id, { where, text: "disk full" }), /view call runtime\.error requires a non-empty where without a control character or ": "/);
+test("runtime.error refuses a place or a text that the error line cannot carry and writes nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("error-refused");
+  const from = wire.calls.length;
+  // runtime.error "disk full"
+  assert.match((await h.call()).error.message, /view call runtime\.error requires an object/);
+  // runtime.error with the places "", "save: now", "save\nnow" and 7
+  for (let n = 0; n < 4; n += 1) {
+    assert.match((await h.call()).error.message, /view call runtime\.error requires a non-empty where without a control character or ": "/);
   }
-  for (const [id, text] of [[6, ""], [7, null]]) {
-    await assert.rejects(call(id, { where: "save", text }), /view call runtime\.error requires a non-empty text/);
-  }
-  assert.deepEqual(ran.errors, []);
+  // runtime.error with the texts "" and null
+  for (let n = 0; n < 2; n += 1) assert.match((await h.call()).error.message, /view call runtime\.error requires a non-empty text/);
+  await flushEvents();
+  assert.deepEqual(wire.calls.slice(from).filter(({ name, payload }) => name === "log" && payload.events.some(({ level }) => level === "error")), []);
+  await h.close();
 });
 
 test("runtime.contributions returns the connected items of the point with their modules on the core root", async () => {
-  const { options } = fakes();
-  const result = await answerViewCall({ id: 1, command: "runtime.contributions", params: { point: "language" } }, options)
-    .catch((error) => error);
-  assert.deepEqual(result, [
+  installContributions(CONTRIBUTORS());
+  const h = await mountView("contributions");
+  const from = wire.calls.length;
+  // runtime.contributions {point: "language"} and {point: "format"}
+  assert.deepEqual((await h.call()).result, [
     { plugin: "one", index: 0, item: { name: "one" }, module: "soksak://core/modules/@scope/plugin-one/ui/one.js" },
     { plugin: "two", index: 1, item: { name: "two" }, module: "soksak://core/modules/@scope/plugin-two/ui/two.js" },
   ]);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.contributions", params: { point: "format" } }, options),
-    /extension point format is not declared by probe/);
+  assert.match((await h.call()).error.message, /extension point format is not declared by probe/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("runtime.contributions.fail makes the named connected item invalid with its reason and replies null", async () => {
-  const { ran, options } = fakes();
-  const params = { point: "language", plugin: "two", index: 1, reason: "extend is not a function" };
-  const result = await answerViewCall({ id: 1, command: "runtime.contributions.fail", params }, options).catch((error) => error);
-  assert.equal(result, null);
-  assert.deepEqual(ran.failed, [{ plugin: "two", index: 1, reason: "extend is not a function" }]);
+  installContributions(CONTRIBUTORS());
+  const h = await mountView("contributions-fail");
+  // runtime.contributions.fail {point: "language", plugin: "two", index: 1, reason: "extend is not a function"}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(contributionsState().map(({ plugin, index, state, reason }) => [plugin, index, state, reason]), [
+    ["one", 0, "connected", null],
+    ["two", 0, "version-mismatch", "range ^2.0.0 does not contain probe.language 1.0.0"],
+    ["two", 1, "invalid", "extend failed: extend is not a function"],
+  ]);
+  await h.close();
 });
 
 test("runtime.contributions.fail refuses an item that is not connected and a reason that is not text", async () => {
-  const { ran, options } = fakes();
-  const call = (id, params) => answerViewCall({ id, command: "runtime.contributions.fail", params }, options);
-  await assert.rejects(call(1, { point: "language", plugin: "two", index: 0, reason: "broken" }),
-    /view call runtime\.contributions\.fail: language has no connected item 0 of two/);
-  await assert.rejects(call(2, { point: "language", plugin: "two", index: 1, reason: "" }),
-    /view call runtime\.contributions\.fail requires a non-empty reason/);
-  assert.deepEqual(ran.failed, []);
+  installContributions(CONTRIBUTORS());
+  const h = await mountView("contributions-fail-refused");
+  // runtime.contributions.fail of the entry 0 of two, which is not connected, and of the entry 1 with an empty reason
+  assert.match((await h.call()).error.message, /view call runtime\.contributions\.fail: language has no connected item 0 of two/);
+  assert.match((await h.call()).error.message, /view call runtime\.contributions\.fail requires a non-empty reason/);
+  assert.deepEqual(contributionsState().map(({ state }) => state), ["connected", "version-mismatch", "connected"]);
+  await h.close();
 });
 
 test("runtime.shortcuts.read returns the rows of the workbench and view owners, and no native menu row", async () => {
-  const { options } = fakes();
-  const result = await answerViewCall({ id: 1, command: "runtime.shortcuts.read", params: null }, options).catch((error) => error);
-  assert.deepEqual(result, [
+  const h = await mountView("shortcuts-read");
+  // runtime.shortcuts.read: the rows of packages/workbench/shortcuts.json whose owner is the workbench or the view
+  assert.deepEqual((await h.call()).result, [
+    { key: "shift+cmd+n", owner: "workbench", command: "core.window.new" },
     { key: "cmd+k", owner: "workbench", command: "core.library.search.focus" },
-    { key: "cmd+j", owner: "workbench", command: "core.probe.jump" },
+    { key: "Enter", owner: "workbench", command: "core.rename.commit" },
+    { key: "Escape", owner: "workbench", command: "core.rename.cancel" },
+    { key: "Enter", owner: "workbench", command: "core.library.form.submit" },
+    { key: "Escape", owner: "workbench", command: "core.picker.close" },
+    { key: "Escape", owner: "workbench", command: "core.modal.dismiss" },
     { key: "Escape", owner: "view", command: "none" },
+    { key: "text input keys", owner: "view", command: "none" },
   ]);
+  await h.close();
 });
 
 test("runtime.shortcuts.missing and runtime.shortcuts.run are not served and write nothing", async () => {
-  const { ran, options } = fakes();
+  const h = await mountView("shortcuts-not-served");
+  const from = wire.calls.length;
+  const before = ran.core.length;
+  // runtime.shortcuts.missing and runtime.shortcuts.run, each with {key: "cmd+j"}
   for (const command of ["runtime.shortcuts.missing", "runtime.shortcuts.run"]) {
-    await assert.rejects(answerViewCall({ id: 1, command, params: { key: "cmd+j" } }, options),
-      new RegExp(`view call ${command.replace(/\./g, "\\.")} is not served`));
+    assert.match((await h.call()).error.message, new RegExp(`view call ${command.replace(/\./g, "\\.")} is not served`));
   }
-  assert.deepEqual(ran.events, []);
-  assert.deepEqual(ran.core, []);
+  await flushEvents();
+  assert.deepEqual(wire.calls.slice(from).filter(({ name, payload }) => name === "log" && payload.events.some(({ event }) => event === "workbench.input.shortcut.failed")), []);
+  assert.deepEqual(h.sent(from, ["exposureForward", "workspace", "viewEvent"]), []);
+  assert.equal(ran.core.length, before);
+  await h.close();
 });
 
 test("runtime.command runs a core command through runCore, and a failed workbench row writes workbench.input.shortcut.failed", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "core.probe.jump", params: {} }, options), { core: true });
-  assert.deepEqual(ran.core, [{ name: "core.probe.jump", params: {} }]);
-  options.runCore = async () => { throw new Error("no focus target"); };
-  await assert.rejects(answerViewCall({ id: 2, command: "core.probe.jump", params: {} }, options), /no focus target/);
-  assert.deepEqual(ran.events, [{ level: "error", event: "workbench.input.shortcut.failed", fields: { plugin: "probe", command: "core.probe.jump" } }]);
-  await assert.rejects(answerViewCall({ id: 3, command: "core.picker.close", params: {} }, options), /no focus target/);
-  assert.equal(ran.events.length, 1, "a core command that is not a workbench row wrote a shortcut record");
+  const h = await mountView("command-core-shortcut");
+  const from = wire.calls.length;
+  const before = ran.core.length;
+  const failures = () => wire.calls.slice(from).filter(({ name, payload }) => name === "log" && payload.action === "batch")
+    .flatMap(({ payload }) => payload.events).filter(({ event }) => event === "workbench.input.shortcut.failed").map(({ level, fields }) => [level, fields]);
+  // core.library.search.focus is a row of the workbench in shortcuts.json: it runs, then it fails; core.tab.select is no row and fails
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(ran.core.slice(before), [{ name: "core.library.search.focus", params: {}, cids: undefined }]);
+  failing.add("core.library.search.focus");
+  failing.add("core.tab.select");
+  try {
+    assert.match((await h.call()).error.message, /no focus target/);
+    await flushEvents();
+    assert.deepEqual(failures(), [["error", { plugin: "probe", command: "core.library.search.focus" }]]);
+    assert.match((await h.call()).error.message, /no focus target/);
+    await flushEvents();
+    assert.equal(failures().length, 1, "a core command that is not a workbench row wrote a shortcut record");
+  } finally {
+    failing.clear();
+  }
+  await h.close();
 });
 
 test("runtime.textSize.read returns the scale of the surface and runtime.textSize.on subscribes once", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.textSize.read", params: null }, options), 1.5);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.textSize.on", params: null }, options), null);
-  assert.deepEqual(ran.textSize, ["read"]);
-  assert.deepEqual(ran.subscribed, [{ textSize: true }]);
+  setSurfaceTextSize(() => 1.5);
+  const h = await mountView("text-size");
+  const from = wire.calls.length;
+  try {
+    // runtime.textSize.read, runtime.textSize.on twice, and a change of the scale
+    assert.equal((await h.call()).result, 1.5);
+    assert.equal((await h.call()).result, null);
+    assert.equal((await h.call()).result, null);
+    assert.deepEqual(h.sent(from, ["viewEvent"]), []);
+    setSurfaceTextSize(() => 2);
+    notifyTextSize();
+    await drained();
+    assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "textSize", data: 2, surface: "probe-surface" }]]);
+  } finally {
+    setSurfaceTextSize(() => 1);
+  }
+  await h.close();
 });
 
 test("runtime.log.levels.on subscribes the view to the changes of the stored levels", async () => {
   // A page reads the stored levels to skip building data that the writer would not store (docs/spec/native-surfaces.md#view-surfaces).
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.log.levels.on", params: null }, options), null);
-  assert.deepEqual(ran.subscribed, [{ logLevels: true }]);
+  const kept = logGate.classes();
+  const h = await mountView("log-levels-on");
+  const from = wire.calls.length;
+  try {
+    // runtime.log.levels.on, and a change of the policy of the page gate
+    assert.equal((await h.call()).result, null);
+    logGate.set({ ...kept, lifecycle: "info" });
+    await drained();
+    assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "log.levels", data: { ...kept, lifecycle: "info" }, surface: "probe-surface" }]]);
+  } finally {
+    logGate.set(kept);
+  }
+  await h.close();
 });
 
 test("runtime.settings.read returns the settings of the plugin and runtime.settings.on subscribes once", async () => {
-  const { ran, options } = fakes();
-  assert.deepEqual(await answerViewCall({ id: 1, command: "runtime.settings.read", params: null }, options), { home: "https://example.test" });
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.settings.on", params: null }, options), null);
-  assert.deepEqual(ran.settings, ["read"]);
-  assert.deepEqual(ran.subscribed, [{ settings: true }]);
+  const h = await mountView("settings");
+  const from = wire.calls.length;
+  // runtime.settings.read, runtime.settings.on twice, and a change of the setting probe.home
+  assert.deepEqual((await h.call()).result, { home: "https://example.test" });
+  assert.equal((await h.call()).result, null);
+  assert.equal((await h.call()).result, null);
+  beginSettings({ common: { "probe.home": "https://changed.test" }, projects: [] }, null);
+  await drained();
+  assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "settings", data: { home: "https://changed.test" }, surface: "probe-surface" }]]);
+  beginSettings({ common: {}, projects: [] }, null);
+  await h.close();
 });
 
-test("a runtime or tab entry that the route does not serve is refused as not served", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.unknown.run", params: {} }, options), /runtime.unknown.run is not served/);
-  assert.deepEqual(ran.core, []);
-  assert.deepEqual(ran.owned, []);
+test("a runtime or tab entry that the route does not serve is refused as not served", { timeout: 5000 }, async () => {
+  const h = await mountView("entry-not-served");
+  const from = wire.calls.length;
+  // runtime.unknown.run {}
+  assert.match((await h.call()).error.message, /runtime.unknown.run is not served/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("a cancel ends the pending call, which replies cancelled, and the pending call is removed", async () => {
-  const { options } = fakes();
-  options.runtime.sidecar.send = () => new Promise(() => {});
-  const call = answerViewCall({ id: 5, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: 1, cids: [] } }, options);
-  // The rejection is observed below; this handler only keeps a failed earlier step from being reported as unhandled.
-  call.catch(() => {});
-  assert.equal(options.pending.size, 1);
-  assert.equal(await answerViewCall({ id: 5, cancel: true }, options), undefined);
-  await assert.rejects(call, { message: "cancelled" });
-  assert.equal(options.pending.size, 0);
+test("a cancel ends the pending call, which replies cancelled, and the pending call is removed", { timeout: 5000 }, async () => {
+  const h = await mountView("cancel-pending");
+  const from = wire.calls.length;
+  // runtime.sidecar.send with the id 5, whose host reply is held
+  assert.deepEqual(await h.deliver(), []);
+  assert.deepEqual(h.after(from).map(({ name }) => name), ["viewSidecarSend"]);
+  // the cancel of the call 5 replies for the call that it ends
+  const [cancelled] = await h.deliver();
+  assert.deepEqual([cancelled.id, cancelled.error.message], [5, "cancelled"]);
+  // the call 5 is removed from the pending calls, so the id 5 serves a later call
+  assert.deepEqual([(await h.call()).id, wire.calls.at(-1).name], [5, "viewReply"]);
+  wire.release();
+  await h.close();
 });
 
-test("a cancel of a call that has no pending call ends nothing", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 9, cancel: true }, options), undefined);
-  assert.deepEqual(ran.core, []);
-  assert.deepEqual(ran.owned, []);
-  assert.equal(options.pending.size, 0);
+test("a cancel of a call that has no pending call ends nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("cancel-none");
+  const from = wire.calls.length;
+  // the cancel of the call 9, which is not pending
+  assert.deepEqual(await h.deliver(), []);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("a call whose id is pending is refused", async () => {
-  const { options } = fakes();
-  options.runtime.sidecar.send = () => new Promise(() => {});
-  const first = answerViewCall({ id: 6, command: "runtime.sidecar.send", params: { id: "probe", sidecar: "fixture-sidecar", body: 1, cids: [] } }, options);
-  first.catch(() => {});
-  await assert.rejects(answerViewCall({ id: 6, command: "runtime.links.open", params: "https://example.test" }, options), /view call 6 is already pending/);
-  await answerViewCall({ id: 6, cancel: true }, options);
-  await assert.rejects(first, { message: "cancelled" });
+test("a call whose id is pending is refused", { timeout: 5000 }, async () => {
+  const h = await mountView("pending-id-refused");
+  // runtime.sidecar.send with the id 6, whose host reply is held
+  assert.deepEqual(await h.deliver(), []);
+  // runtime.links.open with the id 6
+  assert.match((await h.call()).error.message, /view call 6 is already pending/);
+  // the cancel of the call 6 replies for the first call
+  const [cancelled] = await h.deliver();
+  assert.deepEqual([cancelled.id, cancelled.error.message], [6, "cancelled"]);
+  wire.release();
+  await h.close();
 });
 
-test("a subscription call of the view runs its page subscription and replies null", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.native.on", params: { name: "probe.changed" } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.sidecar.on", params: { id: "probe", sidecar: "fixture-sidecar" } }, options), null);
-  assert.equal(await answerViewCall({ id: 3, command: "runtime.sidecar.onFailure", params: { id: "probe" } }, options), null);
-  assert.deepEqual(ran.subscribed, [{ native: "probe.changed" }, { sidecarMessage: "probe", sidecar: "fixture-sidecar" }, { sidecarFailure: "probe" }]);
-});
 
 test("runtime.status.watch subscribes a core status or a status of the plugin and runtime.status.unwatch ends it", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "core.grid" } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.status.watch", params: { name: "probe.count" } }, options), null);
-  assert.equal(await answerViewCall({ id: 3, command: "runtime.status.unwatch", params: { name: "core.grid" } }, options), null);
-  assert.deepEqual(ran.subscribed, [{ statusWatch: "core.grid" }, { statusWatch: "probe.count" }, { statusUnwatch: "core.grid" }]);
+  const h = await mountView("status-watch-core");
+  const from = wire.calls.length;
+  const events = () => h.sent(from, ["viewEvent"]).map(([, payload]) => [payload.data.name, payload.data.value]);
+  // runtime.status.watch {name: "core.grid"}, and of probe.count, which no surface registers and which the page answers with null; the value of core.grid changes; the unwatch of core.grid
+  assert.equal((await h.call()).result, null);
+  assert.equal((await h.call()).result, null);
+  setGrid("a");
+  await drained();
+  assert.deepEqual(events(), [["core.grid", null], ["probe.count", null], ["core.grid", "a"]]);
+  assert.equal((await h.call()).result, null);
+  setGrid("b");
+  await drained();
+  assert.deepEqual(events(), [["core.grid", null], ["probe.count", null], ["core.grid", "a"]], "a value after the unwatch reached the view");
+  assert.deepEqual(h.sent(from, ["exposureForward"]), []);
+  setGrid(null);
+  await h.close();
 });
 
 test("runtime.status.watch and runtime.status.unwatch refuse a status of another plugin and a name that is not text, and subscribe to nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.status.watch", params: { name: "other.count" } }, options),
-    /view call runtime\.status\.watch other\.count is neither a core status nor a status of probe/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.status.unwatch", params: { name: "other.count" } }, options),
-    /view call runtime\.status\.unwatch other\.count is neither a core status nor a status of probe/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.status.watch", params: { name: "" } }, options), /requires a non-empty name/);
-  await assert.rejects(answerViewCall({ id: 4, command: "runtime.status.watch", params: { name: "grid" } }, options),
-    /view call runtime\.status\.watch grid is neither a core status nor a status of probe/);
-  await assert.rejects(answerViewCall({ id: 5, command: "runtime.status.watch", params: "core.grid" }, options), /requires an object/);
-  assert.deepEqual(ran.subscribed, []);
+  const h = await mountView("status-watch-refused");
+  const from = wire.calls.length;
+  // watch other.count, unwatch other.count, watch with an empty name, watch grid, watch with params that are not an object
+  assert.match((await h.call()).error.message, /view call runtime\.status\.watch other\.count is neither a core status nor a status of probe/);
+  assert.match((await h.call()).error.message, /view call runtime\.status\.unwatch other\.count is neither a core status nor a status of probe/);
+  assert.match((await h.call()).error.message, /requires a non-empty name/);
+  assert.match((await h.call()).error.message, /view call runtime\.status\.watch grid is neither a core status nor a status of probe/);
+  assert.match((await h.call()).error.message, /requires an object/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("a subscription call without its name or id is refused and subscribes to nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.native.on", params: { name: "" } }, options), /requires a non-empty name/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.sidecar.on", params: null }, options), /requires an object/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.sidecar.onFailure", params: { id: 7 } }, options), /requires a non-empty id/);
-  assert.deepEqual(ran.subscribed, []);
+test("a subscription call without its name or id is refused and subscribes to nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("subscription-refused");
+  const from = wire.calls.length;
+  // runtime.native.on {name: ""}
+  assert.match((await h.call()).error.message, /requires a non-empty name/);
+  // runtime.sidecar.on null
+  assert.match((await h.call()).error.message, /requires an object/);
+  // runtime.sidecar.onFailure {id: 7}
+  assert.match((await h.call()).error.message, /requires a non-empty id/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("runtime.theme is refused as a call, because the theme reaches a view as a host message", async () => {
-  const { options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.theme", params: null }, options), /view call runtime.theme is not served/);
+test("runtime.theme is refused as a call, because the theme reaches a view as a host message", { timeout: 5000 }, async () => {
+  const h = await mountView("theme-refused");
+  // runtime.theme null
+  assert.match((await h.call()).error.message, /view call runtime.theme is not served/);
+  await h.close();
 });
 
 test("a registration call of the view declares its command on the page and replies null", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.command.register", params: { name: "probe.run" } }, options), null);
-  assert.deepEqual(ran.declared, ["probe.run"]);
+  const h = await mountView("command-register");
+  const from = wire.calls.length;
+  // runtime.command.register {name: "probe.run"}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(registry.registrants("command", "probe.run"), ["probe-surface"]);
+  // The command is registered on the page; the host is told nothing, because it forwards no request of this command to the main page.
+  assert.deepEqual(h.after(from), []);
+  await h.close();
+  assert.deepEqual(registry.registrants("command", "probe.run"), []);
 });
 
 test("a registration call without a name is refused and declares nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.command.register", params: { name: "" } }, options), /requires a non-empty name/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.command.register", params: "probe.run" }, options), /requires an object/);
-  assert.deepEqual(ran.declared, []);
+  const h = await mountView("command-register-refused");
+  const from = wire.calls.length;
+  // runtime.command.register {name: ""} and runtime.command.register "probe.run"
+  assert.match((await h.call()).error.message, /requires a non-empty name/);
+  assert.match((await h.call()).error.message, /requires an object/);
+  assert.deepEqual(registry.registrants("command", "probe.run"), []);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("a registered call of the view records the status or element of its surface", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status", name: "probe.state" } } }, options), null);
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "element", name: "probe.view" } } }, options), null);
-  assert.deepEqual(ran.registered, [{ kind: "status", name: "probe.state" }, { kind: "element", name: "probe.view" }]);
-  assert.deepEqual(ran.native.filter(({ name }) => name === "registered"), [], "the registration was forwarded to the host call route");
+  const h = await mountView("registered");
+  const from = wire.calls.length;
+  // runtime.native.call registered {kind: "status", name: "probe.state"} and {kind: "element", name: "probe.view"}
+  assert.equal((await h.call()).result, null);
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual([registry.registrants("status", "probe.state"), registry.registrants("element", "probe.view")], [["probe-surface"], ["probe-surface"]]);
+  assert.deepEqual(h.sent(from, ["exposureRegister"]), [
+    ["exposureRegister", { kind: "status", name: "probe.state", surface: "probe-surface" }],
+    ["exposureRegister", { kind: "element", name: "probe.view", surface: "probe-surface" }],
+  ]);
+  assert.deepEqual(h.after(from).filter(({ name }) => name === "registered"), [], "the registration was forwarded to the host call route");
+  await h.close();
 });
 
 test("a registered call without its kind or name is refused and records nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: "probe.state" } }, options), /requires an object/);
-  await assert.rejects(answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "", name: "probe.state" } } }, options), /requires a non-empty kind/);
-  await assert.rejects(answerViewCall({ id: 3, command: "runtime.native.call", params: { name: "registered", payload: { kind: "status" } } }, options), /requires a non-empty name/);
-  assert.deepEqual(ran.registered, []);
+  const h = await mountView("registered-refused");
+  const from = wire.calls.length;
+  // runtime.native.call registered with the payload "probe.state", with an empty kind and without a name
+  assert.match((await h.call()).error.message, /requires an object/);
+  assert.match((await h.call()).error.message, /requires a non-empty kind/);
+  assert.match((await h.call()).error.message, /requires a non-empty name/);
+  assert.deepEqual(registry.registrants("status", "probe.state"), []);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("a changed call of the view gives the value of its watched status to the page and replies null", async () => {
-  const { ran, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "runtime.native.call",
-    params: { name: "changed", payload: { name: "probe.state", value: null, version: 1 } } }, options), null);
-  assert.deepEqual(ran.changed, [{ name: "probe.state", value: null, version: 1 }]);
-  assert.deepEqual(ran.native.filter(({ name }) => name === "changed"), [], "the change was forwarded to the host call route");
+  // The document watches the status probe.state of the surface of the view, as the core watches a status of a surface.
+  const seen = [];
+  const stop = registry.observe("probe.state", "probe-surface", (value, from) => seen.push([value, from]), { exact: true });
+  const h = await mountView("changed");
+  const from = wire.calls.length;
+  // runtime.native.call registered {kind: "status", name: "probe.state"}, changed with the value 3 and the version 1, and changed with null and the version 2
+  assert.equal((await h.call()).result, null);
+  assert.equal((await h.call()).result, null);
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(seen, [[null, null], [3, "probe-surface"], [null, "probe-surface"]]);
+  assert.deepEqual(h.after(from).filter(({ name }) => name === "changed"), [], "the change was forwarded to the host call route");
+  stop();
+  await h.close();
 });
 
 test("a changed call without its name, value or a positive integer version is refused and delivers nothing", async () => {
-  const { ran, options } = fakes();
+  const seen = [];
+  const stop = registry.observe("probe.state", "probe-surface", (value, from) => seen.push([value, from]), { exact: true });
+  const h = await mountView("changed-refused");
   const refused = /view call changed requires a non-empty name, a value and a positive integer version/;
-  for (const [id, payload] of [[1, { value: 1, version: 1 }], [2, { name: "probe.state", version: 1 }],
-    [3, { name: "probe.state", value: 1, version: 0 }], [4, { name: "probe.state", value: 1, version: 1.5 }]]) {
-    await assert.rejects(answerViewCall({ id, command: "runtime.native.call", params: { name: "changed", payload } }, options), refused);
-  }
-  assert.deepEqual(ran.changed, []);
+  // runtime.native.call changed without a name, without a value, with the version 0 and with the version 1.5
+  for (let n = 0; n < 4; n += 1) assert.match((await h.call()).error.message, refused);
+  assert.deepEqual(seen, [[null, null]]);
+  stop();
+  await h.close();
 });
 
 test("a registered call of a plugin command is refused, because a view registers its commands with runtime.command.register", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(
-    answerViewCall({ id: 1, command: "runtime.native.call", params: { name: "registered", payload: { kind: "command", name: "probe.run" } } }, options),
-    /view call registered: command probe\.run is registered through runtime\.command\.register/,
-  );
-  assert.equal(await answerViewCall({ id: 2, command: "runtime.native.call", params: { name: "registered", payload: { kind: "command", name: "core.surface.hit" } } }, options), null);
-  assert.deepEqual(ran.registered, [{ kind: "command", name: "core.surface.hit" }]);
+  const h = await mountView("registered-command");
+  const from = wire.calls.length;
+  // runtime.native.call registered {kind: "command", name: "probe.run"} and {kind: "command", name: "core.surface.hit"}
+  assert.match((await h.call()).error.message, /view call registered: command probe\.run is registered through runtime\.command\.register/);
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(registry.registrants("command", "core.surface.hit"), ["probe-surface"]);
+  assert.deepEqual(registry.registrants("command", "probe.run"), []);
+  assert.deepEqual(h.sent(from, ["exposureRegister"]), [["exposureRegister", { kind: "command", name: "core.surface.hit", surface: "probe-surface" }]]);
+  await h.close();
 });
 
 // contract: view.restart.limit-shows-error
@@ -669,140 +986,135 @@ test("a view-stopped event without a reason is refused", () => {
 // The workbench keys the tab state by surface, so a view that is created again on the same surface reads the state that was saved before
 // the restart. The restarted view has a new pending map, and the tab state of the surface is the same object.
 test("a restarted view reads the tab state of its surface as it was saved before the restart", async () => {
-  const store = new Map();
-  const surfaceTab = {
-    read: () => store.get("probe-surface") ?? null,
-    write: (value) => { store.set("probe-surface", value); },
-  };
-  const { options: before } = fakes();
-  await answerViewCall({ id: 1, command: "tab.state.write", params: { page: 3 } }, { ...before, tab: { ...before.tab, state: surfaceTab } });
-  assert.deepEqual(store.get("probe-surface"), { page: 3 });
-  const { options: restarted } = fakes();
-  assert.deepEqual(
-    await answerViewCall({ id: 1, command: "tab.state.read", params: null }, { ...restarted, tab: { ...restarted.tab, state: surfaceTab } }),
-    { page: 3 },
-  );
+  const h = await mountView("restart-tab-state", { id: "tab-view", plugin: "fixture-unload", unload: UNLOAD });
+  // tab.state.write {page: 3}, the restart of the view on the same surface, and tab.state.read of the restarted view
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(h.store.entry("tab-view").state, { format: 2, value: { page: 3 } });
+  await h.restart();
+  assert.deepEqual((await h.call()).result, { page: 3 });
+  await h.close();
 });
 
 test("the composition and region calls of a view run the page operations of its surface with their named fields", async () => {
-  const { ran, options } = fakes();
-  const requests = [
-    ["composition.declaration", null],
-    ["composition.place", { regions: [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], overlays: [], surface: "other" }],
-    ["composition.report", "surface composition failed: probe"],
-    ["document.attach", { name: "doc", surface: "other" }],
-    ["document.load", { name: "doc", url: "https://example.test/" }],
-    ["document.zoom", { name: "doc", zoom: 1.5 }],
-    ["document.go", { name: "doc", action: "back" }],
-    ["document.go", { name: "doc", action: "entry", offset: -2 }],
-    ["document.post", { name: "doc", message: { a: 1 } }],
-    ["document.subscribe", { name: "doc", stream: "elements" }],
-    ["document.unsubscribe", { name: "doc", handle: 3 }],
-    ["document.detach", { name: "doc" }],
-    ["image.attach", { name: "picture", sidecar: "@probe/sidecar" }],
-    ["image.focus", { name: "picture" }],
-    ["image.caret", { name: "picture", x: 1, y: 2, width: 3, height: 4 }],
-    ["image.text", { name: "picture", text: "probe" }],
-    ["image.detach", { name: "picture" }],
-  ];
-  const settled = await Promise.allSettled(requests.map(([command, params], index) => answerViewCall({ id: index + 1, command, params }, options)));
-  assert.deepEqual(settled.map((result) => result.status), requests.map(() => "fulfilled"),
-    settled.map((result) => result.reason?.message).filter(Boolean).join("; "));
-  assert.deepEqual(settled[0].value, { kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }], overlays: [] });
-  assert.deepEqual(ran.composition, [
-    ["place", [{ name: "doc", left: 1, top: 2, right: 3, bottom: 4, visible: true }], []],
-    ["report", "surface composition failed: probe"],
-    ["document.attach", "doc"],
-    ["document.load", "doc", "https://example.test/"],
-    ["document.zoom", "doc", 1.5],
-    ["document.go", "doc", "back", undefined],
-    ["document.go", "doc", "entry", -2],
-    ["document.post", "doc", { a: 1 }],
-    ["document.subscribe", "doc", "elements"],
-    ["document.unsubscribe", "doc", 3],
-    ["document.detach", "doc"],
-    ["image.attach", "picture", "@probe/sidecar"],
-    ["image.focus", "picture"],
-    ["image.caret", "picture", 1, 2, 3, 4],
-    ["image.text", "picture", "probe"],
-    ["image.detach", "picture"],
-  ]);
-  assert.deepEqual(ran.native, []);
+  const h = await mountView("composition-calls", { regions: REGIONS, store: true });
+  const from = wire.calls.length;
+  // composition.declaration, composition.place, composition.report, the document calls attach, load, zoom, go (twice), post, subscribe,
+  // unsubscribe and detach of the region doc, and the image calls attach, focus, caret, text and detach of the region picture
+  const replies = [];
+  for (let n = 0; n < 17; n += 1) replies.push(await h.call());
+  assert.deepEqual(replies.map((reply) => reply.error?.message).filter(Boolean), []);
+  assert.deepEqual(replies[0].result, { kind: "view", regions: REGIONS, overlays: [] });
+  assert.deepEqual(h.sent(from, REGION_HOST_NAMES), EXPECTED_REGION_CALLS);
+  // composition.report writes the failure text of the view to the application log.
+  await flushEvents();
+  assert.deepEqual(wire.calls.slice(from).filter(({ name, payload }) => name === "log" && payload.action === "batch").flatMap(({ payload }) => payload.events)
+    .filter(({ level }) => level === "error").map(({ event, fields }) => [event, fields]),
+  [["workbench.record.error", { where: "surface composition failed", text: "probe" }]]);
+  await h.close();
 });
 
 test("document.subscribe of a view replies the handle number of the host reply and refuses a reply without one", async () => {
   // The hosts reply {handle} (docs/spec/native-surfaces.md#document-regions); the view call replies the handle number, the form of
   // the published case view.composition.stream-subscribe-and-close that the region record of the view keys its stream by.
-  const { options } = fakes();
-  const withReply = (reply) => ({ ...options, composition: { ...options.composition,
-    document: { ...options.composition.document, subscribe: async () => reply } } });
-  assert.equal(await answerViewCall({ id: 1, command: "document.subscribe", params: { name: "doc", stream: "elements" } }, withReply({ handle: 7 })), 7);
-  await assert.rejects(answerViewCall({ id: 2, command: "document.subscribe", params: { name: "doc", stream: "elements" } }, withReply({})),
-    { message: "document.subscribe doc elements: the host reply has no handle: {}" });
+  const h = await mountView("document-subscribe", { regions: REGIONS, store: true });
+  // document.subscribe {name: "doc", stream: "elements"}, answered with {handle: 7}, and again, answered with {}
+  assert.equal((await h.call()).result, 7);
+  assert.equal((await h.call()).error.message, "document.subscribe doc elements: the host reply has no handle: {}");
+  await h.close();
 });
 
-test("a region call without a region name or with params that are not its fields is refused and runs nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 1, command: "document.attach", params: { name: "" } }, options), /document.attach requires a non-empty region name/);
-  await assert.rejects(answerViewCall({ id: 2, command: "image.focus", params: "picture" }, options), /image.focus requires an object/);
-  await assert.rejects(answerViewCall({ id: 3, command: "composition.place", params: { regions: {}, overlays: [] } }, options),
-    /composition.place requires the arrays regions and overlays/);
-  assert.deepEqual(ran.composition, []);
+test("a region call without a region name or with params that are not its fields is refused and runs nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("region-refused");
+  const from = wire.calls.length;
+  // document.attach {name: ""}
+  assert.match((await h.call()).error.message, /document.attach requires a non-empty region name/);
+  // image.focus "picture"
+  assert.match((await h.call()).error.message, /image.focus requires an object/);
+  // composition.place {regions: {}, overlays: []}
+  assert.match((await h.call()).error.message, /composition.place requires the arrays regions and overlays/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
-test("runtime.native.call of a composition or region host call is refused and runs nothing", async () => {
-  const { ran, options } = fakes();
-  for (const [index, name] of ["compositionDeclare", "compositionPlace", "documentAttach", "documentLoad", "imageAttach", "documentQuery"].entries()) {
-    await assert.rejects(answerViewCall({ id: index + 1, command: "runtime.native.call", params: { name, payload: {} } }, options),
-      { message: "view call runtime.native.call " + name + " is not served: a view operates its regions through its composition" });
+test("runtime.native.call of a composition or region host call is refused and runs nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("native-call-region-refused");
+  const from = wire.calls.length;
+  // runtime.native.call with the names compositionDeclare, compositionPlace, documentAttach, documentLoad, imageAttach and documentQuery
+  for (const name of ["compositionDeclare", "compositionPlace", "documentAttach", "documentLoad", "imageAttach", "documentQuery"]) {
+    assert.equal((await h.call()).error.message, `view call runtime.native.call ${name} is not served: a view operates its regions through its composition`);
   }
-  assert.deepEqual(ran.native, []);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("a call that carries the cids of its cause hands them to the command of its plugin", async () => {
-  const { options } = fakes();
-  const seen = [];
-  const runOwned = async (name, params, owner, cids) => { seen.push({ name, owner, cids }); return { owned: true }; };
-  assert.deepEqual(await answerViewCall({ id: 4, command: "probe.run", params: null, cids: ["p1700000000000.4"] }, { ...options, runOwned }), { owned: true });
-  assert.deepEqual(seen, [{ name: "probe.run", owner: "probe", cids: ["p1700000000000.4"] }]);
+  const end = holdSurfaces(["probe-surface", "command", "probe.run"]);
+  const h = await mountView("command-owned-cids");
+  const from = wire.calls.length;
+  try {
+    // probe.run null, with the cids ["p1700000000000.4"]
+    assert.deepEqual((await h.call()).result, { owned: true });
+    assert.deepEqual(h.sent(from, ["exposureForward"]).map(([, forward]) => [forward.method, forward.params.name, forward.params.cids]),
+      [["command.run", "probe.run", ["p1700000000000.4"]]]);
+  } finally {
+    end();
+    await h.close();
+  }
 });
 
 test("a call without cids hands no cids to the command of its plugin", async () => {
-  const { options } = fakes();
-  const seen = [];
-  const runOwned = async (name, params, owner, cids) => { seen.push(cids); return null; };
-  await answerViewCall({ id: 5, command: "probe.run", params: null }, { ...options, runOwned });
-  assert.deepEqual(seen, [undefined]);
+  const end = holdSurfaces(["probe-surface", "command", "probe.run"]);
+  const h = await mountView("command-owned-no-cids");
+  const from = wire.calls.length;
+  try {
+    // probe.run null, without cids
+    assert.equal((await h.call()).result, null);
+    assert.deepEqual(h.sent(from, ["exposureForward"]).map(([, forward]) => Object.hasOwn(forward.params, "cids")), [false]);
+  } finally {
+    end();
+    await h.close();
+  }
 });
 
-test("a call whose cids a line cannot hold is refused and runs nothing", async () => {
-  const { ran, options } = fakes();
-  await assert.rejects(answerViewCall({ id: 6, command: "probe.run", params: null, cids: ["p1.7\"x"] }, options), /cids must be an array of non-empty strings/);
-  assert.deepEqual(ran.owned, []);
+test("a call whose cids a line cannot hold is refused and runs nothing", { timeout: 5000 }, async () => {
+  const h = await mountView("cids-refused");
+  const from = wire.calls.length;
+  // probe.run null, with the cids ['p1.7"x']
+  assert.match((await h.call()).error.message, /cids must be an array of non-empty strings/);
+  assert.deepEqual(h.after(from), []);
+  await h.close();
 });
 
 test("a core command call that carries the cids of its cause hands them to runCore", async () => {
-  const { options } = fakes();
-  const seen = [];
-  const runCore = async (name, params, cids) => { seen.push({ name, cids }); return { core: true }; };
-  assert.deepEqual(await answerViewCall({ id: 7, command: "core.surface.open", params: {}, cids: ["p1700000000000.5"] }, { ...options, runCore }), { core: true });
-  assert.deepEqual(seen, [{ name: "core.surface.open", cids: ["p1700000000000.5"] }]);
+  const h = await mountView("command-core-cids");
+  const before = ran.core.length;
+  // core.tab.select {}, with the cids ["p1700000000000.5"]
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(ran.core.slice(before), [{ name: "core.tab.select", params: {}, cids: ["p1700000000000.5"] }]);
+  await h.close();
 });
 
 test("surface.menu runs core.surface.menu at the window point of a right click in the view", async () => {
-  const { ran, menu, options } = fakes();
-  assert.equal(await answerViewCall({ id: 1, command: "surface.menu", params: { x: 12, y: 8.5 } }, options), true);
-  assert.deepEqual(ran.core, [{ name: "core.surface.menu", params: { surface: "probe-surface", x: 112, y: 48.5 } }]);
-  menu.declared = false;
-  assert.equal(await answerViewCall({ id: 2, command: "surface.menu", params: { x: 1, y: 1 } }, options), false,
-    "a surface whose plugin declares no menu opens none");
-  assert.equal(ran.core.length, 1);
-  menu.declared = true;
-  menu.frame = null;
-  await assert.rejects(answerViewCall({ id: 3, command: "surface.menu", params: { x: 1, y: 1 } }, options),
-    { message: "view call surface.menu surface probe-surface has no applied frame" });
-  menu.frame = { x: 0, y: 0 };
-  await assert.rejects(answerViewCall({ id: 4, command: "surface.menu", params: { x: "1", y: Infinity } }, options),
-    { message: "view call surface.menu requires x and y as finite numbers" });
-  assert.equal(ran.core.length, 1);
+  frames.set("probe-surface", { x: 100, y: 40, w: 400, h: 300 });
+  const h = await mountView("surface-menu");
+  await h.mount("probe-bare-surface", "probe-bare");
+  frames.set("probe-bare-surface", { x: 100, y: 40, w: 400, h: 300 });
+  const before = ran.core.length;
+  try {
+    // surface.menu {x: 12, y: 8.5} of the view of the plugin probe, which declares surface.menu
+    assert.equal((await h.call()).result, true);
+    assert.deepEqual(ran.core.slice(before), [{ name: "core.surface.menu", params: { surface: "probe-surface", x: 112, y: 48.5 }, cids: undefined }]);
+    // surface.menu of the view of the plugin probe-bare, which declares none
+    assert.equal((await h.call()).result, false, "a surface whose plugin declares no menu opens none");
+    assert.equal(ran.core.length, before + 1);
+    // surface.menu of the view probe-surface after its frame ended, and with x as text and y as infinity
+    frames.delete("probe-surface");
+    assert.equal((await h.call()).error.message, "view call surface.menu surface probe-surface has no applied frame");
+    frames.set("probe-surface", { x: 0, y: 0, w: 400, h: 300 });
+    assert.equal((await h.call()).error.message, "view call surface.menu requires x and y as finite numbers");
+    assert.equal(ran.core.length, before + 1);
+  } finally {
+    frames.clear();
+    await h.close();
+  }
 });

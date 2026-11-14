@@ -1,6 +1,6 @@
 // Runs the view wire contract cases (packages/plugin-api/contract/view-wire.json) against the injected view script of core
 // (packages/plugin-api/view-start.js). Each case is one ordered list of steps; each step's output is compared literally with
-// what the script posts to the sok-view handler, delivers to the listener, or throws. A plugin's literal fakes copy these steps.
+// what the script posts to the sok-view handler, delivers to the listener, or throws. A plugin that repeats these steps as literals is a defect.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

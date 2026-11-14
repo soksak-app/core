@@ -1,0 +1,12 @@
+{
+  "recorded": "The launchd domain of the host of the recording, which has no WebKit service. Command: /bin/launchctl print pid/64435. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "/bin/launchctl",
+    "print",
+    "pid/64435"
+  ],
+  "status": 0,
+  "stdout": "pid/64435 = {\n\ttype = pid\n\thandle = 64435\n\tactive count = 1\n\ton-demand count = 1\n\tcreator = launchctl[64657]\n\tcreator euid = 501\n\tuniqueid = 16017830\n\tsecurity context = {\n\t\tuid = 501\n\t\tasid = 100026\n\t}\n\n\tdeath port = 0xf7a73\n\n\tservices = {\n\t}\n\n\tunmanaged processes = {\n\t}\n\n\tendpoints = {\n\t}\n\n\ttask-special ports = {\n\t\t\t 0x17703 4       bootstrap  (unknown)\n\t\t\t  0x3f07 9          access  (unknown)\n\t}\n\n\tresource coalition = {\n\t\tID = 735\n\t\ttype = resource\n\t\tstate = active\n\t\tactive count = 1\n\t\tname = application.app.example.sample-app-d.857386830.857386841\n\t\tbundle ID = app.example.sample-app-d\n\t}\n\n\tjetsam coalition = {\n\t\tID = 736\n\t\ttype = jetsam\n\t\tstate = active\n\t\tactive count = 1\n\t\tname = application.app.example.sample-app-d.857386830.857386841\n\t\tbundle ID = app.example.sample-app-d\n\t}\n\n\n\tproperties = \n}\n",
+  "stderr": "",
+  "pid": 64435
+}

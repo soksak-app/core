@@ -1,0 +1,19 @@
+{
+  "name": "view-calls-contributions",
+  "description": "A view reads the connected items of the extension point language, and of a point that its plugin does not declare.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000000746751,"source":"page"},"mono-ns-1":{"type":"integer","example":5746295789,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.contributions","params":{"point":"language"}}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":[{"plugin":"one","index":0,"item":{"name":"one"},"module":"soksak://core/modules/@scope/plugin-one/ui/one.js"},{"plugin":"two","index":1,"item":{"name":"two"},"module":"soksak://core/modules/@scope/plugin-two/ui/two.js"}],"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.contributions","params":{"point":"format"}}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"error":{"code":-32000,"message":"extension point format is not declared by probe"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":4}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

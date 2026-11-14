@@ -1,4 +1,4 @@
-// Runs published createBinder steps against the core implementation; no SDK code is copied into a fake.
+// Runs published createBinder steps against the core implementation; no SDK code is copied into the test.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

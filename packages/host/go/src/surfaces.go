@@ -1208,11 +1208,12 @@ func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 			}
 		}
 		began = RunLayout(func() error {
-			return setWindowOverlays(win.NativeWindow(), windowOverlays)
+			return setWindowOverlays(framework.MainPage(), win.NativeWindow(), windowOverlays)
 		}, func() error {
 			s.lastPreparation++
 			prepared.Ticket = s.lastPreparation
 			noteLayoutViewport(prepared.Ticket, req.Viewport)
+			recordLayoutBegin(prepared.Ticket)
 			queued, trace := surfaceDispatchClock(now)
 			return system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
 				observeSurfaceCallback(now, win.Name(), &prepared.Ticket, "sync", "sync-layout-ready-callback", queued, trace, func() {
@@ -1274,8 +1275,9 @@ func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 
 // setWindowOverlays gives the main web view of window the declared overlays. A window without a main page has none, because its
 // workbench draws over native views through the covers of the framework (docs/spec/native-surfaces.md#surface-host-container).
-func setWindowOverlays(window platform.Window, overlays []platform.WindowOverlay) error {
-	if !framework.MainPage() {
+// mainPage tells whether the windows of the framework show a main page.
+func setWindowOverlays(mainPage bool, window platform.Window, overlays []platform.WindowOverlay) error {
+	if !mainPage {
 		return nil
 	}
 	main, err := system.MainWebview(window)
@@ -1808,21 +1810,42 @@ func (s *Surfaces) finishLayoutPresentation(window platform.Window, req PresentR
 	return out, nil
 }
 
-// ensureCurrentPresentationJoins verifies that each visible root view in the request still matches its ticket join. The presentation
-// recorded the state of its ticket before it waited, so a ticket without state was cancelled meanwhile, by a reload, the close of the
-// window or cancelSurfaces, and its preparation is no longer current.
+// ensureCurrentPresentationJoins verifies that each visible root view in the request still matches its ticket join, and joins the views
+// that replaced a root view or whose root view is new to the ticket.
 func (s *Surfaces) ensureCurrentPresentationJoins(window platform.Window, req PresentRequest) error {
+	requests, err := s.rejoinRequests(window, req)
+	if err != nil {
+		return err
+	}
+	for _, request := range requests {
+		abandon, joined, err := system.JoinView(request.window, request.ticket, request.view, request.presented, request.ended)
+		// A transaction that a press or key event ended while the presentation waited takes no join: it committed what its
+		// joined views had presented, and the commit of the ticket answers that state, as the first stage records only the views
+		// that joined (docs/spec/native-surfaces.md#layout-transaction).
+		if _, _, err := s.viewJoined(request, viewJoinAnswer{abandon: abandon, joined: joined, err: err}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rejoinRequests verifies that each visible root view in the request still matches its ticket join and returns the joins of the views
+// that replaced a root view or whose root view is new to the ticket. The presentation recorded the state of its ticket before it
+// waited, so a ticket without state was cancelled meanwhile, by a reload, the close of the window or cancelSurfaces, and its
+// preparation is no longer current.
+func (s *Surfaces) rejoinRequests(window platform.Window, req PresentRequest) ([]viewJoinRequest, error) {
 	state := s.presentation.pending[req.Ticket]
 	if state == nil {
-		return fmt.Errorf("surface preparation %d is no longer current", req.Ticket)
+		return nil, fmt.Errorf("surface preparation %d is no longer current", req.Ticket)
 	}
+	var requests []viewJoinRequest
 	for _, placement := range req.Placements {
 		if !placement.Visible || s.viewRecords().specs[placement.ID] == nil {
 			continue
 		}
 		previous, exists := state.placements[placement.ID]
 		if !exists {
-			return fmt.Errorf("visible view %s has no placement in presentation %d", placement.ID, req.Ticket)
+			return nil, fmt.Errorf("visible view %s has no placement in presentation %d", placement.ID, req.Ticket)
 		}
 		channel, current := s.documents.view(placement.ID)
 		if !current {
@@ -1833,7 +1856,7 @@ func (s *Surfaces) ensureCurrentPresentationJoins(window platform.Window, req Pr
 				state.invalid[placement.ID] = true
 				continue
 			}
-			return fmt.Errorf("visible view %s has no current generation for presentation %d", placement.ID, req.Ticket)
+			return nil, fmt.Errorf("visible view %s has no current generation for presentation %d", placement.ID, req.Ticket)
 		}
 		if state.joined[placement.ID] == channel.generation {
 			continue
@@ -1843,15 +1866,15 @@ func (s *Surfaces) ensureCurrentPresentationJoins(window platform.Window, req Pr
 		}
 		if join, waiting := s.presentation.waiting[placement.ID]; waiting {
 			if join.ticket != req.Ticket {
-				return fmt.Errorf("visible view %s still waits for presentation %d", placement.ID, join.ticket)
+				return nil, fmt.Errorf("visible view %s still waits for presentation %d", placement.ID, join.ticket)
 			}
 			if join.generation == channel.generation {
-				return fmt.Errorf("visible view %s has a pending join that is not recorded for presentation %d", placement.ID, req.Ticket)
+				return nil, fmt.Errorf("visible view %s has a pending join that is not recorded for presentation %d", placement.ID, req.Ticket)
 			}
 			delete(s.presentation.waiting, placement.ID)
 			if join.abandon != nil {
 				if err := join.abandon(); err != nil {
-					return fmt.Errorf("abandoning replaced generation %d of view %s: %w", join.generation, placement.ID, err)
+					return nil, fmt.Errorf("abandoning replaced generation %d of view %s: %w", join.generation, placement.ID, err)
 				}
 			}
 		}
@@ -1859,21 +1882,11 @@ func (s *Surfaces) ensureCurrentPresentationJoins(window platform.Window, req Pr
 		state.placements[placement.ID] = previous
 		state.requiresJoin[placement.ID] = true
 		delete(state.invalid, placement.ID)
-		generation, joined, err := s.joinViewForPresentation(window, req.Ticket, placement)
-		if err != nil {
-			return err
-		}
-		// A transaction that a press or key event ended while the presentation waited takes no join: it committed what its
-		// joined views had presented, and the commit of the ticket answers that state, as the first stage records only the views
-		// that joined (docs/spec/native-surfaces.md#layout-transaction).
-		if !joined {
-			continue
-		}
-		if generation != channel.generation {
-			return fmt.Errorf("visible view %s generation %d was not joined to presentation %d", placement.ID, channel.generation, req.Ticket)
+		if request, ok := s.requestViewJoin(window, req.Ticket, placement); ok {
+			requests = append(requests, request)
 		}
 	}
-	return nil
+	return requests, nil
 }
 
 // CreateLogicalSurfaceHandle passes a native creation failure as it is and rejects a nil handle.

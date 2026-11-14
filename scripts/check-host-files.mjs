@@ -298,8 +298,8 @@ export function auditLibraryNames(paths, read) {
   return errors.filter((line, index) => errors.indexOf(line) === index);
 }
 
-// Checks for stub implementations (a regression guard).
-const STUB_PATTERNS = [
+// Checks for markers of an unimplemented operation (a regression guard).
+const UNIMPLEMENTED_PATTERNS = [
   /TODO:\s*Implement/,
   /not yet implemented/,
   /unimplemented!/,
@@ -314,18 +314,18 @@ const PRODUCT_DIRS = [
   "native/darwin/src",
   "packages/workbench-mygo/src",
 ];
-/** Paths that are not checked. Tests and the Windows unsupported implementation legitimately hold stub wording. */
+/** Paths that are not checked. Tests and the Windows unsupported implementation legitimately hold these markers. */
 const EXCLUDE = /(^|\/)(test|tests|windows)(\/|$)/;
-const STUB_SOURCE = /\.(go|rs|m|js|mjs)$/;
+const MARKER_SOURCE = /\.(go|rs|m|js|mjs)$/;
 
 /**
- * Returns the lines of stub implementations in product sources. files are repository-relative paths and read(file) is their text. A file that cannot be read
+ * Returns the lines of unimplemented-operation markers in product sources. files are repository-relative paths and read(file) is their text. A file that cannot be read
  * was not checked, so the check fails with an error that holds the path.
  */
-export function findStubs(files, read) {
-  const stubs = [];
+export function findUnimplementedMarkers(files, read) {
+  const markers = [];
   for (const file of files) {
-    if (!PRODUCT_DIRS.some((dir) => file.startsWith(`${dir}/`)) || !STUB_SOURCE.test(file) || EXCLUDE.test(file)) continue;
+    if (!PRODUCT_DIRS.some((dir) => file.startsWith(`${dir}/`)) || !MARKER_SOURCE.test(file) || EXCLUDE.test(file)) continue;
     let content;
     try {
       content = read(file);
@@ -333,10 +333,10 @@ export function findStubs(files, read) {
       throw new Error(`${file}: ${error.message}`, { cause: error });
     }
     content.split("\n").forEach((line, index) => {
-      for (const pattern of STUB_PATTERNS) if (pattern.test(line)) stubs.push(`${file}:${index + 1}: ${pattern.source}`);
+      for (const pattern of UNIMPLEMENTED_PATTERNS) if (pattern.test(line)) markers.push(`${file}:${index + 1}: ${pattern.source}`);
     });
   }
-  return stubs;
+  return markers;
 }
 
 // An argument of a Tauri command is Argument<T> unless it is a framework object. Then the argument decoder of the host interprets it and rejects it with the same sentence as the Wails host
@@ -399,7 +399,7 @@ export function auditPrefixes(tracked) {
   const audits = [
     ["the main-thread audit", [MAIN_THREAD_LAYER, MAIN_THREAD_BINDINGS, "native/darwin/src/host_api_"]],
     ["the undecoded command argument audit", [COMMAND_SOURCES]],
-    ["the stub check", PRODUCT_DIRS.map((dir) => `${dir}/`)],
+    ["the unimplemented-marker check", PRODUCT_DIRS.map((dir) => `${dir}/`)],
   ];
   const errors = [];
   for (const [audit, prefixes] of audits) {
@@ -693,16 +693,16 @@ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) 
   errors.push(...await auditMainThreadCalls(Object.fromEntries(tracked
     .filter(mainThreadSource)
     .map((path) => [path, readFileSync(`${ROOT}${path}`, "utf8")]))));
-  const stubErrors = findStubs(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8"));
-  if (stubErrors.length) {
-    console.error("Stub implementations found (anti-regression check failed):");
-    console.error(stubErrors.join("\n"));
+  const markerErrors = findUnimplementedMarkers(tracked, (file) => readFileSync(`${ROOT}${file}`, "utf8"));
+  if (markerErrors.length) {
+    console.error("Unimplemented-operation markers found (anti-regression check failed):");
+    console.error(markerErrors.join("\n"));
     process.exitCode = 1;
   }
   if (errors.length) {
     console.error(errors.join("\n"));
     process.exitCode = 1;
-  } else if (stubErrors.length === 0) {
+  } else if (markerErrors.length === 0) {
     console.log(`Host structure checks passed: ${PAIRS.length} pairs`);
   }
 }

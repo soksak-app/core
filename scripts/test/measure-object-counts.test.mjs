@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
 
 import * as counts from "../measure-object-counts.mjs";
 import { countsOf, measure } from "../measure-object-counts.mjs";
@@ -241,95 +246,79 @@ test("runtime figures that are not non-negative integers are an error that names
   }), /runtime figure goroutines is not a non-negative integer \(undefined\)/);
 });
 
+/** The sok that `make build-sok` builds. The operation steps run it, so a missing build is an error that names the file and the command. */
+const SOK = fileURLToPath(new URL("../../target/debug/sok", import.meta.url));
+
 /**
- * A fake application for the operation steps: run and request record each command, the statuses follow the commands, and until
- * records each wait and fails when the status does not satisfy its condition.
+ * The operation steps of a window `w1` of the case player of the case `name`: each command runs the real sok on the configuration
+ * folder of the player, and the client is a real connection to the player. Closing the player fails when the case was not played.
  */
-function application() {
-  const calls = [];
-  // The workbench start of the window; core.plugins.apply starts the workbench again in the same page process, and the new
-  // start is reported once the next status is read after the reply.
-  const state = { picker: false, settings: false, cards: [{ id: "main", fixed: false, c0: 1 }], start: 1, restart: false, pageProcess: 70 };
-  const statuses = {
-    "core.window.workbench": () => {
-      if (state.restart) { state.start += 1; state.restart = false; }
-      return { start: `start-${state.start}`, startedAt: 1000 + state.start, readyState: "complete" };
-    },
-    "host.window": () => ({ pageProcess: state.pageProcess }),
-    "core.grid": () => ({ cards: state.cards }),
-    "core.picker": () => ({ open: state.picker }),
-    "core.settings-modal": () => ({ open: state.settings }),
-  };
-  const run = async (args) => {
-    calls.push(args.join(" "));
-    const [name] = args;
-    if (name === "status") return statuses[args[1]]();
-    if (name === "core.card.split") { state.cards.push({ id: "split", fixed: false, c0: 2 }); return { card: "split" }; }
-    if (name === "core.card.close") { state.cards = state.cards.filter((card) => card.id !== "split"); return null; }
-    if (name === "core.card.menu") { state.picker = true; return null; }
-    if (name === "core.picker.close") { state.picker = false; return null; }
-    if (name === "core.settings.open") { state.settings = true; return null; }
-    if (name === "core.settings.close") { state.settings = false; return null; }
-    if (name === "core.plugins.apply") { state.restart = true; return { reloaded: true }; }
-    throw new Error(`no command ${name}`);
-  };
-  const request = async (method, params) => { calls.push(`${method} ${JSON.stringify(params)}`); return { steps: 12 }; };
-  const until = async (name, predicate) => {
-    const value = statuses[name]();
-    calls.push(`until ${name} ${JSON.stringify(value)}`);
-    if (!predicate(value)) throw new Error(`status ${name} did not satisfy the condition: ${JSON.stringify(value)}`);
-    return value;
-  };
-  const steps = (overrides = {}) => counts.operationSteps({
-    window: "w1", plugins: ["probe"], run, request, until, waitFor: async () => { throw new Error("no wait on windows"); }, projectRoot: "/p",
-    ...overrides,
-  });
-  return { calls, run, steps };
+async function application(t, name) {
+  if (!existsSync(SOK)) throw new Error(`${SOK} is not built; run make build-sok`);
+  const server = await startCasePlayer(`object-counts-${name}`);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const steps = counts.operationSteps({ window: "w1", plugins: ["probe"], sok: SOK, configDir: server.configDir, client,
+    statuses: counts.statusChanges(), projectRoot: "/p" });
+  return { server, steps };
 }
 
-test("the divider drag splits a card, drags the boundary of the split through diagnostics.drag and closes the split", async () => {
-  const { calls, steps } = application();
-  await steps()["divider.drag"]();
-  assert.deepEqual(calls, [
-    "status core.grid --window w1",
-    "core.card.split --window w1 --card main --side right --plugin probe",
-    "status core.grid --window w1",
-    `diagnostics.drag ${JSON.stringify({ window: "w1", axis: "x", line: 2, dx: 40, dy: 0, ms: 200, times: 1 })}`,
-    "core.card.close --window w1 --card split",
+/** The requests that the player received, as `<method> <name>` of each in their order. */
+const received = (server) => server.requests.map(({ method, params }) => (params?.name === undefined ? method : `${method} ${params.name}`));
+
+test("the divider drag splits a card, drags the boundary of the split through diagnostics.drag and closes the split", async (t) => {
+  const { server, steps } = await application(t, "divider-drag");
+  await steps["divider.drag"]();
+  assert.deepEqual(received(server), [
+    "status.get core.grid",
+    "exposure.list", "command.run core.card.split",
+    "status.get core.grid",
+    "diagnostics.drag",
+    "exposure.list", "command.run core.card.close",
+  ]);
+  const [, split, , drag, close] = server.requests.filter(({ method }) => method !== "exposure.list");
+  assert.deepEqual(split.params, { window: "w1", name: "core.card.split", params: { card: "main", side: "right", plugin: "probe" } });
+  assert.deepEqual(drag.params, { window: "w1", axis: "x", line: 2, dx: 40, dy: 0, ms: 200, times: 1 });
+  assert.deepEqual(close.params, { window: "w1", name: "core.card.close", params: { card: "split" } });
+});
+
+test("the menu and the settings window open and close through their declared commands and wait for their statuses", async (t) => {
+  const { server, steps } = await application(t, "menu-settings");
+  await steps["card.menu"]();
+  await steps["settings.window"]();
+  await server.played;
+  const sent = server.requests.filter(({ method }) => method === "command.run" || method === "status.watch")
+    .map(({ method, params }) => `${method === "status.watch" ? "until" : "run"} ${params.name}`);
+  assert.deepEqual(sent, [
+    "run core.card.menu",
+    "until core.picker",
+    "run core.picker.close",
+    "until core.picker",
+    "run core.settings.open",
+    "until core.settings-modal",
+    "run core.settings.close",
+    "until core.settings-modal",
+  ]);
+  assert.deepEqual(server.requests.find(({ method, params }) => method === "command.run" && params.name === "core.card.menu").params,
+    { window: "w1", name: "core.card.menu", params: { card: "main", menu: "add" } });
+});
+
+test("the plugins apply waits for a new start of core.window.workbench, which comes in the same page process", async (t) => {
+  const { server, steps } = await application(t, "plugins-apply");
+  await steps["plugins.apply"]();
+  await server.played;
+  assert.deepEqual(received(server).filter((name) => name !== "exposure.list" && !name.startsWith("status.unwatch")), [
+    "status.get core.window.workbench",
+    "command.run core.plugins.apply",
+    "status.watch core.window.workbench",
+    "status.get core.window.workbench",
   ]);
 });
 
-test("the menu and the settings window open and close through their declared commands and wait for their statuses", async () => {
-  const { calls, steps } = application();
-  await steps()["card.menu"]();
-  await steps()["settings.window"]();
-  assert.deepEqual(calls, [
-    "status core.grid --window w1",
-    "core.card.menu --window w1 --card main --menu add",
-    'until core.picker {"open":true}',
-    "core.picker.close --window w1",
-    'until core.picker {"open":false}',
-    "core.settings.open --window w1",
-    'until core.settings-modal {"open":true}',
-    "core.settings.close --window w1",
-    'until core.settings-modal {"open":false}',
-  ]);
-});
-
-test("the plugins apply waits for a new start of core.window.workbench, which comes in the same page process", async () => {
-  const { calls, steps } = application();
-  await steps()["plugins.apply"]();
-  assert.deepEqual(calls, [
-    "status core.window.workbench --window w1",
-    "core.plugins.apply --window w1",
-    'until core.window.workbench {"start":"start-2","startedAt":1002,"readyState":"complete"}',
-  ]);
-});
-
-test("a divider drag whose split card is missing from core.grid fails with the cards it found", async () => {
-  const { run, steps } = application();
-  const step = steps({ run: async (args) => (args[0] === "core.card.split" ? { card: "other" } : run(args)) })["divider.drag"];
-  await assert.rejects(step(), /core\.grid reports no card other after core\.card\.split: \["main"\]/);
+test("a divider drag whose split card is missing from core.grid fails with the cards it found", async (t) => {
+  const { steps } = await application(t, "divider-drag-missing-card");
+  await assert.rejects(steps["divider.drag"](), /core\.grid reports no card other after core\.card\.split: \["main"\]/);
 });
 
 test("every count of every object member of the reply outside runtime, documents and sessions is a count of the measurement", async () => {

@@ -21,7 +21,7 @@ func TestProjectOpenShowsTheOtherOwnerWithoutActivation(t *testing.T) {
 	previous := projectFrontActive
 	projectFrontActive = func() (bool, error) { return false, nil }
 	t.Cleanup(func() { projectFrontActive = previous })
-	host, _, _, ctx := projectOpenFixture(t)
+	host, _, ctx := projectOpenFixture(t)
 	fronts := &frontRecord{}
 	var events []string
 	other := &Surfaces{projects: map[string]string{}, fronts: fronts, titles: &titleRecord{}, host: host}

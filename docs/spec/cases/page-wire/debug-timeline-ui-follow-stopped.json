@@ -1,0 +1,467 @@
+{
+  "name": "debug-timeline-ui-follow-stopped",
+  "description": "The page shows the timeline and stops following; a notice while stopped asks nothing, and following again asks for the row that the host wrote meanwhile.",
+  "replay": false,
+  "reason": "The case shows, updates, places and hides a modal view of a window through the overlay calls, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "show-request": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "statuses": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "update": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-5": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-5": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-6": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-6": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-7": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-7": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": "$show-request"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": "$statuses"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state.json"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFiles"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-2"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "logQuery",
+        "payload": {
+          "channel": "other",
+          "level": "trace",
+          "order": "desc",
+          "limit": 500
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "rows": [
+            {
+              "role": "host",
+              "boot": "a",
+              "file": "logs/host-a.jsonl",
+              "offset": 300,
+              "event": {
+                "ts_us": 30,
+                "seq": 3,
+                "level": "warn",
+                "layer": "workbench",
+                "event": "workbench.call.slow",
+                "fields": {
+                  "name": "windows.list"
+                }
+              }
+            },
+            {
+              "role": "host",
+              "boot": "a",
+              "file": "logs/host-a.jsonl",
+              "offset": 200,
+              "event": {
+                "ts_us": 20,
+                "seq": 2,
+                "level": "debug",
+                "layer": "host",
+                "event": "host.window.created",
+                "fields": {},
+                "window": "w1"
+              }
+            },
+            {
+              "role": "host",
+              "boot": "a",
+              "file": "logs/host-a.jsonl",
+              "offset": 100,
+              "event": {
+                "ts_us": 10,
+                "seq": 1,
+                "level": "info",
+                "layer": "host",
+                "event": "log.open",
+                "fields": {
+                  "schema": 3,
+                  "boot": "a"
+                }
+              }
+            }
+          ],
+          "next": null,
+          "tail": {
+            "host-a": 3
+          },
+          "scanned": {
+            "logs": 1,
+            "segments": 1,
+            "read": 1,
+            "lines": 3,
+            "rebuilt": 0
+          },
+          "rejected": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "notice": {
+        "event": "debug-log-changed",
+        "payload": {
+          "path": "logs/host-a.jsonl",
+          "size": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-3"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-4"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-4"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-5"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "logQuery",
+        "payload": {
+          "channel": "other",
+          "level": "trace",
+          "order": "asc",
+          "limit": 500,
+          "since": {
+            "host-a": 3
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "rows": [
+            {
+              "role": "host",
+              "boot": "a",
+              "file": "logs/host-a.jsonl",
+              "offset": 800,
+              "event": {
+                "ts_us": 60,
+                "seq": 8,
+                "level": "info",
+                "layer": "host",
+                "event": "host.app.event",
+                "fields": {}
+              }
+            }
+          ],
+          "next": null,
+          "tail": {
+            "host-a": 8
+          },
+          "scanned": {
+            "logs": 1,
+            "segments": 1,
+            "read": 1,
+            "lines": 1,
+            "rebuilt": 0
+          },
+          "rejected": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-5"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-6"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-6"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-7"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-7"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

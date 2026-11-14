@@ -333,31 +333,19 @@ test("a sidecar failure without a handler becomes a page error", async () => {
   }
 });
 
-test("the first sidecar request waits until the failure listener is installed", async (t) => {
-  let install;
-  let installStarted;
-  const installing = new Promise((resolve) => { installStarted = resolve; });
-  const calls = [];
-  // This test keeps a replacement of the host. The page-wire reader answers the installation of a listener at once, so the case cannot hold
-  // the installation until the test releases it, and the wait of the first request cannot be observed through it. The replacement is scoped to
-  // this test, and the copy of the module that it imports is the only one that reads it.
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    call: async (name, payload) => { calls.push([name, payload]); return null; },
-    on: (name) => (name === "sidecar-failure"
-      ? new Promise((resolve) => { install = () => resolve(() => {}); installStarted(); })
-      : Promise.resolve(() => {})),
-  } } });
+test("the first sidecar request waits until the failure listener is installed", async () => {
+  // The case holds the registration of the listener of sidecar-failure until the test releases it.
+  wire = selectPageWire("surface-runtime-sidecar-failure-listener-order");
   const { windowSidecar } = await import("../host.js?test=failure-listener-order");
   const sent = windowSidecar("@fixture/ordered-failure").send("first-tab", { operation: "open" });
   // The installation has started and is not finished. The send runs in microtasks until it waits for the installation, so after
   // the end of the microtask queue a send that did not wait for it has called the host.
-  await installing;
   await drained();
-  assert.deepEqual(calls.filter(([name]) => name === "sidecarSend"), [], "no request before the failure listener is installed");
-  assert.equal(typeof install, "function", "the failure listener installation started");
-  install();
+  assert.deepEqual(wire.calls.filter(({ name }) => name === "sidecarSend"), [], "no request before the failure listener is installed");
+  wire.release();
   await sent;
-  assert.deepEqual(calls.filter(([name]) => name === "sidecarSend").map(([, payload]) => payload.surface), ["first-tab"]);
+  assert.deepEqual(wire.calls.filter(({ name }) => name === "sidecarSend").map(({ payload }) => payload.surface), ["first-tab"]);
+  wire.finish();
 });
 
 test("private view sidecar authority survives the shared ordered IPC queue unchanged", async () => {

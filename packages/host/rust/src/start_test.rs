@@ -7,7 +7,7 @@ use super::{after_page_started, start_document, start_parts};
 // contract: images.reload.start-sends-detach-without-waiting
 #[test]
 fn the_page_start_sends_the_image_detach_and_lists_its_surface_without_waiting() {
-    // The fake supplier never acknowledges, so a start that waited for the acknowledgement would not return.
+    // The supplier of this test never acknowledges, so a start that waited for the acknowledgement would not return.
     let (detach_sender, detach_receiver) = mpsc::channel();
     let order = Mutex::new(Vec::new());
     let (result_sender, result_receiver) = mpsc::channel();

@@ -1,0 +1,19 @@
+{
+  "name": "object-counts-divider-drag-missing-card",
+  "description": "A split card that core.grid does not report fails the divider drag with the cards that the grid reports.",
+  "replay": false,
+  "reason": "The case plays the commands and the waits of the operations of an object-count measurement, which run sok processes and a client of the endpoint on a workbench that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"name":"core.grid","window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"main","fixed":false,"c0":1}]}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"exposure.list","params":{"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"status":[],"commands":[{"name":"core.card.split","description":"Splits a card and puts a new tab of a plugin in a new card on the named side of it: left, right, top, or bottom.","params":{"type":"object","properties":{"card":{"type":"string"},"side":{"enum":["left","right","top","bottom"]},"plugin":{"type":"string"}}},"result":{"type":"object","properties":{"card":{"type":"string"},"tab":{"type":"string"}}},"registered":true}],"element":[]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"name":"core.card.split","params":{"card":"main","side":"right","plugin":"probe"},"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"card":"other","tab":"t-2"}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"name":"core.grid","window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"main","fixed":false,"c0":1}]}}},
+    {"close":"client"}
+  ]
+}

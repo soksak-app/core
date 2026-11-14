@@ -18,15 +18,7 @@ const RELEASE_DIAGNOSTICS = fileURLToPath(new URL("../release-diagnostics.js", i
 function fixtureApp(t) {
   const app = mkdtempSync(join(tmpdir(), "soksak-stage-"));
   t.after(() => rmSync(app, { recursive: true, force: true }));
-  mkdirSync(join(app, "runtime"));
-  writeFileSync(join(app, "runtime/index.js"), "export const host = null;\n");
-  writeFileSync(join(app, "runtime/start.js"), "export default { workspace: { common: {}, projects: [] }, controls: null };\n");
-  writeFileSync(join(app, "package.json"), JSON.stringify({ name: "fixture-app", private: true }));
-  writeFileSync(join(app, "environment.json"), JSON.stringify({
-    runtime: "runtime",
-    workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "x", title: "x" }] }] } },
-    sidebars: { sets: [], links: [] },
-  }));
+  cpSync(fileURLToPath(new URL("fixtures/stage-app/", import.meta.url)), app, { recursive: true });
   return app;
 }
 
@@ -72,7 +64,8 @@ function viewRootApp(t) {
   rmSync(join(app, "runtime"), { recursive: true });
   const environment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
   delete environment.runtime;
-  writeFileSync(join(app, "environment.json"), JSON.stringify(environment));
+  const environmentFile = join(app, "environment.json");
+  writeFileSync(environmentFile, JSON.stringify(environment));
   return app;
 }
 
@@ -119,7 +112,8 @@ test("staging keeps the registry that the application declares and takes no regi
   const app = fixtureApp(t);
   const sourceEnvironment = JSON.parse(readFileSync(join(app, "environment.json"), "utf8"));
   sourceEnvironment.registry = "https://registry.example/index.json";
-  writeFileSync(join(app, "environment.json"), JSON.stringify(sourceEnvironment));
+  const environmentFile = join(app, "environment.json");
+  writeFileSync(environmentFile, JSON.stringify(sourceEnvironment));
 
   stage(app, "--diagnostics");
 
@@ -294,8 +288,7 @@ test("staging holds every file that a staged page reaches, in a release and in a
 
 test("staging leaves the imports of the application runtime to its host", (t) => {
   const app = fixtureApp(t);
-  writeFileSync(join(app, "runtime/index.js"), "import \"/wails/runtime.js\";\nexport const host = null;\n");
-  writeFileSync(join(app, "runtime/start.js"), "import start from \"soksak://core/start.json\" with { type: \"json\" };\nexport default start;\n");
+  cpSync(fileURLToPath(new URL("fixtures/stage-app-wails-runtime/", import.meta.url)), app, { recursive: true });
   assert.match(stage(app), /staged the workbench/);
 });
 
@@ -307,7 +300,8 @@ function workbenchWithout(t, file) {
   cpSync(source, copy, { recursive: true, filter: (path) => !/\/(node_modules|test)(\/|$)/.test(path.slice(source.length - 1)) });
   symlinkSync(join(source, "node_modules"), join(copy, "node_modules"));
   const manifest = JSON.parse(readFileSync(join(copy, "package.json"), "utf8"));
-  writeFileSync(join(copy, "package.json"), JSON.stringify({ ...manifest, files: manifest.files.filter((name) => name !== file) }));
+  const manifestFile = join(copy, "package.json");
+  writeFileSync(manifestFile, JSON.stringify({ ...manifest, files: manifest.files.filter((name) => name !== file) }));
   return copy;
 }
 

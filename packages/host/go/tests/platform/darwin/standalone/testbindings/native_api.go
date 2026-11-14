@@ -46,6 +46,30 @@ func Functions() abi.NativeFunctions {
 		SpHostTestFrameId:      func(a0 unsafe.Pointer) uint32 { return uint32(C.sp_host_test_frame_id(a0)) },
 		SpHostTestFrameInUse:   func(a0 unsafe.Pointer) bool { return bool(C.sp_host_test_frame_in_use(a0)) },
 		SpHostTestFrameRelease: func(a0 unsafe.Pointer) { C.sp_host_test_frame_release(a0) },
+		SpHostTestWindowCreate: func(a0 float64, a1 float64, a2 *unsafe.Pointer) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_create(C.double(a0), C.double(a1), (*unsafe.Pointer)(unsafe.Pointer(a2)))))
+		},
+		SpHostTestWindowCreateTitled: func(a0 float64, a1 float64, a2 *unsafe.Pointer) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_create_titled(C.double(a0), C.double(a1), (*unsafe.Pointer)(unsafe.Pointer(a2)))))
+		},
+		SpHostTestWindowClose: func(a0 unsafe.Pointer) *byte { return (*byte)(unsafe.Pointer(C.sp_host_test_window_close(a0))) },
+		SpHostTestWindowMainWebview: func(a0 unsafe.Pointer, a1 *byte, a2 *unsafe.Pointer) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_main_webview(a0, (*C.char)(unsafe.Pointer(a1)), (*unsafe.Pointer)(unsafe.Pointer(a2)))))
+		},
+		SpHostTestWebviewLoaded:           func(a0 unsafe.Pointer) *byte { return (*byte)(unsafe.Pointer(C.sp_host_test_webview_loaded(a0))) },
+		SpHostTestViewPresentationRelease: func() *byte { return (*byte)(unsafe.Pointer(C.sp_host_test_view_presentation_release())) },
+		SpHostTestWindowImageRegions: func(a0 unsafe.Pointer, a1 *uint64) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_image_regions(a0, (*C.uint64_t)(unsafe.Pointer(a1)))))
+		},
+		SpHostTestWindowKeysWait: func(a0 unsafe.Pointer, a1 *bool, a2 *bool, a3 *bool) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_keys_wait(a0, (*C.bool)(unsafe.Pointer(a1)), (*C.bool)(unsafe.Pointer(a2)), (*C.bool)(unsafe.Pointer(a3)))))
+		},
+		SpHostTestWindowOpenKeyWait: func(a0 unsafe.Pointer, a1 bool) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_open_key_wait(a0, C.bool(a1))))
+		},
+		SpHostTestRegionPresentLease: func(a0 unsafe.Pointer, a1 uint64, a2 uint64, a3 int32) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_region_present_lease(a0, C.uint64_t(a1), C.uint64_t(a2), C.int(a3))))
+		},
 		SpHostTestSpawnHandledCrash: func(a0 *byte, a1 *byte, a2 *byte, a3 int32, a4 *int32, a5 *uintptr) *byte {
 			return (*byte)(unsafe.Pointer(C.sp_host_test_spawn_handled_crash((*C.char)(unsafe.Pointer(a0)), (*C.char)(unsafe.Pointer(a1)), (*C.char)(unsafe.Pointer(a2)), C.int(a3), (*C.int)(unsafe.Pointer(a4)), (*C.uintptr_t)(unsafe.Pointer(a5)))))
 		},

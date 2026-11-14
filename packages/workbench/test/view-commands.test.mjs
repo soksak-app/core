@@ -1,6 +1,7 @@
 // Checks the page side of the commands of a view (docs/spec/native-surfaces.md#view-surfaces): a command that the page runs for
 // its exposure request is sent to the view and answered by the reply of the view. A command has no time limit: its reply, the
-// close of its surface or the end of the view ends it. The post and the reports are fakes.
+// close of its surface or the end of the view ends it. The post and the report are the functions that createViewCommands takes as parameters;
+// the test records what they receive.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createViewCommands } from "../view-commands.js";

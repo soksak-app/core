@@ -3370,6 +3370,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sok-window-race"
+version = "0.0.40"
+dependencies = [
+ "serde_json",
+ "soksak-host",
+ "soksak-host-tauriv2",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "soksak-host"
 version = "0.0.40"
 dependencies = [

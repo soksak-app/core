@@ -1,0 +1,14 @@
+{
+  "name": "view-events-settings",
+  "description": "The page applies the theme of the changed settings to the window and pushes the changed settings of the plugin.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"settings","data":{"home":""},"surface":"probe-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"setMenuLanguage","payload":"en"}},
+    {"reply":{"result":null}}
+  ]
+}

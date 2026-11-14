@@ -1,0 +1,18 @@
+{
+  "name": "app-update-changed-once",
+  "description": "The page reads the update state five times: a candidate, the same candidate, no candidate, a refused read and the same refusal.",
+  "replay": false,
+  "reason": "The appUpdateState call reads the registry index of the application, which the Go producer does not run.",
+  "steps": [
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.8","available":{"version":"0.0.9","release":{"url":"https://github.com/soksak-app/core/releases/download/v0.0.9/soksak-0.0.9-darwin-arm64-wailsv3.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}}}},
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.8","available":{"version":"0.0.9","release":{"url":"https://github.com/soksak-app/core/releases/download/v0.0.9/soksak-0.0.9-darwin-arm64-wailsv3.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}}}},
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.8","available":null}}},
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"error":"the index cannot be read"}},
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"error":"the index cannot be read"}}
+  ]
+}

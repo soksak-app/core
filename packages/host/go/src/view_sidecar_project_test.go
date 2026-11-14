@@ -6,14 +6,13 @@ import (
 	"testing"
 )
 
-// A real ViewStart is installed through the native-view owner. Only the native
-// platform is its existing fixture; the Sidecars sender and outbound wire are
-// production code, with a connected in-memory service and no child process.
-func mountedSidecarProject(t *testing.T) (*Surfaces, *sidecar, *lifecyclePlatform) {
+// A real ViewStart is recorded with the mount of the view (mountView); the Sidecars sender and outbound wire are production code, with
+// a connected in-memory service and no child process.
+func mountedSidecarProject(t *testing.T) (*Surfaces, *sidecar, *lifecycleViews) {
 	t.Helper()
 	start := nullOriginStart()
 	start.Project = &SurfaceProject{ID: "project-a", Root: "/fixture/project-a"}
-	s, fake, _ := newLifecycleSurfacesWithStart(t, start)
+	s, views, _ := newLifecycleSurfacesWithStart(t, start)
 	owner := sidecarSessionSurfaces(t)
 	s.projects, s.shown, s.titles, s.sidecars = owner.projects, owner.shown, owner.titles, owner.sidecars
 	s.root = "/fixture/project-a"
@@ -24,7 +23,7 @@ func mountedSidecarProject(t *testing.T) (*Surfaces, *sidecar, *lifecyclePlatfor
 	if _, ok := s.sidecars.roots["probe-surface"]; ok {
 		t.Fatal("fixture must precede the mount's first sidecar send")
 	}
-	return s, service, fake
+	return s, service, views
 }
 
 func requireMountedSidecarRoot(t *testing.T, s *Surfaces, service *sidecar, want string) {
@@ -86,11 +85,11 @@ func TestRetiredMountedViewCannotForwardALateSidecarRequest(t *testing.T) {
 
 // contract: sidecars.view-send.new-mount-sends-its-own-project
 func TestRecreatedViewSidecarRootUsesItsNewCommittedMountProject(t *testing.T) {
-	s, service, fake := mountedSidecarProject(t)
+	s, service, views := mountedSidecarProject(t)
 	old, _ := s.documents.view("probe-surface")
 	spec := s.viewRecords().specs["probe-surface"]
 	spec.start.Project = &SurfaceProject{ID: "project-b", Root: "/fixture/project-b"}
-	endView(t, s, fake, viewTestEpoch)
+	endView(t, s, views, viewTestEpoch)
 	current, ok := s.documents.view("probe-surface")
 	if !ok || current.generation == old.generation {
 		t.Fatal("the same logical surface did not receive a new actual mount generation")

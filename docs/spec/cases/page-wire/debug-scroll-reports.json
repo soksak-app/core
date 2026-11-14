@@ -1,0 +1,226 @@
+{
+  "name": "debug-scroll-reports",
+  "description": "The page opens the debug view, which records the state and lists the logs folder, and the modal reports the scroll position of its content eight times with the notice overlay-pick: four positions that the page keeps and four values that are not numbers, which the page refuses.",
+  "replay": false,
+  "reason": "The case shows, updates, places and hides a modal view of a window through the overlay calls, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "show-request": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "statuses": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "update": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "place-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": "$show-request"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": "$statuses"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state.json"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFiles"
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": "$place-2"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "12"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "-1"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "-3.5"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "0"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "abc"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "NaN"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": "Infinity"
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "overlay-pick",
+        "payload": {
+          "id": "debug",
+          "key": "scroll",
+          "value": ""
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

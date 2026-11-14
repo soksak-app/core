@@ -65,6 +65,12 @@ void surfaceLayoutKeysDecided(void *owner);
 void surfaceLayoutKeysWaitForModal(void *owner);
 // Whether the keys of owner wait for a modal.
 bool surfaceLayoutKeysModalWaits(void *owner);
+// Reads the key wait of owner for the host test API (tests/support/host_test_api.m): returns whether owner has a key wait, and writes
+// whether it waits for the decision of the workbench and whether it waits for a modal. A window without a wait writes false for both.
+bool surfaceLayoutKeysWaitState(void *owner, bool *decision, bool *modal);
+// Opens the key wait of owner through the opener that the release of a press on the workbench uses, with the wait for the decision set
+// when decision is true, for the host test API (tests/support/host_test_api.m).
+void surfaceLayoutKeysWaitOpen(void *owner, bool decision);
 // Ends the wait for the modal, after the modal took the keyboard or when it closed or failed before that.
 void surfaceLayoutKeysModalEnded(void *owner);
 // Follows a left press and its release that pass to the views of owner, at the point in window coordinates, before they reach a

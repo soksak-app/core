@@ -18,6 +18,9 @@ const IDENTIFIER = /^p[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 // The identifiers of the output name the page identity of the test page as $PAGE.
 const normalize = (value, page) => JSON.parse(JSON.stringify(value).replaceAll(`p${page}.`, "p$PAGE."));
 
+// One turn of the event loop runs every microtask that the writer chain of the page queued before it.
+const turn = () => new Promise((resolve) => setImmediate(resolve));
+
 async function runCase(testCase) {
   const dom = new JSDOM("", { url: "soksak://probe/", runScripts: "outside-only" });
   const logs = [];
@@ -120,7 +123,12 @@ async function runCase(testCase) {
         outputs.push({ request: requests.pop() ?? null, result, throws });
       }
     }
-    return { outputs, reports, openCalls: bridge.calls.openCalls(), page: dom.window.sokView.page };
+    const result = { outputs, reports, openCalls: bridge.calls.openCalls(), page: dom.window.sokView.page };
+    // The page ends as a page does: pagehide flushes the writer, and the writer chain that the last batch started ends before the
+    // window is removed, so no writer step reads the window of a case that ended.
+    dom.window.dispatchEvent(new dom.window.Event("pagehide"));
+    await turn();
+    return result;
   } finally {
     delete globalThis.window;
     dom.window.close();
@@ -133,7 +141,19 @@ test("view operation contract publishes the required cases in order", { timeout:
 
 for (const testCase of CONTRACT.cases) {
   test(`view operation ${testCase.id} matches each ordered step`, { timeout: 5000 }, async () => {
-    const { outputs, reports, openCalls, page } = await runCase(testCase);
+    // The activity of the page after its case ended surfaces as an unhandled rejection; the case ends with none.
+    const stray = [];
+    const collect = (reason) => stray.push(reason?.message ?? String(reason));
+    process.on("unhandledRejection", collect);
+    let outcome;
+    try {
+      outcome = await runCase(testCase);
+      await turn();
+    } finally {
+      process.off("unhandledRejection", collect);
+    }
+    assert.deepEqual(stray, [], "no activity of the page runs after the case ended");
+    const { outputs, reports, openCalls, page } = outcome;
     assert.deepEqual(normalize(outputs, page), testCase.steps.map(({ output }) => output));
     assert.equal(openCalls.count, 0, "all view calls have settled before the page closes");
     assert.equal(reports.at(-1)?.kind, "open-calls");

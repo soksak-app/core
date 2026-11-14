@@ -1,0 +1,2 @@
+none	/tmp/record/plain-a.data
+none	/tmp/record/plain-b.data

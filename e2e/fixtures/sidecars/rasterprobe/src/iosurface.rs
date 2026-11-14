@@ -4,7 +4,6 @@
 use std::ffi::{CString, c_char, c_void};
 
 use crate::raster::{Scene, paint};
-use crate::service::Transfer;
 
 type CFTypeRef = *const c_void;
 type CFStringRef = *const c_void;
@@ -123,27 +122,25 @@ impl Surface {
             Ok(Surface { surface, id: IOSurfaceGetID(surface), nonce, width, height })
         }
     }
-}
 
-impl Transfer for Surface {
-    fn id(&self) -> u32 {
+    pub fn id(&self) -> u32 {
         self.id
     }
 
-    fn nonce(&self) -> [u8; 16] {
+    pub fn nonce(&self) -> [u8; 16] {
         self.nonce
     }
 
-    fn size(&self) -> (u32, u32) {
+    pub fn size(&self) -> (u32, u32) {
         (self.width, self.height)
     }
 
-    fn in_use(&self) -> bool {
+    pub fn in_use(&self) -> bool {
         // SAFETY: the surface is alive while self is.
         unsafe { IOSurfaceIsInUse(self.surface) != 0 }
     }
 
-    fn paint(&mut self, scene: &Scene) -> Result<(), String> {
+    pub fn paint(&mut self, scene: &Scene) -> Result<(), String> {
         if (scene.width, scene.height) != (self.width, self.height) {
             return Err(format!("a scene of {}x{} does not fit a surface of {}x{}", scene.width, scene.height, self.width, self.height));
         }

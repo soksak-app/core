@@ -1,0 +1,24 @@
+{
+  "name": "view-calls-cancel-pending",
+  "description": "A view sends to its sidecar and the host holds the reply; the view cancels the call, then reuses the id.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000000907905,"source":"page"},"mono-ns-1":{"type":"integer","example":5907449914,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":5,"command":"runtime.sidecar.send","params":{"id":"probe-surface","sidecar":"fixture-sidecar","body":1,"cids":[]}}}},
+    {"call":{"name":"viewSidecarSend","payload":{"source":"probe-surface","generation":1,"sidecar":"fixture-sidecar","surface":"probe-surface","body":1,"cids":[]}}},
+    {"reply":{"result":null,"held":true}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":5,"cancel":true}}},
+    {"call":{"name":"viewReply","payload":{"id":5,"error":{"code":-32000,"message":"cancelled"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":5,"command":"runtime.links.open","params":"https://example.test"}}},
+    {"call":{"name":"linkOpen","payload":{"url":"https://example.test"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewReply","payload":{"id":5,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":4}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

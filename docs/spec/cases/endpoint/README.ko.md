@@ -19,7 +19,7 @@ case는 이 디렉터리의 추적되는 JSON 파일 하나다. 파일 이름은
 | `variables` | 아니오 | host가 고르는 값의 field. 각 variable은 `"<name>": {"type": ..., "keys": [...], "example": ...}`이며, `keys`는 선택이고 object 값이 가지는 멤버를 이름으로 든다. |
 | `steps` | 예 | 순서가 있는 step. |
 
-variable은 host의 frame에서 `$<name>`으로 쓴다. host가 처음 보낸 값이 variable을 묶고, 그 값은 선언한 type과 keys를 가져야 하며, 이후 같은 variable은 처음 값과 같아야 한다.
+variable은 host의 frame에서 `$<name>`으로 쓴다. host가 처음 보낸 값이 variable을 묶고, 그 값은 선언한 type과 keys를 가져야 하며, 이후 같은 variable은 처음 값과 같아야 한다. client player(`packages/client/testing/case-player.js`)는 client의 frame에서도 variable을 받는다. host가 앞선 reply에서 고르고 client가 되풀이하는 값(log 위치)이며, player는 이를 test가 준 값이나 example로 바꾸고, 이런 variable을 가진 case는 `replay: false`다.
 
 ## Steps
 

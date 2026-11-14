@@ -1,0 +1,29 @@
+{
+  "name": "surface-view-close-pending",
+  "description": "A view subscribes to a sidecar and sends to it; the send stays in flight while the surface closes, and the page removes the sidecar route of the view.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"ts-us-1":{"type":"integer","example":1791000000000001,"source":"page"},"mono-ns-1":{"type":"integer","example":5000000001,"source":"page"},"ts-us-2":{"type":"integer","example":1791000000000002,"source":"page"},"mono-ns-2":{"type":"integer","example":5000000002,"source":"page"},"ts-us-3":{"type":"integer","example":1791000000000003,"source":"page"},"mono-ns-3":{"type":"integer","example":5000000003,"source":"page"},"ts-us-4":{"type":"integer","example":1791000000000004,"source":"page"},"mono-ns-4":{"type":"integer","example":5000000004,"source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-close-pending-view","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-close-pending-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"fixture-close-pending-surface","plugin":"fixture-close-pending-view","generation":1,"id":10,"command":"runtime.sidecar.on","params":{"id":"probe","sidecar":"fixture-sidecar"}}}},
+    {"call":{"name":"viewSidecarRoute","payload":{"generation":1,"sidecar":"fixture-sidecar","id":"probe","on":true,"surface":"fixture-close-pending-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"debug","event":"workbench.view.call","fields":{"plugin":"fixture-close-pending-view","surface":"fixture-close-pending-surface","generation":1,"id":10,"command":"runtime.sidecar.on"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewReply","payload":{"id":10,"result":null,"page":"$page-identity","generation":1,"surface":"fixture-close-pending-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-2","mono_ns":"$mono-ns-2","start":"$page-identity","level":"debug","event":"workbench.view.reply","fields":{"plugin":"fixture-close-pending-view","surface":"fixture-close-pending-surface","generation":1,"id":10,"outcome":"result"}}]}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"fixture-close-pending-surface","plugin":"fixture-close-pending-view","generation":1,"id":11,"command":"runtime.sidecar.send","params":{"id":"fixture-close-pending-surface","sidecar":"fixture-sidecar","body":{"n":2}}}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-3","mono_ns":"$mono-ns-3","start":"$page-identity","level":"debug","event":"workbench.view.call","fields":{"plugin":"fixture-close-pending-view","surface":"fixture-close-pending-surface","generation":1,"id":11,"command":"runtime.sidecar.send"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewSidecarSend","payload":{"source":"fixture-close-pending-surface","generation":1,"sidecar":"fixture-sidecar","surface":"fixture-close-pending-surface","body":{"n":2},"cids":[]}}},
+    {"reply":{"result":null,"held":true}},
+    {"call":{"name":"viewSidecarRoute","payload":{"generation":1,"sidecar":"fixture-sidecar","id":"probe","on":false,"surface":"fixture-close-pending-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-4","mono_ns":"$mono-ns-4","start":"$page-identity","level":"debug","event":"workbench.view.call.cancel","fields":{"plugin":"fixture-close-pending-view","surface":"fixture-close-pending-surface","generation":1,"id":11,"command":"runtime.sidecar.send"}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "recorded": "The process table with the host of an application, its sidecar, a host launched through a symbolic link of its data folder with its sidecar launched by the real path, two tools that carry --config-dir, and the WebKit services of three applications; the rows of other processes are left out. Command: ps -axww -o pid=,command=. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "ps",
+    "-axww",
+    "-o",
+    "pid=,command="
+  ],
+  "status": 0,
+  "stdout": " 1413 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU\n 1635 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking\n 1638 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.GPU.xpc/Contents/MacOS/com.apple.WebKit.GPU\n 1648 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.WebContent.xpc/Contents/MacOS/com.apple.WebKit.WebContent\n64435 /var/tester/rec/sok-mygo.app/Contents/MacOS/soksak -e setInterval(() => {}, 1e6) -- --config-dir /var/tester/rec/soksak-check-mygo\n64436 /var/tester/rec/soksak-check-mygo/sidecars/probe/bin/probe 600\n64437 /var/tester/rec/sok-mygo.app/Contents/MacOS/soksak -e setInterval(() => {}, 1e6) -- --config-dir /var/tester/rec/link-to-linked\n64438 /var/tester/rec/soksak-check-linked/sidecars/worker/bin/worker 600\n64439 /usr/local/bin/node -e setInterval(() => {}, 1e6) -- --config-dir /var/tester/rec/soksak-check-mygo\n64440 /var/tester/rec/bin/sok -e setInterval(() => {}, 1e6) -- status host.window --config-dir /var/tester/rec/soksak-check-mygo\n64441 /usr/local/bin/node -e const end = Date.now() + 4000; while (Date.now() < end) {}\n64442 /bin/sleep 1.5\n76149 /System/Library/Frameworks/WebKit.framework/Versions/A/XPCServices/com.apple.WebKit.Networking.xpc/Contents/MacOS/com.apple.WebKit.Networking\n",
+  "stderr": "",
+  "configDir": "/var/tester/rec/soksak-check-mygo",
+  "linkedConfigDir": "/var/tester/rec/link-to-linked",
+  "linkedRealPath": "/var/tester/rec/soksak-check-linked",
+  "pids": {
+    "host": 64435,
+    "sidecar": 64436,
+    "linkedHost": 64437,
+    "linkedSidecar": 64438,
+    "nodeTool": 64439,
+    "sokTool": 64440,
+    "busy": 64441,
+    "ender": 64442
+  }
+}

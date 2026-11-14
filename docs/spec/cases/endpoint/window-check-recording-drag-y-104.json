@@ -1,0 +1,21 @@
+{
+  "name": "window-check-recording-drag-y-104",
+  "description": "A captured drag of the y axis whose last screen is displayed at 104ms stops the recording after 104ms.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "variables": {"started": {"type": "object", "keys": ["frames", "window"], "example": {"frames": "/captures/capture-1", "window": 7}}, "stop": {"type": "object", "keys": ["frames", "stills", "window", "count", "missed", "late", "longestGap"], "example": {"frames": "/captures/capture-1", "stills": "/captures/capture-1/stills.jsonl", "window": 7, "count": 2, "missed": 4094, "late": 0, "longestGap": 8.3}}, "drag": {"type": "object", "keys": ["frames", "took", "asked", "ticks", "layouts", "window"], "example": {"frames": "/captures/drag-1", "took": 100, "asked": 100, "ticks": [4, 12], "layouts": [], "window": 7}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"refreshRate": 125}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "diagnostics.drag", "params": {"window": "main", "axis": "y", "line": 1, "dx": 0, "dy": 10, "ms": 100, "times": 1, "capture": {"gap": 8, "frames": 4096}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": "$drag"}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "command.run", "params": {"window": "main", "name": "host.window.presented", "params": {}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": {"displayed": 104}}},
+    {"send": {"jsonrpc": "2.0", "id": 5, "method": "diagnostics.capture.stop", "params": {"window": "main", "after": 104}}},
+    {"reply": {"jsonrpc": "2.0", "id": 5, "result": "$stop"}},
+    {"send": {"jsonrpc": "2.0", "id": 6, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 6, "result": null}}
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "window-check-drag-mode",
+  "description": "A measured drag reads the settings, reduces the log policy to the frame class with the performance trace off, reads them during the gesture and restores both settings.",
+  "replay": false,
+  "reason": "The case plays the settings requests of a measured drag, which change the settings of the application that the replay leaves unchanged.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"values":{"diagnostics.performance":true,"diagnostics.log":{"frame":"trace","call":"debug"}}}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"diagnostics.performance":false,"diagnostics.log":{"frame":"trace"}},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"values":{"diagnostics.performance":false,"diagnostics.log":{"frame":"trace"}}}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":{"values":{"diagnostics.performance":false,"diagnostics.log":{"frame":"trace"}}}}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"diagnostics.performance":true,"diagnostics.log":{"frame":"trace","call":"debug"}},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":6,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":6,"result":{"values":{"diagnostics.performance":true,"diagnostics.log":{"frame":"trace","call":"debug"}}}}}
+  ]
+}

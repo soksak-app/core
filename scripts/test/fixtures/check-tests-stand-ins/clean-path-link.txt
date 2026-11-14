@@ -1,0 +1,11 @@
+import { mkdtempSync, symlinkSync } from "node:fs";
+import { delimiter, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { test } from "node:test";
+test("runs the installed tool from a folder of its own", () => {
+  const bin = mkdtempSync(join(tmpdir(), "bin-"));
+  symlinkSync(execFileSync("which", ["pnpm"], { encoding: "utf8" }).trim(), join(bin, "pnpm"));
+  const env = { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH}` };
+  execFileSync("pnpm", ["--version"], { env });
+});

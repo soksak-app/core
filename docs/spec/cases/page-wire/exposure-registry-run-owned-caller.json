@@ -1,0 +1,14 @@
+{
+  "name": "exposure-registry-run-owned-caller",
+  "description": "The page forwards commands of a plugin to the calling section surface, a tab surface and a section surface of a second registry.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"spc-aaaaaa/left/probe.tree","method":"command.run","params":{"name":"probe.send","params":{},"surface":"spc-aaaaaa/left/probe.tree","cids":[]}}}},
+    {"reply":{"result":{"result":"spc-aaaaaa/left/probe.tree"}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"command.run","params":{"name":"probe.send","params":{},"surface":"tab-a","cids":[]}}}},
+    {"reply":{"result":{"result":"tab-a"}}},
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"spc-aaaaaa/left/probe.tree","method":"command.run","params":{"name":"probe.send","params":{},"surface":"spc-aaaaaa/left/probe.tree","cids":[]}}}},
+    {"reply":{"result":{"result":"spc-aaaaaa/left/probe.tree"}}}
+  ]
+}

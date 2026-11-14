@@ -1,12 +1,246 @@
 {
   "name": "observe-drag-ticks",
-  "description": "The host delivers the steps of a native drag as the notice diagnostics-tick: two steps that each end a leg, then a step that the host could not pace with its error text; the page sends no call for them.",
+  "description": "The page asks the host for the notification state when it starts; the host then delivers the steps of a native drag as the notice diagnostics-tick: two steps that each end a leg, then a step that the host could not pace with its error text.",
   "replay": false,
   "reason": "diagnostics-tick is a notice that the host sends for a drag of a window, and the Go producer runs without a window and cannot deliver it (docs/spec/cases/page-wire/README.md#producer-runs).",
-  "variables": {},
+  "variables": {
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "5d5e7510-e529-40f7-a7de-ce19b0cb926b",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 23,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000455,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000788,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000454,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000787,
+      "source": "page"
+    }
+  },
   "steps": [
-    { "notice": { "event": "diagnostics-tick", "payload": { "fraction": 1, "last": true } } },
-    { "notice": { "event": "diagnostics-tick", "payload": { "fraction": 1, "last": true } } },
-    { "notice": { "event": "diagnostics-tick", "payload": { "error": "the window is on no display with a refresh rate" } } }
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "$authorization",
+          "error": null
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "diagnostics-tick",
+        "payload": {
+          "fraction": 1,
+          "last": true
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "diagnostics-tick",
+        "payload": {
+          "fraction": 1,
+          "last": true
+        }
+      }
+    },
+    {
+      "notice": {
+        "event": "diagnostics-tick",
+        "payload": {
+          "error": "the window is on no display with a refresh rate"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
   ]
 }

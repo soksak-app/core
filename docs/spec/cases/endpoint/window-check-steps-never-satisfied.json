@@ -1,0 +1,14 @@
+{
+  "name": "window-check-steps-never-satisfied",
+  "description": "A status is read and a wait on another status never ends: the host answers the watch and the read and sends nothing after them.",
+  "replay": false,
+  "reason": "The case ends with the application waiting for a value, which a replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.project"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"value":1}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.watch","params":{"window":"main","name":"probe.document"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"main","name":"probe.document"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"value":1}}}
+  ]
+}

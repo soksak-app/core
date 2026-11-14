@@ -1,5 +1,7 @@
-// Reads and writes every item of the general pasteboard by format. The harness saves the pasteboard of the user for
-// each window check and restores it when the check ends (open in e2e/app.mjs).
+// Reads and writes every item of a pasteboard by format. The pasteboard is the general pasteboard of the person unless a name
+// selects a named pasteboard. The harness saves the general pasteboard for each window check and restores it when the check
+// ends (open in app.mjs); a test of the harness itself names its own pasteboard and releases it, so it never touches the
+// pasteboard of the person.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -17,8 +19,11 @@ function run(argv) { const input = JSON.parse(argv[0]); ${body} }`;
   };
 }
 
+// The JavaScript that selects the pasteboard of input.name; a null name is the general pasteboard.
+const selectBoard = "const board = input.name === null ? $.NSPasteboard.generalPasteboard : $.NSPasteboard.pasteboardWithName(input.name);";
+
 const readItems = jxa(`
-const board = $.NSPasteboard.generalPasteboard;
+${selectBoard}
 const items = [];
 const unreadable = [];
 const list = board.pasteboardItems;
@@ -42,7 +47,7 @@ return JSON.stringify({ changeCount: board.changeCount, items, unreadable });`);
 const writeItems = jxa(`
 const text = $.NSString.stringWithContentsOfFileEncodingError(input.file, $.NSUTF8StringEncoding, null).js;
 input.items = JSON.parse(text);
-const board = $.NSPasteboard.generalPasteboard;
+${selectBoard}
 board.clearContents;
 const objects = $.NSMutableArray.array;
 for (const entry of input.items) {
@@ -57,21 +62,35 @@ if (input.items.length > 0 && !board.writeObjects(objects)) {
 }
 return JSON.stringify(board.changeCount);`);
 
+const releaseBoard = jxa(`
+${selectBoard}
+board.releaseGlobally;
+return "null";`);
+
 /**
- * Reads every item of the general pasteboard as base64 by format. unreadable lists, for each item, the types whose
- * data the pasteboard does not return, such as the type of a provider that has quit.
+ * The fault point of the pasteboard operations, null in production. `before(operation)` is called with `read` or `write` before
+ * each operation runs on the real pasteboard, and an error that it throws is the failure of the operation. A test uses it for the
+ * failures that the system pasteboard does not produce on demand, and to observe the order of the operations.
  */
-export function readPasteboard() {
-  return readItems();
+export const pasteboardFault = { before: null };
+
+/**
+ * Reads every item of the pasteboard `name` (the general pasteboard when null) as base64 by format. unreadable lists, for each
+ * item, the types whose data the pasteboard does not return, such as the type of a provider that has quit.
+ */
+export function readPasteboard(name = null) {
+  pasteboardFault.before?.("read");
+  return readItems({ name });
 }
 
-/** Replaces the general pasteboard with items. items has the shape of readPasteboard().items. */
-export function writePasteboard(items) {
+/** Replaces the pasteboard `name` (the general pasteboard when null) with items. items has the shape of readPasteboard().items. */
+export function writePasteboard(items, name = null) {
+  pasteboardFault.before?.("write");
   const directory = mkdtempSync(join(tmpdir(), "soksak-pasteboard-"));
   try {
     const file = join(directory, "items.json");
     writeFileSync(file, JSON.stringify(items));
-    return writeItems({ file });
+    return writeItems({ file, name });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -96,9 +115,18 @@ export function restorableItems({ items, unreadable }) {
   return { items: restored, skipped };
 }
 
-/** The text of the general pasteboard; null when there is no text. */
-export function pasteboardText() {
-  const { items } = readPasteboard();
+/**
+ * Releases a named pasteboard in the pasteboard server, so that its items do not outlive the test that created it. The general
+ * pasteboard cannot be released.
+ */
+export function releasePasteboard(name) {
+  if (typeof name !== "string" || name === "") throw new TypeError("a released pasteboard needs a name");
+  releaseBoard({ name });
+}
+
+/** The text of the pasteboard `name` (the general pasteboard when null); null when there is no text. */
+export function pasteboardText(name = null) {
+  const { items } = readPasteboard(name);
   const text = items.find((item) => item["public.utf8-plain-text"] !== undefined)?.["public.utf8-plain-text"];
   return text === undefined ? null : Buffer.from(text, "base64").toString("utf8");
 }

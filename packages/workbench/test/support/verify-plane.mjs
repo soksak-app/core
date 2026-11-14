@@ -21,7 +21,7 @@ const SLOT_KEYS = ["nativeSurface", "nativeSurfaceId", "nativeLayer", "nativePlu
  * through the host.
  */
 export async function openVerifyPlane() {
-  const dom = new JSDOM(readFileSync(here("../../index.html"), "utf8"), { url: "http://localhost/" });
+  const dom = new JSDOM(readFileSync(here("../../index.html"), "utf8"), { url: "http://localhost/", pretendToBeVisual: true });
   // The view uses matchMedia only to subscribe to resolution changes, and these tests do not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
@@ -95,7 +95,7 @@ export async function openVerifyPlane() {
     },
     /** Marks the slot of the card as the slot of a surface, as the drawing of the plane does for a tab of a loaded plugin. */
     mark({ id = "probe", plugin = "probe", dim = false, composition = { kind: "dom" } } = {}) {
-      slot.dataset.nativeSurface = "stub";
+      slot.dataset.nativeSurface = "view";
       slot.dataset.nativeSurfaceId = id;
       slot.dataset.nativeLayer = "0";
       slot.dataset.nativePlugin = plugin;

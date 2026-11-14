@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"unsafe"
 )
 
 // nullOriginStart is the start values of a view whose tab recorded no directory: its origin is {"directory": null}, and it
@@ -23,45 +22,19 @@ func nullOriginStart() ViewStart {
 // A view that the host creates receives, before its page loads, the document-start script that sets window.sokSurface to the
 // frozen start values {surface, params, origin, project, declarations, diagnostics, section} of its surface, so the first page script reads them.
 func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
-	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}, scripts: map[unsafe.Pointer][]string{}}
-	saved := system
-	system = fake
-	t.Cleanup(func() { system = saved })
-	s := &Surfaces{
-		documents: NewDocuments(),
-		lifecycle: newViewLifecycle(),
-		host:      &Host{configDir: "/config"},
-		events:    func(string, any) {},
-	}
-	native := unsafe.Pointer(new(int))
 	var start ViewStart
 	if err := json.Unmarshal([]byte(`{"params":{"path":"a.md"},"origin":{"directory":"/work/one"},"project":{"id":"prj-one","root":"/work/one"},"declarations":{"commands":[]},"diagnostics":{"module":"ui/probe-diagnostics.js","exposes":{}},"section":null}`), &start); err != nil {
 		t.Fatalf("start values: %v", err)
 	}
-	spec := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
-	spec.directory, spec.folder = "/config/document-data", "/plugins/probe"
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, start); err != nil {
-		t.Fatalf("first sync of the view: %v", err)
+	opened := realViewProbe(t, Theme{}, start).waitCall(t, "probe.opened")
+	want := map[string]any{
+		"surface": "probe-surface", "params": map[string]any{"path": "a.md"}, "origin": map[string]any{"directory": "/work/one"},
+		"project": map[string]any{"id": "prj-one", "root": "/work/one"}, "declarations": map[string]any{"commands": []any{}},
+		"diagnostics": map[string]any{"module": "ui/probe-diagnostics.js", "exposes": map[string]any{}}, "section": nil,
+		"levels": map[string]any{"call": "trace", "frame": "trace", "input": "trace", "io": "trace", "lifecycle": "trace"},
 	}
-	if len(fake.created) != 1 {
-		t.Fatalf("views created: %d, want one", len(fake.created))
-	}
-	want := `window.sokSurface = Object.freeze({"surface":"probe-surface","params":{"path":"a.md"},"origin":Object.freeze({"directory":"/work/one"}),"project":Object.freeze({"id":"prj-one","root":"/work/one"}),"declarations":Object.freeze({"commands":[]}),"diagnostics":Object.freeze({"module":"ui/probe-diagnostics.js","exposes":{}}),"section":null,"levels":Object.freeze({"call":"trace","frame":"trace","input":"trace","io":"trace","lifecycle":"trace"})});`
-	scripts := fake.scripts[fake.created[0]]
-	if len(scripts) != 2 {
-		t.Fatalf("user scripts of the view: %q, want the theme script and the start values script", scripts)
-	}
-	found := false
-	for _, script := range scripts {
-		if script == want {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("user scripts of the view hold no start values script %q: %q", want, scripts)
-	}
-	if len(fake.loadsBeforeScript) != 2 || fake.loadsBeforeScript[0] != 0 || fake.loadsBeforeScript[1] != 0 {
-		t.Fatalf("loads before the scripts: %v, want none", fake.loadsBeforeScript)
+	if !reflect.DeepEqual(opened["surface"], want) {
+		t.Fatalf("the first script of the page read the start values %v, want %v", opened["surface"], want)
 	}
 }
 

@@ -1,94 +1,55 @@
 // Checks that opening the library and switching a project finish in the order they were received.
+// The host calls and the notices of the page are answered by the page-wire case of each test (docs/spec/cases/page-wire/README.md). The
+// modules of the page are the real ones: the project list reads and writes the registry through the workspace calls of the host store,
+// the settings, the window operations, the sidecar retention and the page log send their calls to the host. Each test starts the page
+// over its own case. The page starts once before the tests, as a window starts: the first start reads the settings, opens the tab state
+// files and anchors the clock of the page, so each test starts from the state that this start leaves and passes alone.
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { drained } from "./support/drained.mjs";
 
 const PROJECT = {
   id: "prj-one", root: "/work/one", identity: "1:1", title: "one", color: "#fff", named: 1,
   activeSpaceId: "spc-one", spaces: [{ id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } }], settings: {},
 };
 
-// The geometry that the window reports.
-let windowGeometry = null;
-// The project that received the window open request.
-const openRequests = [];
-mock.module("@soksak/runtime", {
-  namedExports: {
-    windows: {
-      folder: async (root) => {
-        if (root === "/work/missing") throw new Error("project directory does not exist: /work/missing");
-        return { root, identity: PROJECT.identity };
-      },
-      openProject: async (request) => { openRequests.push(request.id); return { local: true }; },
-      projectShown: async () => {},
-      releaseProject: async () => {},
-      state: async () => windowGeometry,
-      close: async () => {},
-      onRemoveProjectRequest: async () => {},
-      askRemoveProject: async () => true,
-      answerRemoveProject: async () => {},
-      ready: async () => {},
-      onActivate: async () => {},
-      onCloseRequest: async () => {},
-    },
-  },
-});
-// Records the calls that clean up sidecar sessions.
-// The page event queue drains before a window closes; the queue of this test holds no events.
-mock.module("../page-log.js", {
-  namedExports: { flushEvents: async () => {}, emitEvent: () => {} },
-});
-const retained = [];
-let retentionFailure = null;
-mock.module("../host.js", {
-  namedExports: {
-    log: () => {},
-    retainSidecarSessions: async (surfaces) => {
-      retained.push(surfaces);
-      if (retentionFailure) throw retentionFailure;
-      return { closed: 0 };
-    },
-    windowSidecar: () => null,
-    documents: null,
-    report: () => {},
-  },
-});
-let dataOptions = null;
-mock.module("../plugin-data.js", {
-  namedExports: {
-    configureData: (values) => { dataOptions = values; },
-    compareProjectData: () => {},
-  },
-});
-/* The project that the first screen chose for the settings. */
-const begunSettings = [];
-let beginThemeReply = async () => {};
-/* The host reply of the settings project selection. The test can hold the reply. */
-let selection = async () => {};
-mock.module("../settings.js", {
-  namedExports: {
-    beginSettings: (snapshot, id) => { begunSettings.push(id); return beginThemeReply(snapshot, id); },
-    selectProject: () => selection(),
-    value: () => "tabs",
-    projectSidebars: (project) => project.sidebarsOfTest ?? { sets: [], links: [] },
-    flushSettings: async () => {},
-  },
-});
+let wire = selectPageWire("projects-switch-import");
 
-// The document global that the project module uses. It records the failures reported through the window error event.
+// The window of the page: its address, its history and the error event that the page reports failures through.
+const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://soksak.test/index.html" });
+globalThis.document = dom.window.document;
+globalThis.location = dom.window.location;
+globalThis.history = dom.window.history;
+globalThis.dispatchEvent = dom.window.dispatchEvent.bind(dom.window);
+globalThis.ErrorEvent = dom.window.ErrorEvent;
+// The failures reported through the window error event.
 const reported = [];
-globalThis.dispatchEvent = (event) => { reported.push(event.message); return true; };
-globalThis.location = new URL("http://soksak.test/index.html");
-globalThis.history = { replaceState: (state, title, url) => { globalThis.location = new URL(url, globalThis.location); } };
+dom.window.addEventListener("error", (event) => reported.push(event.message));
+/** Gives the window the address of the start document with the query. */
+const addressWith = (query) => dom.reconfigure({ url: `http://soksak.test/index.html${query}` });
 
-mock.module("../environment.js", { namedExports: {
-  pluginUnits: () => [{ id: "retained-probe", surface: { composition: { kind: "view" } } }],
-} });
-
-const projects = await import("../projects.js");
+// The project list holds the state of the window (the shown project, the owned projects, the readers of the store). Each test imports its own
+// instance of the module, as each start of the page does, so a test starts from the state of a new page and not from the state that an
+// earlier test left.
+let projects = null;
+let instances = 0;
+const freshProjects = async () => import(`../projects.js?instance=${++instances}`);
 const { registerSection } = await import("../registry.js");
+const { installEnvironment } = await import("../environment.js");
+const { HostWorkspaceStore } = await import("../host-store.js");
+const { connectSettings, settingProject } = await import("../settings.js");
+const { declareProjectData, viewDataOf } = await import("../plugin-data.js");
+
+// The installed plugin whose tabs are views: a stored tab of a view plugin keeps its origin.
+installEnvironment({ runtime: "runtime", workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "retained-probe", title: "probe" }] }] } },
+  sidebars: { sets: [], links: [] } }, { plugins: [{ id: "retained-probe", package: "@fixture/retained-probe", version: "0.0.1",
+  manifest: { id: "retained-probe", name: "Retained", description: "Retained view.", mark: "r", icon: "<path/>",
+    surface: { composition: { kind: "view", page: "ui/page.html", regions: [], overlays: [] } } } }] });
 
 /**
- * A recorder that acts as the plane. A clear after hold() does not finish until release(). The test rejects a rejected layout.
+ * The recorder of the plane. A clear after hold() does not finish until release(). The test rejects a rejected layout.
  * The drawing of a clear erases the plane and runs the screen drawing it received (show). drawing is true during that drawing.
  */
 const plane = { layout: null, events: [], gate: Promise.resolve(), rejected: null, drawing: false };
@@ -100,7 +61,9 @@ plane.hold = () => {
 // Resolves when the next plane clear starts (plane.empty).
 let clearStarted = null;
 const emptyStarts = () => new Promise((resolve) => { clearStarted = resolve; });
-projects.onSwitch({
+// The surface modules that the plane cleaned up, each with the number of host calls before the cleanup.
+const modulesRetained = [];
+const attachPlane = (instance) => instance.onSwitch({
   check: (layout) => { if (layout === plane.rejected) throw new Error("fixture layout cannot be opened"); },
   save: (path) => {
     saves.push(path);
@@ -110,7 +73,7 @@ projects.onSwitch({
   load: (layout) => { plane.layout = layout; plane.events.push("load"); },
   update: () => {},
   // Cleans up the surface modules outside the tabs of the remaining layout. It also records the order relative to the session cleanup in retained.
-  retain: async (surfaceIds) => { retained.push({ modules: [...surfaceIds] }); },
+  retain: async (surfaceIds) => { modulesRetained.push({ modules: [...surfaceIds], at: wire.calls.length }); },
   presented: async () => {},
   // The plane of this test holds no modified tab.
   settleTabs: async () => true,
@@ -125,24 +88,60 @@ projects.onSwitch({
     plane.events.push("emptied");
   },
 });
+wire.finish();
 
-const store = {
-  snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT)], open: [] }),
-  // The tab state store holds no entry.
-  tabState: async () => null,
-  tabStatePut: async () => 0,
-  // The tab sessions hold no file.
-  tabSession: async () => null,
-  tabSessionPut: async () => null,
-  tabSessions: async () => [],
-  add: async () => { throw new Error("not used"); },
-  patch: async () => {},
-  remove: async () => {},
-  onChange: () => {},
-};
+/**
+ * The cleanups in the order they happened since the last forgetRetained: the modules that the plane cleaned up, and the surfaces
+ * that the page asked the host to keep as the sessions of the sidecars (the host call sidecarsRetain).
+ */
+function retained() {
+  const entries = modulesRetained.map(({ modules, at }) => ({ key: at - 0.5, value: { modules } }));
+  wire.calls.forEach(({ name, payload }, index) => {
+    if (name === "sidecarsRetain") entries.push({ key: index, value: payload.surfaces });
+  });
+  return entries.filter(({ key }) => key >= retainedFrom).sort((a, b) => a.key - b.key).map(({ value }) => value);
+}
+let retainedFrom = 0;
+const forgetRetained = () => { retainedFrom = wire.calls.length; };
+
+/**
+ * Prepares the page of a test over its case: a new instance of the project list, the plane without the layout of an earlier test, and the
+ * address of the start document without a project.
+ */
+async function prepare(name) {
+  wire = selectPageWire(name);
+  modulesRetained.length = 0;
+  retainedFrom = 0;
+  Object.assign(plane, { layout: null, gate: Promise.resolve(), rejected: null, drawing: false });
+  plane.events.length = 0;
+  saves.length = 0;
+  clearStarted = null;
+  reported.length = 0;
+  addressWith("");
+  projects = await freshProjects();
+  attachPlane(projects);
+}
+
+/** Starts the page over the case of a test: the settings and the project list connect to the host store. */
+async function start(name, { initialise = true } = {}) {
+  await prepare(name);
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  if (initialise) await projects.initialise(store);
+  return store;
+}
+
+// The first start of the page, with an empty registry.
+await start("projects-switch-prelude");
+wire.finish();
+
+/** The workspace calls of the page of the kind. */
+const workspaceCalls = (kind) => wire.calls.filter(({ name, payload }) => name === "workspace" && payload.kind === kind);
+/** The names of the host calls of the page from the call at index from on. */
+const namesFrom = (from) => wire.calls.slice(from).map(({ name }) => name);
 
 test("opening a project while the library is still clearing the plane loads it after the clearing", { timeout: 5000 }, async () => {
-  await projects.initialise(store);
+  await start("projects-switch-clearing");
   await projects.activate(PROJECT.id);
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
 
@@ -159,38 +158,37 @@ test("opening a project while the library is still clearing the plane loads it a
   assert.deepEqual(plane.events, ["empty started", "released", "emptied", "load"], "the project was loaded while the plane was being cleared");
   assert.deepEqual(plane.layout, PROJECT.spaces[0].layout);
   await projects.flush();
+  wire.finish();
 });
 
 test("plugin states follow the shown project and project data is patched under plugins", async () => {
-  const patches = [];
-  await projects.initialise({ ...store, patch: async (id, patch) => { patches.push([id, patch]); } });
+  await start("projects-switch-project-data");
+  declareProjectData("probe", { marks: { schema: { type: "array" }, default: [] } });
   await projects.browse();
   await projects.activate(PROJECT.id);
   await projects.browse();
   await projects.activate(PROJECT.id);
-  assert.deepEqual(dataOptions.data.get(PROJECT.id, "probe"), {});
-  await dataOptions.data.set(PROJECT.id, "probe", "marks", ["a"]);
-  assert.deepEqual(patches.at(-1), [PROJECT.id, { plugins: { probe: { marks: ["a"] } } }]);
-  assert.deepEqual(dataOptions.data.get(PROJECT.id, "probe"), { marks: ["a"] });
+  const data = viewDataOf({ id: PROJECT.id }, "probe");
+  assert.deepEqual(data.get("marks"), []);
+  await data.set("marks", ["a"]);
+  const patch = workspaceCalls("patch").at(-1).payload;
+  assert.deepEqual([patch.id, patch.patch], [PROJECT.id, { plugins: { probe: { marks: { format: 1, value: ["a"] } } } }]);
+  assert.deepEqual(data.get("marks"), ["a"]);
   await projects.flush();
+  wire.finish();
 });
 
 test("a flush writes the window geometry only when it changed", async () => {
-  const patches = [];
-  await projects.initialise({ ...store, patch: async (id, patch) => { if (patch.geometry) patches.push(patch.geometry); } });
+  await start("projects-switch-geometry");
   await projects.browse();
   await projects.activate(PROJECT.id);
-  windowGeometry = { x: 1, y: 2, width: 300, height: 200 };
-  try {
-    await projects.flush();
-    await projects.flush();
-    assert.deepEqual(patches, [windowGeometry], "an unchanged geometry was written again");
-    windowGeometry = { x: 5, y: 2, width: 300, height: 200 };
-    await projects.flush();
-    assert.equal(patches.length, 2, "a changed geometry was not written");
-  } finally {
-    windowGeometry = null;
-  }
+  const geometryPatches = () => workspaceCalls("patch").filter(({ payload }) => payload.patch.geometry).map(({ payload }) => payload.patch.geometry);
+  await projects.flush();
+  await projects.flush();
+  assert.deepEqual(geometryPatches(), [{ x: 1, y: 2, width: 300, height: 200 }], "an unchanged geometry was written again");
+  await projects.flush();
+  assert.equal(geometryPatches().length, 2, "a changed geometry was not written");
+  wire.finish();
 });
 
 test("the surfaces of every layout are listed with their project root, and removing a project retains the rest", async () => {
@@ -204,27 +202,26 @@ test("the surfaces of every layout are listed with their project root, and remov
   };
   const one = { ...structuredClone(PROJECT), id: "prj-three" };
   one.spaces[0].layout = { state: { cards: [{ id: "one", data: { tabs: [{ id: "tab-one", plugin: "beta" }] } }] } };
-  let listed = [one, two];
-  const local = { ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
-    remove: async (id) => { listed = listed.filter((item) => item.id !== id); } };
-  await projects.initialise(local);
+  const store = await start("projects-switch-layout-surfaces", { initialise: false });
+  await projects.initialise(store);
   assert.deepEqual(projects.layoutSurfaces(), [
     { surface: "tab-one", plugin: "beta", root: "/work/one" },
     { surface: "tab-a", plugin: "fixture", root: "/work/two" },
     { surface: "tab-b", plugin: "fixture", root: "/work/two" },
   ]);
-  retained.length = 0;
+  forgetRetained();
+  modulesRetained.length = 0;
   await projects.close("prj-two");
   // It cleans up the surface modules of the deleted project first. If a module remains, it reopens the finished session in the deleted folder (F44).
-  assert.deepEqual(retained, [{ modules: ["tab-one"] }, [{ surface: "tab-one", plugin: "beta", root: "/work/one" }]],
+  assert.deepEqual(retained(), [{ modules: ["tab-one"] }, [{ surface: "tab-one", plugin: "beta", root: "/work/one" }]],
     "removing a project disposes the surface modules of its tabs before it ends their sidecar sessions");
-  listed[0].spaces[0].layout = { state: {} };
   reported.length = 0;
-  await projects.initialise(local);
+  await projects.initialise(store);
   assert.deepEqual(reported, ["project prj-three space spc-one has no layout cards"],
     "the reconciliation of the tab state store reports a layout without cards and keeps the entries");
   reported.length = 0;
   assert.throws(() => projects.layoutSurfaces(), /has no layout cards/, "a layout without cards is an explicit error");
+  wire.finish();
 });
 
 test("the layouts hold the sections of every space of every project, whatever the window draws, with the sets of each project", async () => {
@@ -232,20 +229,7 @@ test("the layouts hold the sections of every space of every project, whatever th
   for (const [id, plugin] of [["alpha.tree", "alpha"], ["alpha.bookmarks", "alpha"], ["other.list", "other"]]) {
     registerSection({ id, name: id, plugin, surface: { composition: { kind: "view" } } });
   }
-  const card = { id: "crd", data: { tabs: [{ id: "tab-x", plugin: "beta" }], activeId: "tab-x", sidebars: { left: { set: "own" } } } };
-  const sets = (first) => ({
-    sets: [{ id: first, sections: ["alpha.tree", "gone.list"] }, { id: "own", sections: ["alpha.bookmarks"] }],
-    links: [{ place: "left", plugin: null, set: first }],
-  });
-  const listed = [
-    { ...structuredClone(PROJECT), id: "prj-a", root: "/work/a", sidebarsOfTest: sets("first"), spaces: [
-      { id: "spc-a1", title: "SPACE1", layout: { state: { cards: [structuredClone(card)] } } },
-      { id: "spc-a2", title: "SPACE2", layout: { state: { cards: [] } } },
-    ], activeSpaceId: "spc-a1" },
-    { ...structuredClone(PROJECT), id: "prj-b", root: "/work/b", sidebarsOfTest: { sets: [{ id: "only", sections: ["other.list"] }], links: [{ place: "window-right", plugin: "beta", set: "only" }] },
-      spaces: [{ id: "spc-b", title: "SPACE1", layout: { state: { cards: [] } } }], activeSpaceId: "spc-b" },
-  ];
-  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [] }) });
+  await start("projects-switch-sections");
   assert.deepEqual(projects.layoutSurfaces(), [
     { surface: "tab-x", plugin: "beta", root: "/work/a" },
     { surface: "spc-a1/left/alpha.tree", plugin: "alpha", root: "/work/a" },
@@ -253,25 +237,24 @@ test("the layouts hold the sections of every space of every project, whatever th
     { surface: "spc-a2/left/alpha.tree", plugin: "alpha", root: "/work/a" },
     { surface: "spc-b/right/other.list", plugin: "other", root: "/work/b" },
   ]);
+  wire.finish();
 });
 
+/** The ids of the projects that the page asked the host to open from the call at index from on. */
+const openedFrom = (from) => wire.calls.slice(from).filter(({ name }) => name === "projectOpen").map(({ payload }) => payload.id);
+
 test("a saved layout that fails the plane check rejects the open before any project or window change", async () => {
-  const patches = [];
-  const other = { ...structuredClone(PROJECT), id: "prj-bad", root: "/work/bad",
-    spaces: [{ id: "spc-bad", title: "SPACE1", layout: { state: { cards: [], name: "bad" } } }], activeSpaceId: "spc-bad" };
-  const listed = [structuredClone(PROJECT), other];
-  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
-    patch: async (id, patch) => { patches.push([id, patch]); } });
+  await start("projects-switch-plane-check");
   await projects.activate(PROJECT.id);
   const shown = plane.layout;
   plane.rejected = projects.all().find((item) => item.id === "prj-bad").spaces[0].layout;
-  patches.length = 0;
-  openRequests.length = 0;
+  const from = wire.calls.length;
   plane.events.length = 0;
   await assert.rejects(projects.activate("prj-bad"), /fixture layout cannot be opened/);
   assert.equal(projects.active().id, PROJECT.id, "the rejected open replaced the active project");
-  assert.deepEqual(openRequests, [], "the rejected open asked the host for a window");
-  assert.deepEqual(patches.filter(([id]) => id === "prj-bad"), [], "the rejected open changed the saved record");
+  assert.deepEqual(openedFrom(from), [], "the rejected open asked the host for a window");
+  assert.deepEqual(wire.calls.slice(from).filter(({ name, payload }) => name === "workspace" && payload.kind === "patch" && payload.id === "prj-bad"), [],
+    "the rejected open changed the saved record");
   assert.deepEqual(plane.events, [], "the rejected open replaced the plane");
   assert.equal(plane.layout, shown);
   await projects.flush();
@@ -279,30 +262,26 @@ test("a saved layout that fails the plane check rejects the open before any proj
   assert.deepEqual(reported, [], "the rejected open was reported again as a window error");
   plane.rejected = null;
   await projects.flush();
+  wire.finish();
 });
 
 test("opening a project whose folder cannot be read rejects with the host's message", async () => {
-  const missing = { ...structuredClone(PROJECT), id: "prj-missing", root: "/work/missing" };
-  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(PROJECT), structuredClone(missing)], open: [] }),
-    patch: async () => {} });
-  openRequests.length = 0;
+  await start("projects-switch-folder-unreadable");
+  const from = wire.calls.length;
   reported.length = 0;
   await assert.rejects(projects.activate("prj-missing"),
     { message: "project directory does not exist: /work/missing" });
-  assert.deepEqual(openRequests, [], "the failed open asked the host for a window");
+  assert.deepEqual(openedFrom(from), [], "the failed open asked the host for a window");
   // The caller that received the rejection reports the failure once. The switch sequence does not report the same failure again as a window error (G1.4-113).
   await projects.flush();
   assert.deepEqual(reported, [], "the failed switch was reported again as a window error");
+  wire.finish();
 });
 
 test("switching to or closing into a space that fails the plane check changes neither the active space nor the plane", async () => {
   // The project that this window owns keeps its space in memory, so the test uses a different project from the earlier tests.
-  const project = { ...structuredClone(PROJECT), id: "prj-spaces", root: "/work/spaces", spaces: [
-    { id: "spc-one", title: "SPACE1", layout: { state: { cards: [], name: "one" } } },
-    { id: "spc-bad", title: "SPACE2", layout: { state: { cards: [], name: "bad" } } },
-  ] };
-  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: [structuredClone(project)], open: [] }) });
-  await projects.activate(project.id);
+  await start("projects-switch-space-check");
+  await projects.activate("prj-spaces");
   plane.rejected = projects.active().spaces[1].layout;
   plane.events.length = 0;
   assert.throws(() => projects.activateSpace("spc-bad"), /fixture layout cannot be opened/);
@@ -314,150 +293,138 @@ test("switching to or closing into a space that fails the plane check changes ne
   assert.deepEqual(plane.events, [], "the rejected switch replaced the plane");
   plane.rejected = null;
   await projects.flush();
+  wire.finish();
 });
 
 test("the start document draws the window's project before the store connects and the activation resumes it", async () => {
-  const { windows } = await import("@soksak/runtime");
-  const state = windows.state;
-  windows.state = async () => ({ x: 1, y: 2, width: 300, height: 200 });
+  await prepare("projects-switch-start-document");
   const project = { ...structuredClone(PROJECT), id: "prj-begin", root: "/work/begin" };
   const snapshot = { common: {}, projects: [structuredClone(project)], open: [] };
-  globalThis.location = new URL(`http://soksak.test/index.html?project=${project.id}`);
+  addressWith(`?project=${project.id}`);
   plane.events.length = 0;
-  begunSettings.length = 0;
   projects.begin(structuredClone(snapshot));
   assert.equal(projects.active().id, project.id);
   assert.equal(projects.inLibrary(), false);
   assert.deepEqual(plane.events, ["load"], "the first screen did not draw the project's space");
-  assert.deepEqual(begunSettings, [project.id], "the first screen did not apply the project's settings");
-  const patches = [];
-  openRequests.length = 0;
-  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async (id, patch) => { patches.push([id, Object.keys(patch)]); } });
-  windows.state = state;
-  assert.deepEqual(openRequests, [project.id], "the activation did not open the project's window");
-  assert.deepEqual(patches, [[project.id, ["lastOpened"]]], "the activation saved more than the open time");
+  assert.equal(settingProject(), project.id, "the first screen did not apply the project's settings");
+  const from = wire.calls.length;
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
+  assert.deepEqual(openedFrom(from), [project.id], "the activation did not open the project's window");
+  assert.deepEqual(workspaceCalls("patch").map(({ payload }) => [payload.id, Object.keys(payload.patch)]), [[project.id, ["lastOpened"]]],
+    "the activation saved more than the open time");
   assert.equal(projects.active().id, project.id);
   await projects.flush();
+  wire.finish();
 });
 
 test("the start document draws the project synchronously while the host theme reply is pending", { timeout: 5000 }, async () => {
+  await prepare("projects-switch-theme-pending");
   const project = { ...structuredClone(PROJECT), id: "prj-theme-start", root: "/work/theme-start" };
   const snapshot = { common: {}, projects: [structuredClone(project)], open: [] };
-  globalThis.location = new URL(`http://soksak.test/index.html?project=${project.id}`);
-  let acknowledge;
-  beginThemeReply = () => new Promise((resolve) => { acknowledge = resolve; });
+  addressWith(`?project=${project.id}`);
   plane.events.length = 0;
 
   projects.begin(structuredClone(snapshot));
   assert.deepEqual(plane.events, ["load"], "the first DOM layout waited for the host theme reply");
-  acknowledge();
-  beginThemeReply = async () => {};
+  await drained();
+  wire.release();
+  await drained();
+  wire.finish();
 });
 
 test("a project whose settings file the host refused is not opened, and the start shows the library with the error", async () => {
+  await prepare("projects-switch-settings-refused");
   const error = "/work/refused/.soksak/settings.json: settings.json: format must be 1";
   const refused = { ...structuredClone(PROJECT), id: "prj-refused", root: "/work/refused", settingsError: error };
   delete refused.settings;
   const snapshot = { common: {}, projects: [structuredClone(PROJECT), structuredClone(refused)], open: [] };
-  globalThis.location = new URL(`http://soksak.test/index.html?project=${refused.id}`);
-  begunSettings.length = 0;
+  addressWith(`?project=${refused.id}`);
   plane.events.length = 0;
   reported.length = 0;
   projects.begin(structuredClone(snapshot));
   assert.equal(projects.active(), null, "the first screen drew the project whose settings file was refused");
-  assert.deepEqual(begunSettings, [null], "the settings began with the project whose settings file was refused");
-  openRequests.length = 0;
-  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
+  assert.equal(settingProject(), null, "the settings began with the project whose settings file was refused");
+  const from = wire.calls.length;
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
   assert.equal(projects.active(), null);
   assert.equal(projects.inLibrary(), true);
-  assert.deepEqual(openRequests, [], "the refused project asked the host for a window");
+  assert.deepEqual(openedFrom(from), [], "the refused project asked the host for a window");
   assert.deepEqual(reported, [error], "the start did not report the refused settings file once");
   await assert.rejects(projects.activate(refused.id), { message: error });
-  assert.deepEqual(openRequests, [], "the refused open asked the host for a window");
+  assert.deepEqual(openedFrom(from), [], "the refused open asked the host for a window");
   // The other project opens.
   await projects.activate(PROJECT.id);
   assert.equal(projects.active().id, PROJECT.id);
   await projects.flush();
+  wire.finish();
 });
 
 test("a project that the start document drew falls back to the library when its activation fails", async () => {
+  await prepare("projects-switch-start-fallback");
   const missing = { ...structuredClone(PROJECT), id: "prj-gone", root: "/work/missing" };
   const snapshot = { common: {}, projects: [structuredClone(missing)], open: [] };
-  globalThis.location = new URL(`http://soksak.test/index.html?project=${missing.id}`);
+  addressWith(`?project=${missing.id}`);
   projects.begin(structuredClone(snapshot));
   assert.equal(projects.active().id, missing.id);
   plane.events.length = 0;
   reported.length = 0;
-  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
   assert.equal(projects.active(), null);
   assert.equal(projects.inLibrary(), true);
   assert.deepEqual(plane.events, ["empty started", "emptied"]);
   assert.equal(globalThis.location.search, "");
   assert.deepEqual(reported, ["project directory does not exist: /work/missing"], "the failed start activation was not reported once");
+  wire.finish();
 });
 
 test("a project removed from the registry by another window ends in the window that shows it as closing its tab does", { timeout: 5000 }, async () => {
-  /** A project with one tab in one card. */
-  const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
-    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab, plugin: "fixture" }] } }] } } },
-  ], activeSpaceId: `spc-${id}` });
-  let listed = [project("prj-shown", "tab-shown"), project("prj-next", "tab-next"), project("prj-other", "tab-other")];
-  let notify = null;
-  const patches = [];
-  await projects.initialise({ ...store,
-    snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
-    patch: async (id, patch) => { patches.push(id); },
-    onChange: (fn) => { notify = fn; } });
+  await start("projects-switch-removed-elsewhere");
   reported.length = 0;
   // This window shows two projects as tabs, and prj-shown is active. prj-other is the project of another window.
   await projects.activate("prj-next");
   await projects.activate("prj-shown");
-  // Another window deletes prj-shown, and the store notifies this window of the change. projects.idle resolves when the handling of the notification has finished.
-  const removeElsewhere = async (id) => {
-    listed = listed.filter((item) => item.id !== id);
-    retained.length = 0;
-    patches.length = 0;
+  // Another window deletes prj-shown, and the host notifies this window of the change. projects.idle resolves when the handling of the notification has finished.
+  const removeElsewhere = async () => {
+    forgetRetained();
+    modulesRetained.length = 0;
     plane.events.length = 0;
-    notify();
+    wire.deliverNotice();
     await projects.idle();
   };
-  await removeElsewhere("prj-shown");
+  const patchesBefore = workspaceCalls("patch").length;
+  await removeElsewhere();
   assert.equal(projects.all().some((item) => item.id === "prj-shown"), false);
   assert.equal(projects.active()?.id, "prj-next", "the window did not open its next project as closing the project tab does");
-  assert.deepEqual(retained.slice(0, 2), [
+  assert.deepEqual(retained().slice(0, 2), [
     { modules: ["tab-next", "tab-other"] },
     [{ surface: "tab-next", plugin: "fixture", root: "/work/prj-next" }, { surface: "tab-other", plugin: "fixture", root: "/work/prj-other" }],
   ], "the window kept the surface modules and sidecar sessions of the removed project's tabs");
-  assert.equal(patches.includes("prj-shown"), false, "the window saved the removed project");
-  await removeElsewhere("prj-next");
+  assert.equal(workspaceCalls("patch").slice(patchesBefore).some(({ payload }) => payload.id === "prj-shown"), false, "the window saved the removed project");
+  await removeElsewhere();
   assert.equal(projects.active(), null);
   assert.equal(projects.inLibrary(), true, "the window without a project did not show the library");
   assert.deepEqual(projects.local(), []);
-  assert.deepEqual(retained, [{ modules: ["tab-other"] }, [{ surface: "tab-other", plugin: "fixture", root: "/work/prj-other" }]],
+  assert.deepEqual(retained(), [{ modules: ["tab-other"] }, [{ surface: "tab-other", plugin: "fixture", root: "/work/prj-other" }]],
     "the window kept the surface modules and sidecar sessions of its last removed project");
   assert.deepEqual(reported, [], "ending the removed project reported an error");
   await projects.flush();
+  wire.finish();
 });
 
 test("an activation received while a removed project is clearing waits for the clear", { timeout: 5000 }, async () => {
-  const project = (id, tab) => ({ ...structuredClone(PROJECT), id, root: `/work/${id}`, spaces: [
-    { id: `spc-${id}`, title: "SPACE1", layout: { state: { cards: [{ id: `card-${id}`, data: { tabs: [{ id: tab, plugin: "fixture" }] } }] } } },
-  ], activeSpaceId: `spc-${id}` });
-  const removed = project("prj-clearing-removed", "tab-clearing-removed");
-  const next = project("prj-clearing-next", "tab-clearing-next");
-  let listed = [removed, next];
-  let notify = null;
-  await projects.initialise({ ...store,
-    snapshot: async () => ({ common: {}, projects: listed.map((item) => structuredClone(item)), open: [] }),
-    onChange: (fn) => { notify = fn; },
-  });
-  await projects.activate(removed.id);
+  await start("projects-switch-clearing-removed");
+  await projects.activate("prj-clearing-removed");
 
   plane.events.length = 0;
   plane.hold();
-  listed = [next];
   const emptying = emptyStarts();
-  notify();
+  wire.deliverNotice();
   await emptying;
   assert.deepEqual(plane.events, ["empty started"], "removal did not begin clearing the active project");
 
@@ -476,7 +443,7 @@ test("an activation received while a removed project is clearing waits for the c
     return result;
   });
   try {
-    const activation = projects.activate(next.id);
+    const activation = projects.activate("prj-clearing-next");
     await turnStarted;
     plane.events.push("released");
     plane.release();
@@ -488,9 +455,10 @@ test("an activation received while a removed project is clearing waits for the c
 
   assert.deepEqual(plane.events, ["empty started", "turn waits for the clear", "released", "emptied", "load"],
     "the removed-project clear ran after the replacement project was loaded");
-  assert.equal(projects.active()?.id, next.id);
+  assert.equal(projects.active()?.id, "prj-clearing-next");
   assert.equal(projects.inLibrary(), false);
   await projects.flush();
+  wire.finish();
 });
 
 // WebKit runs the reaction of a promise that the host reply fulfilled at the next microtask checkpoint, and that checkpoint can come after the ResizeObserver callback of the next
@@ -498,7 +466,7 @@ test("an activation received while a removed project is clearing waits for the c
 // already delivered (the file tree, the terminal screen) become 0x0 and a loop error occurs (F43). The switch must happen in the drawing that clears the plane,
 // that is, in the next task, which runs outside the observation round.
 test("browsing shows the library in the draw that empties the plane, not where a later host reply resolves", { timeout: 5000 }, async () => {
-  await projects.initialise(store);
+  await start("projects-switch-browse-draw");
   await projects.activate(PROJECT.id);
   let screen = "workspace";
   let inRound = false;
@@ -508,21 +476,17 @@ test("browsing shows the library in the draw that empties the plane, not where a
     if (next !== screen) switches.push(`${next} in ${plane.drawing ? "the empty draw" : inRound ? "the observation round" : "a task"}`);
     screen = next;
   });
-  // The host reply of the settings project selection is fulfilled at the checkpoint after the callback of the file tree observer.
-  const reply = Promise.withResolvers();
-  const asked = Promise.withResolvers();
-  selection = () => { asked.resolve(); return reply.promise; };
   try {
+    // The host reply of the settings project selection is held and fulfilled at the checkpoint after the callback of the file tree observer.
     const browsing = projects.browse();
-    await asked.promise;
+    await drained();
     // Observation round: the tree callback runs, and the held reply is fulfilled at that checkpoint.
     inRound = true;
-    reply.resolve();
+    wire.release();
     await browsing;
     inRound = false;
     assert.deepEqual(switches, ["library in the empty draw"], "the library screen was not drawn by the draw that empties the plane");
   } finally {
-    selection = async () => {};
     projects.onChange(() => {});
   }
   await projects.flush();
@@ -530,75 +494,66 @@ test("browsing shows the library in the draw that empties the plane, not where a
   // snapshot; removing the project ends that ownership, so a later check reads the layout of its own snapshot.
   assert.equal(await projects.close(PROJECT.id), true, "the project that the check opened was not removed");
   assert.equal(projects.local().length, 0, "the window still owns a project after the check");
+  wire.finish();
 });
 
 test("closing a tab removes its session file after the layout write, and the start removes the files of tabs in no layout", async () => {
   const layout = (...tabs) => ({ state: { cards: [{ id: "card-one", data: { tabs: tabs.map((id) => ({ id, plugin: "fixture" })) } }] } });
-  const project = { ...structuredClone(PROJECT), spaces: [{ id: "spc-one", title: "SPACE1", layout: layout("tab-a", "tab-b") }] };
-  const puts = [];
   plane.layout = layout("tab-a", "tab-b");
-  await projects.initialise({ ...store,
-    snapshot: async () => ({ common: {}, projects: [structuredClone(project)], open: [] }),
-    tabSessions: async () => ["tab-gone"],
-    tabSessionPut: async (tab, regions) => { puts.push([tab, regions]); return null; } });
-  assert.deepEqual(puts, [["tab-gone", null]], "the start kept the session file of a tab in no layout");
+  await start("projects-switch-session-files");
+  const puts = () => workspaceCalls("tabSessionPut").map(({ payload }) => [payload.tab, payload.regions]);
+  assert.deepEqual(puts(), [["tab-gone", null]], "the start kept the session file of a tab in no layout");
   await projects.activate("prj-one");
-  puts.length = 0;
-  retained.length = 0;
+  const putsBefore = puts().length;
+  forgetRetained();
+  modulesRetained.length = 0;
   plane.layout = layout("tab-b");
   await projects.keep();
-  assert.deepEqual(puts, [["tab-a", null]], "closing a tab left its session file");
-  assert.deepEqual(retained, [[{ surface: "tab-b", plugin: "fixture", root: "/work/one" }]],
+  assert.deepEqual(puts().slice(putsBefore), [["tab-a", null]], "closing a tab left its session file");
+  assert.deepEqual(retained().filter(Array.isArray), [[{ surface: "tab-b", plugin: "fixture", root: "/work/one" }]],
     "closing the last layout occurrence did not retain only the remaining project surfaces");
   await projects.flush();
 
   reported.length = 0;
-  retentionFailure = new Error("fixture retain failure");
   plane.layout = layout("tab-c");
-  await assert.rejects(projects.keep(), /fixture retain failure/,
+  await assert.rejects(projects.keep(), /sidecars are stopped/,
     "a rejected retain operation was reported as a successful layout save");
-  assert.deepEqual(reported, ["fixture retain failure"], "the retain failure was not reported exactly once");
-  retentionFailure = null;
+  assert.deepEqual(reported, ["sidecars are stopped"], "the retain failure was not reported exactly once");
   await projects.flush();
+  wire.finish();
 });
 
 test("a refused layout write answers its caller, and the next layout write and the same layout reach the store", async () => {
-  const written = [];
-  let refusals = 0;
   plane.layout = PROJECT.spaces[0].layout;
-  await projects.initialise({ ...store, patch: async (id, patch) => {
-    if (refusals > 0 && patch.spaces) {
-      refusals -= 1;
-      throw new Error("the disk is full");
-    }
-    if (patch.spaces) written.push(patch.spaces[0].layout.state.name);
-  } });
+  await start("projects-switch-refused-write");
   await projects.activate(PROJECT.id);
+  const written = () => workspaceCalls("patch").filter(({ payload }) => payload.patch.spaces).map(({ payload }) => payload.patch.spaces[0].layout.state.name);
   const named = (name) => ({ state: { ...PROJECT.spaces[0].layout.state, name } });
-  written.length = 0;
-  refusals = 1;
+  const before = written().length;
   plane.layout = named("refused");
-  await assert.rejects(projects.keep(), /the disk is full/);
+  await assert.rejects(projects.keep(), /no space left on device/);
   await projects.keep();
-  assert.deepEqual(written, ["refused"], "the refused layout was not written again");
+  assert.deepEqual(written().slice(before), ["refused", "refused"], "the refused layout was not written again");
   plane.layout = named("later");
   await projects.keep();
-  assert.deepEqual(written, ["refused", "later"], "a write after a refused write did not reach the store");
+  assert.deepEqual(written().slice(before), ["refused", "refused", "later"], "a write after a refused write did not reach the store");
   assert.equal(await projects.close(PROJECT.id), true);
+  wire.finish();
 });
 
 test("each layout save names its writing path: add space for a new space of the shown project", async () => {
+  await start("projects-switch-save-path");
   saves.length = 0;
-  await projects.initialise(store);
   await projects.activate(PROJECT.id);
   projects.addSpace(PROJECT.spaces[0].layout);
   assert.equal(saves.at(-1), "add space");
   assert.ok(saves.every((path) => typeof path === "string"), "a save names its writing path");
+  await projects.flush();
+  wire.finish();
 });
 
-
-
 test("a reopened project restores inactive-space origins before retained views can start", { timeout: 5000 }, async () => {
+  await prepare("projects-switch-retained-origin");
   const { tabOrigin } = await import("../tab-reports.js");
   const project = structuredClone(PROJECT);
   project.id = "project-retained-origin";
@@ -609,17 +564,18 @@ test("a reopened project restores inactive-space origins before retained views c
     } }] },
   } });
   const snapshot = { common: {}, projects: [project], open: [] };
-  globalThis.location = new URL(`http://soksak.test/index.html?project=${project.id}`);
+  addressWith(`?project=${project.id}`);
   projects.begin(structuredClone(snapshot));
-  await projects.initialise({ ...store, snapshot: async () => structuredClone(snapshot), patch: async () => {} });
+  const store = new HostWorkspaceStore(host);
+  await connectSettings(store);
+  await projects.initialise(store);
   assert.equal(projects.local().some((p) => p.id === project.id), true);
   assert.deepEqual(tabOrigin("tab-retained-origin"), { directory: "/work/retained-source" });
+  wire.finish();
 });
 
 test("a project close that waits names each awaited step it started and has not ended", { timeout: 5000 }, async () => {
-  let listed = [structuredClone(PROJECT)];
-  await projects.initialise({ ...store, snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [] }),
-    remove: async (id) => { listed = listed.filter((item) => item.id !== id); } });
+  await start("projects-switch-close-steps");
   await projects.activate(PROJECT.id);
   const records = [];
   projects.runSteps(async (step, work) => {
@@ -642,126 +598,92 @@ test("a project close that waits names each awaited step it started and has not 
   plane.release();
   assert.equal(await closing, true);
   projects.runSteps(null);
+  wire.finish();
 });
 
 test("a registry read after the write of this window draws nothing, and a read that finds a change draws once", { timeout: 5000 }, async () => {
-  const project = structuredClone(PROJECT);
-  const other = { ...structuredClone(PROJECT), id: "prj-other", root: "/work/other", title: "other" };
-  const listed = [project, other];
-  let open = [];
-  let notify = null;
-  await projects.initialise({ ...store,
-    snapshot: async () => ({ common: {}, projects: structuredClone(listed), open: [...open] }),
-    // The host answers a write of this window with workspace-changed, and the snapshot reads the file that the write changed.
-    patch: async (id, patch) => { Object.assign(listed.find((item) => item.id === id), patch); notify(); },
-    onChange: (fn) => { notify = fn; } });
-  await projects.activate(project.id);
+  await start("projects-switch-registry-draws");
+  await projects.activate(PROJECT.id);
   await projects.flush();
+  // The host answers each write with workspace-changed, and the window reads the registry for each of them.
+  for (const written of workspaceCalls("patch")) {
+    wire.deliverNotice();
+    await projects.idle();
+  }
   let draws = 0;
   projects.onChange(() => { draws += 1; });
   try {
     const space = projects.addSpace({ state: { cards: [], name: "two" } });
     assert.equal(draws, 1, "the addition draws its space");
     await projects.flush();
+    // The host answers a write of this window with workspace-changed, and the snapshot reads the file that the write changed.
+    wire.deliverNotice();
     await projects.idle();
     assert.equal(draws, 1, "the read that the write of this window caused drew an unchanged registry");
     assert.ok(projects.active().spaces.some((item) => item.id === space.id));
 
-    other.title = "renamed elsewhere";
-    notify();
+    // Another window renames the project prj-other.
+    wire.deliverNotice();
     await projects.idle();
     assert.equal(draws, 2, "the title that another window changed");
-    assert.equal(projects.all().find((item) => item.id === other.id).title, "renamed elsewhere");
+    assert.equal(projects.all().find((item) => item.id === "prj-other").title, "renamed elsewhere");
 
-    open = [other.id];
-    notify();
+    // Another window opens the project prj-other.
+    wire.deliverNotice();
     await projects.idle();
     assert.equal(draws, 3, "the project that another window opened");
-    notify();
+    wire.deliverNotice();
     await projects.idle();
     assert.equal(draws, 3, "a read that found the same registry");
   } finally {
     projects.onChange(() => {});
   }
+  wire.finish();
 });
 
 test("a change of the store is read through the read of that change", { timeout: 5000 }, async () => {
-  let notify = null;
-  let snapshots = 0;
-  await projects.initialise({
-    ...store,
-    snapshot: async () => { snapshots += 1; return { common: {}, projects: [structuredClone(PROJECT)], open: [] }; },
-    onChange: (fn) => { notify = fn; },
-  });
-  snapshots = 0;
-  let reads = 0;
-  notify(async () => {
-    reads += 1;
-    return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
-  });
+  await start("projects-switch-change-read");
+  const snapshots = () => workspaceCalls("snapshot").length;
+  const before = snapshots();
+  // The host answers the read of the change after both readers of the window started it: the registry takes the answer of that read.
+  wire.deliverNotice();
+  await drained();
+  wire.release();
   await projects.idle();
-  assert.equal(reads, 1, "the read of the change");
-  assert.equal(snapshots, 0, "no read of its own");
+  assert.equal(snapshots() - before, 1, "the read of the change is the only registry read");
+  assert.equal(projects.all()[0].title, "renamed by the change", "the registry did not take the answer of the read of the change");
+  wire.finish();
 });
 
 test("a registry read that waited behind another read finds what the host holds at its turn", { timeout: 5000 }, async () => {
+  await prepare("projects-switch-read-turn");
   const { HostWorkspaceStore } = await import("../host-store.js");
-  const listed = [structuredClone(PROJECT)];
-  const answer = () => ({ common: {}, projects: structuredClone(listed), open: [] });
-  let held = null;
-  const listeners = [];
-  const host = {
-    on: (name, fn) => { listeners.push(fn); },
-    call: async () => {
-      if (!held) return answer();
-      const value = answer();
-      const wait = held;
-      held = null;
-      await wait;
-      return value;
-    },
-  };
   const shared = new HostWorkspaceStore(host);
-  await projects.initialise({ ...store, snapshot: () => shared.snapshot(), onChange: (fn) => shared.onChange(fn) });
+  await projects.initialise(shared);
+  await connectSettings(shared);
   // The settings of the window start the read of each change.
   let settings = null;
   shared.onChange((read) => { settings = read(); });
   // The first read holds the registry reads of this window while the read of the second change ends.
-  let release = null;
-  held = new Promise((resolve) => { release = resolve; });
-  listeners[0]();
-  listeners[0]();
+  wire.deliverNotice();
+  wire.deliverNotice();
   await settings;
   // Another window adds a project after that read ended, and its change has not arrived yet.
-  listed.push({ ...structuredClone(PROJECT), id: "prj-later", root: "/work/later", title: "later" });
-  release();
+  wire.release();
   await projects.idle();
   assert.ok(projects.all().some((item) => item.id === "prj-later"), "the second registry read reads at its turn");
+  wire.finish();
 });
 
 test("the registry and the settings of a window call the host once for one change", { timeout: 5000 }, async () => {
-  const { HostWorkspaceStore } = await import("../host-store.js");
-  const listeners = [];
-  let calls = 0;
-  // The answer of the host waits for gate. The read of the initialisation is answered at once.
-  let gate = Promise.resolve();
-  const host = {
-    on: (name, fn) => { listeners.push(fn); },
-    call: async () => {
-      calls += 1;
-      await gate;
-      return { common: {}, projects: [structuredClone(PROJECT)], open: [] };
-    },
-  };
-  const shared = new HostWorkspaceStore(host);
-  await projects.initialise({ ...store, snapshot: () => shared.snapshot(), onChange: (fn) => shared.onChange(fn) });
-  shared.onChange((read) => { read(); });
-  calls = 0;
-  // The test releases the answer of the host after the page ran every waiting read of the change.
-  let answerNow = null;
-  gate = new Promise((resolve) => { answerNow = resolve; });
-  listeners[0]();
-  answerNow();
+  await start("projects-switch-one-call");
+  const snapshots = () => workspaceCalls("snapshot").length;
+  // The answer of the host waits until the test releases it, after the page ran every waiting read of the change.
+  const before = snapshots();
+  wire.deliverNotice();
+  await drained();
+  wire.release();
   await projects.idle();
-  assert.equal(calls, 1);
+  assert.equal(snapshots() - before, 1);
+  wire.finish();
 });

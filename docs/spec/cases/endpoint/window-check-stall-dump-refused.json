@@ -1,0 +1,29 @@
+{
+  "name": "window-check-stall-dump-refused",
+  "description": "The host refuses a stall dump whose path names no file.",
+  "replay": false,
+  "reason": "The case sends a dump path that the replaying host would write goroutine stacks beside, so the replay cannot arrange it.",
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "diagnostics.stall.dump",
+        "params": {
+          "window": "main",
+          "path": "/x"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+          "code": -32602,
+          "message": "path does not name a file: /x"
+        }
+      }
+    }
+  ]
+}

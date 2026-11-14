@@ -33,7 +33,8 @@ import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
-import { b3OutOption, execute, measureApps, newWindow, openOnlyTab, parseCpuTime, requireOcclusion } from "./measure-app-usage.mjs";
+import { b3OutOption, measureApps, newWindow, openOnlyTab, parseCpuTime, requireOcclusion } from "./measure-app-usage.mjs";
+import { delay, execute, instant, remainingMs } from "./measure-tools.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 const FIXTURE = fileURLToPath(new URL("./fixtures/status-redraw.mjs", import.meta.url));
@@ -116,18 +117,29 @@ export function frameCost({ rows, totals, presented, seconds }) {
 }
 
 /**
- * Resolves with the host.window value that reports occluded true within ms, or with null. It reads the status once per second and at
- * the end: the host sends a watcher of host.window a new value for each presented frame, which the measurement would count as a cost of
- * the frame. read() answers host.window, and sleep and now replace the clock in a test.
+ * Resolves with the host.window value of the window of the session s that reports occluded true within ms, or with null. It reads the
+ * status once per second and at the end: the host sends a watcher of host.window a new value for each presented frame, which the
+ * measurement would count as a cost of the frame.
  */
-export async function untilCovered({ read, ms, sleep = (wait) => new Promise((resolve) => setTimeout(resolve, wait)), now = Date.now }) {
-  const end = now() + ms;
-  for (let left = ms; left > 0; left = end - now()) {
-    await sleep(Math.min(COVERED_READ_MS, left));
-    const status = await read();
-    if (status.occluded === true) return status;
+export async function untilCovered({ s, ms }) {
+  const startedAt = instant();
+  for (let wait = coveredWaitMs({ startedAt, now: startedAt, ms }); wait > 0; wait = coveredWaitMs({ startedAt, now: instant(), ms })) {
+    await delay(wait);
+    const status = await readCovered({ s });
+    if (status !== null) return status;
   }
   return null;
+}
+
+/** The milliseconds of the next wait of untilCovered at the instant `now` of a watch of `ms` that began at the instant `startedAt`: a second, or the rest of the watch; 0 when the watch is over. */
+export function coveredWaitMs({ startedAt, now, ms }) {
+  return Math.min(COVERED_READ_MS, remainingMs({ since: startedAt, now, ms }));
+}
+
+/** The host.window value of the window of the session s when it reports occluded true, otherwise null. */
+export async function readCovered({ s }) {
+  const status = await s.get("host.window");
+  return status.occluded === true ? status : null;
 }
 
 /** The pid and the CPU seconds of the window server in the rows of ps -axww -o pid=,time=,comm=. */
@@ -210,39 +222,30 @@ export async function prepareRedraw(s, plugin, root) {
 }
 
 /**
- * Measures the region of the surface tab in the window of the session s: measure(marks) runs the CPU interval of measureApps with the
- * marks, which read presentedFrames of the region right before the first and right after the last CPU reading and require the window
- * visible at both. covered(ms) resolves with the host.window value that reports occluded true within ms, or with null. Returns the
- * measurement, its frame cost and the host.window value of the window before the first CPU reading. windowServer() reads the window
- * server at the same marks, and the frame cost holds its CPU time.
+ * Reads presentedFrames of the region of the surface tab in the window of the session s, which must not be occluded. Returns the
+ * presented frames and the host.window value.
  */
-export async function measureRegion({ s, tab, interval, measure, covered, windowServer }) {
-  let watch;
-  let server;
-  const read = async () => {
-    const status = await s.get("host.window");
-    requireOcclusion(null, [{ window: s.window, occluded: status.occluded }]);
-    return { presented: presentedFramesOf(status, tab, s.window), status };
-  };
-  const measurement = await measure({
-    before: async () => {
-      const frames = await read();
-      server = await windowServer();
-      watch = covered(interval * 1000);
-      return frames;
-    },
-    after: async () => {
-      const status = await watch;
-      if (status !== null) throw new Error(`window ${s.window} reported occluded true during the interval: ${JSON.stringify(status.frame)}`);
-      const frames = await read();
-      const { seconds } = await windowServer();
-      server = { pid: server.pid, cpuSeconds: seconds - server.seconds };
-      return frames;
-    },
-  });
+export async function readRegion(s, tab) {
+  const status = await s.get("host.window");
+  requireOcclusion(null, [{ window: s.window, occluded: status.occluded }]);
+  return { presented: presentedFramesOf(status, tab, s.window), status };
+}
+
+/** Requires that the window reported no occluded true during the interval: `covered` is the value of untilCovered. */
+export function requireUncovered(window, covered) {
+  if (covered !== null) throw new Error(`window ${window} reported occluded true during the interval: ${JSON.stringify(covered.frame)}`);
+}
+
+/**
+ * The cost of the frames of the region from the measurement of measureApps with its marks `before` and `after` (the results of
+ * readRegion), the readings `first` and `last` of the window server (parseWindowServer) at the same marks, and the host.window value
+ * of the window before the first CPU reading. The frame cost holds the CPU time of the window server over the interval.
+ */
+export function regionCost({ measurement, first, last }) {
   const [app] = measurement.apps;
   const { before, after } = measurement.marks;
   const cost = frameCost({ rows: app.rows, totals: app.totals, presented: after.presented - before.presented, seconds: measurement.seconds });
+  const server = { pid: first.pid, cpuSeconds: last.seconds - first.seconds };
   cost.windowServer = { ...server, msPerFrame: (server.cpuSeconds * 1000) / cost.presented };
   return { measurement, cost, status: before.status };
 }
@@ -274,12 +277,27 @@ async function measureRedraw({ sok, configDir, plugin, rows, rate, interval, tra
     // The watch ends when the start line is shown, because a watch of the screen relays every screen of the fixture too.
     const screen = await w.until(`${plugin}.screen`, (value) => screenText(value).includes(START), "the fixture did not start", { surface: tab });
     requireRows(screen, rows, tab);
-    const { measurement, cost, status } = await measureRegion({
-      s: w, tab, interval,
-      measure: (marks) => measureApps({ sok, configDirs: [configDir], interval, footprints: "at-once", marks }),
-      covered: (ms) => untilCovered({ read: () => w.get("host.window"), ms }),
-      windowServer: readWindowServer,
+    let watch;
+    let first;
+    let last;
+    const measurement = await measureApps({
+      sok, configDirs: [configDir], interval, footprints: "at-once",
+      marks: {
+        before: async () => {
+          const reading = await readRegion(w, tab);
+          first = await readWindowServer();
+          watch = untilCovered({ s: w, ms: interval * 1000 });
+          return reading;
+        },
+        after: async () => {
+          requireUncovered(w.window, await watch);
+          const reading = await readRegion(w, tab);
+          last = await readWindowServer();
+          return reading;
+        },
+      },
     });
+    const { cost, status } = regionCost({ measurement, first, last });
     // The conditions of a B3 output are read only for one: a plain measurement does not require a window on a screen.
     const conditions = b3Out === null ? null : await readRedrawConditions({ s: w, status, trace, policy: readPolicy(configDir).classes });
     result = { plugin, rows, rate, interval, window: w.window, tab, seconds: measurement.seconds, cost, conditions, errors: measurement.errors };

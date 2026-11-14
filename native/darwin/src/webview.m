@@ -13,6 +13,10 @@
 #import "window_facts.h"
 #import "webview_dialogs.h"
 #import "main_thread.h"
+#import "view_presentation_fault.h"
+#include <notify.h>
+#include <stdlib.h>
+#include <string.h>
 #import "private/webkit.h"
 #include "host_callbacks.h"
 
@@ -291,13 +295,48 @@ bool nativeWindowAfterPresentation(uintptr_t handle, uintptr_t callback) {
 bool nativeWindowJoinView(uintptr_t window, uint64_t ticket, void *view, uintptr_t callback) {
     return ON_MAIN(bool, nativeWindowJoinViewOnMain((void *)window, ticket, view, callback));
 }
+// The fault point SOKSAK_FAULT_VIEW_PRESENTATION=hold of the presentation waits of web views (docs/operations/examples.md#test-kinds): the
+// callback of a wait is delivered only after the real presentation update and a release that came after the wait began. The release
+// is the Darwin notification SP_VIEW_PRESENTATION_FAULT_RELEASE, so a first paint that the system does not delay on demand arrives when
+// the check releases it, and a release that comes before the update is not lost. The counts and the held callbacks are read and
+// changed on the main thread only.
+static NSMutableArray<void (^)(void)> *heldPresentations;
+static NSUInteger presentationReleases;
+
+static bool presentationHeld(void) {
+    const char *fault = getenv("SOKSAK_FAULT_VIEW_PRESENTATION");
+    if (fault == NULL || fault[0] == '\0') return false;
+    if (strcmp(fault, "hold") != 0) {
+        sp_log_error("view presentation fault", "SOKSAK_FAULT_VIEW_PRESENTATION names no fault");
+        return false;
+    }
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        heldPresentations = [[NSMutableArray alloc] init];
+        int token = 0;
+        uint32_t status = notify_register_dispatch(SP_VIEW_PRESENTATION_FAULT_RELEASE, &token, dispatch_get_main_queue(), ^(int unused) {
+            (void)unused;
+            presentationReleases++;
+            NSArray<void (^)(void)> *released = [[heldPresentations copy] autorelease];
+            [heldPresentations removeAllObjects];
+            for (void (^deliver)(void) in released) deliver();
+        });
+        if (status != NOTIFY_STATUS_OK) sp_log_error("view presentation fault", "the release notification could not be registered");
+    });
+    return true;
+}
+
 // Runs callback after the web view presented its next frame. The host waits for the first frame of a revealed modal web view
 // with it (docs/spec/exposure.md, host.window.presented).
 static bool nativeWebviewAfterPresentationOnMain(void *handle, uintptr_t callback) {
     WKWebView *target = (WKWebView *)handle;
     if (!target) return false;
+    bool held = presentationHeld();
+    NSUInteger releasesAtStart = presentationReleases;
     [target _doAfterNextPresentationUpdate:^{
-        hostRunOnWorker(^{ sp_host_callback_native_presentation_done(callback); });
+        void (^deliver)(void) = ^{ hostRunOnWorker(^{ sp_host_callback_native_presentation_done(callback); }); };
+        if (held && presentationReleases == releasesAtStart) [heldPresentations addObject:[[deliver copy] autorelease]];
+        else deliver();
     }];
     return true;
 }

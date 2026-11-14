@@ -2,67 +2,58 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 
 import { installPageStartErrors } from "../page-start-errors.js";
 
-/** A window that keeps the listeners it was given, by type and capture flag, and delivers events to them. */
-class FakeWindow {
-  listeners = [];
-  addEventListener(type, listener, options) {
-    this.listeners.push({ type, listener, capture: options?.capture === true });
-  }
-  removeEventListener(type, listener, options) {
-    const capture = options?.capture === true;
-    this.listeners = this.listeners.filter((item) => !(item.type === type && item.listener === listener && item.capture === capture));
-  }
-  dispatchEvent(event) {
-    for (const item of this.listeners.filter((entry) => entry.type === event.type)) item.listener(event);
-  }
-}
-
-/** An event target that records the lines sent to the host. */
-function fixture() {
-  const target = new FakeWindow();
+/** A document window with its own listeners, and the lines that the handler of the start writes. */
+function fixture(t) {
+  const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
+  t.after(() => dom.window.close());
+  const target = dom.window;
   const lines = [];
   const start = installPageStartErrors({ target, report: (line) => lines.push(line) });
-  return { target, lines, start };
+  return { dom, target, lines, start };
 }
 
-const error = (message, filename, lineno) => ({ type: "error", message, filename, lineno });
-const rejection = (reason) => ({ type: "unhandledrejection", reason });
+const error = (target, message, filename, lineno) => target.dispatchEvent(new target.ErrorEvent("error", { message, filename, lineno }));
+const rejection = (target, reason) => target.dispatchEvent(Object.assign(new target.Event("unhandledrejection"), { reason }));
 
-test("an error before the first screen is written as a page start error with its file and line", () => {
-  const { target, lines } = fixture();
-  target.dispatchEvent(error("boom", "/debug-ui.js", 12));
+test("an error before the first screen is written as a page start error with its file and line", (t) => {
+  const { target, lines } = fixture(t);
+  error(target, "boom", "/debug-ui.js", 12);
   assert.deepEqual(lines, ["start: boom @ /debug-ui.js:12"]);
 });
 
-test("a rejection before the first screen is written with its message", () => {
-  const { target, lines } = fixture();
-  target.dispatchEvent(rejection(new Error("denied")));
-  target.dispatchEvent(rejection("plain"));
+test("a rejection before the first screen is written with its message", (t) => {
+  const { target, lines } = fixture(t);
+  rejection(target, new Error("denied"));
+  rejection(target, "plain");
   assert.deepEqual(lines, ["start: denied", "start: plain"]);
 });
 
-test("the same cause is written once", () => {
-  const { target, lines } = fixture();
-  for (let count = 0; count < 3; count += 1) target.dispatchEvent(error("boom", "/a.js", 1));
+test("the same cause is written once", (t) => {
+  const { target, lines } = fixture(t);
+  for (let count = 0; count < 3; count += 1) error(target, "boom", "/a.js", 1);
   assert.equal(lines.length, 1);
 });
 
-test("a module that fails to load is written with its address", () => {
-  const { target, lines } = fixture();
-  const failed = { type: "error", target: { src: "http://127.0.0.1/missing.js" } };
-  target.dispatchEvent(failed);
+test("a module that fails to load is written with its address", (t) => {
+  const { dom, lines } = fixture(t);
+  const script = dom.window.document.createElement("script");
+  script.type = "module";
+  script.src = "http://127.0.0.1/missing.js";
+  dom.window.document.body.append(script);
+  script.dispatchEvent(new dom.window.Event("error"));
   assert.deepEqual(lines, ["start: cannot load http://127.0.0.1/missing.js"]);
 });
 
-test("nothing is written after the page has drawn its first screen", () => {
-  const { target, lines, start } = fixture();
+test("nothing is written after the page has drawn its first screen", (t) => {
+  const { target, lines, start } = fixture(t);
   start.finish();
-  target.dispatchEvent(error("late", "/a.js", 1));
-  assert.deepEqual(lines, []);
-  assert.deepEqual(target.listeners, [], "a handler of the start remains");
+  error(target, "late", "/a.js", 1);
+  rejection(target, "late");
+  assert.deepEqual(lines, [], "a handler of the start remains");
   start.finish();
 });
 

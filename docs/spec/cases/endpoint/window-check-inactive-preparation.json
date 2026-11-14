@@ -1,0 +1,11 @@
+{
+  "name": "window-check-inactive-preparation",
+  "description": "An inactive session reads host.window before its body; a reading that proves no inactive application ends the preparation.",
+  "replay": false,
+  "reason": "The case reads the activation observation of the window of the application, which a replay would not leave unchanged.",
+  "variables": {"state": {"type": "object", "example": {"active": false, "activationObservation": {"registered": true, "count": "0"}}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": "$state"}}
+  ]
+}

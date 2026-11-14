@@ -5,44 +5,28 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-type activationObservationPlatform struct {
-	pageProcessPlatform
-	observation json.RawMessage
-}
-
-func (p *activationObservationPlatform) WindowFacts(platform.Window) (string, error) {
-	facts := map[string]any{"pageProcess": 0, "nativeSurfaces": []any{}, "webviews": []any{}}
-	if p.observation != nil {
-		facts["activationObservation"] = p.observation
+// activationObservationFacts is the native window facts text with the activationObservation member raw, or without one when raw
+// is empty.
+func activationObservationFacts(raw string) string {
+	member := ""
+	if raw != "" {
+		member = `,"activationObservation":` + raw
 	}
-	text, err := json.Marshal(facts)
-	return string(text), err
+	return `{"pageProcess":0,"nativeSurfaces":[],"webviews":[]` + member + `}`
 }
 
 // contract: window.facts.activation-observation-is-the-native-object
 func TestHostWindowPreservesExactActivationObservation(t *testing.T) {
 	for _, raw := range []string{`{"registered":true,"count":"0"}`, `{"registered":false,"count":"18446744073709551615"}`} {
-		s := pageProcessSurfaces(t, pagelessFramework{}, 0)
-		system = &activationObservationPlatform{observation: json.RawMessage(raw)}
-		status, err := s.windowState()
+		actual, err := windowStatusMembers(t, activationObservationFacts(raw), false)
 		if err != nil {
-			t.Fatal(err)
-		}
-		text, err := json.Marshal(status)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var actual map[string]json.RawMessage
-		if err := json.Unmarshal(text, &actual); err != nil {
 			t.Fatal(err)
 		}
 		var got, want any
 		if err := json.Unmarshal(actual["activationObservation"], &got); err != nil {
-			t.Fatalf("host.window lost activationObservation: %s (%v)", text, err)
+			t.Fatalf("host.window lost activationObservation: %s (%v)", actual["activationObservation"], err)
 		}
 		if err := json.Unmarshal([]byte(raw), &want); err != nil {
 			t.Fatal(err)
@@ -57,13 +41,7 @@ func TestHostWindowPreservesExactActivationObservation(t *testing.T) {
 func TestHostWindowRefusesMissingOrInvalidActivationObservation(t *testing.T) {
 	for _, raw := range []string{"", `null`, `{}`, `{"registered":true}`, `{"count":"1"}`, `{"registered":"true","count":"1"}`, `{"registered":false,"count":1}`, `{"registered":false,"count":""}`, `{"registered":false,"count":"01"}`, `{"registered":false,"count":"-1"}`, `{"registered":false,"count":"+1"}`, `{"registered":false,"count":"1.0"}`, `{"registered":false,"count":"18446744073709551616"}`} {
 		t.Run(raw, func(t *testing.T) {
-			s := pageProcessSurfaces(t, pagelessFramework{}, 0)
-			var observation json.RawMessage
-			if raw != "" {
-				observation = json.RawMessage(raw)
-			}
-			system = &activationObservationPlatform{observation: observation}
-			_, err := s.windowState()
+			_, err := windowStatusMembers(t, activationObservationFacts(raw), false)
 			if err == nil || !strings.Contains(err.Error(), "activationObservation") {
 				t.Fatalf("invalid native activationObservation %q returned %v", raw, err)
 			}

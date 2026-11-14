@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, cpSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import test from "node:test";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -428,8 +428,7 @@ test("an unreadable listed file fails the published import check with its path",
   const dir = join(tmpdir(), `fixture-unreadable-${process.pid}-${Date.now()}`);
   mkdirSync(dir, { recursive: true });
   try {
-    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "test-fixture-unreadable", files: ["app.js"] }));
-    writeFileSync(join(dir, "app.js"), "export const app = 1;\n");
+    cpSync(fileURLToPath(new URL("fixtures/stage-unreadable/", import.meta.url)), dir, { recursive: true });
     chmodSync(join(dir, "app.js"), 0o000);
     assert.throws(() => collectPublishedImports("test-fixture-unreadable", dir, ["app.js"]), /EACCES.*app\.js/);
   } finally {

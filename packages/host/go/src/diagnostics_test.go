@@ -13,9 +13,9 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
 // contract: diagnostics.capture-start.preserves-display-option-parsing
@@ -127,57 +127,8 @@ func TestDiagnosticDragCaptureTakesAPlan(t *testing.T) {
 	}
 }
 
-type captureStartProbe struct {
-	plan     CapturePlan
-	failStop bool
-}
-
-func (*captureStartProbe) Open(CaptureTarget) error { return nil }
-func (c *captureStartProbe) Start(_ string, plan CapturePlan) error {
-	c.plan = plan
-	return nil
-}
-func (c *captureStartProbe) Stop() (int, error) {
-	if c.failStop {
-		return 0, errors.New("stop failed")
-	}
-	return 1, nil
-}
-
 // testPlan is the plan of the stills of the recordings of these tests.
 var testPlan = CapturePlan{Gap: 8, Frames: 120}
-
-// contract: recording.finish.keeps-folder-and-reports-frames
-func TestRecordingFinishKeepsTheFolder(t *testing.T) {
-	fake := &captureStartProbe{}
-	var recording Recording
-	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.Start(fake, CaptureTarget{Window: 7}, directory, testPlan); err != nil {
-		t.Fatal(err)
-	}
-	finishedDirectory, _, window, err := recording.Finish(fake)
-	if err != nil || finishedDirectory != directory || window == nil || *window != 7 {
-		t.Fatalf("finish directory=%q window=%v error=%v", finishedDirectory, window, err)
-	}
-}
-
-// contract: recording.finish.reports-the-recorded-window
-func TestRecordingFinishReportsTheRecordedWindow(t *testing.T) {
-	fake := &captureStartProbe{}
-	var recording Recording
-	if err := recording.Start(fake, CaptureTarget{Window: 7, Display: true}, filepath.Join(t.TempDir(), "display"), testPlan); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, window, err := recording.Finish(fake); err != nil || window != nil {
-		t.Fatalf("a display recording finished with window %v and error %v, want nil and nil", window, err)
-	}
-	if err := recording.Start(fake, CaptureTarget{Window: 9}, filepath.Join(t.TempDir(), "window"), testPlan); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, window, err := recording.Finish(fake); err != nil || window == nil || *window != 9 {
-		t.Fatalf("a window recording finished with window %v and error %v, want 9 and nil", window, err)
-	}
-}
 
 // contract: diagnostics.capture-stop.payload-reports-stills
 func TestCaptureStopPayloadReportsStills(t *testing.T) {
@@ -235,31 +186,50 @@ func TestALayoutTraceKeepsTheStagesOfEachTransaction(t *testing.T) {
 	}
 }
 
-// traceCapturer is a platform whose layout trace counts its starts and stops and answers records.
-type traceCapturer struct {
-	platform.Capturer
-	starts, stops int
-	records       []platform.LayoutRecord
+// realLayoutTraceWindow returns the recording device of the real platform and the native window of a real window with its main page, and
+// makes the framework run its steps on the main thread. The window cancels its open layout when the test ends.
+func realLayoutTraceWindow(t *testing.T) (platformCapture, platform.Window) {
+	t.Helper()
+	useCurrentPlatformForViews(t)
+	capturer, ok := system.(platform.Capturer)
+	if !ok {
+		t.Fatal("the platform records no windows")
+	}
+	savedFramework := framework
+	framework = mainThreadFramework{}
+	t.Cleanup(func() { framework = savedFramework })
+	native := support.TitledWindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	t.Cleanup(func() { runOnMainThread(func() { system.CancelLayout(native) }) })
+	return platformCapture{Capturer: capturer}, native
 }
 
-func (c *traceCapturer) LayoutTraceStart() { c.starts++ }
-func (c *traceCapturer) LayoutTraceStop() ([]platform.LayoutRecord, error) {
-	c.stops++
-	return c.records, nil
+// beginRealLayout begins the layout transaction of ticket in native and returns when the native layer allowed it.
+func beginRealLayout(t *testing.T, native platform.Window, ticket uint64) {
+	t.Helper()
+	allowed := make(chan bool, 1)
+	var err error
+	runOnMainThread(func() { err = system.BeginLayout(native, ticket, func(ok bool) { allowed <- ok }) })
+	if err != nil {
+		t.Fatalf("begin the layout %d: %v", ticket, err)
+	}
+	if !<-allowed {
+		t.Fatalf("the native layer refused the layout %d", ticket)
+	}
 }
 
 // One run holds the layout trace at a time, because a native start discards what the trace recorded; only the run that holds
-// the trace stops it, and the end of the connection that started a trace of diagnostics.layout.trace stops it.
+// the trace stops it, and the end of the connection that started a trace of diagnostics.layout.trace stops it. The trace is the native
+// trace of a real window: the transaction that it recorded survives the refused second start.
 // contract: diagnostics.layout-trace.one-run-at-a-time
 func TestTheLayoutTraceHasOneRunAtATime(t *testing.T) {
-	previous := framework
-	framework = pagelessFramework{window: &elementWindow{}}
-	t.Cleanup(func() { framework = previous })
-	native := &traceCapturer{records: []platform.LayoutRecord{{Ticket: 1}}}
-	trace := platformCapture{Capturer: native}
+	trace, native := realLayoutTraceWindow(t)
 	drag, other := &layoutTraceRun{}, &layoutTraceRun{endpoint: true}
 	if err := startLayoutTrace(trace, drag); err != nil {
 		t.Fatal(err)
+	}
+	beginRealLayout(t, native, 4001)
+	if !commitLayout(native, 4001) {
+		t.Fatal("the native layer did not commit the layout 4001")
 	}
 	if err := startLayoutTrace(trace, other); err == nil || err.Error() != "the layout trace is already running" {
 		t.Fatalf("a second start answered %v", err)
@@ -268,8 +238,8 @@ func TestTheLayoutTraceHasOneRunAtATime(t *testing.T) {
 		t.Fatalf("a stop of a run that does not hold the trace answered %v", err)
 	}
 	layouts, err := stopLayoutTrace(trace, drag)
-	if err != nil || len(layouts) != 1 || native.starts != 1 || native.stops != 1 {
-		t.Fatalf("the stop answered %v, %v after %d starts and %d stops", layouts, err, native.starts, native.stops)
+	if err != nil || len(layouts) != 1 || layouts[0]["ticket"] != uint64(4001) {
+		t.Fatalf("the stop answered %v, %v, want the one transaction that the run recorded, which the second start did not discard", layouts, err)
 	}
 	ended := false
 	other.forget = func() { ended = true }
@@ -281,39 +251,23 @@ func TestTheLayoutTraceHasOneRunAtATime(t *testing.T) {
 	}
 }
 
-// viewportPlatform is a layoutOrderPlatform whose begin records, for each layout, whether it began in a main-thread step and whether
-// the layout trace held the viewport of its preparation then.
-type viewportPlatform struct {
-	*layoutOrderPlatform
-	inStep *bool
-	begins []string
-}
-
-func (p *viewportPlatform) BeginLayout(window platform.Window, ticket uint64, ready func(bool)) error {
-	layoutViewports.mu.Lock()
-	_, noted := layoutViewports.byTicket[ticket]
-	layoutViewports.mu.Unlock()
-	p.begins = append(p.begins, fmt.Sprintf("begin %d in step %t noted %t", ticket, *p.inStep, noted))
-	return p.layoutOrderPlatform.BeginLayout(window, ticket, ready)
-}
-
 // The layout trace keeps the viewport of each preparation that began its layout during the trace with the transaction of its ticket.
 // The preparation notes it in the main-thread step that begins its transaction, before the begin, and a stop ends the trace in a
 // main-thread step of its own, so the stop finds the viewport of every transaction that it reports. A preparation outside a trace
-// keeps nothing (docs/spec/native-surfaces.md#layout-transaction).
+// keeps nothing (docs/spec/native-surfaces.md#layout-transaction). The preparations are the real preparations of a real window.
 // contract: diagnostics.layout-trace.reply-carries-layout-viewport
 func TestTheLayoutTraceKeepsTheViewportOfEachPreparation(t *testing.T) {
-	inStep := false
-	fake := &viewportPlatform{layoutOrderPlatform: &layoutOrderPlatform{frames: map[unsafe.Pointer]platform.Rect{}}, inStep: &inStep}
-	saved, savedFramework := system, framework
-	system, framework = fake, steppingFramework{inStep: &inStep}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
-	s := &Surfaces{window: &noticeFrontend{notices: make(chan func(error), 1)}, invoke: func(task func()) { task() },
-		views: map[string]*nativeWebview{}, named: map[uintptr]string{}, compositions: map[string]SurfaceComposition{},
-		surfacePlugins: map[string]string{}, images: NewImages(), documents: NewDocuments(), sidecars: &Sidecars{},
-		sourceOrigins: newSourceOrigins()}
+	trace, native := realLayoutTraceWindow(t)
+	window := &openFrontend{native: native}
+	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
 	// The page of the window is ready, so the preparation emits no page-ready.
 	s.first.Do(func() {})
+	noted := func(ticket uint64) bool {
+		layoutViewports.mu.Lock()
+		defer layoutViewports.mu.Unlock()
+		_, ok := layoutViewports.byTicket[ticket]
+		return ok
+	}
 	prepare := func(width, height float64) uint64 {
 		t.Helper()
 		prepared, err := s.SyncSurfaces(SyncRequest{Titlebar: 40, Settled: true, Viewport: LayoutViewport{Width: width, Height: height}})
@@ -322,32 +276,49 @@ func TestTheLayoutTraceKeepsTheViewportOfEachPreparation(t *testing.T) {
 		}
 		return prepared.Ticket
 	}
+	// The begin of each layout recorded whether the viewport was noted before it: the note precedes the begin of its own transaction.
+	atBegin := func(ticket uint64) bool {
+		t.Helper()
+		noted, recorded := layoutBeginNoted(ticket)
+		if !recorded {
+			t.Fatalf("the begin of the layout %d was not recorded", ticket)
+		}
+		return noted
+	}
 	before := prepare(1200, 760)
-	native := &traceCapturer{}
-	trace := platformCapture{Capturer: native}
+	if atBegin(before) {
+		t.Fatal("a preparation before the trace had a viewport at its begin")
+	}
+	if noted(before) {
+		t.Fatal("a preparation before the trace kept its viewport")
+	}
+	if !commitLayout(native, before) {
+		t.Fatalf("the native layer did not commit the layout %d", before)
+	}
 	run := &layoutTraceRun{}
 	if err := startLayoutTrace(trace, run); err != nil {
 		t.Fatal(err)
 	}
 	during := prepare(1800, 1081)
-	native.records = []platform.LayoutRecord{{Ticket: before}, {Ticket: during}}
+	if !noted(during) || !atBegin(during) {
+		t.Fatalf("a preparation during the trace kept no viewport, or kept it only after the begin of its transaction (noted at begin: %t)", atBegin(during))
+	}
+	if !commitLayout(native, during) {
+		t.Fatalf("the native layer did not commit the layout %d", during)
+	}
 	layouts, err := stopLayoutTrace(trace, run)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{fmt.Sprintf("begin %d in step true noted false", before), fmt.Sprintf("begin %d in step true noted true", during)}
-	if !reflect.DeepEqual(fake.begins, want) {
-		t.Fatalf("the preparations began %v, want %v", fake.begins, want)
+	if len(layouts) != 1 || layouts[0]["ticket"] != during {
+		t.Fatalf("the layout trace reports %v, want the one transaction of the preparation during the trace", layouts)
 	}
-	if len(layouts) != 2 {
-		t.Fatalf("the layout trace reports %d transactions, want 2", len(layouts))
+	if want := map[string]any{"width": float64(1800), "height": float64(1081)}; !reflect.DeepEqual(layouts[0]["viewport"], want) {
+		t.Fatalf("the layout trace reports the viewport %v, want %v", layouts[0]["viewport"], want)
 	}
-	viewports := []any{layouts[0]["viewport"], layouts[1]["viewport"]}
-	if want := []any{nil, map[string]any{"width": float64(1800), "height": float64(1081)}}; !reflect.DeepEqual(viewports, want) {
-		t.Fatalf("the layout trace reports the viewports %v, want %v", viewports, want)
-	}
-	if after := prepare(1200, 760); len(fake.begins) != 3 || fake.begins[2] != fmt.Sprintf("begin %d in step true noted false", after) {
-		t.Fatalf("a preparation after the stop began %v, want no viewport kept", fake.begins)
+	after := prepare(1200, 760)
+	if atBegin(after) || noted(after) {
+		t.Fatal("a preparation after the stop kept its viewport")
 	}
 }
 
@@ -373,53 +344,25 @@ func TestDiagnosticViewportMarkerIsDeclared(t *testing.T) {
 	}
 }
 
-type viewportMarkerPlatform struct {
-	platform.Platform
-	document unsafe.Pointer
-	enabled  bool
-	color    [3]uint8
-	width    float64
-	err      error
-	calls    int
-	inUI     func() bool
-}
-
-func (p *viewportMarkerPlatform) SetDocumentViewportMarker(document unsafe.Pointer, enabled bool) ([3]uint8, float64, error) {
-	p.calls++
-	p.document, p.enabled = document, enabled
-	if p.inUI != nil && !p.inUI() {
-		return [3]uint8{}, 0, errors.New("marker called outside UI thread")
-	}
-	return p.color, p.width, p.err
-}
-
-func viewportMarkerEndpoint(t *testing.T, marker *viewportMarkerPlatform, attached bool) (*Endpoint, *Surfaces, *byte) {
+// viewportMarkerEndpoint returns the endpoint of a host with the window window-a, which holds the real document region document-a of
+// surface-a when attached is set. The document is a real region of a real window, and the marker call runs on the real main thread.
+func viewportMarkerEndpoint(t *testing.T, attached bool) *Endpoint {
 	t.Helper()
-	h := &Host{windows: map[uint]*Surfaces{}}
-	s := &Surfaces{name: "window-a", documents: NewDocuments()}
-	h.windows[1] = s
-	var document *byte
+	p := newViewProbe(t, Theme{})
+	s := &Surfaces{name: "window-a", documents: NewDocuments(), invoke: runOnMainThread}
 	if attached {
+		document := realDocument(t, p, func(string) {})
+		t.Cleanup(func() { runOnMainThread(func() { system.CloseDocument(document) }) })
 		key := DocumentKey{Surface: "surface-a", Name: "document-a"}
 		if err := s.documents.Reserve(key); err != nil {
 			t.Fatal(err)
 		}
-		document = new(byte)
-		if !s.documents.Set(key, unsafe.Pointer(document)) {
+		if !s.documents.Set(key, document) {
 			t.Fatal("document reservation disappeared")
 		}
 	}
-	onUI := false
-	s.invoke = func(task func()) {
-		onUI = true
-		task()
-		onUI = false
-	}
-	marker.inUI = func() bool { return onUI }
-	oldSystem := system
-	system = marker
-	t.Cleanup(func() { system = oldSystem })
-	return &Endpoint{backend: hostBackend{h: h}}, s, document
+	viewportMarkerCalls.Store(0)
+	return &Endpoint{backend: hostBackend{h: &Host{windows: map[uint]*Surfaces{1: s}}}}
 }
 
 func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
@@ -433,14 +376,14 @@ func runViewportMarker(t *testing.T, e *Endpoint, params string) (any, error) {
 
 // contract: diagnostics.document.viewport-marker.uses-the-owning-window-document, diagnostics.document.viewport-marker.schedules-native-work-and-returns-native-result
 func TestDiagnosticViewportMarkerValidatesAndRunsOnUI(t *testing.T) {
-	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-	e, _, document := viewportMarkerEndpoint(t, marker, true)
+	e := viewportMarkerEndpoint(t, true)
 	result, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err != nil {
 		t.Fatalf("diagnostics.document.viewport-marker: %v", err)
 	}
-	if marker.calls != 1 || marker.document != unsafe.Pointer(document) || !marker.enabled {
-		t.Fatalf("native request = calls:%d document:%p enabled:%t", marker.calls, marker.document, marker.enabled)
+	// The native marker asserts the main thread, so a call off it ends the process; the registered real region reached the native call.
+	if calls := viewportMarkerCalls.Load(); calls != 1 {
+		t.Fatalf("native calls = %d, want 1", calls)
 	}
 	encoded, err := json.Marshal(result)
 	if err != nil {
@@ -456,6 +399,9 @@ func TestDiagnosticViewportMarkerValidatesAndRunsOnUI(t *testing.T) {
 	color, ok := got["markerColor"].([]any)
 	if !ok || len(color) != 3 || color[0] != float64(0) || color[1] != float64(255) || color[2] != float64(255) {
 		t.Fatalf("markerColor = %#v", got["markerColor"])
+	}
+	if _, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":false}`); err != nil {
+		t.Fatalf("the stop of the marker: %v", err)
 	}
 }
 
@@ -474,13 +420,12 @@ func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
 		{"unowned surface", `{"window":"window-a","surface":"surface-b","document":"document-a","enabled":true}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-			e, _, _ := viewportMarkerEndpoint(t, marker, true)
+			e := viewportMarkerEndpoint(t, true)
 			if _, err := runViewportMarker(t, e, test.params); err == nil {
 				t.Fatalf("accepted invalid request %s", test.params)
 			}
-			if marker.calls != 0 {
-				t.Fatalf("native marker called %d times for invalid request", marker.calls)
+			if calls := viewportMarkerCalls.Load(); calls != 0 {
+				t.Fatalf("native marker called %d times for invalid request", calls)
 			}
 		})
 	}
@@ -488,27 +433,25 @@ func TestDiagnosticViewportMarkerRejectsInvalidAndUnownedTargets(t *testing.T) {
 
 // contract: diagnostics.document.viewport-marker.uses-the-owning-window-document
 func TestDiagnosticViewportMarkerStartRequiresAttachedRegion(t *testing.T) {
-	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-	e, _, _ := viewportMarkerEndpoint(t, marker, false)
+	e := viewportMarkerEndpoint(t, false)
 	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err == nil || !strings.Contains(err.Error(), "not attached") {
 		t.Fatalf("start without region error = %v", err)
 	}
-	if marker.calls != 0 {
-		t.Fatalf("native marker called %d times for missing region", marker.calls)
+	if calls := viewportMarkerCalls.Load(); calls != 0 {
+		t.Fatalf("native marker called %d times for missing region", calls)
 	}
 }
 
 // contract: diagnostics.document.viewport-marker.uses-the-owning-window-document
 func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
-	marker := &viewportMarkerPlatform{color: [3]uint8{0, 255, 255}, width: 2}
-	e, _, _ := viewportMarkerEndpoint(t, marker, false)
+	e := viewportMarkerEndpoint(t, false)
 	result, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":false}`)
 	if err != nil {
 		t.Fatalf("stop after region removal: %v", err)
 	}
-	if marker.calls != 1 || marker.document != nil || marker.enabled {
-		t.Fatalf("native stop = calls:%d document:%p enabled:%t", marker.calls, marker.document, marker.enabled)
+	if calls := viewportMarkerCalls.Load(); calls != 1 {
+		t.Fatalf("native stop calls = %d, want 1", calls)
 	}
 	if result == nil {
 		t.Fatal("stop after region removal returned no metadata")
@@ -516,12 +459,16 @@ func TestDiagnosticViewportMarkerStopAfterRegionRemoval(t *testing.T) {
 }
 
 // contract: diagnostics.document.viewport-marker.reports-native-errors
+// The native marker fails through the fault injection point of the call, after the platform call returned.
 func TestDiagnosticViewportMarkerPropagatesNativeFailure(t *testing.T) {
-	marker := &viewportMarkerPlatform{err: errors.New("native marker failed")}
-	e, _, _ := viewportMarkerEndpoint(t, marker, true)
+	e := viewportMarkerEndpoint(t, true)
+	t.Setenv(faultViewportMarker, "fail")
 	_, err := runViewportMarker(t, e, `{"window":"window-a","surface":"surface-a","document":"document-a","enabled":true}`)
 	if err == nil || err.Error() != "native marker failed" {
 		t.Fatalf("native error = %v", err)
+	}
+	if calls := viewportMarkerCalls.Load(); calls != 1 {
+		t.Fatalf("native calls = %d, want 1", calls)
 	}
 }
 

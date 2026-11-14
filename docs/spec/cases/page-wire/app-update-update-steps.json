@@ -1,0 +1,15 @@
+{
+  "name": "app-update-update-steps",
+  "description": "The page reads the candidate, stages it and applies the staged bundle.",
+  "replay": false,
+  "reason": "The stage and apply calls stage and apply an application bundle through the native host and its registry, which the Go producer does not run.",
+  "variables": {"op-cid":{"type":"string","example":"p5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234.1","source":"page"}},
+  "steps": [
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.8","available":{"version":"0.0.9","release":{"url":"https://github.com/soksak-app/core/releases/download/v0.0.9/soksak-0.0.9-darwin-arm64-wailsv3.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}}}},
+    {"call":{"name":"appUpdateStage","payload":{"version":"0.0.9"},"cids":["$op-cid"]}},
+    {"reply":{"result":{"bundle":"/config/updates/0.0.9/soksak.app"}}},
+    {"call":{"name":"appUpdateApply","payload":{"bundle":"/config/updates/0.0.9/soksak.app"},"cids":["$op-cid"]}},
+    {"reply":{"result":null}}
+  ]
+}

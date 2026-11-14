@@ -348,6 +348,7 @@ Every workbench page declares one import map equal to `PAGE_IMPORTS`: `soksak`, 
 | --- | --- |
 | `host` | Main-page host interface (`call`, `on`, `page`, `draggable`), or `null` without a native host |
 | `page` | Surface and modal page interface (`theme`, `sidecar`, `exposure`, `document`, `modal`), or `null` without a native host |
+| `clock` | The clock of the page that its event batcher reads: `now()` returns the reading in milliseconds, and `after(callback, ms)` runs the callback once when `ms` milliseconds of that clock have passed. Applications export `platformClock` of `@soksak/plugin-api/log-batch.js`; a test runtime exports a clock whose instants the test gives |
 | `openStore()` | Returns the workspace store. The browser application uses IndexedDB; native applications return `HostWorkspaceStore` |
 | `windows` | Window and project-folder interface. Native applications export `hostWindows(host)` from `@soksak/workbench/host-windows.js`; the browser application exports its own implementation |
 

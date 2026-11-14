@@ -1,0 +1,16 @@
+{
+  "name": "window-check-input-source-child-closed",
+  "description": "A session whose child window selected the first input source and closed restores the source of the person through the main window.",
+  "replay": false,
+  "reason": "The case selects the input source of the person and restores it, and the replay would change the input source of the person.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.input.source", "params": {"window": "child"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"current": null, "source": "person-source"}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.input.source", "params": {"window": "child", "select": "korean"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"current": "korean", "source": "role-korean"}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "command.run", "params": {"window": "child", "name": "host.window.close", "params": {}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "diagnostics.input.source", "params": {"window": "main", "restore": "person-source"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": {"current": null, "source": "person-source"}}}
+  ]
+}

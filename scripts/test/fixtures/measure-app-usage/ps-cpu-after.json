@@ -1,0 +1,21 @@
+{
+  "recorded": "The CPU times of the processes of the recording after an interval of about 2.027 s in which the process busy burned CPU and the process ender ended. Command: ps -axo pid=,time=. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "ps",
+    "-axo",
+    "pid=,time="
+  ],
+  "status": 0,
+  "stdout": "64435   0:00.07\n64436   0:00.00\n64437   0:00.08\n64438   0:00.00\n64439   0:00.06\n64440   0:00.07\n64441   0:03.03\n",
+  "stderr": "",
+  "pids": {
+    "host": 64435,
+    "sidecar": 64436,
+    "linkedHost": 64437,
+    "linkedSidecar": 64438,
+    "nodeTool": 64439,
+    "sokTool": 64440,
+    "busy": 64441,
+    "ender": 64442
+  }
+}

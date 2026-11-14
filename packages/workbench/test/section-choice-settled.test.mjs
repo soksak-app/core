@@ -8,7 +8,7 @@ import { JSDOM } from "jsdom";
 
 test("folding, selecting and sizing a section lay out the plane again", { timeout: 5000 }, async () => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;

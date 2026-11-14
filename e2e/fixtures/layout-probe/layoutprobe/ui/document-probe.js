@@ -13,21 +13,23 @@ export function storageKey(location) {
   return `layoutprobe.site.${new URL(location.href).searchParams.get("key") ?? ""}`;
 }
 
-/** Starts the document in its window and reports it once at once and again at each change. */
-export function startDocumentProbe(window) {
+/**
+ * Opens the document in its window with the color scheme `dark` (true for the dark scheme) and reports it once at once and again at
+ * each change. Returns setDark(dark), which sets the color scheme and reports. The scheme is data of the caller, so the reaction of
+ * the document to it does not depend on the media query of the platform.
+ */
+export function openDocumentProbe(window, dark) {
   const { document, localStorage, location } = window;
   const key = storageKey(location);
-  const dark = window.matchMedia("(prefers-color-scheme: dark)");
   let changes = 0;
   const report = () => window.postMessage({
     from: FROM_DOCUMENT,
-    scheme: dark.matches ? "dark" : "light",
+    scheme: dark ? "dark" : "light",
     visibility: document.visibilityState,
     changes,
     stored: localStorage.getItem(key),
     color: window.getComputedStyle(document.body).backgroundColor,
   }, location.origin);
-  dark.addEventListener("change", report);
   document.addEventListener("visibilitychange", () => {
     changes += 1;
     report();
@@ -40,4 +42,17 @@ export function startDocumentProbe(window) {
     report();
   });
   report();
+  return {
+    setDark(next) {
+      dark = next;
+      report();
+    },
+  };
+}
+
+/** Starts the document in its window with the color scheme of the platform: it follows the media query `prefers-color-scheme: dark`. */
+export function startDocumentProbe(window) {
+  const query = window.matchMedia("(prefers-color-scheme: dark)");
+  const probe = openDocumentProbe(window, query.matches);
+  query.addEventListener("change", () => probe.setDark(query.matches));
 }

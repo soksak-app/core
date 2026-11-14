@@ -4,7 +4,7 @@
 // `log`; each event names the document in `start`. A document without the application host (the browser example) writes to its
 // console.
 import { LOG_LEVELS } from "@soksak/plugin-api";
-import { host } from "@soksak/runtime";
+import { clock, host } from "@soksak/runtime";
 import { boundedJson, byteLength, cutBytes } from "@soksak/plugin-api/bounded-json.js";
 import { callEvent, observeHostCalls } from "./host-calls.js";
 import { createEventBatcher } from "@soksak/plugin-api/log-batch.js";
@@ -26,7 +26,7 @@ export const rawConsole = {
 };
 
 const batcher = host
-  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), classify: classOf, gate: logGate, writer: { layer: "workbench", member: "start", identity: pageIdentity } })
+  ? createEventBatcher({ call: (request) => host.call("log", request), report: (error) => rawConsole.error(error.message), now: clock.now, timer: clock.after, classify: classOf, gate: logGate, writer: { layer: "workbench", member: "start", identity: pageIdentity } })
   : null;
 
 // The longest place and text of a record in an event, in bytes; a longer one is cut on a character boundary and the event says

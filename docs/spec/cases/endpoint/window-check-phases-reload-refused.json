@@ -1,0 +1,10 @@
+{
+  "name": "window-check-phases-reload-refused",
+  "description": "The host refuses the reload command of a window with 1005 because the reloaded page did not report ready, and the check session fails with that error.",
+  "replay": false,
+  "reason": "The refusal is the state of a page that did not become ready, which the replay cannot arrange.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "command.run", "params": {"window": "main", "name": "host.window.reload", "params": {}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": 1005, "message": "the reloaded page did not report ready"}}}
+  ]
+}

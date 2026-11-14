@@ -863,7 +863,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	// Sets the fake onMain to return false
+	// The main-thread function of the envelope reports that its task could not run.
 	var receivedImageName string
 	var receivedResponse map[string]interface{}
 	handled := host.HandleEnvelope(bodyBytes, "sidecar-a", "tab-1", images,

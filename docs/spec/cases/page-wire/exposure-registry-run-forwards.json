@@ -1,0 +1,10 @@
+{
+  "name": "exposure-registry-run-forwards",
+  "description": "The page forwards a command to the surface that the run names.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"command.run","params":{"name":"probe.send","params":{},"surface":"tab-a"}}}},
+    {"reply":{"result":{"result":"tab-a"}}}
+  ]
+}

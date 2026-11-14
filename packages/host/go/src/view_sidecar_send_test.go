@@ -37,14 +37,14 @@ func TestViewSidecarSendRequiresTheOriginalSafeGenerationAndOwnSession(t *testin
 
 // contract: sidecars.view-send.retired-generation-sends-nothing, sidecars.view-send.new-mount-sends-its-own-project
 func TestViewSidecarSendNeverBorrowsTheSuccessorGenerationOrMountRoot(t *testing.T) {
-	s, service, fake := mountedSidecarProject(t)
+	s, service, views := mountedSidecarProject(t)
 	old, _ := s.documents.view("probe-surface")
 	request, err := viewSidecarSendRequestFrom(encodedViewSidecarSend(t, s, old.generation))
 	if err != nil {
 		t.Fatal(err)
 	}
 	s.viewRecords().specs["probe-surface"].start.Project = &SurfaceProject{ID: "project-b", Root: "/fixture/project-b"}
-	endView(t, s, fake, viewTestEpoch)
+	endView(t, s, views, viewTestEpoch)
 	next, ok := s.documents.view("probe-surface")
 	if !ok || next.generation == old.generation {
 		t.Fatal("fixture did not replace A with B")

@@ -1,0 +1,10 @@
+{
+  "name": "app-update-state-error",
+  "description": "The read of the update state is refused with the text of the registry error.",
+  "replay": false,
+  "reason": "The appUpdateState call reads the registry index of the application, which the Go producer does not run.",
+  "steps": [
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"error":"registry: unreachable"}}
+  ]
+}

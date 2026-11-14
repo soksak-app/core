@@ -1,0 +1,32 @@
+{
+  "name": "plain-view-section-ready",
+  "description": "The plain view section is ready while it shows the declared text and answers the length of its session history.",
+  "plugin": "probeplain",
+  "replay": false,
+  "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "steps": [
+    {"call":{"command":"runtime.command.register","params":{"name":"probeplain.view.frames"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.command.register","params":{"name":"probeplain.view.history"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.on","params":{"name":"exposure-request"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"probeplain.section.view.ready"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.document"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.input"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.hit"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.clock"}}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"exposure-request","data":{"id":1001,"method":"status.get","params":{"name":"probeplain.section.view.ready"}}}},
+    {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1001,"result":{"ready":true,"content":"Plain section"}}}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"exposure-request","data":{"id":1002,"method":"status.get","params":{"name":"probeplain.section.view.ready"}}}},
+    {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1002,"result":{"ready":false,"content":"Plain section"}}}}},
+    {"reply":{"result":null}},
+    {"request":{"id":1003,"command":"probeplain.view.history","params":null}}
+  ]
+}

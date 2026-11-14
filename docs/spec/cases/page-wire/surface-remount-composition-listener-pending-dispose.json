@@ -1,0 +1,15 @@
+{
+  "name": "surface-remount-composition-listener-pending-dispose",
+  "description": "A view mount registers its six listeners; the registrations of view-process-ended and view-reply stay pending while the surface is disposed. The pending registration of view-reply then resolves with an unsubscribe function that throws, and the pending registration of view-process-ended is refused.",
+  "replay": false,
+  "reason": "The registration of a listener belongs to a page, which the Go producer does not have (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "listen": { "event": "view-call" } },
+    { "listen": { "event": "view-process-ended", "error": "view-process-ended registration failed after dispose", "held": true } },
+    { "listen": { "event": "view-reply", "unsubscribeError": "late listener cleanup failed", "held": true } },
+    { "listen": { "event": "view-stopped" } },
+    { "listen": { "event": "view-responsiveness" } },
+    { "listen": { "event": "view-presentation-abandoned" } }
+  ]
+}

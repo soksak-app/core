@@ -466,7 +466,7 @@ function updateCard(el, card, rect) {
     setText(statusText, cardStatusText(card, tabs, folded));
     return;
   }
-  setData(slot, "nativeSurface", "stub");
+  setData(slot, "nativeSurface", "view");
   setData(slot, "nativeSurfaceId", shown.id);
   setData(slot, "nativeLayer", "10");
   setData(slot, "nativePlugin", shown.plugin);

@@ -1,0 +1,15 @@
+{
+  "name": "view-events-ordered-delivery",
+  "description": "The host sends two input events of a view; the host holds the reply of the first push while the page keeps the second push queued.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"listen":{"event":"input"}},
+    {"notice":{"event":"input","payload":{"surface":"probe-surface","id":1}}},
+    {"notice":{"event":"input","payload":{"surface":"probe-surface","id":2}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"input","data":{"surface":"probe-surface","id":1},"surface":"probe-surface"}}},
+    {"reply":{"result":true,"held":true}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"input","data":{"surface":"probe-surface","id":2},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

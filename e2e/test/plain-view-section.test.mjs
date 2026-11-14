@@ -1,9 +1,10 @@
 // The section view of the plain view probe (e2e/fixtures/plain-view/probe): its declarations meet the section-view contract of the view
-// benchmark, and its diagnostic module serves that contract on a fake view.
+// benchmark, and its diagnostic module serves that contract on a view bridge.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { openView } from "@soksak/plugin-api/testing";
 import { validateManifest } from "@soksak/plugin-api";
 import { requireSectionDeclarations } from "../benchmark/cases/section-view.mjs";
 import { attach, declaredText } from "../fixtures/plain-view/probe/ui/section-diagnostics.js";
@@ -23,69 +24,58 @@ test("the plain view probe declares one section whose diagnostic declaration mee
   assert.ok(JSON.parse(read("package.json")).files.includes("diagnostics.json"), "the package omits diagnostics.json");
 });
 
-/** A fake view window whose document is width by height. */
-function fakeView() {
-  const observers = [];
-  const frames = [];
-  const view = {
-    document: { documentElement: { getBoundingClientRect: () => ({ width: 240, height: 400 }) } },
-    ResizeObserver: class {
-      constructor(callback) { this.callback = callback; this.observed = []; this.disconnected = false; observers.push(this); }
-      observe(target) { this.observed.push(target); }
-      disconnect() { this.disconnected = true; }
-    },
-    MutationObserver: class { observe() {} disconnect() {} },
-    requestAnimationFrame: (callback) => frames.push(callback),
-    cancelAnimationFrame: () => {},
-    performance: { timeOrigin: 1000, now: () => 5 },
-    history: { length: 1 },
-    observers,
-    frames,
-  };
-  return view;
-}
-
-/** Attaches the diagnostic module to `view` and returns its registered commands, its ready read and its trace records. */
-async function attached(view, content = { isConnected: true, hidden: false, textContent: "Plain section" }) {
-  const commands = new Map();
-  const traces = [];
-  let readReady = null;
+/**
+ * Opens the section view of the plain view probe as its entry (ui/section.js) does: the real view bridge and exposure over a jsdom
+ * window whose #content shows the declared text, and the diagnostic module attached to them; the wire is the case `wire`. The layout
+ * data gives the rectangle of the root of the document.
+ */
+async function attached(wire) {
+  const view = await openView(wire, {
+    declarations: diagnostics.exposes,
+    html: '<!doctype html><body><p id="content">Plain section</p></body>',
+    layout: { width: 240, height: 400, rect: () => ({ left: 0, top: 0, right: 240, bottom: 400, width: 240, height: 400 }) },
+    start: { surface: "spc-1/left/probeplain.section", params: null, origin: { directory: null }, project: null,
+      section: { id: "probeplain.section", sidebar: "left", card: null } },
+  });
+  const content = view.window.document.getElementById("content");
   await attach({
     declaration: diagnostics,
     status: STATUS,
-    registerStatus: async (read) => { readReady = read; },
-    commands: { register: async (name, handler) => { commands.set(name, handler); } },
-    view,
+    registerStatus: (read, subscribe) => view.expose.status(STATUS, read, subscribe),
+    commands: view.bridge.commands,
+    view: view.window,
     content,
-    log: { trace: (event, fields) => traces.push([event, fields]) },
+    log: view.bridge.runtime.log,
   });
-  return { commands, ready: readReady, traces };
+  return { view, content };
 }
 
-test("the section view is ready while it shows the declared text and answers the length of its session history", async () => {
-  const content = { isConnected: true, hidden: false, textContent: "Plain section" };
-  const { commands, ready } = await attached(fakeView(), content);
-  assert.deepEqual([...commands.keys()], ["probeplain.view.frames", "probeplain.view.history"]);
-  assert.deepEqual(ready(), { ready: true, content: "Plain section" });
+test("the section view is ready while it shows the declared text and answers the length of its session history", { timeout: 5000 }, async () => {
+  const { view, content } = await attached("plain-view-section-ready");
+  assert.deepEqual(view.calls.filter(({ command }) => command === "runtime.command.register").map(({ params }) => params.name),
+    ["probeplain.view.frames", "probeplain.view.history"]);
+  assert.deepEqual(await view.status(STATUS), { ready: true, content: "Plain section" });
   content.hidden = true;
-  assert.deepEqual(ready(), { ready: false, content: "Plain section" });
-  assert.deepEqual(await commands.get("probeplain.view.history")(), { length: 1 });
+  assert.deepEqual(await view.status(STATUS), { ready: false, content: "Plain section" });
+  assert.deepEqual(await view.run("probeplain.view.history"), { length: view.window.history.length });
   assert.throws(() => declaredText({ exposes: { status: [] } }, STATUS, "content"), /gives probeplain.section.view.ready no content enum of one string/);
+  await view.close();
 });
 
-test("the frames start records content frames and the stop ends their observation", async () => {
-  const view = fakeView();
-  const { commands, traces } = await attached(view);
-  const frames = commands.get("probeplain.view.frames");
-  const started = await frames({ action: "start" });
-  assert.deepEqual(started, { enabled: true, sourceClock: { documentTimeOriginMs: 1000, sourceNowMs: 5, sourceResolutionMs: 1 } });
-  await assert.rejects(frames({ action: "start" }), /probeplain.view.frames is already started/);
-  view.frames.shift()();
-  view.observers[0].callback([{ target: view.document.documentElement }]);
-  view.frames.shift()(16);
-  assert.deepEqual(traces.map(([event, fields]) => [event, fields.width, fields.height]), [["view.content_frame", 240, 400]]);
-  assert.deepEqual(await frames({ action: "stop" }), { enabled: false });
-  assert.equal(view.observers[0].disconnected, true);
-  await assert.rejects(frames({ action: "stop" }), /probeplain.view.frames is not started/);
-  await assert.rejects(frames({ action: "pause" }), /action must be start or stop/);
+test("the frames start records content frames and the stop ends their observation", { timeout: 5000 }, async () => {
+  const { view } = await attached("plain-view-section-frames");
+  const started = await view.run("probeplain.view.frames", { action: "start" });
+  assert.deepEqual(started, { enabled: true, sourceClock: { documentTimeOriginMs: view.window.performance.timeOrigin, sourceNowMs: started.sourceClock.sourceNowMs, sourceResolutionMs: 1 } });
+  assert.ok(started.sourceClock.sourceNowMs > 0, "the source reading is a reading of the clock of the window");
+  await assert.rejects(view.run("probeplain.view.frames", { action: "start" }), /probeplain.view.frames is already started/);
+  // The observer of the frames is the one that the module made; the size change of the root is delivered to it, and the frame follows.
+  const [observer] = view.observers;
+  observer.notify([{ target: view.window.document.documentElement }]);
+  const record = await view.logged("plugin.probeplain.view.content_frame");
+  assert.deepEqual([record.fields.width, record.fields.height], [240, 400]);
+  assert.deepEqual(await view.run("probeplain.view.frames", { action: "stop" }), { enabled: false });
+  assert.equal(observer.disconnected, true);
+  await assert.rejects(view.run("probeplain.view.frames", { action: "stop" }), /probeplain.view.frames is not started/);
+  await assert.rejects(view.run("probeplain.view.frames", { action: "pause" }), /action must be start or stop/);
+  await view.close();
 });

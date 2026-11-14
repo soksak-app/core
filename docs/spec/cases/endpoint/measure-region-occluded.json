@@ -1,0 +1,10 @@
+{
+  "name": "measure-region-occluded",
+  "description": "The read of the region fails while the window reports occluded true.",
+  "replay": false,
+  "reason": "The replies are the recorded replies of the host for one preparation or reading of the measurement; the replay cannot arrange the application state that they describe.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"w2","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"frame":{"x":40,"y":60,"width":760,"height":642},"content":{"x":0,"y":28,"width":760,"height":614},"occluded":true,"active":true,"pageProcess":null,"frames":900,"commandBuffers":899,"regions":[{"surface":"tab-1","name":"screen","presentedFrames":120},{"surface":"tab-9","name":"screen","presentedFrames":5}]}}}
+  ]
+}

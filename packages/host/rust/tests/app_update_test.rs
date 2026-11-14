@@ -100,7 +100,11 @@ fn the_update_starts_sok_from_a_copy_beside_the_updates_and_checks_the_staged_bu
     folder::install_fixture(&running.join("Contents/MacOS"), "sok", "exit 0\n");
     let staged = config.path().join("updates/0.0.9/soksak.app");
     std::fs::create_dir_all(staged.join("Contents")).unwrap();
-    std::fs::write(staged.join("Contents/Info.plist"), "<plist/>").unwrap();
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/update/Info.plist"),
+        staged.join("Contents/Info.plist"),
+    )
+    .unwrap();
     let arguments = vec![
         "--config-dir".to_string(),
         config.path().display().to_string(),
@@ -177,7 +181,11 @@ fn the_detached_update_command_keeps_its_errors_and_is_recorded_when_it_starts()
             config.join("updates/control"),
         )
         .unwrap();
-        std::fs::write(staged.join("Contents/Info.plist"), "<plist/>").unwrap();
+        std::fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/update/Info.plist"),
+            staged.join("Contents/Info.plist"),
+        )
+        .unwrap();
         soksak_host::application_log::start_standard_error(&config, "check").unwrap();
         let writer = records::start_writer(&config);
         let mut command = prepare_start(&config, &executable, &staged, 4321, &[]).unwrap();

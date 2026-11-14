@@ -104,6 +104,8 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "packages/soksak/scripts/emit-dom-reference.mjs",
     "packages/soksak/scripts/fuzz.mjs",
   ], ["scripts/test/soksak-scripts.test.mjs"], { sharedTests: true }),
+  lane("view channel script of the Go host tests", "js-ts", ["packages/host/go/src/testdata/view-channel.js"], ["packages/host/go/src/view_probe_test.go"], { testLanguage: "go", sharedTests: true }),
+  lane("view fixture pages of the Go host tests", "document", ["packages/host/go/src/testdata/view-plugin/ui/*.html"], ["packages/host/go/src/view_probe_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("sidecar fixture program", "shell", ["docs/spec/cases/sidecars/fixture.sh"], ["packages/host/go/tests/platform/darwin/system/flush_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("replay fixture program", "shell", ["docs/spec/cases/log-contract/replay/engine.sh"], ["packages/sok/go/tests/replay_test.go"], { testLanguage: "go", sharedTests: true }),
   lane("build environment audit", "shell", ["scripts/check-tools.sh"], ["scripts/test/soksak-scripts.test.mjs", "scripts/test/check-tools.sh"], {
@@ -121,7 +123,8 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("page memory measurement", "js-ts", ["scripts/measure-page-memory.mjs"], ["scripts/test/measure-page-memory.test.mjs"]),
   lane("object counts measurement", "js-ts", ["scripts/measure-object-counts.mjs"], ["scripts/test/measure-object-counts.test.mjs"]),
   lane("host call memory measurement", "js-ts", ["scripts/measure-host-calls.mjs"], ["scripts/test/measure-host-calls.test.mjs"]),
-  lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs"]),
+  lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs", "scripts/test/platform/darwin/system/measure-app-usage.test.mjs", "scripts/test/fixtures/measure-app-usage/**/*"], { sharedTests: true, testExtensions: new Set([".mjs", ".json"]) }),
+  lane("measurement tools and waits", "js-ts", ["scripts/measure-tools.mjs"], ["scripts/test/measure-tools.test.mjs", "scripts/test/platform/darwin/system/measure-app-usage.test.mjs"], { sharedTests: true }),
   lane("terminal redraw measurement", "js-ts", ["scripts/measure-terminal-redraw.mjs", "scripts/fixtures/status-redraw.mjs"], ["scripts/test/measure-terminal-redraw.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("measurement trace state", "js-ts", ["scripts/measure-trace.mjs"], ["scripts/test/measure-trace.test.mjs"]),
@@ -140,7 +143,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("component boundary audit", "js-ts", ["scripts/check-boundaries.mjs"], ["scripts/test/check-boundaries.test.mjs", "scripts/test/soksak-scripts.test.mjs", "scripts/test/fixtures/check-boundaries/**/*"], { sharedTests: true }),
   lane("plugin API", "js-ts", ["packages/plugin-api/*.js"], ["packages/plugin-api/test/**/*.mjs", "scripts/test/fixture-compositions.test.mjs", "scripts/test/surface-names.test.mjs"]),
   lane("log contract", "js-ts", ["packages/log-contract/*.js"], ["packages/log-contract/test/**/*.mjs"]),
-  lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs"], { sharedTests: true }),
+  lane("workbench", "js-ts", ["packages/workbench/*.js", "packages/workbench/*.mjs"], ["packages/workbench/test/**/*.js", "packages/workbench/test/**/*.mjs", "packages/workbench/test/fixtures/**/*.json"], { sharedTests: true, testExtensions: new Set([".js", ".mjs", ".json"]) }),
   lane("client", "js-ts", [
     "packages/client/*.js",
     "packages/client/platform/**/*.js",
@@ -150,7 +153,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("MCP client", "js-ts", ["packages/mcp/**/*.js"], ["packages/mcp/test/**/*.mjs"]),
   lane("mygo workbench layout", "go", ["packages/workbench-mygo/src/**/*.go"], ["packages/workbench-mygo/tests/**/*.go"]),
   // The C file is the fault injection library that test/folder-wait-stream-start.test.mjs compiles and loads into its child process.
-  lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c"], { testExtensions: new Set([".mjs", ".c"]), sharedTests: true }),
+  lane("window check harness", "js-ts", ["packages/window-check/*.mjs", "packages/window-check/platform/*.mjs", "packages/window-check/fixtures/*.mjs", "packages/window-check/fixtures/*/*.mjs"], ["packages/window-check/test/**/*.mjs", "packages/window-check/test/platform/darwin/*.c", "packages/window-check/test/fixtures/*.json"], { testExtensions: new Set([".mjs", ".c", ".json"]), sharedTests: true }),
   // The start probe that @soksak/window-check ships for the checks of plugin repositories.
   lane("window check start probe declaration", "declaration", ["packages/window-check/fixtures/start-probe/plugin.json"], ["packages/window-check/test/start.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("window check start probe view", "js-ts", ["packages/window-check/fixtures/start-probe/ui/app.js"], ["packages/window-check/test/start.test.mjs"], { sharedTests: true }),
@@ -160,11 +163,11 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Tauri runtime", "js-ts", ["apps/tauriv2/runtime/**/*.js"], ["apps/tauriv2/test/**/*.mjs"], { sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/event_log_native_test.rs", "packages/host/rust/src/stall_watch_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/view_binary_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_new_window_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/window_cursor_test.rs", "packages/host/rust/src/window_sheet_test.rs", "packages/host/rust/src/dialog_test.rs", "packages/host/rust/src/window_order_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/sidecars_stop_test.rs", "packages/host/rust/src/windows_removal_end_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
-  lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs"]),
-  lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/event_log_native_test.rs", "packages/host/rust/src/stall_watch_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_new_window_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/window_cursor_test.rs", "packages/host/rust/src/window_sheet_test.rs", "packages/host/rust/src/dialog_test.rs", "packages/host/rust/src/window_order_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/sidecars_stop_test.rs", "packages/host/rust/src/windows_removal_end_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/tests/fixtures/window-race/Cargo.toml", "packages/host/tauriv2/tests/fixtures/window-race/tauri.conf.json", "packages/host/tauriv2/tests/fixtures/window-race/frontend/index.html", "packages/host/tauriv2/tests/fixtures/window-race/icons/icon.png"], { testExtensions: new Set([".rs", ".toml", ".json", ".html", ".png"]) }),
+  lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs", "e2e/fixtures/sidecars/*/tests/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/endpoint_response_test.go", "packages/host/go/src/endpoint_input_test.go", "packages/host/go/src/event_native_test.go", "packages/host/go/src/diagnostics_view_fault_test.go", "packages/host/go/src/endpoint_presses_test.go", "packages/host/go/src/endpoint_ended_test.go", "packages/host/go/src/quit_owner_test.go", "packages/host/go/src/sidecar_root_admission_test.go", "packages/host/go/src/view_sidecar_cids_test.go", "packages/host/go/src/view_sidecar_enqueue_test.go", "packages/host/go/src/view_sidecar_project_test.go", "packages/host/go/src/view_sidecar_send_test.go", "packages/host/go/src/window_sidecar_admission_test.go", "packages/host/go/src/main_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_pageless_processes_test.go", "packages/host/go/src/window_cursor_test.go", "packages/host/go/src/window_sheet_test.go", "packages/host/go/src/dialog_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/fatal_exit_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/open_layout_test.go", "packages/host/go/src/surface_created_bounds_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_hold_end_test.go", "packages/host/go/src/diagnostics_hold_window_test.go", "packages/host/go/src/diagnostics_native_wait_test.go", "packages/host/go/src/diagnostics_new_window_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_input_source_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/capture_layout_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/platform/darwin/input_test.go", "packages/host/go/src/page_end_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go", "packages/host/go/src/windows_removal_end_test.go", "packages/host/go/src/sidecars_stop_test.go", "packages/host/go/src/exposure_wait_ends_test.go", "packages/host/go/src/exposure_request_ends_test.go", "packages/host/go/src/layout_watch_test.go", "packages/host/go/src/page_start_main_thread_test.go", "packages/host/go/src/window_order_test.go", "packages/host/go/src/stall_watch_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/endpoint_response_test.go", "packages/host/go/src/endpoint_input_test.go", "packages/host/go/src/event_native_test.go", "packages/host/go/src/diagnostics_view_fault_test.go", "packages/host/go/src/endpoint_presses_test.go", "packages/host/go/src/endpoint_ended_test.go", "packages/host/go/src/quit_owner_test.go", "packages/host/go/src/sidecar_root_admission_test.go", "packages/host/go/src/view_sidecar_cids_test.go", "packages/host/go/src/view_sidecar_enqueue_test.go", "packages/host/go/src/view_sidecar_project_test.go", "packages/host/go/src/view_sidecar_send_test.go", "packages/host/go/src/window_sidecar_admission_test.go", "packages/host/go/src/main_test.go", "packages/host/go/src/main_thread_step_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_pageless_processes_test.go", "packages/host/go/src/window_cursor_test.go", "packages/host/go/src/window_sheet_test.go", "packages/host/go/src/dialog_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/fatal_exit_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/open_layout_test.go", "packages/host/go/src/surface_created_bounds_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/surfaces_layout_trace_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_hold_end_test.go", "packages/host/go/src/diagnostics_hold_window_test.go", "packages/host/go/src/diagnostics_native_wait_test.go", "packages/host/go/src/diagnostics_new_window_test.go", "packages/host/go/src/diagnostics_recording_e2e_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_input_source_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/capture_layout_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/platform/darwin/input_test.go", "packages/host/go/src/page_end_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go", "packages/host/go/src/windows_removal_end_test.go", "packages/host/go/src/sidecars_stop_test.go", "packages/host/go/src/exposure_wait_ends_test.go", "packages/host/go/src/exposure_request_ends_test.go", "packages/host/go/src/layout_watch_test.go", "packages/host/go/src/page_start_main_thread_test.go", "packages/host/go/src/window_order_test.go", "packages/host/go/src/stall_watch_test.go", "packages/host/go/src/view_probe_test.go", "packages/host/go/src/exposure_settled_failure_test.go", "packages/host/go/src/view_reply_fault_test.go", "packages/host/go/src/view_wire_test.go", "packages/host/go/src/window_native_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go", "packages/host/mygo/src/frontend_test.go", "packages/host/mygo/src/workbench_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/platform/darwin/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -238,7 +241,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin capture", "objective-c", ["native/darwin/src/capture.m"], ["native/darwin/tests/capture_test.m", "native/darwin/tests/capture_covered_test.m", "native/darwin/tests/capture_pressure_test.m", "native/darwin/tests/capture_metadata_test.m", "native/darwin/tests/capture_resize_test.m", "native/darwin/tests/capture_checker_test.m", "native/darwin/tests/capture_file_checker_test.m", "native/darwin/tests/capture_storage_test.m", "native/darwin/tests/capture_frame_test.m", "native/darwin/tests/capture_preparation_test.m", "native/darwin/tests/capture_cleanup_test.m"], { sharedTests: true }),
   lane("Darwin dock menu", "objective-c", ["native/darwin/src/dock_menu.m"], ["native/darwin/tests/dock_menu_test.m"], { sharedTests: true }),
   lane("Darwin appearance", "objective-c", ["native/darwin/src/appearance.m"], ["native/darwin/tests/appearance_test.m"], { sharedTests: true }),
-  lane("Darwin native interfaces", "native-interface", ["native/darwin/src/**/*.h", "native/darwin/process-identity/**/*.h"], ["native/darwin/tests/**/*.m", "native/darwin/tests/support/*.h"], { testLanguage: "objective-c", sharedTests: true, testExtensions: new Set([".m", ".mm", ".h"]) }),
+  lane("Darwin native interfaces", "native-interface", ["native/darwin/src/**/*.h", "native/darwin/process-identity/**/*.h"], ["native/darwin/tests/**/*.m", "native/darwin/tests/support/*.h", "native/darwin/tests/fixtures/*.html"], { testLanguage: "objective-c", sharedTests: true, testExtensions: new Set([".m", ".mm", ".h", ".html"]) }),
   lane("browser environment declaration", "declaration", ["apps/browser/environment.json"], ["apps/browser/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Tauri environment declaration", "declaration", ["apps/tauriv2/environment.json"], ["apps/tauriv2/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails environment declaration", "declaration", ["apps/wailsv3/environment.json"], ["apps/wailsv3/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
@@ -382,7 +385,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/platform/platform.mjs", symbol: "export class PlatformOperationNotImplemented extends Error {" },
       { file: "packages/window-check/platform/platform.mjs", symbol: "export function releasePlatform({ platform = runPlatform(), arch = process.arch } = {}) {" },
       { file: "packages/window-check/platform/darwin.mjs", symbol: "export async function listProcesses(run) {" },
-      { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, fetchImpl," },
+      { file: "packages/window-check/test-app.mjs", symbol: "export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, releases, write = () => {} } = {}) {" },
       { file: "packages/window-check/test-app.mjs", symbol: "async function quit(child, sok, configDir, by, root, platform) {" },
     ],
     tests: [
@@ -392,7 +395,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/platform.test.mjs", id: "an operation that the platform does not implement rejects with its name and runs nothing" },
       { file: "packages/window-check/test/platform.test.mjs", id: "the package ships the platform operations of the run" },
       { file: "packages/window-check/test/test-app.test.mjs", id: "the run uses the published application zip of the core release of this package for the platform that runs it" },
-      { file: "packages/window-check/test/test-app.test.mjs", id: "the bundle of an application is extracted by the platform operation of the platform that runs the run" },
+      { file: "packages/window-check/test/platform/darwin/system/test-app-bundle.test.mjs", id: "the bundle of an application is downloaded and extracted by ditto once into the cache" },
       { file: "packages/window-check/test/test-app.test.mjs", id: "on a platform that declares no application artifact the run fails by the operation before any download" },
       { file: "packages/window-check/test/test-app.test.mjs", id: "the remaining processes are those whose command line names a path of the run, except this one" },
       { file: "packages/window-check/test/test-app.test.mjs", id: "the run module names no macOS program, bundle layout or quit key of its own" },
@@ -415,7 +418,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/makefile-recipes.test.mjs", id: "managed mygo verification prepares declared native fixtures and selects CGO0" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "the mygo application stages its view root, not a main page" },
       { file: "scripts/test/test-hosts.test.mjs", id: "Go host run profiles preserve shared coverage with CGO0 for every mygo run and separate generic from cgo link flags" },
-      { file: "scripts/test/test-kinds.test.mjs", id: "the root Go E2E target selects every actual registered test through the cgo-free maintained runner" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the root Go E2E targets select every actual registered test through the maintained runner" },
     ],
     expected: "Cgo-free mygo app and bundled CLI builds pass the declared macOS minimum directly to Go's internal linker through -macos. Build owners require the exact debug/release linker flags, preserve tags, release stripping and bundle paths, and retain the separate cgo linker policy without an SDK override. Managed Go profiles propagate the generic linker flags. These links establish source and profile guards; artifact release-audit evidence is recorded separately.",
     levels: ["unit"],
@@ -427,7 +430,7 @@ const FEATURE_LINKS = [
       { file: "Makefile", symbol: "CGO_ENABLED=0 $(call go-env) node scripts/go-tests.mjs --package './packages/host/mygo/tests/...' --tags 'e2e diagnostics mygo' --test '^TestE2E' --count 1 --timeout $(TEST_TIMEOUT)" },
     ],
     tests: [
-      { file: "scripts/test/test-kinds.test.mjs", id: "the root Go E2E target selects every actual registered test through the cgo-free maintained runner" },
+      { file: "scripts/test/test-kinds.test.mjs", id: "the root Go E2E targets select every actual registered test through the maintained runner" },
       { file: "scripts/test/test-kinds.test.mjs", id: "a future shared or Wails Go E2E test fails ownership until the maintained target maps it" },
     ],
     expected: "The maintained Go E2E target declares its native prerequisites and selects registered TestE2E cases through the cgo-free runner with the e2e diagnostics mygo profile. Source-inventory checks reject unmapped future owners. This link establishes target, profile and inventory ownership; it does not certify execution of the complete display suite.",
@@ -461,11 +464,12 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/go-repeat-inputs.test.mjs", id: "native discovery uses selected Go import IDs and leaves unrelated graphs free of pkg-config work" },
       { file: "scripts/test/go-repeat-inputs.test.mjs", id: "explicit native artifact presence rejects invalid values without pkg-config fallback" },
-      { file: "scripts/test/go-repeat-inputs.test.mjs", id: "selected cgo graph hashes both pkg-config static artifacts and preserves caller flags" },
+      { file: "scripts/test/go-repeat-inputs.test.mjs", id: "selected cgo graph hashes the path and the content of both pkg-config static artifacts and preserves caller flags" },
       { file: "scripts/test/test-hosts.test.mjs", id: "Go host run profiles preserve shared coverage with CGO0 for every mygo run and separate generic from cgo link flags" },
       { file: "scripts/test/test-discovery.test.mjs", id: "Go discovery preserves the selected CGO0 environment through compilation, binary listing and test execution" },
       { file: "scripts/test/repeat-go.test.mjs", id: "Go test runner preserves the selected native environment through graph, build, listing and execution without cgo-only flags in CGO0" },
       { file: "scripts/test/repeat-go.test.mjs", id: "Go test runner keeps generic linker flags and applies cgo linker flags to a CGO1 build" },
+      { file: "scripts/test/repeat-go.test.mjs", id: "Go test runner links the static library that pkg-config names now, also when another location held the same content earlier" },
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "native artifact variables follow relocation and preserve unchanged pkg-config files" },
       { file: "scripts/test/workflows.test.mjs", id: "make test-mygo runs the contract run of the mygo host and the unit tests of the mygo application" },
     ],
@@ -537,11 +541,11 @@ const FEATURE_LINKS = [
   {
     id: "F675",
     implementation: [
-      { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {" },
+      { file: "native/darwin/src/input_virtual.m", symbol: "bool sp_input_virtual_send_key_to_web_view(void *handle, void *event, bool *inputContextAbsent) {" },
     ],
     tests: [
       { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "Backspace deletes the last character" },
-      { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "no key down reaches the input method" },
+      { file: "native/darwin/tests/webview_virtual_typing_test.m", id: "the web view takes the key down without an input context" },
     ],
     expected: "A named key and a key with a stated text of the virtual key window reach a web view without its input context, so Backspace runs deleteBackward: and no key down reaches the input method.",
     levels: ["native"],
@@ -898,7 +902,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/recording.test.mjs", id: "[\"with a frame file of no written still\"," },
       { file: "native/darwin/tests/surface_layout_test.m", id: "clips its content to the slot of the move at its commit" },
       { file: "native/darwin/tests/surface_layout_test.m", id: "commits its native frame with the presentation of the page that drew it" },
-      { file: "packages/host/go/src/surfaces_test.go", id: "TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNotice" },
+      { file: "packages/host/go/src/surfaces_layout_trace_test.go", id: "TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNotice" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "still 9 fails at its request while stills 1 to 8 wait for their image" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "the writer limit is the smallest power of two that holds one incompressible still of a 7680x4320 display" },
       { file: "native/darwin/tests/capture_pressure_test.m", id: "the writer admits a still whose encoded bytes fit and refuses one byte more" },
@@ -949,7 +953,7 @@ const FEATURE_LINKS = [
   {
     id: "F737",
     implementation: [
-      { file: "packages/host/go/src/surfaces.go", symbol: "if !joined {\n\t\t\tcontinue\n\t\t}" },
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "if !answer.joined {\n\t\treturn generation, false, nil\n\t}" },
       { file: "packages/workbench/compositor.js", symbol: "held(validated.placements.map(({ id }) => id));" },
       { file: "packages/workbench/index.html", symbol: "held: (surfaceIds) => { hostHeld = surfaceIds; }," },
       { file: "packages/workbench-mygo/src/sidecar_sessions.go", symbol: "func (s *Shell) afterRetains(then func()) {" },
@@ -2490,24 +2494,25 @@ const FEATURE_LINKS = [
     id: "F502-2-3",
     implementation: [
       { file: "scripts/measure-app-usage.mjs", symbol: "export async function prepareState(s, state, deps, plugins = {})" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function waitIdle({ sessions, frames, sleep })" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS })" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function measurePointer({ s, measure, frameRecords, restore, tail, records })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function waitIdle({ sessions })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function untilFramesQuiet({ frames })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function pointerGesture({ s, status, trace })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function gestureFigures({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq })" },
-      { file: "scripts/footprints.mjs", symbol: "export async function settledFootprints({ readFootprints, readFrames, sleep, readings = SETTLE_READINGS })" },
-      { file: "scripts/footprints.mjs", symbol: "export async function readFootprint(pid, run)" },
+      { file: "scripts/footprints.mjs", symbol: "export async function settledFootprints({ readFootprints, readFrames, readings = SETTLE_READINGS })" },
+      { file: "scripts/footprints.mjs", symbol: "export async function readFootprint(pid)" },
       { file: "scripts/frame-records.mjs", symbol: "export function requireCompleteGesture({ records, dropped, window, framesBefore, framesAfter, fromSeq, toSeq })" },
       { file: "scripts/frame-records.mjs", symbol: "export function frameTimes(records)" },
       { file: "scripts/frame-records.mjs", symbol: "export function stepTimes(records)" },
       { file: "scripts/frame-records.mjs", symbol: "export function firstFrameMs(records)" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function applicationRows({ configDir, run = execute, realpath = realpathSync })" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function windowApplicationRows({ configDir, statuses, run = execute, realpath = realpathSync })" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export async function readCpuSeconds(run)" },
-      { file: "scripts/measure-app-usage.mjs", symbol: "export function execute(command, args)" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function applicationRows({ configDir })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function windowApplicationRows({ configDir, statuses })" },
+      { file: "scripts/measure-app-usage.mjs", symbol: "export async function readCpuSeconds()" },
+      { file: "scripts/measure-tools.mjs", symbol: "export function execute(command, args)" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function requireOcclusion(state, readings)" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function windowRows(window, configDir, status)" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function prepareRedraw(s, plugin, root)" },
-      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function measureRegion({ s, tab, interval, measure, covered, windowServer })" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export async function readRegion(s, tab)" },
+      { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function regionCost({ measurement, first, last })" },
       { file: "scripts/measure-terminal-redraw.mjs", symbol: "export function frameCost({ rows, totals, presented, seconds })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function usageMeasurements({ app, marks, faultLines, gesture })" },
       { file: "scripts/measure-app-usage.mjs", symbol: "export function usageOutput({ options, measurement, gesture, faultLines })" },
@@ -2532,27 +2537,27 @@ const FEATURE_LINKS = [
       { file: "scripts/test/frame-records.test.mjs", id: "the step time runs from the entry of each step to its return and keeps the kind of the step" },
       { file: "scripts/test/frame-records.test.mjs", id: "the first frame time runs from the start of the first frame of the gesture to its presentation request" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a nested step is part of the step that contains it and is not added again" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the process listing of a configuration folder holds its host, its sidecars and the WebKit services of the domain of its host" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the processes of an application are its host, its sidecars and the WebKit services of the launchd domain of its host, read from the recorded process table" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu reading runs ps -axo pid=,time= and names the command of a failure" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the executor resolves to the status and the output of a command, and to the error of a command that does not start" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu readings of ps are the cpu seconds of every process, and a failing ps is an error that names the command" },
+      { file: "scripts/test/platform/darwin/system/measure-app-usage.test.mjs", id: "a command that runs resolves to its status and output, and a command that does not start resolves to its error" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the B3 measurements of the redraw are the cpu milliseconds per presented frame, the frame rate and the presented frames" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a window without a main page has no page process row and is no error" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "every window must be visible except the covered first window of S9" },
       { file: "scripts/test/footprints.test.mjs", id: "footprints settle when two readings 5 seconds apart differ by less than 1,024 KB and the reading is 3 seconds after the last frame" },
-      { file: "scripts/test/footprints.test.mjs", id: "reading a footprint runs footprint -p PID -f bytes and names the process of a failure" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait waits for the cursor idle timeout of every tab whose plugin exposes its cursor status and then for 3 seconds without a frame" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module" },
+      { file: "scripts/test/footprints.test.mjs", id: "a footprint reading is the footprint and the peak of the output of footprint -p PID -f bytes, and a failure names the process" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the idle wait reads the cursor idle timeout of every tab whose plugin exposes its cursor status and then the frames" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the frames of every window must not change for 3 seconds, and the readings are 3 seconds apart" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the gesture figures are the 90th percentile of the mouseMoved: steps with the hitTest: step right before each" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the repeated move sets the trace state of the frame records, reads the frames of the move before the flush, reads the U7 records and sets the trace state again" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture with fewer frame records than the change of frames fails and names the missing records" },
       { file: "scripts/test/frame-records.test.mjs", id: "a gesture that contains a seq range that a log.dropped event names fails" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer step sends input.pointer moves without activating the window, and repeats them in the trace state of the frame records to read the U7 records" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the pointer move sends input.pointer moves without activating the window, each after the answer of the one before it" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "S0b closes the project and waits for the exit of each WebContent process of a view page or a document region" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "S12 makes one layout draw fail and waits for its error line, and S15 opens the settings window" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reads a mygo application without a page row, settles its footprints and reads the marks around the cpu interval" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "S12 makes one layout draw fail and waits for its error line in the application log" },
+      { file: "scripts/test/platform/darwin/system/measure-app-usage.test.mjs", id: "measureApps reads the footprints, the marks around the counts and the cpu interval, and the cpu seconds of an application" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the measurement opens one tab of the plugin in a new project window of 760 by 614 points" },
-      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the region measurement reads presentedFrames right around the cpu interval and fails while the window is occluded" },
+      { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the region read returns the presentedFrames of the tab and the window value" },
       { file: "scripts/test/measure-terminal-redraw.test.mjs", id: "the cpu time of each process is divided by the frames that the region presented over the interval" },
     ],
     expected: "make measure-app-usage prepares the states of the three-host benchmark, waits for the idle state, measures a pointer move with the U7 records of a window without a main page and sets the trace state of TRACE, and make measure-terminal-redraw opens one tab of PLUGIN in a new project window of 760 by 614 points and divides the CPU time of each process by the frames that the region of the tab presented; with B3_OUT both write the figures of a run and its conditions as a B3 record.",
@@ -2588,7 +2593,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/b3-out.test.mjs", id: "the reader returns what the writer wrote and refuses a file outside the form with the file and the bad key" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "B3_MEASUREMENTS declares the keys of the B3 output of object-counts, which b3Measurements gives" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "the B3 output of object-counts states the performance switch that TRACE set, the policy and the window it measured" },
-      { file: "scripts/test/measure-host-allocations.test.mjs", id: "the measurement records the totals and the footprint at start and each minute, then the footprint after it settles by the rule of G3" },
+      { file: "scripts/test/measure-host-allocations.test.mjs", id: "each phase of the measurement logs the totals and the footprint of the process at its elapsed time" },
       { file: "scripts/test/measure-host-allocations.test.mjs", id: "B3_MEASUREMENTS declares hostFootprintKb, the settled footprint in KB that b3Output gives with the conditions of the windows" },
       { file: "scripts/test/b3-out.test.mjs", id: "the conditions of a run are the refresh rate of the window of the state, the refresh rate that every window reported, the backing scale that every window shares, the content size of the first window, the performance switch and the policy" },
       { file: "scripts/test/measure-object-counts.test.mjs", id: "the B3 measurements count the counts that change after the first repetition and the figures that grow from repetitions 11-20 to 21-30" },
@@ -2632,8 +2637,8 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/documents_test.rs", id: "a_failed_step_of_the_creation_closes_the_document" },
       { file: "packages/host/rust/src/documents_test.rs", id: "a_creation_without_failure_keeps_the_document_and_a_failed_close_is_reported" },
       { file: "packages/host/rust/tests/documents_test.rs", id: "a_failed_configuration_or_load_of_a_view_closes_the_view" },
-      { file: "packages/host/go/src/documents_test.go", id: "TestAFailedStepOfTheCreationClosesTheDocument" },
-      { file: "packages/host/go/src/documents_test.go", id: "TestACreationWithoutFailureKeepsTheDocument" },
+      { file: "packages/host/go/src/diagnostics_view_fault_test.go", id: "TestAFailedStepOfTheCreationClosesTheDocument" },
+      { file: "packages/host/go/src/diagnostics_view_fault_test.go", id: "TestACreationWithoutFailureKeepsTheDocument" },
       { file: "packages/host/go/src/diagnostics_view_fault_test.go", id: "TestAFailedConfigurationOrLoadOfAViewClosesTheView" },
     ],
     expected: "Every failure after the native document of a document region or of a view exists closes the document before the error returns, in both hosts, and a failed close is reported with the failure.",
@@ -3120,8 +3125,8 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a page process that waits in flock names the file it waits for and the process that holds its lock" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a flock wait whose holder cannot be identified names why in the record" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a flock wait whose file cannot be identified names why in the record" },
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a page process that waits in no flock has no flock fields in its record" },
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "a flock wait that cannot be read is named in the record with the reason" },
+      { file: "packages/window-check/test/platform/darwin/system/stall-sample.test.mjs", id: "a page process that waits in no flock has no flock fields in its record" },
+      { file: "packages/window-check/test/platform/darwin/system/stall-sample.test.mjs", id: "a flock wait that cannot be read is named in the record with the reason" },
       { file: "packages/window-check/test/platform/darwin/system/stall-sample.test.mjs", id: "lsof and the lock probe of macOS name the file and the holder of a real flock wait" },
     ],
     expected: "A stall record of a page process that waits in flock names the file it waits for and the process that holds its lock, or names why either cannot be read.",
@@ -3732,7 +3737,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/window-check/stall-sample.mjs", symbol: "function endError(error, stderr, limitMs, state) {" },
       { file: "packages/window-check/stall-sample.mjs", symbol: "function readState(atLimit, pid, stateLimitMs) {" },
-      { file: "packages/window-check/stall-sample.mjs", symbol: "export async function samplerState(pid, file, run = runProcess) {" },
+      { file: "packages/window-check/stall-sample.mjs", symbol: "export async function samplerState(pid, file, { limitMs = SAMPLER_LIMIT } = {}) {" },
       { file: "packages/window-check/stall-sample.mjs", symbol: "export function runProcess(command, args, { limitMs = 10000, atLimit = systemState, stateLimitMs = STATE_LIMIT } = {}) {" },
     ],
     tests: [
@@ -3741,7 +3746,7 @@ const FEATURE_LINKS = [
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a state at the limit that does not finish does not hold the end of the process" },
       { file: "packages/window-check/test/platform/darwin/system/stall-sample.test.mjs", id: "a sample that stalls records the stacks of the sampling process before it ends" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process at its limit with no state reader is reported without a state" },
-      { file: "packages/window-check/test/stall-sample.test.mjs", id: "stacks that the sampling process cannot record are named with the reason" },
+      { file: "packages/window-check/test/platform/darwin/system/stall-sample.test.mjs", id: "stacks that the sampling process cannot record are named with the reason" },
       { file: "packages/window-check/test/stall-sample.test.mjs", id: "a process ended by a signal of another sender is not reported as ended at its limit" },
     ],
     expected: "A process of the stall sample that does not reach its own exit fails with its signal, the limit when the limit ended it, its standard error and the state of the machine at the limit; a sample that stalls leaves the stacks of its own process or the reason they are missing.",
@@ -3834,7 +3839,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/measure-app-usage.test.mjs", id: "only the hitTest: step right before a move adds to that move" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "a gesture without a delivered move and a gesture with incomplete records fail" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the measurement does not import the real-input tool" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "a move that input.pointer refuses fails the pointer step and sets the trace state again" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a move that input.pointer refuses fails the repeated move and sets the trace state again" },
     ],
     expected: "The pointer step measures the moves that input.pointer delivers, by the outermost mouseMoved: step, without a real cursor or activation.",
     levels: ["unit"],
@@ -3938,8 +3943,8 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "const unread = new Map();" },
     ],
     tests: [
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps leaves out a process of no application whose footprint fails while it ends" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reports a process of no application that runs and has no footprint" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a process of no application whose footprint cannot be read ended when the process table at the end does not hold it, and failed when it does" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a process of no application whose footprint cannot be read ended when the process table at the end does not hold it, and failed when it does" },
     ],
     expected: "A process of no application whose footprint cannot be read leaves the measurement when the process table at its end no longer lists it, and fails it while that table lists it.",
     levels: ["unit"],
@@ -4070,7 +4075,7 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "export function recordsOver(before, after) {" },
     ],
     tests: [
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval" },
+      { file: "scripts/test/platform/darwin/system/measure-app-usage.test.mjs", id: "measureApps reads the footprints, the marks around the counts and the cpu interval, and the cpu seconds of an application" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the wait for the counts is longer than the time a count of the gate waits for a write" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the records of the interval are the lines that the event logs gained, in a file that appeared as well" },
     ],
@@ -4371,7 +4376,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "scripts/test/b3-judge.test.mjs", id: "a value that a host records in no run is printed as not measured, and it is no pass and no failure" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "an idle wait over a window whose frames is null reports that no frame was read, and frames that hold still report quiet" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "an idle wait over a window whose frames is null reports that no frame was read, and the two readings 3 seconds apart are quiet" },
       { file: "scripts/test/measure-app-usage.test.mjs", id: "the report names the counters that no window reports and an idle wait that read no frame" },
     ],
     expected: "A value that a host records in no run is printed as not measured, and an idle wait over a window whose frames is null says that it read no frame.",
@@ -4556,8 +4561,8 @@ const FEATURE_LINKS = [
       { file: "scripts/measure-app-usage.mjs", symbol: "const remaining = unattributed.filter(({ pid }) => !ended.has(pid));" },
     ],
     tests: [
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps leaves out a process of no application that ends between the cpu reads" },
-      { file: "scripts/test/measure-app-usage.test.mjs", id: "measureApps reports a process of the application that ends between the cpu reads" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "a process of no application that ends between the cpu reads leaves the list without an error" },
+      { file: "scripts/test/measure-app-usage.test.mjs", id: "the cpu figures of a process are its cpu seconds over the interval, and a process of the application that ends is an error" },
     ],
     expected: "A process of no application that ends during a measurement leaves the measurement, and a process of the application that ends fails it.",
     levels: ["unit"],
@@ -4588,17 +4593,17 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "native/darwin/src/document_view.m", symbol: "char *sp_document_binary_put(void *handle, const void *bytes, size_t length, const char *type, char id[33]) {" },
       { file: "packages/host/go/src/clipboard.go", symbol: "func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {" },
-      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub(crate) fn read_view_png_with(" },
+      { file: "packages/host/rust/src/clipboard.rs", symbol: "pub fn put_view_png(" },
       { file: "packages/workbench/view-calls.js", symbol: "const persisted = await runtime.clipboard.persistPNG(fields.binary);" },
       { file: "packages/plugin-api/view.js", symbol: "const uploadBinary = async (bytes, type) => {" },
     ],
     tests: [
       { file: "native/darwin/tests/document_binary_test.m", id: "a native put stores the bytes under a new id" },
       { file: "native/darwin/tests/document_binary_test.m", id: "a put over the page limit of 64 MiB is refused and stores nothing" },
-      { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGReadPutsTheClipboardPNGIntoTheViewStore" },
+      { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGReadAnswersFromTheValueOfTheClipboard" },
       { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGPersistTakesTheIdAndSavesItsBytes" },
-      { file: "packages/host/rust/src/view_binary_test.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
-      { file: "packages/host/rust/src/view_binary_test.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
+      { file: "packages/host/rust/tests/view_binary_test.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
+      { file: "packages/host/rust/tests/view_binary_test.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing" },
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "a png read downloads the bytes of the binary id that the reply names" },
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "persistPNG uploads the bytes as image/png and sends the binary id of the upload" },
@@ -4633,9 +4638,9 @@ const FEATURE_LINKS = [
       { file: "scripts/check-host-files.mjs", symbol: "function callsBlock(call) {" },
     ],
     tests: [
-      { file: "packages/host/go/src/surfaces_test.go", id: "TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend" },
+      { file: "packages/host/go/src/surfaces_layout_trace_test.go", id: "TestLayoutCommitsAfterThePresentationNoticeOfTheFrontend" },
       { file: "packages/host/rust/src/surfaces_test.rs", id: "the_layout_commits_after_the_presentation_notice_of_the_frontend" },
-      { file: "packages/host/go/src/surfaces_test.go", id: "TestAFailedPresentationNoticeCancelsTheLayout" },
+      { file: "packages/host/go/src/surfaces_layout_trace_test.go", id: "TestAFailedPresentationNoticeCancelsTheLayout" },
       { file: "packages/host/rust/src/surfaces_test.rs", id: "a_failed_presentation_notice_ends_the_present_with_its_error" },
       { file: "packages/host/go/src/exposure_settled_test.go", id: "TestSettledWaitBringsTheContentThroughTheFrontend" },
       { file: "packages/host/rust/src/exposure_settled_test.rs", id: "the_settled_wait_brings_the_content_through_the_frontend" },
@@ -5070,7 +5075,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/tests/endpoint_cases_test.go", id: "TestEndpointScriptedCases" },
       { file: "packages/host/go/tests/endpoint_test.go", id: "TestEndpointRecordsAWriteThatThePeerClosedAsNotSent" },
-      { file: "packages/host/rust/tests/endpoint_test.rs", id: "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "scripted_reply_after_peer_close" },
     ],
     expected: "Both hosts record a reply or a notification that meets a connection that the peer closed as not sent, and neither records an error.",
     levels: ["unit"],
@@ -5168,11 +5173,11 @@ const FEATURE_LINKS = [
     },
     {
       "file": "packages/window-check/test/view-metrics-collection.test.mjs",
-      "id": "footprint failure retains recording paths and skips the deferred content frame"
+      "id": "a failed phase names its failure and the recording that each opened view retains"
     },
     {
       "file": "packages/window-check/test/view-metrics-collection.test.mjs",
-      "id": "deferred content frame failure retains its recording path and rejects the collector"
+      "id": "view totals are sampled at their declared count before extra process-start views open"
     }
   ],
   "expected": "Live readiness, finalized recordings and process identities precede clock-bracketed one-view and N-view footprint sampling; the offline content frame selection follows both samples without changing recordings, thresholds or failure retention.",
@@ -5608,8 +5613,8 @@ const FEATURE_LINKS = [
     ],
     tests: [
       {
-        file: "scripts/test/measure-app-usage.test.mjs",
-        id: "attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host"
+        file: "scripts/test/platform/darwin/system/measure-app-usage.test.mjs",
+        id: "launchctl lists the launchd domain of a process without a WebKit service, and refuses the domain of pid 0 with the folder in the error"
       }
     ],
     expected: "Usage attribution awaits asynchronous discovery and preserves per-host attribution and errors.",
@@ -7912,7 +7917,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/endpoint_cases_test.go", id: "TestEndpointScriptedCases" },
-      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_a_request_that_ended_without_its_result" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "scripted_no_result_recorded" },
     ],
     expected: "Both hosts write the method and the reason of an endpoint request that ends without its result.",
     levels: ["unit"],
@@ -8254,7 +8259,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/endpoint_cases_test.go", id: "TestEndpointScriptedCases" },
-      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_endpoint_records_why_a_connection_closes" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "scripted_close_reason_recorded" },
     ],
     expected: "A connection of the endpoint that closes writes the reason of the close as an info record before the socket closes.",
     levels: ["unit"],
@@ -8637,7 +8642,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/test/exposure.test.mjs", id: "an undefined status value or command result is refused with an error that names it, and null is the no-value" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view reply the host refuses is reported through the page error path" },
       { file: "packages/workbench/test/exposure.test.mjs", id: "an observation whose watch the surface refuses reports the error with its surface" },
-      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "a host call that rejects with a value that is not an Error is reported with its text" },
+      { file: "packages/workbench/test/plugin-operations.test.mjs", id: "an unreadable registry index keeps the installed rows and an unreadable state lists none" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "a console argument that JSON cannot serialize is recorded as a marker with its reason, not as [object Object]" },
       { file: "scripts/test/test-command.test.mjs", id: "keeps a process error and a cleanup error together when both occur" },
       { file: "scripts/test/test-discovery.test.mjs", id: "a cargo line that starts with a brace but is not JSON fails with the line" },
@@ -8884,10 +8889,10 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/host/go/src/documents.go", symbol: "func (s *Surfaces) replyView(" }],
     tests: [
       { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost" },
-      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
+      { file: "packages/host/go/src/view_reply_fault_test.go", id: "TestViewReplyPostRefusalLeavesCallOpenForProcessEnd" },
       { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyRecordsTheNativePostResultAfterPosting" },
       { file: "packages/host/go/src/surfaces_test.go", id: "TestStaleViewReplyRecordsDiscardWithoutPosting" },
-      { file: "packages/host/go/src/surfaces_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
+      { file: "packages/host/go/src/view_reply_fault_test.go", id: "TestViewReplyPostRefusalReturnsErrorWithoutPostedRecord" },
       { file: "packages/host/go/src/view_call_peer_test.go", id: "TestViewCallAnsweredBeforeTheProcessEndWritesNoPeerLost" },
       { file: "packages/host/go/src/view_call_peer_test.go", id: "TestViewProcessEndWritesPeerLostForEachOpenViewCall" },
     ],
@@ -8972,7 +8977,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench/test/plane-placeholder-error.test.mjs", id: "a placeholder whose install state cannot be read is an error shown once, and withdrawn when its surface leaves" },
       { file: "packages/workbench/test/plane-placeholder-params.test.mjs", id: "a stored tab whose params do not match its plugin is an error shown once, and withdrawn when its surface leaves" },
-      { file: "packages/workbench/test/plane-placeholder-reasons.test.mjs", id: "the placeholder reasons that are designed states write no error" },
+      { file: "packages/workbench/test/plane-placeholder-reasons.test.mjs", id: "the placeholder reasons that the host state gives write no error" },
     ],
     expected: "A tab whose install state cannot be read, or whose stored params do not match its loaded plugin, shows its placeholder error once through the error display path at the place of its surface, and the draw withdraws it when the surface leaves; the designed placeholder reasons write no error.",
     levels: ["unit"],
@@ -9586,10 +9591,10 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/window_show_hold_test.m", id: "the release puts the held window on screen, and the window server lists it with its bounds" },
       { file: "native/darwin/tests/window_show_hold_test.m", id: "a failed still 0 puts the held window on screen" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestCaptureStartNewWindowIsAStrictBooleanWithoutDisplay" },
-      { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow" },
+      { file: "packages/host/go/src/diagnostics_recording_e2e_test.go", id: "TestE2EANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestAFailedHoldStartsNoRecording" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestTheStopEndsAHoldThatNoShowTook" },
-      { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestAFailureAfterTheHoldReleasesTheHeldWindow" },
+      { file: "packages/host/go/src/diagnostics_recording_e2e_test.go", id: "TestE2EAFailureAfterTheHoldReleasesTheHeldWindow" },
       { file: "packages/host/go/src/diagnostics_new_window_test.go", id: "TestTheConnectionAndTheWindowOfTheRequestEndTheWaitForAHeldWindow" },
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "the_new_window_option_is_a_strict_boolean_without_display" },
       { file: "packages/host/rust/src/diagnostics_new_window_test.rs", id: "a_new_window_recording_answers_once_the_hold_is_set_and_records_the_held_window" },
@@ -10053,7 +10058,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/windows.rs", symbol: "list_entries" },
     ],
     tests: [
-      { file: "packages/host/rust/tests/exposure_test.rs", id: "a_close_during_the_list_does_not_fail_the_list" },
+      { file: "packages/host/tauriv2/tests/window_race_test.rs", id: "a_close_during_the_list_does_not_fail_the_list" },
     ],
     expected: "The Tauri window list reads each window's closing state and queries it in one main-thread step.",
     levels: ["unit", "application"],
@@ -10089,7 +10094,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/go/src/windows.go", symbol: "UseNativeWindow" },
     ],
     tests: [
-      { file: "packages/host/rust/tests/window_close_test.rs", id: "a_close_after_the_handle_read_does_not_reach_native_code" },
+      { file: "packages/host/tauriv2/tests/window_race_test.rs", id: "a_close_after_the_handle_read_does_not_reach_native_code" },
       { file: "packages/host/go/tests/window_close_test.go", id: "TestACloseBeforeTheNativeStepDoesNotReachNativeCode" },
     ],
     expected: "A native window handle is used only in the main-thread step that reads it.",
@@ -11326,7 +11331,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/window-check/app.mjs", symbol: "async click(x, y)" }],
     tests: [
       { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for an already-held button before pressing" },
-      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for a button released between its press and release" },
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a high-level click waits for a button held between its press and release" },
     ],
     expected: "A high-level native click waits for the host to report no pressed buttons before its down and up phases.",
     levels: ["unit"],
@@ -11371,7 +11376,6 @@ const FEATURE_LINKS = [
     id: "F239-55",
     implementation: [{ file: "e2e/run.mjs", symbol: "export function runE2E(" }],
     tests: [
-      { file: "e2e/test/run.test.mjs", id: "runE2E rejects missing or partial metadata before injected operations" },
       { file: "e2e/test/run.test.mjs", id: "run requires both run metadata values before child start" },
       { file: "e2e/test/run.test.mjs", id: "run forwards valid run metadata unchanged" },
     ],
@@ -11380,7 +11384,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F292-39",
-    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app, { clipboard = false, inactive = false } = {})" }],
+    implementation: [{ file: "packages/window-check/app.mjs", symbol: "export async function open(t, app, { clipboard = false, inactive = false, pasteboard: pasteboardName = null } = {})" }],
     tests: [
       { file: "packages/window-check/test/session-frontmost.test.mjs", id: "a frontmost change to another application during a check does not reject the check result" },
     ],
@@ -11480,7 +11484,7 @@ const FEATURE_LINKS = [
   {
     id: "F239-67",
     implementation: [{ file: "packages/workbench/error-text.js", symbol: "export function errorText(error)" }],
-    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a structured starter failure keeps its code and data in operation, log, and display" }],
+    tests: [{ file: "packages/workbench/test/plugin-operations.test.mjs", id: "a refused starter install keeps its text in operation, log, and display" }],
     expected: "Structured starter failures preserve their code and data in operation status, logs, and displayed text.",
     levels: ["unit"],
   },
@@ -11704,7 +11708,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/endpoint_cases_test.go", id: "TestEndpointScriptedCases" },
-      { file: "packages/host/rust/tests/endpoint_test.rs", id: "target_params_are_checked_in_order" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "scripted_target_params_order" },
     ],
     expected: "Both hosts check the window, then the name, then the existence of the window of an endpoint request with one error text.",
     levels: ["unit"],
@@ -12432,7 +12436,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/tests/exposure_test.go", id: "TestAForwardedRequestCarriesNoTimeLimit" },
       { file: "packages/host/go/tests/endpoint_cases_test.go", id: "TestEndpointScriptedCases" },
-      { file: "packages/host/rust/tests/endpoint_test.rs", id: "the_end_of_the_endpoint_connection_ends_its_page_requests" },
+      { file: "packages/host/rust/tests/endpoint_test.rs", id: "scripted_connection_end_ends_page_request" },
     ],
     expected: "No forwarded request has a time limit, whatever its method: it ends by its reply or by the end of its peer, the endpoint connection that sent it included.",
     levels: ["unit"],
@@ -12701,7 +12705,7 @@ const FEATURE_LINKS = [
       { file: "e2e/library-preview.mjs", symbol: "export function startPreviewPanes(grid, preview) {" },
       { file: "packages/workbench-mygo/src/shell_project.go", symbol: "func (s *Shell) removalAsked(data []any) {" },
       { file: "packages/workbench-mygo/src/library.go", symbol: "func (s *Shell) performLibrary(action func(done func(error)), ended func()) {" },
-      { file: "scripts/fixture-registry.mjs", symbol: "export async function fixtureRegistry({ sok, signal, build = buildFixtureRegistry, remove = removeFolder }) {" },
+      { file: "scripts/fixture-registry.mjs", symbol: "export async function fixtureRegistry({ sok, signal, root }) {" },
       { file: "packages/workbench-mygo/src/app.go", symbol: "func (s *Shell) applyPlugins(done func(reloaded bool, err error)) {" },
       { file: "packages/workbench-mygo/src/requests.go", symbol: "func (q *Requests) Answered(mark int, then func()) {" },
       { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *Shell) afterSettingsWrites(from int, done func(err error)) {" },
@@ -12827,8 +12831,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/keyboard.go", symbol: "func (s *Shell) afterCommands(mark int, run func()) {" },
     ],
     tests: [
-      { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", id: "each_input_makes_a_frame_whose_event_names_the_inputs_it_presents" },
-      { file: "e2e/fixtures/sidecars/rasterprobe/src/service.rs", id: "a_refused_frame_ends_its_wait_and_the_new_raster_is_drawn" },
+      { file: "e2e/fixtures/sidecars/rasterprobe/tests/service.rs", id: "each_input_makes_a_frame_whose_event_names_the_inputs_it_presents" },
+      { file: "e2e/fixtures/sidecars/rasterprobe/tests/service.rs", id: "a_refused_frame_ends_its_wait_and_the_new_raster_is_drawn" },
       { file: "e2e/test/view-display.test.mjs", id: "each loaded view surface of core.surfaces counts one view web view, shown or retained" },
       { file: "e2e/test/view-display.test.mjs", id: "the app DOM web views of a window are its main page, when it has one, and one view web view for each loaded view" },
       { file: "packages/workbench/test/layout-queue.test.mjs", id: "a preparation whose seats no longer hold before its draw hands its transaction to the next layout" },
@@ -14184,8 +14188,6 @@ const FEATURE_LINKS = [
     tests: [
       { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered event listener errors are reported without blocking later subscribers or messages" },
       { file: "apps/tauriv2/test/runtime.test.mjs", id: "ordered listener failures fail explicitly when the page error path is unavailable" },
-      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "a drawn view fails when its required composition state is missing" },
-      { file: "packages/workbench/test/host-required-surface-module.test.mjs", id: "an undrawn view fails when its required mount lookup is missing" },
     ],
     expected: "Required runtime behavior and error-reporting paths fail explicitly instead of being replaced by no-op or discarded-error fallbacks.",
     levels: ["unit"],
@@ -15289,7 +15291,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F510 records execution of existing suites and introduces no product capability.
 // F673 makes stall_watch_test wait for the states of the run loop instead of fixed run times; it changes no runtime capability.
 // F676 makes surface_keyboard_test judge the given keys when the event queue is empty instead of after a fixed interval; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F811", "F810", "F813", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read
@@ -15491,15 +15493,36 @@ const PROGRAM_WINDOW = 10;
 // A write of the PATH variable, and a value that prepends to it (a delimiter, a concatenation, a join or a shell expansion).
 const PATH_WRITE = /\bPATH\s*=(?!=)|\bPATH["']?\s*:(?!:)|\b(?:setenv|Setenv|set_var|putenv)\(\s*["']PATH["']|\b(?:process\.)?env\.PATH\s*=(?!=)/;
 const PATH_PREPEND = /\bdelimiter\b|\+|\bjoin\(|\bJoin\(|\$\{?PATH\b/;
-// A temporary folder or an executable mode in the same file: the folder that a prepended PATH holds executables in.
-const TEMPORARY_OR_EXECUTABLE = /\b(?:mkdtemp\w*|MkdirTemp|TempDir|tmpdir|mktemp|CreateTemp|TMPDIR|tempdir)\b|\bchmod\w*|\bChmod\b|\bset_permissions\b|\b0o?7[0-7]{2}\b/;
+// An executable that the test creates in the same file: a mode or a permission call, or a copy of a file, which keeps the mode of an
+// executable. The temporary folder that a prepended PATH holds is no evidence: a symbolic link to the installed tool writes no program,
+// so the folder then holds the real tool.
+const EXECUTABLE_CREATION = /\bchmod\w*|\bChmod\b|\bset_permissions\b|\b0o?7[0-7]{2}\b|\b(?:copyFileSync|copyFile|cpSync|CopyFile)\b|\bfs::copy\b|\bcp\s/;
 // The fixture folder holds the stand-ins that this detector judges: its files are the declared inputs of findStandIns, and its
 // own tests read them directly, so the repository scan skips the folder.
 const STAND_IN_FIXTURES = "scripts/test/fixtures/check-tests-stand-ins/";
-// The rule document defines the banned words and kinds in its test-kinds section, so its own mentions are not findings.
-const RULE_DOCUMENTS = new Set(["docs/operations/examples.md"]);
+// The rule document defines the banned words and kinds in its test-kinds section, so its own mentions are not findings. Its Korean
+// translation holds the same sentences with the same words, so it is the rule document in the other language.
+const RULE_DOCUMENTS = new Set(["docs/operations/examples.md", "docs/operations/examples.ko.md"]);
 // Records: the documents of docs/ and the changelogs. A record names a stand-in only as an identifier word.
 const RECORD_DOCUMENT = /^(?:docs\/.+\.md|CHANGELOG[^/]*\.md)$/;
+
+/**
+ * The 0-based lines of a tool recording that hold the output of the tool. A tool recording is a JSON object with the keys
+ * `recorded` (a text), `command` (the argument list of the real command) and `stdout`, `stderr` (the verbatim output). The
+ * output of a real tool names its own fields (`launchctl print` prints "service stubs"), so the identifier kind does not judge
+ * those two values; the other lines of the recording, including its `recorded` text, are judged. A file that is no recording
+ * has no such lines.
+ */
+function recordedOutputLines(file, lines, text) {
+  if (!file.endsWith(".json")) return new Set();
+  let recording;
+  try { recording = JSON.parse(text); }
+  catch { return new Set(); }
+  if (typeof recording?.recorded !== "string" || !Array.isArray(recording.command) || recording.command.length === 0 ||
+    recording.command.some((argument) => typeof argument !== "string") ||
+    typeof recording.stdout !== "string" || typeof recording.stderr !== "string") return new Set();
+  return new Set(lines.flatMap((line, index) => /^\s*"(?:stdout|stderr)"\s*:/.test(line) ? [index] : []));
+}
 
 /** The word parts of the identifiers and words of a line, split at digits, camel-case boundaries and every non-letter. */
 function standInParts(line) {
@@ -15508,24 +15531,37 @@ function standInParts(line) {
     .filter((part) => STAND_IN_PARTS.has(part.toLowerCase()));
 }
 
+// A quoted module specifier: the text of a string literal, which names a package or a path below it.
+const QUOTED_SPECIFIER = /(["'`])([^"'`\s]+)\1/g;
+
+/** The line without the string literals that name a declared dependency or a path below it. */
+function withoutDependencyNames(line, dependencies) {
+  if (dependencies.size === 0) return line;
+  return line.replace(QUOTED_SPECIFIER, (literal, quote, specifier) =>
+    [...dependencies].some((name) => specifier === name || specifier.startsWith(`${name}/`)) ? `${quote}${quote}` : literal);
+}
+
 /**
  * The stand-in findings of one file. A test source (isTestSource) gets every kind; a record gets only the identifier kind.
- * A line has at most one finding of each kind; the kinds are counted separately.
+ * A line has at most one finding of each kind; the kinds are counted separately. The name of a declared dependency (a package
+ * of the ecosystem that a manifest of the repository declares) in a string literal is the name of that package, not an
+ * identifier of the repository, so it is not a stand-in name.
  */
-export function findStandIns(file, text) {
+export function findStandIns(file, text, dependencies = new Set()) {
   const lines = text.split("\n");
   const testSource = isTestSource(file);
+  const recorded = recordedOutputLines(file, lines, text);
   const findings = [];
   lines.forEach((line, index) => {
     const kinds = [];
-    if (standInParts(line).length) kinds.push("stand-in-name");
+    if (!recorded.has(index) && standInParts(withoutDependencyNames(line, dependencies)).length) kinds.push("stand-in-name");
     if (testSource) {
       if (MODULE_REPLACEMENT.test(line)) kinds.push("module-replacement");
       if (TIMER_REPLACEMENT.test(line)) kinds.push("timer-replacement");
       if (GLOBAL_REPLACEMENT.test(line)) kinds.push("global-replacement");
       if (SHEBANG_TEXT.test(line) || (LITERAL_WRITE.test(line) &&
         lines.slice(index, index + PROGRAM_WINDOW).some((next) => PERMISSION_OR_EXECUTION.test(next)))) kinds.push("inline-program");
-      if (PATH_WRITE.test(line) && PATH_PREPEND.test(line) && TEMPORARY_OR_EXECUTABLE.test(text)) kinds.push("path-tool");
+      if (PATH_WRITE.test(line) && PATH_PREPEND.test(line) && EXECUTABLE_CREATION.test(text)) kinds.push("path-tool");
     }
     for (const kind of kinds) findings.push({ file, line: index + 1, kind, text: line.trim() });
   });
@@ -15538,6 +15574,7 @@ export function findStandIns(file, text) {
  */
 export function auditStandIns(files, readSource = (file) => readFileSync(`${ROOT}${file}`, "utf8")) {
   const findings = [];
+  const dependencies = declaredDependencies(files, readSource, findings);
   for (const file of [...new Set(files)].sort()) {
     if (file.startsWith(STAND_IN_FIXTURES) || RULE_DOCUMENTS.has(file)) continue;
     if (!isTestSource(file) && !RECORD_DOCUMENT.test(file)) continue;
@@ -15548,9 +15585,28 @@ export function auditStandIns(files, readSource = (file) => readFileSync(`${ROOT
       continue;
     }
     if (text.includes("\0")) continue;
-    findings.push(...findStandIns(file, text));
+    findings.push(...findStandIns(file, text, dependencies));
   }
   return findings;
+}
+
+/**
+ * The names of the packages that the npm manifests of the files declare in dependencies, devDependencies, peerDependencies or
+ * optionalDependencies. A manifest that cannot be read or parsed is a finding of kind `unreadable`.
+ */
+function declaredDependencies(files, readSource, findings) {
+  const names = new Set();
+  for (const file of files.filter((path) => path === "package.json" || path.endsWith("/package.json"))) {
+    let manifest;
+    try { manifest = JSON.parse(readSource(file)); }
+    catch (error) {
+      findings.push({ file, line: 0, kind: "unreadable", text: error?.message ?? String(error) });
+      continue;
+    }
+    for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"])
+      for (const name of Object.keys(manifest[field] ?? {})) names.add(name);
+  }
+  return names;
 }
 
 export { MATRIX, repositoryFiles };

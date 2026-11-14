@@ -1,0 +1,12 @@
+{
+  "name": "plugin-operations-unreadable",
+  "description": "The host answers the plugin state with an index that cannot be read, and then refuses the state because installed.json is not valid JSON.",
+  "replay": false,
+  "reason": "pluginsState and the plugin operations read and change the installed plugins of the configuration directory and its registry, which the Go producer builds no state for (docs/spec/cases/page-wire/README.md#limits).",
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"error":"/registry/index.json: no such file"},"installed":{"format":2,"plugins":{"tty":{"version":"0.1.0","enabled":true,"sidecars":{}},"notes":{"version":"1.1.0","enabled":true,"sidecars":{}},"off":{"version":"1.0.0","enabled":false,"sidecars":{}},"fresh":{"version":"0.1.0","enabled":true,"sidecars":{}}},"sidecars":{}}}}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"error":"installed.json is not valid JSON"}}
+  ]
+}

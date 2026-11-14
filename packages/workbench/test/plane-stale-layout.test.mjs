@@ -12,7 +12,7 @@ const pluginId = "fixture-stale-layout";
 
 test("a held layout draw survives the close of a card it contains", { timeout: 5000 }, async (t) => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   // matchMedia, which JSDOM does not have. The view uses it only to subscribe to resolution changes, and this test does not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });

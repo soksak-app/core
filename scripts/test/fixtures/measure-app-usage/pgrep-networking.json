@@ -1,0 +1,11 @@
+{
+  "recorded": "The WebKit networking processes that run. Command: pgrep -f com.apple.WebKit.Networking. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "pgrep",
+    "-f",
+    "com.apple.WebKit.Networking"
+  ],
+  "status": 0,
+  "stdout": "1635\n76149\n90525\n",
+  "stderr": ""
+}

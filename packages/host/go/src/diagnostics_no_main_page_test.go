@@ -5,6 +5,7 @@ package host
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -86,26 +87,33 @@ func TestAFrameworkWithAMainPageReachesTheModalMethod(t *testing.T) {
 	}
 }
 
-// fakeDragWorkbench answers the record of a drag and writes down what it was asked.
-type fakeDragWorkbench struct {
-	asked  []string
-	params []any
-	record string
+// dragAsks is the asking of the workbench of a drag: it writes down each method and its params, and the answer of the workbench to a
+// method is the recorded value of that method in answers. A method without a recorded answer fails.
+type dragAsks struct {
+	answers map[string]string
+	asked   []string
+	params  []any
 }
 
-func (f *fakeDragWorkbench) ask(method string, params any) (json.RawMessage, error) {
-	f.asked = append(f.asked, method)
-	f.params = append(f.params, params)
-	if method == "diagnostics.drag.end" {
-		return json.RawMessage(f.record), nil
+// dragAnswers are the recorded answers of the workbench to the two methods of a drag, with end as the record of the drag.
+func dragAnswers(end string) map[string]string {
+	return map[string]string{"diagnostics.drag": "null", "diagnostics.drag.end": end}
+}
+
+func (a *dragAsks) ask(method string, params any) (json.RawMessage, error) {
+	a.asked = append(a.asked, method)
+	a.params = append(a.params, params)
+	answer, recorded := a.answers[method]
+	if !recorded {
+		return nil, fmt.Errorf("the workbench of the drag has no recorded answer to %s", method)
 	}
-	return json.RawMessage("null"), nil
+	return json.RawMessage(answer), nil
 }
 
 // contract: diagnostics.drag.no-main-page-delivers-native
 func TestADragOfAWindowWithoutAMainPageDeliversNativeInputAndReadsTheWorkbench(t *testing.T) {
 	plan := dragPlan{Axis: "x", Line: 2, DX: -30, MS: 16, Times: 1}
-	workbench := &fakeDragWorkbench{record: `{"boundary":[100,70,100]}`}
+	workbench := &dragAsks{answers: dragAnswers(`{"boundary":[100,70,100]}`)}
 	var hear func(StepRecord)
 	ended := false
 	result, err := workbenchDrag(plan, workbench.ask, func(report func(StepRecord)) func() {
@@ -147,7 +155,7 @@ func TestADragOfAWindowWithoutAMainPageDeliversNativeInputAndReadsTheWorkbench(t
 // contract: diagnostics.drag.no-main-page-delivers-native
 func TestAFailedDragOfAWindowWithoutAMainPageEndsTheRecordOfTheWorkbench(t *testing.T) {
 	plan := dragPlan{Axis: "x", Line: 2, DX: -30, MS: 16, Times: 1}
-	workbench := &fakeDragWorkbench{record: `{"boundary":[100]}`}
+	workbench := &dragAsks{answers: dragAnswers(`{"boundary":[100]}`)}
 	failure := errors.New("native drag step 1: no input")
 	_, err := workbenchDrag(plan, workbench.ask, func(func(StepRecord)) func() { return func() {} },
 		func() (map[string]any, error) { return nil, failure })
@@ -166,7 +174,7 @@ func TestADragThatRecordedFewerStepsThanItDeliveredFails(t *testing.T) {
 		"no callback":  {},
 		"one callback": {{Callback: "mouseDragged:"}},
 	} {
-		workbench := &fakeDragWorkbench{record: `{"boundary":[100,70,100]}`}
+		workbench := &dragAsks{answers: dragAnswers(`{"boundary":[100,70,100]}`)}
 		var hear func(StepRecord)
 		_, err := workbenchDrag(plan, workbench.ask, func(report func(StepRecord)) func() {
 			hear = report

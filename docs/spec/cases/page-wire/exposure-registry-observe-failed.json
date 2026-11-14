@@ -1,0 +1,16 @@
+{
+  "name": "exposure-registry-observe-failed",
+  "description": "The surfaces refuse a watch, a status read and the end of a watch with failures.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"error":{"code":-32000,"message":"watch lost"}}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-b","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":3,"surface":"tab-b","method":"status.get","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"error":{"code":-32000,"message":"read lost"}}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"surface":"tab-b","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"error":{"code":-32000,"message":"unwatch lost"}}}}
+  ]
+}

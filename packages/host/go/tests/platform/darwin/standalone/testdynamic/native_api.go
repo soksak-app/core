@@ -242,6 +242,106 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.SpHostTestFrameRelease, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_create")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_create: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_create: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowCreate, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_create_titled")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_create_titled: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_create_titled: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowCreateTitled, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_close")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_close: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_close: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowClose, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_main_webview")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_main_webview: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_main_webview: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowMainWebview, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_webview_loaded")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_webview_loaded: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_webview_loaded: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWebviewLoaded, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_view_presentation_release")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_view_presentation_release: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_view_presentation_release: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestViewPresentationRelease, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_image_regions")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_image_regions: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_image_regions: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowImageRegions, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_keys_wait")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_keys_wait: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_keys_wait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowKeysWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_window_open_key_wait")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_open_key_wait: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_window_open_key_wait: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestWindowOpenKeyWait, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_region_present_lease")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_region_present_lease: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_region_present_lease: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestRegionPresentLease, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "sp_host_test_spawn_handled_crash")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_spawn_handled_crash: %w", err)

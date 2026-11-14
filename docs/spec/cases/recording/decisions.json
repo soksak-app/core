@@ -1,0 +1,29 @@
+{
+  "description": "Decisions of the state of a diagnostic recording on the answers of its recorder and of the filesystem (docs/spec/host-contract.md, the cases `recording.*`), replayed by the Go and Rust host tests. The recorder gives the answers (open, start, stop) and the filesystem gives the removal result of the owned folder; each decision is a function of those answers, so a case lists the answers as data and the text that the host reports. `directory` is the folder that a recording or its cleanup owns, empty for none. `stopped` is whether the native recording has ended. A null `cause` is no error before the removal, and a null `removal` is a removal that succeeded. The recorder is judged against the real window server by e2e/capture-state.test.mjs, and the real filesystem refusal of a removal by the host tests of each language.",
+  "refuseStart": [
+    { "id": "no-owner", "directory": "", "error": null },
+    { "id": "running", "directory": "/captures/1-0", "error": "a capture into /captures/1-0 is running" }
+  ],
+  "refuseFinish": [
+    { "id": "running", "directory": "/captures/1-0", "stopped": false, "error": null },
+    { "id": "nothing-running", "directory": "", "stopped": false, "error": "no capture is running" },
+    { "id": "cleanup-pending", "directory": "/captures/1-0", "stopped": true, "error": "capture has stopped but its directory cleanup is incomplete; abort is required" }
+  ],
+  "needsStop": [
+    { "id": "running", "directory": "/captures/1-0", "stopped": false, "stop": true },
+    { "id": "stopped-cleanup-retry", "directory": "/captures/1-0", "stopped": true, "stop": false },
+    { "id": "nothing-owned", "directory": "", "stopped": false, "stop": false }
+  ],
+  "stopFailure": [
+    { "id": "stop-failed", "stop": "stop failed", "error": "capture stop failed: stop failed" }
+  ],
+  "settleCleanup": [
+    { "id": "failed-open-folder-removed", "cause": "window 7 is not on screen", "removal": null, "retainOwner": false, "error": "window 7 is not on screen" },
+    { "id": "failed-start-folder-removed", "cause": "the first still was not written before the window closed", "removal": null, "retainOwner": false, "error": "the first still was not written before the window closed" },
+    { "id": "failed-start-folder-kept", "cause": "window 7 is not on screen", "removal": "unlinkat /captures/1-0: permission denied", "retainOwner": true, "error": "window 7 is not on screen; capture directory cleanup failed: unlinkat /captures/1-0: permission denied" },
+    { "id": "abort-nothing-failed", "cause": null, "removal": null, "retainOwner": false, "error": null },
+    { "id": "abort-stop-failed-folder-removed", "cause": "capture stop failed: stop failed", "removal": null, "retainOwner": false, "error": "capture stop failed: stop failed" },
+    { "id": "abort-folder-kept", "cause": null, "removal": "unlinkat /captures/1-0: permission denied", "retainOwner": true, "error": "capture directory cleanup failed: unlinkat /captures/1-0: permission denied" },
+    { "id": "abort-stop-failed-folder-kept", "cause": "capture stop failed: stop failed", "removal": "unlinkat /captures/1-0: permission denied", "retainOwner": true, "error": "capture stop failed: stop failed; capture directory cleanup failed: unlinkat /captures/1-0: permission denied" }
+  ]
+}

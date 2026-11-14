@@ -1,0 +1,12 @@
+{
+  "name": "window-check-trace-identity-client-replaced",
+  "description": "The connection that replaces the client of the session during the start of a trace sees the clock read after the start and the stop of the observer.",
+  "replay": false,
+  "reason": "The case plays the clock reads and the trace commands of a measured gesture of a view, which need a view of a plugin that the replay does not open.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"diagnostics.clock","params":{"window":"main"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"mono_ns":"1000000000"}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"fixture.trace.stop","params":{},"surface":"view-1"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"enabled":false}}}
+  ]
+}

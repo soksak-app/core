@@ -507,13 +507,17 @@ void *sp_input_virtual_text_client(void *handle) {
     return (__bridge void *)view;
 }
 
-bool sp_input_virtual_send_key_to_web_view(void *handle, void *event) {
+bool sp_input_virtual_send_key_to_web_view(void *handle, void *event, bool *inputContextAbsent) {
     NSCAssert(NSThread.isMainThread, @"the virtual key window belongs to the main thread");
     NSWindow *window = (__bridge NSWindow *)handle;
     NSView *client = textInputClient(window);
     if (!sp_input_virtual_is(window) || ![client isKindOfClass:WKWebView.class]) return false;
     keyWebView = (WKWebView *)client;
+    // The input context that WebKit reads while it takes the key, read through the same method before and after the key.
+    bool absent = client.inputContext == nil;
     [NSApp sendEvent:(__bridge NSEvent *)event];
+    absent = absent && client.inputContext == nil;
     keyWebView = nil;
+    if (inputContextAbsent) *inputContextAbsent = absent;
     return true;
 }

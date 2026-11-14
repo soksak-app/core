@@ -1,0 +1,27 @@
+{
+  "name": "settings-switch-order",
+  "description": "The page reads the settings snapshot, reports the trace off and writes the default log policy; a switch change sends the theme and the menu language and then writes the settings, and the host answers the write after the page drew the change; the page reads the snapshot again once the write is answered.",
+  "replay": false,
+  "reason": "The calls setTheme and setMenuLanguage apply to the window of the native host, and the reply of the call workspace with the kind snapshot is the state of the registry and the ids of the open windows, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {
+    "theme-1": { "type": "object", "example": { "scheme": "dark", "tokens": { "--bg": "#111" } }, "source": "page" },
+    "language": { "type": "string", "example": "ko", "source": "page" },
+    "cid-1": { "type": "string", "example": "p6f1d0c2e-5a7b-4e8f-9c3d-2b1a0f9e8d7c.1", "source": "page" }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } },
+    { "call": { "name": "performance", "payload": { "action": "off" } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "log", "payload": { "action": "policy", "classes": { "lifecycle": "error", "input": "error", "call": "error", "io": "error", "frame": "error" } } } },
+    { "reply": { "result": null } },
+    { "call": { "name": "setTheme", "payload": "$theme-1" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "left": false }, "remove": [] }, "cids": ["$cid-1"] } },
+    { "reply": { "result": null, "held": true } },
+    { "call": { "name": "setMenuLanguage", "payload": "$language" } },
+    { "reply": { "result": null } },
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": { "left": false }, "projects": [], "open": [] } } }
+  ]
+}

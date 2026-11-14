@@ -1,0 +1,23 @@
+{
+  "name": "projects-switch-prelude",
+  "description": "The page starts with an empty registry: the settings, the tab state files and the clock of the page are read once.",
+  "replay": false,
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[],"open":[]}}},
+    {"call":{"name":"performance","payload":{"action":"off"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"policy","classes":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}}
+  ]
+}

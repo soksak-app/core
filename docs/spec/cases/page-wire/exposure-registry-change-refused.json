@@ -1,0 +1,12 @@
+{
+  "name": "exposure-registry-change-refused",
+  "description": "The page forwards a watch to a surface, and the host refuses the status change that the page sends with the text of the refusal.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureChanged","payload":{"name":"probe.lines","value":null}}},
+    {"reply":{"error":"argument request.value is missing"}}
+  ]
+}

@@ -5,60 +5,58 @@ import (
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
-// openFrontend is the window of a frame that opens its layout: a layout test window with an id.
-type openFrontend struct{ noticeFrontend }
-
-func (*openFrontend) ID() uint { return 1 }
-
-// openPlatform is the platform of a frame that opens its layout: it records the layouts that begin and the cancels.
-type openPlatform struct {
-	layoutPlatform
-	begun []uint64
+// openFrontend is the window of a frame that opens its layout: a layout test window with an id and the native window of the platform.
+type openFrontend struct {
+	noticeFrontend
+	native platform.Window
 }
 
-func (p *openPlatform) BeginLayout(_ platform.Window, ticket uint64, _ func(bool)) error {
-	p.begun = append(p.begun, ticket)
-	return nil
-}
+func (*openFrontend) ID() uint                        { return 1 }
+func (f *openFrontend) NativeWindow() platform.Window { return f.native }
 
 // A frame that opened the layout of its window holds the frames of the window until a preparation takes the layout over, so a
 // preparation that fails before its layout begins cancels the opened layout, and the frame after it is not held
-// (docs/spec/hosts.md#native-views).
+// (docs/spec/hosts.md#native-views). The window and its layouts are of the real platform: the native layer takes the commit of the ticket
+// of an open layout and refuses the commit of a ticket whose layout was cancelled.
 // contract: surface-layout.frame-opened-layout-ends-with-a-preparation
 func TestAPreparationThatFailsCancelsTheLayoutThatAFrameOpened(t *testing.T) {
-	fake := &openPlatform{layoutPlatform: layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 2)}}
-	saved, savedFramework := system, framework
-	system, framework = fake, stepFramework{}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
-	window := &openFrontend{}
+	useCurrentPlatformForViews(t)
+	savedFramework := framework
+	framework = mainThreadFramework{}
+	t.Cleanup(func() { framework = savedFramework })
+	native := support.WindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	t.Cleanup(func() { runOnMainThread(func() { system.CancelLayout(native) }) })
+	window := &openFrontend{native: native}
 	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins()}
 	h := &Host{windows: map[uint]*Surfaces{1: s}}
-	ticket, err := OpenLayout(h, window)
-	if err != nil || ticket == 0 || len(fake.begun) != 1 || fake.begun[0] != ticket {
-		t.Fatalf("the frame opened the layout %d (%v), and the layouts %v began", ticket, err, fake.begun)
+	var ticket uint64
+	var err error
+	runOnMainThread(func() { ticket, err = OpenLayout(h, window) })
+	if err != nil || ticket == 0 {
+		t.Fatalf("the frame opened the layout %d (%v)", ticket, err)
 	}
 	// A title bar outside its range fails the preparation before its layout begins.
 	if _, err := s.SyncSurfaces(SyncRequest{Titlebar: 1}); err == nil {
 		t.Fatal("a preparation with an invalid title bar succeeded")
 	}
-	select {
-	case got := <-fake.cancels:
-		if got != ticket {
-			t.Fatalf("the failed preparation cancelled the layout %d, not the opened %d", got, ticket)
-		}
-	default:
+	if commitLayout(native, ticket) {
 		t.Fatalf("the failed preparation left the opened layout %d holding the frames of the window", ticket)
 	}
-	// The opened layout ended with the first preparation, so a later failure cancels nothing.
+	// The opened layout ended with the first preparation, so a later failure cancels nothing: the layout that a frame opens after it
+	// stays open.
+	var later uint64
+	runOnMainThread(func() { later, err = OpenLayout(h, window) })
+	if err != nil || later == 0 {
+		t.Fatalf("the frame opened the layout %d (%v) after the failed preparation", later, err)
+	}
 	if _, err := s.SyncSurfaces(SyncRequest{Titlebar: 1}); err == nil {
 		t.Fatal("a preparation with an invalid title bar succeeded")
 	}
-	select {
-	case got := <-fake.cancels:
-		t.Fatalf("a second failed preparation cancelled the layout %d", got)
-	default:
+	if commitLayout(native, later) {
+		t.Fatalf("the second failed preparation left the layout %d open", later)
 	}
 }
 
@@ -67,19 +65,24 @@ func TestAPreparationThatFailsCancelsTheLayoutThatAFrameOpened(t *testing.T) {
 // other window (docs/spec/hosts.md#native-views).
 // contract: surface-layout.closed-window-begins-no-layout
 func TestAPreparationOfAClosedWindowBeginsNoLayout(t *testing.T) {
-	fake := &openPlatform{layoutPlatform: layoutPlatform{commits: make(chan uint64, 1), cancels: make(chan uint64, 2)}}
-	saved, savedFramework := system, framework
-	window := &openFrontend{}
+	useCurrentPlatformForViews(t)
+	native := support.WindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	t.Cleanup(func() { runOnMainThread(func() { system.CancelLayout(native) }) })
+	window := &openFrontend{native: native}
+	savedFramework := framework
 	// A mygo window has no main page, so its preparation places no window overlays.
-	system, framework = fake, pagelessFramework{window: window}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
+	framework = pagelessFramework{window: window}
+	t.Cleanup(func() { framework = savedFramework })
 	s := &Surfaces{window: window, images: NewImages(), documents: NewDocuments(), sourceOrigins: newSourceOrigins(), closed: true}
 	// The page of the window was ready before the close.
 	s.first.Do(func() {})
-	if _, err := s.SyncSurfaces(SyncRequest{Titlebar: 40}); !errors.Is(err, errWindowClosed) {
+	var err error
+	runOnMainThread(func() { _, err = s.SyncSurfaces(SyncRequest{Titlebar: 40}) })
+	if !errors.Is(err, errWindowClosed) {
 		t.Fatalf("the preparation of a closed window ended with %v, not that the window closed", err)
 	}
-	if len(fake.begun) != 0 {
-		t.Fatalf("the preparation of a closed window began the layouts %v", fake.begun)
+	// A preparation that began a layout would have opened the transaction of ticket 1, whose commit the native layer takes.
+	if commitLayout(native, 1) {
+		t.Fatal("the preparation of a closed window began a layout")
 	}
 }

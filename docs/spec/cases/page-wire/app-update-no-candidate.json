@@ -1,0 +1,10 @@
+{
+  "name": "app-update-no-candidate",
+  "description": "The page reads the update state of the version 0.0.9 without a candidate.",
+  "replay": false,
+  "reason": "The appUpdateState call reads the registry index of the application, which the Go producer does not run.",
+  "steps": [
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.9","available":null}}}
+  ]
+}

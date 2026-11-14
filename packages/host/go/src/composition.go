@@ -112,6 +112,9 @@ func (s *Surfaces) sendImageDrawingChange(change ImageDrawing) error {
 // readOnScreen records whether the window is neither occluded nor minimized. Call it on the UI thread.
 func (s *Surfaces) readOnScreen() error {
 	onScreen, err := system.WindowOnScreen(s.window.NativeWindow())
+	if err == nil {
+		err = windowOnScreenFault()
+	}
 	if err != nil {
 		return err
 	}

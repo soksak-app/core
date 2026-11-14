@@ -9,16 +9,14 @@ import { JSDOM } from "jsdom";
 
 const root = "/Users/someone/work-tree/a b/name\\with/" + "abcdefgh".repeat(14);
 
-test("the folder caption of the project scope breaks after each separator and hyphen and never runs past the pane", async (t) => {
+test("the folder caption of the project scope breaks after each separator and hyphen and never runs past the pane", async () => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   globalThis.window = dom.window;
   globalThis.CSS = dom.window.CSS ?? { escape: (text) => text };
   globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
-  // The active project is the project that the window shows. Its activation runs the layout listener of the plane (projects.js onSwitch), which
-  // this unit test does not start, so the test gives the active project its root.
-  t.mock.module("../projects.js", { exports: { ...await import("../projects.js"), active: () => ({ root }) } });
-  // The settings of the project scope are the settings of the snapshot of the project, as the start document gives them (beginSettings).
+  // The folder of the project scope is the folder of the project whose settings the window shows: the settings of the project scope are the
+  // settings of the snapshot of the project, as the start document gives them (beginSettings).
   const { beginSettings } = await import("../settings.js");
   beginSettings({ common: {}, projects: [{ id: "fixture", root, title: "fixture", spaces: [], settings: {} }] }, "fixture");
   const { registry } = await import("../exposure.js");

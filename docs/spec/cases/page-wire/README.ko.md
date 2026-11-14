@@ -34,29 +34,29 @@ case는 이 디렉터리의 추적되는 JSON 파일 하나다. consumer는 work
 step은 네 객체 중 하나다.
 
 - `{"call": {"name": ..., "payload": ..., "cids": [...]}}`: page가 host 메서드 `name`을 호출한다. `payload`는 호출의 인자 하나이며, page가 인자를 보내지 않으면 없다. `cids`는 page가 호출과 함께 넘기는 상관 식별자 목록이며, 넘기지 않으면 없다.
-- `{"reply": {"result": ...}}` 또는 `{"reply": {"error": "..."}}`: 바로 앞 호출에 대한 host의 응답이다. `result`는 호출이 resolve하는 JSON 값이며, host가 아무것도 답하지 않으면 `null`이다. `error`는 호출이 reject하는 오류 텍스트다. `"held": true`이면 reader가 테스트가 풀 때까지 응답을 붙잡으므로, 테스트는 호출이 끝나지 않은 동안 page가 동작하게 할 수 있다. producer는 이 응답을 다른 응답처럼 비교한다.
+- `{"reply": {"result": ...}}` 또는 `{"reply": {"error": "..."}}`: 바로 앞 호출에 대한 host의 응답이다. `result`는 호출이 resolve하는 JSON 값이며, host가 아무것도 답하지 않으면 `null`이다. `error`는 호출이 reject하는 오류 텍스트다. host는 실패한 호출에 텍스트로 답하고, 각 애플리케이션의 runtime은 그 텍스트를 가진 `Error`로 reject하므로(Wails runtime의 `RuntimeError`, Tauri runtime은 command 값을 감싸는 `hostInvoke`의 `Error`) page는 `Error`가 아닌 reject를 받지 않으며, code와 data를 가진 구조화된 오류 객체는 wire의 값이 아니다. `"held": true`이면 reader가 테스트가 풀 때까지 응답을 붙잡으므로, 테스트는 호출이 끝나지 않은 동안 page가 동작하게 할 수 있다. producer는 이 응답을 다른 응답처럼 비교한다.
 - `{"notice": {"event": ..., "payload": ...}}`: host가 page가 `event`에 등록한 listener에 인자 하나 `payload`와 함께 notice `event`를 보낸다. notice에 인자가 없으면 `payload`는 없다.
-- `{"listen": {"event": ...}}` 또는 `{"listen": {"event": ..., "error": "...", "held": true}}`: page가 `host.on(event, listener)`로 `event`의 listener를 등록한다. `error`가 없으면 등록은 unsubscribe 함수로 resolve한다. `error`가 있으면 등록은 그 텍스트로 reject하고 listener는 등록되지 않는다. `"held": true`이면 reader가 응답과 마찬가지로 테스트가 풀 때까지 등록의 settle을 붙잡는다.
+- `{"listen": {"event": ...}}` 또는 `{"listen": {"event": ..., "error": "...", "held": true}}`: page가 `host.on(event, listener)`로 `event`의 listener를 등록한다. `error`가 없으면 등록은 unsubscribe 함수로 resolve한다. `error`가 있으면 등록은 그 텍스트로 reject하고 listener는 등록되지 않는다. `"held": true`이면 reader가 응답과 마찬가지로 테스트가 풀 때까지 등록의 settle을 붙잡는다. `"unsubscribeError": "..."`는 resolve한 등록의 unsubscribe 함수가 listener를 제거한 뒤 그 텍스트의 오류를 throw하게 한다. `error`가 있는 등록에는 unsubscribe 함수가 없다.
 
 호출 step 다음에는 그 호출의 응답 step이 오고, notice와 listen step은 그 쌍 사이에 온다. 호출은 page의 호출과 필드 단위로 정확히 비교하며, JSON 인코딩 후에 비교한다. 따라서 없는 필드와 `null`은 서로 다른 값이다.
 
 ## Reader 동작
 
-workbench 테스트 runtime(`packages/workbench/test/runtime/page-wire.js`이며, `packages/workbench/test/runtime/index.js`의 `selectPageWire`가 선택한다)은 page의 호출에 step 순서대로 답한다.
+workbench 테스트 runtime(`packages/workbench/test/runtime/page-wire.js`이며, `packages/workbench/test/runtime/index.js`의 `selectPageWire`가 선택한다)은 page의 호출에 step 순서대로 답한다. case 형식의 검사와 호출 매칭, 변수, 붙잡힌 항목, case의 끝은 `@soksak/plugin-api/wire-case`이며, view-wire reader(`@soksak/plugin-api/testing`의 `openView`)와 공유한다.
 
-- case의 다음 호출이 아닌 호출은 reject되며, 차이가 failure로 남는다.
-- case의 마지막 step 뒤의 호출은 reject되며, failure로 남는다.
+- 자기 stream의 다음 호출이 아닌 호출은 reject되며, 차이가 failure로 남는다. host 메서드 `log`의 호출이 한 stream이고, 그 밖의 모든 호출·notice·listen step이 다른 stream이다. page는 `log` 호출을 다른 호출이 정하지 않는 시점에 보내므로(clock 기준점과 gated 건수 보고는 timer로 실행된다), reader는 `log` 호출을 `log` step들 사이의 순서에서 다음의 실행되지 않은 `log` step과, 그 밖의 호출을 다른 step들 사이의 순서에서 다음의 실행되지 않은 step과 맞춘다. 어느 stream이든 어긋난 호출은 실패한다.
+- 자기 stream의 마지막 step 뒤의 호출은 reject되며, failure로 남는다.
 - reader의 `calls` 목록은 page의 모든 호출을 담으므로, 테스트가 기대하는 호출과 비교할 수 있다.
 - listen step이 없는 case는 page의 등록을 기록하지 않는다. 각 `host.on`은 listener를 등록하고 즉시 resolve한다. listen step이 하나 이상 있는 case는 page의 모든 등록을 기록하므로, 각 `host.on`은 다음 step이 답한다. 그 step은 해당 event의 listen step이어야 한다. 다음 step이 아닌 등록은 reject되며, 호출과 마찬가지로 차이가 failure로 남는다. 마지막 step 뒤의 등록도 failure다. 등록은 page에 속하므로 producer는 listen step이 있는 case를 실행하지 않는다.
-- `release()`는 가장 오래 붙잡힌 응답 또는 등록을 settle한다.
+- `release(key)`는 붙잡힌 응답 또는 등록을 settle한다. `key`가 없으면 가장 오래된 것을 settle한다. 숫자 `key`는 그것을 붙잡은 case step의 index(응답은 call step, 등록은 listen step)이고, 문자열 `key`는 호출 또는 이벤트의 이름이며 그 이름의 가장 오래된 붙잡힌 항목을 settle하므로, 테스트는 붙잡힌 항목을 순서와 상관없이 settle할 수 있다. 붙잡힌 항목이 없는 `key`는 실패이며 `release`가 throw하고 `finish()`가 보고한다.
 - `unsubscribed`는 page가 등록이 resolve한 함수로 제거한 listener의 event를 제거한 순서대로 담는다.
 - 환경 변수 `PAGE_WIRE_TRACE=1`이면 reader가 page가 보내는 각 호출을 맞든 틀리든 표준 오류에 쓴다. case를 쓰는 사람은 이것으로 page의 호출 순서를 읽는다.
 - `deliverNotice()`는 다음 step을 실행한다. 그 step은 notice여야 하며, page가 그 event에 등록한 각 listener를 호출한다. listener가 없는 notice는 failure다. 테스트는 host가 notice를 보낼 시점에 이를 전달한다.
-- `finish()`는 남은 failure가 있거나, 실행되지 않은 step이 있거나, 풀리지 않은 응답이 있으면 throw한다. 테스트는 본문 끝에서 이를 호출한다.
+- `finish()`는 남은 failure가 있거나, 실행되지 않은 step(어느 stream이든)이 있거나, 풀리지 않은 응답이 있으면 throw한다. 테스트는 본문 끝에서 이를 호출한다.
 
 ## Producer 실행
 
-page-wire producer를 가진 각 패키지는 `replay: true`인 case를 실제 host에 실행한다. Go producer는 window 없이 host를 실행하고 notice는 window의 listener에만 닿으므로, notice나 listen step이 있는 `replay: true` case를 거부한다. 그런 case는 window가 있는 producer가 실행할 때까지 `replay: false`와 그 이유를 가진다. 실제 host가 case와 다르게 응답하면 host 또는 case의 결함이다. host의 producer runner는 `packages/host/go/tests/page_wire_test.go`(`TestPageWire`)다. 이 runner는 `replay: true`인 각 case를 bindings의 기록 진입점(`host.RecordedCall`)과 각 호출의 host 메서드가 실행하는 작업(`log`는 `host.LogCommand`, `workspace`는 `host.Workspace.Apply`)을 거쳐 실행한다. 이 디렉터리 case의 응답은 요청에 대해 host 소스가 돌려주는 값이다: `packages/host/go/src/event_relay.go`의 `log` 호출(`LogCommand`, `Log`), `packages/host/go/src/log_policy.go`의 `setLogPolicy`, `packages/host/go/src/workspace.go`의 `workspace` 호출(`snapshot`, `Apply`, `runWorkspace`).
+page-wire producer를 가진 각 패키지는 `replay: true`인 case를 실제 host에 실행한다. Go producer는 window 없이 host를 실행하고 notice는 window의 listener에만 닿으므로, notice나 listen step이 있는 `replay: true` case를 거부한다. 그런 case는 window가 있는 producer가 실행할 때까지 `replay: false`와 그 이유를 가진다. 실제 host가 case와 다르게 응답하면 host 또는 case의 결함이다. producer는 case의 step 순서대로 실행하며 두 stream을 구분하지 않는다: `log` 호출의 응답은 event writer의 상태에만, `workspace` 호출의 응답은 저장소에만 달려 있으므로, 두 stream 사이의 순서는 producer가 비교하는 어떤 응답도 바꾸지 않는다. host의 producer runner는 `packages/host/go/tests/page_wire_test.go`(`TestPageWire`)다. 이 runner는 `replay: true`인 각 case를 bindings의 기록 진입점(`host.RecordedCall`)과 각 호출의 host 메서드가 실행하는 작업(`log`는 `host.LogCommand`, `workspace`는 `host.Workspace.Apply`)을 거쳐 실행한다. 이 디렉터리 case의 응답은 요청에 대해 host 소스가 돌려주는 값이다: `packages/host/go/src/event_relay.go`의 `log` 호출(`LogCommand`, `Log`), `packages/host/go/src/log_policy.go`의 `setLogPolicy`, `packages/host/go/src/workspace.go`의 `workspace` 호출(`snapshot`, `Apply`, `runWorkspace`). Rust producer runner는 `packages/host/rust/tests/page_wire_test.rs`이며, 비교와 예시 값을 view-wire runner와 공유하고(`packages/host/rust/tests/support/wire_replay.rs`), 같은 규칙으로 case를 읽고 `log`는 `event_relay::log_command`로, `workspace`는 `Workspace::apply`로 실행한다. 그 답은 `packages/host/rust/src/event_relay.rs`와 `packages/host/rust/src/workspace.rs`의 값이다.
 
 ## 한계
 

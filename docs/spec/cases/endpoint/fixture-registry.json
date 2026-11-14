@@ -1,0 +1,24 @@
+{
+  "name": "fixture-registry",
+  "description": "The first change of the registry records the registry of the application; a restore that fails keeps the record, a later restore sets the recorded registry and removes the record, and a new first change records the registry again.",
+  "replay": false,
+  "reason": "The case plays the requests of the start state of a check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.plugins"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"registry":"https://registry.example/index.json"}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.plugins.registry","params":{"index":"file:///first/index.json"}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"command.run","params":{"window":"main","name":"core.plugins.registry","params":{"index":"https://registry.example/index.json"}}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"error":{"code":1000,"message":"the registry command failed"}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"command.run","params":{"window":"main","name":"core.plugins.registry","params":{"index":"file:///second/index.json"}}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"command.run","params":{"window":"main","name":"core.plugins.registry","params":{"index":"https://registry.example/index.json"}}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":6,"method":"status.get","params":{"window":"main","name":"core.plugins"}}},
+    {"reply":{"jsonrpc":"2.0","id":6,"result":{"registry":"https://registry.example/index.json"}}},
+    {"send":{"jsonrpc":"2.0","id":7,"method":"command.run","params":{"window":"main","name":"core.plugins.registry","params":{"index":"file:///third/index.json"}}}},
+    {"reply":{"jsonrpc":"2.0","id":7,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":8,"method":"command.run","params":{"window":"main","name":"core.plugins.registry","params":{"index":"https://registry.example/index.json"}}}},
+    {"reply":{"jsonrpc":"2.0","id":8,"result":null}}
+  ]
+}

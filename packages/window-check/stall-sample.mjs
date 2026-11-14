@@ -27,7 +27,7 @@ const LATE_SERVICES = ["com.apple.metadata.mds", "com.apple.coresymbolicationd"]
 const SAMPLE_PROFILE = `(version 1)(allow default)(deny mach-lookup (global-name ${LATE_SERVICES.map((name) => `"${name}"`).join(" ")}))`;
 
 /** The command and the arguments that sample the threads of pid for seconds into file without the late services. */
-function sampleCommand(pid, seconds, file) {
+export function sampleCommand(pid, seconds, file) {
   return ["/usr/bin/sandbox-exec", ["-p", SAMPLE_PROFILE, "/usr/bin/sample", String(pid), String(seconds), "-file", file]];
 }
 
@@ -42,10 +42,10 @@ async function systemState() {
  * The state of the machine and the stacks of the process pid of sample, recorded in file, while it stalls. It names
  * the reason when the stacks could not be recorded, because then the state is all that remains of that moment.
  *
- * run(command, args, options)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
+ * limitMs  the milliseconds after which the sampling process is ended (SAMPLER_LIMIT by default).
  */
-export async function samplerState(pid, file, run = runProcess) {
-  const [state, result] = await Promise.all([systemState(), run(...sampleCommand(pid, 1, file), { limitMs: SAMPLER_LIMIT, atLimit: null })]);
+export async function samplerState(pid, file, { limitMs = SAMPLER_LIMIT } = {}) {
+  const [state, result] = await Promise.all([systemState(), runProcess(...sampleCommand(pid, 1, file), { limitMs, atLimit: null })]);
   if (result.error) return `${state}, stacks of the process not recorded: ${result.error.message}`;
   if (result.status !== 0) return `${state}, stacks of the process not recorded: exited with ${result.status}: ${String(result.stderr).trim()}`;
   return `${state}, stacks of the process: ${file}`;
@@ -71,7 +71,7 @@ function readState(atLimit, pid, stateLimitMs) {
 /**
  * Runs command with its own limit, so child operations never block endpoint reads or test deadlines. At the limit the
  * process still runs while atLimit(pid) reads the state of that moment, within stateLimitMs, and then ends. A null
- * atLimit ends it at once. The limit runs on AbortSignal.timeout: a check that moves mocked timers does not move it.
+ * atLimit ends it at once. The limit runs on AbortSignal.timeout: a check that moves a clock of its own does not move it.
  */
 export function runProcess(command, args, { limitMs = 10000, atLimit = systemState, stateLimitMs = STATE_LIMIT } = {}) {
   return new Promise((resolve) => {
@@ -132,45 +132,57 @@ export function stallDue({ started, planned, pending, at, after = STALL_AFTER })
  * Writes the thread stacks of process pid to file and returns file. It fails with the reason when sample fails, and a
  * sample that stalls leaves the stacks of its own process next to file.
  *
- * run(command, args, options)  an executor that resolves to a process result ({status, stderr}). The checks replace it.
+ * limitMs  the milliseconds after which the sample is ended as stalled (runProcess limit by default).
  */
-export async function sampleProcess(pid, file, run = runProcess) {
+export async function sampleProcess(pid, file, { limitMs } = {}) {
   const atLimit = (sampler) => samplerState(sampler, `${file}.sampler.txt`);
-  const result = await run(...sampleCommand(pid, SECONDS, file), { atLimit });
+  const result = await runProcess(...sampleCommand(pid, SECONDS, file), { atLimit, ...(limitMs === undefined ? {} : { limitMs }) });
   if (result.error) throw new Error(`sample ${pid}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`sample ${pid} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return file;
 }
 
 /**
- * The running services of the launchd domain of process host, as { pid, label }. launchd runs the WebKit services of an
- * application in the launchd domain of its process, and `launchctl print pid/<host>` lists each service of that domain as
- * a line `<pid> <status> <label>`, with pid 0 for a service that does not run; no other interface lists the services of
- * another process. It fails with the reason when launchctl fails.
- *
- * run(command, args)  an executor that resolves to a process result ({status, stdout, stderr}). The checks replace it.
+ * The running services of the output of `launchctl print pid/<host>`, as { pid, label }. launchd runs the WebKit services of an
+ * application in the launchd domain of its process, and the output lists each service of that domain as a line
+ * `<pid> <status> <label>`, with pid 0 for a service that does not run.
  */
-export async function launchdServices(host, run = runProcess) {
-  const result = await run("/bin/launchctl", ["print", `pid/${host}`]);
-  if (result.error) throw new Error(`launchctl print pid/${host}: ${result.error.message}`);
-  if (result.status !== 0) throw new Error(`launchctl print pid/${host} exited with ${result.status}: ${String(result.stderr).trim()}`);
-  return String(result.stdout).split("\n")
+export function launchdServicesOf(stdout) {
+  return String(stdout).split("\n")
     .map((line) => line.trim().split(/\s+/))
     .filter((fields) => fields.length === 3 && /^[1-9][0-9]*$/.test(fields[0]))
     .map((fields) => ({ pid: Number(fields[0]), label: fields[2] }));
 }
 
 /**
- * The running WebContent processes of host, which run its pages. While the page does not answer, its JavaScript runs in
- * this process and not in the host, so it is recorded too. They are the WebContent services of the launchd domain of host
- * (launchdServices). It fails with the reason when launchctl fails.
- *
- * run(command, args)  an executor that resolves to a process result ({status, stdout, stderr}). The checks replace it.
+ * The running services of the launchd domain of process host, as { pid, label }, from the process result
+ * ({status, stdout, stderr, error}) of `launchctl print pid/<host>`. It fails with the reason when launchctl failed.
  */
-export async function pageProcesses(host, run = runProcess) {
-  return (await launchdServices(host, run))
-    .filter(({ label }) => label.startsWith("com.apple.WebKit.WebContent."))
-    .map(({ pid }) => pid);
+export function launchdServicesOfResult(host, result) {
+  if (result.error) throw new Error(`launchctl print pid/${host}: ${result.error.message}`);
+  if (result.status !== 0) throw new Error(`launchctl print pid/${host} exited with ${result.status}: ${String(result.stderr).trim()}`);
+  return launchdServicesOf(result.stdout);
+}
+
+/**
+ * The running services of the launchd domain of process host, as { pid, label }; no other interface lists the services of another
+ * process. It fails with the reason when launchctl fails.
+ */
+export async function launchdServices(host) {
+  return launchdServicesOfResult(host, await runProcess("/bin/launchctl", ["print", `pid/${host}`]));
+}
+
+/**
+ * The running WebContent processes among services (launchdServicesOf), which run the pages of a host. While the page does not
+ * answer, its JavaScript runs in this process and not in the host, so it is recorded too.
+ */
+export function webContentProcesses(services) {
+  return services.filter(({ label }) => label.startsWith("com.apple.WebKit.WebContent.")).map(({ pid }) => pid);
+}
+
+/** The running WebContent processes of host (webContentProcesses of its launchd domain). It fails with the reason when launchctl fails. */
+export async function pageProcesses(host) {
+  return webContentProcesses(await launchdServices(host));
 }
 
 /**
@@ -240,49 +252,65 @@ export function probedLocks(paths, stdout) {
 }
 
 // The stdout of a command of the flock reading, or its failure with the command and its reason.
-async function commandOutput(run, command, args) {
-  const result = await run(command, args);
+async function commandOutput(command, args) {
+  const result = await runProcess(command, args);
   const named = `${command} ${args.join(" ")}`;
   if (result.error) throw new Error(`${named}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`${named} exited with ${result.status}: ${String(result.stderr).trim() || "no standard error"}`);
   return String(result.stdout);
 }
 
+/** The paths of the regular files that process pid has open on a numbered descriptor, from the output of `lsof -F pcftn -p <pid>`. */
+export function openRegularFiles(pid, lsofOutput) {
+  const open = lsofFiles(lsofOutput).filter((entry) => entry.pid === pid && /^\d+$/.test(entry.fd) && entry.type === "REG");
+  return [...new Set(open.map((entry) => entry.name))];
+}
+
 /**
- * The file that process pid waits for in flock(2) and the process that holds its lock, read when the sample of pid in
- * file shows a thread in flock, as { file } or { fileError } and, with a file, { holder: { pid, command } } or
- * { holderError }. It is null when no thread waited in flock. macOS names no holder of a lock of flock, so the holder is
- * read from the files open:
- * - the file is the one regular file that pid has open on a numbered descriptor (`lsof -p`) and that holds a lock of
- *   flock (LOCK_PROBE); a file of none or of several is named as fileError.
- * - a lock of flock belongs to an open file description, so its holder has the file open: the holder is the one process
- *   other than pid that has the file open (`lsof -- <file>`), or pid itself when it has the file open more than once.
- *   No such process, or several, is named as holderError. lsof sees the processes of the same user only.
- * It fails with the reason when sample text, lsof or the probe cannot be read.
- *
- * run(command, args)  an executor that resolves to a process result ({status, stdout, stderr}). read(file) resolves to
- * the text of file. The checks replace both.
+ * The file that process pid waits for, from the paths that it has open and the output of the lock probe over them, as
+ * { file } or { fileError }. The file is the one regular file that holds a lock of flock (LOCK_PROBE); a file of none or of
+ * several is named as fileError.
  */
-export async function flockWait(pid, file, { run = runProcess, read = (path) => readFile(path, "utf8") } = {}) {
-  if (!waitsInFlock(await read(file))) return null;
-  const open = lsofFiles(await commandOutput(run, "/usr/sbin/lsof", ["-n", "-P", "-F", "pcftn", "-p", String(pid)]))
-    .filter((entry) => entry.pid === pid && /^\d+$/.test(entry.fd) && entry.type === "REG");
-  const paths = [...new Set(open.map((entry) => entry.name))];
+export function flockedFile(pid, paths, probeOutput) {
   if (paths.length === 0) return { fileError: `process ${pid} has no regular file open` };
-  const locks = probedLocks(paths, await commandOutput(run, "/usr/bin/perl", ["-e", LOCK_PROBE, "--", ...paths]));
+  const locks = probedLocks(paths, probeOutput);
   const unread = locks.filter(({ lock }) => lock.error !== undefined);
   if (unread.length > 0) return { fileError: `the lock of ${unread.map(({ path, lock }) => `${path} not read: ${lock.error}`).join(", ")}` };
   const flocked = locks.filter(({ lock }) => lock.pid === -1).map(({ path }) => path);
   if (flocked.length === 0) return { fileError: `no file that process ${pid} has open holds a lock of flock` };
   if (flocked.length > 1) return { fileError: `${flocked.length} files that process ${pid} has open hold a lock of flock: ${flocked.join(", ")}` };
-  const [path] = flocked;
-  const openers = lsofFiles(await commandOutput(run, "/usr/sbin/lsof", ["-n", "-P", "-F", "pcftn", "--", path]));
+  return { file: flocked[0] };
+}
+
+/**
+ * The holder of the lock of flock on path, from the output of `lsof -F pcftn -- <path>`, as { file, holder: { pid, command } } or
+ * { file, holderError }. A lock of flock belongs to an open file description, so its holder has the file open: the holder is the
+ * one process other than pid that has the file open, or pid itself when it has the file open more than once. No such process, or
+ * several, is named as holderError. lsof sees the processes of the same user only.
+ */
+export function flockHolder(pid, path, lsofOutput) {
+  const openers = lsofFiles(lsofOutput);
   const own = openers.filter((entry) => entry.pid === pid).length;
   const candidates = [...new Map(openers.filter((entry) => entry.pid !== pid || own > 1)
     .map((entry) => [entry.pid, { pid: entry.pid, command: entry.command }])).values()];
   if (candidates.length === 1) return { file: path, holder: candidates[0] };
   if (candidates.length === 0) return { file: path, holderError: `no other process of this user has ${path} open` };
   return { file: path, holderError: `one of the processes that have the file open holds it: ${candidates.map((c) => `${c.pid} ${c.command}`).join(", ")}` };
+}
+
+/**
+ * The file that process pid waits for in flock(2) and the process that holds its lock, read when the sample of pid in
+ * file shows a thread in flock, as { file } or { fileError } and, with a file, { holder: { pid, command } } or
+ * { holderError }. It is null when no thread waited in flock. macOS names no holder of a lock of flock, so the holder is
+ * read from the files open with the real lsof and the lock probe (openRegularFiles, flockedFile, flockHolder). It fails with
+ * the reason when the sample text, lsof or the probe cannot be read.
+ */
+export async function flockWait(pid, file) {
+  if (!waitsInFlock(await readFile(file, "utf8"))) return null;
+  const paths = openRegularFiles(pid, await commandOutput("/usr/sbin/lsof", ["-n", "-P", "-F", "pcftn", "-p", String(pid)]));
+  const found = flockedFile(pid, paths, paths.length === 0 ? "" : await commandOutput("/usr/bin/perl", ["-e", LOCK_PROBE, "--", ...paths]));
+  if (found.fileError !== undefined) return found;
+  return flockHolder(pid, found.file, await commandOutput("/usr/sbin/lsof", ["-n", "-P", "-F", "pcftn", "--", found.file]));
 }
 
 /** The fields of the stall record of a page process for the answer of flockWait, or "" when it waited in no flock. */
@@ -294,22 +322,29 @@ export function flockFields(wait) {
 }
 
 /**
+ * The record of a page process whose sample is in file: the file and, when the process waits in flock, the file and the holder of
+ * its lock; the failed reading is named instead (flockWait).
+ */
+export async function pageRecord(pid, file) {
+  try {
+    return `${file}${flockFields(await flockWait(pid, file))}`;
+  } catch (error) {
+    return `${file}; flock.error=${error.message}`;
+  }
+}
+
+/**
  * Records the threads of the host host that did not answer and of its page processes pages in directory, and returns
  * for each process that file or the reason why it could not be recorded. The page may be read again and a WebContent
  * process may have ended, so when one process cannot be recorded the others are still recorded. It fails with the
  * reason when the host cannot be recorded. The file names share the host pid and time.
  */
-export async function sampleStall({ host, pages, directory, time = Date.now(), sample = sampleProcess, flock = flockWait }) {
+export async function sampleStall({ host, pages, directory, time = Date.now() }) {
   const base = join(directory, `stall-${host}-${time}`);
   const results = await Promise.allSettled([host, ...pages].map(async (pid, index) => {
-    if (index === 0) return sample(pid, `${base}.txt`);
-    const file = await sample(pid, `${base}-page-${pid}.txt`);
-    // A page process that waits in flock names the file and the holder of its lock; a failed reading is named instead.
-    try {
-      return `${file}${flockFields(await flock(pid, file))}`;
-    } catch (error) {
-      return `${file}; flock.error=${error.message}`;
-    }
+    if (index === 0) return sampleProcess(pid, `${base}.txt`);
+    // A page process that waits in flock names the file and the holder of its lock.
+    return pageRecord(pid, await sampleProcess(pid, `${base}-page-${pid}.txt`));
   }));
   if (results[0].status === "rejected") {
     const errors = results.filter((result) => result.status === "rejected").map((result) => result.reason);

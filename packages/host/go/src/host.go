@@ -104,7 +104,7 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 		return nil, err
 	}
 	session.frontend = frontend
-	if err := readBackgroundScript(frontend); err != nil {
+	if err := readBackgroundScript(frontend, framework.MainPage()); err != nil {
 		return nil, err
 	}
 	// Each view configuration runs the view channel script of the bundled frontend before its page (docs/spec/native-surfaces.md#view-surfaces).
@@ -279,9 +279,10 @@ func (s *Session) Shutdown() {
 }
 
 // readBackgroundScript reads the background script of the modal web views from the staged frontend. An application without a main
-// page has neither, and its staging holds no such file (docs/spec/plugins.md#environmentjson).
-func readBackgroundScript(frontend fs.FS) error {
-	if !framework.MainPage() {
+// page has neither, and its staging holds no such file (docs/spec/plugins.md#environmentjson). mainPage tells whether the windows of
+// the framework show a main page.
+func readBackgroundScript(frontend fs.FS, mainPage bool) error {
+	if !mainPage {
 		return nil
 	}
 	background, err := fs.ReadFile(frontend, "background.js")

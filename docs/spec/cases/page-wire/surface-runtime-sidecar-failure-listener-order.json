@@ -1,0 +1,19 @@
+{
+  "name": "surface-runtime-sidecar-failure-listener-order",
+  "description": "The first sidecar send of a window registers the listener of sidecar-failure; the host settles that registration after the test releases it, and only then receives the sidecarSend call.",
+  "replay": false,
+  "reason": "The registration of a listener belongs to a page, which the Go producer does not have (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    { "listen": { "event": "page-reload" } },
+    { "listen": { "event": "surface-pressed" } },
+    { "listen": { "event": "menu-command" } },
+    { "listen": { "event": "memory-pressure" } },
+    { "listen": { "event": "document-state" } },
+    { "listen": { "event": "surface-input" } },
+    { "listen": { "event": "overlay-pick" } },
+    { "listen": { "event": "sidecar-failure", "held": true } },
+    { "call": { "name": "sidecarSend", "payload": { "sidecar": "@fixture/ordered-failure", "surface": "first-tab", "body": { "operation": "open" }, "cids": [] } } },
+    { "reply": { "result": null } }
+  ]
+}

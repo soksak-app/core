@@ -9,96 +9,58 @@ import (
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
-// settledFrontend is the window of a settled wait test: its settled presentation is a function that stands for the block.
-type settledFrontend struct {
+// realPresentedFrontend is the window of a settled wait test whose settled presentation is the main presentation of its native window,
+// which the platform makes as the framework does.
+type realPresentedFrontend struct {
 	frontendRecord
-	window    platform.Window
-	present   func()
-	presented error
+	window platform.Window
 }
 
-func (f *settledFrontend) NativeWindow() platform.Window { return f.window }
-
-func (f *settledFrontend) SettledPresentation() (unsafe.Pointer, error) {
-	if f.presented != nil {
-		return nil, f.presented
-	}
-	return unsafe.Pointer(&f.present), nil
+func (f *realPresentedFrontend) NativeWindow() platform.Window { return f.window }
+func (f *realPresentedFrontend) SettledPresentation() (unsafe.Pointer, error) {
+	return system.MainPresentation(f.window)
 }
 
-// settledPlatform is the platform of a settled wait test: its settled wait runs the block that it takes on the window, and
-// reports the time of the screen.
-type settledPlatform struct {
-	platform.Platform
-	window    platform.Window
-	displayed float64
-	failure   error
-	waits     int
-}
-
-func (p *settledPlatform) AfterSettled(window platform.Window, present unsafe.Pointer, done func(displayed float64, err error)) error {
-	p.waits++
-	if window != p.window {
-		done(0, errors.New("the settled wait took another window"))
-		return nil
-	}
-	(*(*func())(present))()
-	done(p.displayed, p.failure)
-	return nil
-}
-
-func settledSurfaces(t *testing.T, window *settledFrontend, fake *settledPlatform) *Surfaces {
+// realSettledSurfaces returns the surfaces of a window of the real platform with the window, and the framework that runs its steps on
+// the main thread.
+func realSettledSurfaces(t *testing.T, withMainPage bool) *Surfaces {
 	t.Helper()
-	saved, savedFramework := system, framework
-	system, framework = fake, stepFramework{}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
-	return &Surfaces{window: window, images: NewImages()}
+	useCurrentPlatformForViews(t)
+	saved := framework
+	framework = mainThreadFramework{}
+	t.Cleanup(func() { framework = saved })
+	var native platform.Window
+	if withMainPage {
+		native = support.WindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	} else {
+		native = support.Window(t, runOnMainThread, 400, 300)
+	}
+	return &Surfaces{window: &realPresentedFrontend{window: native}, images: NewImages()}
 }
 
-// The settled wait brings the content to the screen through the settled presentation of the Frontend.
+// The settled wait brings the content to the screen through the settled presentation of the Frontend: the main presentation of the window
+// of the real platform settles, and the wait answers the time of the screen.
 // contract: exposure.settled-wait.presents-through-the-frontend
 func TestSettledWaitBringsTheContentThroughTheFrontend(t *testing.T) {
-	native := platform.Window(1)
-	var brought int
-	window := &settledFrontend{window: native, present: func() { brought++ }}
-	fake := &settledPlatform{window: native, displayed: 12.5}
-	displayed, err := settledSurfaces(t, window, fake).presented(context.Background())
+	displayed, err := realSettledSurfaces(t, true).presented(context.Background())
 	if err != nil {
 		t.Fatalf("the settled wait failed: %v", err)
 	}
-	if displayed != 12.5 {
+	if displayed <= 0 {
 		t.Fatalf("the settled wait reported %v, want the time of the screen", displayed)
 	}
-	if brought == 0 || brought != fake.waits {
-		t.Fatalf("the block ran %d times in %d settled waits", brought, fake.waits)
-	}
 }
 
-// A settled presentation that the Frontend cannot make ends the wait with its error, before the settled wait of the platform.
+// A settled presentation that the Frontend cannot make ends the wait with its error, before the settled wait of the platform: a window
+// without a main web view has no main presentation.
 // contract: exposure.settled-wait.presents-through-the-frontend
 func TestSettledWaitEndsWithTheFailureOfTheFrontend(t *testing.T) {
-	refused := errors.New("the main web view is gone")
-	fake := &settledPlatform{}
-	_, err := settledSurfaces(t, &settledFrontend{presented: refused}, fake).presented(context.Background())
-	if !errors.Is(err, refused) {
+	_, err := realSettledSurfaces(t, false).presented(context.Background())
+	if err == nil || err.Error() != "native presentation is unavailable" {
 		t.Fatalf("the settled wait ended with %v, want the error of the Frontend", err)
-	}
-	if fake.waits != 0 {
-		t.Fatalf("the platform waited %d times without a presentation", fake.waits)
-	}
-}
-
-// The failure of the block ends the settled wait.
-// contract: exposure.settled-wait.presents-through-the-frontend
-func TestSettledWaitEndsWithTheFailureOfThePresentation(t *testing.T) {
-	native := platform.Window(1)
-	failed := errors.New("the document did not finish")
-	window := &settledFrontend{window: native, present: func() {}}
-	_, err := settledSurfaces(t, window, &settledPlatform{window: native, failure: failed}).presented(context.Background())
-	if !errors.Is(err, failed) {
-		t.Fatalf("the settled wait ended with %v, want the failure of the block", err)
 	}
 }
 

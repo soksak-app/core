@@ -8,6 +8,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -47,47 +48,23 @@ func TestACommandThatAnswersLaterRepliesThroughTheRelay(t *testing.T) {
 	equal(t, listed, true)
 }
 
-type fakeSurfaces struct {
-	mounted  map[string]bool
-	restored []string
-	// attached lists the tabs with attached regions; each read of their sessions waits in held while hold is set.
-	attached []string
-	reads    int
-	hold     bool
-	held     []func(map[string]string, error)
-}
-
-func (f *fakeSurfaces) Mounted(tab string) bool { return f.mounted[tab] }
-func (f *fakeSurfaces) DetachHeld(string) bool  { return false }
-func (f *fakeSurfaces) Keeps(string) []string   { return nil }
-func (f *fakeSurfaces) Regions(_ string, answer func([]string, error)) {
-	answer(nil, nil)
-}
-func (f *fakeSurfaces) Interaction(_ string, answer func(map[string]string, error)) {
-	f.reads++
-	if f.hold {
-		f.held = append(f.held, answer)
-		return
-	}
-	answer(nil, nil)
-}
-func (f *fakeSurfaces) AttachedTabs() []string     { return f.attached }
-func (f *fakeSurfaces) Restore(tab string)         { f.restored = append(f.restored, tab) }
-func (f *fakeSurfaces) ReportTitle(string, string) {}
-func (f *fakeSurfaces) ReportState(string, string) {}
-
 // tabShell is a shell with its tab ports, over a host that also stores the tab state and answers the sidecar calls.
 type tabShell struct {
 	*shellFixture
-	surfaces *fakeSurfaces
 	timers   *clock
 	commits  int
 	sidecar  chan string
 	events   *stateEvents
 	failed   []string
 	keptPuts []string
-	// sessionPuts holds the tab of each write of the stored sessions.
-	sessionPuts []string
+	// sessionPuts holds the tab of each write of the stored sessions, and sessionReads the tab of each read of them.
+	sessionPuts  []string
+	sessionReads []string
+	// reads counts the reads of the interaction state of a document region. While readGate is set, each read waits at it after it
+	// counted itself, and readEntered receives the surface of each read that began.
+	reads       atomic.Int32
+	readGate    *gate
+	readEntered chan string
 }
 
 func newTabShell(t *testing.T, stored *storedHost) *tabShell {
@@ -101,8 +78,8 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := &tabShell{shellFixture: &shellFixture{t: t, host: stored, pending: make(steps, 256)}, surfaces: &fakeSurfaces{mounted: map[string]bool{}},
-		timers: &clock{}, sidecar: make(chan string, 16), events: &stateEvents{}}
+	f := &tabShell{shellFixture: &shellFixture{t: t, host: stored, pending: make(steps, 256)},
+		readEntered: make(chan string, 16), timers: &clock{}, sidecar: make(chan string, 16), events: &stateEvents{}}
 	table := stored.table()
 	base := table["workspace"]
 	table["workspace"] = func(ctx context.Context, argument json.RawMessage) (any, error) {
@@ -117,6 +94,7 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		case "tabState":
 			return stored.tabState, refused
 		case "tabSession":
+			f.sessionReads = append(f.sessionReads, request.Tab)
 			return nil, nil
 		case "tabSessions":
 			return append([]string{}, stored.sessionTabs...), nil
@@ -134,6 +112,19 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 			f.sidecar <- name + " " + string(argument)
 			return nil, nil
 		}
+	}
+	table["documentAttach"] = func(context.Context, json.RawMessage) (any, error) { return nil, nil }
+	table["documentInteractionState"] = func(_ context.Context, argument json.RawMessage) (any, error) {
+		var request struct{ Surface string }
+		if err := json.Unmarshal(argument, &request); err != nil {
+			return nil, err
+		}
+		f.reads.Add(1)
+		if f.readGate != nil {
+			f.readEntered <- request.Surface
+			f.readGate.wait()
+		}
+		return "QUFBQQ==", nil
 	}
 	table["sidecarListen"] = record("listen")
 	table["sidecarSend"] = record("send")
@@ -164,14 +155,14 @@ func newTabShellWithState(t *testing.T, stored *storedHost, refused error) *tabS
 		Post:        f.pending.post,
 		Report:      func(line string) { f.lines = append(f.lines, line) },
 		Reload:      func() { stored.reloads++ },
-		Tabs: func(*workbench.Shell) workbench.TabPorts {
+		Tabs: func(shell *workbench.Shell) workbench.TabPorts {
 			return workbench.TabPorts{Plugins: func() []workbench.ShellPlugin {
 				return []workbench.ShellPlugin{
 					{ID: "notes", Opens: []string{"md"}, Unload: true},
 					{ID: "session", Background: &workbench.BackgroundDeclaration{Sidecar: backgroundSidecar, Operation: "open"}},
 				}
 			},
-				Surfaces:       f.surfaces,
+				Surfaces:       workbench.SurfacesOf(shell),
 				Enabled:        func() bool { return true },
 				Delay:          func() int { return 120 },
 				PluginSettings: func(string) map[string]any { return nil },
@@ -204,6 +195,17 @@ func storedProject(tabs ...map[string]any) map[string]any {
 		"id": "main", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "data": map[string]any{"tabs": tabs, "activeId": tabs[0]["id"]}}}}
 	return map[string]any{"id": "prj-a", "named": 1, "title": "a", "root": "/a", "identity": "identity of /a", "color": "#ffb36b", "activeSpaceId": "spc-aaaaaa",
 		"spaces": []map[string]any{{"id": "spc-aaaaaa", "title": "main", "layout": map[string]any{"state": state}}}}
+}
+
+// attach attaches the document region "page" of the tab through the view call of its surface, as the page of the plugin does.
+func (f *tabShell) attach(t *testing.T, tab string) {
+	t.Helper()
+	f.shell.Event("view-call", []any{map[string]any{"surface": tab, "plugin": "notes", "generation": 1, "id": 5, "command": "document.attach",
+		"params": map[string]any{"name": "page"}}})
+	f.settle()
+	if !slices.Equal(workbench.SurfacesOf(f.shell).AttachedTabs(), []string{tab}) {
+		t.Fatalf("the document region of %s is not attached", tab)
+	}
 }
 
 func (f *tabShell) open(t *testing.T) {
@@ -316,7 +318,7 @@ func TestTheMemorySaverReadsTheTabsOfThePlaneAndAShowRestoresAnUnloadedTab(t *te
 	f.settle()
 	// The restore ends when the placement holds the surface of the tab.
 	equal(t, memoryTabs(t, f)["tab-bbbbbb"]["state"], "loaded")
-	equal(t, f.surfaces.restored, []string{"tab-bbbbbb"})
+	equal(t, f.sessionReads, []string{"tab-bbbbbb"})
 	// The first tab is hidden now, and the delay unloads it.
 	f.timers.tick(120 * minute)
 	f.settle()
@@ -455,29 +457,32 @@ func TestATimerOfTheTabPartsDoesNotRunAfterTheWindowClosed(t *testing.T) {
 func TestAWindowThatClosedReadsNoSession(t *testing.T) {
 	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}})
 	f.open(t)
-	f.surfaces.attached = []string{"tab-aaaaaa"}
-	reads := f.surfaces.reads
+	f.attach(t, "tab-aaaaaa")
+	reads := f.reads.Load()
 	f.shell.Closed()
 	f.settle()
-	equal(t, f.surfaces.reads, reads)
+	equal(t, f.reads.Load(), reads)
 }
 
 // A close request writes the sessions of the tabs before it closes the window: the read of a session is a host call of the window.
 func TestACloseRequestClosesTheWindowAfterTheSessionsAreRead(t *testing.T) {
 	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(tab("tab-aaaaaa", "notes"))}})
 	f.open(t)
-	f.surfaces.attached = []string{"tab-aaaaaa"}
-	f.surfaces.hold = true
+	f.attach(t, "tab-aaaaaa")
+	f.readGate = newGate()
+	reads := f.reads.Load()
 	f.shell.Event("project-close-request", nil)
 	f.settle()
-	if len(f.surfaces.held) != 1 {
-		t.Fatalf("the close read %d sessions, want 1", len(f.surfaces.held))
+	if surface := <-f.readEntered; surface != "tab-aaaaaa" {
+		t.Fatalf("the close read the session of %s", surface)
+	}
+	if got := f.reads.Load() - reads; got != 1 {
+		t.Fatalf("the close read %d sessions, want 1", got)
 	}
 	if f.host.called("windowClose") {
 		t.Fatal("the window closed before the session of its tab was read")
 	}
-	f.surfaces.hold = false
-	f.surfaces.held[0](map[string]string{"page": "AAAA"}, nil)
+	f.readGate.open()
 	f.settle()
 	if !f.host.called("windowClose") {
 		t.Fatalf("the window did not close after the read: %v", f.host.calls)

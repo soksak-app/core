@@ -1,0 +1,15 @@
+{
+  "name": "window-check-relaunch-ready",
+  "description": "The new process of a relaunch reports its windows: the first value of host.windows has a page that is not ready, and the next value has every page ready.",
+  "replay": false,
+  "reason": "The case follows a relaunch of the host, which the replay does not start.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "host.windows"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.get", "params": {"window": "main", "name": "host.windows"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": [{"window": "main", "ready": false}]}},
+    {"notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "host.windows", "value": [{"window": "main", "ready": true}]}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": {"window": "main", "name": "host.windows"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": null}}
+  ]
+}

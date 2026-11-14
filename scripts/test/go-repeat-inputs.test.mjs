@@ -113,12 +113,12 @@ test('explicit native artifact presence rejects invalid values without pkg-confi
   assert.ok(input.calls.every((call) => call.command !== 'pkg-config'));
 });
 
-test('selected cgo graph hashes both pkg-config static artifacts and preserves caller flags', (t) => {
+test('selected cgo graph hashes the path and the content of both pkg-config static artifacts and preserves caller flags', (t) => {
   const input = fixture(t, [{ ImportPath: 'fixture/cgo', CgoPkgConfig: ['soksak-darwin', 'soksak-host-test'] }], '1');
   const result = resolve(input);
   assert.equal(result.cgoEnabled, true);
   for (const [key, contents] of [['SOKSAK_DARWIN_LIBRARY', 'productionStatic'], ['SOKSAK_HOST_TEST_LIBRARY', 'testStatic']]) {
-    const digest = createHash('sha256').update(contents).digest('hex').slice(0, 16);
+    const digest = createHash('sha256').update(input.artifacts[contents]).update('\0').update(contents).digest('hex').slice(0, 16);
     assert.ok(result.env.CGO_CFLAGS.includes(`-D${key}=${digest}`), result.env.CGO_CFLAGS);
   }
   assert.ok(result.env.CGO_CFLAGS.startsWith('-DDECLARED=1 '));

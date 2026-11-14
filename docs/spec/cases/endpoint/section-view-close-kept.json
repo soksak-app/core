@@ -1,0 +1,17 @@
+{
+  "name": "section-view-close-kept",
+  "description": "A surface that stays registered after the card closed never satisfies the wait on core.surfaces, which the close of the connection ends.",
+  "replay": false,
+  "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.sidebars"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":[{"sidebar":"card-4:left","placement":"card","card":"card-4","sections":[{"id":"probeplain.section","surfaceId":"spc-1/card-4:left/probeplain.section"}]}]}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.card.close","params":{"card":"card-4"}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"closed":true}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.watch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":[{"surface":"spc-1/card-4:left/probeplain.section"}]}},
+    {"close":"host"}
+  ]
+}

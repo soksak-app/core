@@ -1,0 +1,8 @@
+{
+  "name": "compositor-deferred-preparation",
+  "description": "The page prepares and draws a view that its placement deferred; the placement answers are values of the compositor, and no host call is sent.",
+  "replay": false,
+  "reason": "The page sends no call; the case selects the native host that the page draws native surfaces for, and the Go producer runs no page (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+  ]
+}

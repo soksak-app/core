@@ -24,14 +24,15 @@ func TestStepRecordsReachTheClassFrame(t *testing.T) {
 	}
 }
 
-// fakeStepFramework starts and stops recordings and hands out what they report.
-type fakeStepFramework struct {
+// stepRecorder keeps each start and each stop of a step recording that the judged code makes and the callbacks that it passes. The
+// test calls the callbacks as the main thread of a framework does, so the recorder holds no answer of its own.
+type stepRecorder struct {
 	starts, stops int
 	report        func(StepRecord)
 	lost          func(uint64)
 }
 
-func (f *fakeStepFramework) RecordSteps(report func(StepRecord), lost func(uint64)) func() {
+func (f *stepRecorder) RecordSteps(report func(StepRecord), lost func(uint64)) func() {
 	f.starts++
 	f.report, f.lost = report, lost
 	return func() { f.stops++ }
@@ -39,36 +40,36 @@ func (f *fakeStepFramework) RecordSteps(report func(StepRecord), lost func(uint6
 
 // contract: window.frames.step-recording-follows-the-policy
 func TestStepRecordingFollowsTheStoredLevelOfTheClassFrame(t *testing.T) {
-	fake := &fakeStepFramework{}
+	recorder := &stepRecorder{}
 	stored := false
 	losses := uint64(0)
-	recording := newStepRecording(fake.RecordSteps, func() bool { return stored }, func(n uint64) { losses += n })
+	recording := newStepRecording(recorder.RecordSteps, func() bool { return stored }, func(n uint64) { losses += n })
 	recording.sync()
-	if fake.starts != 0 {
-		t.Fatalf("a policy that stores no debug frame records started %d recordings", fake.starts)
+	if recorder.starts != 0 {
+		t.Fatalf("a policy that stores no debug frame records started %d recordings", recorder.starts)
 	}
 	stored = true
 	recording.sync()
 	recording.sync()
-	if fake.starts != 1 || fake.stops != 0 {
-		t.Fatalf("a policy that stores them: %d starts and %d stops, want 1 and 0", fake.starts, fake.stops)
+	if recorder.starts != 1 || recorder.stops != 0 {
+		t.Fatalf("a policy that stores them: %d starts and %d stops, want 1 and 0", recorder.starts, recorder.stops)
 	}
-	fake.lost(4)
+	recorder.lost(4)
 	if losses != 4 {
 		t.Fatalf("the losses reached %d, want 4", losses)
 	}
 	stored = false
 	recording.sync()
 	recording.sync()
-	if fake.stops != 1 {
-		t.Fatalf("a policy that stops storing them: %d stops, want 1", fake.stops)
+	if recorder.stops != 1 {
+		t.Fatalf("a policy that stops storing them: %d stops, want 1", recorder.stops)
 	}
 	stored = true
 	recording.sync()
 	recording.stop()
 	recording.stop()
-	if fake.starts != 2 || fake.stops != 2 {
-		t.Fatalf("after the end: %d starts and %d stops, want 2 and 2", fake.starts, fake.stops)
+	if recorder.starts != 2 || recorder.stops != 2 {
+		t.Fatalf("after the end: %d starts and %d stops, want 2 and 2", recorder.starts, recorder.stops)
 	}
 }
 
@@ -81,18 +82,18 @@ func TestStepRecordingWithoutFrameworkStepsRecordsNothing(t *testing.T) {
 
 // contract: window.frames.step-listener-hears-without-the-policy
 func TestAListenerHearsEachStepWithoutThePolicyAndEndsWithADrain(t *testing.T) {
-	fake := &fakeStepFramework{}
+	recorder := &stepRecorder{}
 	stored := false
-	recording := newStepRecording(fake.RecordSteps, func() bool { return stored }, func(uint64) {})
+	recording := newStepRecording(recorder.RecordSteps, func() bool { return stored }, func(uint64) {})
 	heard := []string{}
 	end := recording.listen(func(step StepRecord) { heard = append(heard, step.Callback) })
-	if fake.starts != 1 {
-		t.Fatalf("a listener started %d recordings, want 1", fake.starts)
+	if recorder.starts != 1 {
+		t.Fatalf("a listener started %d recordings, want 1", recorder.starts)
 	}
-	fake.report(StepRecord{Callback: "first"})
+	recorder.report(StepRecord{Callback: "first"})
 	end()
-	if fake.stops != 1 || fake.starts != 1 {
-		t.Fatalf("the end of the listener: %d starts and %d stops, want 1 and 1", fake.starts, fake.stops)
+	if recorder.stops != 1 || recorder.starts != 1 {
+		t.Fatalf("the end of the listener: %d starts and %d stops, want 1 and 1", recorder.starts, recorder.stops)
 	}
 	if !slices.Equal(heard, []string{"first"}) {
 		t.Fatalf("the listener heard %v", heard)
@@ -101,14 +102,14 @@ func TestAListenerHearsEachStepWithoutThePolicyAndEndsWithADrain(t *testing.T) {
 	stored = true
 	recording.sync()
 	end = recording.listen(func(step StepRecord) { heard = append(heard, step.Callback) })
-	if fake.starts != 3 || fake.stops != 2 {
-		t.Fatalf("a listener under the policy: %d starts and %d stops, want 3 and 2", fake.starts, fake.stops)
+	if recorder.starts != 3 || recorder.stops != 2 {
+		t.Fatalf("a listener under the policy: %d starts and %d stops, want 3 and 2", recorder.starts, recorder.stops)
 	}
 	end()
-	if fake.starts != 4 || fake.stops != 3 {
-		t.Fatalf("the end under the policy: %d starts and %d stops, want 4 and 3", fake.starts, fake.stops)
+	if recorder.starts != 4 || recorder.stops != 3 {
+		t.Fatalf("the end under the policy: %d starts and %d stops, want 4 and 3", recorder.starts, recorder.stops)
 	}
-	fake.report(StepRecord{Callback: "after"})
+	recorder.report(StepRecord{Callback: "after"})
 	if !slices.Equal(heard, []string{"first"}) {
 		t.Fatalf("after its end the listener heard %v", heard)
 	}

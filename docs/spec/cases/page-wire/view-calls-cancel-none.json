@@ -1,0 +1,11 @@
+{
+  "name": "view-calls-cancel-none",
+  "description": "A view cancels a call that is not pending.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":9,"cancel":true}}}
+  ]
+}

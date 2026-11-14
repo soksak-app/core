@@ -229,7 +229,6 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
     let mut clock_values = [Some(120), Some(140)].into_iter();
     let mut observed = Vec::new();
     let mut phases = Vec::new();
-    let fake_ui_dispatch = |work: Box<dyn FnOnce() + '_>| work();
     let dispatch = surface_dispatch_context_with(
         || Some((100, SurfaceDispatchMode::Performance)),
         || "main".to_owned(),
@@ -240,7 +239,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
     )
     .expect("enabled trace captures its dispatch context");
     let dispatch_for_run = dispatch.clone();
-    fake_ui_dispatch(Box::new(|| {
+    {
         let result = surface_dispatch_result_with(
             Some(dispatch_for_run.clone()),
             || clock_values.next().flatten(),
@@ -254,7 +253,7 @@ fn surface_dispatch_wrapper_records_queue_entry_and_return_boundaries() {
             },
         );
         assert_eq!(result, 7);
-    }));
+    }
     assert_eq!(phases, ["work"]);
     assert_eq!(
         observed,
@@ -480,11 +479,11 @@ fn root_view_join_is_registered_before_dom_presentation_wait() {
             || {
                 assert!(
                     registered_join.lock().unwrap().is_some(),
-                    "DOM presentation was registered before the fake platform join"
+                    "DOM presentation was registered before the join of the root view stage"
                 );
                 assert!(
                     !view_presented.load(Ordering::SeqCst),
-                    "the fake platform presented the root view before the DOM wait"
+                    "the root view stage presented the root view before the DOM wait"
                 );
                 phase_tx.send("register-dom").unwrap();
                 Ok(())
@@ -526,7 +525,7 @@ fn root_view_join_is_registered_before_dom_presentation_wait() {
     worker.join().unwrap();
     assert!(
         !presented.load(Ordering::SeqCst),
-        "the fake platform join was released before the root view presented"
+        "the join of the root view stage was released before the root view presented"
     );
     pending_join
         .lock()

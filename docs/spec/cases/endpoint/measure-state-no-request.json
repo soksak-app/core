@@ -1,0 +1,9 @@
+{
+  "name": "measure-state-no-request",
+  "description": "A refused preparation sends no request.",
+  "replay": false,
+  "reason": "The case holds no step.",
+  "steps": [
+
+  ]
+}

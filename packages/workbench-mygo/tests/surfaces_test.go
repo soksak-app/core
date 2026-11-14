@@ -1007,10 +1007,10 @@ func attachShell(t *testing.T, session string, refuses bool) (*shellFixture, *su
 			return nil, nil
 		},
 	}
-	stored.tabs = func(*workbench.Shell) workbench.TabPorts {
+	stored.tabs = func(shell *workbench.Shell) workbench.TabPorts {
 		return workbench.TabPorts{
 			Plugins:        func() []workbench.ShellPlugin { return nil },
-			Surfaces:       &fakeSurfaces{mounted: map[string]bool{}},
+			Surfaces:       workbench.SurfacesOf(shell),
 			Enabled:        func() bool { return false },
 			Delay:          func() int { return 120 },
 			PluginSettings: func(string) map[string]any { return nil },

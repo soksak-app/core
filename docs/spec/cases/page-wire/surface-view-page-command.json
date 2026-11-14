@@ -1,0 +1,27 @@
+{
+  "name": "surface-view-page-command",
+  "description": "A view registers a command and subscribes to the exposure requests; a command run reaches the view as a command request, and another request reaches the view as an exposure request.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"gated-count-1":{"type":"integer","example":1,"source":"page"},"ts-us-1":{"type":"integer","example":1791000000000001,"source":"page"},"mono-ns-1":{"type":"integer","example":5000000001,"source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-page-command-view","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-page-command-view-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"fixture-page-command-view-surface","plugin":"fixture-page-command-view","generation":1,"id":2,"command":"runtime.command.register","params":{"name":"fixture-page-command-view.run"}}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"fixture-page-command-view-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"fixture-page-command-view-surface","plugin":"fixture-page-command-view","generation":1,"id":3,"command":"runtime.native.on","params":{"name":"exposure-request"}}}},
+    {"call":{"name":"viewReply","payload":{"id":3,"result":null,"page":"$page-identity","generation":1,"surface":"fixture-page-command-view-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"exposure-request","payload":{"surface":"fixture-page-command-view-surface","id":4,"method":"command.run","params":{"name":"fixture-page-command-view.run","params":{}}}}},
+    {"call":{"name":"viewRequest","payload":{"id":1,"command":"fixture-page-command-view.run","params":{},"generation":1,"surface":"fixture-page-command-view-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"exposure-request","payload":{"surface":"fixture-page-command-view-surface","id":5,"method":"status.get","params":{"name":"core.surface.document"}}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"exposure-request","data":{"surface":"fixture-page-command-view-surface","id":5,"method":"status.get","params":{"name":"core.surface.document"}},"surface":"fixture-page-command-view-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"exposureReply","payload":{"id":4,"error":{"code":-32000,"message":"command fixture-page-command-view.run ended: surface-closed"},"surface":"fixture-page-command-view-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":"$gated-count-1"}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

@@ -63,10 +63,10 @@ const sha256 = (file) => createHash("sha256").update(readFileSync(file)).digest(
 /** The core version of the run: the version of this installed @soksak/window-check. */
 export const coreVersion = () => readJson(new URL("./package.json", import.meta.url)).version;
 
-/** The published application zip of `host` for `version` on the release platform of `platform` and `arch`, as core names its release files. */
-export function applicationZip(version, host, { platform = runPlatform(), arch = process.arch } = {}) {
+/** The published application zip of `host` for `version` on the release platform of `platform` and `arch`, as core names its release files, under the release address `releases`. */
+export function applicationZip(version, host, { platform = runPlatform(), arch = process.arch, releases = RELEASES } = {}) {
   const name = `soksak-${version}-${releasePlatform({ platform, arch })}-${host}.zip`;
-  return { name, url: `${RELEASES}/v${version}/${name}` };
+  return { name, url: `${releases}/v${version}/${name}` };
 }
 
 /** The file name of a sidecar release: `scope-name` for `@scope/name` (docs/spec/installation.md#sidecar-release). */
@@ -282,16 +282,16 @@ async function endGroup(child, signal, exited) {
 
 
 /** The response of `url`, bounded by `timeout` and `signal`; another status than 2xx is an error that names the address. */
-async function fetchBounded(url, { timeout, signal, fetchImpl = fetch }) {
+async function fetchBounded(url, { timeout, signal }) {
   const bound = AbortSignal.any([AbortSignal.timeout(timeout), ...(signal ? [signal] : [])]);
-  const response = await fetchImpl(url, { signal: bound });
+  const response = await fetch(url, { signal: bound });
   if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
   return { response, bound };
 }
 
 /** Downloads `url` into `file` through a temporary file beside it, so an interrupted download leaves no file. */
-export async function download(url, file, { timeout = LIMITS.download, signal, fetchImpl } = {}) {
-  const { response, bound } = await fetchBounded(url, { timeout, signal, fetchImpl });
+export async function download(url, file, { timeout = LIMITS.download, signal } = {}) {
+  const { response, bound } = await fetchBounded(url, { timeout, signal });
   mkdirSync(dirname(file), { recursive: true });
   const partial = `${file}.partial`;
   try {
@@ -304,32 +304,30 @@ export async function download(url, file, { timeout = LIMITS.download, signal, f
 }
 
 /** The JSON document at `url`, bounded by `timeout` and `signal`. */
-export async function fetchJson(url, { timeout = LIMITS.index, signal, fetchImpl } = {}) {
-  const { response } = await fetchBounded(url, { timeout, signal, fetchImpl });
+export async function fetchJson(url, { timeout = LIMITS.index, signal } = {}) {
+  const { response } = await fetchBounded(url, { timeout, signal });
   return response.json();
 }
 
 /**
  * The application of `host` for `version` in the cache folder `cache`: the zip of the release platform is downloaded and extracted
- * once by the platform operations of `platform`. `run(file, args)` runs the extraction program, `extract(zip, folder)` replaces the
- * extraction and `fetchImpl` the download in a test. A platform without an operation of the application rejects before the download.
+ * once by the platform operations of `platform`, from the release address `releases`. A platform without an operation of the application
+ * rejects before the download.
  */
-export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, fetchImpl,
-  write = () => {}, run: runProgram = (file, args) => run(file, args, { signal, timeout: LIMITS.extract }),
-  extract = (zip, folder) => extractApplication(zip, folder, { platform, run: runProgram }) } = {}) {
+export async function cachedBundle(cache, version, host, { platform = runPlatform(), arch = process.arch, signal, releases, write = () => {} } = {}) {
   const folder = join(cache, version, host);
   const bundle = await applicationBundle(folder, { platform });
   if (existsSync(bundle)) return bundle;
-  const { name, url } = applicationZip(version, host, { platform, arch });
+  const { name, url } = applicationZip(version, host, { platform, arch, releases });
   const zip = join(cache, version, name);
   const extracting = `${folder}.partial`;
   const extracted = await applicationBundle(extracting, { platform });
   if (!existsSync(zip)) {
     write(`downloading ${url}`);
-    await download(url, zip, { signal, fetchImpl });
+    await download(url, zip, { signal });
   }
   rmSync(extracting, { recursive: true, force: true });
-  await extract(zip, extracting);
+  await extractApplication(zip, extracting, { platform, run: (file, args) => run(file, args, { signal, timeout: LIMITS.extract }) });
   if (!existsSync(extracted)) throw new Error(`${zip} holds no ${relative(extracting, extracted)}`);
   renameSync(extracting, folder);
   return bundle;
@@ -340,7 +338,7 @@ export async function cachedBundle(cache, version, host, { platform = runPlatfor
  * the release of each fixture plugin, the entry of each sidecar that a plugin names is copied from the public index, and
  * `sok registry build` writes index.json. Resolves with the index path and the plugin ids.
  */
-export async function buildRegistry({ root, folder, sok, pack = DEFAULT_PACK, pnpm = "pnpm", signal, fetchImpl, indexUrl = PUBLIC_INDEX }) {
+export async function buildRegistry({ root, folder, sok, pack = DEFAULT_PACK, pnpm = "pnpm", signal, indexUrl = PUBLIC_INDEX }) {
   const releases = join(folder, "releases");
   mkdirSync(releases, { recursive: true });
   // The start probe is packed from a copy inside the registry folder, so the pack reads no workspace of the installed package.
@@ -364,7 +362,7 @@ export async function buildRegistry({ root, folder, sok, pack = DEFAULT_PACK, pn
     }
   }
   const named = plugins.some(({ manifest }) => Object.keys(manifest.dependencies ?? {}).length > 0);
-  const index = named ? await step("public registry index", () => fetchJson(indexUrl, { signal, fetchImpl })) : { sidecars: [] };
+  const index = named ? await step("public registry index", () => fetchJson(indexUrl, { signal })) : { sidecars: [] };
   const sidecars = sidecarEntries(index, plugins);
   for (const entry of sidecars) writeJson(join(folder, "sidecars", `${sidecarFileName(entry.name)}.json`), entry);
   const sidecarNames = new Set(sidecars.map((entry) => entry.name));
@@ -386,11 +384,11 @@ export async function buildRegistry({ root, folder, sok, pack = DEFAULT_PACK, pn
  * installs nothing: the first run of each application installs the starter pack that its environment.json names from that index
  * (docs/spec/installation.md#first-run). A missing or unreadable index fails the step that names it.
  */
-export async function installRegistry({ root, folder, executables, configDir, index, pack = DEFAULT_PACK, pnpm, signal, fetchImpl }) {
+export async function installRegistry({ root, folder, executables, configDir, index, pack = DEFAULT_PACK, pnpm, signal, indexUrl }) {
   const hosts = [...executables.keys()];
   let registry;
   if (index === undefined) {
-    registry = await buildRegistry({ root, folder, sok: executables.get(hosts[0]).sok, pack, pnpm, signal, fetchImpl });
+    registry = await buildRegistry({ root, folder, sok: executables.get(hosts[0]).sok, pack, pnpm, signal, indexUrl });
   } else {
     const path = resolve(root, index);
     await step(`registry index ${path}`, () => {

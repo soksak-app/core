@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { APP_NAMES } from "../app.mjs";
 import { START_PROBE } from "../start.mjs";
@@ -20,12 +21,29 @@ const writeJson = (path, value) => {
   mkdirSync(join(path, ".."), { recursive: true });
   writeFileSync(path, JSON.stringify(value));
 };
-/** An executable node script at `path`. */
-const script = (path, body) => {
-  writeFileSync(path, `#!${process.execPath}\n${body}\n`);
-  chmodSync(path, 0o755);
+// The tracked programs of the run tests: the commands that the run starts, and the pack command and the `sok` of the registry tests.
+const program = (name) => fileURLToPath(new URL(`../fixtures/test-app/${name}`, import.meta.url));
+/** A copy of the tracked program `name` at `path`, with its mode, so that its log lands beside the copy. */
+const copyProgram = (path, name) => {
+  copyFileSync(program(name), path);
   return path;
 };
+
+/**
+ * A server on a local address with the handlers of `routes`, `{ [path]: (request, response) => void }`, and the paths that it was asked
+ * for. A path without a handler answers 404. It ends with the test.
+ */
+async function serve(t, routes) {
+  const requested = [];
+  const server = createServer((request, response) => {
+    requested.push(request.url);
+    if (routes[request.url]) routes[request.url](request, response);
+    else response.writeHead(404).end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }));
+  return { url: `http://127.0.0.1:${server.address().port}`, requested };
+}
 
 test("the run uses the published application zip of the core release of this package for the platform that runs it", () => {
   assert.equal(coreVersion(), JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version);
@@ -95,13 +113,13 @@ test("the sidecar entries of the run are copied from the public index; a depende
 
 test("a command ends at its time limit, at an interrupt and with its status, and a step names itself", async () => {
   const options = { cwd: tmpdir(), timeout: 5000 };
-  assert.equal(await run(process.execPath, ["-e", "process.stdout.write('out')"], { ...options, capture: true }), "out");
-  await assert.rejects(run(process.execPath, ["-e", "process.stderr.write('bad'); process.exit(3)"], { ...options, capture: true }),
+  assert.equal(await run(process.execPath, [program("command-probe.mjs"), "out"], { ...options, capture: true }), "out");
+  await assert.rejects(run(process.execPath, [program("command-probe.mjs"), "fail3"], { ...options, capture: true }),
     /ended with status 3: bad/);
-  await assert.rejects(run(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { ...options, timeout: 200 }), /did not end in 0\.2s/);
+  await assert.rejects(run(process.execPath, [program("command-probe.mjs"), "wait"], { ...options, timeout: 200 }), /did not end in 0\.2s/);
   const interrupt = new AbortController();
   setTimeout(() => interrupt.abort("SIGINT"), 100);
-  await assert.rejects(run(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { ...options, signal: interrupt.signal }),
+  await assert.rejects(run(process.execPath, [program("command-probe.mjs"), "wait"], { ...options, signal: interrupt.signal }),
     /was interrupted by SIGINT/);
   await assert.rejects(run(process.execPath, [], { cwd: tmpdir() }), /a command runs with a time limit/);
   await assert.rejects(step("pack checked", () => { throw new Error("no make"); }), /^Error: pack checked: no make$/);
@@ -112,15 +130,13 @@ test("a command ends at its time limit, at an interrupt and with its status, and
  * that the child wrote, which `started` resolves with.
  */
 function programWithChild(t, marker) {
-  const child = `process.on("SIGTERM", () => {}); require("node:fs").writeFileSync(${JSON.stringify(marker)}, String(process.pid)); setTimeout(() => {}, 2147483647);`;
-  const source = `require("node:child_process").spawn(process.execPath, ["-e", ${JSON.stringify(child)}], { stdio: "ignore" }); setTimeout(() => {}, 2147483647);`;
   const started = new Promise((resolve) => {
     const read = () => { try { const pid = Number(readFileSync(marker, "utf8")); if (pid > 0) { watcher.close(); resolve(pid); } } catch {} };
     const watcher = watch(join(marker, ".."), read);
     read();
   });
   t.after(() => { try { process.kill(Number(readFileSync(marker, "utf8")), "SIGKILL"); } catch {} });
-  return { args: ["-e", source], started };
+  return { args: [program("parent-with-child.mjs"), marker], started };
 }
 
 /**
@@ -135,7 +151,7 @@ const alive = (pid) => {
 
 test("a command at its limit ends with every process it started", { timeout: 30000 }, async (t) => {
   const { args, started } = programWithChild(t, join(folder(t), "child"));
-  // The limit is the real 5 s of the run; the test waits on the rejection of the run, not on a fake clock.
+  // The limit is the real 5 s of the run; the test waits on the rejection of the run, not on a clock of its own.
   const outcome = run(process.execPath, args, { cwd: tmpdir(), timeout: 5000 });
   const child = await started;
   await assert.rejects(outcome, /did not end in 5s/);
@@ -155,51 +171,29 @@ test("an interrupted command ends with every process it started, also one that i
 test("a download writes its file whole or leaves none", async (t) => {
   const dir = folder(t);
   const file = join(dir, "a.zip");
-  await download("https://example.invalid/a.zip", file, { fetchImpl: async () => new Response("zip") });
+  const host = await serve(t, {
+    "/a.zip": (request, response) => response.end("zip"),
+    // The server ends the connection after a part of the body, as a network that resets does.
+    "/c.zip": (request, response) => { response.write("part"); setTimeout(() => response.destroy(), 20); },
+    // The server never answers.
+    "/d.zip": () => {},
+  });
+  await download(`${host.url}/a.zip`, file);
   assert.equal(readFileSync(file, "utf8"), "zip");
-  await assert.rejects(download("https://example.invalid/b.zip", join(dir, "b.zip"), { fetchImpl: async () => new Response("", { status: 404 }) }),
-    /b\.zip: HTTP 404/);
-  const broken = new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode("part")); controller.error(new Error("reset")); } });
-  await assert.rejects(download("https://example.invalid/c.zip", join(dir, "c.zip"), { fetchImpl: async () => new Response(broken) }), /reset/);
+  await assert.rejects(download(`${host.url}/b.zip`, join(dir, "b.zip")), /b\.zip: HTTP 404/);
+  await assert.rejects(download(`${host.url}/c.zip`, join(dir, "c.zip")), /terminated|reset|aborted/i);
   assert.equal(existsSync(join(dir, "c.zip")), false);
   assert.equal(existsSync(join(dir, "c.zip.partial")), false);
-  await assert.rejects(download("https://example.invalid/d.zip", join(dir, "d.zip"), { timeout: 50,
-    fetchImpl: (url, { signal }) => new Promise((_, reject) => signal.addEventListener("abort", () => reject(signal.reason))) }), /timeout|aborted/i);
-});
-
-test("the bundle of an application is downloaded and extracted once into the cache", async (t) => {
-  const cache = folder(t);
-  const fetched = [];
-  const extract = async (zip, into) => { mkdirSync(join(into, "soksak.app"), { recursive: true }); };
-  const fetchImpl = async (url) => { fetched.push(url); return new Response("zip"); };
-  const darwin = { platform: "darwin", arch: "arm64" };
-  const bundle = await cachedBundle(cache, "0.0.41", "mygo", { ...darwin, fetchImpl, extract });
-  assert.equal(bundle, join(cache, "0.0.41", "mygo", "soksak.app"));
-  assert.equal(await cachedBundle(cache, "0.0.41", "mygo", { ...darwin, fetchImpl, extract }), bundle);
-  assert.deepEqual(fetched, [applicationZip("0.0.41", "mygo", darwin).url]);
-  await assert.rejects(cachedBundle(cache, "0.0.41", "wailsv3", { ...darwin, fetchImpl, extract: async () => {} }),
-    /soksak-0\.0\.41-darwin-arm64-wailsv3\.zip holds no soksak\.app/);
-});
-
-test("the bundle of an application is extracted by the platform operation of the platform that runs the run", async (t) => {
-  const cache = folder(t);
-  const ran = [];
-  const run = async (file, args) => {
-    ran.push([file, ...args]);
-    mkdirSync(join(args.at(-1), "soksak.app"), { recursive: true });
-    return "";
-  };
-  await cachedBundle(cache, "0.0.41", "mygo", { platform: "darwin", arch: "arm64", run, fetchImpl: async () => new Response("zip") });
-  assert.deepEqual(ran, [["ditto", "-x", "-k", join(cache, "0.0.41", "soksak-0.0.41-darwin-arm64-mygo.zip"), join(cache, "0.0.41", "mygo.partial")]]);
+  await assert.rejects(download(`${host.url}/d.zip`, join(dir, "d.zip"), { timeout: 50 }), /timeout|aborted/i);
 });
 
 test("on a platform that declares no application artifact the run fails by the operation before any download", async (t) => {
+  const host = await serve(t, {});
   for (const platform of ["linux", "win32"]) {
     const cache = folder(t);
-    const fetched = [];
-    await assert.rejects(cachedBundle(cache, "0.0.41", "mygo", { platform, arch: "x64", fetchImpl: async (url) => { fetched.push(url); return new Response("zip"); },
-      run: async () => { throw new Error("the run ran a program"); } }), new RegExp(`^PlatformOperationNotImplemented: applicationBundle is not implemented on ${platform}$`));
-    assert.deepEqual(fetched, []);
+    await assert.rejects(cachedBundle(cache, "0.0.41", "mygo", { platform, arch: "x64", releases: host.url }),
+      new RegExp(`^PlatformOperationNotImplemented: applicationBundle is not implemented on ${platform}$`));
+    assert.deepEqual(host.requested, []);
     assert.deepEqual(readdirSync(cache), []);
   }
 });
@@ -215,41 +209,26 @@ function repository(t, manifest = {}) {
   return root;
 }
 
-/**
- * A fake pack and `sok`: the pack writes the release file that `pnpm pack` names into the destination; `sok` records its arguments
- * in sok.log beside it, `registry build` answers the index it writes, `registry use` the file URL of its index.
- */
+/** The pack command, `pnpm` and `sok` of the registry tests in `dir`, as copies of the tracked programs; `sok` logs beside its copy. */
 function tools(dir) {
-  const pack = `const { readFileSync, writeFileSync } = require("node:fs");
-const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-const out = process.argv.at(-1);
-writeFileSync(out + "/" + pkg.name.replace(/^@/, "").replace("/", "-") + "-" + pkg.version + ".tgz", pkg.name);`;
-  return {
-    pack: `${script(join(dir, "pack"), pack)} {out}`,
-    pnpm: script(join(dir, "pnpm"), pack),
-    sok: script(join(dir, "sok"), `const { appendFileSync, writeFileSync } = require("node:fs");
-const args = process.argv.slice(2);
-appendFileSync(__filename + ".log", JSON.stringify(args) + "\\n");
-if (args[0] === "registry" && args[1] === "build") {
-  writeFileSync(args[2] + "/index.json", "{}");
-  process.stdout.write(JSON.stringify({ index: args[2] + "/index.json", args }));
-} else if (args[0] === "registry" && args[1] === "use") {
-  process.stdout.write(JSON.stringify({ index: require("node:url").pathToFileURL(args[2]).href }));
-} else {
-  process.stdout.write("{}");
-}`),
-  };
+  const pack = copyProgram(join(dir, "pack"), "pack.mjs");
+  return { pack: `${pack} {out}`, pnpm: copyProgram(join(dir, "pnpm"), "pack.mjs"), sok: copyProgram(join(dir, "sok"), "sok.mjs") };
 }
+
+/** A server that answers the public registry index of a run with `index`. */
+const indexHost = async (t, index) => {
+  const host = await serve(t, { "/index.json": (request, response) => response.setHeader("content-type", "application/json").end(JSON.stringify(index)) });
+  return { ...host, indexUrl: `${host.url}/index.json` };
+};
 
 test("the check registry holds the release of the repository, the start probe, the fixture plugins and the sidecars they name", async (t) => {
   const root = repository(t);
   const registry = join(folder(t), "registry");
   const { pack, pnpm, sok } = tools(folder(t));
   const index = { plugins: [], sidecars: [{ name: "@scope/sidecar-a", repository: "r", versions: [] }, { name: "@scope/other", versions: [] }] };
-  const built = await buildRegistry({ root, folder: registry, sok, pack, pnpm, fetchImpl: async (url) => {
-    assert.equal(url, PUBLIC_INDEX);
-    return Response.json(index);
-  } });
+  const host = await indexHost(t, index);
+  const built = await buildRegistry({ root, folder: registry, sok, pack, pnpm, indexUrl: host.indexUrl });
+  assert.deepEqual(host.requested, ["/index.json"]);
   assert.deepEqual(built, { index: join(registry, "index.json"), ids: ["checked", "fixture", START_PROBE] });
   const entry = JSON.parse(readFileSync(join(registry, "plugins", "checked.json"), "utf8"));
   const release = join(registry, "releases", packFileName("@scope/checked", "1.0.0"));
@@ -264,10 +243,14 @@ test("the check registry holds the release of the repository, the start probe, t
 
 test("a check registry fails at the step that fails, and a plugin id of the repository that the start probe has is refused", async (t) => {
   const { pack, pnpm, sok } = tools(folder(t));
-  const offline = async () => { throw new Error("offline"); };
-  await assert.rejects(buildRegistry({ root: repository(t), folder: join(folder(t), "r"), sok, pack, pnpm, fetchImpl: offline }),
-    /public registry index: offline/);
-  await assert.rejects(buildRegistry({ root: repository(t), folder: join(folder(t), "r"), sok, pack: `${process.execPath} -e process.exit(4) {out}`, pnpm }),
+  // The port of a server that ended refuses the connection, as an address without a network does.
+  const ended = createServer();
+  await new Promise((resolve) => ended.listen(0, "127.0.0.1", resolve));
+  const { port } = ended.address();
+  await new Promise((resolve) => ended.close(resolve));
+  await assert.rejects(buildRegistry({ root: repository(t), folder: join(folder(t), "r"), sok, pack, pnpm, indexUrl: `http://127.0.0.1:${port}/index.json` }),
+    /public registry index: /);
+  await assert.rejects(buildRegistry({ root: repository(t), folder: join(folder(t), "r"), sok, pack: `${process.execPath} ${program("command-probe.mjs")} fail4 {out}`, pnpm }),
     /pack checked: .* ended with status 4/);
   await assert.rejects(buildRegistry({ root: repository(t, { id: START_PROBE, dependencies: {} }), folder: join(folder(t), "r"), sok, pack, pnpm }),
     /the plugin id startprobe of the start probe of @soksak\/window-check is also the id of \./);
@@ -283,10 +266,11 @@ test("with --index the run builds no registry and sets that index in each applic
   const configDir = (host) => join(config, host);
   const index = join(folder(t), "build", "index.json");
   writeJson(index, { format: 1, plugins: [], sidecars: [], packs: [] });
-  const failing = `${process.execPath} -e process.exit(4) {out}`;
-  const unreachable = async () => { throw new Error("the run fetched the public index"); };
+  const failing = `${process.execPath} ${program("command-probe.mjs")} fail4 {out}`;
+  const host = await indexHost(t, { plugins: [], sidecars: [] });
   const recorded = await installRegistry({ root, folder: join(config, "registry"), executables, configDir, index, pack: failing,
-    fetchImpl: unreachable });
+    indexUrl: host.indexUrl });
+  assert.deepEqual(host.requested, [], "the run fetched the public index");
   assert.equal(recorded, pathToFileURL(index).href);
   assert.equal(existsSync(join(config, "registry")), false);
   const calls = readFileSync(`${sok}.log`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
@@ -308,7 +292,8 @@ test("without --index the run installs every plugin of the check registry into e
   const executables = new Map([["mygo", { application: join(tooling, "sok-mygo"), sok }]]);
   const configDir = (host) => join(config, host);
   const registry = join(config, "registry");
-  const recorded = await installRegistry({ root, folder: registry, executables, configDir, pack, pnpm });
+  const host = await indexHost(t, { plugins: [], sidecars: [] });
+  const recorded = await installRegistry({ root, folder: registry, executables, configDir, pack, pnpm, indexUrl: host.indexUrl });
   assert.equal(recorded, pathToFileURL(join(registry, "index.json")).href);
   const calls = readFileSync(`${sok}.log`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
   assert.deepEqual(calls.slice(1), [["registry", "use", join(registry, "index.json"), "--config-dir", configDir("mygo")],

@@ -9,7 +9,7 @@ const pluginId = "fixture-text-scope";
 
 test("the scope of a pressed card ends with the card and its space", { timeout: 30000 }, async (t) => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;

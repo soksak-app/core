@@ -1,111 +1,121 @@
-// Clipboard ownership is explicit; preparation failures release resources before open rejects.
+// Clipboard ownership is explicit; preparation failures release resources before open rejects. The checks run on a pasteboard of
+// macOS that has a name of its own and that the file releases when it ends, so they never read or write the general pasteboard of
+// the person.
 import assert from "node:assert/strict";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { once } from "node:events";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import test, { mock } from "node:test";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import test from "node:test";
+import { playApplication } from "../fixtures/endpoint-player.mjs";
+import { pasteboardDifference, pasteboardFault, readPasteboard, releasePasteboard, writePasteboard } from "../pasteboard.mjs";
 
 const root = realpathSync(mkdtempSync(join(tmpdir(), "soksak-session-clipboard-")));
 process.env.TMPDIR = root;
 delete process.env.SOKSAK_APP;
 delete process.env.SOKSAK_RUN_ID;
 delete process.env.SOKSAK_RUN_FOLDER;
-const binary = join(root, "probe-binary");
-writeFileSync(binary, "");
-let snapshotError;
-let wrongApplication = false;
-let restoreError;
-let board = [{ "public.utf8-plain-text": "YmVmb3Jl" }];
-const calls = [];
-const clients = [];
-mock.module("../pasteboard.mjs", { exports: {
-  readPasteboard() {
-    calls.push("read");
-    if (snapshotError) throw snapshotError;
-    return { items: structuredClone(board), unreadable: board.map(() => []), changeCount: 1 };
-  },
-  writePasteboard(items) { calls.push("write"); if (restoreError) throw restoreError; board = structuredClone(items); return 1; },
-  restorableItems(value) { return { items: value.items, skipped: [] }; },
-  restoreFailure(saved, written, after) { return JSON.stringify(saved) === JSON.stringify(after.items) ? null : "changed"; },
-} });
-mock.module("../event-log.mjs", { exports: {
-  readEventErrors: () => ({ errors: [] }), sessionEventBoot: () => 0, sessionEventStart: () => ({}),
-} });
-class EndpointError extends Error {}
-mock.module("@soksak/client", { exports: {
-  EndpointError,
-  async connect({ configDir }) {
-    const name = basename(configDir);
-    const client = { closed: 0, endpoint: { pid: process.pid, application: wrongApplication ? "other" : name, executable: binary,
-      started: new Date(Date.now() + 60_000).toISOString() },
-    close() { this.closed++; }, request: async () => null };
-    clients.push(client);
-    return client;
-  },
-} });
 const { open, acquireWindowCheckSlot } = await import("../app.mjs");
+
+const text = (value) => ({ "public.utf8-plain-text": Buffer.from(value).toString("base64") });
+const board = `app.soksak.window-check.test-${randomUUID()}`;
+// The operations that the session ran on the pasteboard, in their order; `injected` is the error that the next operation throws.
+const calls = [];
+let injected = null;
+let observing = true;
+pasteboardFault.before = (operation) => {
+  if (!observing) return;
+  calls.push(operation);
+  if (injected?.operation === operation) throw injected.error;
+};
+test.after(() => {
+  pasteboardFault.before = null;
+  releasePasteboard(board);
+  rmSync(root, { recursive: true, force: true });
+});
+
+/** Runs `action` without recording its pasteboard operations: the operations of the test are not the operations of the session. */
+function unobserved(action) {
+  observing = false;
+  try { return action(); } finally { observing = true; }
+}
+/** Writes the pasteboard as the person's clipboard before a check. */
+const prepare = (value) => unobserved(() => writePasteboard([text(value)], board));
+const current = () => unobserved(() => readPasteboard(board).items);
+
 function context(name) {
   const afters = [];
   return { name, passed: true, diagnostic() {}, after(fn) { afters.push(fn); },
     async finish() { for (const fn of afters) await fn(); } };
 }
-const app = (name) => ({ name, binary, configDir: join(root, name) });
-test.after(() => rmSync(root, { recursive: true, force: true }));
+/** The application `application` whose endpoint names `endpointApplication` and the player of its endpoint. */
+async function setup(t, application, endpointApplication = application) {
+  const player = await playApplication(t, "window-check-open-idle", endpointApplication);
+  return { player, app: { name: application, binary: process.execPath, configDir: player.configDir } };
+}
 
-test("an unrelated session never reads or writes the clipboard", { timeout: 10000 }, async () => {
+/** Resolves when the connection of the session to the player has ended: a session that opened and was rejected closed it. */
+async function closed(player) {
+  await Promise.all([...player.connections].map((socket) => once(socket, "close")));
+  assert.equal(player.connections.size, 0, "the connection of the session stayed open");
+}
+
+test("an unrelated session never reads or writes the clipboard", { timeout: 20000 }, async (t) => {
   calls.length = 0;
   const check = context("unrelated");
-  try { await open(check, app("wailsv3")); } finally { await check.finish(); }
+  const { app } = await setup(t, "wailsv3");
+  try { await open(check, app); } finally { await check.finish(); }
   assert.deepEqual(calls, []);
 });
 
-test("an explicitly owning session restores clipboard after test cleanup", { timeout: 10000 }, async () => {
+test("an explicitly owning session restores clipboard after test cleanup", { timeout: 20000 }, async (t) => {
+  prepare("before");
+  const before = current();
   calls.length = 0;
-  const before = structuredClone(board);
   const check = context("owner");
-  const s = await open(check, app("tauriv2"), { clipboard: true });
-  s.cleanup(() => { board = [{ "public.png": "Y2hhbmdlZA==" }]; });
+  const { app } = await setup(t, "tauriv2");
+  const s = await open(check, app, { clipboard: true, pasteboard: board });
+  s.cleanup(() => { unobserved(() => writePasteboard([{ "public.png": Buffer.from("changed").toString("base64") }], board)); });
   check.passed = false; // Restoration is required even when the test body failed.
   await check.finish();
-  assert.deepEqual(board, before);
+  assert.equal(pasteboardDifference(before, current()), null);
   assert.deepEqual(calls, ["read", "write", "read"]);
 });
 
-test("clipboard preparation failure immediately closes connection and releases slot", { timeout: 10000 }, async () => {
+test("clipboard preparation failure immediately closes connection and releases slot", { timeout: 20000 }, async (t) => {
   const check = context("snapshot fails");
-  snapshotError = new Error("snapshot preparation failed");
+  const { app, player } = await setup(t, "mygo");
+  injected = { operation: "read", error: new Error("snapshot preparation failed") };
   try {
-    await assert.rejects(open(check, app("mygo"), { clipboard: true }), /snapshot preparation failed/);
-    assert.equal(clients.at(-1).closed, 1, "open must close before rejecting, without waiting for after hooks");
+    await assert.rejects(open(check, app, { clipboard: true, pasteboard: board }), /snapshot preparation failed/);
+    await closed(player);
     const release = await acquireWindowCheckSlot("mygo");
     release();
     await check.finish();
-    assert.equal(clients.at(-1).closed, 1, "after hooks must not close the failed preparation twice");
-  } finally { snapshotError = undefined; }
+  } finally { injected = null; }
 });
 
-test("endpoint preparation failure immediately releases resources without clipboard ownership", { timeout: 10000 }, async () => {
+test("endpoint preparation failure immediately releases resources without clipboard ownership", { timeout: 20000 }, async (t) => {
   const check = context("wrong endpoint");
-  wrongApplication = true;
-  try {
-    await assert.rejects(open(check, app("wailsv3")), /belongs to other/);
-    assert.equal(clients.at(-1).closed, 1, "endpoint validation failure must close before rejecting");
-    const release = await acquireWindowCheckSlot("wailsv3");
-    release();
-    await check.finish();
-    assert.equal(clients.at(-1).closed, 1);
-  } finally { wrongApplication = false; }
+  const { app, player } = await setup(t, "wailsv3", "other");
+  await assert.rejects(open(check, app), /belongs to other/);
+  await closed(player);
+  const release = await acquireWindowCheckSlot("wailsv3");
+  release();
+  await check.finish();
 });
 
 for (const failRestore of [false, true]) {
-  test(`clipboard owner restores on endpoint preparation failure (restore error: ${failRestore})`, { timeout: 10000 }, async () => {
+  test(`clipboard owner restores on endpoint preparation failure (restore error: ${failRestore})`, { timeout: 20000 }, async (t) => {
     const check = context("owner endpoint fails");
-    const before = structuredClone(board);
+    prepare("before");
+    const before = current();
     calls.length = 0;
-    wrongApplication = true;
-    restoreError = failRestore ? new Error("clipboard restore failed") : undefined;
+    const { app, player } = await setup(t, "tauriv2", "other");
+    injected = failRestore ? { operation: "write", error: new Error("clipboard restore failed") } : null;
     try {
-      await assert.rejects(open(check, app("tauriv2"), { clipboard: true }), (error) => {
+      await assert.rejects(open(check, app, { clipboard: true, pasteboard: board }), (error) => {
         if (failRestore) {
           assert.ok(error instanceof AggregateError);
           assert.match(error.errors[0].message, /belongs to other/);
@@ -113,13 +123,12 @@ for (const failRestore of [false, true]) {
         } else assert.match(error.message, /belongs to other/);
         return true;
       });
-      assert.equal(clients.at(-1).closed, 1);
+      await closed(player);
       const release = await acquireWindowCheckSlot("tauriv2");
       release();
       await check.finish();
-      assert.equal(clients.at(-1).closed, 1);
-      assert.deepEqual(board, before);
+      assert.equal(pasteboardDifference(before, current()), null);
       assert.deepEqual(calls, failRestore ? ["read", "write"] : ["read", "write", "read"]);
-    } finally { wrongApplication = false; restoreError = undefined; }
+    } finally { injected = null; }
   });
 }

@@ -90,7 +90,7 @@ pub struct Plan {
     pub frames: i32,
 }
 
-/// The recording device. A platform implementation or a fake of a check provides it.
+/// The recording device. The platform implementation provides it: the native recorder of the window server.
 pub trait Capture {
     /// Sets the window with the window server number target.window as the recording target. An error creates no
     /// preparation and leaves any existing active recording unchanged.
@@ -145,24 +145,6 @@ struct State {
     window: Option<isize>,
 }
 
-/// Fault injection points of the recording. A set variable makes its point fail after the device call it names, and the
-/// value is the exact error text. The device call runs first, so the device records the call as the native device does.
-/// docs/operations/examples.md#test-kinds
-const CAPTURE_OPEN_FAULT: &str = "SOKSAK_FAULT_CAPTURE_OPEN";
-const CAPTURE_START_FAULT: &str = "SOKSAK_FAULT_CAPTURE_START";
-const CAPTURE_STOP_FAULT: &str = "SOKSAK_FAULT_CAPTURE_STOP";
-
-/// Returns the error that the fault point named by variable injects, or None when the variable is unset or empty. A value
-/// that is not Unicode is reported as the error.
-fn fault_error(variable: &str) -> Option<String> {
-    match std::env::var(variable) {
-        Ok(text) if text.is_empty() => None,
-        Ok(text) => Some(text),
-        Err(std::env::VarError::NotPresent) => None,
-        Err(std::env::VarError::NotUnicode(_)) => Some(format!("{variable} is not valid Unicode")),
-    }
-}
-
 /// Opens target and starts its recording of plan in directory. It returns once still 0 is written; a failure leaves no
 /// native recording.
 fn begin(
@@ -172,19 +154,132 @@ fn begin(
     plan: Plan,
 ) -> Result<(), String> {
     capture.open(target)?;
-    if let Some(error) = fault_error(CAPTURE_OPEN_FAULT) {
-        return Err(error);
-    }
-    capture.start(directory, plan)?;
-    fault_error(CAPTURE_START_FAULT).map_or(Ok(()), Err)
+    capture.start(directory, plan)
 }
 
-/// Stops the native recording and returns the number of frames it wrote. The recording ends also when the stop fails.
-fn stop_capture(capture: &dyn Capture) -> Result<i32, String> {
-    let count = capture.stop()?;
-    match fault_error(CAPTURE_STOP_FAULT) {
-        Some(error) => Err(error),
-        None => Ok(count),
+/// The error of a start while directory, the folder that a recording or its cleanup owns, is some.
+pub fn refuse_start(directory: Option<&Path>) -> Option<String> {
+    directory.map(|running| format!("a capture into {} is running", running.display()))
+}
+
+/// The error of a finish of a recording that owns directory, whose native recording has or has not ended (capture_stopped),
+/// or none when the recording can end.
+pub fn refuse_finish(directory: Option<&Path>, capture_stopped: bool) -> Option<String> {
+    if capture_stopped {
+        return Some(
+            "capture has stopped but its directory cleanup is incomplete; abort is required".into(),
+        );
+    }
+    directory
+        .is_none()
+        .then(|| "no capture is running".to_string())
+}
+
+/// Whether an abort ends the native recording of the owned directory: it does not when the recording has ended already, so a
+/// retry of the cleanup does not stop twice.
+pub fn needs_stop(directory: Option<&Path>, capture_stopped: bool) -> bool {
+    directory.is_some() && !capture_stopped
+}
+
+/// The error of an ended native recording whose stop failed with error.
+pub fn stop_failure(error: &str) -> String {
+    format!("capture stop failed: {error}")
+}
+
+/// The result of the removal of an owned folder: whether the recording keeps the folder, because its removal failed, and the
+/// error to report, which holds the cause that led to the removal and the failure of the removal.
+#[derive(Debug, PartialEq)]
+pub struct Cleanup {
+    pub retain_owner: bool,
+    pub error: Option<String>,
+}
+
+/// Combines cause, the error that led to the removal of a folder, with removal, the error of that removal (none for a removal
+/// that succeeded). A failed removal keeps the folder owned and is reported after the cause.
+pub fn settle_cleanup(cause: Option<String>, removal: Option<&str>) -> Cleanup {
+    match (cause, removal) {
+        (cause, None) => Cleanup {
+            retain_owner: false,
+            error: cause,
+        },
+        (None, Some(removal)) => Cleanup {
+            retain_owner: true,
+            error: Some(format!("capture directory cleanup failed: {removal}")),
+        },
+        (Some(cause), Some(removal)) => Cleanup {
+            retain_owner: true,
+            error: Some(format!(
+                "{cause}; capture directory cleanup failed: {removal}"
+            )),
+        },
+    }
+}
+
+/// The error text of the removal of directory: none when it is removed or was not there.
+fn remove_directory(directory: &Path) -> Option<String> {
+    match std::fs::remove_dir_all(directory) {
+        Ok(()) => None,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => Some(error.to_string()),
+    }
+}
+
+/// What the stop of the cleanup after a panic of the start answered.
+#[derive(Debug, PartialEq)]
+pub enum StopAnswer {
+    Stopped,
+    Failed(String),
+    Panicked,
+}
+
+/// The state that the cleanup after a panic of the start leaves.
+#[derive(Debug, PartialEq)]
+pub struct PanicCleanup {
+    /// Whether the native recording has ended: a start that never reached the capture, a stop and a failed stop end it, a
+    /// panicking stop leaves it active.
+    pub capture_stopped: bool,
+    pub retain_owner: bool,
+    pub errors: Vec<String>,
+}
+
+/// Decides the state after the stop of the cleanup of a panic. open_attempted is whether the start reached the capture, and
+/// stop is the answer of the stop that followed it.
+pub fn panic_stop(open_attempted: bool, stop: Option<StopAnswer>) -> PanicCleanup {
+    match (open_attempted, stop) {
+        (true, Some(StopAnswer::Failed(error))) => PanicCleanup {
+            capture_stopped: true,
+            retain_owner: false,
+            errors: vec![stop_failure(&error)],
+        },
+        (true, Some(StopAnswer::Panicked)) => PanicCleanup {
+            capture_stopped: false,
+            retain_owner: true,
+            errors: vec!["capture stop panicked".into()],
+        },
+        _ => PanicCleanup {
+            capture_stopped: true,
+            retain_owner: false,
+            errors: Vec::new(),
+        },
+    }
+}
+
+/// Adds the removal of the folder after a stopped capture to the state of a panic cleanup: a removal that failed keeps the
+/// owner.
+pub fn panic_removal(mut cleanup: PanicCleanup, removal: Option<&str>) -> PanicCleanup {
+    if let Some(error) = removal {
+        cleanup.retain_owner = true;
+        cleanup
+            .errors
+            .push(format!("capture directory cleanup failed: {error}"));
+    }
+    cleanup
+}
+
+/// Reports the errors of a cleanup after a panic as one error of the application log.
+pub fn report_panic_cleanup(cleanup: &PanicCleanup) {
+    if !cleanup.errors.is_empty() {
+        crate::application_log::log_error("recording", cleanup.errors.join("; "));
     }
 }
 
@@ -252,15 +347,18 @@ impl Recording {
     ) -> Result<(), String> {
         // default: poison paths preserve the owned directory and stop status, so start can refuse a running capture.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(running) = &state.directory {
-            return Err(format!("a capture into {} is running", running.display()));
+        if let Some(error) = refuse_start(state.directory.as_deref()) {
+            return Err(error);
         }
         make(directory)?;
         if let Err(error) = capture.hold_new_window() {
-            return Err(match std::fs::remove_dir_all(directory) {
-                Ok(()) => error,
-                Err(cleanup) => format!("{error}; capture directory cleanup failed: {cleanup}"),
-            });
+            let cleanup = settle_cleanup(Some(error), remove_directory(directory).as_deref());
+            if cleanup.retain_owner {
+                state.directory = Some(directory.to_path_buf());
+                state.capture_stopped = true;
+                state.window = None;
+            }
+            return Err(cleanup.error.unwrap_or_default()); // default: settle_cleanup keeps the cause it is given, so the error is present.
         }
         let end = Arc::new(Mutex::new(NewWindowEnd::default()));
         let (done, on_done) = mpsc::channel();
@@ -318,8 +416,8 @@ impl Recording {
         // default: poison paths preserve the owned directory and stop status before unwinding, so start can refuse a
         // running or cleanup-pending capture.
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(running) = &state.directory {
-            return Err(format!("a capture into {} is running", running.display()));
+        if let Some(error) = refuse_start(state.directory.as_deref()) {
+            return Err(error);
         }
         // The caller owns the path until creation succeeds; a failed `make` must not trigger directory removal here.
         make(directory)?;
@@ -337,61 +435,38 @@ impl Recording {
                 state.window = (!target.display).then_some(target.window);
                 Ok(())
             }
-            Ok(Err(error)) => match std::fs::remove_dir_all(directory) {
-                Ok(()) => Err(error),
-                Err(cleanup_error) => {
+            Ok(Err(error)) => {
+                let cleanup = settle_cleanup(Some(error), remove_directory(directory).as_deref());
+                if cleanup.retain_owner {
                     state.directory = Some(directory.to_path_buf());
                     state.capture_stopped = true;
-                    Err(format!(
-                        "{error}; capture directory cleanup failed: {cleanup_error}"
-                    ))
                 }
-            },
+                Err(cleanup.error.unwrap_or_default()) // default: settle_cleanup names the failed removal whenever it retains the owner.
+            }
             Err(panic) => {
-                let mut cleanup_errors = Vec::new();
-                let mut retain_owner = false;
                 // A panic can interrupt a start that the native capture has not ended, so a start that reached the
                 // capture is stopped; the stop ends the recording also when it fails.
-                let capture_stopped = if capture_open_attempted {
-                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        stop_capture(capture)
-                    })) {
-                        Ok(Ok(_)) => true,
-                        Ok(Err(error)) => {
-                            cleanup_errors.push(format!("capture stop failed: {error}"));
-                            true
-                        }
-                        Err(_) => {
-                            cleanup_errors.push("capture stop panicked".into());
-                            retain_owner = true;
-                            false
-                        }
+                let stop = capture_open_attempted.then(|| {
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| capture.stop()))
+                    {
+                        Ok(Ok(_)) => StopAnswer::Stopped,
+                        Ok(Err(error)) => StopAnswer::Failed(error),
+                        Err(_) => StopAnswer::Panicked,
                     }
-                } else {
-                    true
-                };
-                if capture_stopped {
-                    match std::fs::remove_dir_all(directory) {
-                        Ok(()) => {}
-                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                        Err(error) => {
-                            retain_owner = true;
-                            cleanup_errors
-                                .push(format!("capture directory cleanup failed: {error}"));
-                        }
-                    }
+                });
+                let mut cleanup = panic_stop(capture_open_attempted, stop);
+                if cleanup.capture_stopped {
+                    cleanup = panic_removal(cleanup, remove_directory(directory).as_deref());
                 }
-                if !retain_owner {
+                if cleanup.retain_owner {
+                    state.directory = Some(directory.to_path_buf());
+                    state.capture_stopped = cleanup.capture_stopped;
+                } else {
                     state.directory = None;
                     state.capture_stopped = false;
                     self.state.clear_poison();
-                } else {
-                    state.directory = Some(directory.to_path_buf());
-                    state.capture_stopped = capture_stopped;
                 }
-                if !cleanup_errors.is_empty() {
-                    crate::application_log::log_error("recording", cleanup_errors.join("; "));
-                }
+                report_panic_cleanup(&cleanup);
                 drop(state);
                 std::panic::resume_unwind(panic)
             }
@@ -412,35 +487,23 @@ impl Recording {
                 state.capture_stopped = true;
                 retired_stop_error = Some(error);
             }
-            if !state.capture_stopped {
-                if let Err(stop_error) = stop_capture(capture) {
-                    retired_stop_error = Some(format!("capture stop failed: {stop_error}"));
+            if needs_stop(state.directory.as_deref(), state.capture_stopped) {
+                if let Err(stop_error) = capture.stop() {
+                    retired_stop_error = Some(stop_failure(&stop_error));
                 }
                 state.capture_stopped = true;
             }
-            if let Some(directory) = state.directory.as_deref() {
-                match std::fs::remove_dir_all(directory) {
-                    Ok(()) => {}
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-                    Err(error) => {
-                        return Err(match retired_stop_error {
-                            Some(stop_error) => {
-                                format!("{stop_error}; capture directory cleanup failed: {error}")
-                            }
-                            None => format!("capture directory cleanup failed: {error}"),
-                        });
-                    }
-                }
-            }
+        }
+        let removal = state.directory.as_deref().and_then(remove_directory);
+        let cleanup = settle_cleanup(retired_stop_error, removal.as_deref());
+        if cleanup.retain_owner {
+            return Err(cleanup.error.unwrap_or_default()); // default: settle_cleanup names the failed removal whenever it retains the owner.
         }
         state.directory = None;
         state.capture_stopped = false;
         state.window = None;
         self.state.clear_poison();
-        match retired_stop_error {
-            Some(error) => Err(error),
-            None => Ok(()),
-        }
+        cleanup.error.map_or(Ok(()), Err)
     }
 
     /// Ends the recording in progress and returns the folder, the number of frames and the window server number of its window, none for a display recording. The requester deletes the folder. A stop error
@@ -451,14 +514,8 @@ impl Recording {
             .lock()
             // default: a poisoned state retains its owned directory and stop status for finish or abort cleanup.
             .unwrap_or_else(PoisonError::into_inner);
-        if state.capture_stopped {
-            return Err(
-                "capture has stopped but its directory cleanup is incomplete; abort is required"
-                    .into(),
-            );
-        }
-        if state.directory.is_none() {
-            return Err("no capture is running".into());
+        if let Some(error) = refuse_finish(state.directory.as_deref(), state.capture_stopped) {
+            return Err(error);
         }
         if let Err(error) = settle_new_window(&mut state) {
             // The start failed before a recording ran: the requester owns the folder, which keeps what was written.
@@ -468,7 +525,7 @@ impl Recording {
             return Err(error);
         }
         let window = state.window.take();
-        let count = match stop_capture(capture) {
+        let count = match capture.stop() {
             Ok(count) => count,
             Err(stop_error) => {
                 state.directory = None;

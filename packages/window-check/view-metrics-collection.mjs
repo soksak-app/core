@@ -503,7 +503,7 @@ export async function viewFootprints(host, surfaces, measureFootprint) {
   return measureProcessGroup(viewProcessPids(host, surfaces), measureFootprint);
 }
 
-function validateFootprintSample(value, label) {
+export function validateFootprintSample(value, label) {
   assert.ok(value && Array.isArray(value.processes), `${label} footprint sample must include process rows`);
   assert.ok(value.processes.length > 0, `${label} footprint sample must include at least one process`);
   assert.ok(value.sampleClock && typeof value.sampleClock === "object",
@@ -530,13 +530,36 @@ async function verifyOpenedViewContent(view) {
   return view;
 }
 
-function reportRetainedRecordings(diagnostic, opened, phase, error) {
-  diagnostic(`${phase} failed: ${error.stack ?? error}`);
+/** The diagnostic lines of a failed phase: the failure, and the folder of each recording that the opened views retain. */
+export function retainedRecordingLines(opened, phase, error) {
+  const lines = [`${phase} failed: ${error.stack ?? error}`];
   for (const view of opened) {
     if (typeof view.recording?.directory === "string") {
-      diagnostic(`view recording retained at ${view.recording.directory} after ${phase} failure`);
+      lines.push(`view recording retained at ${view.recording.directory} after ${phase} failure`);
     }
   }
+  return lines;
+}
+
+function reportRetainedRecordings(diagnostic, opened, phase, error) {
+  for (const line of retainedRecordingLines(opened, phase, error)) diagnostic(line);
+}
+
+/**
+ * The steps of the collection of the process groups of viewCount views with processStartCount start samples: each `open` opens one
+ * view, `footprint` reads the footprint of the first `views` views opened so far, and `verify` keeps the content frame of every opened
+ * view. The one-view footprint comes before the other views open, the N-view footprint before the extra process-start views open, and
+ * the content frames after both footprints.
+ */
+export function processGroupSteps(viewCount, processStartCount) {
+  assert.ok(Number.isSafeInteger(viewCount) && viewCount >= 2, "view count must be at least two");
+  assert.ok(Number.isSafeInteger(processStartCount) && processStartCount >= 1, "process start sample count must be positive");
+  const steps = [{ step: "open" }, { step: "footprint", views: 1 }];
+  for (let opened = 1; opened < viewCount; opened++) steps.push({ step: "open" });
+  steps.push({ step: "footprint", views: viewCount });
+  for (let opened = viewCount; opened < Math.max(viewCount, processStartCount); opened++) steps.push({ step: "open" });
+  steps.push({ step: "verify" });
+  return steps;
 }
 
 /** Opens the requested view set, measures its process groups, and collects independent start samples. */
@@ -558,30 +581,29 @@ export async function collectViewProcessGroups({ openView, readFootprints, diagn
     events.push(...value.events);
     return value;
   };
-  const first = await open();
-  let oneView;
-  try {
-    oneView = validateFootprintSample(await readFootprints([first.surface]), "one-view");
-  } catch (error) {
-    reportRetainedRecordings(diagnostic, opened, "one-view footprint sample", error);
-    throw error;
+  const footprints = {};
+  for (const { step, views } of processGroupSteps(viewCount, processStartCount)) {
+    if (step === "open") {
+      await open();
+    } else if (step === "footprint") {
+      const label = views === 1 ? "one-view" : "N-view";
+      try {
+        footprints[label] = validateFootprintSample(await readFootprints(opened.slice(0, views).map(({ surface }) => surface)), label);
+      } catch (error) {
+        reportRetainedRecordings(diagnostic, opened, `${label} footprint sample`, error);
+        throw error;
+      }
+    } else {
+      try {
+        for (const view of opened) await verifyOpenedViewContent(view);
+      } catch (error) {
+        reportRetainedRecordings(diagnostic, opened, "deferred content verification", error);
+        throw error;
+      }
+    }
   }
-  while (opened.length < viewCount) await open();
-  const measuredViews = opened.slice(0, viewCount);
-  let allViews;
-  try {
-    allViews = validateFootprintSample(await readFootprints(measuredViews.map(({ surface }) => surface)), "N-view");
-  } catch (error) {
-    reportRetainedRecordings(diagnostic, opened, "N-view footprint sample", error);
-    throw error;
-  }
-  while (opened.length < Math.max(viewCount, processStartCount)) await open();
-  try {
-    for (const view of opened) await verifyOpenedViewContent(view);
-  } catch (error) {
-    reportRetainedRecordings(diagnostic, opened, "deferred content verification", error);
-    throw error;
-  }
+  const oneView = footprints["one-view"];
+  const allViews = footprints["N-view"];
   return { opened, events, oneViewProcesses: oneView.processes, oneViewSampleClock: oneView.sampleClock,
     allViewProcesses: allViews.processes, allViewSampleClock: allViews.sampleClock, openView: open };
 }
@@ -668,6 +690,22 @@ function requirePagelessProcessRows(host) {
       `host.window has an invalid process without a page ${JSON.stringify(row)}`);
   }
   return host.pagelessProcesses;
+}
+
+/**
+ * What became of each process of `beforeProcesses` in the `host.window` reading `closed` that no longer lists the closed views:
+ * `page` when it holds a page of another surface, `no page` when it remains without a page, `ending` when the host reports it
+ * ending without a page (the close awaits its exit), and `exited` when the reading no longer lists it. A host that does not report
+ * the processes without a page is refused.
+ */
+export function processFates(beforeProcesses, closed) {
+  const held = new Set(requireHostDocumentRows(closed).filter((row) => row.process > 0).map((row) => row.process));
+  const pageless = new Map(requirePagelessProcessRows(closed).map((row) => [row.pid, row.ending]));
+  return beforeProcesses.map(({ pid }) => {
+    if (held.has(pid)) return { pid, fate: "page" };
+    if (pageless.get(pid) === false) return { pid, fate: "no page" };
+    return { pid, fate: pageless.get(pid) === true ? "ending" : "exited" };
+  });
 }
 
 /** Runs the three initial-only process-group reclamation samples for opened view surfaces. */
@@ -764,18 +802,16 @@ export async function closeViewGroup(t, s, { placement, surfaces, beforeProcesse
   const closed = await s.until("host.window",
     (value) => !requireHostDocumentRows(value).some((row) => closedSurfaces.has(row.surface)),
     `host.window still lists a document of the closed views ${surfaces.join(", ")}`);
-  const held = new Set(requireHostDocumentRows(closed).filter((row) => row.process > 0).map((row) => row.process));
-  const pageless = new Map(requirePagelessProcessRows(closed).map((row) => [row.pid, row.ending]));
-  const afterProcesses = await Promise.all(beforeProcesses.map(async ({ pid }) => {
-    if (held.has(pid)) {
+  const afterProcesses = await Promise.all(processFates(beforeProcesses, closed).map(async ({ pid, fate }) => {
+    if (fate === "page") {
       t.diagnostic(`view process ${pid} still holds a page after its views closed`);
       return { pid, footprintBytes: await measureFootprint(pid), remained: "page" };
     }
-    if (pageless.get(pid) === false) {
+    if (fate === "no page") {
       t.diagnostic(`view process ${pid} remained without a page after its views closed`);
       return { pid, footprintBytes: await measureFootprint(pid), remained: "no page" };
     }
-    if (pageless.get(pid) === true) await s.request("diagnostics.process.exit", { pid });
+    if (fate === "ending") await s.request("diagnostics.process.exit", { pid });
     return { pid, footprintBytes: 0 };
   }));
   const ended = await monotonicTimeMs(s);

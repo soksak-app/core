@@ -3,14 +3,12 @@ package host
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"testing"
 	"unsafe"
 
-	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
 type imageDetachMessageOwner struct {
@@ -572,154 +570,101 @@ func TestAnUnacknowledgedImageDetachKeepsOnlyItsSurfacePending(t *testing.T) {
 	}
 }
 
-// attachPlatform creates and closes image regions and reports a window that is on screen or a failure of that read.
-type attachPlatform struct {
-	platform.Platform
-	created, closed []unsafe.Pointer
-	onScreen        error
-	// released is the release callback of the last region created.
-	released func(generation, raster uint64, sequence int)
-}
-
-func (p *attachPlatform) CreateImage(surface unsafe.Pointer, name string, event func(json string), released func(generation, raster uint64, sequence int)) (unsafe.Pointer, error) {
-	handle := unsafe.Pointer(new(int))
-	p.created = append(p.created, handle)
-	p.released = released
-	return handle, nil
-}
-
-func (p *attachPlatform) CloseImage(image unsafe.Pointer) { p.closed = append(p.closed, image) }
-
-func (*attachPlatform) SetImageBackground(unsafe.Pointer, bool) {}
-
-func (p *attachPlatform) WindowOnScreen(platform.Window) (bool, error) { return false, p.onScreen }
-
-// queuedFramework runs a queued task before its next step, as the main thread runs a task that was queued ahead of that step.
-type queuedFramework struct {
-	frameworkRecord
-	queued func()
-}
-
-func (f *queuedFramework) Step(task func()) {
-	if queued := f.queued; queued != nil {
-		f.queued = nil
-		queued()
-	}
-	task()
-}
-
-// attachSurfaces returns the surfaces of a window whose surface-a declares the image region view of fixture-sidecar.
-func attachSurfaces(t *testing.T) (*Surfaces, *attachPlatform, *queuedFramework) {
+// attachSurfaces returns the surfaces of a real window whose real surface surface-a declares the image region view of fixture-sidecar, and
+// the probe of the window. A task that the test queues with queueOnMainThread runs ahead of the main-thread step of the next attach.
+func attachSurfaces(t *testing.T) (*Surfaces, *viewProbe) {
 	t.Helper()
+	p := newViewProbe(t, Theme{})
 	surfaces := sidecarSessionSurfaces(t)
 	surfaces.sidecars.stopped = false
 	surfaces.sidecars.running["fixture-sidecar"] = &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 16),
 		closeWaiters: map[string]chan error{}, retained: map[string]int{}, surfaces: map[string]bool{}}
 	surfaces.images = NewImages()
-	surfaces.window = &noticeFrontend{}
-	surfaces.views = map[string]*nativeWebview{"surface-a": {handle: unsafe.Pointer(new(int))}}
+	surfaces.window = &openFrontend{native: p.window}
+	surfaces.views = map[string]*nativeWebview{"surface-a": {handle: p.surface}}
 	surfaces.compositions = map[string]SurfaceComposition{"surface-a": {Kind: "view", Regions: []SurfaceRegion{
 		{Name: "view", Kind: "image", Sidecar: "fixture-sidecar", Present: "copy"},
 	}}}
-	fake, steps := &attachPlatform{}, &queuedFramework{}
-	savedSystem, savedFramework := system, framework
-	system, framework = fake, steps
-	t.Cleanup(func() { system, framework = savedSystem, savedFramework })
-	return surfaces, fake, steps
+	t.Cleanup(func() { runOnMainThread(func() { surfaces.closeSurfaceImages("surface-a") }) })
+	return surfaces, p
 }
 
 // contract: images.lease.failed-release-is-reported
+// The region is a real lease region of a real window, and a real frame is presented into it: the close of the region ends the lease, and the
+// native layer runs the release callback with the identity of the frame.
 func TestAReleaseThatFailsInAnOpenWindowReportsTheFailure(t *testing.T) {
-	surfaces, fake, _ := attachSurfaces(t)
+	isolateTraceRecords(t)
+	surfaces, _ := attachSurfaces(t)
+	surfaces.compositions["surface-a"] = SurfaceComposition{Kind: "view", Regions: []SurfaceRegion{
+		{Name: "view", Kind: "image", Sidecar: "fixture-sidecar", Present: "lease"},
+	}}
 	key := ImageKey{Surface: "surface-a", Name: "view"}
-	if _, err := surfaces.createImage(key, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}, true); err != nil {
+	request := ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
+	if err := surfaces.attachCheckedImage(key, request); err != nil {
 		t.Fatalf("the lease region was not created: %v", err)
 	}
-	if fake.released == nil {
-		t.Fatal("a lease region has no release")
+	region, err := surfaces.images.Get(key)
+	if err != nil {
+		t.Fatal(err)
 	}
+	runOnMainThread(func() { system.PlaceImage(region, 0, 0, 0, 0, true) })
+	support.PresentLeaseFrame(t, runOnMainThread, region, 1, 2, 3)
 	surfaces.sidecars.mu.Lock()
 	surfaces.sidecars.stopped = true
 	surfaces.sidecars.mu.Unlock()
-	fake.released(1, 2, 3)
-	records.Lock()
-	defer records.Unlock()
-	for _, record := range records.buffer {
-		if record.event != "host.record.error" {
-			continue
-		}
-		var fields map[string]any
-		if err := json.Unmarshal(record.fields, &fields); err != nil {
-			t.Fatalf("an error record is not JSON: %v", err)
-		}
-		if fields["where"] == "image view released" && fields["text"] == "sidecars are stopped" {
+	runOnMainThread(func() { surfaces.closeSurfaceImages("surface-a") })
+	for _, record := range awaitTraces(t, "host.record.error", 1) {
+		if record["where"] == "image view released" && record["text"] == "sidecars are stopped" {
 			return
 		}
 	}
-	t.Fatal("the failed release of an open window recorded no error")
+	t.Fatalf("the failed release of an open window recorded no error: %v", bufferedTraces(t, "host.record.error"))
 }
 
 // contract: images.attach.one-main-step
 func TestAReloadDuringAnAttachLeavesNoRegionWithoutAName(t *testing.T) {
-	surfaces, fake, steps := attachSurfaces(t)
+	surfaces, p := attachSurfaces(t)
 	key, request := ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
 	// The reload of the surface and the attach of its new page, which run on the main thread ahead of the main-thread work of the attach.
 	var attachedAgain error
-	steps.queued = func() {
+	reloaded := queueOnMainThread(func() {
 		surfaces.reloadSurfaceImages("surface-a", system.CloseImage)
-		attachedAgain = surfaces.attachCheckedImage(key, request)
-	}
+		attachedAgain = surfaces.attachImageOnMain(key, request)
+	})
 	if err := surfaces.attachCheckedImage(key, request); err == nil {
 		t.Fatal("the attach of the earlier page took the name of the new page")
 	}
+	<-reloaded
 	if attachedAgain != nil {
 		t.Fatalf("the attach of the new page: %v", attachedAgain)
 	}
-	registered, err := surfaces.images.Get(key)
-	if err != nil {
+	if _, err := surfaces.images.Get(key); err != nil {
 		t.Fatalf("the region of the new page: %v", err)
 	}
-	for _, handle := range fake.created {
-		if handle != registered && !slices.Contains(fake.closed, handle) {
-			t.Fatalf("created %v, closed %v, registered %v: a region has no name and stays open", fake.created, fake.closed, registered)
-		}
+	if regions := regionsOfSurface(t, p); regions != 1 {
+		t.Fatalf("the surface holds %d image regions, want the one of the new page: a region has no name and stays open", regions)
 	}
 }
 
 // contract: images.attach.one-main-step
 func TestASurfaceCloseDuringAnAttachFindsNoNameOfTheAttach(t *testing.T) {
-	surfaces, fake, steps := attachSurfaces(t)
+	surfaces, p := attachSurfaces(t)
 	key, request := ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
-	steps.queued = func() {
+	closed := queueOnMainThread(func() {
 		surfaces.images.CloseSurface("surface-a", system.CloseImage)
 		surfaces.images.EndGeneration("surface-a")
 		delete(surfaces.views, "surface-a")
 		delete(surfaces.compositions, "surface-a")
-	}
+	})
 	if err := surfaces.attachCheckedImage(key, request); err == nil {
 		t.Fatal("the attach of a closed surface succeeded")
 	}
-	if len(fake.created) != 0 {
-		t.Fatalf("the attach created %d regions in a closed surface", len(fake.created))
+	<-closed
+	if regions := regionsOfSurface(t, p); regions != 0 {
+		t.Fatalf("the attach created %d regions in a closed surface", regions)
 	}
 	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "fixture-sidecar", SidecarOwner: surfaces}); err != nil {
 		t.Fatalf("the attach kept a name after the close: %v", err)
-	}
-}
-
-// contract: images.attach.one-main-step
-func TestAFailedAttachTakesBackItsName(t *testing.T) {
-	surfaces, fake, _ := attachSurfaces(t)
-	fake.onScreen = errors.New("the window state cannot be read")
-	key, request := ImageKey{Surface: "surface-a", Name: "view"}, ImageRequest{Surface: "surface-a", Name: "view", Sidecar: "fixture-sidecar"}
-	if err := surfaces.attachCheckedImage(key, request); err == nil || err.Error() != "the window state cannot be read" {
-		t.Fatalf("attach: %v", err)
-	}
-	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "fixture-sidecar", SidecarOwner: surfaces}); err != nil {
-		t.Fatalf("the failed attach kept its name: %v", err)
-	}
-	if len(fake.created) != len(fake.closed) {
-		t.Fatalf("created %v, closed %v: the failed attach left a region", fake.created, fake.closed)
 	}
 }
 
@@ -769,4 +714,10 @@ func TestAMalformedImageDetachAcknowledgementNamesItsMember(t *testing.T) {
 			}
 		})
 	}
+}
+
+// regionsOfSurface returns the number of the image region views that the native window of the probe holds.
+func regionsOfSurface(t *testing.T, p *viewProbe) int {
+	t.Helper()
+	return int(support.ImageRegions(t, runOnMainThread, p.window))
 }

@@ -28,3 +28,12 @@ func viewStepFault(step string) error {
 func viewLoadFault() bool {
 	return os.Getenv(faultViewStep) == "load"
 }
+
+// faultViewPost is the fault injection point of the post to a view document. Its value post makes the post fail as the native post does
+// when the document refuses the message; the platform post does not run.
+const faultViewPost = "SOKSAK_FAULT_VIEW_POST"
+
+// viewPostFault reports whether the fault point refuses the post to a view document.
+func viewPostFault() bool {
+	return os.Getenv(faultViewPost) == "post"
+}

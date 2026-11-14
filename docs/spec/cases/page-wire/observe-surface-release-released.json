@@ -1,6 +1,6 @@
 {
   "name": "observe-surface-release-released",
-  "description": "The host sends the event diagnostics-surface-released for the surface tab-1, and the page ends the hold of that surface and logs the observation of the hold in a log batch, after the clock answers of the host.",
+  "description": "The page declares the composition of the view tab-1 to the host. The host sends the event diagnostics-surface-released for the surface tab-1, and the page ends the hold of that surface and logs the observation of the hold in a log batch, after the clock answers of the host.",
   "replay": false,
   "reason": "The case delivers the diagnostics-surface-released notice of the host, and the Go producer runs no window and refuses a notice (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {
@@ -50,6 +50,26 @@
           "authorization": "notDetermined",
           "error": null
         }
+      }
+    },
+    {
+      "call": {
+        "name": "compositionDeclare",
+        "payload": {
+          "plugin": "fixture-held",
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html",
+            "regions": [],
+            "overlays": []
+          },
+          "surface": "tab-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     },
     {

@@ -11,3 +11,8 @@ func viewStepFault(step string) error {
 func viewLoadFault() bool {
 	return false
 }
+
+// viewPostFault refuses no post: only a diagnostic build has the view fault injection point.
+func viewPostFault() bool {
+	return false
+}

@@ -1,0 +1,98 @@
+{
+  "name": "library-redraw-controls",
+  "description": "The page reads the notification state and applies the theme and the menu language when it starts; the library asks the host for the folder of each of two listed projects, and the plugin page reads the plugin state, the outdated sidecars and the application update state.",
+  "replay": false,
+  "reason": "The producer runs only the calls log and workspace (docs/spec/cases/page-wire/README.md#producer-runs), and this case holds the calls projectFolder, pluginsState, sidecarsOutdated and appUpdateState.",
+  "variables": {
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    },
+    "theme-1": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "menu-language-1": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "identity-bin": {
+      "type": "string",
+      "example": "id"
+    },
+    "identity-lib": {
+      "type": "string",
+      "example": "id"
+    },
+    "theme-2": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "menu-language-2": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    }
+  },
+  "steps": [
+    {"call":{"name":"notificationState"}},
+    {"reply":{"result":{"authorization":"$authorization","error":null}}},
+    {"call":{"name":"setTheme","payload":"$theme-1"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setMenuLanguage","payload":"$menu-language-1"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"projectFolder","payload":"/usr/bin"}},
+    {"reply":{"result":{"root":"/usr/bin","identity":"$identity-bin"}}},
+    {"call":{"name":"projectFolder","payload":"/usr/lib"}},
+    {"reply":{"result":{"root":"/usr/lib","identity":"$identity-lib"}}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.40","registry":"file:///registry/index.json","index":null,"installed":{"format":3,"plugins":{"tty":{"version":"0.1.0","path":"plugins/tty/0.1.0","enabled":true,"sidecars":{}}},"sidecars":{}},"firstRun":false,"starter":null}}},
+    {"call":{"name":"sidecarsOutdated"}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.40","available":null}}},
+    {"call":{"name":"setTheme","payload":"$theme-2"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setMenuLanguage","payload":"$menu-language-2"}},
+    {"reply":{"result":null}}
+  ]
+}

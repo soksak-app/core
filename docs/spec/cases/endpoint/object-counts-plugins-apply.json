@@ -1,0 +1,22 @@
+{
+  "name": "object-counts-plugins-apply",
+  "description": "The plugins apply answers reloaded before the new start of the workbench, and the wait for the status core.window.workbench ends with the new start that is complete.",
+  "replay": false,
+  "reason": "The case plays the commands and the waits of the operations of an object-count measurement, which run sok processes and a client of the endpoint on a workbench that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"name":"core.window.workbench","window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"start":"start-1","startedAt":1001,"readyState":"complete"}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"exposure.list","params":{"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"status":[],"commands":[{"name":"core.plugins.apply","description":"Asks for each modified tab of the window whether to save it, discard its changes or keep the workbench, then saves the projects and starts the workbench of the window again so that it loads the plugins that installed.json lists, answering reloaded true before the new start; answers reloaded false when a tab is kept.","params":{"type":"object","properties":{}},"result":{"type":"object","properties":{"reloaded":{"type":"boolean"}}},"registered":true}],"element":[]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"name":"core.plugins.apply","params":{},"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"reloaded":true}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.watch","params":{"window":"w1","name":"core.window.workbench"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"w1","name":"core.window.workbench"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"start":"start-2","startedAt":1002,"readyState":"complete"}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.unwatch","params":{"window":"w1","name":"core.window.workbench"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}}
+  ]
+}

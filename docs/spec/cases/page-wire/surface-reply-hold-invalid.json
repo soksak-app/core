@@ -1,0 +1,8 @@
+{
+  "name": "surface-reply-hold-invalid",
+  "description": "The page sends no call while a hold refuses an invalid surface.",
+  "replay": false,
+  "reason": "The case has no step: the page sends no call, so there is no reply for the producer to compare (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+  ]
+}

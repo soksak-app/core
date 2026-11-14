@@ -34,7 +34,7 @@ type CapturePlan struct {
 	Frames  int
 }
 
-// Capture is the recording device. The platform implementation or a fake of a check provides it.
+// Capture is the recording device. The platform implementation provides it.
 type Capture interface {
 	// Open makes the window with the window server number target.Window the recording target. An error leaves no new
 	// active recording and leaves any existing active recording unchanged.
@@ -131,8 +131,8 @@ func (r *Recording) Start(capture Capture, target CaptureTarget, directory strin
 
 // createDirectory creates the private folder of a new recording; it fails while a recording or its cleanup owns a folder.
 func (r *Recording) createDirectory(directory string) error {
-	if r.directory != "" {
-		return fmt.Errorf("a capture into %s is running", r.directory)
+	if err := RefuseStart(r.directory); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(directory), 0o700); err != nil {
 		return err
@@ -207,30 +207,63 @@ func (r *Recording) settleNewWindow() error {
 // removeFailedStartDirectory removes the folder of a start that failed with cause, which left no native recording. A folder that
 // cannot be removed stays owned until Abort removes it.
 func (r *Recording) removeFailedStartDirectory(directory string, cause error) error {
-	if removeErr := os.RemoveAll(directory); removeErr != nil {
+	cleanup := SettleCleanup(cause, os.RemoveAll(directory))
+	if cleanup.RetainOwner {
 		r.directory = directory
 		r.captureStopped = true
 		r.window = nil
-		return fmt.Errorf("%w; remove failed capture directory: %v", cause, removeErr)
 	}
-	return cause
+	return cleanup.Err
 }
 
-// Fault injection points of the recording. A non-empty variable makes its point fail after the device call it names, and the
-// value is the exact error text. The device call runs first, so the device records the call as the native device does.
-// docs/operations/examples.md#test-kinds
-const (
-	captureOpenFault  = "SOKSAK_FAULT_CAPTURE_OPEN"
-	captureStartFault = "SOKSAK_FAULT_CAPTURE_START"
-	captureStopFault  = "SOKSAK_FAULT_CAPTURE_STOP"
-)
+// RefuseStart is the error of a start while directory, the folder that a recording or its cleanup owns, is not empty.
+func RefuseStart(directory string) error {
+	if directory == "" {
+		return nil
+	}
+	return fmt.Errorf("a capture into %s is running", directory)
+}
 
-// faultError returns the error that the fault point named by variable injects, or nil when the variable is empty.
-func faultError(variable string) error {
-	if message := os.Getenv(variable); message != "" {
-		return errors.New(message)
+// RefuseFinish is the error of a finish of a recording that owns directory, whose native recording has or has not ended
+// (stopped), or nil when the recording can end.
+func RefuseFinish(directory string, stopped bool) error {
+	if stopped {
+		return errors.New("capture has stopped but its directory cleanup is incomplete; abort is required")
+	}
+	if directory == "" {
+		return errors.New("no capture is running")
 	}
 	return nil
+}
+
+// NeedsStop reports whether an abort ends the native recording of the owned directory: it does not when the recording has ended
+// already, so a retry of the cleanup does not stop twice.
+func NeedsStop(directory string, stopped bool) bool {
+	return directory != "" && !stopped
+}
+
+// StopFailure is the error of an ended native recording whose stop failed with err.
+func StopFailure(err error) error {
+	return fmt.Errorf("capture stop failed: %w", err)
+}
+
+// CleanupResult is the result of the removal of an owned folder: whether the recording keeps the folder, because its removal failed,
+// and the error to report, which holds the cause that led to the removal and the failure of the removal.
+type CleanupResult struct {
+	RetainOwner bool
+	Err         error
+}
+
+// SettleCleanup combines cause, the error that led to the removal of a folder (nil for none), with removeErr, the result of that
+// removal. A failed removal keeps the folder owned and is reported after the cause.
+func SettleCleanup(cause, removeErr error) CleanupResult {
+	if removeErr == nil {
+		return CleanupResult{Err: cause}
+	}
+	if cause == nil {
+		return CleanupResult{RetainOwner: true, Err: fmt.Errorf("capture directory cleanup failed: %w", removeErr)}
+	}
+	return CleanupResult{RetainOwner: true, Err: fmt.Errorf("%w; capture directory cleanup failed: %v", cause, removeErr)}
 }
 
 // begin opens target and starts its recording with plan in directory. It returns once still 0 is written; a failure leaves no
@@ -240,22 +273,7 @@ func begin(capture Capture, target CaptureTarget, directory string, plan Capture
 	if err := capture.Open(target); err != nil {
 		return err
 	}
-	if err := faultError(captureOpenFault); err != nil {
-		return err
-	}
-	if err := capture.Start(directory, plan); err != nil {
-		return err
-	}
-	return faultError(captureStartFault)
-}
-
-// stopCapture ends the native recording and returns the number of frames it wrote. The recording ends also when the stop fails.
-func stopCapture(capture Capture) (int, error) {
-	count, err := capture.Stop()
-	if err == nil {
-		err = faultError(captureStopFault)
-	}
-	return count, err
+	return capture.Start(directory, plan)
 }
 
 // Abort stops the recording in progress and deletes the folder. It reports a stop error, after which the native recording has
@@ -270,22 +288,19 @@ func (r *Recording) Abort(capture Capture) error {
 	if err := r.settleNewWindow(); err != nil && r.captureStopped {
 		stopErr = err
 	}
-	if !r.captureStopped {
-		if _, err := stopCapture(capture); err != nil {
-			stopErr = fmt.Errorf("stop capture: %w", err)
+	if NeedsStop(r.directory, r.captureStopped) {
+		if _, err := capture.Stop(); err != nil {
+			stopErr = StopFailure(err)
 		}
 		r.captureStopped = true
 	}
-	if err := os.RemoveAll(r.directory); err != nil {
-		if stopErr != nil {
-			return fmt.Errorf("%w; remove capture directory: %v", stopErr, err)
-		}
-		return fmt.Errorf("remove capture directory: %w", err)
+	cleanup := SettleCleanup(stopErr, os.RemoveAll(r.directory))
+	if !cleanup.RetainOwner {
+		r.directory = ""
+		r.captureStopped = false
+		r.window = nil
 	}
-	r.directory = ""
-	r.captureStopped = false
-	r.window = nil
-	return stopErr
+	return cleanup.Err
 }
 
 // Finish ends the recording in progress and returns the folder, the number of frames and the window server number of its
@@ -294,13 +309,10 @@ func (r *Recording) Abort(capture Capture) error {
 func (r *Recording) Finish(capture Capture) (string, int, *int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.captureStopped {
-		return "", 0, nil, errors.New("capture has stopped but its directory cleanup is incomplete; abort is required")
+	if err := RefuseFinish(r.directory, r.captureStopped); err != nil {
+		return "", 0, nil, err
 	}
 	directory := r.directory
-	if directory == "" {
-		return "", 0, nil, errors.New("no capture is running")
-	}
 	if err := r.settleNewWindow(); err != nil {
 		// The start failed before a recording ran: the requester owns the folder, which keeps what was written.
 		if r.captureStopped {
@@ -311,7 +323,7 @@ func (r *Recording) Finish(capture Capture) (string, int, *int, error) {
 		return directory, 0, nil, err
 	}
 	window := r.window
-	count, err := stopCapture(capture)
+	count, err := capture.Stop()
 	r.directory = ""
 	r.captureStopped = false
 	r.window = nil

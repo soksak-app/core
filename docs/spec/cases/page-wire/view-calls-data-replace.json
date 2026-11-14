@@ -1,0 +1,29 @@
+{
+  "name": "view-calls-data-replace",
+  "description": "A view replaces the key note with its base, and then replaces it without a base, which the page refuses.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000000246103,"source":"page"},"mono-ns-1":{"type":"integer","example":5245647706,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"p1","root":"/projects/p1","identity":"p1","title":"p1","color":"#fff","named":1,"activeSpaceId":"spc-p1","spaces":[{"id":"spc-p1","title":"SPACE1","layout":{"state":{"cards":[]}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.data.replace","params":{"key":"note","base":"default","value":"kept"}}}},
+    {"call":{"name":"workspace","payload":{"kind":"patch","id":"p1","patch":{"plugins":{"probe":{"note":{"format":1,"value":"kept"}}}}}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":true,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.data.replace","params":{"key":"note","value":"x"}}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"error":{"code":-32000,"message":"view call runtime.data.replace requires base"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":4}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

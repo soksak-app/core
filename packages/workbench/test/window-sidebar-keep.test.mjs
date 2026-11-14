@@ -4,21 +4,26 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { drained } from "./support/drained.mjs";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
 
 const pluginId = "fixture-keep";
 const setId = "fixture-keep-set";
 const treeId = (side) => `spc-aaaaaa/${side}/${pluginId}.tree`;
 
-test("a switched window sidebar keeps its section surfaces hidden in the plane, and an arrangement keeps the sidebar that stays", { timeout: 5000 }, async (t) => {
+const wire = selectPageWire("window-sidebar-keep-session");
+
+test("a switched window sidebar keeps its section surfaces hidden in the plane, and an arrangement keeps the sidebar that stays", { timeout: 5000 }, async () => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
   globalThis.CSS = dom.window.CSS;
+  Object.defineProperty(document, "adoptedStyleSheets", { value: [] });
   globalThis.devicePixelRatio = 2;
   const planeEl = document.getElementById("plane");
   Object.defineProperty(planeEl, "clientWidth", { value: 800 });
@@ -28,11 +33,6 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // The page has no host in this test, so it is not native: a surface is drawn as a placeholder. Without a host, report writes the
-  // error to console.error and stores no record, so the test keeps this replacement of the report to observe the errors that the plane reports.
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
   // The environment of the page: the plugin with its tab and its section, and the set that the left and the right side show.
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
@@ -61,13 +61,18 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
   const { sectionSurfaceShown } = await import("../section-surfaces.js");
   const { sidebarsState } = await import("../sidebar-sections.js");
   const { audit } = await import("../commands.js");
+  const { flushEvents } = await import("../page-log.js");
+  const modules = await import("../surface-modules.js");
+  // The error records that the page wrote to the log of the host.
+  const errorRecords = () => wire.calls.filter(({ name, payload }) => name === "log" && payload.action === "batch")
+    .flatMap(({ payload }) => payload.events).filter(({ event }) => event === "workbench.record.error");
   try {
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
     const drawHeld = () => { const draw = held; held = null; draw?.(); };
     const slotsOf = (id) => [...planeEl.querySelectorAll(`[data-native-surface][data-native-surface-id="${id}"]`)];
-    // A surface that the page ends loses its placeholder in the document (disposeSurface), so the placeholders show the surfaces that stand.
-    const placeholdersOf = (id) => [...planeEl.querySelectorAll(`.surface-placeholder[data-surface-id="${id}"]`)];
+    // A surface that the page ends loses its mounted view (disposeSurface), so the mounted views show the surfaces that stand.
+    const mountedOf = (id) => modules.mountedSurface(id);
     const switchTo = (side, on) => { begin({ left: side === "left" ? on : true, right: side === "right" ? on : true }); plane.settle(); drawHeld(); };
     plane.adopt(plane.fresh(), "spc-aaaaaa");
     drawHeld();
@@ -76,8 +81,8 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
       assert.equal(slotsOf(treeId(side)).length, 1, `the ${side} sidebar seats its section once`);
     }
     const leftSlot = slotsOf(treeId("left"))[0];
-    const [leftPlaceholder] = placeholdersOf(treeId("left"));
-    assert.ok(leftPlaceholder, "the left section stands as a placeholder");
+    const leftMounted = mountedOf(treeId("left"));
+    assert.ok(leftMounted, "the left section is not mounted");
 
     // An arrangement that closes and inserts the window sidebars again keeps the slot of the sidebar that stays.
     switchTo("right", false);
@@ -94,8 +99,8 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     assert.deepEqual(sidebarsState().map(({ sidebar }) => sidebar), ["left"], "core.sidebars reports the hidden sidebar");
     // The kept set is not drawn, so its controls are inert and the audit of the workbench lists none of them.
     assert.deepEqual(audit(document.body), [], "the audit lists the controls of the kept set");
-    // Without a native host a hidden section is seated and not mounted (sidebar-sections.js, mountPlacedSections), so no placeholder of it
-    // stands until the show; the surface that is not mounted cannot be observed as ended here.
+    assert.ok(mountedOf(treeId("right")) && !mountedOf(treeId("right")).disposed, "the switch off ended the view of the right section");
+    const rightMounted = mountedOf(treeId("right"));
 
     // A show places the kept surface in the sidebar again.
     switchTo("right", true);
@@ -105,9 +110,14 @@ test("a switched window sidebar keeps its section surfaces hidden in the plane, 
     assert.equal(shown[0].closest("[hidden]"), null, "the shown section stays hidden");
     assert.ok(sectionSurfaceShown(treeId("right")));
     assert.deepEqual(audit(document.body), [], "the audit lists a control of the shown sidebar");
-    assert.equal(placeholdersOf(treeId("right")).length, 1, "the sidebar ended a surface");
-    assert.deepEqual(placeholdersOf(treeId("left")), [leftPlaceholder], "the sidebar ended the surface of the sidebar that stays");
-    assert.deepEqual(reports, []);
+    assert.equal(mountedOf(treeId("right")), rightMounted, "the show started a new view for the kept section");
+    assert.equal(rightMounted.disposed, false, "the sidebar ended a surface");
+    assert.equal(mountedOf(treeId("left")), leftMounted, "the sidebar ended the surface of the sidebar that stays");
+    assert.equal(leftMounted.disposed, false, "the sidebar ended the surface of the sidebar that stays");
+    await drained();
+    await flushEvents();
+    assert.deepEqual(errorRecords(), []);
+    wire.finish();
   } finally {
     delete globalThis.devicePixelRatio;
     dom.window.close();

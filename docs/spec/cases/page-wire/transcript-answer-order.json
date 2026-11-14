@@ -1,0 +1,11 @@
+{
+  "name": "transcript-answer-order",
+  "description": "The lines of two calls are sent in the order in which their answers arrived, and the host answers the first line after the second call is sent.",
+  "replay": true,
+  "steps": [
+    {"call":{"name":"log","payload":{"action":"transcript","start":"start-1","line":"host second [1] -> 2"}}},
+    {"reply":{"result":null,"held":true}},
+    {"call":{"name":"log","payload":{"action":"transcript","start":"start-1","line":"host first null -> \"done\""}}},
+    {"reply":{"result":null}}
+  ]
+}

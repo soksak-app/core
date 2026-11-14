@@ -1,0 +1,12 @@
+{
+  "name": "exposure-registry-core-entries",
+  "description": "The registry of the page sends the changes of a watched core status to the host, once per new value.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureChanged","payload":{"name":"core.fixture.count","value":3}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"exposureChanged","payload":{"name":"core.fixture.count","value":4}}},
+    {"reply":{"result":null}}
+  ]
+}

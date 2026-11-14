@@ -48,7 +48,7 @@ fn append_private_file_creates_an_owner_only_file_and_appends() {
     assert_eq!(mode(&path), 0o600);
     // The permissions of an existing file are not changed.
     let shared = directory.path().join("shared.log");
-    std::fs::write(&shared, "").unwrap();
+    std::fs::File::create(&shared).unwrap();
     std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o644)).unwrap();
     current.append_private_file(&shared).unwrap();
     assert_eq!(mode(&shared), 0o644);
@@ -85,7 +85,7 @@ fn write_private_file_creates_an_owner_only_file_and_replaces_its_contents() {
     assert_eq!(mode(&path), 0o600);
     // The permissions of an existing file are not changed.
     let shared = directory.path().join("shared.json");
-    std::fs::write(&shared, "").unwrap();
+    std::fs::File::create(&shared).unwrap();
     std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o644)).unwrap();
     current.write_private_file(&shared, b"x").unwrap();
     assert_eq!(mode(&shared), 0o644);

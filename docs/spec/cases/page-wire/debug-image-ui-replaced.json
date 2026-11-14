@@ -1,0 +1,282 @@
+{
+  "name": "debug-image-ui-replaced",
+  "description": "The page opens the debug view, shows an image file, shows the list again, and a load of the replaced image places the modal no more.",
+  "replay": false,
+  "reason": "The case shows, updates, places and hides a modal view of a window through the overlay calls, which the Go producer does not run (packages/host/go/tests/page_wire_test.go answers only log and workspace).",
+  "variables": {
+    "show-request": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "statuses": {
+      "type": "array",
+      "example": [],
+      "source": "page"
+    },
+    "update": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-2": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-3": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    },
+    "update-4": {
+      "type": "object",
+      "example": {},
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": "$show-request"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRecord",
+        "payload": {
+          "workbench": "$statuses"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/state-1.json"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugFiles"
+      }
+    },
+    {
+      "reply": {
+        "result": [
+          {
+            "path": "logs/captures/still-1/window.png",
+            "size": 267300,
+            "modified": 1
+          }
+        ]
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "debugRead",
+        "payload": {
+          "path": "logs/captures/still-1/window.png"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "path": "logs/captures/still-1/window.png",
+          "size": 267300,
+          "truncated": false,
+          "kind": "image",
+          "text": "",
+          "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 640,
+            "h": 500
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayUpdate",
+        "payload": "$update-4"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayPlace",
+        "payload": {
+          "id": "debug",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 1024,
+            "h": 768
+          },
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 640,
+            "h": 500
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 1024,
+          "h": 768
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "debug"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

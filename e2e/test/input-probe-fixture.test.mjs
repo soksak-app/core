@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { JSDOM } from "jsdom";
 import { validateManifest } from "@soksak/plugin-api";
 
 import { createInputLog } from "../fixtures/input-probe/probe/ui/input-log.js";
@@ -48,45 +49,38 @@ test("the input probe release holds its view page, its region document and the m
   assert.match(app, /const PLUGIN = "probeinput";/);
 });
 
-/** An object with addEventListener that keeps its listeners by type in on. */
-const eventTarget = (members) => ({
-  ...members,
-  on: new Map(),
-  addEventListener(type, fn) {
-    if (!this.on.has(type)) this.on.set(type, []);
-    this.on.get(type).push(fn);
-  },
-});
-
-/** A text field with the events and the selection of an input element, and the window of its document. */
-function fakeField() {
-  const element = eventTarget({ value: "", selectionStart: 0, selectionEnd: 0, selectionDirection: "none",
-    setSelectionRange(start, end) {
-      this.selectionStart = start;
-      this.selectionEnd = end;
-    } });
-  const document = eventTarget({ activeElement: element, hasFocus: () => true });
-  const view = eventTarget({ document, performance: { timeOrigin: 1000, now: () => 5 } });
-  // default: an event without a time arrives at time 0.
-  const dispatch = (target, type, event) => {
-    for (const fn of target.on.get(type) ?? []) fn({ type, timeStamp: 0, ...event });
+/** A document with a text field, in a jsdom window: the events and the selection of the field are those of jsdom. */
+function textField() {
+  const { window } = new JSDOM("<!doctype html><input id=field>", { url: "soksak://probeinput/" });
+  const element = window.document.getElementById("field");
+  element.focus();
+  // The time of an event is its timeStamp, which a dispatched event takes from the clock; the event of a case carries the time of the case.
+  const dispatch = (target, event, timeStamp) => {
+    if (timeStamp !== undefined) Object.defineProperty(event, "timeStamp", { value: timeStamp });
+    target.dispatchEvent(event);
   };
-  const fire = (type, event = {}) => dispatch(element, type, event);
-  const fireDocument = (type, event = {}) => dispatch(document, type, event);
-  return { element, view, fire, fireDocument };
+  const keyboard = (type, init, timeStamp) => dispatch(element, new window.KeyboardEvent(type, { bubbles: true, ...init }), timeStamp);
+  const composition = (type, data, timeStamp) => dispatch(element, new window.CompositionEvent(type, { data }), timeStamp);
+  const input = (init, timeStamp) => dispatch(element, new window.InputEvent("input", init), timeStamp);
+  const clipboard = (type, text) => {
+    const event = new window.Event(type);
+    Object.defineProperty(event, "clipboardData", { value: { getData: (kind) => (kind === "text/plain" ? text : "") } });
+    dispatch(element, event);
+  };
+  const documentEvent = (event, timeStamp) => dispatch(window.document, event, timeStamp);
+  return { window, element, keyboard, composition, input, clipboard, documentEvent };
 }
 
-const key = (key, extra = {}) => ({ key, code: `Key${key.toUpperCase()}`, shiftKey: false, altKey: false, ctrlKey: false,
-  metaKey: false, isComposing: false, keyCode: 0, repeat: false, isTrusted: true, ...extra });
+const key = (key, extra = {}) => ({ key, code: `Key${key.toUpperCase()}`, ...extra });
 
 test("the input log reports keys in order with modifiers, text and arrival time", { timeout: 5000 }, () => {
-  const { element, view, fire } = fakeField();
-  const log = createInputLog(element, view);
-  fire("keydown", { ...key("a"), timeStamp: 10 });
-  fire("keyup", { ...key("a"), timeStamp: 12 });
-  fire("keydown", { ...key("c", { metaKey: true, shiftKey: true }), timeStamp: 20 });
+  const { window, element, keyboard } = textField();
+  const log = createInputLog(element, window);
+  keyboard("keydown", key("a"), 10);
+  keyboard("keyup", key("a"), 12);
+  keyboard("keydown", key("c", { metaKey: true, shiftKey: true }), 20);
   const state = log.read();
-  assert.equal(state.documentTimeOriginMs, 1000);
+  assert.equal(state.documentTimeOriginMs, window.performance.timeOrigin);
   assert.equal(state.focused, true);
   assert.deepEqual(state.keys.map(({ sequence, type, key: name, modifiers, text, atMs }) => ({ sequence, type, name, modifiers, text, atMs })), [
     { sequence: 1, type: "keydown", name: "a", modifiers: [], text: "a", atMs: 10 },
@@ -96,18 +90,18 @@ test("the input log reports keys in order with modifiers, text and arrival time"
 });
 
 test("the input log reports the preedit and its range and one commit when a composition ends", { timeout: 5000 }, () => {
-  const { element, view, fire } = fakeField();
-  const log = createInputLog(element, view);
+  const { window, element, composition, input } = textField();
+  const log = createInputLog(element, window);
   element.value = "ab";
-  element.selectionStart = element.selectionEnd = 2;
-  fire("compositionstart", { data: "" });
-  fire("compositionupdate", { data: "ㅎ" });
-  fire("input", { inputType: "insertCompositionText", isComposing: true, data: "ㅎ" });
-  fire("compositionupdate", { data: "한" });
+  element.setSelectionRange(2, 2);
+  composition("compositionstart", "");
+  composition("compositionupdate", "ㅎ");
+  input({ inputType: "insertCompositionText", isComposing: true, data: "ㅎ" });
+  composition("compositionupdate", "한");
   assert.deepEqual(log.read().preedit, { text: "한", start: 2, end: 3 });
-  fire("input", { inputType: "insertFromComposition", isComposing: true, data: "한" });
-  fire("compositionend", { data: "한", timeStamp: 30 });
-  fire("input", { inputType: "insertText", isComposing: false, data: "x", timeStamp: 31 });
+  input({ inputType: "insertFromComposition", isComposing: true, data: "한" });
+  composition("compositionend", "한", 30);
+  input({ inputType: "insertText", isComposing: false, data: "x" }, 31);
   const state = log.read();
   assert.equal(state.preedit, null);
   assert.deepEqual(state.commits, [
@@ -117,13 +111,13 @@ test("the input log reports the preedit and its range and one commit when a comp
 });
 
 test("the input log reports the copied selection, the pasted text, the caret, and clears", { timeout: 5000 }, () => {
-  const { element, view, fire } = fakeField();
-  const log = createInputLog(element, view);
+  const { window, element, clipboard } = textField();
+  const log = createInputLog(element, window);
   const seen = [];
   log.subscribe((state) => seen.push(state.caret));
   log.select({ value: "EDITMENU", start: 0, end: 4 });
-  fire("copy");
-  fire("paste", { clipboardData: { getData: (type) => (type === "text/plain" ? "PASTED" : "") } });
+  clipboard("copy", "");
+  clipboard("paste", "PASTED");
   let state = log.read();
   assert.deepEqual(state.caret, { start: 0, end: 4, direction: "none" });
   assert.deepEqual(state.copies.map((entry) => entry.text), ["EDIT"]);
@@ -133,18 +127,21 @@ test("the input log reports the copied selection, the pasted text, the caret, an
   state = log.read();
   assert.equal(state.value, "");
   assert.deepEqual([state.keys, state.commits, state.copies, state.pastes, state.preedit], [[], [], [], [], null]);
-  assert.deepEqual(log.clock(), { documentTimeOriginMs: 1000, sourceNowMs: 5, sourceResolutionMs: 1 });
+  const clock = log.clock();
+  assert.deepEqual([clock.documentTimeOriginMs, clock.sourceResolutionMs], [window.performance.timeOrigin, 1]);
+  assert.ok(clock.sourceNowMs > 0 && clock.sourceNowMs <= window.performance.now(), "the source reading is a reading of the clock of the window");
 });
 
 test("the input log reports the wheels and the pointer gesture of its document, and a foreign button", { timeout: 5000 }, () => {
-  const { element, view, fireDocument } = fakeField();
-  const log = createInputLog(element, view);
-  fireDocument("wheel", { deltaX: 0, deltaY: -120, shiftKey: true, altKey: false, ctrlKey: false, metaKey: false, timeStamp: 7 });
-  fireDocument("pointerdown", { buttons: 1 });
-  fireDocument("pointermove", { buttons: 1 });
-  fireDocument("pointermove", { buttons: 1 });
-  fireDocument("pointerup", { buttons: 0 });
-  fireDocument("pointermove", { buttons: 2 });
+  const { window, element, documentEvent } = textField();
+  const log = createInputLog(element, window);
+  const pointer = (type, buttons) => documentEvent(new window.MouseEvent(type, { buttons }));
+  documentEvent(new window.WheelEvent("wheel", { deltaX: 0, deltaY: -120, shiftKey: true }), 7);
+  pointer("pointerdown", 1);
+  pointer("pointermove", 1);
+  pointer("pointermove", 1);
+  pointer("pointerup", 0);
+  pointer("pointermove", 2);
   let state = log.read();
   assert.deepEqual(state.wheels, [{ sequence: 1, deltaX: 0, deltaY: -120, modifiers: ["shift"], atMs: 7 }]);
   assert.deepEqual(state.pointer, { downs: 1, drags: 2, ups: 1, foreign: 1 });

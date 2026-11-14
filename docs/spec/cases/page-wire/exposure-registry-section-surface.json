@@ -1,0 +1,12 @@
+{
+  "name": "exposure-registry-section-surface",
+  "description": "The page forwards a command to a tab surface and a status request to a section surface that the request names.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"command.run","params":{"name":"probe.send","params":{}}}}},
+    {"reply":{"result":{"result":"tab-a"}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"spc-aaaaaa/left/probe.tree","method":"status.get","params":{"name":"probe.lines","surface":"spc-aaaaaa/left/probe.tree"}}}},
+    {"reply":{"result":{"result":"spc-aaaaaa/left/probe.tree"}}}
+  ]
+}

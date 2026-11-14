@@ -1,0 +1,14 @@
+{
+  "name": "log-clock",
+  "description": "The event writer of the page asks the host for its clocks, and the host answers with its wall clock and monotonic clock.",
+  "plugin": "probe",
+  "replay": true,
+  "variables": {
+    "ts-us": {"type": "integer", "example": 1000000, "source": "host"},
+    "mono-ns": {"type": "integer", "example": 1000000000, "source": "host"}
+  },
+  "steps": [
+    {"call": {"command": "runtime.log", "params": {"action": "clock"}}},
+    {"reply": {"result": {"ts_us": "$ts-us", "mono_ns": "$mono-ns"}}}
+  ]
+}

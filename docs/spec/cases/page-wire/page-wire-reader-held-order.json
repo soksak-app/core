@@ -1,0 +1,18 @@
+{
+  "name": "page-wire-reader-held-order",
+  "description": "The case holds the replies of a workspace snapshot, a log clock request and a workspace settings change, so a test releases them by their step or by the name of their call in any order.",
+  "replay": false,
+  "reason": "The case judges the keyed release of the reader; the producers run the cases of the host methods.",
+  "variables": {
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456 },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789 }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [], "open": [] }, "held": true } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns" }, "held": true } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "left": false }, "remove": [] } } },
+    { "reply": { "result": null, "held": true } }
+  ]
+}

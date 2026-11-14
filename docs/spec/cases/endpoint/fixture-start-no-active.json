@@ -1,0 +1,10 @@
+{
+  "name": "fixture-start-no-active",
+  "description": "A start layout whose focused card holds no layout probe tab fails after the grid is read.",
+  "replay": false,
+  "reason": "The case plays the requests of the start state of a check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"id":"t1","plugin":"starter-a"}]},{"id":"lower","focused":false,"active":"b1","tabs":[{"id":"b1","plugin":"starter-b"}]}]}}}
+  ]
+}

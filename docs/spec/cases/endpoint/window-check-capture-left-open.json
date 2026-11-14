@@ -1,0 +1,19 @@
+{
+  "name": "window-check-capture-left-open",
+  "description": "A recording that a check started and did not stop is stopped by the cleanup of the session after the stop request of the check is absent: the host answers the start with the frame folder and the window 7, the stop with the same folder, and the covered drawing is held from the start to the stop.",
+  "replay": false,
+  "reason": "The case starts a capture of a window of the application, and the replay cannot choose the folder that the host creates.",
+  "variables": {"frames": {"type": "string", "example": "/tmp/soksak-config/logs/captures/capture-1"}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"refreshRate": 120}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "diagnostics.capture.start", "params": {"window": "main", "gap": 8.333333333333334, "frames": 4096}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": {"frames": "$frames", "window": 7}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "diagnostics.capture.stop", "params": {"window": "main", "after": 0}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": {"frames": "$frames", "window": 7}}},
+    {"send": {"jsonrpc": "2.0", "id": 5, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 5, "result": null}}
+  ]
+}

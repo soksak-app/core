@@ -1,0 +1,31 @@
+{
+  "name": "testing-status-watch",
+  "description": "A status of the exposure is read and watched through the exposure requests of the host.",
+  "plugin": "probe",
+  "replay": false,
+  "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "steps": [
+    {"call":{"command":"runtime.native.on","params":{"name":"exposure-request"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"probe.count"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.document"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.input"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.hit"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.clock"}}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"exposure-request","data":{"id":1001,"method":"status.get","params":{"name":"probe.count"}}}},
+    {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1001,"result":{"count":1}}}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"exposure-request","data":{"id":1002,"method":"status.watch","params":{"name":"probe.count"}}}},
+    {"call":{"command":"runtime.native.call","params":{"name":"changed","payload":{"name":"probe.count","value":{"count":1},"version":1}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"exposureReply","payload":{"id":1002,"result":null}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"changed","payload":{"name":"probe.count","value":{"count":2},"version":2}}}},
+    {"reply":{"result":null}}
+  ]
+}

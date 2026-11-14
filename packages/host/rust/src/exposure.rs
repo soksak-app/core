@@ -246,12 +246,18 @@ pub fn exposure_list(
 }
 
 pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
-    let Ok(mut lists) = serde_json::from_str::<BTreeMap<String, Vec<Box<RawValue>>>>(listed.get())
-    else {
-        return Err(Failure::new(
-            -32603,
-            "the page returned an exposure list that is not an object of arrays",
-        ));
+    let mut lists = match serde_json::from_str::<BTreeMap<String, Vec<Box<RawValue>>>>(listed.get())
+    {
+        Ok(lists) => lists,
+        Err(error) if listed.get().trim_start().starts_with('{') => {
+            return Err(Failure::new(-32603, format!("page exposure.list: {error}")));
+        }
+        Err(_) => {
+            return Err(Failure::new(
+                -32603,
+                format!("page exposure.list is {}, not an object", listed.get()),
+            ));
+        }
     };
     let Value::Object(declared) = host_declarations() else {
         unreachable!("host declarations are an object")
@@ -3028,7 +3034,6 @@ impl Host {
         params: &Map<String, Value>,
         reply: Option<&crate::endpoint::ReplyScope>,
     ) -> Result<Value, Failure> {
-        check_host_name(method, name)?;
         let unknown = || Failure::new(UNKNOWN_NAME, undeclared_text(method, name));
         match (method, name) {
             ("status.get", "host.window") => window_status(window),
@@ -3083,10 +3088,10 @@ impl Host {
                 | "host.sidecars" | "host.buttons" | "host.log",
             ) => Ok(Value::Null),
             ("command.run", _) => {
+                // The endpoint has checked that the params are absent, null or an object.
                 let arguments = match params.get("params") {
-                    None | Some(Value::Null) => Map::new(),
                     Some(Value::Object(arguments)) => arguments.clone(),
-                    Some(_) => return Err(Failure::params("params must be an object")),
+                    _ => Map::new(),
                 };
                 self.host_command(window, name, &arguments, reply)
                     .ok_or_else(unknown)?
@@ -3415,10 +3420,6 @@ impl Host {
                     .answer(window.label(), answer)
                     .map_err(Failure::params)?;
                 raw(&Value::Null)
-            }
-            "exposure.list" => {
-                let page_params = params.clone();
-                exposure_list(&params, || self.page(window, method, page_params, reply))
             }
             #[cfg(feature = "diagnostics")]
             _ if method.starts_with("diagnostics.") => raw(&crate::diagnostics::call(

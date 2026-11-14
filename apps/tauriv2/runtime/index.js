@@ -7,6 +7,7 @@ import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { settlingCalls } from "@soksak/workbench/host-calls.js";
 import { surfaceCalls } from "@soksak/workbench/surface-calls.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
+import { platformClock } from "@soksak/plugin-api/log-batch.js";
 import { createLifecycleListener } from "./listener-lifecycle.js";
 
 const COMMAND = {
@@ -262,6 +263,8 @@ export const host = (() => {
   };
 })();
 
+/** The clock of the page that its event batcher reads (docs/spec/plugins.md#runtime-module). */
+export const clock = platformClock;
 export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
 
 /*

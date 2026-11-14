@@ -136,7 +136,11 @@ fn bundle_zip(parent: &Path, version: &str) -> (PathBuf, String) {
         ),
     )
     .unwrap();
-    std::fs::write(bundle.join("MacOS/soksak"), "#!/bin/sh\n").unwrap();
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/bundle/soksak"),
+        bundle.join("MacOS/soksak"),
+    )
+    .unwrap();
     let zip = parent.join(format!("soksak-{version}-darwin-arm64-tauriv2.zip"));
     let status = Command::new("ditto")
         .args(["-c", "-k", "--keepParent"])

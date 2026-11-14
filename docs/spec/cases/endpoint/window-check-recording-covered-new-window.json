@@ -1,0 +1,15 @@
+{
+  "name": "window-check-recording-covered-new-window",
+  "description": "A recording of a new window starts without a hold of the covered drawing of the requesting window, and its stop ends nothing.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "variables": {"frames":{"type":"string","example":"/captures/capture-1"}},
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"refreshRate":120}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"diagnostics.capture.start","params":{"window":"main","newWindow":true,"gap":8.333333333333334,"frames":4096}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"frames":"$frames","window":null}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.capture.stop","params":{"window":"main","after":0}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"error":{"code":1004,"message":"the capture failed"}}}
+  ]
+}

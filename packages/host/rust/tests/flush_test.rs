@@ -13,46 +13,13 @@ use std::path::Path;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/sidecar_recorder.rs"]
+mod sidecar_recorder;
 
 use serde_json::Value;
 use serde_json::value::RawValue;
-use soksak_host::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
-
-#[derive(Clone)]
-struct FakeOwner {
-    key: String,
-    root: String,
-    sent: std::sync::mpsc::Sender<Message>,
-}
-
-impl Owner for FakeOwner {
-    fn key(&self) -> String {
-        self.key.clone()
-    }
-    fn root(&self) -> Result<String, String> {
-        Ok(self.root.clone())
-    }
-
-    fn deliver(&self, message: Message) {
-        let _ = self.sent.send(message);
-    }
-    fn deliver_failure(&self, failure: Failure) {
-        // These checks do not assert failures, so failures are left in the check output.
-        eprintln!("sidecar failure: {failure:?}");
-    }
-}
-
-fn owner(key: &str, root: &str) -> (FakeOwner, std::sync::mpsc::Receiver<Message>) {
-    let (sent, received) = std::sync::mpsc::channel();
-    (
-        FakeOwner {
-            key: key.into(),
-            root: root.into(),
-            sent,
-        },
-        received,
-    )
-}
+use sidecar_recorder::{SidecarRecorder, owner};
+use soksak_host::sidecars::{SidecarDeclaration, Sidecars};
 
 fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
@@ -80,7 +47,7 @@ fn declare(files: &Files, folder: &Path) -> Vec<SidecarDeclaration> {
         .collect()
 }
 
-fn create(files: &Files, directory: &std::path::Path) -> Result<Sidecars<FakeOwner>, String> {
+fn create(files: &Files, directory: &std::path::Path) -> Result<Sidecars<SidecarRecorder>, String> {
     Sidecars::new(&declare(files, directory), directory.to_path_buf())
 }
 
@@ -408,7 +375,11 @@ fn received_lines(lines: &[&str]) -> String {
 }
 
 /// Sends 20 KB bodies on s1 until the queue refuses one, and returns the count of the bodies that it accepted.
-fn send_until_full(sidecars: &Sidecars<FakeOwner>, owner: &FakeOwner, big: &RawValue) -> usize {
+fn send_until_full(
+    sidecars: &Sidecars<SidecarRecorder>,
+    owner: &SidecarRecorder,
+    big: &RawValue,
+) -> usize {
     for queued in 0..4000 {
         if let Err(error) = sidecars.send(owner, ECHO, "s1", big) {
             assert!(error.contains("is not keeping up"), "{error}");

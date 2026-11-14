@@ -1,48 +1,31 @@
 // When a request is still pending at STALL_AFTER, the check keeps the stacks of the host process at that time (F69).
-// What the main thread did while it did not answer can be seen only at that moment. The record ends no request.
+// What the main thread did while it did not answer can be seen only at that moment. The record ends no request. The decisions of
+// this file are functions of data: the instants of a request, the outcome of a sample, and the texts of the tools that the stall
+// record reads. The live tools (/usr/bin/sample, lsof, launchctl) are exercised by test/platform/darwin/system/stall-sample.test.mjs.
 import assert from "node:assert/strict";
-import * as childProcess from "node:child_process";
-import test, { mock } from "node:test";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+import { playClient } from "../fixtures/endpoint-player.mjs";
+import { announceStall, flockedFile, flockFields, flockHolder, launchdServicesOf, launchdServicesOfResult, openRegularFiles, plannedLength, probedLocks, runProcess,
+  sampleCommand, stallDeadline, stallDue, waitsInFlock, webContentProcesses } from "../stall-sample.mjs";
 
-// The host pid that no process holds. launchctl and sample answer for it as they do on macOS 27 for a process that does not run,
-// so the check of the record of an absent host does not depend on the tools of the system; every other command runs.
-const ABSENT_HOST = 999999;
-const ABSENT_DOMAIN = `pid/${ABSENT_HOST} = {\n\ttype = pid\n\thandle = ${ABSENT_HOST}\n\tactive count = 1\n\n\tservices = {\n\t}\n\n` +
-  "\tunmanaged processes = {\n\t}\n\n\tendpoints = {\n\t}\n\n\tproperties = slain\n}\n";
-const ABSENT_SAMPLE = `sample[19329]: sample cannot examine process ${ABSENT_HOST} (with name like '${ABSENT_HOST}') because it no longer appears to be running.\n`;
-function execFile(command, args, options, callback) {
-  if (command === "/bin/launchctl" && args[1] === `pid/${ABSENT_HOST}`) {
-    queueMicrotask(() => callback(null, ABSENT_DOMAIN, ""));
-    return { pid: undefined, kill: () => false };
-  }
-  if (command === "/usr/bin/sandbox-exec" && args[2] === "/usr/bin/sample" && args[3] === String(ABSENT_HOST)) {
-    queueMicrotask(() => callback(Object.assign(new Error(`Command failed: ${command} ${args.join(" ")}`), { code: 255 }), "", ABSENT_SAMPLE));
-    return { pid: undefined, kill: () => false };
-  }
-  return childProcess.execFile(command, args, options, callback);
-}
-mock.module("node:child_process", {
-  namedExports: { ...childProcess, execFile },
-  defaultExport: { ...childProcess.default, execFile },
-});
-const { whilePending } = await import("../app.mjs");
-const { sampleProcess } = await import("../stall-sample.mjs");
+const { Session, stallLine } = await import("../app.mjs");
 
-// The shell tests give whilePending a stall delay of 0 (or the planned length of a drag, for its text), so the stall timer fires on
-// the next timer turn, and they wait on the promise or the report that the shell returns, never on a sleep. The decisions that
-// depend on the instant are judged by the pure functions stallDeadline and stallDue on the instants they receive.
-test("a failed sample of a pending request is named in the report instead of hiding it", { timeout: 10000 }, async () => {
-  const reports = [];
-  const held = Promise.withResolvers();
-  void whilePending(new Promise(() => {}), "probe", async () => { throw new Error("sample: no such process"); },
-    (text) => reports.push(text), (started) => held.resolve(started), 0, 0);
-  await assert.rejects(held.promise, /^Error: probe still pending after 0 ms; sampling the host failed: sample: no such process$/);
-  assert.deepEqual(reports, ["probe still pending after 0 ms; sampling the host failed: sample: no such process"]);
-});
+const stallHost = fileURLToPath(new URL("../fixtures/stall-host.mjs", import.meta.url));
 
-test("the stall deadline and the stall line are functions of the instants and the outcome that they receive", async () => {
-  const { stallDeadline, stallDue } = await import("../stall-sample.mjs");
-  const { stallLine } = await import("../app.mjs");
+// The texts of the tools that the stall record reads, each recorded from the tool on processes of the fixture programs of this
+// package (the folder of a recording is named /tmp/record): `lsof -n -P -F pcftn`, the lock probe of stall-sample.mjs,
+// `launchctl print pid/<host>` (its services block) and /usr/bin/sample.
+const tool = (name) => readFileSync(fileURLToPath(new URL(`../fixtures/stall-tools/${name}`, import.meta.url)), "utf8");
+
+test("the stall deadline and the stall line are functions of the instants and the outcome that they receive", () => {
   // The sample starts `after` (STALL_AFTER by default) after the planned length of the request, from the instant that it started.
   assert.equal(stallDeadline(0, 0), 3000);
   assert.equal(stallDeadline(1000, 1440), 5440);
@@ -58,13 +41,13 @@ test("the stall deadline and the stall line are functions of the instants and th
 });
 
 test("a request of a session has no time limit and takes no options", async (t) => {
-  const { mkdtempSync, rmSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  const { Session } = await import("../app.mjs");
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-config-"));
   t.after(() => rmSync(configDir, { recursive: true }));
-  const s = new Session({ name: "tauriv2", configDir }, { endpoint: { pid: ABSENT_HOST }, request: async () => 1 });
+  const server = await startCasePlayer("window-check-open-idle");
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const s = new Session({ name: "tauriv2", configDir }, client);
   assert.throws(() => s.request("status.get", { name: "core.verify" }, { timeout: 10 }), {
     name: "TypeError", message: "request status.get takes no options: a request ends by its answer or the close of the connection",
   });
@@ -73,32 +56,20 @@ test("a request of a session has no time limit and takes no options", async (t) 
   });
 });
 
-test("sampleProcess runs sample on the host process into the given file and reports its failure", async () => {
-  const calls = [];
-  const path = await sampleProcess(4321, "/x/stall.txt", (command, args) => { calls.push([command, ...args]); return { status: 0, stderr: "" }; });
-  assert.equal(path, "/x/stall.txt");
-  assert.deepEqual(calls.map((call) => call.slice(-5)), [["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"]]);
-  await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => ({ status: 1, stderr: "sample cannot examine process 4321\n" })),
-    /^Error: sample 4321 exited with 1: sample cannot examine process 4321$/);
-});
-
 test("a process ended at its limit is named with the signal, the limit, its standard error and the state of the system", async () => {
-  const { runProcess } = await import("../stall-sample.mjs");
-  const ended = (script) => sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", script], { limitMs: 200 }));
-  await assert.rejects(ended("echo held >&2; exec sleep 5"),
-    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: held; at the limit: free \d+ MB on \/, load \d+\.\d$/);
-  await assert.rejects(ended("exec sleep 5"),
-    /^Error: sample 4321: ended by SIGTERM at its limit of 200 ms; standard error: none; at the limit: free \d+ MB on \/, load \d+\.\d$/);
+  const ended = async (script) => (await runProcess("/bin/sh", ["-c", script], { limitMs: 200 })).error.message;
+  assert.match(await ended("echo held >&2; exec sleep 5"),
+    /^ended by SIGTERM at its limit of 200 ms; standard error: held; at the limit: free \d+ MB on \/, load \d+\.\d$/);
+  assert.match(await ended("exec sleep 5"),
+    /^ended by SIGTERM at its limit of 200 ms; standard error: none; at the limit: free \d+ MB on \/, load \d+\.\d$/);
 });
 
 test("a process ended by a signal of another sender is not reported as ended at its limit", async () => {
-  const { runProcess } = await import("../stall-sample.mjs");
-  await assert.rejects(sampleProcess(4321, "/x/stall.txt", () => runProcess("/bin/sh", ["-c", "echo held >&2; kill -KILL $$"], { limitMs: 5000 })),
-    /^Error: sample 4321: ended by SIGKILL; standard error: held$/);
+  const { error } = await runProcess("/bin/sh", ["-c", "echo held >&2; kill -KILL $$"], { limitMs: 5000 });
+  assert.match(error.message, /^ended by SIGKILL; standard error: held$/);
 });
 
 test("the state at the limit is read while the process still runs", async () => {
-  const { runProcess } = await import("../stall-sample.mjs");
   let running = false;
   const atLimit = async (pid) => {
     process.kill(pid, 0);
@@ -111,131 +82,70 @@ test("the state at the limit is read while the process still runs", async () => 
 });
 
 test("a state at the limit that does not finish does not hold the end of the process", { timeout: 5000 }, async () => {
-  const { runProcess } = await import("../stall-sample.mjs");
   const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: () => new Promise(() => {}), stateLimitMs: 100 });
   assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none; at the limit: not read within 100 ms");
 });
 
 test("a process at its limit with no state reader is reported without a state", { timeout: 5000 }, async () => {
-  const { runProcess } = await import("../stall-sample.mjs");
   const { error } = await runProcess("/bin/sh", ["-c", "exec sleep 5"], { limitMs: 100, atLimit: null });
   assert.equal(error.message, "ended by SIGTERM at its limit of 100 ms; standard error: none");
 });
 
 // A binary without symbols, as /bin/sleep, makes sample look for its dSYM with a Spotlight query, which mds answers and tccd
 // attributes; on a loaded machine its first reply came after 0.4 to 2 s instead of 0.04 s, and a sample of one second did not
-// reach "Sampling completed" within 5 s (the unified log of the window runs of 2026-11-11). The fake answers as that sample
-// did whenever sample can reach those services, so only a sample that does not wait for them keeps the stacks.
-test("a stall sample waits for no symbol lookup of Spotlight, which a loaded machine answers late", async () => {
-  const { samplerState } = await import("../stall-sample.mjs");
-  const calls = [];
-  const loaded = async (command, args, { limitMs = 10000 } = {}) => {
-    calls.push([command, ...args]);
-    const sample = command === "/usr/bin/sample" ? args : command === "/usr/bin/sandbox-exec" && args[0] === "-p" && args[2] === "/usr/bin/sample" ? args.slice(3) : null;
-    assert.ok(sample, `not a sample: ${command} ${args.join(" ")}`);
-    const denied = (service) => command === "/usr/bin/sandbox-exec" && new RegExp(`\\(deny mach-lookup \\(global-name [^)]*"${service.replaceAll(".", "\\.")}"`).test(args[1]);
-    if (denied("com.apple.metadata.mds") && denied("com.apple.coresymbolicationd")) return { status: 0, stderr: "" };
-    return { error: new Error(`ended by SIGTERM at its limit of ${limitMs} ms; standard error: Sampling process ${sample[0]} for ${sample[1]} second`) };
-  };
-  assert.equal(await sampleProcess(4321, "/x/stall.txt", loaded), "/x/stall.txt");
-  assert.match(await samplerState(99, "/x/sampler.txt", loaded), /^free \d+ MB on \/, load \d+\.\d, stacks of the process: \/x\/sampler\.txt$/);
-  assert.deepEqual(calls.map((call) => call.slice(-5)), [["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"], ["/usr/bin/sample", "99", "1", "-file", "/x/sampler.txt"]]);
+// reach "Sampling completed" within 5 s (the unified log of the window runs of 2026-11-11). A sample that denies those services
+// to the tool waits for no such answer, so the command denies both.
+test("the command of a stall sample denies the services of the symbol lookup of Spotlight, which a loaded machine answers late", () => {
+  const [command, args] = sampleCommand(4321, 2, "/x/stall.txt");
+  assert.equal(command, "/usr/bin/sandbox-exec");
+  assert.equal(args[0], "-p");
+  for (const service of ["com.apple.metadata.mds", "com.apple.coresymbolicationd"]) {
+    assert.match(args[1], new RegExp(`\\(deny mach-lookup \\(global-name [^)]*"${service.replaceAll(".", "\\.")}"`));
+  }
+  assert.deepEqual(args.slice(2), ["/usr/bin/sample", "4321", "2", "-file", "/x/stall.txt"]);
 });
 
-test("stacks that the sampling process cannot record are named with the reason", async () => {
-  const { samplerState } = await import("../stall-sample.mjs");
-  assert.match(await samplerState(99, "/x/sampler.txt", async () => ({ error: new Error("ended by SIGTERM at its limit of 3000 ms") })),
-    /^free \d+ MB on \/, load \d+\.\d, stacks of the process not recorded: ended by SIGTERM at its limit of 3000 ms$/);
-  assert.match(await samplerState(99, "/x/sampler.txt", async () => ({ status: 1, stderr: "no such process\n" })),
-    /^free \d+ MB on \/, load \d+\.\d, stacks of the process not recorded: exited with 1: no such process$/);
+test("the page processes of a host are the running WebContent services of its launchd domain", () => {
+  // The services block of `launchctl print pid/<host>` of an application that runs a page: the running WebContent service, a running
+  // GPU service, a running service of the application, and the services that do not run (pid 0).
+  const services = launchdServicesOf(tool("launchctl-services.txt"));
+  assert.deepEqual(services.map(({ pid }) => pid), [1648, 1413, 12478, 1635]);
+  assert.deepEqual(webContentProcesses(services), [1648]);
+  assert.deepEqual(launchdServicesOf(""), []);
 });
 
-test("the page processes of a host are the running WebContent services of its launchd domain", async () => {
-  const { pageProcesses } = await import("../stall-sample.mjs");
-  const stdout = "pid/10 = {\n\tservices = {\n\t\t       0      - \tcom.apple.WebKit.WebContent\n" +
-    "\t\t      11      - \tcom.apple.WebKit.GPU.A\n\t\t      12      - \tcom.apple.WebKit.WebContent.B\n" +
-    "\t\t      13      - \tcom.apple.WebKit.WebContent.C\n\t}\n\tendpoints = {\n\t\t   14 com.apple.WebKit.WebContent.D\n\t}\n}\n";
-  const calls = [];
-  assert.deepEqual(await pageProcesses(10, (command, args) => { calls.push([command, ...args]); return { status: 0, stdout }; }), [12, 13]);
-  assert.deepEqual(calls, [["/bin/launchctl", "print", "pid/10"]]);
-  await assert.rejects(pageProcesses(10, () => ({ status: 113, stderr: "Could not print domain\n" })),
-    /^Error: launchctl print pid\/10 exited with 113: Could not print domain$/);
-});
-
-test("a page that does not reply records the host and its page processes and names the records", async () => {
-  const { sampleStall } = await import("../stall-sample.mjs");
-  const sampled = [];
-  const files = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
-    sample: (pid, file) => { sampled.push([pid, file]); return file; }, flock: async () => null });
-  assert.deepEqual(sampled, [[10, "/x/logs/stall-10-7.txt"], [12, "/x/logs/stall-10-7-page-12.txt"], [13, "/x/logs/stall-10-7-page-13.txt"]]);
-  assert.deepEqual(files, sampled.map(([, file]) => file));
-});
-
-test("a page process that already ended does not cost the records of the host and the other pages", async () => {
-  const { sampleStall } = await import("../stall-sample.mjs");
-  const results = await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7, sample: (pid, file) => {
-    if (pid === 12) throw new Error("sample 12 exited with 255: process 12 no longer appears to be running");
-    return file;
-  }, flock: async () => null });
-  assert.deepEqual(results, [
-    "/x/logs/stall-10-7.txt",
-    "page 12 not sampled: sample 12 exited with 255: process 12 no longer appears to be running",
-    "/x/logs/stall-10-7-page-13.txt",
-  ]);
-});
-
-test("the path of the dump of the host is stored as an event, and its position and the running host calls of the window are named", async () => {
-  const { announceStall } = await import("../stall-sample.mjs");
-  const calls = [];
-  const text = await announceStall(async (method, params) => {
-    calls.push([method, params]);
-    return { boot: "b1", seq: 9, running: "wait_presented 3.5s, surface_focus 2.5s" };
-  }, "main", ["/x/logs/stall-10-7.txt", "page 12 not sampled: gone", "/x/logs/stall-10-7-page-13.txt"]);
-  assert.deepEqual(calls, [["diagnostics.stall.dump", { window: "main", path: "/x/logs/stall-10-7.txt" }]]);
+test("the path of the dump of the host is stored as an event, and its position and the running host calls of the window are named", async (t) => {
+  const { client } = await playClient(t, "window-check-stall-dump", "mygo");
+  const text = await announceStall((method, params) => client.request(method, params), "main",
+    ["/x/logs/stall-10-7.txt", "page 12 not sampled: gone", "/x/logs/stall-10-7-page-13.txt"]);
   assert.equal(text, "host.stall.dump at b1:9; running host calls of main: wait_presented 3.5s, surface_focus 2.5s");
 });
 
-test("a dump reply without the running calls of the window is named as a broken reply", async () => {
-  const { announceStall } = await import("../stall-sample.mjs");
-  const text = await announceStall(async () => ({ boot: "b1", seq: 9 }), "main", ["/x/logs/stall-10-7.txt"]);
+test("a dump reply without the running calls of the window is named as a broken reply", async (t) => {
+  const { client } = await playClient(t, "window-check-stall-dump-no-running", "mygo");
+  const text = await announceStall((method, params) => client.request(method, params), "main", ["/x/logs/stall-10-7.txt"]);
   assert.equal(text, "host.stall.dump at b1:9; the reply names no running host calls: {\"boot\":\"b1\",\"seq\":9}");
 });
 
-test("a host that refuses the dump event is named in the message instead of hiding it", async () => {
-  const { announceStall } = await import("../stall-sample.mjs");
-  const text = await announceStall(async () => { throw new Error("path does not name a file: /x"); }, "main", ["/x/logs/stall-10-7.txt"]);
+test("a host that refuses the dump event is named in the message instead of hiding it", async (t) => {
+  const { client } = await playClient(t, "window-check-stall-dump-refused", "mygo");
+  const text = await announceStall((method, params) => client.request(method, params), "main", ["/x"]);
   assert.equal(text, "host.stall.dump not stored: path does not name a file: /x");
 });
 
-test("a host whose connection ends before it answers the dump event is named in the message", async () => {
-  const { announceStall } = await import("../stall-sample.mjs");
-  const text = await announceStall(async () => { throw new Error("endpoint connection closed"); }, "main", ["/x/logs/stall-10-7.txt"]);
+test("a host whose connection ends before it answers the dump event is named in the message", async (t) => {
+  const { client } = await playClient(t, "window-check-stall-dump-closed", "mygo");
+  const text = await announceStall((method, params) => client.request(method, params), "main", ["/x/logs/stall-10-7.txt"]);
   assert.equal(text, "host.stall.dump not stored: endpoint connection closed");
 });
 
-test("the dump event takes no limit", async () => {
-  const { announceStall } = await import("../stall-sample.mjs");
-  await assert.rejects(announceStall(async () => ({ boot: "b1", seq: 9 }), "main", ["/x/logs/stall-10-7.txt"], 10),
+test("the dump event takes no limit", async (t) => {
+  const { client } = await playClient(t, "window-check-open-idle", "mygo");
+  await assert.rejects(announceStall((method, params) => client.request(method, params), "main", ["/x/logs/stall-10-7.txt"], 10),
     /^TypeError: announceStall takes no limit/);
 });
 
-test("a pending request starts the host and page samples together when its stall is due", { timeout: 10000 }, async () => {
-  const { sampleStall } = await import("../stall-sample.mjs");
-  const started = [];
-  const sample = async () => (await sampleStall({ host: 10, pages: [12, 13], directory: "/x/logs", time: 7,
-    sample: (pid, file) => { started.push(pid); return file; }, flock: async () => null })).join(", ");
-  const reported = Promise.withResolvers();
-  const reports = [];
-  void whilePending(new Promise(() => {}), "wailsv3 status.get host.windows", sample, (text) => { reports.push(text); reported.resolve(); },
-    () => {}, 0, 0);
-  // The host and both page samples start in the turn of the stall timer, before the report that follows them.
-  await reported.promise;
-  assert.deepEqual(started, [10, 12, 13]);
-  assert.deepEqual(reports, ["wailsv3 status.get host.windows still pending after 0 ms; the host's threads at that moment: /x/logs/stall-10-7.txt, /x/logs/stall-10-7-page-12.txt, /x/logs/stall-10-7-page-13.txt"]);
-});
-
-test("the planned length of a request is the length of its drag or the wait of its stop, and none for any other", async () => {
-  const { plannedLength } = await import("../stall-sample.mjs");
+test("the planned length of a request is the length of its drag or the wait of its stop, and none for any other", () => {
   assert.equal(plannedLength("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 }), 1440);
   assert.equal(plannedLength("diagnostics.capture.stop", { after: 5100 }, 5000), 100);
   assert.equal(plannedLength("diagnostics.capture.stop", { after: 4000 }, 5000), 0);
@@ -245,160 +155,97 @@ test("the planned length of a request is the length of its drag or the wait of i
   assert.equal(plannedLength("status.get", { name: "core.verify" }, 5000), 0);
 });
 
-test("a drag being measured is reported with the planned length of the drag and its stall after it", { timeout: 10000 }, async () => {
-  const { plannedLength } = await import("../stall-sample.mjs");
-  const plan = { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 };
-  const planned = plannedLength("diagnostics.drag", plan);
-  const reported = Promise.withResolvers();
-  const reports = [];
-  void whilePending(new Promise(() => {}), "mygo diagnostics.drag", async () => "stacks",
-    (text) => { reports.push(text); reported.resolve(); }, () => {}, planned, 0);
-  await reported.promise;
-  assert.deepEqual(reports, ["mygo diagnostics.drag still pending 0 ms after its planned 1440 ms; the host's threads at that moment: stacks"]);
-});
-
-test("a session request of a drag names the planned length of the drag in its stall line", { timeout: 10000 }, async (t) => {
-  const { mkdtempSync, rmSync } = await import("node:fs");
-  const { join } = await import("node:path");
-  const { tmpdir } = await import("node:os");
-  const { Session } = await import("../app.mjs");
+test("a session request of a drag names the planned length of the drag in its stall line", { timeout: 60000 }, async (t) => {
   const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-plan-"));
   t.after(() => rmSync(configDir, { recursive: true }));
+  // The host is a running process of the fixture program, which does not answer diagnostics.drag.
+  const host = spawn(process.execPath, [stallHost, configDir], { stdio: ["ignore", "pipe", "inherit"] });
+  t.after(() => host.kill("SIGKILL"));
+  await once(host.stdout, "data");
+  const client = await connect({ configDir });
+  t.after(() => client.close());
   // The stall delay is a declared option of the session, so the stall line is reported without waiting for STALL_AFTER.
-  const s = new Session({ name: "mygo", configDir }, { endpoint: { pid: ABSENT_HOST }, request: () => new Promise(() => {}) }, { stallAfter: 0 });
-  const stalled = Promise.withResolvers();
-  s.step = (what) => { if (what.includes("still pending")) stalled.resolve(what); };
-  void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });
-  const line = await stalled.promise;
-  assert.match(line, /^mygo diagnostics\.drag still pending 0 ms after its planned 1440 ms; /);
+  const s = new Session({ name: "mygo", configDir }, client, { stallAfter: 0 });
+  const started = once(s.stalls, "started");
+  void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 }).catch(() => {});
+  assert.deepEqual(await started, ["mygo diagnostics.drag"]);
   assert.equal(s.stallSamples.size, 1);
-  assert.throws(() => new Session({ name: "mygo", configDir }, {}, { stallAfter: -1 }), /^Error: Session needs a stall delay of 0 or more ms$/);
+  const [{ line }] = await Promise.all(s.stallSamples);
+  assert.match(line, /^mygo diagnostics\.drag still pending 0 ms after its planned 1440 ms; /);
+  assert.throws(() => new Session({ name: "mygo", configDir }, client, { stallAfter: -1 }), /^Error: Session needs a stall delay of 0 or more ms$/);
 });
 
-test("a drag being measured is not sampled before 3 s after the end of its planned length", async () => {
-  const { plannedLength, stallDue } = await import("../stall-sample.mjs");
+test("a drag being measured is not sampled before 3 s after the end of its planned length", () => {
   const planned = plannedLength("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 });
   assert.equal(stallDue({ started: 0, planned, pending: true, at: 4439 }), false);
   assert.equal(stallDue({ started: 0, planned, pending: true, at: 4440 }), true);
 });
 
-test("a request that answers before its stall is due does not start a sample", { timeout: 10000 }, async () => {
-  const { stallDue } = await import("../stall-sample.mjs");
-  let sampled = 0;
-  // The finally of whilePending clears the stall timer in a microtask that runs before the next timer turn, so the answer wins
-  // without a sleep. The instant of the deadline is judged by stallDue, not by the wall clock.
-  const answer = whilePending(Promise.resolve(5), "probe", async () => { sampled++; return ""; }, () => {}, () => {}, 0, 0);
-  assert.equal(await answer, 5);
-  assert.equal(sampled, 0);
-  assert.equal(stallDue({ started: 0, planned: 0, pending: false, at: 3000 }), false);
+// The lsof output of the waiter of a lock of flock, the lock probe over its regular files and the lsof output of that file, recorded
+// from the fixture programs flock-holder.pl (process 63341, holds the lock) and flock-waiter.pl (process 63342, waits for it).
+const WAITER = 63342;
+const SHADERS = "/tmp/record/shaders.data";
+
+test("a page process that waits in flock names the file it waits for and the process that holds its lock", () => {
+  assert.equal(waitsInFlock(tool("sample-flock-waiter.txt")), true);
+  const paths = openRegularFiles(WAITER, tool("lsof-waiter.txt"));
+  assert.deepEqual(paths, [SHADERS]);
+  const wait = flockedFile(WAITER, paths, tool("lock-probe-waiter.txt"));
+  assert.deepEqual(wait, { file: SHADERS });
+  const holder = flockHolder(WAITER, wait.file, tool("lsof-file-holder-waiter.txt"));
+  assert.deepEqual(holder, { file: SHADERS, holder: { pid: 63341, command: "perl" } });
+  assert.equal(flockFields(holder), `; flock.file=${SHADERS}; flock.holder=63341 perl`);
 });
 
-
-// The sample of a page process whose render queue waits in flock, as /usr/bin/sample of macOS 27 writes it, and of one
-// that waits in no flock. Only the section of the tops of the stacks is read.
-const FLOCK_SAMPLE = [
-  "Call graph:",
-  "    1700 Thread_9697167   DispatchQueue_1: com.apple.main-thread  (serial)",
-  "      1700 start  (in dyld) + 6688  [0x18113be80]",
-  "    1700 Thread_9697170   DispatchQueue_42: com.apple.CoreAnimation.render-queue  (serial)",
-  "      1700 flock  (in libsystem_kernel.dylib) + 8  [0x1814d0cdc]",
-  "",
-  "Total number in stack (recursive counted multiple, when >=5):",
-  "",
-  "Sort by top of stack, same collapsed (when >= 5):",
-  "        flock  (in libsystem_kernel.dylib)        1700",
-  "        mach_msg2_trap  (in libsystem_kernel.dylib)        1700",
-  "",
-  "Binary Images:",
-  "",
-].join("\n");
-const IDLE_SAMPLE = FLOCK_SAMPLE.replace("        flock  (in libsystem_kernel.dylib)        1700\n", "");
-
-// The field output of `lsof -n -P -F pcftn -p 12`: the mapped executable, a pipe, the shader cache and a database.
-const LSOF_PAGE = "p12\ncWebContent\nftxt\ntREG\nn/System/WebContent\nf2\ntPIPE\nn->0x1\nf7\ntREG\nn/c/metal/shaders.data\nf9\ntREG\nn/c/web.db\n";
-// The answer of the lock probe for both files: a lock of flock on the cache and a lock of fcntl of process 12 on the database.
-const PROBE_PAGE = "locked\t-1\t/c/metal/shaders.data\nlocked\t12\t/c/web.db\n";
-const opener = (pid, command, fd) => `p${pid}\nc${command}\nf${fd}\ntREG\nn/c/metal/shaders.data\n`;
-
-// An executor that answers each command of the flock reading from outputs, by its program and its last argument.
-function commands(outputs, calls) {
-  return async (command, args) => {
-    calls.push([command, ...args]);
-    const answer = outputs[`${command} ${args.at(-1)}`];
-    if (answer === undefined) throw new Error(`no answer for ${command} ${args.join(" ")}`);
-    return answer;
-  };
-}
-
-test("a page process that waits in flock names the file it waits for and the process that holds its lock", async () => {
-  const { flockWait, sampleStall } = await import("../stall-sample.mjs");
-  const calls = [];
-  const run = commands({
-    "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE, stderr: "" },
-    "/usr/bin/perl /c/web.db": { status: 0, stdout: PROBE_PAGE, stderr: "" },
-    "/usr/sbin/lsof /c/metal/shaders.data": { status: 0, stdout: opener(12, "WebContent", 7) + opener(31, "MTLCompilerService", 4), stderr: "" },
-  }, calls);
-  const read = async (file) => { assert.equal(file, "/x/logs/stall-10-7-page-12.txt"); return FLOCK_SAMPLE; };
-  const records = await sampleStall({ host: 10, pages: [12], directory: "/x/logs", time: 7, sample: (pid, file) => file,
-    flock: (pid, file) => flockWait(pid, file, { run, read }) });
-  assert.deepEqual(records, ["/x/logs/stall-10-7.txt",
-    "/x/logs/stall-10-7-page-12.txt; flock.file=/c/metal/shaders.data; flock.holder=31 MTLCompilerService"]);
-  assert.deepEqual(calls.map(([command, ...args]) => [command, args[0] === "-e" ? ["-e", "<probe>", ...args.slice(2)] : args].flat()), [
-    ["/usr/sbin/lsof", "-n", "-P", "-F", "pcftn", "-p", "12"],
-    ["/usr/bin/perl", "-e", "<probe>", "--", "/c/metal/shaders.data", "/c/web.db"],
-    ["/usr/sbin/lsof", "-n", "-P", "-F", "pcftn", "--", "/c/metal/shaders.data"],
-  ]);
-});
-
-test("a flock wait whose holder cannot be identified names why in the record", async () => {
-  const { flockWait, flockFields } = await import("../stall-sample.mjs");
-  const wait = (openers) => flockWait(12, "/x/page.txt", { read: async () => FLOCK_SAMPLE, run: commands({
-    "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE },
-    "/usr/bin/perl /c/web.db": { status: 0, stdout: PROBE_PAGE },
-    "/usr/sbin/lsof /c/metal/shaders.data": { status: 0, stdout: openers },
-  }, []) }).then(flockFields);
-  assert.equal(await wait(opener(12, "WebContent", 7) + opener(31, "WebContent", 4) + opener(32, "WebContent", 5)),
-    "; flock.file=/c/metal/shaders.data; flock.holder.error=one of the processes that have the file open holds it: 31 WebContent, 32 WebContent");
-  assert.equal(await wait(opener(12, "WebContent", 7)),
-    "; flock.file=/c/metal/shaders.data; flock.holder.error=no other process of this user has /c/metal/shaders.data open");
+test("a flock wait whose holder cannot be identified names why in the record", () => {
+  // The recording of a second waiter has three processes with the file open: the holder and both waiters.
+  assert.equal(flockFields(flockHolder(WAITER, SHADERS, tool("lsof-file-holder-two-waiters.txt"))),
+    `; flock.file=${SHADERS}; flock.holder.error=one of the processes that have the file open holds it: 63341 perl, 63403 perl`);
+  // A waiter without a holder is alone with the file open.
+  assert.equal(flockFields(flockHolder(63432, "/tmp/record/alone.data", tool("lsof-file-alone.txt"))),
+    "; flock.file=/tmp/record/alone.data; flock.holder.error=no other process of this user has /tmp/record/alone.data open");
   // A process that has the file open twice may hold the lock on one description and wait on the other.
-  assert.equal(await wait(opener(12, "WebContent", 7) + "f8\ntREG\nn/c/metal/shaders.data\n"),
-    "; flock.file=/c/metal/shaders.data; flock.holder=12 WebContent");
+  assert.equal(flockFields(flockHolder(63440, "/tmp/record/reopen.data", tool("lsof-file-reopened.txt"))),
+    "; flock.file=/tmp/record/reopen.data; flock.holder=63440 perl");
 });
 
-test("a flock wait whose file cannot be identified names why in the record", async () => {
-  const { flockWait, flockFields } = await import("../stall-sample.mjs");
-  const wait = (lsof, probe) => flockWait(12, "/x/page.txt", { read: async () => FLOCK_SAMPLE, run: commands({
-    "/usr/sbin/lsof 12": { status: 0, stdout: lsof },
-    "/usr/bin/perl /c/web.db": { status: 0, stdout: probe },
-  }, []) }).then(flockFields);
-  assert.equal(await wait("p12\ncWebContent\nftxt\ntREG\nn/System/WebContent\n", ""), "; flock.file.error=process 12 has no regular file open");
-  assert.equal(await wait(LSOF_PAGE, "none\t/c/metal/shaders.data\nlocked\t12\t/c/web.db\n"),
-    "; flock.file.error=no file that process 12 has open holds a lock of flock");
-  assert.equal(await wait(LSOF_PAGE, "locked\t-1\t/c/metal/shaders.data\nlocked\t-1\t/c/web.db\n"),
-    "; flock.file.error=2 files that process 12 has open hold a lock of flock: /c/metal/shaders.data, /c/web.db");
-  assert.equal(await wait(LSOF_PAGE, "locked\t-1\t/c/metal/shaders.data\nerror\tPermission denied\t/c/web.db\n"),
-    "; flock.file.error=the lock of /c/web.db not read: Permission denied");
+test("a flock wait whose file cannot be identified names why in the record", () => {
+  const fileError = (pid, paths, probe) => flockFields(flockedFile(pid, paths, tool(probe)));
+  // The process of the recording has no regular file open on a numbered descriptor.
+  assert.deepEqual(openRegularFiles(63462, tool("lsof-no-regular-file.txt")), []);
+  assert.equal(flockFields(flockedFile(63462, [], "")), "; flock.file.error=process 63462 has no regular file open");
+  assert.equal(fileError(WAITER, ["/tmp/record/plain-a.data", "/tmp/record/plain-b.data"], "lock-probe-none.txt"),
+    `; flock.file.error=no file that process ${WAITER} has open holds a lock of flock`);
+  assert.equal(fileError(WAITER, ["/tmp/record/held-a.data", "/tmp/record/held-b.data"], "lock-probe-two-flocked.txt"),
+    `; flock.file.error=2 files that process ${WAITER} has open hold a lock of flock: /tmp/record/held-a.data, /tmp/record/held-b.data`);
+  assert.equal(fileError(WAITER, ["/tmp/record/held-c.data", "/tmp/record/denied.data"], "lock-probe-unreadable.txt"),
+    "; flock.file.error=the lock of /tmp/record/denied.data not read: Permission denied");
 });
 
-test("a page process that waits in no flock has no flock fields in its record", async () => {
-  const { flockWait, sampleStall } = await import("../stall-sample.mjs");
-  const calls = [];
-  const records = await sampleStall({ host: 10, pages: [12], directory: "/x/logs", time: 7, sample: (pid, file) => file,
-    flock: (pid, file) => flockWait(pid, file, { run: commands({}, calls), read: async () => IDLE_SAMPLE }) });
-  assert.deepEqual(records, ["/x/logs/stall-10-7.txt", "/x/logs/stall-10-7-page-12.txt"]);
-  assert.deepEqual(calls, []);
+test("a lock probe that does not answer every file in its order is refused", () => {
+  assert.throws(() => probedLocks(["/tmp/record/held-c.data", "/tmp/record/denied.data"], tool("lock-probe-one-flocked.txt")),
+    /^Error: the lock probe answered 1 of 2 files$/);
+  assert.throws(() => probedLocks(["/tmp/record/denied.data"], tool("lock-probe-one-flocked.txt")),
+    /^Error: the lock probe answered "locked\\t-1\\t\/tmp\/record\/held-c\.data" for \/tmp\/record\/denied\.data$/);
 });
 
-test("a flock wait that cannot be read is named in the record with the reason", async () => {
-  const { flockWait, sampleStall } = await import("../stall-sample.mjs");
-  const record = async (read, run) => (await sampleStall({ host: 10, pages: [12], directory: "/x/logs", time: 7, sample: (pid, file) => file,
-    flock: (pid, file) => flockWait(pid, file, { run, read }) }))[1];
-  assert.equal(await record(async () => FLOCK_SAMPLE, async () => ({ status: 1, stdout: "", stderr: "" })),
-    "/x/logs/stall-10-7-page-12.txt; flock.error=/usr/sbin/lsof -n -P -F pcftn -p 12 exited with 1: no standard error");
-  assert.equal(await record(async () => "Call graph:\n", commands({}, [])),
-    "/x/logs/stall-10-7-page-12.txt; flock.error=the sample has no section \"Sort by top of stack, same collapsed\"");
-  assert.equal(await record(async () => FLOCK_SAMPLE, commands({ "/usr/sbin/lsof 12": { status: 0, stdout: LSOF_PAGE },
-    "/usr/bin/perl /c/web.db": { status: 0, stdout: "locked\t-1\t/c/metal/shaders.data\n" } }, [])),
-  "/x/logs/stall-10-7-page-12.txt; flock.error=the lock probe answered 1 of 2 files");
+test("a sample that waits in no flock has no flock fields in its record, and one without its section cannot be read", () => {
+  assert.equal(waitsInFlock(tool("sample-idle.txt")), false);
+  assert.equal(flockFields(null), "");
+  assert.throws(() => waitsInFlock(tool("sample-header-only.txt")), /^Error: the sample has no section "Sort by top of stack, same collapsed"$/);
+});
+
+// The process results of `launchctl print pid/<host>` as the tool gave them: the domain of an application with WebKit services, the domain of a
+// process without one, and the refusal for pid 0 (status 112); each file holds the command, its status, its output and its error output.
+const launchctl = (name) => JSON.parse(readFileSync(fileURLToPath(new URL(`./fixtures/${name}.json`, import.meta.url)), "utf8"));
+
+test("the services of a launchd domain are read from the result of launchctl print, and a refusal is an error that names the process", () => {
+  const all = launchctl("launchctl-print-all-services");
+  assert.deepEqual(launchdServicesOfResult(all.pid, all).map(({ pid }) => pid), [1648, 1413, 12478, 1635]);
+  const host = launchctl("launchctl-print-host");
+  assert.deepEqual(launchdServicesOfResult(host.pid, host), [], "a domain without a service lists none");
+  const refused = launchctl("launchctl-print-refused");
+  assert.equal(refused.status, 112);
+  assert.throws(() => launchdServicesOfResult(refused.pid, refused),
+    /^Error: launchctl print pid\/0 exited with 112: Bad request\.\nCould not find domain for pid: 0$/);
 });

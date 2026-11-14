@@ -4,8 +4,10 @@
 // the project list are stored in IndexedDB.
 import { WorkspaceStore } from "./browser-storage.js";
 import { createClipboardBridge } from "@soksak/plugin-api";
+import { platformClock } from "@soksak/plugin-api/log-batch.js";
 
 export const host = null;
+export const clock = platformClock;
 export const page = null;
 export const clipboard = createClipboardBridge(async (_name, { type }) => {
   if (type !== "text" || !globalThis.navigator?.clipboard?.readText) return { present: false, type };

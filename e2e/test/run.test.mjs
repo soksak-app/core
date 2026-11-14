@@ -1,53 +1,17 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { runE2E } from "../run.mjs";
 
 const runner = fileURLToPath(new URL("../run.mjs", import.meta.url));
-
-test("runE2E rejects missing or partial metadata before injected operations", async (t) => {
-  for (const env of [{}, { SOKSAK_RUN_ID: "run-only" }, { SOKSAK_RUN_FOLDER: "/tmp/folder-only" }]) {
-    await t.test(JSON.stringify(env), () => {
-      let spawnCalls = 0;
-      let reported = "";
-      const status = runE2E({
-        args: ["--test", "fixture.test.mjs"], env,
-        spawn: () => { spawnCalls += 1; return { status: 0 }; },
-        stderr: { write: (message) => { reported += message; } },
-      });
-      assert.equal(status, 1);
-      assert.equal(spawnCalls, 0);
-      assert.match(reported, /SOKSAK_RUN_ID and SOKSAK_RUN_FOLDER/);
-    });
-  }
-});
-
-test("runE2E passes both metadata values through unchanged", () => {
-  const env = { SOKSAK_RUN_ID: "opaque/id", SOKSAK_RUN_FOLDER: "/tmp/run folder" };
-  let received;
-  const status = runE2E({
-    args: ["--test", "fixture.test.mjs"], env,
-    spawn: (_executable, args, options) => {
-      received = { args, env: options.env };
-      return { status: 0 };
-    },
-    stderr: { write: (message) => { throw new Error(message); } },
-  });
-  assert.equal(status, 0);
-  assert.deepEqual(received.args, ["--test", "fixture.test.mjs"]);
-  assert.equal(received.env.SOKSAK_RUN_ID, env.SOKSAK_RUN_ID);
-  assert.equal(received.env.SOKSAK_RUN_FOLDER, env.SOKSAK_RUN_FOLDER);
-});
 
 async function runWithMetadata(metadata) {
   const directory = await mkdtemp(join(tmpdir(), "soksak-e2e-run-metadata-"));
   const child = join(directory, "child-started");
-  const childTest = join(directory, "child.test.mjs");
-  await writeFile(childTest, `import { writeFileSync } from "node:fs";\nwriteFileSync(process.env.SOKSAK_CHILD_MARKER, JSON.stringify({id: process.env.SOKSAK_RUN_ID ?? null, folder: process.env.SOKSAK_RUN_FOLDER ?? null}));\n`);
+  const childTest = fileURLToPath(new URL("../fixtures/programs/run-child.mjs", import.meta.url));
   const env = { ...process.env, SOKSAK_CHILD_MARKER: child };
   delete env.NODE_TEST_CONTEXT;
   delete env.SOKSAK_RUN_ID;
@@ -70,6 +34,7 @@ test("run requires both run metadata values before child start", async (t) => {
       const { result, child } = await runWithMetadata(metadata);
       assert.deepEqual({ child, status: result.status }, { child: null, status: 1 },
         "invalid run metadata must fail before child start");
+      assert.match(result.stderr, /SOKSAK_RUN_ID and SOKSAK_RUN_FOLDER are required and must both be nonempty/);
     });
   }
 });
@@ -80,4 +45,10 @@ test("run forwards valid run metadata unchanged", async () => {
   assert.equal(result.status, 0, result.stderr);
   assert.notEqual(child, null, `child did not write metadata: ${result.stdout}\n${result.stderr}`);
   assert.deepEqual(JSON.parse(child), { id: expected.SOKSAK_RUN_ID, folder: expected.SOKSAK_RUN_FOLDER });
+});
+
+test("run without --test prints its usage and exits 2 before child start", () => {
+  const result = spawnSync(process.execPath, [runner, "fixture.test.mjs"], { encoding: "utf8" });
+  assert.equal(result.status, 2);
+  assert.equal(result.stderr, "usage: node ./run.mjs --test <node test arguments>\n");
 });

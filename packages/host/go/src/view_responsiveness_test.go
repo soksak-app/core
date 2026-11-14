@@ -77,15 +77,15 @@ func tracesOf(t *testing.T, event string) []map[string]any {
 // does the same with responsive true. Neither notice closes or creates a view, because no call of the view ends.
 func TestViewResponsivenessNoticeIsRelayedWithoutEndingTheView(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, _ := newLifecycleSurfaces(t)
+	s, views, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
-	receive := fake.responsiveness[fake.created[0]]
-	if receive == nil {
-		t.Fatalf("the view has no responsiveness receiver")
+	channel, ok := s.documents.view("probe-surface")
+	if !ok {
+		t.Fatal("the created view has no channel")
 	}
-	receive(false)
-	receive(true)
+	s.viewResponsiveness("probe-surface", "probe", channel.generation, false)
+	s.viewResponsiveness("probe-surface", "probe", channel.generation, true)
 	if len(*events) != 2 {
 		t.Fatalf("events after the two notices: %d, want one view-responsiveness event for each", len(*events))
 	}
@@ -98,8 +98,9 @@ func TestViewResponsivenessNoticeIsRelayedWithoutEndingTheView(t *testing.T) {
 			t.Fatalf("event %d payload %v, want surface probe-surface, plugin probe, generation 1 and responsive %v", i, (*events)[i].data, want)
 		}
 	}
-	if len(fake.closed) != 0 || len(fake.created) != 1 {
-		t.Fatalf("a responsiveness notice closed %d views and created %d, want no change", len(fake.closed), len(fake.created))
+	current, ok := s.documents.view("probe-surface")
+	if !ok || current.generation != channel.generation || !s.viewRecords().live["probe-surface"] || len(views.closed) != 0 || len(views.created) != 1 {
+		t.Fatalf("a responsiveness notice changed the view: channel %+v, live %v, closed %d, created %d; want no change", current, s.viewRecords().live["probe-surface"], len(views.closed), len(views.created))
 	}
 	if got := bufferedTraces(t, "host.trace.view.unresponsive"); len(got) != 1 || got[0]["surface"] != "probe-surface" || got[0]["plugin"] != "probe" {
 		t.Fatalf("host.trace.view.unresponsive records: %v, want one for probe-surface", got)
@@ -114,15 +115,17 @@ func TestViewResponsivenessNoticeIsRelayedWithoutEndingTheView(t *testing.T) {
 // host.trace.view.process-ready.
 func TestViewProcessEventsMarkTheRequestAndTheFirstReadyMessage(t *testing.T) {
 	isolateTraceRecords(t)
+	// The trace of the request is written by the step that records the created view (viewLoaded), which the first mount runs.
 	s, _, _ := newLifecycleSurfaces(t)
 	requests := bufferedTraces(t, "host.trace.view.process-request")
 	if len(requests) != 1 || requests[0]["surface"] != "probe-surface" || requests[0]["plugin"] != "probe" {
 		t.Fatalf("host.trace.view.process-request records: %v, want one for probe-surface", requests)
 	}
-	ready := `{"message":{"sok":1,"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`
+	generation := probeGeneration(s)
+	timeOrigin := 1234.5
 	for i := 0; i < 2; i++ {
-		if err := s.viewMessage("probe-surface", ready); err != nil {
-			t.Fatalf("ready message %d: %v", i, err)
+		if accepted, err := s.viewReady("probe-surface", "probe", generation, "probe", "doc-1", &timeOrigin); !accepted || err != nil {
+			t.Fatalf("ready message %d: accepted %v, error %v", i, accepted, err)
 		}
 	}
 	readies := bufferedTraces(t, "host.trace.view.process-ready")

@@ -1,0 +1,14 @@
+{
+  "recorded": "The footprint of the running host of the recording. Command: footprint -p 64435 -f bytes. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "footprint",
+    "-p",
+    "64435",
+    "-f",
+    "bytes"
+  ],
+  "status": 0,
+  "stdout": "======================================================================\nsoksak [64435]: 64-bit    Footprint: 11994792 B (16384 bytes per page)\n======================================================================\n\n      Dirty         Clean   Reclaimable    Regions    Category\n        ---           ---           ---        ---    ---\n  4866048 B           0 B           0 B         42    app-specific tag 16\n  3555328 B           0 B           0 B          6    MALLOC_SMALL\n  1181352 B           0 B           0 B          1    page table\n   928245 B           0 B           0 B        345    __DATA\n   351769 B           0 B           0 B        284    __DATA_DIRTY\n   327680 B           0 B           0 B          8    MALLOC metadata\n   245760 B           0 B           0 B          1    MALLOC_TINY\n   212992 B           0 B           0 B         14    stack\n    98248 B           0 B           0 B          2    __TPRO_CONST\n    86722 B           0 B           0 B        848    unused dyld shared cache area\n    65536 B           0 B           0 B          2    dyld private memory\n    32768 B           0 B           0 B         15    untagged (VM_ALLOCATE)\n    16384 B           0 B           0 B          1    os_alloc_once\n    16384 B           0 B           0 B          1    tag 22\n     9576 B      884736 B           0 B        425    __DATA_CONST\n        0 B    15400960 B           0 B        444    __TEXT\n        0 B     7913472 B           0 B         99    __LINKEDIT\n        0 B           0 B           0 B          1    __CTF\n        0 B           0 B           0 B        340    __AUTH_CONST\n        0 B           0 B           0 B          1    __FONT_DATA\n        0 B           0 B           0 B        149    __AUTH\n        0 B           0 B           0 B          1    mapped file\n        ---           ---           ---        ---    ---\n 11994792 B    24199168 B           0 B       3032    TOTAL\n\nAuxiliary data:\n    phys_footprint: 12027560 B\n    phys_footprint_peak: 12027560 B\n\n",
+  "stderr": "",
+  "pid": 64435
+}

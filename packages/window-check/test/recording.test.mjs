@@ -4,102 +4,90 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+
 import { drag, finishSession, Session } from "../app.mjs";
 import { writeStillRecording } from "../still-recording.mjs";
 
-/**
- * A connection that imitates a host with one recording on a display of `refreshRate` Hz. The recording plans the stills that
- * its start asks for (frames, or seconds at gap), and its stop writes the first two of them and stops the rest of the plan.
- * stop takes the recording and then fails when stopFails is set. Without a recording, it rejects with `no capture is running`
- * like the host. The start and stop replies name the recorded window 7, or null for a recording of the display, and the start
- * of a recording of a new window names none; `started` changes the start reply. The stills of `failed` fail. `damage` changes the stop reply and the stills.jsonl of the recording after it is written.
- */
-function fakeClient(directory, { stopFails = false, removeFramesOnStopFailure = false, refreshRate = 120,
-  damage = (reply) => reply, framePath = (path) => path, failed = [], started = (reply) => reply } = {}) {
-  const requests = [];
-  let running = null;
-  let plan = null;
-  const captures = join(directory, "logs", "captures");
-  mkdirSync(captures, { recursive: true });
+// The checks of this file run without a test runner that keeps a run, so no test is marked in the event log (markTest of the session).
+delete process.env.SOKSAK_RUN_ID;
+delete process.env.SOKSAK_RUN_FOLDER;
+
+// The requests of a test follow the endpoint cases window-check-recording-*: the case player answers each request of the client with
+// the reply of the case, and the replies that name a recording (the start reply, the stop reply and the drag reply) are the values of
+// the variables of the case. The disk state that the host writes for a recording, the recording folder with its stills.jsonl and its
+// frames, is written by the test before the recording starts, with the function of the still recording that the host contract defines.
+
+/** The configuration folder of a session, which holds the event log of the application and the folder of its captures. */
+function configDirectory(t, prefix = "soksak-record-") {
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  mkdirSync(join(directory, "logs", "captures"), { recursive: true });
   writeFileSync(join(directory, "logs", "host-1-1.jsonl"),
     `${JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 3 } })}\n`);
-  return {
-    endpoint: { pid: process.pid },
-    requests,
-    request: async (method, params) => {
-      requests.push({ method, ...params });
-      // A recording holds the covered drawing of its window until it stops.
-      if (method === "diagnostics.window.draw-covered") return null;
-      if (method === "status.get" && params.name === "host.window") return { refreshRate };
-      if (method === "diagnostics.capture.start") {
-        plan = { gap: params.gap, stills: params.frames ?? Math.ceil(params.seconds * 1000 / params.gap),
-          window: params.display === true ? null : 7 };
-        running = join(captures, `capture-${requests.length}`);
-        mkdirSync(running);
-        // A recording of a new window starts before the window is shown, so its start names no window.
-        return started({ frames: framePath(running), window: params.newWindow === true ? null : plan.window });
-      }
-      if (method === "diagnostics.capture.stop") {
-        if (!running) throw new Error("no capture is running");
-        const frames = framePath(running);
-        const storedFrames = running;
-        running = null;
-        if (stopFails) {
-          if (removeFramesOnStopFailure) rmSync(storedFrames, { recursive: true, force: true });
-          throw new Error("layout trace failed");
-        }
-        const reply = writeStillRecording(storedFrames, { gap: plan.gap, until: (plan.stills - 1) * plan.gap, stoppedAt: 2, failed, window: plan.window, layouts: [{ ticket: 3, begun: 1, requested: 2, presented: 3, committed: 4 }] });
-        return damage({ ...reply, frames, stills: join(frames, "stills.jsonl") }, storedFrames);
-      }
-      throw new Error(`unexpected ${method}`);
-    },
-  };
+  return directory;
 }
 
+/**
+ * The recording that the host wrote for a plan of `stills` stills at `gap` ms on the window `window` (null for the display): the
+ * folder under the captures of `directory`, its first two stills written and the rest stopped, the start reply and the stop reply.
+ */
+function written(directory, name, { gap = 1000 / 120, stills = 4096, window = 7, failed = [] } = {}) {
+  const frames = join(directory, "logs", "captures", name);
+  const stop = writeStillRecording(frames, { gap, until: (stills - 1) * gap, stoppedAt: 2, failed, window });
+  const reply = { ...stop, frames, stills: join(frames, "stills.jsonl") };
+  return { frames, started: { frames, window }, stop: reply, values: { started: { frames, window }, stop: reply } };
+}
+
+// Starts the case player of the case with the values of its variables and connects the client of the package to it. Closing the
+// player throws when the case was not played to its end.
+async function play(t, name, values = {}) {
+  const server = await startCasePlayer(name, { values });
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  return { server, client };
+}
+
+// The requests that the client sent to the player, each as the object of its method and params.
+const sent = (server) => server.requests.map(({ method, params }) => ({ method, ...params }));
+
 const app = { name: "fixture" };
-const stops = (client) => client.requests.filter((request) => request.method === "diagnostics.capture.stop");
+const stops = (server) => sent(server).filter((request) => request.method === "diagnostics.capture.stop");
 const newSession = (directory, client) => {
   const s = new Session({ ...app, configDir: directory }, client);
   s.recordingsBefore = [];
   s.eventStart = {};
   s.eventBoot = 0;
-  s.markTest = async () => null;
   return s;
 };
+// The recorder of the diagnostics of a finished check, as the test of node:test gives them to the function that finishes a session.
 const cleanUp = async (s, diagnostics = []) => finishSession({ name: "recording test", passed: true,
   diagnostic(line) { diagnostics.push(line); } }, s, () => {});
 
 // A recording is the log of a check: a stop that fails is told, the check passes and removes the folder, and only the judgment
 // of the recording fails on the stop.
 test("a recording whose stop fails is told, sends no second stop and fails only its judgment", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory, { stopFails: true });
+  const directory = configDirectory(t);
+  const host = written(directory, "capture-1", { window: null });
+  const { server, client } = await play(t, "window-check-recording-stop-fails", { started: host.started });
   const s = newSession(directory, client);
   const recording = await s.record({ display: true });
-  assert.equal(client.requests.find((request) => request.method === "diagnostics.capture.start").display, true);
+  assert.equal(sent(server).find((request) => request.method === "diagnostics.capture.start").display, true);
   assert.equal(await recording.stop({ after: 5 }), null);
   assert.throws(() => recording.judge(), /layout trace failed/);
   const diagnostics = [];
   await cleanUp(s, diagnostics);
-  assert.ok(diagnostics.some((line) => /^recording: .*: the stop of the recording failed: layout trace failed$/.test(line)),
+  assert.ok(diagnostics.some((line) => /^recording: .*: the stop of the recording failed: .*layout trace failed$/.test(line)),
     `the stop failure was not told: ${diagnostics.join("; ")}`);
-  assert.equal(stops(client).length, 1, "the cleanup sent another stop after one was sent");
+  assert.equal(stops(server).length, 1, "the cleanup sent another stop after one was sent");
   assert.equal(existsSync(recording.frames), false, "the recording of a passed check stayed");
 });
 
 test("a recording whose start fails is told, has no frames, answers no stop and fails only its judgment", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-start-fails-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
-  const request = client.request;
-  client.request = async (method, params) => {
-    if (method === "diagnostics.capture.start") {
-      client.requests.push({ method, ...params });
-      throw new Error("the capture did not start");
-    }
-    return request(method, params);
-  };
+  const directory = configDirectory(t);
+  const { server, client } = await play(t, "window-check-recording-start-fails");
   const s = newSession(directory, client);
   const recording = await s.record();
   assert.equal(recording.frames, null);
@@ -108,45 +96,47 @@ test("a recording whose start fails is told, has no frames, answers no stop and 
   assert.throws(() => recording.judge(), /the capture did not start/);
   const diagnostics = [];
   await cleanUp(s, diagnostics);
-  assert.ok(diagnostics.includes("recording: the recording did not start: the capture did not start"),
+  assert.ok(diagnostics.some((line) => /^recording: the recording did not start: .*the capture did not start$/.test(line)),
     `the start failure was not told: ${diagnostics.join("; ")}`);
-  assert.deepEqual(stops(client), [], "a stop was sent for a recording that did not start");
-  assert.deepEqual(client.requests.filter((request) => request.method === "diagnostics.window.draw-covered").map(({ draw }) => draw),
+  assert.deepEqual(stops(server), [], "a stop was sent for a recording that did not start");
+  assert.deepEqual(sent(server).filter((request) => request.method === "diagnostics.window.draw-covered").map(({ draw }) => draw),
     [true, false], "the hold of the covered drawing was not ended");
 });
 
 test("a stop failure is told when the host removes its recording folder", { timeout: 30000 }, async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-removed-after-stop-error-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory, { stopFails: true, removeFramesOnStopFailure: true });
+  const directory = configDirectory(t);
+  const host = written(directory, "capture-1");
+  const { server, client } = await play(t, "window-check-recording-stop-fails-after-0", { started: host.started });
   const s = newSession(directory, client);
   const recording = await s.record();
   assert.equal(await recording.stop({ after: 0 }), null);
+  // The host removes the folder of a recording whose stop failed.
+  rmSync(host.frames, { recursive: true, force: true });
   const diagnostics = [];
   await cleanUp(s, diagnostics);
 
-  assert.ok(diagnostics.some((line) => /the stop of the recording failed: layout trace failed$/.test(line)),
+  assert.ok(diagnostics.some((line) => /the stop of the recording failed: .*layout trace failed$/.test(line)),
     `the stop failure was not told: ${diagnostics.join("; ")}`);
-  assert.equal(stops(client).length, 1, "cleanup retried stop after the host removed the folder");
-  assert.equal(existsSync(recording.frames), false, "the host fixture did not remove the recording folder");
+  assert.equal(stops(server).length, 1, "cleanup retried stop after the host removed the folder");
+  assert.equal(existsSync(recording.frames), false, "the recording folder stayed");
 });
 
 test("a recording that the check did not stop is stopped and removed after finalization", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
+  const directory = configDirectory(t);
+  const host = written(directory, "capture-1");
+  const { server, client } = await play(t, "window-check-recording-cleanup-stop", host.values);
   const s = newSession(directory, client);
   const recording = await s.record();
   await cleanUp(s);
-  assert.deepEqual(stops(client).map(({ after }) => after), [0]);
+  assert.deepEqual(stops(server).map(({ after }) => after), [0]);
   assert.equal(existsSync(recording.frames), false, "the recording folder stayed");
 });
 
 // A recording is the log of a check: a still that a recording which the check did not stop lost is told, and the check passes.
 test("a recording that the check did not stop tells a still that it lost as a diagnostic", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory, { failed: [1] });
+  const directory = configDirectory(t);
+  const host = written(directory, "capture-1", { failed: [1] });
+  const { client } = await play(t, "window-check-recording-cleanup-stop", host.values);
   const s = newSession(directory, client);
   const recording = await s.record();
   const diagnostics = [];
@@ -157,9 +147,9 @@ test("a recording that the check did not stop tells a still that it lost as a di
 });
 
 test("a stopped recording is removed after finalization without another stop", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
+  const directory = configDirectory(t);
+  const host = written(directory, "capture-1");
+  const { server, client } = await play(t, "window-check-recording-stop-after-7", host.values);
   const s = newSession(directory, client);
   const recording = await s.record();
   const stopped = await recording.stop({ after: 7 });
@@ -167,50 +157,50 @@ test("a stopped recording is removed after finalization without another stop", a
   assert.equal(stopped.stills, join(recording.frames, "stills.jsonl"));
   await assert.rejects(recording.stop({ after: 8 }), /stop was already sent/);
   await cleanUp(s);
-  assert.equal(stops(client).length, 1);
+  assert.equal(stops(server).length, 1);
   assert.equal(existsSync(recording.frames), false, "the recording folder stayed");
 });
 
 // A recording takes one still each refresh of the display of its window, read when it starts, and plans as many stills as a
-// recording holds, so it records until the check stops it. The check may ask for its own gap and length.
+// recording holds, so it records until the check stops it. The check may ask for its own gap and length. The start of each case
+// carries the gap and the number of stills, so a start that differs from them fails the case.
 test("a recording asks for one still each refresh of the display of its window and the most stills a recording holds", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-gap-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  for (const [refreshRate, gap] of [[120, 1000 / 120], [60, 1000 / 60]]) {
-    const client = fakeClient(directory, { refreshRate });
+  const directory = configDirectory(t);
+  for (const [name, gap] of [["display-stop", 1000 / 120], ["display-60-stop", 1000 / 60]]) {
+    const host = written(directory, `capture-${name}`, { gap, window: null });
+    const { server, client } = await play(t, `window-check-recording-${name}`, host.values);
     const s = newSession(directory, client);
     await (await s.record({ display: true })).stop();
-    assert.deepEqual(client.requests.find((request) => request.method === "diagnostics.capture.start"),
+    assert.deepEqual(sent(server).find((request) => request.method === "diagnostics.capture.start"),
       { method: "diagnostics.capture.start", window: "main", display: true, gap, frames: 4096 });
     await cleanUp(s);
   }
-  const client = fakeClient(directory);
+  const host = written(directory, "capture-own", { gap: 20, stills: 100 });
+  const { server, client } = await play(t, "window-check-recording-gap-seconds-stop", host.values);
   const s = newSession(directory, client);
   await (await s.record({ gap: 20, seconds: 2 })).stop();
-  assert.deepEqual(client.requests.find((request) => request.method === "diagnostics.capture.start"),
+  assert.deepEqual(sent(server).find((request) => request.method === "diagnostics.capture.start"),
     { method: "diagnostics.capture.start", window: "main", gap: 20, seconds: 2 });
-  assert.equal(client.requests.some((request) => request.method === "status.get"), false,
+  assert.equal(sent(server).some((request) => request.method === "status.get"), false,
     "a recording with its own gap read the refresh rate");
   await cleanUp(s);
 });
 
 test("a recording of a window on no display is told and does not start", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-no-display-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory, { refreshRate: null });
+  const directory = configDirectory(t);
+  const { server, client } = await play(t, "window-check-recording-no-display");
   const s = newSession(directory, client);
   const recording = await s.record();
   assert.throws(() => recording.judge(), /^Error: a recording takes one still each refresh, and host\.window\.refreshRate is null$/);
-  assert.equal(client.requests.some((request) => request.method === "diagnostics.capture.start"), false);
+  assert.equal(sent(server).some((request) => request.method === "diagnostics.capture.start"), false);
   assert.deepEqual(s.recordingNotes,
     ["the recording did not start: a recording takes one still each refresh, and host.window.refreshRate is null"]);
   await cleanUp(s);
 });
 
 test("a tracked recording is finalized when its frame path has an equivalent filesystem spelling", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-path-identity-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
+  const directory = configDirectory(t);
+  const { client } = await play(t, "window-check-recording-idle");
   const s = newSession(directory, client);
   const captures = join(directory, "logs", "captures");
   const frames = join(captures, "capture-alias");
@@ -223,9 +213,8 @@ test("a tracked recording is finalized when its frame path has an equivalent fil
 });
 
 test("finalization tolerates a tracked recording folder already removed", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-removed-path-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
+  const directory = configDirectory(t);
+  const { client } = await play(t, "window-check-recording-idle");
   const s = newSession(directory, client);
   const frames = join(directory, "logs", "captures", "already-removed");
   mkdirSync(frames);
@@ -239,9 +228,9 @@ test("finalization tolerates a tracked recording folder already removed", async 
 // A failed check keeps its recording, and the recording holds what the check judged: the whole stop reply with every layout
 // transaction, and the values that the check keeps beside it.
 test("a stopped recording keeps its stop reply and the values that the check keeps", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
+  const directory = configDirectory(t);
+  const host = written(directory, "capture-1");
+  const { client } = await play(t, "window-check-recording-stop-after-7", host.values);
   const s = newSession(directory, client);
   const recording = await s.record();
   const stopped = await recording.stop({ after: 7 });
@@ -309,9 +298,9 @@ for (const [what, damage, error] of [
   }, /the still recording .* took still 0 of the windows \[9\], without the recorded window 7/],
 ]) {
   test(`a recording stop ${what} is told, and its judgment fails`, async (t) => {
-    const directory = mkdtempSync(join(tmpdir(), "soksak-record-"));
-    t.after(() => rmSync(directory, { recursive: true, force: true }));
-    const client = fakeClient(directory, { damage });
+    const directory = configDirectory(t);
+    const host = written(directory, "capture-1");
+    const { client } = await play(t, "window-check-recording-window-stop", { started: host.started, stop: damage(host.stop, host.frames) });
     const s = newSession(directory, client);
     const recording = await s.record();
     await recording.stop();
@@ -326,17 +315,18 @@ for (const [what, damage, error] of [
 // A recording of a window names the window that it records (a window number), and a recording of the display names none
 // (null): each written still of a window recording took that window.
 test("a recording whose start names no recorded window is told, and its judgment fails", async (t) => {
-  for (const [params, started, error] of [
-    [{}, ({ frames }) => ({ frames }),
+  for (const [params, name, started, error] of [
+    [{}, "window-stop", ({ frames }) => ({ frames }),
       /^Error: the start reply of a window recording names the recorded window undefined, not a window number$/],
-    [{}, ({ frames }) => ({ frames, window: null }),
+    [{}, "window-stop", ({ frames }) => ({ frames, window: null }),
       /^Error: the start reply of a window recording names the recorded window null, not a window number$/],
-    [{ display: true }, ({ frames }) => ({ frames, window: 7 }),
+    [{ display: true }, "display-stop", ({ frames }) => ({ frames, window: 7 }),
       /^Error: the start reply of a display recording names the recorded window 7, not null$/],
   ]) {
-    const directory = mkdtempSync(join(tmpdir(), "soksak-record-window-"));
-    t.after(() => rmSync(directory, { recursive: true, force: true }));
-    const s = newSession(directory, fakeClient(directory, { started }));
+    const directory = configDirectory(t, "soksak-record-window-");
+    const host = written(directory, "capture-1", { window: params.display ? null : 7 });
+    const { client } = await play(t, `window-check-recording-${name}`, { started: started(host.started), stop: host.stop });
+    const s = newSession(directory, client);
     const recording = await s.record(params);
     await recording.stop();
     assert.throws(() => recording.judge(), error);
@@ -349,24 +339,26 @@ test("a recording whose start names no recorded window is told, and its judgment
 
 // A recording of a new window starts before the application shows the window, so only its stop names the window.
 test("a recording of a new window reads its window from its stop", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-new-window-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const s = newSession(directory, fakeClient(directory));
+  const directory = configDirectory(t, "soksak-record-new-window-");
+  const host = written(directory, "capture-1");
+  const { client } = await play(t, "window-check-recording-new-window-stop", { started: { frames: host.frames, window: null }, stop: host.stop });
+  const s = newSession(directory, client);
   const stopped = await (await s.record({ newWindow: true })).stop();
   assert.equal(stopped.window, 7);
   await cleanUp(s);
 });
 
 test("a recording of a new window whose start names a window or whose stop names none is told, and its judgment fails", async (t) => {
-  for (const [started, damage, error] of [
+  for (const [started, stop, error] of [
     [({ frames }) => ({ frames, window: 7 }), (reply) => reply,
       /^Error: the start reply of a new window recording names the recorded window 7, not null$/],
-    [(reply) => reply, (reply) => ({ ...reply, window: null }),
+    [({ frames }) => ({ frames, window: null }), (reply) => ({ ...reply, window: null }),
       /^Error: the stop reply of a window recording names the recorded window null, not a window number$/],
   ]) {
-    const directory = mkdtempSync(join(tmpdir(), "soksak-record-new-window-"));
-    t.after(() => rmSync(directory, { recursive: true, force: true }));
-    const s = newSession(directory, fakeClient(directory, { started, damage }));
+    const directory = configDirectory(t, "soksak-record-new-window-");
+    const host = written(directory, "capture-1");
+    const { client } = await play(t, "window-check-recording-new-window-stop", { started: started(host.started), stop: stop(host.stop) });
+    const s = newSession(directory, client);
     const recording = await s.record({ newWindow: true });
     await recording.stop();
     assert.throws(() => recording.judge(), error);
@@ -377,9 +369,10 @@ test("a recording of a new window whose start names a window or whose stop names
 });
 
 test("a recording of the display takes no recorded window", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-display-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const s = newSession(directory, fakeClient(directory));
+  const directory = configDirectory(t, "soksak-record-display-");
+  const host = written(directory, "capture-1", { window: null });
+  const { client } = await play(t, "window-check-recording-display-stop", host.values);
+  const s = newSession(directory, client);
   const stopped = await (await s.record({ display: true })).stop();
   assert.equal(stopped.window, null);
   await cleanUp(s);
@@ -387,9 +380,10 @@ test("a recording of the display takes no recorded window", async (t) => {
 
 // A recording holds at most 4096 stills, so a reply for a larger plan is no reply of a recording.
 test("the judgment of a recording stop for a plan of more stills than a recording holds fails", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-most-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const s = newSession(directory, fakeClient(directory));
+  const directory = configDirectory(t, "soksak-record-most-");
+  const host = written(directory, "capture-1", { gap: 8, stills: 4097 });
+  const { client } = await play(t, "window-check-recording-most-stills-stop", host.values);
+  const s = newSession(directory, client);
   const recording = await s.record({ gap: 8, frames: 4097 });
   await recording.stop();
   assert.throws(() => recording.judge(), /the still recording .*stills\.jsonl plans 4097 stills, more than the 4096 that a recording holds$/);
@@ -398,9 +392,10 @@ test("the judgment of a recording stop for a plan of more stills than a recordin
 
 // A recording stopped after a time that its plan does not reach lost the screens of that time.
 test("the judgment of a recording whose plan ends before the time that it is stopped after fails", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-short-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const s = newSession(directory, fakeClient(directory));
+  const directory = configDirectory(t, "soksak-record-short-");
+  const host = written(directory, "capture-1", { gap: 8, stills: 4 });
+  const { client } = await play(t, "window-check-recording-short-plan-stop", host.values);
+  const s = newSession(directory, client);
   const recording = await s.record({ gap: 8, frames: 4 });
   await recording.stop({ after: 100 });
   assert.throws(() => recording.judge(), new RegExp("^Error: the still recording .*stills\\.jsonl planned its " +
@@ -408,21 +403,20 @@ test("the judgment of a recording whose plan ends before the time that it is sto
   await cleanUp(s);
 });
 
+/**
+ * The still recording of a captured drag on a display of 125 Hz, as the host writes it: the 4096 stills that window-check asks
+ * for at a gap of 8ms, those up to `until` (ms) taken 1ms each, and the rest stopped.
+ */
+const dragRecording = (frames, { until, ...stills }) =>
+  writeStillRecording(frames, { ...stills, gap: 8, until: 4095 * 8, stoppedAt: Math.floor(until / 8) + 1, took: 1 });
+
 test("a captured drag remains available when the session fails", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-drag-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
-  const s = newSession(directory, client);
+  const directory = configDirectory(t, "soksak-drag-record-");
   const frames = join(directory, "logs", "captures", "drag-1");
   const stopped = dragRecording(frames, { until: 24 });
-  s.get = async () => ({ active: false, occluded: false, refreshRate: 125 });
-  s.presented = async () => ({ displayed: 16 });
-  s.request = async (method) => {
-    if (method === "diagnostics.window.draw-covered") return null;
-    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [], window: 7 };
-    if (method === "diagnostics.capture.stop") return stopped;
-    throw new Error(`unexpected ${method}`);
-  };
+  const { client } = await play(t, "window-check-recording-drag-x-16",
+    { drag: { frames, took: 100, asked: 100, ticks: [4, 12], layouts: [], window: 7 }, stop: stopped });
+  const s = newSession(directory, client);
   const result = await drag(s,
     { axis: "x", line: 0, dx: 10, dy: 0, ms: 100, times: 1 }, { capture: true });
   assert.equal(result.frameDir, frames);
@@ -432,9 +426,9 @@ test("a captured drag remains available when the session fails", async (t) => {
 });
 
 test("a capture is preserved when the final application error audit fails", async (t) => {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-record-audit-failure-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const client = fakeClient(directory);
+  const directory = configDirectory(t, "soksak-record-audit-failure-");
+  const host = written(directory, "capture-1");
+  const { client } = await play(t, "window-check-recording-window-stop", host.values);
   const s = newSession(directory, client);
   const recording = await s.record();
   await recording.stop();
@@ -448,34 +442,17 @@ test("a capture is preserved when the final application error audit fails", asyn
 });
 
 /**
- * The still recording of a captured drag on a display of 125 Hz, as the host writes it: the 4096 stills that window-check asks
- * for at a gap of 8ms, those up to `until` (ms) taken 1ms each, and the rest stopped.
+ * A session whose captured drag, answered by the case `name`, sends its steps at `ticks` and stops with a still recording taken
+ * until `until` (ms), with the layouts `layouts` of the drag; the stills of `failed` fail, the drag reply names the recorded
+ * window `dragWindow` and the stop names `window`. Returns the session and the player of the case.
  */
-const dragRecording = (frames, { until, ...stills }) =>
-  writeStillRecording(frames, { ...stills, gap: 8, until: 4095 * 8, stoppedAt: Math.floor(until / 8) + 1, took: 1 });
-
-/**
- * A session whose captured drag sends its steps at `ticks` and stops with a still recording taken until `until` (ms), with the
- * layouts `layouts` of the drag; the stills of `failed` fail, the drag reply names the recorded window `dragWindow` and the
- * stop names `window`. The last screen of the drag is displayed at `displayed`.
- */
-function dragSession(t, { until, ticks, displayed = until, layouts = [], failed = [], window = 7, dragWindow = 7 }) {
-  const directory = mkdtempSync(join(tmpdir(), "soksak-drag-record-"));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const s = newSession(directory, fakeClient(directory));
+async function dragSession(t, name, { until, ticks, layouts = [], failed = [], window = 7, dragWindow = 7 }) {
+  const directory = configDirectory(t, "soksak-drag-record-");
   const frames = join(directory, "logs", "captures", "drag-1");
   const stopped = dragRecording(frames, { until, failed, window });
-  s.get = async () => ({ active: false, occluded: false, refreshRate: 125 });
-  s.presented = async () => ({ displayed });
-  s.requests = [];
-  s.request = async (method, params) => {
-    s.requests.push({ method, ...params });
-    if (method === "diagnostics.window.draw-covered") return null;
-    if (method === "diagnostics.drag") return { frames, took: 100, asked: 100, ticks, layouts, window: dragWindow };
-    if (method === "diagnostics.capture.stop") return stopped;
-    throw new Error(`unexpected ${method}`);
-  };
-  return s;
+  const { server, client } = await play(t, `window-check-recording-${name}`,
+    { drag: { frames, took: 100, asked: 100, ticks, layouts, window: dragWindow }, stop: stopped });
+  return { s: newSession(directory, client), server };
 }
 
 const gapPlan = { axis: "y", line: 1, dx: 0, dy: 10, ms: 100, times: 1 };
@@ -486,9 +463,9 @@ const every = (from, to, step) => Array.from({ length: Math.floor((to - from) / 
 // A recording takes a still each refresh, also while the window stays as it is. The drag asks for the recording that
 // window-check plans, a still each refresh and 4096 stills, and returns its counts.
 test("a captured drag asks for the recording that window-check plans and returns its counts", async (t) => {
-  const s = dragSession(t, { until: 900, displayed: 880, ticks: [...every(152, 244, 8), ...every(402, 494, 8)] });
+  const { s, server } = await dragSession(t, "drag-y-880", { until: 900, ticks: [...every(152, 244, 8), ...every(402, 494, 8)] });
   const result = await drag(s, gapPlan, { capture: true });
-  assert.deepEqual(s.requests.find((request) => request.method === "diagnostics.drag").capture, { gap: 8, frames: 4096 });
+  assert.deepEqual(sent(server).find((request) => request.method === "diagnostics.drag").capture, { gap: 8, frames: 4096 });
   assert.equal(result.count, 113);
   // Each still up to the stop is written, so the longest gap is one gap of 8ms.
   assert.equal(result.longestGap, 8);
@@ -499,7 +476,7 @@ test("a captured drag asks for the recording that window-check plans and returns
 // The recording of a drag is its log: a still that it lost and a recorded window that its replies do not agree on are told, and
 // the drag does not fail on them.
 test("a captured drag whose recording lost a still tells it", async (t) => {
-  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8), failed: [5] });
+  const { s } = await dragSession(t, "drag-y-104", { until: 104, ticks: every(4, 92, 8), failed: [5] });
   await drag(s, gapPlan, { capture: true });
   assert.equal(s.recordingNotes.length, 1);
   assert.match(s.recordingNotes[0],
@@ -507,46 +484,38 @@ test("a captured drag whose recording lost a still tells it", async (t) => {
 });
 
 test("a captured drag whose stop fails tells it and returns the drag", async (t) => {
-  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
-  const request = s.request;
-  s.request = async (method, params) => {
-    if (method === "diagnostics.capture.stop") throw new Error("the capture failed");
-    return request(method, params);
-  };
+  const { s } = await dragSession(t, "drag-stop-fails", { until: 104, ticks: every(4, 92, 8) });
   const result = await drag(s, gapPlan, { capture: true });
   assert.equal(result.took, 100);
   assert.equal(result.count, undefined);
-  assert.deepEqual(s.recordingNotes.map((note) => note.replace(/^.*: the stop/, "the stop")),
-    ["the stop of the recording of the drag failed: the capture failed"]);
+  assert.equal(s.recordingNotes.length, 1);
+  assert.match(s.recordingNotes[0], /: the stop of the recording of the drag failed: .*the capture failed$/);
 });
 
 test("a captured drag whose host recording did not start tells the host failure and stops nothing", async (t) => {
-  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
-  const request = s.request;
-  s.request = async (method, params) => {
-    if (method !== "diagnostics.drag") return request(method, params);
-    s.requests.push({ method, ...params });
-    return { took: 100, asked: 100, captureError: "the recording did not start: no window" };
-  };
+  const directory = configDirectory(t, "soksak-drag-record-");
+  const { server, client } = await play(t, "window-check-recording-drag-capture-error");
+  const s = newSession(directory, client);
   const result = await drag(s, gapPlan, { capture: true });
   assert.equal(result.took, 100);
-  assert.equal(s.requests.some((request) => request.method === "diagnostics.capture.stop"), false);
+  assert.equal(sent(server).some((request) => request.method === "diagnostics.capture.stop"), false);
   assert.deepEqual(s.recordingNotes, ["the recording of the drag: the recording did not start: no window"]);
 });
 
 test("a captured drag of a window on no display runs without a recording and tells it", async (t) => {
-  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8) });
-  s.get = async () => ({ active: false, occluded: false, refreshRate: null });
+  const directory = configDirectory(t, "soksak-drag-record-");
+  const { server, client } = await play(t, "window-check-recording-drag-no-display");
+  const s = newSession(directory, client);
   const result = await drag(s, gapPlan, { capture: true });
-  assert.equal(s.requests.find((request) => request.method === "diagnostics.drag").capture, false);
-  assert.equal(s.requests.some((request) => request.method === "diagnostics.capture.stop"), false);
+  assert.equal(sent(server).find((request) => request.method === "diagnostics.drag").capture, false);
+  assert.equal(sent(server).some((request) => request.method === "diagnostics.capture.stop"), false);
   assert.equal(result.took, 100);
   assert.deepEqual(s.recordingNotes,
     ["the recording of the drag did not start: a recording takes one still each refresh, and host.window.refreshRate is null"]);
 });
 
 test("a captured drag whose reply names no recorded window tells it", async (t) => {
-  const s = dragSession(t, { until: 104, ticks: every(4, 92, 8), dragWindow: null });
+  const { s } = await dragSession(t, "drag-y-104", { until: 104, ticks: every(4, 92, 8), dragWindow: null });
   await drag(s, gapPlan, { capture: true });
   assert.equal(s.recordingNotes.length, 1);
   assert.match(s.recordingNotes[0], /: the drag reply of a window recording names the recorded window null, not a window number$/);
@@ -554,7 +523,7 @@ test("a captured drag whose reply names no recorded window tells it", async (t) 
 
 test("a captured drag whose stop names another window than its reply tells it", async (t) => {
   for (const window of [null, 8]) {
-    const s = dragSession(t, { until: 104, ticks: every(4, 92, 8), window });
+    const { s } = await dragSession(t, "drag-y-104", { until: 104, ticks: every(4, 92, 8), window });
     await drag(s, gapPlan, { capture: true });
     assert.equal(s.recordingNotes.length, 1);
     assert.match(s.recordingNotes[0],
@@ -562,28 +531,20 @@ test("a captured drag whose stop names another window than its reply tells it", 
   }
 });
 
-/** A session whose requests of the layout trace are listed in `calls`; the stop answers `layouts` or fails with `stopFails`. */
-function traceSession({ layouts = [], stopFails = null } = {}) {
-  const s = Object.create(Session.prototype);
-  s.calls = [];
-  s.request = async (method, params) => {
-    s.calls.push(`${method} ${params.on}`);
-    if (!params.on && stopFails) throw new Error(stopFails);
-    return params.on ? null : { layouts };
-  };
-  return s;
-}
-
-test("an action under the layout trace answers its result with the layouts of the trace", async () => {
-  const s = traceSession({ layouts: [{ ticket: 1 }] });
+test("an action under the layout trace answers its result with the layouts of the trace", async (t) => {
+  const directory = configDirectory(t, "soksak-layout-trace-");
+  const { server, client } = await play(t, "window-check-recording-layout-trace");
+  const s = newSession(directory, client);
   assert.deepEqual(await s.traceLayouts(async () => "moved"), { result: "moved", layouts: [{ ticket: 1 }] });
-  assert.deepEqual(s.calls, ["diagnostics.layout.trace true", "diagnostics.layout.trace false"]);
+  assert.deepEqual(sent(server).map(({ method, on }) => `${method} ${on}`), ["diagnostics.layout.trace true", "diagnostics.layout.trace false"]);
 });
 
-test("an action under the layout trace that fails stops the trace and fails with both failures", async () => {
-  const s = traceSession();
-  await assert.rejects(s.traceLayouts(async () => { throw new Error("the action failed"); }), /^Error: the action failed$/);
-  assert.deepEqual(s.calls, ["diagnostics.layout.trace true", "diagnostics.layout.trace false"]);
-  await assert.rejects(traceSession({ stopFails: "no trace" }).traceLayouts(async () => { throw new Error("the action failed"); }),
-    /the trace did not stop: the action failed; no trace/);
+test("an action under the layout trace that fails stops the trace and fails with both failures", async (t) => {
+  const directory = configDirectory(t, "soksak-layout-trace-");
+  const first = await play(t, "window-check-recording-layout-trace-action-fails");
+  await assert.rejects(newSession(directory, first.client).traceLayouts(async () => { throw new Error("the action failed"); }), /^Error: the action failed$/);
+  assert.deepEqual(sent(first.server).map(({ method, on }) => `${method} ${on}`), ["diagnostics.layout.trace true", "diagnostics.layout.trace false"]);
+  const second = await play(t, "window-check-recording-layout-trace-stop-fails");
+  await assert.rejects(newSession(directory, second.client).traceLayouts(async () => { throw new Error("the action failed"); }),
+    /the trace did not stop: the action failed; .*no trace/);
 });

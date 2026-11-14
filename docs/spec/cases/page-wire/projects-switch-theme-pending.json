@@ -1,0 +1,13 @@
+{
+  "name": "projects-switch-theme-pending",
+  "description": "Placeholder of theme-pending.",
+  "replay": false,
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {},
+  "steps": [
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
+    {"reply":{"result":null,"held":true}},
+    {"call":{"name":"setMenuLanguage","payload":"en"}},
+    {"reply":{"result":null}}
+  ]
+}

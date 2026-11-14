@@ -114,6 +114,14 @@ export declare class SoksakView {
      */
     private disarms;
     private observer;
+    private observeFrame;
+    /**
+     * Where the observation of the host size stands: `refused` by the options,
+     * `pending` until the animation frame that starts it, `observing`,
+     * `unavailable` when the environment has no ResizeObserver at that frame, or
+     * `stopped` by `destroy`.
+     */
+    observation: 'refused' | 'pending' | 'observing' | 'unavailable' | 'stopped';
     private resolution;
     private readonly resolutionChanged;
     private observeResolution;
@@ -140,6 +148,16 @@ export declare class SoksakView {
     private renumbered;
     private disposed;
     constructor(host: HTMLElement, grid: Soksak, options: ViewOptions);
+    /**
+     * Whether a view with these options observes its host: the option does not
+     * refuse it and the environment has a ResizeObserver to observe with.
+     */
+    static observesHost(options: ViewOptions, observerAvailable: boolean): boolean;
+    /**
+     * The reaction to one observation of the host size. Returns whether the
+     * grid took the size.
+     */
+    hostResized(width: number, height: number): boolean;
     /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
     /**
      * Change the layout, then draw it.

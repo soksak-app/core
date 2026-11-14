@@ -1,0 +1,332 @@
+{
+  "name": "background-sessions-context",
+  "description": "The page starts with a project in its address, reads the registry, opens the project and forwards the messages of the background session of a tab that has no surface to the sidecar.",
+  "replay": false,
+  "reason": "sidecarListen and sidecarSend register a session with the sidecar services of a window, and only the native host with a window and a sidecar answers them (docs/operations/examples.md#test-kinds).",
+  "variables": {
+    "authorization": {
+      "type": "string",
+      "example": "notDetermined"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "25c5dd90-4c68-4c05-9a13-093a42d6c132",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 15,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000099,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999643393,
+      "source": "page"
+    },
+    "started-at-2": {
+      "type": "number",
+      "example": 1794620225845.881,
+      "source": "page"
+    },
+    "theme-1": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "menu-language-1": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "cid-1": {
+      "type": "string",
+      "example": "p25c5dd90-4c68-4c05-9a13-093a42d6c132.1",
+      "source": "page"
+    },
+    "presented-ms": {
+      "type": "number",
+      "example": 12.5
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000348910,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5348454518,
+      "source": "page"
+    },
+    "opened-at-1": {
+      "type": "integer",
+      "example": 1794620228223,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000369355,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5368899518,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000369333,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5368877227,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000397432,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5396976393,
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000397798,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5397342685,
+      "source": "page"
+    },
+    "ts-us-8": {
+      "type": "integer",
+      "example": 1791000000408354,
+      "source": "page"
+    },
+    "mono-ns-8": {
+      "type": "integer",
+      "example": 5407898685,
+      "source": "page"
+    },
+    "ts-us-9": {
+      "type": "integer",
+      "example": 1791000000415787,
+      "source": "page"
+    },
+    "mono-ns-9": {
+      "type": "integer",
+      "example": 5415331643,
+      "source": "page"
+    },
+    "theme-2": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "menu-language-2": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "ts-us-10": {
+      "type": "integer",
+      "example": 1791000000463517,
+      "source": "page"
+    },
+    "mono-ns-10": {
+      "type": "integer",
+      "example": 5463061852,
+      "source": "page"
+    },
+    "ts-us-11": {
+      "type": "integer",
+      "example": 1791000000464934,
+      "source": "page"
+    },
+    "mono-ns-11": {
+      "type": "integer",
+      "example": 5464478518,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {"call":{"name":"notificationState"}},
+    {"reply":{"result":{"authorization":"$authorization","error":null}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$clock-ts-us-1","mono_ns":"$clock-mono-ns-1"}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$clock-ts-us-2","mono_ns":"$clock-mono-ns-2"}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$clock-ts-us-3","mono_ns":"$clock-mono-ns-3"}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$clock-ts-us-4","mono_ns":"$clock-mono-ns-4"}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":"$clock-ts-us-5","mono_ns":"$clock-mono-ns-5"}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.clock","fields":{"trip_us":"$trip-us-1","resolution_us":"$resolution-us-1"}},{"ts_us":"$ts-us-2","mono_ns":"$mono-ns-2","start":"$page-identity","level":"info","event":"workbench.start","fields":{"started_at":"$started-at-2","url":"http://localhost/?project=prj-session"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setTheme","payload":"$theme-1"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setMenuLanguage","payload":"$menu-language-1"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{"diagnostics.log":{"lifecycle":"info"}},"projects":[{"id":"prj-session","title":"session","root":"/work/session","identity":"id","color":"#fff","named":1,"activeSpaceId":"spc-aaaaaa","spaces":[{"id":"spc-aaaaaa","title":"SPACE1","layout":{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"main","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":[{"id":"tab-aaaaaa","plugin":"fixture-session","title":"shown","origin":{"directory":"/work/session"}},{"id":"tab-bbbbbb","plugin":"fixture-session","title":"hidden","origin":{"directory":"/work/session"}}],"activeId":"tab-aaaaaa"}}]},"focusedId":"main","windowSidebars":{},"named":0,"sidebars":{}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"performance","payload":{"action":"off"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"policy","classes":{"lifecycle":"info","input":"error","call":"error","io":"error","frame":"error"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{"diagnostics.log":{"lifecycle":"info"}},"projects":[{"id":"prj-session","title":"session","root":"/work/session","identity":"id","color":"#fff","named":1,"activeSpaceId":"spc-aaaaaa","spaces":[{"id":"spc-aaaaaa","title":"SPACE1","layout":{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"main","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":[{"id":"tab-aaaaaa","plugin":"fixture-session","title":"shown","origin":{"directory":"/work/session"}},{"id":"tab-bbbbbb","plugin":"fixture-session","title":"hidden","origin":{"directory":"/work/session"}}],"activeId":"tab-aaaaaa"}}]},"focusedId":"main","windowSidebars":{},"named":0,"sidebars":{}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"projectFolder","payload":"/work/session"}},
+    {"reply":{"result":{"root":"/work/session","identity":"id"}}},
+    {"call":{"name":"projectOpen","payload":{"id":"prj-session","root":"/work/session","separate":true,"geometry":null},"cids":["$cid-1"]}},
+    {"reply":{"result":{"local":true,"staged":true}}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{"diagnostics.log":{"lifecycle":"info"}},"projects":[{"id":"prj-session","title":"session","root":"/work/session","identity":"id","color":"#fff","named":1,"activeSpaceId":"spc-aaaaaa","spaces":[{"id":"spc-aaaaaa","title":"SPACE1","layout":{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"main","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":[{"id":"tab-aaaaaa","plugin":"fixture-session","title":"shown","origin":{"directory":"/work/session"}},{"id":"tab-bbbbbb","plugin":"fixture-session","title":"hidden","origin":{"directory":"/work/session"}}],"activeId":"tab-aaaaaa"}}]},"focusedId":"main","windowSidebars":{},"named":0,"sidebars":{}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"projectShown","payload":{"project":{"id":"prj-session","root":"/work/session","title":"session"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"sidecarListen","payload":{"sidecar":"@scope/fixture-sidecar","id":"tab-bbbbbb","on":true}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"waitPresented"}},
+    {"reply":{"result":"$presented-ms"}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-3","mono_ns":"$mono-ns-3","start":"$page-identity","level":"info","event":"workbench.background.session","fields":{"tab":"tab-bbbbbb","plugin":"fixture-session","sidecar":"@scope/fixture-sidecar","action":"open","surface":"absent"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"patch","id":"prj-session","patch":{"lastOpened":"$opened-at-1"}}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"sidecarSend","payload":{"sidecar":"@scope/fixture-sidecar","surface":"tab-bbbbbb","body":{"operation":"open"},"cids":[]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-4","mono_ns":"$mono-ns-4","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"input","level":"debug","count":2}},{"ts_us":"$ts-us-5","mono_ns":"$mono-ns-5","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"info","count":1}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.background.session","fields":{"tab":"tab-aaaaaa","plugin":"fixture-session","sidecar":"@scope/fixture-sidecar","action":"skip","surface":"mounted"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-7","mono_ns":"$mono-ns-7","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"input","level":"debug","count":1}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"sidecarListen","payload":{"sidecar":"@scope/fixture-sidecar","id":"tab-bbbbbb","on":false}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-8","mono_ns":"$mono-ns-8","start":"$page-identity","level":"info","event":"workbench.background.session","fields":{"tab":"tab-bbbbbb","plugin":"fixture-session","sidecar":"@scope/fixture-sidecar","action":"stop","surface":"mounted"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-9","mono_ns":"$mono-ns-9","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"input","level":"debug","count":1}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"surfaceFocus","payload":{"surface":null}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setTheme","payload":"$theme-2"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setMenuLanguage","payload":"$menu-language-2"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{"diagnostics.log":{"lifecycle":"info"}},"projects":[{"id":"prj-session","title":"session","root":"/work/session","identity":"id","color":"#fff","named":1,"activeSpaceId":"spc-aaaaaa","spaces":[{"id":"spc-aaaaaa","title":"SPACE1","layout":{"state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"main","c0":0,"c1":1,"r0":0,"r1":1,"data":{"tabs":[{"id":"tab-aaaaaa","plugin":"fixture-session","title":"shown","origin":{"directory":"/work/session"}},{"id":"tab-bbbbbb","plugin":"fixture-session","title":"hidden","origin":{"directory":"/work/session"}}],"activeId":"tab-aaaaaa"}}]},"focusedId":"main","windowSidebars":{},"named":0,"sidebars":{}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"error":"tab-state store open failed"}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-10","mono_ns":"$mono-ns-10","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"input","level":"debug","count":2}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"surfaceFocus","payload":{"surface":null}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-11","mono_ns":"$mono-ns-11","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"input","level":"debug","count":2}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

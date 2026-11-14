@@ -43,7 +43,7 @@ func writeEventFile(t *testing.T, config, name, text string) string {
 
 // contract: log.endpoint.query-answers-the-rows-around-a-row
 func TestTheEndpointMethodLogQueryAnswersTheRowsAroundARow(t *testing.T) {
-	_, address, config := serve(t, newFakeBackend())
+	_, address, config, _ := servePage(t)
 	writeEventFile(t, config, "host-b1.jsonl", eventLines(9))
 	conn := dial(t, address)
 	around := map[string]any{"ts_us": 1005, "role": "host", "boot": "b1", "seq": 5}
@@ -83,7 +83,7 @@ func TestTheEndpointMethodLogQueryAnswersTheRowsAroundARow(t *testing.T) {
 
 // contract: log.endpoint.query-answers-one-page
 func TestTheEndpointMethodLogQueryAnswersOnePage(t *testing.T) {
-	_, address, config := serve(t, newFakeBackend())
+	_, address, config, _ := servePage(t)
 	path := writeEventFile(t, config, "host-b1.jsonl", eventLines(5))
 	conn := dial(t, address)
 	reply := call(t, conn, 1, "log.query", map[string]any{"channel": "all", "limit": 3})
@@ -133,7 +133,7 @@ func TestTheEndpointMethodLogQueryAnswersOnePage(t *testing.T) {
 
 // contract: debug.log-query.answers-the-query-of-the-endpoint
 func TestTheHostCallLogQueryAnswersTheQueryOfTheEndpoint(t *testing.T) {
-	_, address, config := serve(t, newFakeBackend())
+	_, address, config, _ := servePage(t)
 	writeEventFile(t, config, "host-b1.jsonl", eventLines(8))
 	conn := dial(t, address)
 	request := map[string]any{"order": "desc", "limit": 4, "event_prefix": "host.x"}

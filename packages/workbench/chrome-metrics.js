@@ -23,18 +23,38 @@ export function installChromeMetrics(root) {
   for (const [name, value] of Object.entries(CHROME)) root.style.setProperty(`--${name}`, value);
 }
 
+/** The media condition of the narrow library: the window is at most the chrome metric library-narrow-w wide. */
+export const libraryNarrowCondition = () => `(max-width: ${CHROME["library-narrow-w"]})`;
+
+/** Marks root with data-library-narrow while narrow is true, and removes the mark while it is false. */
+export function markLibraryNarrow(root, narrow) {
+  if (narrow) root.dataset.libraryNarrow = "";
+  else delete root.dataset.libraryNarrow;
+}
+
 /**
  * Marks root with data-library-narrow while the window is at most the chrome metric library-narrow-w wide, and keeps the mark current. A media
  * condition cannot read a custom property, so library.css reads this mark.
  */
 export function followLibraryWidth(root, view) {
-  const narrow = view.matchMedia(`(max-width: ${CHROME["library-narrow-w"]})`);
-  const mark = () => {
-    if (narrow.matches) root.dataset.libraryNarrow = "";
-    else delete root.dataset.libraryNarrow;
-  };
+  const narrow = view.matchMedia(libraryNarrowCondition());
+  const mark = () => markLibraryNarrow(root, narrow.matches);
   mark();
   narrow.addEventListener("change", mark);
+}
+
+/**
+ * The box of the focus mark around slot in the coordinates of host, outside the slot on every side by the chrome metric focus-mark-t:
+ * the CSS lengths left, top, width and height. hostRect and slotRect are the rectangles of the host and of the slot.
+ */
+export function focusMarkBox(hostRect, slotRect) {
+  const out = parseFloat(CHROME["focus-mark-t"]);
+  return {
+    left: `${slotRect.left - hostRect.left - out}px`,
+    top: `${slotRect.top - hostRect.top - out}px`,
+    width: `${slotRect.width + out * 2}px`,
+    height: `${slotRect.height + out * 2}px`,
+  };
 }
 
 /**
@@ -42,11 +62,5 @@ export function followLibraryWidth(root, view) {
  * mark is that metric thick (app.css), so the stroke lies outside the slot and does not cover the surface drawn in it.
  */
 export function placeFocusMark(mark, host, slot) {
-  const out = parseFloat(CHROME["focus-mark-t"]);
-  const h = host.getBoundingClientRect();
-  const r = slot.getBoundingClientRect();
-  mark.style.left = `${r.left - h.left - out}px`;
-  mark.style.top = `${r.top - h.top - out}px`;
-  mark.style.width = `${r.width + out * 2}px`;
-  mark.style.height = `${r.height + out * 2}px`;
+  Object.assign(mark.style, focusMarkBox(host.getBoundingClientRect(), slot.getBoundingClientRect()));
 }

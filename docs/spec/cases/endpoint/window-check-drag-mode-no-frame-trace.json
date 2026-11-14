@@ -1,0 +1,10 @@
+{
+  "name": "window-check-drag-mode-no-frame-trace",
+  "description": "The log policy of the application does not store the frame class at trace: the drag reads the settings and changes nothing.",
+  "replay": false,
+  "reason": "The case plays the settings requests of a measured drag, which change the settings of the application that the replay leaves unchanged.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"values":{"diagnostics.performance":true,"diagnostics.log":{}}}}}
+  ]
+}

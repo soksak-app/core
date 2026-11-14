@@ -6,13 +6,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
 const pluginId = "fixture-side-toggles";
 const setId = "fixture-set";
 
-test("a draw keeps the pressed card header fold control in the document", { timeout: 5000 }, async (t) => {
+test("a draw keeps the pressed card header fold control in the document", { timeout: 5000 }, async () => {
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
+  // are imported, because host.js reads the host when it is imported.
+  const wire = selectPageWire("plane-side-toggles");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   // matchMedia, which JSDOM does not have. The view uses it only to subscribe to resolution changes, and this test does not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
@@ -33,11 +38,6 @@ test("a draw keeps the pressed card header fold control in the document", { time
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // The page has no host in this test, so it is not native. Without a host, report writes the error to console.error and stores no record,
-  // so the test keeps this replacement of the report to observe the errors that the plane reports (the same as plane-sidebar-space.test.mjs).
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
   // The environment of the page: the plugin with its card tab, and the sidebar set that the card header shows at the top and left sides.
   // The environment is installed before the page draws, and no project is open.
   const { installEnvironment } = await import("../environment.js");
@@ -56,6 +56,7 @@ test("a draw keeps the pressed card header fold control in the document", { time
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
+  const { flushEvents } = await import("../page-log.js");
   try {
     // The receiver keeps the drawing function and does not draw immediately. This is the same as a page that waits for the native preparation and the next task.
     let held = null;
@@ -84,7 +85,12 @@ test("a draw keeps the pressed card header fold control in the document", { time
     assert.deepEqual(removed, [], "the draw took fold controls out of the card header");
     assert.equal(card.dataset.sidebarLeft, "folded");
     assert.deepEqual(controls(), ["top", "left"], "the draw changed the order of the fold controls");
-    assert.deepEqual(reports, []);
+    // The window closes here: the focus leaves the document, which the keyboard of the page records as an event that the gate counts.
+    dom.window.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
+    assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord)), [], "the plane reported an error");
+    wire.finish();
   } finally {
     delete globalThis.devicePixelRatio;
     dom.window.close();

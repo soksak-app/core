@@ -16,7 +16,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
 import { find as findReleaseMarkers } from "../check-release.mjs";
-import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findStubs, findUndecodedCommandArguments } from "../check-host-files.mjs";
+import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findUnimplementedMarkers, findUndecodedCommandArguments } from "../check-host-files.mjs";
 import { auditPlatformSource } from "../check-platform-files.mjs";
 import { GATE_SOURCES } from "../check-boundaries.mjs";
 import { auditUnboundNames, auditE2ESource } from "../check-app-tests.mjs";
@@ -298,10 +298,10 @@ test("a prefix audit of the host structure fails when a prefix selects no file",
     "the main-thread audit selects no file with the prefix native/darwin/src/host_api_",
   ]);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => path !== "packages/host/rust/src/host.rs")), [
-    "the stub check selects no file with the prefix packages/host/rust/src/",
+    "the unimplemented-marker check selects no file with the prefix packages/host/rust/src/",
   ]);
   assert.deepEqual(auditPrefixes(tracked.filter((path) => !path.startsWith("packages/workbench-mygo/"))), [
-    "the stub check selects no file with the prefix packages/workbench-mygo/src/",
+    "the unimplemented-marker check selects no file with the prefix packages/workbench-mygo/src/",
   ]);
 });
 
@@ -457,7 +457,7 @@ async fn other(app: AppHandle<R, Extra>) -> Result<(), String> {}
   ]);
 });
 
-test("stub audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
+test("unimplemented-marker audit reads every product source file and reports a file it cannot read", { timeout: 1000 }, () => {
   const files = {
     "native/darwin/src/a.m": "// TODO: Implement the panel\n",
     "packages/host/go/src/a.go": "func f() {}\n",
@@ -465,9 +465,9 @@ test("stub audit reads every product source file and reports a file it cannot re
     "packages/host/go/src/platform/windows/unsupported.go": "// not yet implemented\n",
     "packages/workbench-mygo/src/layout/a.go": "// not yet implemented\n",
   };
-  assert.deepEqual(findStubs(Object.keys(files), (file) => files[file]), ["native/darwin/src/a.m:1: TODO:\\s*Implement",
+  assert.deepEqual(findUnimplementedMarkers(Object.keys(files), (file) => files[file]), ["native/darwin/src/a.m:1: TODO:\\s*Implement",
     "packages/workbench-mygo/src/layout/a.go:1: not yet implemented"]);
-  assert.throws(() => findStubs(["native/darwin/src/a.m"], () => { throw new Error("EACCES: permission denied"); }),
+  assert.throws(() => findUnimplementedMarkers(["native/darwin/src/a.m"], () => { throw new Error("EACCES: permission denied"); }),
     /native\/darwin\/src\/a\.m: EACCES: permission denied/);
 });
 

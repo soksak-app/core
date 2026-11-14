@@ -1,0 +1,7 @@
+{
+  "name": "view-events-none",
+  "description": "The page sends no call and registers no listener while the modules of the surface runtime are imported.",
+  "replay": true,
+  "steps": [
+  ]
+}

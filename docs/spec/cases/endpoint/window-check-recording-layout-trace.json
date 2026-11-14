@@ -1,0 +1,12 @@
+{
+  "name": "window-check-recording-layout-trace",
+  "description": "The layout trace starts and stops and its stop answers the layouts of the trace.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.layout.trace", "params": {"window": "main", "on": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.layout.trace", "params": {"window": "main", "on": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"layouts": [{"ticket": 1}]}}}
+  ]
+}

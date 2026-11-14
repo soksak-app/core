@@ -5,6 +5,8 @@
 
 #[path = "support/folder.rs"]
 mod folder;
+#[path = "support/sidecar_recorder.rs"]
+mod sidecar_recorder;
 
 #[path = "support/platform/platform.rs"]
 mod endpoint_client;
@@ -15,6 +17,7 @@ use std::sync::{Arc, Mutex, mpsc};
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
+use sidecar_recorder::owner;
 use soksak_host::documents::Documents;
 use soksak_host::endpoint::{self, Endpoint, Service};
 use soksak_host::exposure::Relay;
@@ -22,29 +25,9 @@ use soksak_host::images::Images;
 use soksak_host::object_counts::{
     DocumentObjects, HostObjects, ObjectCounter, ObjectCounts, PageObjects, SidecarSession,
 };
-use soksak_host::sidecars::{Failure, Message, Owner, SidecarDeclaration, Sidecars};
+use soksak_host::sidecars::{SidecarDeclaration, Sidecars};
 
 const ECHO: &str = "@fixture/sidecar-echo";
-
-#[derive(Clone)]
-struct FakeOwner {
-    key: String,
-    root: String,
-}
-
-impl Owner for FakeOwner {
-    fn key(&self) -> String {
-        self.key.clone()
-    }
-    fn root(&self) -> Result<String, String> {
-        Ok(self.root.clone())
-    }
-
-    fn deliver(&self, _message: Message) {}
-    fn deliver_failure(&self, failure: Failure) {
-        eprintln!("sidecar failure: {failure:?}");
-    }
-}
 
 fn key(surface: &str, name: &str) -> (String, String) {
     (surface.to_string(), name.to_string())
@@ -102,10 +85,7 @@ fn sidecar_sessions_list_only_the_surfaces_that_sent() {
         dependents: Vec::new(),
     }];
     let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
-    let owner = FakeOwner {
-        key: "a".into(),
-        root: directory.path().display().to_string(),
-    };
+    let (owner, _messages) = owner("a", &directory.path().display().to_string());
     for surface in ["terminal-b", "terminal-a"] {
         sidecars
             .send_with_cids(&owner, ECHO, surface, &raw("{}"), &[])
@@ -139,14 +119,9 @@ fn sidecar_session_and_pending_reply_counts_follow_the_owner() {
         dependents: Vec::new(),
     }];
     let sidecars = Sidecars::new(&declarations, directory.path().to_path_buf()).unwrap();
-    let owner = FakeOwner {
-        key: "a".into(),
-        root: directory.path().display().to_string(),
-    };
-    let other = FakeOwner {
-        key: "b".into(),
-        root: directory.path().display().to_string(),
-    };
+    let (owner, _messages) = owner("a", &directory.path().display().to_string());
+    let (other, _other_messages) =
+        sidecar_recorder::owner("b", &directory.path().display().to_string());
     assert_eq!(sidecars.sessions(&owner).len(), 0);
     sidecars
         .send_with_cids(&owner, ECHO, "s1", &raw("{}"), &["c1".to_string()])

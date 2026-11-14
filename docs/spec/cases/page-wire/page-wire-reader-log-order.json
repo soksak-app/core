@@ -1,0 +1,18 @@
+{
+  "name": "page-wire-reader-log-order",
+  "description": "The case orders a log clock request between two workspace calls; the reader matches the log call in its own order among the log steps and the workspace calls in their own order among the other steps.",
+  "replay": false,
+  "reason": "The case judges the order rule of the reader; the producers run the cases of the host methods.",
+  "variables": {
+    "clock-ts-us": { "type": "integer", "example": 1791000000000456 },
+    "clock-mono-ns": { "type": "integer", "example": 5000000789 }
+  },
+  "steps": [
+    { "call": { "name": "workspace", "payload": { "kind": "snapshot" } } },
+    { "reply": { "result": { "common": {}, "projects": [], "open": [] } } },
+    { "call": { "name": "log", "payload": { "action": "clock" } } },
+    { "reply": { "result": { "ts_us": "$clock-ts-us", "mono_ns": "$clock-mono-ns" } } },
+    { "call": { "name": "workspace", "payload": { "kind": "settings", "id": null, "patch": { "left": false }, "remove": [] } } },
+    { "reply": { "result": null } }
+  ]
+}

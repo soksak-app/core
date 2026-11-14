@@ -1,0 +1,16 @@
+{
+  "name": "view-calls-command-core-cids",
+  "description": "A view runs the core command core.tab.select with the correlation identifiers of its cause.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000001216503,"source":"page"},"mono-ns-1":{"type":"integer","example":6216047747,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"ts-us-2":{"type":"integer","example":1791000000000456,"source":"page"},"mono-ns-2":{"type":"integer","example":5000000789,"source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"core.tab.select","params":{},"cids":["p1700000000000.5"]}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-2","mono_ns":"$mono-ns-2","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":3}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

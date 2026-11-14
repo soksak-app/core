@@ -2,7 +2,7 @@
 // its request fails and the main page does not start.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -22,17 +22,10 @@ function importsOf(text) {
 test("every file that the start document and the modules of the page import is listed in package.json files", () => {
   const app = mkdtempSync(join(tmpdir(), "soksak-workbench-import-stage-"));
   try {
-    mkdirSync(join(app, "runtime"));
+    cpSync(fileURLToPath(new URL("fixtures/stage-app/", import.meta.url)), app, { recursive: true });
+    cpSync(fileURLToPath(new URL("fixtures/stage-app-probe/", import.meta.url)), app, { recursive: true });
     const configuration = join(app, "configuration");
-    mkdirSync(join(configuration, "plugins"), { recursive: true });
-    writeFileSync(join(configuration, "plugins/installed.json"), JSON.stringify({ format: 3, plugins: {}, sidecars: {} }));
-    writeFileSync(join(app, "runtime/index.js"), "export const host = null;\n");
-    writeFileSync(join(app, "runtime/start.js"), "export default { workspace: { common: {}, projects: [] }, controls: null };\n");
-    writeFileSync(join(app, "environment.json"), JSON.stringify({
-      runtime: "runtime",
-      workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "probe", title: "Probe" }] }] } },
-      sidebars: { sets: [], links: [] },
-    }));
+    cpSync(fileURLToPath(new URL("fixtures/stage-app-installed/", import.meta.url)), configuration, { recursive: true });
     execFileSync(process.execPath, [STAGE, "out", "--installed", configuration], { cwd: app, encoding: "utf8" });
 
     const output = join(app, "out");

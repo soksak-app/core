@@ -1,0 +1,17 @@
+{
+  "name": "window-check-readiness-exposure",
+  "description": "The status exposure of a view is registered after the first reading of core.surfaces: the readiness of the view runs after the notification.",
+  "replay": false,
+  "reason": "The case waits for a notification that the replay does not send.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.watch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":[{"surface":"view-a","exposes":[]}]}},
+    {"notify":{"jsonrpc":"2.0","method":"status.changed","params":{"window":"main","name":"core.surfaces","value":[{"surface":"view-a","exposes":["status fixture.ready"]}]}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.unwatch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.get","params":{"window":"main","name":"fixture.ready"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":"ready"}}
+  ]
+}

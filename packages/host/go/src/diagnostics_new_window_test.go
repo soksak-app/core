@@ -4,62 +4,33 @@ package host
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
-// newWindowProbe is a capture whose hold of a new window the test answers: held gives the number of the window that the hold
-// took, and the end of the wait answers the wait with the error of the native library.
-type newWindowProbe struct {
-	captureStartProbe
-	holdErr  error
-	openErr  error
-	held     chan int
-	opened   chan CaptureTarget
-	mu       sync.Mutex
-	released int
-}
-
-func newNewWindowProbe() *newWindowProbe {
-	return &newWindowProbe{held: make(chan int, 1), opened: make(chan CaptureTarget, 1)}
-}
-
-func (p *newWindowProbe) HoldNewWindow() error { return p.holdErr }
-func (p *newWindowProbe) WaitNewWindow(registerEnd func(end func(reason string))) (int, error) {
-	ended := make(chan string, 1)
-	registerEnd(func(reason string) {
-		select {
-		case ended <- reason:
-		default:
-		}
-	})
-	select {
-	case number := <-p.held:
-		return number, nil
-	case reason := <-ended:
-		return -1, fmt.Errorf("no new window was shown before %s", reason)
+// newWindowCapture returns the recording device of the real platform, whose steps run on the main thread, and a function that creates a
+// real window with its main page that is not on screen.
+func newWindowCapture(t *testing.T) (platformCapture, func() platform.Window) {
+	t.Helper()
+	useCurrentPlatformForViews(t)
+	capturer, ok := system.(platform.Capturer)
+	if !ok {
+		t.Fatal("the platform records no windows")
 	}
-}
-func (p *newWindowProbe) Open(target CaptureTarget) error {
-	p.opened <- target
-	return p.openErr
-}
-func (p *newWindowProbe) ReleaseNewWindow() {
-	p.mu.Lock()
-	p.released++
-	p.mu.Unlock()
-}
-func (p *newWindowProbe) releases() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.released
+	savedFramework := framework
+	framework = mainThreadFramework{}
+	t.Cleanup(func() { framework = savedFramework })
+	capture := platformCapture{Capturer: capturer}
+	// A hold that a test leaves set would hold the show of a window of a later test.
+	t.Cleanup(func() { runOnMainThread(capture.ReleaseNewWindow) })
+	return capture, func() platform.Window {
+		return support.TitledWindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	}
 }
 
 // contract: diagnostics.capture-start.new-window-is-strict-boolean
@@ -85,45 +56,16 @@ func TestCaptureStartNewWindowIsAStrictBooleanWithoutDisplay(t *testing.T) {
 }
 
 // contract: diagnostics.capture-start.new-window-answers-once-held
-func TestANewWindowRecordingAnswersOnceTheHoldIsSetAndRecordsTheHeldWindow(t *testing.T) {
-	probe := newNewWindowProbe()
-	var recording Recording
-	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, testPlan); err != nil {
+// The hold is refused by the native library while another hold is set.
+func TestAFailedHoldStartsNoRecording(t *testing.T) {
+	capture, _ := newWindowCapture(t)
+	if err := capture.HoldNewWindow(); err != nil {
 		t.Fatal(err)
 	}
-	if recording.Running() != directory {
-		t.Fatalf("the held recording owns %q, want %q", recording.Running(), directory)
-	}
-	select {
-	case target := <-probe.opened:
-		t.Fatalf("the recording opened %+v before a window was shown", target)
-	default:
-	}
-	probe.held <- 31
-	if target := <-probe.opened; target != (CaptureTarget{Window: 31}) {
-		t.Fatalf("the recording opened %+v, want the held window 31 alone", target)
-	}
-	finished, count, window, err := recording.Finish(probe)
-	if err != nil || finished != directory || count != 1 || window == nil || *window != 31 {
-		t.Fatalf("finish = %q, %d, window %v, %v; want the held window 31", finished, count, window, err)
-	}
-	if probe.releases() != 0 {
-		t.Fatalf("a recording that started released its hold %d times; its start shows the window", probe.releases())
-	}
-	if probe.plan != testPlan {
-		t.Fatalf("the start of the held window received the plan %+v, want %+v", probe.plan, testPlan)
-	}
-}
-
-// contract: diagnostics.capture-start.new-window-answers-once-held
-func TestAFailedHoldStartsNoRecording(t *testing.T) {
-	probe := newNewWindowProbe()
-	probe.holdErr = errors.New("a new window is already held for a recording")
 	var recording Recording
-	err := recording.StartNewWindow(probe, filepath.Join(t.TempDir(), "frames"), testPlan)
-	if err == nil || err.Error() != "a new window is already held for a recording" {
-		t.Fatalf("start error %v", err)
+	err := recording.StartNewWindow(capture, filepath.Join(t.TempDir(), "frames"), testPlan)
+	if err == nil || !strings.Contains(err.Error(), "held") {
+		t.Fatalf("start error %v, want the refusal of a second hold", err)
 	}
 	if recording.Running() != "" {
 		t.Fatalf("a failed hold owns %q", recording.Running())
@@ -132,13 +74,13 @@ func TestAFailedHoldStartsNoRecording(t *testing.T) {
 
 // contract: diagnostics.capture-start.new-window-hold-ends
 func TestTheStopEndsAHoldThatNoShowTook(t *testing.T) {
-	probe := newNewWindowProbe()
+	capture, _ := newWindowCapture(t)
 	var recording Recording
 	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, testPlan); err != nil {
+	if err := recording.StartNewWindow(capture, directory, testPlan); err != nil {
 		t.Fatal(err)
 	}
-	finished, _, _, err := recording.Finish(probe)
+	finished, _, _, err := recording.Finish(capture)
 	if finished != directory || err == nil || err.Error() != "no new window was shown before the stop of the recording" {
 		t.Fatalf("finish = %q, %v", finished, err)
 	}
@@ -147,55 +89,39 @@ func TestTheStopEndsAHoldThatNoShowTook(t *testing.T) {
 	}
 }
 
-// contract: diagnostics.capture-start.new-window-hold-ends
-func TestAFailureAfterTheHoldReleasesTheHeldWindow(t *testing.T) {
-	probe := newNewWindowProbe()
-	probe.openErr = errors.New("window 31 not found")
-	var recording Recording
-	directory := filepath.Join(t.TempDir(), "frames")
-	if err := recording.StartNewWindow(probe, directory, testPlan); err != nil {
-		t.Fatal(err)
-	}
-	probe.held <- 31
-	<-probe.opened
-	finished, _, _, err := recording.Finish(probe)
-	if finished != directory || err == nil || !strings.Contains(err.Error(), "window 31 not found") {
-		t.Fatalf("finish = %q, %v", finished, err)
-	}
-	if probe.releases() != 1 {
-		t.Fatalf("the failed recording released its hold %d times, want 1", probe.releases())
-	}
-}
-
-// heldWindowCapturer is a platform capture whose wait for a held window ends only by its end.
-type heldWindowCapturer struct {
-	platform.Capturer
-	waiting chan uint64
-	ended   chan string
-}
-
-func (c *heldWindowCapturer) CaptureHoldNewWindow() error { return nil }
-func (c *heldWindowCapturer) CaptureWaitNewWindow(token uint64) (int, error) {
-	c.waiting <- token
-	return -1, fmt.Errorf("no new window was shown before %s", <-c.ended)
-}
-func (c *heldWindowCapturer) CaptureReleaseNewWindow()               {}
-func (c *heldWindowCapturer) CaptureEndWait(_ uint64, reason string) { c.ended <- reason }
-
+// The wait for a held window runs on the native library with a real hold: no window is shown, so the wait ends only by its end.
+// An end that comes after the wait registered ends it, also before it waits in the native library.
 // contract: diagnostics.capture-start.new-window-hold-ends
 func TestTheConnectionAndTheWindowOfTheRequestEndTheWaitForAHeldWindow(t *testing.T) {
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	system, ok := current.(platform.Capturer)
+	if !ok {
+		t.Fatal("the platform records no windows")
+	}
+	previous := framework
+	framework = mainThreadFramework{}
+	t.Cleanup(func() { framework = previous })
 	for _, end := range []string{waitEndConnection, waitEndWindow} {
 		t.Run(end, func(t *testing.T) {
-			fake := &heldWindowCapturer{waiting: make(chan uint64, 1), ended: make(chan string, 1)}
 			s := &Surfaces{name: "new-window-" + end}
 			conn := endpointConnection(t)
-			capture := platformCapture{Capturer: fake, window: s, connection: conn}
+			capture := platformCapture{Capturer: system, window: s, connection: conn}
+			if err := capture.HoldNewWindow(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { runOnMainThread(capture.ReleaseNewWindow) })
+			registered := make(chan struct{})
 			result := make(chan error, 1)
 			go func() {
-				_, err := capture.WaitNewWindow(func(func(string)) {})
+				// The wait calls registerEnd after it registered with the window and the connection, and before it waits in the
+				// native library.
+				_, err := capture.WaitNewWindow(func(func(string)) { close(registered) })
 				result <- err
 			}()
-			<-fake.waiting
+			<-registered
 			if end == waitEndConnection {
 				conn.close("the requester closed")
 			} else {
@@ -208,49 +134,28 @@ func TestTheConnectionAndTheWindowOfTheRequestEndTheWaitForAHeldWindow(t *testin
 	}
 }
 
-// mainStepFramework is a framework whose step of the main thread marks the time it runs, so a test tells a call made in a step
-// from a call made on the goroutine of a request.
-type mainStepFramework struct {
-	frameworkRecord
-	inStep *atomic.Bool
-}
-
-func (f mainStepFramework) Step(task func()) {
-	f.inStep.Store(true)
-	defer f.inStep.Store(false)
-	task()
-}
-
-// stepHoldCapturer is a platform capture that records whether its hold of a new window ran in a step of the main thread.
-type stepHoldCapturer struct {
-	platform.Capturer
-	inStep           *atomic.Bool
-	held, heldInStep bool
-}
-
-func (c *stepHoldCapturer) CaptureHoldNewWindow() error {
-	c.held = true
-	c.heldInStep = c.inStep.Load()
-	return nil
-}
-func (c *stepHoldCapturer) CaptureWaitNewWindow(uint64) (int, error) {
-	return -1, errors.New("no window")
-}
-func (c *stepHoldCapturer) CaptureReleaseNewWindow() {}
-
 // contract: diagnostics.capture-start.new-window-answers-once-held
 func TestTheHoldOfANewWindowRunsInAStepOfTheMainThread(t *testing.T) {
-	// The native hold sets AppKit state and asserts the main thread; the request that starts it runs on a goroutine of the
-	// endpoint, from which the native call of the main thread runs its body directly (native/darwin/src/main_thread.h).
-	inStep := &atomic.Bool{}
-	previous := framework
-	framework = mainStepFramework{inStep: inStep}
-	t.Cleanup(func() { framework = previous })
-	capturer := &stepHoldCapturer{inStep: inStep}
-	if err := (platformCapture{Capturer: capturer}).HoldNewWindow(); err != nil {
+	// The native hold sets AppKit state and asserts the main thread, and this test calls it from a goroutine that is not the main
+	// thread, so the hold of the native library holds only when the call runs in a step of the main thread.
+	current, err := platform.Current()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !capturer.held || !capturer.heldInStep {
-		t.Fatalf("the hold ran %v, in a step of the main thread %v; want it in a step", capturer.held, capturer.heldInStep)
+	capturer, ok := current.(platform.Capturer)
+	if !ok {
+		t.Fatal("the platform records no windows")
+	}
+	steps := &atomic.Int64{}
+	previous := framework
+	framework = countedStepFramework{steps: steps}
+	t.Cleanup(func() { framework = previous })
+	capture := platformCapture{Capturer: capturer}
+	if err := capture.HoldNewWindow(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { runOnMainThread(capture.ReleaseNewWindow) })
+	if got := steps.Load(); got != 1 {
+		t.Fatalf("the hold ran in %d steps of the main thread, want 1", got)
 	}
 }

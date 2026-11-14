@@ -1,0 +1,16 @@
+{
+  "name": "window-check-input-source-restore",
+  "description": "A session that selects an input source in the main window and in a child window reads the source of the person once, and its cleanup restores that source after the cleanups that were registered before.",
+  "replay": false,
+  "reason": "The case selects the input source of the person and restores it, and the replay would change the input source of the person.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.input.source", "params": {"window": "main"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"current": null, "source": "person-source"}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.input.source", "params": {"window": "main", "select": "korean"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"current": "korean", "source": "role-korean"}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "diagnostics.input.source", "params": {"window": "child", "select": "latin"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": {"current": "latin", "source": "role-latin"}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "diagnostics.input.source", "params": {"window": "main", "restore": "person-source"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": {"current": null, "source": "person-source"}}}
+  ]
+}

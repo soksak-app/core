@@ -1,0 +1,274 @@
+{
+  "name": "plane-placeholder-reasons",
+  "description": "The page reads the notification state and then the plugin state three times: the host answers that no plugin is installed, that the plugin of the saved tab is installed and disabled, and that it is installed and enabled; the layout draws send no error record, and the batch of the flush reports only the events that the gate refused.",
+  "replay": false,
+  "reason": "The replies of pluginsState are the state of the registry in the configuration directory, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits); the calls notificationState and surfaceFocus are answered by the window of the native host, which the producer does not run.",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000501,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000502,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000802,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "core": "0.0.40",
+          "registry": null,
+          "index": null,
+          "installed": {
+            "format": 3,
+            "plugins": {},
+            "sidecars": {}
+          },
+          "firstRun": false,
+          "starter": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "core": "0.0.40",
+          "registry": null,
+          "index": null,
+          "installed": {
+            "format": 3,
+            "plugins": {
+              "fixture-placeholder-reasons": {
+                "version": "0.0.1",
+                "path": "plugins/fixture-placeholder-reasons",
+                "enabled": false,
+                "sidecars": {}
+              }
+            },
+            "sidecars": {}
+          },
+          "firstRun": false,
+          "starter": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "pluginsState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "core": "0.0.40",
+          "registry": null,
+          "index": null,
+          "installed": {
+            "format": 3,
+            "plugins": {
+              "fixture-placeholder-reasons": {
+                "version": "0.0.1",
+                "path": "plugins/fixture-placeholder-reasons",
+                "enabled": true,
+                "sidecars": {}
+              }
+            },
+            "sidecars": {}
+          },
+          "firstRun": false,
+          "starter": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": 1791000000000456,
+              "mono_ns": 5000000789,
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

@@ -9,56 +9,6 @@ import { startCasePlayer } from "@soksak/client/testing";
 
 import { Session } from "../app.mjs";
 
-/**
- * A connection that records requests and fails the input with the code that fail returns. host.buttons is the buttons
- * value, which press changes and reports to the watchers. The watch ends only by notification and uses no time limit.
- */
-function fakeClient(fail = () => null) {
-  const requests = [];
-  const watches = new Set();
-  const messages = {
-    1005: "the document did not receive the input",
-    1007: "AppKit reports NSEvent.pressedMouseButtons mask 0x1 while com.apple.finder (pid 667) is frontmost",
-  };
-  const client = {
-    requests,
-    buttons: { mask: 0 },
-    request: async (method, params) => {
-      requests.push({ method, ...params });
-      const code = method === "input.pointer" ? fail(params, client.buttons) : null;
-      if (code !== null) throw Object.assign(new Error(messages[code]), { code });
-      client.afterRequest?.(method, params);
-      return null;
-    },
-    watch: (window, name, predicate) => new Promise((resolve, reject) => {
-      if (name !== "host.buttons") {
-        reject(new Error(`the fake watches only host.buttons, not ${name}`));
-        return;
-      }
-      requests.push({ method: "status.watch", window, name });
-      const watch = { predicate, resolve };
-      if (predicate(client.buttons)) resolve(client.buttons);
-      else watches.add(watch);
-    }),
-    /** Reports that a person pressed or released a button and host.buttons changed. */
-    press(mask) {
-      client.buttons = { mask };
-      for (const watch of [...watches]) {
-        if (!watch.predicate(client.buttons)) continue;
-        watches.delete(watch);
-        watch.resolve(client.buttons);
-      }
-    },
-  };
-  return client;
-}
-
-/** Runs all continuations of waiting promises. It does not wait for time. */
-const settle = () => new Promise((resolve) => setImmediate(resolve));
-
-/** A host that rejects press and release while AppKit reports a button. */
-const heldRefuses = (params, buttons) => ((params.phase === "down" || params.phase === "up") && buttons.mask !== 0 ? 1007 : null);
-
 // The configuration folder of the fixture holds no record of an application that stopped replying.
 const app = { name: "fixture", configDir: mkdtempSync(join(tmpdir(), "soksak-pointer-presses-")) };
 process.once("exit", () => rmSync(app.configDir, { recursive: true, force: true }));
@@ -113,77 +63,46 @@ test("a check session releases the press of each named pointer", async (t) => {
   ]);
 });
 
-test("a refused release keeps the press open until the held button is released", async () => {
-  const client = fakeClient(heldRefuses);
+test("a refused release keeps the press open until the held button is released", async (t) => {
+  const { server, client } = await play(t, "window-check-presses-held-refused");
   const s = new Session(app, client);
   await s.pointer(10, 20, "down");
-  client.press(0x1);
   // Whether the rejected event was a press or a release decides whether an open press remains, so the error names the
   // step and the location.
   await assert.rejects(s.pointer(10, 20, "up"), (error) => error.code === 1007 &&
-    /^input\.pointer up of the left button at 10,20 in main: AppKit reports NSEvent\.pressedMouseButtons mask 0x1/.test(error.message));
+    /^input\.pointer up of the left button at 10,20 in main: .*AppKit reports NSEvent\.pressedMouseButtons mask 0x1/.test(error.message));
   assert.deepEqual(open(s), [{ window: "main", x: 10, y: 20, button: "left" }]);
-  const sent = client.requests.length;
-  let ended = false;
-  let released;
   // The clock gives the instant before and after the wait for host.buttons, so the waited time is the difference of the instants.
   const instants = [1000, 1234];
-  const release = s.releasePresses({ clock: () => instants.shift() }).then((lines) => { ended = true; released = lines; });
-  await settle();
-  assert.equal(ended, false, "the cleanup ended while the button was held");
-  assert.deepEqual(client.requests.slice(sent), [{ method: "status.watch", window: "main", name: "host.buttons" }],
-    "the cleanup sent a release while host.buttons reported a held button");
-  client.press(0);
-  await release;
+  const released = await s.releasePresses({ clock: () => instants.shift() });
   // A press that the cleanup ended remains as a diagnostic of the check, so the output of the window run shows that the
   // wait for the release ran.
   assert.deepEqual(released, ["released open press: left at 10,20 in main after host.buttons reported mask 0 (waited 234ms)"]);
   assert.deepEqual(instants, [], "the clock was read before and after the wait");
-  assert.deepEqual(client.requests.slice(sent), [
-    { method: "status.watch", window: "main", name: "host.buttons" },
-    { method: "input.pointer", window: "main", x: 10, y: 20, phase: "up", button: "left" },
-  ]);
+  assert.deepEqual(sent(server).map(({ method, phase }) => (method === "input.pointer" ? phase : method)),
+    ["down", "up", "status.watch", "status.get", "status.unwatch", "up"]);
   assert.deepEqual(open(s), []);
   // A press of the same button after an ended press is delivered (it is not 1008).
   await s.pointer(10, 20, "down");
   await s.pointer(10, 20, "up");
 });
 
-test("a high-level click waits for an already-held button before pressing", async () => {
-  const client = fakeClient(heldRefuses);
+test("a high-level click waits for an already-held button before pressing", async (t) => {
+  const { server, client } = await play(t, "window-check-click-held-before");
   const s = new Session(app, client);
-  client.press(0x1);
-  const click = s.click(10, 20);
-  const result = click.then(() => null, (error) => error);
-  await settle();
-  assert.deepEqual(client.requests, [{ method: "status.watch", window: "main", name: "host.buttons" }],
-    "the click sent input while AppKit reported a held button");
-  client.press(0);
-  assert.equal(await result, null);
-  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").map(({ phase }) => phase), ["down", "up"]);
+  await s.click(10, 20);
+  assert.deepEqual(sent(server).filter((request) => request.method === "input.pointer").map(({ phase }) => phase), ["down", "up"]);
 });
 
-test("a high-level click waits for a button released between its press and release", async () => {
-  const client = fakeClient(heldRefuses);
+test("a high-level click waits for a button held between its press and release", async (t) => {
+  const { server, client } = await play(t, "window-check-click-held-between");
   const s = new Session(app, client);
-  client.afterRequest = (method, params) => {
-    if (method === "input.pointer" && params.phase === "down") client.press(0x1);
-  };
-  const click = s.click(10, 20);
-  const result = click.then(() => null, (error) => error);
-  await settle();
-  assert.deepEqual(client.requests, [
-    { method: "status.watch", window: "main", name: "host.buttons" },
-    { method: "input.pointer", window: "main", x: 10, y: 20, phase: "down" },
-    { method: "status.watch", window: "main", name: "host.buttons" },
-  ], "the click sent its release while AppKit reported a held button");
-  client.press(0);
-  assert.equal(await result, null);
-  assert.deepEqual(client.requests.filter((request) => request.method === "input.pointer").map(({ phase }) => phase), ["down", "up"]);
+  await s.click(10, 20);
+  assert.deepEqual(sent(server).filter((request) => request.method === "input.pointer").map(({ phase }) => phase), ["down", "up"]);
 });
 
-test("a release that is refused after the buttons are released reports the press that stayed open", async () => {
-  const client = fakeClient((params) => (params.phase === "up" ? 1007 : null));
+test("a release that is refused after the buttons are released reports the press that stayed open", async (t) => {
+  const { client } = await play(t, "window-check-presses-release-refused-late");
   const s = new Session(app, client);
   await s.pointer(10, 20, "down");
   await assert.rejects(s.pointer(10, 20, "up"), /pressedMouseButtons/);

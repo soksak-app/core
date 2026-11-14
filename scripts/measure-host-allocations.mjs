@@ -13,15 +13,15 @@
 // conditions of the windows. `make measure-host-allocations` runs it.
 //
 //   node scripts/measure-host-allocations.mjs --sok PATH --config-dir DIR --trace 0|1 [--minutes N] [--b3-out FILE]
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { setTimeout as sleep } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
 import { b3Conditions, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
 import { PROCESS_TABLE_BYTES, hostProcess, parseProcessTable, requireOcclusion } from "./measure-app-usage.mjs";
+import { delay, instant, remainingMs } from "./measure-tools.mjs";
 import { applyTrace, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 /** The keys of the B3 output of host-allocations (scripts/b3-out.mjs), which b3Output gives. */
@@ -40,26 +40,45 @@ export function heapTotals(text) {
   return { nodes: Number(match[1]), bytes: Number(match[2]) };
 }
 
+/** The milliseconds that remain at the instant `now` until minute `minute` of a measurement that began at the instant `startedAt`. */
+export function minuteWaitMs({ startedAt, now, minute }) {
+  return remainingMs({ since: startedAt, now, ms: minute * 60_000 });
+}
+
+/** The milliseconds that a measurement that began at the instant `startedAt` has run at the instant `now`. */
+export function elapsedSince({ startedAt, now }) {
+  return Math.round(now - startedAt);
+}
+
 /**
- * Records the totals and the footprint (footprint(pid), in bytes) at start and after each of `minutes` intervals, then reads the
- * footprint until it settles by the rule of G3 with the frames of the windows (readFrames()) and records it; returns the settled
- * footprint in bytes. wait(ms) waits, for the minutes and for the readings of the settle rule. readWindows() gives the host.window
- * reply of each window with its id in `window`: a covered window measures another state, so each record requires no window that is covered.
+ * Records one phase: requires that no window is covered (readWindows() gives the host.window reply of each window with its id in
+ * `window`: a covered window measures another state), then logs the totals and the footprint (footprint(pid), in bytes) of the process
+ * `pid` at `elapsedMs`. Returns the entry.
  */
-export async function measure({ pid, minutes, totals, footprint, readFrames, readWindows, wait, log, now = Date.now }) {
-  const uncovered = async () => requireOcclusion(null, await readWindows());
-  const started = now();
-  await uncovered();
-  log({ phase: "start", elapsedMs: 0, pid, ...totals(pid), footprint: await footprint(pid) });
+export async function recordPhase({ phase, elapsedMs, pid, totals, footprint, readWindows, log }) {
+  requireOcclusion(null, await readWindows());
+  const entry = { phase, elapsedMs, pid, ...totals(pid), footprint: await footprint(pid) };
+  log(entry);
+  return entry;
+}
+
+/**
+ * Records the totals and the footprint at start and after each of `minutes` intervals (each minute waits minuteWaitMs from the start),
+ * then reads the footprint until it settles by the rule of G3 with the frames of the windows (readFrames()) and records it; returns
+ * the settled footprint in bytes. A covered window fails the measurement at the reading that finds it.
+ */
+export async function measure({ pid, minutes, totals, footprint, readFrames, readWindows, log }) {
+  const startedAt = instant();
+  const phase = (name, elapsedMs) => recordPhase({ phase: name, elapsedMs, pid, totals, footprint, readWindows, log });
+  await phase("start", 0);
   for (let minute = 1; minute <= minutes; minute++) {
-    await wait(60_000);
-    await uncovered();
-    log({ phase: `minute ${minute}`, elapsedMs: now() - started, pid, ...totals(pid), footprint: await footprint(pid) });
+    await delay(minuteWaitMs({ startedAt, now: instant(), minute }));
+    await phase(`minute ${minute}`, elapsedSince({ startedAt, now: instant() }));
   }
-  const { footprints } = await settledFootprints({ readFootprints: async () => new Map([[pid, await footprint(pid)]]), readFrames, sleep: wait });
+  const { footprints } = await settledFootprints({ readFootprints: async () => new Map([[pid, await footprint(pid)]]), readFrames });
   const settled = footprints.get(pid);
-  await uncovered();
-  log({ phase: "settled", elapsedMs: now() - started, pid, footprint: settled });
+  requireOcclusion(null, await readWindows());
+  log({ phase: "settled", elapsedMs: elapsedSince({ startedAt, now: instant() }), pid, footprint: settled });
   return settled;
 }
 
@@ -134,10 +153,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const settledBytes = await measure({
     pid, minutes,
     totals: (id) => heapTotals(execFileSync("heap", [String(id)], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 })),
-    footprint: async (id) => (await readFootprint(id, async (command, args) => spawnSync(command, args, { encoding: "utf8" }))).bytes,
+    footprint: async (id) => (await readFootprint(id)).bytes,
     readFrames: async () => windowFrames(replies()),
     readWindows: async () => replies(),
-    wait: (ms) => sleep(ms),
     log: (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`),
   });
   if (b3Out !== null) writeB3Out(b3Out, b3Output({ settledBytes, windows: replies(), trace, policy: readPolicy(configDir).classes }));

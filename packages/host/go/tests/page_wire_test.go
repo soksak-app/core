@@ -77,9 +77,10 @@ type pageWireStep struct {
 // pageWireListen is the registration of a listener that the page makes for an event of the host. Error is the text that the registration
 // rejects with, and it is absent when the registration succeeds. Held is the reader's: the reader settles a held registration when the test releases it.
 type pageWireListen struct {
-	Event string  `json:"event"`
-	Error *string `json:"error"`
-	Held  bool    `json:"held"`
+	Event            string  `json:"event"`
+	Error            *string `json:"error"`
+	Held             bool    `json:"held"`
+	UnsubscribeError *string `json:"unsubscribeError"`
 }
 
 // pageWireNotice is a notice that the host sends to the listeners of the page.

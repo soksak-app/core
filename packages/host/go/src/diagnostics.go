@@ -141,6 +141,7 @@ func diagnosticDocumentViewportMarker(e *Endpoint, _ *endpointConn, params json.
 			document = nil
 		}
 		color, borderWidthPt, markerErr = marker.SetDocumentViewportMarker(document, *request.Enabled)
+		markerErr = viewportMarkerResult(markerErr)
 	})
 	if markerErr != nil {
 		return nil, markerErr

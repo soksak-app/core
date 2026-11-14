@@ -1,0 +1,33 @@
+{
+  "name": "projects-switch-space-check",
+  "description": "Placeholder of space-check.",
+  "replay": false,
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"cid-1":{"type":"string","example":"p5c976a96-3aec-4cc8-889e-2958cf878f76.1","source":"page"},"last-opened-1":{"type":"integer","example":1794624970445,"source":"page"}},
+  "steps": [
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-spaces","root":"/work/spaces","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"spc-bad","title":"SPACE2","layout":{"state":{"cards":[],"name":"bad"}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-spaces","root":"/work/spaces","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"spc-bad","title":"SPACE2","layout":{"state":{"cards":[],"name":"bad"}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"projectFolder","payload":"/work/spaces"}},
+    {"reply":{"result":{"root":"/work/spaces","identity":"1:1"}}},
+    {"call":{"name":"projectOpen","payload":{"id":"prj-spaces","root":"/work/spaces","separate":true,"geometry":null},"cids":["$cid-1"]}},
+    {"reply":{"result":{"local":true,"staged":true}}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"prj-spaces","root":"/work/spaces","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"spc-bad","title":"SPACE2","layout":{"state":{"cards":[],"name":"bad"}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"projectShown","payload":{"project":{"id":"prj-spaces","root":"/work/spaces","title":"one"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"patch","id":"prj-spaces","patch":{"lastOpened":"$last-opened-1"}}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"workspace","payload":{"kind":"patch","id":"prj-spaces","patch":{"spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"spc-bad","title":"SPACE2","layout":{"state":{"cards":[],"name":"bad"}}}],"activeSpaceId":"spc-one","named":1}}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"windowState"}},
+    {"reply":{"result":null}}
+  ]
+}

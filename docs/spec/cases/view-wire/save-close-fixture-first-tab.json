@@ -1,0 +1,31 @@
+{
+  "name": "save-close-fixture-first-tab",
+  "description": "The save close probe saves once in a tab and keeps the count.",
+  "plugin": "probeclose",
+  "replay": false,
+  "reason": "The calls of this case other than runtime.log are answered by the page of the workbench, which only a running application has; the runtime.log steps are replayed by the cases log-clock and log-batch.",
+  "steps": [
+    {"call":{"command":"runtime.command.register","params":{"name":"probeclose.prepare"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.on","params":{"name":"exposure-request"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.command.register","params":{"name":"probeclose.save"}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.document"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"core.surface.input"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.hit"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"command","name":"core.surface.clock"}}}},
+    {"reply":{"result":null}},
+    {"call":{"command":"runtime.native.call","params":{"name":"registered","payload":{"kind":"status","name":"probeclose.state"}}}},
+    {"reply":{"result":null}},
+    {"request":{"id":1001,"command":"probeclose.prepare","params":{"keepModified":false}}},
+    {"call":{"command":"tab.modified","params":true}},
+    {"reply":{"result":null}},
+    {"request":{"id":1002,"command":"probeclose.save","params":{}}},
+    {"call":{"command":"tab.modified","params":false}},
+    {"reply":{"result":null}}
+  ]
+}

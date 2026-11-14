@@ -1,0 +1,20 @@
+{
+  "name": "view-events-status-surface",
+  "description": "The page forwards the watches of a status to a section surface and a tab surface, pushes the value of each, and forwards the end of each watch.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"spc-aaaaaa/left/files.tree","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"probe.lines","surface":"spc-aaaaaa/left/files.tree","value":["section"]},"surface":"probe-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"probe.lines","surface":"tab-a","value":["tab"]},"surface":"probe-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"exposureForward","payload":{"id":3,"surface":"spc-aaaaaa/left/files.tree","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"surface":"tab-a","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}}
+  ]
+}

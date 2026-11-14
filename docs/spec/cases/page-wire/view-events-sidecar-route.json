@@ -1,0 +1,16 @@
+{
+  "name": "view-events-sidecar-route",
+  "description": "The page adds the host route of the view for a sidecar session, receives the failure of the sidecar, pushes it and removes the route.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"viewSidecarRoute","payload":{"generation":1,"sidecar":"fixture-sidecar","id":"probe-surface","on":true,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"listen":{"event":"sidecar-failure"}},
+    {"notice":{"event":"sidecar-failure","payload":{"sidecar":"fixture-sidecar","surface":"probe-surface","reason":"exited"}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"sidecar.failure","data":{"id":"probe-surface","reason":"exited"},"surface":"probe-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"viewSidecarRoute","payload":{"generation":1,"sidecar":"fixture-sidecar","id":"probe-surface","on":false,"surface":"probe-surface"}}},
+    {"reply":{"result":null}}
+  ]
+}

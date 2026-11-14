@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
 import { Session } from "../app.mjs";
+import { playSession } from "../fixtures/endpoint-player.mjs";
 
-test("a failed pointer-outside move retains its input and final geometry", async () => {
+test("a failed pointer-outside move retains its input and final geometry", { timeout: 5000 }, async (t) => {
   const initial = {
     pointer: { x: 50, y: 40 },
     frame: { x: 0, y: 0, width: 100, height: 80 },
@@ -20,27 +20,12 @@ test("a failed pointer-outside move retains its input and final geometry", async
     ...initial,
     pointer: { x: 70, y: 50 },
   };
-  const commands = [];
-  const session = new Session({ name: "fixture" }, {});
-  let windowReads = 0;
-  session.get = async (name) => {
-    assert.ok(["host.window", "host.screens"].includes(name));
-    if (name === "host.screens") return [screen];
-    windowReads++;
-    return windowReads < 3 ? initial : final;
-  };
-  session.run = async (name, params) => {
-    commands.push({ name, params });
-  };
-  session.until = async (name, predicate, message) => {
-    assert.equal(name, "host.window");
-    assert.equal(predicate(final), false);
-    // A wait has no time limit; the close of the connection is the end that leaves the predicate false.
-    throw new Error(`fixture: ${message} (endpoint connection closed); last value ${JSON.stringify(final)}`);
-  };
-
+  // The host moves the window and reports it where it was, with the pointer inside it, and ends the watch of host.window because
+  // its window closed; the connection stays open, so the final geometry can be read.
+  const { session } = await playSession(t, Session, "window-check-pointer-outside-stays", "fixture");
   await assert.rejects(session.keepPointerOutside(), (error) => {
     assert.match(error.message, /keepPointerOutside=/);
+    assert.match(error.message, /^fixture: the window did not move away from the pointer \(status host\.window ended: the window closed\); /);
     const details = JSON.parse(error.message.split("keepPointerOutside=")[1]);
     assert.deepEqual(details, {
       initialPointer: initial.pointer,
@@ -50,5 +35,4 @@ test("a failed pointer-outside move retains its input and final geometry", async
     });
     return true;
   });
-  assert.deepEqual(commands, [{ name: "host.window.move", params: { x: 200, y: 0 } }]);
 });

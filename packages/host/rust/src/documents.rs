@@ -1434,7 +1434,7 @@ impl ViewChannels {
 
 /// The name of the view web view of a view surface. No composition region has an empty name, so the view cannot collide with a
 /// region, and the view closes with the other documents of its surface.
-pub(crate) const VIEW_NAME: &str = "";
+pub const VIEW_NAME: &str = "";
 
 /// Returns the display label of the WebContent process of the view (region `VIEW_NAME`) or the document region of `plugin`
 /// (docs/spec/plugin-processes.md#operating-system-display-labels).
@@ -3530,10 +3530,6 @@ pub fn put_view_binary_of(
 #[cfg(test)]
 #[path = "document_post_test.rs"]
 mod post_tests;
-
-#[cfg(test)]
-#[path = "view_binary_test.rs"]
-mod view_binary_tests;
 
 /// Ends the presentation wait of the view of surface with reason, and writes the failure of the end to the application log.
 /// Joins each changed visible root placement to the open layout transaction of window with ticket

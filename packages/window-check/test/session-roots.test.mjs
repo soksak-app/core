@@ -13,7 +13,7 @@ function leavesNothing(t, file) {
   t.after(() => rmSync(temporary, { recursive: true }));
   // NODE_TEST_CONTEXT of this test process would make the file report to this run instead of running as a run of its own.
   const { NODE_TEST_CONTEXT, ...env } = process.env;
-  const result = spawnSync(process.execPath, ["--test", "--experimental-test-module-mocks", "--test-name-pattern=^no test has this name$", file], {
+  const result = spawnSync(process.execPath, ["--test", "--test-name-pattern=^no test has this name$", file], {
     cwd: import.meta.dirname, encoding: "utf8", timeout: 60_000, env: { ...env, TMPDIR: `${temporary}/` },
   });
   assert.equal(result.status, 0, result.stdout + result.stderr);

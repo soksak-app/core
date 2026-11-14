@@ -277,24 +277,45 @@ func validViewTimeOrigin(value float64) bool {
 	return value > 0 && !math.IsNaN(value) && !math.IsInf(value, 0)
 }
 
+// viewLogRequest answers the runtime.log call of the view of surface: the host writes the request to its event writer and posts the
+// reply to the ready document of the call.
 func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, call map[string]any) error {
+	answer, err := s.answerViewLog(surface, plugin, generation, call)
+	if err != nil || answer == nil {
+		return err
+	}
+	return s.postViewLogReply(surface, answer)
+}
+
+// viewLogAnswer is the answer to a runtime.log call: the document that made the call, the reply message that goes to it, and the
+// failure of the request, which the reply carries as its error.
+type viewLogAnswer struct {
+	generation uint64
+	document   string
+	message    map[string]any
+	requestErr error
+}
+
+// answerViewLog carries out the runtime.log call of the view of surface and returns its answer. A call of a view that has another plugin or
+// generation has no answer.
+func (s *Surfaces) answerViewLog(surface, plugin string, generation uint64, call map[string]any) (*viewLogAnswer, error) {
 	channel, ok := s.documents.view(surface)
 	if !ok || channel.plugin != plugin || channel.generation != generation {
-		return nil
+		return nil, nil
 	}
 	if channel.document == "" || channel.timeOrigin == 0 {
-		return fmt.Errorf("%s: runtime.log has no ready document", surface)
+		return nil, fmt.Errorf("%s: runtime.log has no ready document", surface)
 	}
 	if s.host == nil || s.host.events == nil {
-		return fmt.Errorf("%s: runtime.log event writer is not running", surface)
+		return nil, fmt.Errorf("%s: runtime.log event writer is not running", surface)
 	}
 	id, ok := call["id"].(uint64)
 	if !ok {
-		return fmt.Errorf("%s: runtime.log call has no integer id", surface)
+		return nil, fmt.Errorf("%s: runtime.log call has no integer id", surface)
 	}
 	params, ok := call["params"].(json.RawMessage)
 	if !ok || len(params) == 0 {
-		return s.replyViewLog(surface, generation, channel.document, id, nil,
+		return viewLogReply(surface, generation, channel.document, id, nil,
 			fmt.Errorf("runtime.log params must be an object"))
 	}
 	var request map[string]any
@@ -302,21 +323,23 @@ func (s *Surfaces) viewLogRequest(surface, plugin string, generation uint64, cal
 		if err == nil {
 			err = errors.New("params must be an object")
 		}
-		return s.replyViewLog(surface, generation, channel.document, id, nil,
+		return viewLogReply(surface, generation, channel.document, id, nil,
 			fmt.Errorf("runtime.log params are invalid: %w", err))
 	}
 	requestReply, err := viewLogCommand(s.host.events, plugin, surface, channel.document, channel.timeOrigin, request)
 	if err != nil {
-		return s.replyViewLog(surface, generation, channel.document, id, nil, err)
+		return viewLogReply(surface, generation, channel.document, id, nil, err)
 	}
 	var result any
 	if requestReply.Clock != nil {
 		result = requestReply.Clock
 	}
-	return s.replyViewLog(surface, generation, channel.document, id, result, nil)
+	return viewLogReply(surface, generation, channel.document, id, result, nil)
 }
 
-func (s *Surfaces) replyViewLog(surface string, generation uint64, document string, id uint64, result any, requestErr error) error {
+// viewLogReply returns the answer that carries result as the reply of the call id, or the failure of its request as the error of the
+// reply.
+func viewLogReply(surface string, generation uint64, document string, id uint64, result any, requestErr error) (*viewLogAnswer, error) {
 	var reply ViewReplyRequest
 	if requestErr != nil {
 		reply = ViewReplyRequest{Page: document, Surface: surface, Generation: generation, ID: id,
@@ -324,22 +347,28 @@ func (s *Surfaces) replyViewLog(surface string, generation uint64, document stri
 	} else {
 		data, err := json.Marshal(result)
 		if err != nil {
-			return fmt.Errorf("%s: encode runtime.log reply: %w", surface, err)
+			return nil, fmt.Errorf("%s: encode runtime.log reply: %w", surface, err)
 		}
 		reply = ViewReplyRequest{Page: document, Surface: surface, Generation: generation, ID: id, Result: data}
 	}
 	message, err := ViewReplyMessage(reply)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	posted, stale, postErr := s.postViewDocumentGeneration(surface, generation, document, message)
+	return &viewLogAnswer{generation: generation, document: document, message: message, requestErr: requestErr}, nil
+}
+
+// postViewLogReply posts the reply of the answer to the document that made the call. A reply of a document that navigated meanwhile is
+// not posted.
+func (s *Surfaces) postViewLogReply(surface string, answer *viewLogAnswer) error {
+	posted, stale, postErr := s.postViewDocumentGeneration(surface, answer.generation, answer.document, answer.message)
 	if stale {
 		return nil
 	}
 	if postErr != nil {
 		postErr = fmt.Errorf("%s: post runtime.log reply: %w", surface, postErr)
-		if requestErr != nil {
-			return errors.Join(requestErr, postErr)
+		if answer.requestErr != nil {
+			return errors.Join(answer.requestErr, postErr)
 		}
 		return postErr
 	}
@@ -351,31 +380,40 @@ func (s *Surfaces) replyViewLog(surface string, generation uint64, document stri
 
 // postViewDocumentGeneration checks the ready document identity and generation in the UI task that posts the reply.
 func (s *Surfaces) postViewDocumentGeneration(surface string, generation uint64, document string, message map[string]any) (bool, bool, error) {
-	message["sok"] = viewChannelMarker
-	data, err := json.Marshal(message)
-	if err != nil {
-		return false, false, err
-	}
 	var posted, stale bool
 	var postErr error
 	s.invoke(func() {
-		channel, ok := s.documents.view(surface)
-		if !ok || channel.generation != generation || channel.document != document {
-			stale = true
+		var post viewPost
+		post, stale, postErr = s.planViewDocumentPost(surface, generation, document, message)
+		if stale || postErr != nil {
 			return
 		}
-		handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
-		if err != nil {
-			postErr = err
-			return
-		}
-		if !system.PostDocument(handle, string(data)) {
+		if viewPostFault() || !system.PostDocument(post.handle, post.text) {
 			postErr = fmt.Errorf("the view document refused the message")
 			return
 		}
 		posted = true
 	})
 	return posted, stale, postErr
+}
+
+// planViewDocumentPost returns the post of message to the view of surface when its channel still has generation and the ready
+// document, with the field sok 1. stale is true for a view of another generation or document. It runs on the UI thread.
+func (s *Surfaces) planViewDocumentPost(surface string, generation uint64, document string, message map[string]any) (post viewPost, stale bool, err error) {
+	message["sok"] = viewChannelMarker
+	data, err := json.Marshal(message)
+	if err != nil {
+		return viewPost{}, false, err
+	}
+	channel, ok := s.documents.view(surface)
+	if !ok || channel.generation != generation || channel.document != document {
+		return viewPost{}, true, nil
+	}
+	handle, err := s.documents.Get(DocumentKey{Surface: surface, Name: viewRegionName})
+	if err != nil {
+		return viewPost{}, false, err
+	}
+	return viewPost{handle: handle, text: string(data)}, false, nil
 }
 
 func viewLogCommand(log *EventLog, plugin, surface, page string, timeOrigin float64, request map[string]any) (LogReply, error) {

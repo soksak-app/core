@@ -1,0 +1,18 @@
+{
+  "name": "exposure-registry-origin-request",
+  "description": "The page forwards five requests that it handles for exposure-requests, each with the id of its request as origin.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"origin":41,"surface":"tab-a","method":"command.run","params":{"name":"probe.send","params":{}}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"origin":42,"surface":"tab-a","method":"status.get","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":3,"origin":43,"surface":"tab-a","method":"element.rect","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"origin":44,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":5,"origin":45,"surface":"tab-a","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}}
+  ]
+}

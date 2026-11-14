@@ -173,6 +173,10 @@ func (s *Shell) documentNames(tab string) []string {
 // shellSurfaces is what the tab parts read of the surfaces of a window.
 type shellSurfaces struct{ shell *Shell }
 
+// SurfacesOf is what the tab parts read of the surfaces of the window of shell: the application gives it to the tab ports of each
+// window, and a check of the tab parts gives the same to its ports.
+func SurfacesOf(shell *Shell) TabSurfaces { return shellSurfaces{shell} }
+
 func (f shellSurfaces) Mounted(tab string) bool { return f.shell.surfaces.held[tab] != nil }
 
 func (f shellSurfaces) DetachHeld(tab string) bool { return f.shell.surfaces.detachHeld(tab) }
@@ -299,7 +303,7 @@ func (a *App) tabPorts(shell *Shell) TabPorts {
 	}
 	return TabPorts{
 		Plugins:        shell.shellPlugins,
-		Surfaces:       shellSurfaces{shell},
+		Surfaces:       SurfacesOf(shell),
 		Enabled:        shell.memoryEnabled,
 		Delay:          shell.memoryDelay,
 		PluginSettings: shell.pluginSettings,

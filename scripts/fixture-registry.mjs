@@ -10,7 +10,7 @@
 // index variants that the check serves, serveRegistry serves them over https, and readIndex reads the fixture registry that a check
 // application uses.
 //
-//   node scripts/fixture-registry.mjs --sok <sok executable> --out <registry folder>
+//   node scripts/fixture-registry.mjs --sok <sok executable> --out <registry folder> [--root <fixtures folder>]
 import { parseArgs } from "node:util";
 import { createHash } from "node:crypto";
 import { constants, accessSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -155,11 +155,11 @@ const requestPath = (target) => decodeURIComponent(target.split("?")[0]);
 /**
  * Serves a registry folder over https on 127.0.0.1 with the certificate { cert, key }: each path of documents answers its JSON
  * document, and any other path answers the file of that path inside folder, or 404. Resolves with { base, close }; close stops the
- * server, and a second close waits for the same stop. createServer and protocol select another server, such as node:http.
+ * server, and a second close waits for the same stop.
  */
-export async function serveRegistry(folder, documents, { cert, key, createServer = createHttpsServer, protocol = "https:" } = {}) {
+export async function serveRegistry(folder, documents, { cert, key } = {}) {
   const root = resolve(folder);
-  const server = createServer({ cert, key }, (request, response) => {
+  const server = createHttpsServer({ cert, key }, (request, response) => {
     const path = requestPath(request.url);
     if (Object.hasOwn(documents, path)) {
       response.writeHead(200, { "content-type": "application/json" });
@@ -185,7 +185,7 @@ export async function serveRegistry(folder, documents, { cert, key, createServer
     server.close(() => done());
     server.closeAllConnections();
   });
-  return { base: `${protocol}//127.0.0.1:${server.address().port}`, close };
+  return { base: `https://127.0.0.1:${server.address().port}`, close };
 }
 
 /** The registry entry of one sidecar. declaration is its sidecar.json, and release is { platform, release, sha256 }. */
@@ -284,13 +284,13 @@ export function fixturePluginIds(root = FIXTURES) {
 
 /**
  * Writes the fixture registry folder out anew from the fixtures under root and creates index.json; resolves with the result of the
- * registry build. pack writes a plugin release, release writes a sidecar release, and build runs `sok registry build`; each receives
- * { signal, timeoutMs }, so a cancelled signal or a step over the limit ends the build. versions maps a fixture plugin id to the
+ * registry build. pnpmPack writes a plugin release, npmSidecarRelease writes a sidecar release, and registryBuild runs the `sok registry
+ * build` of the executable `binary`; each receives { signal, timeoutMs }, so a cancelled signal or a step over the limit ends the
+ * build. versions maps a fixture plugin id to the
  * version entries `{ version, engines }` that its registry entry lists in place of the version of the fixture: each is packed from
  * a copy of the fixture in out/copies whose package.json names version and, when engines is given, engines.soksak `engines`.
  */
-export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack = pnpmPack, release = npmSidecarRelease, build = registryBuild,
-  signal, timeoutMs, versions = {} } = {}) {
+export async function buildFixtureRegistry(binary, out, { root = FIXTURES, signal, timeoutMs, versions = {} } = {}) {
   const bound = { signal, timeoutMs };
   for (const [id, listed] of Object.entries(versions)) {
     if (!Array.isArray(listed) || listed.length === 0) throw new Error(`versions of ${id} list no version`);
@@ -303,7 +303,7 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
   for (const dir of sources.sidecars) {
     const pkg = read(join(dir, "package.json"));
     sidecars.add(pkg.name);
-    writeJson(join(out, "sidecars", `${sidecarFileName(pkg.name)}.json`), sidecarEntry(pkg, read(join(dir, "sidecar.json")), await release(dir, releases, bound)));
+    writeJson(join(out, "sidecars", `${sidecarFileName(pkg.name)}.json`), sidecarEntry(pkg, read(join(dir, "sidecar.json")), await npmSidecarRelease(dir, releases, bound)));
   }
   const ids = [];
   for (const dir of sources.plugins) {
@@ -312,13 +312,13 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
     const listed = versions[manifest.id];
     let entry;
     if (listed === undefined) {
-      entry = pluginEntry(manifest, pkg, await pack(dir, releases, bound), sidecars);
+      entry = pluginEntry(manifest, pkg, await pnpmPack(dir, releases, bound), sidecars);
     } else {
       const entries = [];
       for (const item of listed) {
         const copy = join(out, COPIES, `${manifest.id}-${item.version}`);
         const copied = versionedCopy(dir, copy, item);
-        entries.push(pluginVersion(manifest, copied, await pack(copy, releases, bound), sidecars));
+        entries.push(pluginVersion(manifest, copied, await pnpmPack(copy, releases, bound), sidecars));
       }
       entry = pluginEntryOf(manifest, pkg, entries);
     }
@@ -329,25 +329,25 @@ export async function buildFixtureRegistry(binary, out, { root = FIXTURES, pack 
   if (unknown.length > 0) throw new Error(`versions name no fixture plugin: ${unknown.join(", ")}`);
   writeJson(join(out, "packs", `${PACK}.json`), { name: PACK, description: "Every fixture plugin of the core fixtures.", plugins: ids });
   writeJson(join(out, "revoked.json"), { plugins: [], sidecars: [] });
-  return build(binary, out, bound);
+  return registryBuild(binary, out, bound);
 }
 
 const removeFolder = (folder) => rmSync(folder, { recursive: true, force: true });
 
 /**
  * Resolves with a new registry folder that holds the fixture registry: every plugin of e2e/fixtures packed, the pack fixtures and the
- * index that the `sok registry build` of the executable `sok` writes. `build` (buildFixtureRegistry) writes it under `signal`, each of
- * its commands within the step limit. A failed build removes the folder with `remove`; when the removal also fails, the build rejects
- * with an AggregateError of both. The caller removes the folder.
+ * index that the `sok registry build` of the executable `sok` writes. buildFixtureRegistry writes it from the fixtures under `root`
+ * under `signal`, each of its commands within the step limit. A failed build removes the folder; when the removal also fails, the
+ * build rejects with an AggregateError of both. The caller removes the folder.
  */
-export async function fixtureRegistry({ sok, signal, build = buildFixtureRegistry, remove = removeFolder }) {
+export async function fixtureRegistry({ sok, signal, root }) {
   const folder = mkdtempSync(join(tmpdir(), "soksak-fixture-registry-"));
   try {
-    await build(sok, folder, { signal });
+    await buildFixtureRegistry(sok, folder, { root, signal });
   } catch (error) {
     let cleanupError = null;
     try {
-      remove(folder);
+      removeFolder(folder);
     } catch (cleanup) {
       cleanupError = cleanup;
     }
@@ -357,20 +357,21 @@ export async function fixtureRegistry({ sok, signal, build = buildFixtureRegistr
 }
 
 /**
- * The command line: builds the registry of `--sok` into `--out` and resolves with the result of the build. SIGTERM, SIGINT or SIGHUP
- * of `signals` (the process) aborts the signal of the build, so a run that ends the build (scripts/test-app.mjs interrupts its step
- * with SIGTERM, and make passes it on) ends the running pack instead of leaving it behind.
+ * The command line: builds the registry of `--sok` into `--out` from the fixtures under `--root` (e2e/fixtures by default) and
+ * resolves with the result of the build. SIGTERM, SIGINT or SIGHUP of the process aborts the signal of the build, so a run
+ * that ends the build (scripts/test-app.mjs interrupts its step with SIGTERM, and make passes it on) ends the running pack instead of
+ * leaving it behind.
  */
-export async function main(argv, { signals = process, build = buildFixtureRegistry } = {}) {
-  const { values } = parseArgs({ args: argv, options: { sok: { type: "string" }, out: { type: "string" } }, strict: true });
+export async function main(argv) {
+  const { values } = parseArgs({ args: argv, options: { sok: { type: "string" }, out: { type: "string" }, root: { type: "string" } }, strict: true });
   for (const name of ["sok", "out"]) if (!values[name]) throw new Error(`--${name} is required`);
   const interrupt = new AbortController();
   const handlers = ["SIGTERM", "SIGINT", "SIGHUP"].map((name) => [name, () => interrupt.abort(name)]);
-  for (const [name, handler] of handlers) signals.once(name, handler);
+  for (const [name, handler] of handlers) process.once(name, handler);
   try {
-    return await build(values.sok, values.out, { signal: interrupt.signal });
+    return await buildFixtureRegistry(values.sok, values.out, { root: values.root, signal: interrupt.signal });
   } finally {
-    for (const [name, handler] of handlers) signals.removeListener(name, handler);
+    for (const [name, handler] of handlers) process.removeListener(name, handler);
   }
 }
 

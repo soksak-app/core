@@ -36,6 +36,15 @@ import { subscribe } from "@parcel/watcher";
 const RESCAN_REPORT = / File system must be re-scanned\.$/;
 
 /**
+ * The fault point of the watch of a folder wait, for a failure or a delay that the real watch does not produce on demand. A test
+ * sets the members; production leaves both null. `start({ folder, report })` runs, and is awaited, before the real subscription
+ * starts, so a test holds the start or changes the folder before the watch is active, and `report(error)` delivers an error to the
+ * watch as the callback of @parcel/watcher does. `end({ folder })` runs, and is awaited, before the real unsubscription; the
+ * unsubscription follows also when it throws, and its error is the error of the watch end.
+ */
+export const watchFault = { start: null, end: null };
+
+/**
  * Resolves with the first value other than undefined that `read()` returns. `read` runs once after the watch of `folder`
  * (recursive) is active and again at each change and at each report of lost events (RESCAN_REPORT); an error that `read`
  * throws or any other error that the watch reports rejects the wait. An abort of `signal`, a process or a connection whose
@@ -59,7 +68,13 @@ export function untilFolderState(folder, read, options = {}, ...rest) {
       outcome(value);
       const end = { folder };
       // default: a watch whose start failed has nothing to end, and the error of its start rejected the wait.
-      ending.set(end, subscribed.then((subscription) => subscription.unsubscribe(), () => undefined).then(
+      ending.set(end, subscribed.then(async (subscription) => {
+        try {
+          await watchFault.end?.({ folder });
+        } finally {
+          await subscription.unsubscribe();
+        }
+      }, () => undefined).then(
         () => { ending.delete(end); },
         (error) => { ending.delete(end); endErrors.push(new Error(`the watch of ${folder} failed to end: ${error.message}`, { cause: error })); }));
     };
@@ -95,7 +110,8 @@ export function untilFolderState(folder, read, options = {}, ...rest) {
     // watch on its worker thread after the call returned (UnsubscribeRunner::execute), and a watch of the same folder that
     // starts while that end runs can receive no change of the folder.
     const earlier = [...ending].filter(([end]) => end.folder === folder).map(([, ended]) => ended);
-    const start = () => subscribe(folder, (error) => (error && !RESCAN_REPORT.test(error.message) ? finish(reject, error) : check()));
+    const report = (error) => (error && !RESCAN_REPORT.test(error.message) ? finish(reject, error) : check());
+    const start = () => (watchFault.start ? Promise.resolve(watchFault.start({ folder, report })).then(() => subscribe(folder, report)) : subscribe(folder, report));
     const subscribed = earlier.length > 0 ? Promise.all(earlier).then(start) : start();
     subscribed.then(() => {
       active = true;

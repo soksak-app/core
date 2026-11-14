@@ -1,0 +1,21 @@
+{
+  "name": "surface-view-log-clock",
+  "description": "The page reads the clock of the host five times before its first batch and then sends the batch with the record of the clock and the start of the workbench.",
+  "replay": false,
+  "reason": "The page writes its events through the host call log with its own clock readings, which the Go producer cannot reproduce without the page (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"trip-us":{"type":"integer","example":412,"source":"page"},"resolution-us":{"type":"integer","example":1,"source":"page"},"ts-us-1":{"type":"integer","example":1791000000000491,"source":"page"},"mono-ns-1":{"type":"integer","example":5000000831,"source":"page"},"started-at":{"type":"number","example":1791000000000.5,"source":"page"}},
+  "steps": [
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":1791000000000456,"mono_ns":5000000789}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":1791000000000456,"mono_ns":5000000789}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":1791000000000456,"mono_ns":5000000789}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":1791000000000456,"mono_ns":5000000789}}},
+    {"call":{"name":"log","payload":{"action":"clock"}}},
+    {"reply":{"result":{"ts_us":1791000000000456,"mono_ns":5000000789}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":1791000000000456,"mono_ns":5000000789,"start":"$page-identity","level":"info","event":"workbench.log.clock","fields":{"trip_us":"$trip-us","resolution_us":"$resolution-us"}},{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.start","fields":{"started_at":"$started-at","url":"http://localhost/"}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

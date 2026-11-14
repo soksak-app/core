@@ -528,27 +528,13 @@ test("a divider swept away mid-drag ends its drag", () => {
 });
 
 test("the view follows the host's size, and ignores a host with none", () => {
-  // jsdom has no ResizeObserver, so the block that reads the host's size had
-  // never run — including the guard its own comment warns about.
+  // The reaction to an observation is a function of the size it reports.
   const dom = createDOM();
   globalThis.document = dom.window.document;
   const host = dom.window.document.getElementById("host");
-  let fire = () => {};
-  globalThis.ResizeObserver = class {
-    constructor(cb) {
-      fire = cb;
-    }
-    observe() {}
-    disconnect() {
-      fire = () => {};
-    }
-  };
-  const size = (w, h) => {
-    Object.defineProperty(host, "clientWidth", { value: w, configurable: true });
-    Object.defineProperty(host, "clientHeight", { value: h, configurable: true });
-  };
+  Object.defineProperty(host, "clientWidth", { value: 1000, configurable: true });
+  Object.defineProperty(host, "clientHeight", { value: 800, configurable: true });
 
-  size(1000, 800);
   const grid = new Soksak(undefined, { width: 1000, height: 800, gap: 24 });
   grid.split("card", "x");
   grid.setSize("card", "x", 300);
@@ -558,28 +544,25 @@ test("the view follows the host's size, and ignores a host with none", () => {
     onChange: (reason) => reasons.push(reason),
   });
 
-  size(600, 500);
-  fire();
+  assert.equal(view.hostResized(600, 500), true);
   assert.deepEqual([grid.width, grid.height], [600, 500], "the grid took the new size");
   assert.ok(reasons.includes("resize"), "and the host was told");
 
   // A hidden host reports nothing. Writing that in scaled every px size to zero
   // and showing the host again did not bring them back.
-  size(0, 0);
-  fire();
-  assert.deepEqual([grid.width, grid.height], [600, 500], "a host with no layout is ignored");
+  for (const [w, h] of [[0, 0], [0, 500], [600, 0], [-1, 500]]) {
+    assert.equal(view.hostResized(w, h), false, `a host of ${w}x${h} is ignored`);
+    assert.deepEqual([grid.width, grid.height], [600, 500], "a host with no layout is ignored");
+  }
   assert.equal(grid.card("card").width, 300, "so the px size survives");
 
-  size(1000, 800);
-  fire();
+  assert.equal(view.hostResized(1000, 800), true);
   assert.deepEqual([grid.width, grid.height], [1000, 800]);
   assert.equal(grid.rect("card").w, 300, "and it is drawn at the size it declares");
 
   view.destroy();
-  size(400, 400);
-  fire();
+  assert.equal(view.hostResized(400, 400), false);
   assert.deepEqual([grid.width, grid.height], [1000, 800], "a destroyed view stops observing");
-  delete globalThis.ResizeObserver;
 });
 
 test("the view calls back and honours its options", () => {
@@ -1121,42 +1104,55 @@ test("onChange reports a centring", () => {
 });
 
 test("observeResize: false leaves the host unwatched", () => {
+  const cases = [
+    [{}, true, true, "the view that did not refuse it observes"],
+    [{ observeResize: true }, true, true, "the view that asked for it observes"],
+    [{ observeResize: false }, true, false, "the view that refused it does not observe"],
+    [{}, false, false, "a host without an observer is not observed"],
+    [{ observeResize: false }, false, false, "refusing it without an observer does not observe"],
+  ];
+  for (const [options, available, expected, name] of cases) {
+    assert.equal(SoksakView.observesHost(options, available), expected, name);
+  }
+});
+
+test("the view starts observing its host at an animation frame", async () => {
+  // An observation that starts during a frame's observation round defers its
+  // first notifications and WebKit reports a loop error, so the start waits for
+  // an animation frame, which runs before that round.
   const dom = createDOM();
   const { window } = dom;
   globalThis.document = window.document;
+  delete globalThis.ResizeObserver;
   const host = window.document.getElementById("host");
-  let size = { w: 1000, h: 800 };
-  Object.defineProperty(host, "clientWidth", { get: () => size.w, configurable: true });
-  Object.defineProperty(host, "clientHeight", { get: () => size.h, configurable: true });
-
-  // jsdom has no ResizeObserver, so this stub is the one the view finds.
-  const watchers = [];
-  globalThis.ResizeObserver = class {
-    constructor(fn) { this.fn = fn; watchers.push(this); }
-    observe() {}
-    disconnect() {}
-  };
-  const view = (grid, options) =>
-    new SoksakView(host, grid, {
+  Object.defineProperty(host, "clientWidth", { value: 1000, configurable: true });
+  Object.defineProperty(host, "clientHeight", { value: 800, configurable: true });
+  const frame = () => new Promise((resolve) => window.requestAnimationFrame(resolve));
+  const view = (options) =>
+    new SoksakView(host, new Soksak(undefined, { width: 1000, height: 800 }), {
       createCard: () => window.document.createElement("div"),
       ...options,
     });
 
-  const unwatched = new Soksak(undefined, { width: size.w, height: size.h });
-  const watched = new Soksak(undefined, { width: size.w, height: size.h });
-  const off = view(unwatched, { observeResize: false });
-  assert.equal(watchers.length, 0, "the view that refused it makes no observer");
-  const on = view(watched, {});
-  assert.equal(watchers.length, 1, "the view that did not makes one");
+  const refused = view({ observeResize: false });
+  assert.equal(refused.observation, "refused", "a view that refused it never schedules a start");
 
-  size = { w: 600, h: 500 };
-  watchers[0].fn();
-  assert.equal(watched.width, 600, "the watched grid follows the host");
-  assert.equal(unwatched.width, 1000, "the unwatched one does not");
+  const waiting = view({});
+  assert.equal(waiting.observation, "pending", "the start is scheduled, not made in the constructor");
+  await frame();
+  await frame();
+  assert.equal(waiting.observation, "unavailable", "at the frame the window has no ResizeObserver to start");
 
-  off.destroy();
-  on.destroy();
-  delete globalThis.ResizeObserver;
+  const destroyed = view({});
+  assert.equal(destroyed.observation, "pending");
+  destroyed.destroy();
+  assert.equal(destroyed.observation, "stopped", "a destroy before the frame ends it");
+  await frame();
+  await frame();
+  assert.equal(destroyed.observation, "stopped", "and the cancelled frame does not start it");
+
+  refused.destroy();
+  waiting.destroy();
 });
 
 test("the sheet draws each part the layout specification names", () => {
@@ -1263,18 +1259,8 @@ test("a resize under a drag carries the drag with it", () => {
   const { window } = dom;
   globalThis.document = window.document;
   const host = window.document.getElementById("host");
-  let fire = () => {};
-  globalThis.ResizeObserver = class {
-    constructor(cb) { fire = cb; }
-    observe() {}
-    disconnect() { fire = () => {}; }
-  };
-  const size = (w, h) => {
-    Object.defineProperty(host, "clientWidth", { value: w, configurable: true });
-    Object.defineProperty(host, "clientHeight", { value: h, configurable: true });
-  };
-
-  size(1200, 600);
+  Object.defineProperty(host, "clientWidth", { value: 1200, configurable: true });
+  Object.defineProperty(host, "clientHeight", { value: 600, configurable: true });
   const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24 });
   grid.split("card", "x");
   const view = new SoksakView(host, grid, {
@@ -1290,8 +1276,7 @@ test("a resize under a drag carries the drag with it", () => {
 
   // The host shrinks while the finger is still down. The boundary moves with the
   // plane, and the drag holds the position it was pressed at.
-  size(800, 600);
-  fire();
+  view.hostResized(800, 600);
   const carried = grid.boundaryPos("x", 1);
   assert.notEqual(carried, moved, "the resize moved the boundary");
 
@@ -1303,7 +1288,6 @@ test("a resize under a drag carries the drag with it", () => {
 
   pointer(window, divider, "pointerup", 1, at + 130, 300);
   view.destroy();
-  delete globalThis.ResizeObserver;
 });
 
 test("a second finger on a held divider is not the second press of a pair", () => {

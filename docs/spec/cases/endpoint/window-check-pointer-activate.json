@@ -1,0 +1,10 @@
+{
+  "name": "window-check-pointer-activate",
+  "description": "A move that asks for activation is one input.pointer request: the host emulates the activation.",
+  "replay": false,
+  "reason": "The case sends a pointer move that the replay would deliver to a window of the application.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"input.pointer","params":{"window":"main","x":10,"y":20,"phase":"move","activate":true}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}}
+  ]
+}

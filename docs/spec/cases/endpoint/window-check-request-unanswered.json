@@ -1,0 +1,9 @@
+{
+  "name": "window-check-request-unanswered",
+  "description": "The host receives status.get of core.settings and does not answer it.",
+  "replay": false,
+  "reason": "A replay would wait for an answer that the host does not send.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "core.settings"}}}
+  ]
+}

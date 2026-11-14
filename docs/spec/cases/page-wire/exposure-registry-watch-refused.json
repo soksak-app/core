@@ -1,0 +1,12 @@
+{
+  "name": "exposure-registry-watch-refused",
+  "description": "The surface refuses two watches with the code of a surface that is gone.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"error":{"code":1003,"message":"gone"}}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"error":{"code":1003,"message":"gone"}}}}
+  ]
+}

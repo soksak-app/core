@@ -40,10 +40,7 @@ func TestAWorkbenchStartingEndsTheReloadOfItsWindow(t *testing.T) {
 
 // contract: images.reload.start-sends-detach-without-waiting, surfaces.reload.sends-only-image-detaches
 func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testing.T) {
-	saved := system
-	t.Cleanup(func() { system = saved })
-	recorder := &blurPlatform{documents: map[unsafe.Pointer]bool{}, images: map[unsafe.Pointer]bool{}}
-	system = recorder
+	probe := newRegionsProbe(t)
 	c := sidecarSessionSurfaces(t).sidecars
 	c.stopped = false
 	service := &sidecar{name: "fixture-sidecar", persistent: true, outbox: make(chan queuedLine, 4),
@@ -61,7 +58,12 @@ func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testi
 	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "fixture-sidecar", SidecarOwner: surfaces}); err != nil {
 		t.Fatalf("reserve image: %v", err)
 	}
-	image := unsafe.Pointer(new(byte))
+	image := probe.image
+	// The image region is blurred, so the authoritative update before its close is the end of the blur.
+	runOnMainThread(func() { system.SetImageBackground(image, true) })
+	if !probe.imageBlurred(t) {
+		t.Fatal("the image region is not blurred before the page start")
+	}
 	if !surfaces.images.Set(key, image) {
 		t.Fatal("set image handle failed")
 	}
@@ -70,15 +72,17 @@ func TestStartPageSendsTheReloadedImageDetachAndLeavesItsSurfacePending(t *testi
 		if handle != image {
 			t.Fatalf("closed image %p, want the registered image %p", handle, image)
 		}
-		if blurred, seen := recorder.images[handle]; !seen || blurred {
-			t.Fatalf("image background before close/detach: seen=%t blurred=%t, want an authoritative false update", seen, blurred)
+		if nativeImageBlurred(t, handle) {
+			t.Fatal("the image background before close/detach is blurred, want an authoritative update that ends the blur")
 		}
 		closed = true
 	}
 	owner := &Host{windows: map[uint]*Surfaces{1: surfaces}, workspace: NewWorkspace(t.TempDir()),
 		relay: &Relay[relayTarget]{waiting: map[uint64]*relayWaiter[relayTarget]{}}}
 	surfaces.host = owner
-	if _, err := owner.startPage(1); !errors.Is(err, errNoWindow) {
+	var started error
+	runOnMainThread(func() { _, started = owner.startPage(1) })
+	if err := started; !errors.Is(err, errNoWindow) {
 		t.Fatalf("page start with an unacknowledged image detach: %v, want the later no-window test boundary", err)
 	}
 	if !closed {

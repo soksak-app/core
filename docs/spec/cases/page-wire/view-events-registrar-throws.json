@@ -1,0 +1,7 @@
+{
+  "name": "view-events-registrar-throws",
+  "description": "The page sends no call and registers no listener.",
+  "replay": true,
+  "steps": [
+  ]
+}

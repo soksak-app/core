@@ -1,0 +1,10 @@
+{
+  "name": "section-view-close-lost",
+  "description": "A surface that no card sidebar holds fails the close after core.sidebars is read.",
+  "replay": false,
+  "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.sidebars"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":[]}}
+  ]
+}

@@ -32,7 +32,9 @@ func TestAnEndpointRequestIsAnEventWhileTheTraceIsOff(t *testing.T) {
 	if host.PerformanceEnabled() {
 		t.Fatal("the performance trace is on")
 	}
-	_, address, _ := serve(t, newFakeBackend())
+	_, address, _, _ := servePage(t,
+		pageExchange("status.get", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.watch", `{"name":"core.layout"}`, `null`))
 	conn := dial(t, address)
 	call(t, conn, 1, "windows.list", nil)
 	call(t, conn, 2, "status.get", map[string]any{"window": "main", "name": "core.layout"})
@@ -64,7 +66,7 @@ func TestAnEndpointRequestIsAnEventWhileTheTraceIsOff(t *testing.T) {
 // contract: endpoint.record.failure-names-the-error
 func TestAFailedEndpointRequestIsAWarningWithItsErrorText(t *testing.T) {
 	log := support.UseEventLog(t)
-	_, address, _ := serve(t, newFakeBackend())
+	_, address, _, _ := servePage(t)
 	conn := dial(t, address)
 	reply := call(t, conn, 1, "status.get", map[string]any{"window": "absent", "name": "core.layout"})
 	if reply.Error == nil {
@@ -83,10 +85,10 @@ func TestAFailedEndpointRequestIsAWarningWithItsErrorText(t *testing.T) {
 // contract: endpoint.record.arguments-are-cut-before-copying
 func TestTheArgumentsOfAnEndpointEventAreCutAtTheBound(t *testing.T) {
 	log := support.UseEventLog(t)
-	_, address, _ := serve(t, newFakeBackend())
-	conn := dial(t, address)
 	// Multi-byte characters put the bound inside a character.
 	name := "core." + strings.Repeat("é", 3000)
+	_, address, _, _ := servePage(t)
+	conn := dial(t, address)
 	call(t, conn, 1, "status.get", map[string]any{"window": "main", "name": name})
 	calls := endpointCalls(t, log)
 	if len(calls) != 1 {

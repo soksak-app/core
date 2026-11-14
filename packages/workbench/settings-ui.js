@@ -15,7 +15,6 @@
 // command.
 import { standIn } from "./compositor.js";
 import { native, overlay } from "./host.js";
-import { active } from "./projects.js";
 import { icon } from "./icons.js";
 import { onGripDrag, showValue } from "./card.js";
 import { commandOf, delegate, mark, run } from "./commands.js";
@@ -25,7 +24,7 @@ import { matchPlugins } from "./plugin-search.js";
 import { restoreScroll, scrollPositions } from "./scroll-keep.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, overridden, sourceScope,
+  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
   settingDefinitions,
 } from "./settings.js";
 
@@ -301,7 +300,7 @@ function drawGeneral() {
   // One fixed sidebar per side; the order sets which sidebar takes the room of the plane first (docs/spec/external-sidebars.md).
   body.append(group("사이드바", "한 변에는 고정 사이드바가 하나 있고, 포커스된 플러그인의 창 세트는 같은 자리의 내용을 바꾼다. 순서가 앞선 변의 사이드바가 먼저 공간을 차지한다.", [
     ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 보이기`, toggle(side, value(side)))),
-    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 세트`, choose(`link:${side}:`, generalOptions(), choiceOf(side, null)))),
+    ...WINDOW_SIDES.map((side) => row(`${SIDE_NAMES[side]} 사이드바 세트`, linkControl(`link:${side}:`, side, null))),
     ...(overridden("links") && settingProject() ? [row("", ...overrideControls("links", "전역 연결 사용"))] : []),
     ...orderRows("sidebarOrder", "사이드바 순서", SIDE_NAMES),
   ]));
@@ -381,16 +380,22 @@ function orderRows(key, label, names) {
 
 /** The set entries of the set select box. The value is the set id. */
 // default: a set without sections is shown as having no section.
-// A link control takes the sets of the scope of the links as its options (docs/spec/settings.md#scope-of-a-control).
-const setItems = () => scopedValue("sets", scopeOf("links")).map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
-/** The entries of a general choice: not used and every set. */
-const generalOptions = () => [["off", "사용 안 함"], ...setItems()];
+const setItems = (sets) => sets.map((s) => [s.id, `${s.title} — ${sectionNames(s.sections).join(" · ") || "섹션 없음"}`]);
 /** The current choice to show in the select box: a set id or off. */
-function choiceOf(place, plugin) {
-  const found = value("links").find((l) => l.place === place && l.plugin === plugin);
+function choiceOf(links, place, plugin) {
+  const found = links.find((l) => l.place === place && l.plugin === plugin);
   if (!found) return "off";
   return found.set;
 }
+/**
+ * The select box of a general choice of a sidebar link over the links and the sets: not used and every set. It throws when the link names a
+ * choice that the sets do not have, and never replaces that value with another choice.
+ */
+export function linkChoice(links, sets, key, place, plugin) {
+  return choose(key, [["off", "사용 안 함"], ...setItems(sets)], choiceOf(links, place, plugin));
+}
+// A link control takes the sets of the scope of the links as its options (docs/spec/settings.md#scope-of-a-control).
+const linkControl = (key, place, plugin) => linkChoice(value("links"), scopedValue("sets", scopeOf("links")), key, place, plugin);
 
 /** The controls of the plugin setting formats (Controls in docs/spec/settings.md), one per format. */
 const DECLARED_CONTROLS = {
@@ -470,10 +475,10 @@ function drawPluginPage(unit) {
 
   body.append(group("창 사이드바", "이 플러그인의 탭이 포커스 카드의 활성 탭인 동안 그 변 고정 사이드바의 내용을 이 세트로 바꾼다.",
     WINDOW_SIDES.map((side) => row(`창 ${SIDE_NAMES[side]} 사이드바`,
-      choose(`link:window-${side}:${unit.id}`, generalOptions(), choiceOf(`window-${side}`, unit.id))))));
+      linkControl(`link:window-${side}:${unit.id}`, `window-${side}`, unit.id)))));
   if (unit.surface) body.append(group("카드 사이드바", "카드 내부의 네 변에 표시한다.", [
     ...[["left", "왼쪽"], ["right", "오른쪽"], ["top", "상단"], ["bottom", "하단"]].map(([side,label]) =>
-      row(`카드 ${label} 사이드바`, choose(`link:card-${side}:${unit.id}`, generalOptions(), choiceOf(`card-${side}`,unit.id)))),
+      row(`카드 ${label} 사이드바`, linkControl(`link:card-${side}:${unit.id}`, `card-${side}`, unit.id))),
   ]));
 }
 
@@ -763,11 +768,11 @@ export function drawSettings() {
     const folder = document.createElement("p");
     folder.className = "set-caption set-folder";
     folder.dataset.expose = "core.settings-modal.folder";
-    const project = active();
-    if (!project) throw new Error("the project settings scope has no active project");
+    const root = settingProjectRoot();
+    if (root === null) throw new Error("the project settings scope has no project");
     // The whole path stays inside the pane: text breaks at a space by itself, and the caption adds a break after each
     // separator and hyphen (docs/spec/settings.md).
-    for (const part of project.root.split(/(?<=[\/\\-])/)) {
+    for (const part of root.split(/(?<=[\/\\-])/)) {
       folder.append(part);
       if (/[\/\\-]$/.test(part)) folder.append(document.createElement("wbr"));
     }

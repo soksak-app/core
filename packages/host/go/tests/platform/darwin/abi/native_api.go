@@ -48,6 +48,16 @@ type NativeFunctions struct {
 	SpHostTestFrameId                  func(unsafe.Pointer) uint32
 	SpHostTestFrameInUse               func(unsafe.Pointer) bool
 	SpHostTestFrameRelease             func(unsafe.Pointer)
+	SpHostTestWindowCreate             func(float64, float64, *unsafe.Pointer) *byte
+	SpHostTestWindowCreateTitled       func(float64, float64, *unsafe.Pointer) *byte
+	SpHostTestWindowClose              func(unsafe.Pointer) *byte
+	SpHostTestWindowMainWebview        func(unsafe.Pointer, *byte, *unsafe.Pointer) *byte
+	SpHostTestWebviewLoaded            func(unsafe.Pointer) *byte
+	SpHostTestViewPresentationRelease  func() *byte
+	SpHostTestWindowImageRegions       func(unsafe.Pointer, *uint64) *byte
+	SpHostTestWindowKeysWait           func(unsafe.Pointer, *bool, *bool, *bool) *byte
+	SpHostTestWindowOpenKeyWait        func(unsafe.Pointer, bool) *byte
+	SpHostTestRegionPresentLease       func(unsafe.Pointer, uint64, uint64, int32) *byte
 	SpHostTestSpawnHandledCrash        func(*byte, *byte, *byte, int32, *int32, *uintptr) *byte
 	SpHostTestWaitHandledCrash         func(uintptr, *int32, *int32) *byte
 }
@@ -121,6 +131,36 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpHostTestFrameRelease == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_frame_release")
+	}
+	if functions.SpHostTestWindowCreate == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_create")
+	}
+	if functions.SpHostTestWindowCreateTitled == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_create_titled")
+	}
+	if functions.SpHostTestWindowClose == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_close")
+	}
+	if functions.SpHostTestWindowMainWebview == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_main_webview")
+	}
+	if functions.SpHostTestWebviewLoaded == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_webview_loaded")
+	}
+	if functions.SpHostTestViewPresentationRelease == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_view_presentation_release")
+	}
+	if functions.SpHostTestWindowImageRegions == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_image_regions")
+	}
+	if functions.SpHostTestWindowKeysWait == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_keys_wait")
+	}
+	if functions.SpHostTestWindowOpenKeyWait == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_window_open_key_wait")
+	}
+	if functions.SpHostTestRegionPresentLease == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_region_present_lease")
 	}
 	if functions.SpHostTestSpawnHandledCrash == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_spawn_handled_crash")

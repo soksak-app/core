@@ -1,28 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+import { Session } from "@soksak/window-check/app.mjs";
 import { failureWithSlowestPhase, phasedSession, slowestPhase, timePhase } from "../reload-phases.mjs";
 
-/** A session whose requests answer with their name and arguments, and whose request named `failing` fails with `message`. */
-function fakeSession(failing, message) {
-  const answer = (method, args) => (args[0] === failing ? Promise.reject(new Error(message)) : Promise.resolve({ method, args }));
-  return {
-    run: (...args) => answer("run", args),
-    get: (...args) => answer("get", args),
-    until: (...args) => answer("until", args),
-    presented: () => answer("presented", []),
-  };
+const app = { name: "fixture", configDir: mkdtempSync(join(tmpdir(), "soksak-reload-phases-")) };
+process.once("exit", () => rmSync(app.configDir, { recursive: true, force: true }));
+
+/** The check session of the case `name`, on a client that is connected to the case player; closing the player fails when the case was not played. */
+async function play(t, name) {
+  const server = await startCasePlayer(name);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  return new Session(app, client);
 }
 
-test("a phased request names its phase by the command, the status read, the status waited for or the presentation", async () => {
+test("a phased request names its phase by the command, the status read, the status waited for or the presentation", async (t) => {
   const phases = [];
-  const requests = phasedSession(fakeSession(null), (phase) => phases.push(phase));
-  const predicate = () => true;
-  assert.deepEqual(await requests.run("core.card.split", { card: "c1" }), { method: "run", args: ["core.card.split", { card: "c1" }] });
-  assert.deepEqual(await requests.get("core.grid"), { method: "get", args: ["core.grid"] });
-  assert.deepEqual(await requests.until("host.window", predicate, "the resize did not arrive"),
-    { method: "until", args: ["host.window", predicate, "the resize did not arrive"] }, "a wait passes its predicate and message");
-  await requests.presented();
+  const requests = phasedSession(await play(t, "window-check-phases-session"), (phase) => phases.push(phase));
+  assert.deepEqual(await requests.run("core.card.split", { card: "c1" }), { card: "c2" });
+  assert.deepEqual(await requests.get("core.grid"), { cards: [] });
+  const seen = [];
+  assert.deepEqual(await requests.until("host.window", (value) => { seen.push(value); return true; }, "the resize did not arrive"),
+    { width: 640 }, "a wait passes its predicate and message");
+  assert.deepEqual(seen, [{ width: 640 }]);
+  assert.deepEqual(await requests.presented(), { displayed: 5 });
   assert.deepEqual(phases.map(({ phase, ok, error }) => ({ phase, ok, error })), [
     { phase: "core.card.split", ok: true, error: null },
     { phase: "status core.grid", ok: true, error: null },
@@ -32,13 +40,12 @@ test("a phased request names its phase by the command, the status read, the stat
   assert.ok(phases.every((phase) => Number.isInteger(phase.micros) && phase.micros >= 0), "a phase carries whole microseconds");
 });
 
-test("a failed request is a failed phase with its error, and the request still fails with that error", async () => {
+test("a failed request is a failed phase with its error, and the request still fails with that error", async (t) => {
   const phases = [];
-  const requests = phasedSession(fakeSession("host.window.reload", "1005: the reloaded page did not report ready"),
-    (phase) => phases.push(phase));
-  await assert.rejects(requests.run("host.window.reload"), /^Error: 1005: the reloaded page did not report ready$/);
-  assert.deepEqual(phases.map(({ phase, ok, error }) => ({ phase, ok, error })),
-    [{ phase: "host.window.reload", ok: false, error: "1005: the reloaded page did not report ready" }]);
+  const requests = phasedSession(await play(t, "window-check-phases-reload-refused"), (phase) => phases.push(phase));
+  const message = "fixture command.run host.window.reload: the reloaded page did not report ready";
+  await assert.rejects(requests.run("host.window.reload"), (error) => error.code === 1005 && error.message === message);
+  assert.deepEqual(phases.map(({ phase, ok, error }) => ({ phase, ok, error })), [{ phase: "host.window.reload", ok: false, error: message }]);
 });
 
 test("a phase is recorded when its request answers, not when it is sent", async () => {

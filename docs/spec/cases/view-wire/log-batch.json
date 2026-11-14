@@ -1,0 +1,17 @@
+{
+  "name": "log-batch",
+  "description": "The event writer of the page sends a batch of page records of the ready document, and the host answers with a null result.",
+  "plugin": "probe",
+  "replay": true,
+  "variables": {
+    "events": {"type": "array", "example": [
+      {"ts_us": 1234567, "mono_ns": 1234567890, "page": "doc-1", "level": "info", "event": "page.start", "fields": {"time_origin": 1234.5, "url": "soksak://probe/ui/page.html"}},
+      {"ts_us": 1234568, "mono_ns": 1234568890, "page": "doc-1", "level": "info", "event": "page.log.clock", "fields": {"trip_us": 1000, "resolution_us": 1}},
+      {"ts_us": 1234569, "mono_ns": 1234569890, "page": "doc-1", "level": "info", "event": "plugin.probe.measurement", "fields": {"sample": "accepted"}}
+    ], "source": "page"}
+  },
+  "steps": [
+    {"call": {"command": "runtime.log", "params": {"action": "batch", "events": "$events"}}},
+    {"reply": {"result": null}}
+  ]
+}

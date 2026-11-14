@@ -5,13 +5,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
 const pluginId = "fixture-space";
 const setId = "fixture-space-set";
 
-test("a sidebar draws the section surface ids of the space of the held layout while the project state shows the library", { timeout: 5000 }, async (t) => {
+test("a sidebar draws the section surface ids of the space of the held layout while the project state shows the library", { timeout: 5000 }, async () => {
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
+  // are imported, because host.js reads the host when it is imported.
+  const wire = selectPageWire("plane-sidebar-space");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
@@ -27,12 +32,6 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // The page has no host in this test, so it is not native: the surfaces are placeholders, and no call reaches a host.
-  // Without a host, report writes the error to console.error and stores no record, so the test keeps this replacement of
-  // the report to observe the errors that the plane reports.
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
   // The environment of the page: the plugin with its section, and the sidebar set that names the section. The environment is
   // installed before the page draws, and no project is open, so the project state shows the library.
   const { installEnvironment } = await import("../environment.js");
@@ -52,6 +51,7 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const plane = await import("../plane.js");
+  const { flushEvents } = await import("../page-log.js");
   try {
     let held = null;
     plane.onLayout((made, draw) => { held = draw; });
@@ -62,7 +62,12 @@ test("a sidebar draws the section surface ids of the space of the held layout wh
     drawHeld();
     const ids = [...document.querySelectorAll(".set__body")].map((body) => body.dataset.nativeSurfaceId);
     assert.deepEqual(ids, ["spc-aaaaaa/main:left/fixture-space.tree"]);
-    assert.deepEqual(reports, []);
+    // The window closes here: the focus leaves the document, which the keyboard of the page records as an event that the gate counts.
+    dom.window.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
+    assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord)), []);
+    wire.finish();
   } finally {
     delete globalThis.devicePixelRatio;
     dom.window.close();

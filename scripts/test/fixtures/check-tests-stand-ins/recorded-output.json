@@ -1,0 +1,8 @@
+{
+  "recorded": "The output of the real command that lists the services of a launchd domain.",
+  "command": ["/bin/launchctl", "print", "pid/1"],
+  "status": 0,
+  "stdout": "pid/1 = {\n\tservice stubs = {\n\t}\n}\n",
+  "stderr": "",
+  "pid": 1
+}

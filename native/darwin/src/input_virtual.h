@@ -63,8 +63,9 @@ void sp_input_virtual_end_cursor_observation(void *observation);
 // window, the virtual key window, when the text input client that holds its keyboard is a web view, and reports whether it did.
 // The input method of the system does not serve the window, so the web view takes the key without its input context: it inserts
 // a stated text through its text input and runs the command of the key binding of a named key. Another client, such as an image
-// region, takes the key itself and is not served here. Main thread.
-bool sp_input_virtual_send_key_to_web_view(void *window, void *event);
+// region, takes the key itself and is not served here. *inputContextAbsent, when given, tells whether the input context of the web view
+// was nil before and after the key, which is how the key stays away from the input method. Main thread.
+bool sp_input_virtual_send_key_to_web_view(void *window, void *event, bool *inputContextAbsent);
 
 // Whether input of window passes -[NSApplication sendEvent:]: the application is really active and window is its key window.
 // AppKit also holds a key window in an application that is not active, such as a window that a host shows while another window

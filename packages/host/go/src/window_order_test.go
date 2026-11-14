@@ -11,16 +11,12 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-// orderPlatform answers the window facts with a display and a place among the windows on the screen, and records the raises and
-// the lowers of the windows.
+// orderPlatform records the raises and the lowers of the windows.
 type orderPlatform struct {
 	elementPlatform
-	facts string
 	calls []string
 	fail  error
 }
-
-func (p *orderPlatform) WindowFacts(platform.Window) (string, error) { return p.facts, nil }
 
 func (p *orderPlatform) RaiseWindow(window platform.Window) error {
 	p.calls = append(p.calls, fmt.Sprintf("raise %d", window))
@@ -56,19 +52,9 @@ func TestWindowReportsItsDisplayAndItsPlaceAmongTheWindowsOnTheScreen(t *testing
 		{name: "a window that is not on the screen", display: "null", order: "null"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			p := &orderPlatform{facts: fmt.Sprintf(`{"display":%s,"order":%s,"nativeSurfaces":[],"webviews":[],`+
-				`"activationObservation":{"registered":false,"count":"0"}}`, c.display, c.order)}
-			_, s := orderHost(t, p)
-			state, err := s.windowState()
+			status, err := windowStatusMembers(t, fmt.Sprintf(`{"display":%s,"order":%s,"nativeSurfaces":[],"webviews":[],`+
+				`"activationObservation":{"registered":false,"count":"0"}}`, c.display, c.order), false)
 			if err != nil {
-				t.Fatal(err)
-			}
-			text, err := json.Marshal(state)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var status map[string]json.RawMessage
-			if err := json.Unmarshal(text, &status); err != nil {
 				t.Fatal(err)
 			}
 			if string(status["display"]) != c.display || string(status["order"]) != c.order {

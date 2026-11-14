@@ -1,0 +1,420 @@
+{
+  "name": "plane-frame-text",
+  "description": "The page reads the stored settings, writes the default log policy, reads the notification state and applies the theme and the menu language; the text size 1.5 and then 1 are written to the common settings file with the identifiers of the change and read back by a snapshot, and the batch of the flush reports the events that the gate refused.",
+  "replay": false,
+  "reason": "The reply of the call workspace with the kind snapshot is the state of the registry, which the Go producer builds no project for (docs/spec/cases/page-wire/README.md#limits), and the calls setTheme, setMenuLanguage and notificationState apply to the window of the native host, which the producer does not run.",
+  "variables": {
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "theme-1": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "cid-1": {
+      "type": "string",
+      "example": "p5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234.1",
+      "source": "page"
+    },
+    "cid-2": {
+      "type": "string",
+      "example": "p5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234.2",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 412,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901234",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000501,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000801,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000502,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000802,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000503,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000803,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000504,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5000000804,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {},
+          "projects": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "off"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "policy",
+          "classes": {
+            "lifecycle": "error",
+            "input": "error",
+            "call": "error",
+            "io": "error",
+            "frame": "error"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme-1"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "settings",
+          "id": null,
+          "patch": {
+            "textSize": 1.5
+          },
+          "remove": []
+        },
+        "cids": [
+          "$cid-1"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "en"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {
+            "textSize": 1.5
+          },
+          "projects": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme-1"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "settings",
+          "id": null,
+          "patch": {
+            "textSize": 1
+          },
+          "remove": []
+        },
+        "cids": [
+          "$cid-2"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "en"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "common": {
+            "textSize": 1
+          },
+          "projects": []
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$ts-us",
+          "mono_ns": "$mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": 1791000000000456,
+              "mono_ns": 5000000789,
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "info",
+                "count": 2
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

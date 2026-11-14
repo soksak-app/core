@@ -1,15 +1,15 @@
 {
   "name": "overlay-element-rect-menu",
-  "description": "The page opens the menu modal of the picker at its rectangle in the page, the modal document reports the places of its elements, the page moves the modal with overlayPlace, the modal document reports the place of the remaining elements, and the page closes the modal by its element id; the host answers each call with null.",
+  "description": "The page opens the menu modal of the picker at its rectangle in the page, the modal document reports the places of its elements, the page moves the modal with overlayPlace, the modal document reports the place of the remaining elements, and the page closes the modal by its element id; the host answers overlayShow with the rectangle that it fitted to the device pixels and the other calls with null.",
   "replay": false,
   "reason": "overlayShow opens a native modal view in the window, and the modal document sends its state through the overlay-pick notice; only the native host with a window produces them (the native tier of docs/operations/examples.md#test-kinds).",
   "variables": {},
   "steps": [
     { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 715, "y": 142, "w": 160, "h": 60 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "<button id=\"one\" data-expose=\"core.picker.item\"></button>\n  <button id=\"two\" data-expose=\"core.picker.item\"></button><span id=\"name\" data-expose=\"core.picker.item-name\"></span>", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
-    { "reply": { "result": null } },
+    { "reply": { "result": { "x": 715, "y": 142, "w": 160, "h": 60 } } },
     { "notice": { "event": "overlay-pick", "payload": { "id": "menu", "key": "document", "value": "{\"elements\":[{\"name\":\"core.picker.item\",\"x\":0,\"y\":2,\"width\":160,\"height\":27},{\"name\":\"core.picker.item\",\"x\":0,\"y\":29,\"width\":160,\"height\":27},{\"name\":\"core.picker.item-name\",\"x\":30,\"y\":7,\"width\":87,\"height\":17}]}" } } },
     { "call": { "name": "overlayPlace", "payload": { "id": "menu", "rect": { "x": 700, "y": 150, "w": 160, "h": 60 }, "card": { "x": 0, "y": 0, "w": 0, "h": 0 } } } },
-    { "reply": { "result": null } },
+    { "reply": { "result": { "x": 700, "y": 150, "w": 160, "h": 60 } } },
     { "notice": { "event": "overlay-pick", "payload": { "id": "menu", "key": "document", "value": "{\"elements\":[{\"name\":\"core.picker.item-name\",\"x\":30,\"y\":7,\"width\":87,\"height\":17}]}" } } },
     { "call": { "name": "overlayHide", "payload": "menu" } },
     { "reply": { "result": null } }

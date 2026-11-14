@@ -43,61 +43,9 @@ function testSource(entry) {
   return [...source.matchAll(/^#import "([a-z0-9_]+\.m)"$/gm)].reduce((text, match) => text + read(`native/darwin/tests/${match[1]}`), source);
 }
 
-// The functions of a source that start a recording: sp_capture_start and each function whose body calls one of them.
-function recordingCalls(source) {
-  const names = new Set(["sp_capture_start"]);
-  const bodies = [...source.matchAll(/^static [^\n(]*?\b(\w+)\(([^)]*)\) \{\n([\s\S]*?)^\}/gm)];
-  for (let grown = true; grown; ) {
-    grown = false;
-    for (const [, name, , body] of bodies) {
-      if (names.has(name) || ![...names].some((called) => new RegExp(`\\b${called}\\(`).test(body))) continue;
-      names.add(name);
-      grown = true;
-    }
-  }
-  return names;
-}
-
-/**
- * Whether every recording of the main function of source takes its images from a stand-in of the window server: main sets
- * captureLookup to a lookup that answers CGWindowListCreateImageFromArray with a function of the test whatever the state, and
- * every call that starts a recording comes after that and before captureLookup is the system lookup again. A stand-in that
- * answers only in some states leaves the other recordings on the window server.
- */
-export function controlledRecordings(source) {
-  const standIns = new Set([...source.matchAll(
-    /^static void \*(\w+)\(void \*handle, const char \*name\) \{\n\s*return strcmp\(name, "CGWindowListCreateImageFromArray"\) == 0 \? \(void \*\)\w+ : dlsym\(handle, name\);\n\}/gm,
-  )].map((match) => match[1]));
-  const main = /^int main\([^)]*\) \{([\s\S]*)$/m.exec(source)?.[1] ?? "";
-  const calls = [...recordingCalls(source)].filter((name) => name !== "main");
-  const starts = calls.flatMap((name) => [...main.matchAll(new RegExp(`\\b${name}\\(`, "g"))].map((match) => match.index));
-  if (standIns.size === 0 || starts.length === 0) return false;
-  const swaps = [...main.matchAll(/\bcaptureLookup = (\w+);/g)].map((match) => ({ at: match.index, standIn: standIns.has(match[1]) }));
-  return starts.every((at) => {
-    const before = swaps.filter((swap) => swap.at < at).at(-1);
-    return before !== undefined && before.standIn;
-  });
-}
-
 // A recording that starts on a real window waits for frames that the display presents, so it is an end-to-end case; an invalid
-// window number is negative, an open alone prepares the target, a still capture takes one image, and a recording whose images
-// all come from a stand-in of the window server is a controlled sample that needs no display.
-const recordsAWindow = (source) =>
-  /sp_capture_open\(\s*[^-\s]/.test(source) && /sp_capture_start\(/.test(source) && !controlledRecordings(source);
-
-test("a recording is controlled only while an unconditional stand-in gives every image", { timeout: 1000 }, () => {
-  const standIn = 'static void *lookupTest(void *handle, const char *name) {\n    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)testImage : dlsym(handle, name);\n}\n';
-  const failing = 'static void *lookupFailing(void *handle, const char *name) {\n    if (fail && strcmp(name, "CGWindowListCreateImageFromArray") == 0) return (void *)noImage;\n    return dlsym(handle, name);\n}\n';
-  const helper = "static bool record(NSWindow *window) {\n    return sp_capture_open(window.windowNumber, false, NULL) && sp_capture_start(\"d\", 10, 0, 4, 1, NULL);\n}\n";
-  assert.equal(controlledRecordings(`${standIn}${helper}int main(void) {\n    captureLookup = lookupTest;\n    record(window);\n    captureLookup = dlsym;\n}\n`), true,
-    "a helper recording between the stand-in and the system lookup is controlled");
-  assert.equal(controlledRecordings(`${standIn}${helper}int main(void) {\n    captureLookup = lookupTest;\n    record(window);\n    captureLookup = dlsym;\n    record(window);\n}\n`), false,
-    "a recording after the system lookup is restored records the screen");
-  assert.equal(controlledRecordings(`${failing}${helper}int main(void) {\n    captureLookup = lookupFailing;\n    record(window);\n}\n`), false,
-    "a stand-in that answers only in some states is not controlled");
-  assert.equal(controlledRecordings(`${standIn}${helper}int main(void) {\n    record(window);\n    captureLookup = lookupTest;\n}\n`), false,
-    "a recording before the stand-in records the screen");
-});
+// window number is negative, an open alone prepares the target, and a still capture takes one image.
+const recordsAWindow = (source) => /sp_capture_open\(\s*[^-\s]/.test(source) && /sp_capture_start\(/.test(source);
 
 test("a native unit test records no window of the screen", { timeout: 1000 }, () => {
   const makefile = read("native/darwin/Makefile");
@@ -188,14 +136,24 @@ function goHostTestSources() {
   return files;
 }
 
-test("the root Go E2E target selects every actual registered test through the cgo-free maintained runner", { timeout: 1000 }, () => {
+test("the root Go E2E targets select every actual registered test through the maintained runner", { timeout: 1000 }, () => {
   const makefile = read("Makefile");
   const recipe = rules(makefile).find((rule) => rule.target === "test-app-host-go")?.recipe ?? "";
   const patterns = [...recipe.matchAll(/--package\s+'([^']+)'/g)].map((match) => match[1]);
   assert.deepEqual(patterns, ["./packages/host/mygo/tests/..."], "declare the actual E2E owner instead of zero-match host loops");
+  // The Go host library links the native library with cgo, so its end-to-end tests have a target of their own.
+  const library = rules(makefile).find((rule) => rule.target === "test-app-host-go-library")?.recipe ?? "";
+  const libraryPatterns = [...library.matchAll(/--package\s+'([^']+)'/g)].map((match) => match[1]);
+  assert.deepEqual(libraryPatterns, ["./packages/host/go/src"], "the cgo end-to-end target selects the Go host library");
+  assert.match(library, /node scripts\/go-tests\.mjs/);
+  assert.match(library, /--tags 'e2e diagnostics'/);
+  assert.match(library, /--test '\^TestE2E'/);
+  assert.match(library, /--cgo-ldflags=['"]\$\(GO_LINK\)['"]/);
+  assert.doesNotMatch(library, /CGO_ENABLED=0/);
+  assert.match(makefile, /^test-app-host-go-library:[^\n]*\bbuild-native\b[^\n]*\bbuild-native-tests\b/m);
   const sources = goHostTestSources();
   assert.ok(goEndToEndDeclarations(sources).length > 0, "the target has no actual registered Go E2E tests");
-  assert.deepEqual(unmappedGoEndToEndTests(sources, patterns), [], "a registered Go E2E test has no maintained target");
+  assert.deepEqual(unmappedGoEndToEndTests(sources, [...patterns, ...libraryPatterns]), [], "a registered Go E2E test has no maintained target");
   assert.match(makefile, /^test-app-host-go:[^\n]*\bbuild-native-mygo\b[^\n]*\bbuild-native-tests\b/m);
   assert.match(recipe, /CGO_ENABLED=0/);
   assert.match(recipe, /node scripts\/go-tests\.mjs/);

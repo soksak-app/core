@@ -1,0 +1,10 @@
+{
+  "name": "view-events-text-size",
+  "description": "The page pushes the new text scale of the view.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"textSize","data":1.5,"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

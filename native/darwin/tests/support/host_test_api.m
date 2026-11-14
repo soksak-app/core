@@ -1,7 +1,13 @@
 #include "host_test_api.h"
+#import <AppKit/AppKit.h>
+#import <WebKit/WebKit.h>
+#import <objc/runtime.h>
+#include <string.h>
 #include <Block.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <notify.h>
+#include "../../src/view_presentation_fault.h"
 
 static void (*installedCounts)(uint64_t *, uint64_t *, uint64_t *);
 static void (*installedSetter)(bool);
@@ -256,6 +262,8 @@ int sp_host_test_recorder_entry_at(uint64_t index, uint64_t *at, int32_t *activi
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOSurface/IOSurfaceRef.h>
+#import <AppKit/AppKit.h>
+#include <math.h>
 
 static CFNumberRef number(int value) { return CFNumberCreate(NULL, kCFNumberIntType, &value); }
 
@@ -453,4 +461,196 @@ const char *sp_host_test_wait_handled_crash(uintptr_t handle, int *status, int *
     if (reaped == -1) return "host test crash child could not be waited for";
     if (failed) return "host test crash service failed";
     return NULL;
+}
+
+static const char *windowCreate(double width, double height, void **window, NSWindowStyleMask style, BOOL deferred) {
+    if (!window) return "host test window result address is missing";
+    *window = NULL;
+    if (!pthread_main_np()) return "host test window creation requires the main thread";
+    if (!(isfinite(width) && isfinite(height) && width > 0 && height > 0)) return "host test window size is not positive and finite";
+    NSWindow *created = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, width, height)
+                                                    styleMask:style
+                                                      backing:NSBackingStoreBuffered
+                                                        defer:deferred];
+    if (!created) return "host test window could not be created";
+    created.releasedWhenClosed = NO;
+    created.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height)] autorelease];
+    *window = (void *)created;
+    return NULL;
+}
+
+const char *sp_host_test_window_create(double width, double height, void **window) {
+    return windowCreate(width, height, window, NSWindowStyleMaskBorderless, YES);
+}
+
+// The window that both frameworks give the host: a hidden title bar over a content view that fills the window, with the standard
+// window buttons. Nothing orders it on screen.
+const char *sp_host_test_window_create_titled(double width, double height, void **window) {
+    const char *failure = windowCreate(width, height, window, NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
+        | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable | NSWindowStyleMaskFullSizeContentView, NO);
+    if (failure) return failure;
+    NSWindow *created = (NSWindow *)*window;
+    created.animationBehavior = NSWindowAnimationBehaviorNone;
+    created.titlebarAppearsTransparent = YES;
+    created.titleVisibility = NSWindowTitleHidden;
+    return NULL;
+}
+
+#ifndef SP_HOST_TEST_FIXTURES
+#error "SP_HOST_TEST_FIXTURES names the folder of the fixture pages (native/darwin/tests/fixtures)"
+#endif
+
+static const char mainLoadKey;
+
+// The navigation delegate of the main web view of a test window: it keeps the result of the first navigation, which the wait of
+// sp_host_test_webview_loaded reads.
+@interface SPHostTestMainLoad : NSObject <WKNavigationDelegate> {
+    dispatch_semaphore_t finished;
+}
+@property(nonatomic, copy) NSString *failure;
+- (void)wait;
+@end
+
+@implementation SPHostTestMainLoad
+- (instancetype)init {
+    self = [super init];
+    if (self) finished = dispatch_semaphore_create(0);
+    return self;
+}
+- (void)dealloc {
+    dispatch_release(finished);
+    [_failure release];
+    [super dealloc];
+}
+- (void)wait {
+    dispatch_semaphore_wait(finished, DISPATCH_TIME_FOREVER);
+    dispatch_semaphore_signal(finished);
+}
+- (void)end:(NSError *)error {
+    if (error) self.failure = [NSString stringWithFormat:@"the main page of the host test window did not load: %@", error.localizedDescription];
+    dispatch_semaphore_signal(finished);
+}
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation { [self end:nil]; }
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self end:error]; }
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self end:error]; }
+@end
+
+const char *sp_host_test_window_main_webview(void *window, const char *fixture, void **webview) {
+    if (!webview) return "host test main web view result address is missing";
+    *webview = NULL;
+    if (!pthread_main_np()) return "host test main web view creation requires the main thread";
+    if (!window) return "host test window is missing";
+    if (!fixture || fixture[0] == '\0' || strchr(fixture, '/') != NULL || strcmp(fixture, "..") == 0) {
+        return "host test fixture name is not a file name of the fixture folder";
+    }
+    NSWindow *host = (NSWindow *)window;
+    if (!host.contentView) return "host test window has no content view";
+    NSURL *folder = [NSURL fileURLWithPath:@SP_HOST_TEST_FIXTURES isDirectory:YES];
+    NSURL *page = [folder URLByAppendingPathComponent:[NSString stringWithUTF8String:fixture]];
+    WKWebView *created = [[[WKWebView alloc] initWithFrame:host.contentView.bounds configuration:[[[WKWebViewConfiguration alloc] init] autorelease]] autorelease];
+    if (!created) return "host test main web view could not be created";
+    created.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    SPHostTestMainLoad *load = [[[SPHostTestMainLoad alloc] init] autorelease];
+    created.navigationDelegate = load;
+    objc_setAssociatedObject(created, &mainLoadKey, load, OBJC_ASSOCIATION_RETAIN);
+    [host.contentView addSubview:created];
+    if (![created loadFileURL:page allowingReadAccessToURL:folder]) return "host test main page could not start loading";
+    *webview = (void *)created;
+    return NULL;
+}
+
+const char *sp_host_test_webview_loaded(void *webview) {
+    if (pthread_main_np()) return "host test main web view wait requires a thread that is not the main thread";
+    if (!webview) return "host test main web view is missing";
+    SPHostTestMainLoad *load = objc_getAssociatedObject((WKWebView *)webview, &mainLoadKey);
+    if (!load) return "host test web view is not the main web view of a host test window";
+    [load wait];
+    return load.failure ? load.failure.UTF8String : NULL;
+}
+
+const char *sp_host_test_window_close(void *window) {
+    if (!pthread_main_np()) return "host test window closing requires the main thread";
+    if (!window) return "host test window is missing";
+    NSWindow *object = (NSWindow *)window;
+    [object close];
+    [object release];
+    return NULL;
+}
+
+// The fault point SOKSAK_FAULT_VIEW_PRESENTATION=hold of the production library holds the callback of each presentation wait of a
+// web view until this notification (native/darwin/src/webview.m). Posting it releases the callbacks that are held and no later one.
+const char *sp_host_test_view_presentation_release(void) {
+    if (notify_post(SP_VIEW_PRESENTATION_FAULT_RELEASE) != NOTIFY_STATUS_OK) return "host test release of the held presentations could not be posted";
+    return NULL;
+}
+
+// The functions of the production library that the reads below call. They are weak so that this library links without it.
+extern bool surfaceLayoutKeysWaitState(void *owner, bool *decision, bool *modal) __attribute__((weak_import));
+extern void surfaceLayoutKeysWaitOpen(void *owner, bool decision) __attribute__((weak_import));
+extern bool sp_region_raster(void *region, double *out) __attribute__((weak_import));
+extern bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height,
+    double scale, uint64_t generation, uint64_t raster, int sequence) __attribute__((weak_import));
+
+static const char *requireProduction(const void *function, const char *name) {
+    (void)name;
+    if (!pthread_main_np()) return "host test read of the production library requires the main thread";
+    if (!function) return "host test read of the production library requires the production library in the process";
+    return NULL;
+}
+
+static void countRegions(NSView *view, Class region, uint64_t *count) {
+    if ([view isKindOfClass:region]) (*count)++;
+    for (NSView *child in view.subviews) countRegions(child, region, count);
+}
+
+const char *sp_host_test_window_image_regions(void *window, uint64_t *count) {
+    if (!count) return "host test image region count address is missing";
+    *count = 0;
+    if (!pthread_main_np()) return "host test read of the production library requires the main thread";
+    if (!window) return "host test window is missing";
+    Class region = NSClassFromString(@"SPImageRegion");
+    if (!region) return "host test read of the production library requires the production library in the process";
+    NSView *content = ((NSWindow *)window).contentView;
+    if (!content) return "host test window has no content view";
+    countRegions(content, region, count);
+    return NULL;
+}
+
+const char *sp_host_test_window_keys_wait(void *window, bool *waiting, bool *decision, bool *modal) {
+    if (!waiting || !decision || !modal) return "host test key wait result address is missing";
+    *waiting = *decision = *modal = false;
+    const char *refused = requireProduction((const void *)surfaceLayoutKeysWaitState, "surfaceLayoutKeysWaitState");
+    if (refused) return refused;
+    if (!window) return "host test window is missing";
+    *waiting = surfaceLayoutKeysWaitState(window, decision, modal);
+    return NULL;
+}
+
+const char *sp_host_test_window_open_key_wait(void *window, bool decision) {
+    const char *refused = requireProduction((const void *)surfaceLayoutKeysWaitOpen, "surfaceLayoutKeysWaitOpen");
+    if (refused) return refused;
+    if (!window) return "host test window is missing";
+    surfaceLayoutKeysWaitOpen(window, decision);
+    return NULL;
+}
+
+static char presentRefusal[160];
+
+const char *sp_host_test_region_present_lease(void *region, uint64_t generation, uint64_t raster, int sequence) {
+    const char *refused = requireProduction((const void *)sp_region_present, "sp_region_present");
+    if (refused) return refused;
+    if (!sp_region_raster) return "host test read of the production library requires the production library in the process";
+    if (!region) return "host test region is missing";
+    double native[3] = {0};
+    if (!sp_region_raster(region, native)) return "host test region has no native raster: it is not placed in a laid-out surface";
+    unsigned char nonce[16];
+    arc4random_buf(nonce, sizeof nonce);
+    void *frame = sp_host_test_frame_create((int)native[0], (int)native[1], nonce);
+    if (!frame) return "host test frame could not be created";
+    bool accepted = sp_region_present(region, sp_host_test_frame_id(frame), nonce, native[0], native[1], native[2], generation, raster, sequence);
+    sp_host_test_frame_release(frame);
+    if (accepted) return NULL;
+    snprintf(presentRefusal, sizeof presentRefusal, "host test region refused the frame of generation %llu, raster %llu, sequence %d",
+        (unsigned long long)generation, (unsigned long long)raster, sequence);
+    return presentRefusal;
 }

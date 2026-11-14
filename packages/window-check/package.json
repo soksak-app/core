@@ -92,7 +92,7 @@
     "sok-test-app": "./sok-test-app.mjs"
   },
   "scripts": {
-    "test": "node --test --experimental-test-module-mocks test/*.test.mjs test/platform/darwin/system/*.test.mjs"
+    "test": "node --test test/*.test.mjs test/platform/darwin/system/*.test.mjs"
   },
   "specFiles": [
     "docs/spec/events.json"

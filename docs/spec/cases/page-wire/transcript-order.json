@@ -1,0 +1,11 @@
+{
+  "name": "transcript-order",
+  "description": "The page sends the line of a call to the host call log with the action transcript, and sends the next line after the host answered the first.",
+  "replay": true,
+  "steps": [
+    {"call":{"name":"log","payload":{"action":"transcript","start":"start-1","line":"host overlayUpdate {\"id\":\"settings\"} -> null"}}},
+    {"reply":{"result":null,"held":true}},
+    {"call":{"name":"log","payload":{"action":"transcript","start":"start-1","line":"host overlayPlace {\"id\":\"settings\"} -> null"}}},
+    {"reply":{"result":null}}
+  ]
+}

@@ -136,8 +136,8 @@ func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
 
 // contract: diagnostics.objects.counts-host-objects
 func TestEventSubscriberCountFollowsTheSubscription(t *testing.T) {
-	backend := newFakeBackend()
-	endpoint, address, _ := serve(t, backend)
+	endpoint, address, _, page := servePage(t, pageExchange("status.watch", `{"name":"core.layout"}`, `null`),
+		pageExchange("status.unwatch", `{"name":"core.layout"}`, `null`))
 	if got := endpoint.SubscriberCount("main"); got != 0 {
 		t.Fatalf("no subscriber counts %d for main, want 0", got)
 	}
@@ -145,7 +145,9 @@ func TestEventSubscriberCountFollowsTheSubscription(t *testing.T) {
 	params := json.RawMessage(`{"window":"main","name":"core.layout"}`)
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": params})
 	// The page receives the first subscription after the count changed, so its request marks the count as changed.
-	<-backend.watched
+	if !page.awaitCall() {
+		t.Fatal("the page received no status.watch")
+	}
 	if got := endpoint.SubscriberCount("main"); got != 1 {
 		t.Fatalf("one subscribed connection counts %d for main, want 1", got)
 	}
@@ -153,7 +155,9 @@ func TestEventSubscriberCountFollowsTheSubscription(t *testing.T) {
 		t.Fatalf("subscription of main counts %d for another window, want 0", got)
 	}
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": params})
-	<-backend.unwatched
+	if !page.awaitCall() {
+		t.Fatal("the page received no status.unwatch")
+	}
 	if got := endpoint.SubscriberCount("main"); got != 0 {
 		t.Fatalf("after the last release the count is %d for main, want 0", got)
 	}
@@ -282,9 +286,11 @@ func TestACPUProfileWritesTheWorkBetweenItsStartAndItsStop(t *testing.T) {
 	}
 }
 
-// objectsBackend is the diagnostic backend of diagnostics.objects: it answers fixed counts and records the window of each request.
+// objectsBackend is the window owner of the endpoint for diagnostics.objects: it gives the counts that the test holds as data and
+// records the window of each request.
 type objectsBackend struct {
-	*fakeBackend
+	*casePage
+	counts  host.ObjectCounts
 	mu      sync.Mutex
 	windows []string
 }
@@ -293,7 +299,14 @@ func (b *objectsBackend) ObjectCounts(window string) (host.ObjectCounts, error) 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.windows = append(b.windows, window)
-	return host.ObjectCounts{
+	return b.counts, nil
+}
+
+// diagnostics.objects requires a window, answers an unknown window with the missing window error without asking the backend, and replies the
+// counts of the backend for the named window with the documents ordered by surface and document.
+// contract: diagnostics.objects.reply-and-params
+func TestDiagnosticsObjectsReplyAndParams(t *testing.T) {
+	backend := &objectsBackend{casePage: newTierBackend([]string{"main"}), counts: host.ObjectCounts{
 		Host: host.HostObjects{Surfaces: 2, Regions: 1, Documents: 2, SidecarSessions: 1, PendingReplies: 0, EventSubscribers: 3},
 		Page: &host.PageObjects{Elements: 40, Documents: 1},
 		Documents: []host.DocumentObjects{
@@ -301,14 +314,7 @@ func (b *objectsBackend) ObjectCounts(window string) (host.ObjectCounts, error) 
 			{Key: host.DocumentKey{Surface: "tab-1", Name: "page"}, Counts: host.PageObjects{Elements: 3, Documents: 1}},
 		},
 		Sessions: []host.SidecarSession{{Sidecar: "@scope/sidecar-a", Surface: "tab-1"}},
-	}, nil
-}
-
-// diagnostics.objects requires a window, answers an unknown window with the missing window error without asking the backend, and replies the
-// counts of the backend for the named window with the documents ordered by surface and document.
-// contract: diagnostics.objects.reply-and-params
-func TestDiagnosticsObjectsReplyAndParams(t *testing.T) {
-	backend := &objectsBackend{fakeBackend: newFakeBackend()}
+	}}
 	_, address, _ := serve(t, backend)
 	conn := dial(t, address)
 	if reply := call(t, conn, 1, "diagnostics.objects", map[string]any{}); reply.Error == nil || reply.Error.Code != -32602 {

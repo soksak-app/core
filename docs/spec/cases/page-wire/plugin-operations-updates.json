@@ -1,0 +1,10 @@
+{
+  "name": "plugin-operations-updates",
+  "description": "The page reads the plugin state, in which the registry lists the plugin tty in a newer version than the installed one.",
+  "replay": false,
+  "reason": "pluginsState and the plugin operations read and change the installed plugins of the configuration directory and its registry, which the Go producer builds no state for (docs/spec/cases/page-wire/README.md#limits).",
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[{"id":"tty","package":"plugin-tty","name":"Terminal","description":"Terminal 설명.","versions":[{"version":"0.1.0","engines":{"soksak":"*"},"sidecars":{}},{"version":"0.10.0","engines":{"soksak":"*"},"sidecars":{}},{"version":"0.9.0","engines":{"soksak":"*"},"sidecars":{}}]},{"id":"db","package":"plugin-db","name":"DB","description":"DB 설명.","versions":[{"version":"2.0.0","engines":{"soksak":"*"},"sidecars":{}}]},{"id":"off","package":"plugin-off","name":"Off","description":"Off 설명.","versions":[{"version":"1.0.0","engines":{"soksak":"*"},"sidecars":{}}]}],"revoked":{"plugins":[],"sidecars":[],"core":[]}},"installed":{"format":2,"plugins":{"tty":{"version":"0.1.0","enabled":true,"sidecars":{}},"notes":{"version":"1.1.0","enabled":true,"sidecars":{}},"off":{"version":"1.0.0","enabled":false,"sidecars":{}},"fresh":{"version":"0.1.0","enabled":true,"sidecars":{}}},"sidecars":{}}}}}
+  ]
+}

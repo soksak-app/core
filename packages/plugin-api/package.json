@@ -14,7 +14,9 @@
     "./view-modules": "./view-modules.js",
     "./log-batch.js": "./log-batch.js",
     "./bounded-json.js": "./bounded-json.js",
-    "./diagnostic-view-frames": "./diagnostic-view-frames.js"
+    "./diagnostic-view-frames": "./diagnostic-view-frames.js",
+    "./testing": "./testing.js",
+    "./wire-case": "./wire-case.js"
   },
   "files": [
     "index.js",
@@ -44,6 +46,8 @@
     "bounded-json.js",
     "exposure-check.js",
     "core-exposure.json",
+    "testing.js",
+    "wire-case.js",
     "contract/"
   ],
   "scripts": {
@@ -51,10 +55,19 @@
   },
   "specFiles": [
     "docs/spec/cases/manifest-validation.json",
-    "docs/spec/cases/version-ranges.json"
+    "docs/spec/cases/version-ranges.json",
+    "docs/spec/cases/view-wire/"
   ],
   "devDependencies": {
     "jsdom": "^30.0.1"
+  },
+  "peerDependencies": {
+    "jsdom": "^30.0.1"
+  },
+  "peerDependenciesMeta": {
+    "jsdom": {
+      "optional": true
+    }
   },
   "dependencies": {
     "es-module-lexer": "^3.0.4"

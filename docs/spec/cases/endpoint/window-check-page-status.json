@@ -1,0 +1,12 @@
+{
+  "name": "window-check-page-status",
+  "description": "A wait without a surface watches the status of the page at once.",
+  "replay": false,
+  "reason": "The case waits on the statuses of a surface of a tab that the replay does not open.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.watch","params":{"window":"main","name":"core.project"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.project"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"id":"p"}}}
+  ]
+}

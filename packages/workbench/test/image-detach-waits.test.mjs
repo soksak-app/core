@@ -31,7 +31,7 @@ test("a held tab is neither mounted nor given a background session until its det
   // before the modules that read the host are imported, because they read it when they are imported.
   const wire = selectPageWire("image-detach-waits-held-tab");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;

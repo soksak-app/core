@@ -1,7 +1,7 @@
 // The view of the second layout probe: its surface id, the size and scale of its view, and the text size of its surface with the
 // height of its line of text, served as layoutprobe2.surface. The line of text is drawn at 13 points times the text size of the
 // surface, as a text size reaches a view (docs/spec/text-size.md), and the empty area below it shows only the card background. The
-// module imports nothing, so the owner test runs it with a fake bridge and a fake exposure.
+// module imports nothing: its owner test runs it on the view bridge and the exposure of core.
 
 /** The font size of the line of text at text size 1, in CSS pixels. */
 export const TEXT_SIZE = 13;

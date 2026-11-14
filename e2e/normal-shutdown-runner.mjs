@@ -15,7 +15,7 @@ function request(client, method, params) {
   return client.request(method, params);
 }
 
-async function waitForReady(client) {
+async function untilReady(client) {
   await client.watch("main", "host.windows",
     (windows) => windows.length === 1 && windows[0].ready);
 }
@@ -78,7 +78,7 @@ function serviceEndpoint(configDir) {
  * no time limit (docs/spec/cli.md): it answers when the operating system reports the end of the PID, so the wait ends by that end
  * or by the exit of the CLI, and the limit of the test runner bounds a wait that neither ends.
  */
-export async function runSokProcessWait({ binary, configDir, pid, spawnChild = spawn, ...rest }) {
+export async function runSokProcessWait({ binary, configDir, pid, ...rest }) {
   if (Object.keys(rest).length > 0) {
     throw new TypeError(`runSokProcessWait takes no ${Object.keys(rest).join(", ")}: the wait ends by the end of the process or of the CLI`);
   }
@@ -91,7 +91,7 @@ export async function runSokProcessWait({ binary, configDir, pid, spawnChild = s
   }
   if (!details.isFile() || (details.mode & 0o111) === 0) throw new Error(`bundled sok executable ${sok} is not an executable file`);
 
-  const child = spawnChild(sok, ["process", "wait", String(pid), "--config-dir", configDir], {
+  const child = spawn(sok, ["process", "wait", String(pid), "--config-dir", configDir], {
     stdio: ["ignore", "pipe", "pipe"],
   });
   let stdout = "";
@@ -114,15 +114,9 @@ export async function runSokProcessWait({ binary, configDir, pid, spawnChild = s
   if (result.pid !== pid || result.ended !== true) throw new Error(`bundled sok process wait returned ${JSON.stringify(result)} for service PID ${pid}, expected ended=true`);
 }
 
-/** Runs the declared shutdown check with replaceable boundaries for its owning controlled-client test. */
+/** Runs the declared shutdown check on the application `app`; `env` holds its variables and `write` receives its report lines. */
 export async function runNormalShutdown({
   app = APPS[Object.keys(APPS)[0]],
-  connectClient = connect,
-  waitForFilesystem,
-  waitForReady: waitReady = waitForReady,
-  waitForShutdown = untilShutdown,
-  waitForServiceProcess: waitServiceProcess = runSokProcessWait,
-  prepareService: prepare = prepareRasterSession,
   env = process.env,
   write = (line) => console.log(line),
 } = {}) {
@@ -130,11 +124,9 @@ export async function runNormalShutdown({
   const started = Date.now();
   // Each wait of the check ends by its event and has no time limit: the endpoint file, the end of the connection and the end of
   // the service process; the limit of the test runner bounds the check.
-  const waitFilesystem = waitForFilesystem ?? ((label, predicate) => untilFolderState(dirname(endpointFile),
-    () => (predicate() ? Date.now() - started : undefined)));
   write(`START normal-shutdown app=${app.name}`);
-  await waitFilesystem("endpoint", () => existsSync(endpointFile));
-  const client = await connectClient({ configDir: app.configDir });
+  await untilFolderState(dirname(endpointFile), () => (existsSync(endpointFile) ? Date.now() - started : undefined));
+  const client = await connect({ configDir: app.configDir });
   let service = null;
   const failures = [];
   let audit = null;
@@ -145,9 +137,9 @@ export async function runNormalShutdown({
       offsets: currentEventOffsets(app.configDir),
       boot: sessionEventBoot(app.configDir, pid),
     };
-    await waitReady(client);
+    await untilReady(client);
     const raster = env.SOKSAK_SHUTDOWN_SERVICE === "1"
-      ? await prepare(client, request) : null;
+      ? await prepareRasterSession(client, request) : null;
     const by = env.SOKSAK_SHUTDOWN_BY ?? "command";
     if (by !== "command" && by !== "signal") throw new Error(`SOKSAK_SHUTDOWN_BY is ${by}, expected command or signal`);
     service = raster ? serviceEndpoint(app.configDir) : null;
@@ -174,11 +166,11 @@ export async function runNormalShutdown({
       });
       if (reply !== null) throw new Error(`host.quit returned ${JSON.stringify(reply)}, expected null`);
     }
-    const { closedMs } = await waitForShutdown(client, endpointFile, { from });
+    const { closedMs } = await untilShutdown(client, endpointFile, { from });
     let serviceObservationMs = "none";
     if (service) {
       const observationFrom = Date.now();
-      await waitServiceProcess({ binary: app.binary, configDir: app.configDir, pid: service.pid });
+      await runSokProcessWait({ binary: app.binary, configDir: app.configDir, pid: service.pid });
       if (existsSync(service.file)) throw new Error(`${service.file} remains after service PID ${service.pid} ended`);
       serviceObservationMs = Date.now() - observationFrom;
     }
@@ -187,15 +179,8 @@ export async function runNormalShutdown({
     failures.push(error);
   }
 
-  const closeErrors = [];
-  for (const [name, connection] of [["application", client]]) {
-    if (!connection) continue;
-    try {
-      connection.close();
-    } catch (error) {
-      closeErrors.push(new Error(`${app.name}: could not close the ${name} client: ${error?.message ?? error}`, { cause: error }));
-    }
-  }
+  // The close of a client records its closing cause and rejects its pending requests; it throws nothing.
+  client.close();
   if (audit) {
     try {
       auditShutdownErrors({ appName: app.name, configDir: app.configDir, offsets: audit.offsets, boot: audit.boot });
@@ -203,7 +188,6 @@ export async function runNormalShutdown({
       failures.push(error);
     }
   }
-  failures.push(...closeErrors);
   if (failures.length === 1) throw failures[0];
   if (failures.length > 1) {
     throw joinedFailure(`${app.name}: shutdown reported ${failures.length} errors`, failures);

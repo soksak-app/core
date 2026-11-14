@@ -8,7 +8,7 @@ import (
 // contract: view.origin.current-callback-is-dispatched
 func TestCurrentViewCallbackEntersDispatch(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, _ := newLifecycleSurfaces(t)
+	s, views, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
 	channel, ok := s.documents.view("probe-surface")
@@ -18,7 +18,7 @@ func TestCurrentViewCallbackEntersDispatch(t *testing.T) {
 
 	s.viewReceived(
 		"probe-surface",
-		fake.created[0],
+		views.created[0],
 		"probe",
 		channel.generation,
 		`{"message":{"sok":1,"id":7,"command":"probe.run","params":{}}}`,
@@ -31,15 +31,15 @@ func TestCurrentViewCallbackEntersDispatch(t *testing.T) {
 // contract: view.origin.retired-callback-is-cancelled
 func TestRetiredViewCallbackDoesNotReachDispatch(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, _ := newLifecycleSurfaces(t)
+	s, views, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
-	retired, oldGeneration := retireAndReplaceView(t, s, fake)
+	retired, oldGeneration := retireAndReplaceView(t, s, views)
 	current, ok := s.documents.view("probe-surface")
 	if !ok || current.generation == oldGeneration {
 		t.Fatalf("replacement view generation: %+v, want a current generation after %d", current, oldGeneration)
 	}
-	created := len(fake.created)
+	created := len(views.created)
 	beforeCalls := len(*events)
 
 	s.viewReceived(
@@ -58,17 +58,17 @@ func TestRetiredViewCallbackDoesNotReachDispatch(t *testing.T) {
 	if len(calls) != 0 {
 		t.Fatalf("view-call events after a retired callback: %+v, want none", calls)
 	}
-	if len(fake.created) != created || len(fake.closed) != 1 {
-		t.Fatalf("views after a retired callback: created %d closed %d, want %d and 1", len(fake.created), len(fake.closed), created)
+	if len(views.created) != created || len(views.closed) != 1 {
+		t.Fatalf("views after a retired callback: created %d closed %d, want %d and 1", len(views.created), len(views.closed), created)
 	}
 }
 
 // contract: view.origin.retired-producer-error-is-preserved
 func TestRetiredViewCallbackPreservesItsProducerError(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, _ := newLifecycleSurfaces(t)
+	s, views, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
-	retired, oldGeneration := retireAndReplaceView(t, s, fake)
+	retired, oldGeneration := retireAndReplaceView(t, s, views)
 	before := len(bufferedTraces(t, "host.record.error"))
 
 	s.viewReceived(
@@ -104,9 +104,9 @@ func TestRetiredViewCallbackPreservesMalformedAndTransportErrors(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			isolateTraceRecords(t)
-			s, fake, _ := newLifecycleSurfaces(t)
+			s, views, _ := newLifecycleSurfaces(t)
 			s.views = map[string]*nativeWebview{"probe-surface": {}}
-			retired, oldGeneration := retireAndReplaceView(t, s, fake)
+			retired, oldGeneration := retireAndReplaceView(t, s, views)
 			before := len(bufferedTraces(t, "host.record.error"))
 
 			s.viewReceived("probe-surface", retired, "probe", oldGeneration, test.value)
@@ -125,9 +125,9 @@ func TestRetiredViewCallbackPreservesMalformedAndTransportErrors(t *testing.T) {
 // contract: view.origin.retired-malformed-envelope-is-reported
 func TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, _ := newLifecycleSurfaces(t)
+	s, views, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
-	_, retiredGeneration := retireAndReplaceView(t, s, fake)
+	_, retiredGeneration := retireAndReplaceView(t, s, views)
 	current, ok := s.documents.view("probe-surface")
 	if !ok || current.generation == retiredGeneration {
 		t.Fatalf("replacement generation: %+v, want a generation newer than %d", current, retiredGeneration)
@@ -160,35 +160,40 @@ func TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError(t *testing.
 
 // contract: view.channel.overflow-closes
 func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
-	s, fake, _ := newLifecycleSurfaces(t)
-	first := fake.created[0]
+	s, views, _ := newLifecycleSurfaces(t)
+	first := views.created[0]
 	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
 	channel, _ := s.documents.view("probe-surface")
-	s.viewReceived("probe-surface", first, channel.plugin, channel.generation, full)
-	if len(fake.closed) != 1 || fake.closed[0] != first {
-		t.Fatalf("closed views after the overflow: %d, want the overflowed view", len(fake.closed))
+	if !s.viewReceive("probe-surface", first, channel.plugin, channel.generation, full) {
+		t.Fatal("a message that reports a full queue did not end the view")
 	}
-	if len(fake.created) != 2 {
-		t.Fatalf("created views after the overflow: %d, want the view created again", len(fake.created))
+	endView(t, s, views, viewTestEpoch)
+	if len(views.closed) != 1 || views.closed[0] != first {
+		t.Fatalf("closed views after the overflow: %d, want the overflowed view", len(views.closed))
+	}
+	if len(views.created) != 2 {
+		t.Fatalf("created views after the overflow: %d, want the view created again", len(views.created))
 	}
 	// A message that arrives from the view closed by the overflow is a late message and closes nothing.
-	s.viewReceived("probe-surface", first, channel.plugin, channel.generation, full)
-	if len(fake.closed) != 1 || len(fake.created) != 2 {
-		t.Fatalf("a message of the closed view changed the views: closed %d, created %d", len(fake.closed), len(fake.created))
+	if s.viewReceive("probe-surface", first, channel.plugin, channel.generation, full) {
+		t.Fatal("a message of the closed view ended the view again")
+	}
+	if len(views.closed) != 1 || len(views.created) != 2 {
+		t.Fatalf("a message of the closed view changed the views: closed %d, created %d", len(views.closed), len(views.created))
 	}
 }
 
-func retireAndReplaceView(t *testing.T, s *Surfaces, fake *lifecyclePlatform) (unsafe.Pointer, uint64) {
+func retireAndReplaceView(t *testing.T, s *Surfaces, views *lifecycleViews) (unsafe.Pointer, uint64) {
 	t.Helper()
 	old, ok := s.documents.view("probe-surface")
-	if !ok || len(fake.created) != 1 {
-		t.Fatalf("initial view state: channel %v, created %d", ok, len(fake.created))
+	if !ok || len(views.created) != 1 {
+		t.Fatalf("initial view state: channel %v, created %d", ok, len(views.created))
 	}
-	retired := fake.created[0]
-	endView(t, s, fake, viewTestEpoch)
+	retired := views.created[0]
+	endView(t, s, views, viewTestEpoch)
 	current, ok := s.documents.view("probe-surface")
-	if !ok || current.generation == old.generation || len(fake.created) != 2 {
-		t.Fatalf("replacement view: channel %+v, created %d; want a new generation and one new view", current, len(fake.created))
+	if !ok || current.generation == old.generation || len(views.created) != 2 {
+		t.Fatalf("replacement view: channel %+v, created %d; want a new generation and one new view", current, len(views.created))
 	}
 	return retired, old.generation
 }

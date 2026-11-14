@@ -1,0 +1,336 @@
+{
+  "name": "window-sidebar-keep-session",
+  "description": "The page asks for the notification state, sets the theme and the menu language of its window at each start of the settings, and writes the clock anchor and the start of the document in its log batch; the switches of the window sidebars send no further call.",
+  "replay": false,
+  "reason": "The calls set the theme and the menu language of the window, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "language": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "theme-2": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "language-2": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "theme-3": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "language-3": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "e62a48a7-caea-4be7-8535-32988c960b45",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 6,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000233,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999777310,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language-2"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language-3"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us",
+              "mono_ns": "$mono-ns",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

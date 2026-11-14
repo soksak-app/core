@@ -3,15 +3,11 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export function runE2E({
-  args = process.argv.slice(2),
-  env = process.env,
-  stderr = process.stderr,
-  spawn = spawnSync,
-  executable = process.execPath,
-} = {}) {
+export function runE2E() {
+  const args = process.argv.slice(2);
+  const env = process.env;
   if (args[0] !== "--test") {
-    stderr.write("usage: node ./run.mjs --test <node test arguments>\n");
+    process.stderr.write("usage: node ./run.mjs --test <node test arguments>\n");
     return 2;
   }
 
@@ -22,11 +18,11 @@ export function runE2E({
       }
     }
 
-    const result = spawn(executable, args, { env, stdio: "inherit" });
+    const result = spawnSync(process.execPath, args, { env, stdio: "inherit" });
     if (result.error) throw result.error;
     return result.status ?? 1;
   } catch (error) {
-    stderr.write(`${error.message}\n`);
+    process.stderr.write(`${error.message}\n`);
     return 1;
   }
 }

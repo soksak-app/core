@@ -3,6 +3,16 @@ import { isPlace } from "./registry.js";
 import { sizeKey, windowSidebarsArranged } from "./window-sidebars.js";
 
 /**
+ * The scale that the host seated a visible surface with. The compositor accepts a visible placement only with the scale (validatePlacementAnswer), so a
+ * seated surface without it is a defect of the record, which verification refuses with its own error.
+ */
+export function seatScale(surface) {
+  const seat = surface.scale;
+  if (!(seat > 0)) throw new Error(`verify: seated surface ${surface.id} has no seat scale (${seat})`);
+  return seat;
+}
+
+/**
  * Adds up the number of connected rectangle clusters of each rail group and returns the number of closed loops that the rail outline must have.
  * Two rectangles are connected when both their horizontal and vertical gaps are at most gap (+0.5).
  */

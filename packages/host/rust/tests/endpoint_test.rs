@@ -1,5 +1,7 @@
-//! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. A fake service
-//! replaces the window and the page.
+//! Tests of the transport, the frames, the JSON-RPC handling and the watch list of the local endpoint. The page of the window is
+//! the page of an endpoint case (support/endpoint_case.rs): it answers the requests of the endpoint as the `page` steps of a
+//! case state, and a request that the case has no step for fails the test. The cases of docs/spec/cases/endpoint that the
+//! endpoint answers with such a page are played here, as the Go host plays them.
 
 #[path = "support/child.rs"]
 mod child;
@@ -11,9 +13,14 @@ mod endpoint_client;
 
 use endpoint_client::Connection;
 
+#[path = "support/endpoint_case.rs"]
+mod endpoint_case;
+
+use endpoint_case::{CasePage, exchange, refused_exchange, serve_page};
+
 use std::io::Write;
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 #[path = "support/records.rs"]
@@ -21,93 +28,13 @@ mod records;
 
 use serde_json::value::RawValue;
 use serde_json::{Map, Value, json};
-use soksak_host::endpoint::{self, Endpoint, Failure, Service, UnrecordedEnd, Watch, raw};
+use soksak_host::endpoint::{self, Endpoint, Failure, Service, UnrecordedEnd, raw};
 
-/// A service that records requests and has only the window w1.
-struct Fake {
-    calls: Mutex<Vec<(String, String, Value)>>,
-    seen: Mutex<Sender<(String, String, Value)>>,
-    /// The phase of `input.pointer` that is refused, and the code of the refusal.
-    refusing: Mutex<Option<(String, i64)>>,
-    /// A method of the page that ends without its result, with the error 1005.
-    without_result: Mutex<Option<String>>,
-}
-
-impl Fake {
-    fn new() -> (Arc<Fake>, Receiver<(String, String, Value)>) {
-        let (tx, rx) = mpsc::channel();
-        (
-            Arc::new(Fake {
-                calls: Mutex::new(Vec::new()),
-                seen: Mutex::new(tx),
-                refusing: Mutex::new(None),
-                without_result: Mutex::new(None),
-            }),
-            rx,
-        )
-    }
-
-    fn calls(&self) -> Vec<(String, String, Value)> {
-        self.calls.lock().unwrap().clone()
-    }
-}
-
-impl Service for Fake {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((String::new(), "windows.list".into(), Value::Null));
-        Ok(json!([{"window": "w1", "title": "one", "project": null, "key": true}]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "w1"
-    }
-
-    fn call(
-        &self,
-        window: &str,
-        method: &str,
-        params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        let plain = params.get("name").and_then(Value::as_str) == Some("core.plain");
-        let refused = self.refusing.lock().unwrap().clone().filter(|(phase, _)| {
-            method == "input.pointer"
-                && params.get("phase").and_then(Value::as_str) == Some(phase.as_str())
-        });
-        let call = (
-            window.to_string(),
-            method.to_string(),
-            Value::Object(params),
-        );
-        self.calls.lock().unwrap().push(call.clone());
-        let _ = self.seen.lock().unwrap().send(call);
-        if let Some((phase, code)) = refused {
-            return Err(Failure::new(code, format!("the {phase} is refused")));
-        }
-        if self.without_result.lock().unwrap().as_deref() == Some(method) {
-            return Err(Failure::new(1005, "the document did not receive the input"));
-        }
-        match method {
-            "status.get" => raw(&json!(7)),
-            "element.rect" => raw(&json!({
-                "x": 1, "y": 2, "width": 3, "height": 4, "zoom": 1,
-                "role": if plain { Value::Null } else { json!("button") },
-            })),
-            _ => raw(&Value::Null),
-        }
-    }
-}
-
-/// Opens the endpoint in the sockets directory inside config and writes endpoint.json with the window w1. The socket
+/// Opens the endpoint in the sockets directory inside config and writes endpoint.json with the window main. The socket
 /// path is within the length limit.
-fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
-    let endpoint = Endpoint::start(&config.join("sockets"), config, application, service).unwrap();
-    endpoint.publish("w1").unwrap();
+fn start(config: &Path, application: &str, page: Arc<CasePage>) -> Endpoint {
+    let endpoint = Endpoint::start(&config.join("sockets"), config, application, page).unwrap();
+    endpoint.publish("main").unwrap();
     endpoint
 }
 
@@ -115,9 +42,9 @@ fn start(config: &Path, application: &str, service: Arc<Fake>) -> Endpoint {
 #[test]
 fn a_configuration_directory_has_one_process_owner() {
     let config = folder::Folder::new();
-    let (first, _) = Fake::new();
+    let first = CasePage::without_steps(&["main"]);
     let endpoint = start(config.path(), "test-owner", first);
-    let (second, _) = Fake::new();
+    let second = CasePage::without_steps(&["main"]);
     let refused = Endpoint::start(
         &config.path().join("sockets"),
         config.path(),
@@ -136,8 +63,8 @@ fn a_configuration_directory_has_one_process_owner() {
 #[test]
 fn the_process_lock_is_owner_only() {
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-lock-mode", fake);
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = start(config.path(), "test-lock-mode", page);
     assert_eq!(mode(&config.path().join("process.lock")), 0o600);
     endpoint.stop();
 }
@@ -171,7 +98,7 @@ fn start_beside_a_stale_lock(
         if locked != nested.as_path() || fired.swap(true, Ordering::SeqCst) {
             return;
         }
-        let (second, _) = Fake::new();
+        let second = CasePage::without_steps(&["main"]);
         let started = Endpoint::start(&nested.join("sockets"), &nested, "test-race", second);
         *slot.lock().unwrap() = Some(match started {
             Ok(endpoint) => {
@@ -182,7 +109,7 @@ fn start_beside_a_stale_lock(
             Err(error) => error,
         });
     })));
-    let (first, _) = Fake::new();
+    let first = CasePage::without_steps(&["main"]);
     let first_started = Endpoint::start(&directory.join("sockets"), directory, "test-race", first);
     set_process_lock_hook(None);
     let second = outcome.lock().unwrap().take();
@@ -234,12 +161,12 @@ fn a_held_lock_with_another_form_is_refused_and_kept() {
         // This test is the live owner: it holds the lock while the content has another form.
         let owner = std::fs::File::open(&lock).unwrap();
         owner.try_lock().unwrap();
-        let (fake, _) = Fake::new();
+        let page = CasePage::without_steps(&["main"]);
         let refused = Endpoint::start(
             &config.path().join("sockets"),
             config.path(),
             "test-malformed",
-            fake,
+            page,
         )
         .err()
         .unwrap_or_else(|| panic!("lock {contents:?} was accepted while held"));
@@ -261,12 +188,12 @@ fn a_stale_lock_of_another_form_is_taken_over_and_reported() {
     for contents in ["123", "abc"] {
         let config = folder::Folder::new();
         std::fs::write(config.path().join("process.lock"), contents).unwrap();
-        let (fake, _) = Fake::new();
+        let page = CasePage::without_steps(&["main"]);
         let endpoint = Endpoint::start(
             &config.path().join("sockets"),
             config.path(),
             "test-stale-form",
-            fake,
+            page,
         )
         .unwrap_or_else(|error| panic!("a stale lock {contents:?} was refused: {error}"));
         assert_eq!(
@@ -288,12 +215,12 @@ fn an_empty_lock_file_is_taken_over_without_a_report() {
     // starter that has not locked it yet. No owner wrote a record in it, so no earlier run is reported.
     let config = folder::Folder::new();
     std::fs::write(config.path().join("process.lock"), "").unwrap();
-    let (fake, _) = Fake::new();
+    let page = CasePage::without_steps(&["main"]);
     let endpoint = Endpoint::start(
         &config.path().join("sockets"),
         config.path(),
         "test-empty",
-        fake,
+        page,
     )
     .unwrap_or_else(|error| panic!("an empty lock file was refused: {error}"));
     assert_eq!(endpoint.unrecorded_end(), None);
@@ -311,12 +238,12 @@ fn a_stale_lock_is_taken_over_and_names_the_previous_run() {
         format!("{{\"pid\":{dead},\"boot\":\"1700000000-4242\"}}"),
     )
     .unwrap();
-    let (fake, _) = Fake::new();
+    let page = CasePage::without_steps(&["main"]);
     let endpoint = Endpoint::start(
         &config.path().join("sockets"),
         config.path(),
         "test-stale",
-        fake,
+        page,
     )
     .unwrap_or_else(|error| panic!("a stale lock was refused: {error}"));
     assert_eq!(
@@ -359,68 +286,381 @@ fn request(connection: &mut Connection, id: u64, method: &str, params: Value) ->
     receive(connection).expect("the endpoint closed the connection")
 }
 
+// The cases of the transport and of the checks of the request, which the endpoint answers without a page.
+
 // contract: endpoint.transport.http-request-line-closes
 #[test]
-fn http_request_line_closes_connection_without_running_a_method() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-http", fake.clone());
-    let mut connection = open(&endpoint);
-    connection
-        .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
-        .unwrap();
-    assert_eq!(receive(&mut connection), None);
-    assert!(fake.calls().is_empty());
-    endpoint.stop();
+fn framing_http_request_line() {
+    endpoint_case::play(
+        "framing_http_request_line",
+        "framing-http-request-line",
+        &[],
+    );
 }
 
 // contract: endpoint.transport.invalid-json-closes
 #[test]
-fn invalid_json_closes_connection() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-json", fake.clone());
-    let mut connection = open(&endpoint);
-    let body = b"{\"jsonrpc\": \"2.0\", \"id\": 1,";
-    connection
-        .write_all(&(body.len() as u32).to_be_bytes())
-        .unwrap();
-    connection.write_all(body).unwrap();
-    assert_eq!(receive(&mut connection), None);
-    assert!(fake.calls().is_empty());
-    endpoint.stop();
+fn framing_invalid_json() {
+    endpoint_case::play("framing_invalid_json", "framing-invalid-json", &[]);
+}
+
+// contract: endpoint.transport.length-over-limit-closes
+#[test]
+fn framing_length_over_limit() {
+    endpoint_case::play(
+        "framing_length_over_limit",
+        "framing-length-over-limit",
+        &[],
+    );
 }
 
 // contract: endpoint.transport.non-jsonrpc-object-closes
 #[test]
-fn non_jsonrpc_object_closes_connection() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-object", fake.clone());
-    let mut connection = open(&endpoint);
-    send(&mut connection, json!({"id": 1, "method": "windows.list"}));
-    assert_eq!(receive(&mut connection), None);
-    assert!(fake.calls().is_empty());
-    endpoint.stop();
+fn framing_not_object() {
+    endpoint_case::play("framing_not_object", "framing-not-object", &[]);
+}
+
+// contract: endpoint.transport.non-jsonrpc-object-closes
+#[test]
+fn framing_version_not_2() {
+    endpoint_case::play("framing_version_not_2", "framing-version-not-2", &[]);
 }
 
 // contract: endpoint.transport.undeclared-method-closes
 #[test]
-fn undeclared_method_closes_connection() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-undeclared", fake.clone());
-    // dom.rect and dom.act are removed: an element is measured with element.rect and acted on with element.act.
-    for method in ["page.eval", "dom.rect", "dom.act"] {
-        let mut connection = open(&endpoint);
-        send(
-            &mut connection,
-            json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": {"window": "w1", "name": "core.card"}}),
-        );
-        assert_eq!(receive(&mut connection), None, "{method}");
+fn undeclared_method() {
+    endpoint_case::play("undeclared_method", "undeclared-method", &[]);
+}
+
+// contract: endpoint.names.owner-form-required, endpoint.rpc.target-params-are-checked-in-order
+#[test]
+fn error_invalid_params() {
+    endpoint_case::play("error_invalid_params", "error-invalid-params", &[]);
+}
+
+// contract: endpoint.rpc.unknown-window-1003
+#[test]
+fn error_window_missing() {
+    endpoint_case::play("error_window_missing", "error-window-missing", &[]);
+}
+
+// contract: endpoint.rpc.unknown-window-1003, endpoint.rpc.target-params-are-checked-in-order
+#[test]
+fn command_window_missing() {
+    endpoint_case::play("command_window_missing", "command-window-missing", &[]);
+}
+
+// The cases with a scripted page.
+
+// contract: endpoint.transport.close-reason-is-recorded
+#[test]
+fn scripted_close_reason_recorded() {
+    endpoint_case::play(
+        "scripted_close_reason_recorded",
+        "close-reason-recorded",
+        &[],
+    );
+}
+
+// contract: exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests
+#[test]
+fn scripted_connection_end_ends_page_request() {
+    endpoint_case::play(
+        "scripted_connection_end_ends_page_request",
+        "connection-end-ends-page-request",
+        &[],
+    );
+}
+
+// contract: endpoint.rpc.element-rect-role
+#[test]
+fn scripted_element_rect_role() {
+    endpoint_case::play("scripted_element_rect_role", "element-rect-role", &[]);
+}
+
+// contract: exposure.list.host-owner-without-page
+#[test]
+fn scripted_exposure_list_host_entries() {
+    endpoint_case::play(
+        "scripted_exposure_list_host_entries",
+        "exposure-list-host-entries",
+        &[],
+    );
+}
+
+// contract: endpoint.no-result.is-recorded
+#[test]
+fn scripted_no_result_recorded() {
+    endpoint_case::play("scripted_no_result_recorded", "no-result-recorded", &[]);
+}
+
+// contract: endpoint.close.reply-after-peer-close
+#[test]
+fn scripted_reply_after_peer_close() {
+    endpoint_case::play(
+        "scripted_reply_after_peer_close",
+        "reply-after-peer-close",
+        &[],
+    );
+}
+
+// contract: endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window
+#[test]
+fn scripted_round_trip_page_params() {
+    endpoint_case::play(
+        "scripted_round_trip_page_params",
+        "round-trip-page-params",
+        &[],
+    );
+}
+
+// contract: endpoint.rpc.target-params-are-checked-in-order
+#[test]
+fn scripted_target_params_order() {
+    endpoint_case::play("scripted_target_params_order", "target-params-order", &[]);
+}
+
+// contract: endpoint.transport.undeclared-method-closes
+#[test]
+fn scripted_undeclared_methods_removed() {
+    endpoint_case::play(
+        "scripted_undeclared_methods_removed",
+        "undeclared-methods-removed",
+        &[],
+    );
+}
+
+// contract: endpoint.watch.unwatch-enters-the-queue-only-after-a-watch
+#[test]
+fn scripted_unwatch_without_watch() {
+    endpoint_case::play(
+        "scripted_unwatch_without_watch",
+        "unwatch-without-watch",
+        &[],
+    );
+}
+
+// contract: endpoint.watch.subscription-arrival-order
+#[test]
+fn scripted_watch_arrival_order() {
+    endpoint_case::play("scripted_watch_arrival_order", "watch-arrival-order", &[]);
+}
+
+// contract: endpoint.watch.other-requests-not-blocked-by-pending-subscription
+#[test]
+fn scripted_watch_pending_subscription() {
+    endpoint_case::play(
+        "scripted_watch_pending_subscription",
+        "watch-pending-subscription",
+        &[],
+    );
+}
+
+// contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
+#[test]
+fn scripted_watch_per_connection() {
+    endpoint_case::play("scripted_watch_per_connection", "watch-per-connection", &[]);
+}
+
+// contract: endpoint.rpc.missing-window-param-invalid
+#[test]
+fn scripted_window_param_missing() {
+    endpoint_case::play("scripted_window_param_missing", "window-param-missing", &[]);
+}
+
+// contract: exposure.list.host-owner-without-page
+#[test]
+fn scripted_exposure_list_host_owner() {
+    endpoint_case::play(
+        "scripted_exposure_list_host_owner",
+        "exposure-list-host-owner",
+        &[],
+    );
+}
+
+// contract: exposure.list.non-object-list-rejected
+#[test]
+fn scripted_exposure_list_not_object() {
+    endpoint_case::play(
+        "scripted_exposure_list_not_object",
+        "exposure-list-not-object",
+        &[],
+    );
+}
+
+// contract: endpoint.input.dialog-answer
+#[test]
+fn scripted_input_delivered() {
+    endpoint_case::play("scripted_input_delivered", "input-delivered", &[]);
+}
+
+// contract: endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase
+#[test]
+fn scripted_name_errors() {
+    endpoint_case::play("scripted_name_errors", "name-errors", &[]);
+}
+
+// contract: endpoint.dialog.watch-reaches-the-host
+#[test]
+fn scripted_watch_host_dialog() {
+    endpoint_case::play("scripted_watch_host_dialog", "watch-host-dialog", &[]);
+}
+
+// contract: endpoint.watch.empty-surface-invalid, endpoint.watch.surface-and-plain-forwarded-separately
+#[test]
+fn scripted_watch_surface_separate() {
+    endpoint_case::play(
+        "scripted_watch_surface_separate",
+        "watch-surface-separate",
+        &[],
+    );
+}
+
+/// The scripted cases that this file plays.
+const SCRIPTED: &[&str] = &[
+    "close-reason-recorded",
+    "connection-end-ends-page-request",
+    "element-rect-role",
+    "exposure-list-host-entries",
+    "exposure-list-host-owner",
+    "exposure-list-not-object",
+    "input-delivered",
+    "name-errors",
+    "no-result-recorded",
+    "reply-after-peer-close",
+    "round-trip-page-params",
+    "target-params-order",
+    "undeclared-methods-removed",
+    "unwatch-without-watch",
+    "watch-arrival-order",
+    "watch-host-dialog",
+    "watch-pending-subscription",
+    "watch-per-connection",
+    "watch-surface-separate",
+    "window-param-missing",
+];
+
+// contract: endpoint.cases.replayed-cases-are-covered
+#[test]
+fn every_scripted_case_is_played() {
+    let mut problems = Vec::new();
+    let cases = endpoint_case::read_cases().unwrap_or_else(|error| panic!("{error}"));
+    for case in &cases {
+        let listed = SCRIPTED.contains(&case.name.as_str());
+        if case.scripted && !listed {
+            problems.push(format!(
+                "{} has a scripted page but is not played here",
+                case.name
+            ));
+        }
+        if case.scripted && case.replay {
+            problems.push(format!(
+                "{} has a scripted page but its case has replay true: a running application has a page of its own",
+                case.name
+            ));
+        }
     }
-    assert!(fake.calls().is_empty());
-    endpoint.stop();
+    for name in SCRIPTED.iter().copied() {
+        if !cases.iter().any(|case| case.name == name && case.scripted) {
+            problems.push(format!("{name} is listed here but is no scripted case"));
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
+}
+
+// contract: endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples
+#[test]
+fn names_must_have_the_owner_form() {
+    let served = serve_page("test-names", Vec::new());
+    let mut connection = served.open();
+    let reply = request(&mut connection, 9, "status.get", json!({"window": "main"}));
+    assert_eq!(reply["error"]["code"], -32602, "missing name: {reply}");
+    for (id, name) in [
+        (1, json!("layout")),
+        (2, json!("Core.layout")),
+        (3, json!("core.")),
+        (4, json!(3)),
+    ] {
+        let reply = request(
+            &mut connection,
+            id,
+            "status.get",
+            json!({"window": "main", "name": name}),
+        );
+        assert_eq!(reply["error"]["code"], -32602, "{name}");
+    }
+    assert!(endpoint::valid_name("core.surface.document") && endpoint::valid_name("plugin-x.a-1"));
+    served.finish();
+}
+
+// contract: endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch
+#[test]
+fn surface_watches_are_separate() {
+    let served = serve_page(
+        "test-surface",
+        vec![
+            exchange(
+                "status.watch",
+                json!({"name": "probe.lines", "surface": "tab-a"}),
+                Value::Null,
+            ),
+            exchange("status.watch", json!({"name": "probe.lines"}), Value::Null),
+            exchange(
+                "status.unwatch",
+                json!({"name": "probe.lines", "surface": "tab-a"}),
+                Value::Null,
+            ),
+        ],
+    );
+    let notifier = served.endpoint.notifier();
+    let mut connection = served.open();
+    let named = json!({"window": "main", "name": "probe.lines", "surface": "tab-a"});
+    assert_eq!(
+        request(&mut connection, 1, "status.watch", named.clone())["result"],
+        Value::Null
+    );
+    assert_eq!(
+        request(
+            &mut connection,
+            2,
+            "status.watch",
+            json!({"window": "main", "name": "probe.lines"})
+        )["result"],
+        Value::Null
+    );
+    let reply = request(
+        &mut connection,
+        3,
+        "status.watch",
+        json!({"window": "main", "name": "probe.lines", "surface": ""}),
+    );
+    assert_eq!(reply["error"]["code"], -32602);
+    assert_eq!(notifier.watches("main").len(), 2);
+
+    notifier.changed(
+        "main",
+        "probe.lines",
+        Some("tab-a"),
+        &raw(&json!(["a"])).unwrap(),
+    );
+    assert_eq!(
+        receive(&mut connection),
+        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "main", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}}))
+    );
+    notifier.changed("main", "probe.lines", None, &raw(&json!(["b"])).unwrap());
+    assert_eq!(
+        receive(&mut connection),
+        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
+        "params": {"window": "main", "name": "probe.lines", "value": ["b"]}}))
+    );
+
+    request(&mut connection, 4, "status.unwatch", named);
+    assert!(
+        notifier.watched("main", "probe.lines"),
+        "the watch without a surface remains"
+    );
+    served.finish();
 }
 
 // contract: endpoint.diagnostics-clock.real-jsonrpc-returns-monotonic-decimal
@@ -428,8 +668,8 @@ fn undeclared_method_closes_connection() {
 #[test]
 fn diagnostics_clock_returns_monotonic_nanoseconds() {
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-diagnostics-clock", fake.clone());
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = start(config.path(), "test-diagnostics-clock", page.clone());
     let mut connection = open(&endpoint);
     let mut previous = 0;
     for id in 1..=2 {
@@ -437,7 +677,7 @@ fn diagnostics_clock_returns_monotonic_nanoseconds() {
             &mut connection,
             id,
             "diagnostics.clock",
-            json!({"window": "w1"}),
+            json!({"window": "main"}),
         );
         assert_eq!(reply["jsonrpc"], "2.0");
         assert_eq!(reply["id"], id);
@@ -457,7 +697,7 @@ fn diagnostics_clock_returns_monotonic_nanoseconds() {
         assert!(parsed >= previous, "mono_ns must not decrease");
         previous = parsed;
     }
-    assert!(fake.calls().is_empty());
+    assert_eq!(page.finish(), Vec::<String>::new());
     endpoint.stop();
 }
 
@@ -466,29 +706,28 @@ fn diagnostics_clock_returns_monotonic_nanoseconds() {
 #[test]
 fn diagnostics_clock_is_not_declared_without_diagnostics() {
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "clock-release", fake.clone());
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = start(config.path(), "clock-release", page.clone());
     let mut connection = open(&endpoint);
     send(
         &mut connection,
-        json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.clock", "params": {"window": "w1"}}),
+        json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.clock", "params": {"window": "main"}}),
     );
     assert_eq!(receive(&mut connection), None);
-    assert!(fake.calls().is_empty());
+    assert_eq!(page.finish(), Vec::<String>::new());
     endpoint.stop();
 }
 
 // contract: endpoint.diagnostics.methods-exist-only-in-diagnostic-builds
 #[test]
 fn diagnostic_methods_exist_only_in_diagnostic_builds() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-diagnostics", fake.clone());
-    let mut connection = open(&endpoint);
+    // The endpoint answers the record of a diagnostic build itself, and any request that reaches the page fails the test.
+    let served = serve_page("test-diagnostics", Vec::new());
+    let mut connection = served.open();
     send(
         &mut connection,
         json!({"jsonrpc": "2.0", "id": 1, "method": "diagnostics.transcript",
-        "params": {"window": "w1", "on": false}}),
+        "params": {"window": "main", "on": false}}),
     );
     let reply = receive(&mut connection);
     if cfg!(feature = "diagnostics") {
@@ -498,140 +737,16 @@ fn diagnostic_methods_exist_only_in_diagnostic_builds() {
         );
     } else {
         assert_eq!(reply, None);
-        assert!(fake.calls().is_empty());
     }
-    endpoint.stop();
-}
-
-// contract: endpoint.rpc.unknown-window-1003, endpoint.rpc.missing-window-param-invalid
-#[test]
-fn declared_method_on_unknown_window_returns_1003() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-window", fake.clone());
-    let mut connection = open(&endpoint);
-    let reply = request(
-        &mut connection,
-        4,
-        "command.run",
-        json!({"window": "gone", "name": "host.window.reload"}),
-    );
-    assert_eq!(reply["id"], 4);
-    assert_eq!(reply["error"]["code"], 1003);
-    let reply = request(
-        &mut connection,
-        5,
-        "status.get",
-        json!({"name": "host.window"}),
-    );
-    assert_eq!(reply["error"]["code"], -32602);
-    assert!(fake.calls().is_empty());
-    endpoint.stop();
-}
-
-// contract: endpoint.rpc.element-rect-role
-#[test]
-fn an_element_rect_reply_keeps_the_role() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-element-role", fake);
-    let mut connection = open(&endpoint);
-    for (id, (name, role)) in [("core.save", json!("button")), ("core.plain", Value::Null)]
-        .into_iter()
-        .enumerate()
-    {
-        let reply = request(
-            &mut connection,
-            id as u64 + 1,
-            "element.rect",
-            json!({"window": "w1", "name": name}),
-        );
-        assert_eq!(reply["result"].get("role"), Some(&role), "{reply}");
-    }
-    endpoint.stop();
-}
-
-// contract: endpoint.rpc.target-params-are-checked-in-order
-#[test]
-fn target_params_are_checked_in_order() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-window", fake.clone());
-    let mut connection = open(&endpoint);
-    let window = "window must be a non-empty string";
-    let name = "name is required and must have the form <owner>.<name>";
-    let cases = [
-        (json!({"name": "core.layout"}), window),
-        (json!({"window": 3, "name": "core.layout"}), window),
-        (json!({"window": "", "name": "core.layout"}), window),
-        (json!({"window": null, "name": "core.layout"}), window),
-        // The window is checked before the name, and the name before the existence of the window.
-        (json!({"window": 3, "name": 3}), window),
-        (json!({"window": "gone", "name": 3}), name),
-        (json!({"window": "gone", "name": "layout"}), name),
-    ];
-    for (m, method) in ["status.get", "element.rect", "element.act"]
-        .into_iter()
-        .enumerate()
-    {
-        for (id, (params, message)) in cases.iter().enumerate() {
-            let reply = request(
-                &mut connection,
-                30 + 100 * m as u64 + id as u64,
-                method,
-                params.clone(),
-            );
-            assert_eq!(
-                (
-                    reply["error"]["code"].clone(),
-                    reply["error"]["message"].clone()
-                ),
-                (json!(-32602), json!(message)),
-                "{method} {params}"
-            );
-        }
-    }
-    assert!(fake.calls().is_empty());
-    endpoint.stop();
-}
-
-// contract: endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window
-#[test]
-fn framing_round_trip_answers_requests_by_id() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-frame", fake.clone());
-    let mut connection = open(&endpoint);
-    let reply = request(&mut connection, 1, "windows.list", Value::Null);
-    assert_eq!(
-        reply,
-        json!({"jsonrpc": "2.0", "id": 1,
-        "result": [{"window": "w1", "title": "one", "project": null, "key": true}]})
-    );
-    let reply = request(
-        &mut connection,
-        2,
-        "status.get",
-        json!({"window": "w1", "name": "core.layout"}),
-    );
-    assert_eq!(reply, json!({"jsonrpc": "2.0", "id": 2, "result": 7}));
-    assert_eq!(
-        fake.calls()[1],
-        (
-            "w1".into(),
-            "status.get".into(),
-            json!({"name": "core.layout"})
-        )
-    );
-    endpoint.stop();
+    served.finish();
 }
 
 // contract: endpoint.discovery.writes-endpoint-json, endpoint.discovery.removes-endpoint-json-on-close, endpoint.discovery.removes-socket-on-close
 #[test]
 fn endpoint_file_is_written_and_removed() {
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-file", fake);
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = start(config.path(), "test-file", page);
     let file = config.path().join("endpoint.json");
     let written: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
     assert_eq!(written["transport"], "unix");
@@ -655,8 +770,8 @@ fn endpoint_file_is_written_and_removed() {
 #[test]
 fn stop_keeps_an_endpoint_file_that_another_process_wrote() {
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-replacement", fake);
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = start(config.path(), "test-replacement", page);
     let file = config.path().join("endpoint.json");
     let replacement = json!({
         "transport": "unix", "address": "replacement.sock", "pid": std::process::id() + 1,
@@ -676,8 +791,8 @@ fn stop_keeps_an_endpoint_file_that_another_process_wrote() {
 #[test]
 fn endpoint_files_are_private_to_the_user() {
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-modes", fake);
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = start(config.path(), "test-modes", page);
     assert_eq!(mode(&config.path().join("sockets")), 0o700);
     assert_eq!(mode(Path::new(endpoint.address())), 0o600);
     assert_eq!(mode(&config.path().join("endpoint.json")), 0o600);
@@ -709,8 +824,8 @@ fn sockets_of_ended_processes_are_removed() {
     for path in [&ended, &running, &other] {
         std::fs::write(path, "").unwrap();
     }
-    let (fake, _) = Fake::new();
-    let endpoint = Endpoint::start(&sockets, config.path(), "test-sweep", fake).unwrap();
+    let page = CasePage::without_steps(&["main"]);
+    let endpoint = Endpoint::start(&sockets, config.path(), "test-sweep", page).unwrap();
     let found = (ended.exists(), running.exists(), other.exists());
     endpoint.stop();
     assert_eq!(
@@ -728,8 +843,8 @@ fn a_socket_directory_open_to_others_is_refused() {
     let sockets = config.path().join("sockets");
     std::fs::create_dir(&sockets).unwrap();
     std::fs::set_permissions(&sockets, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let (fake, _) = Fake::new();
-    let refused = Endpoint::start(&sockets, config.path(), "test-open", fake)
+    let page = CasePage::without_steps(&["main"]);
+    let refused = Endpoint::start(&sockets, config.path(), "test-open", page)
         .err()
         .unwrap();
     assert!(refused.contains("mode 755"), "{refused}");
@@ -741,8 +856,8 @@ fn a_socket_directory_open_to_others_is_refused() {
 fn a_socket_directory_of_another_user_is_refused() {
     // /usr is owned by root. The check looks at the owner before the permissions.
     let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", fake)
+    let page = CasePage::without_steps(&["main"]);
+    let refused = Endpoint::start(Path::new("/usr"), config.path(), "test-owner", page)
         .err()
         .unwrap();
     assert!(refused.contains("belongs to another user"), "{refused}");
@@ -756,8 +871,8 @@ fn a_socket_path_that_is_not_a_directory_is_refused() {
     std::fs::create_dir(&target).unwrap();
     let sockets = config.path().join("sockets");
     std::os::unix::fs::symlink(&target, &sockets).unwrap();
-    let (fake, _) = Fake::new();
-    let refused = Endpoint::start(&sockets, config.path(), "test-link", fake)
+    let page = CasePage::without_steps(&["main"]);
+    let refused = Endpoint::start(&sockets, config.path(), "test-link", page)
         .err()
         .unwrap();
     assert!(refused.contains("is not a directory"), "{refused}");
@@ -770,8 +885,8 @@ fn a_socket_path_over_the_limit_is_refused() {
     let config = folder::Folder::new();
     let sockets = config.path().join("s".repeat(120));
     let address = sockets.join(format!("test-long-{}.sock", std::process::id()));
-    let (fake, _) = Fake::new();
-    let refused = Endpoint::start(&sockets, config.path(), "test-long", fake)
+    let page = CasePage::without_steps(&["main"]);
+    let refused = Endpoint::start(&sockets, config.path(), "test-long", page)
         .err()
         .unwrap();
     assert_eq!(
@@ -784,335 +899,23 @@ fn a_socket_path_over_the_limit_is_refused() {
     );
 }
 
-// contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
-#[test]
-fn watchers_belong_to_their_connection() {
-    let config = folder::Folder::new();
-    let (fake, seen) = Fake::new();
-    let endpoint = start(config.path(), "test-watch", fake.clone());
-    let notifier = endpoint.notifier();
-    let mut first = open(&endpoint);
-    let mut second = open(&endpoint);
-
-    assert_eq!(
-        request(
-            &mut first,
-            1,
-            "status.watch",
-            json!({"window": "w1", "name": "core.layout"})
-        )["result"],
-        Value::Null
-    );
-    assert!(notifier.watched("w1", "core.layout"));
-    assert!(!notifier.watched("w1", "core.other"));
-    assert_eq!(
-        notifier.watches("w1"),
-        [Watch {
-            window: "w1".into(),
-            name: "core.layout".into(),
-            surface: None
-        }]
-    );
-
-    // The second connection did not watch, so it receives its own response first and not a notification.
-    notifier.changed("w1", "core.layout", None, &raw(&json!(1)).unwrap());
-    assert_eq!(
-        receive(&mut first),
-        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
-        "params": {"window": "w1", "name": "core.layout", "value": 1}}))
-    );
-    assert_eq!(
-        request(
-            &mut second,
-            2,
-            "status.get",
-            json!({"window": "w1", "name": "core.layout"})
-        )["id"],
-        2
-    );
-
-    // Unwatching by the second connection does not change the watch of the first connection.
-    request(
-        &mut second,
-        3,
-        "status.watch",
-        json!({"window": "w1", "name": "core.layout"}),
-    );
-    request(
-        &mut second,
-        4,
-        "status.unwatch",
-        json!({"window": "w1", "name": "core.layout"}),
-    );
-    notifier.changed("w1", "core.layout", None, &raw(&json!(2)).unwrap());
-    assert_eq!(receive(&mut first).unwrap()["params"]["value"], 2);
-    // The page receives only the first watch of the watches of the two connections.
-    let page_watches = fake
-        .calls()
-        .iter()
-        .filter(|(_, method, _)| method == "status.watch")
-        .count();
-    assert_eq!(page_watches, 1, "{:?}", fake.calls());
-    assert!(
-        !fake
-            .calls()
-            .iter()
-            .any(|(_, method, _)| method == "status.unwatch")
-    );
-
-    // When the connection of the last watcher closes, the page is asked to unwatch.
-    while seen.try_recv().is_ok() {}
-    drop(first);
-    let (window, method, params) = seen.recv().unwrap();
-    assert_eq!((window.as_str(), method.as_str()), ("w1", "status.unwatch"));
-    assert_eq!(params, json!({"name": "core.layout"}));
-    assert!(!notifier.watched("w1", "core.layout"));
-    assert!(notifier.watches("w1").is_empty());
-    endpoint.stop();
-}
-
-// contract: endpoint.watch.surface-and-plain-forwarded-separately, endpoint.watch.empty-surface-invalid, endpoint.watch.surface-change-names-surface, endpoint.watch.surface-unwatch-forwarded-with-surface, endpoint.watch.surface-unwatch-keeps-plain-watch
-#[test]
-fn surface_watches_are_separate() {
-    let config = folder::Folder::new();
-    let (fake, seen) = Fake::new();
-    let endpoint = start(config.path(), "test-surface", fake.clone());
-    let notifier = endpoint.notifier();
-    let mut connection = open(&endpoint);
-    let named = json!({"window": "w1", "name": "probe.lines", "surface": "tab-a"});
-    assert_eq!(
-        request(&mut connection, 1, "status.watch", named.clone())["result"],
-        Value::Null
-    );
-    assert_eq!(
-        request(
-            &mut connection,
-            2,
-            "status.watch",
-            json!({"window": "w1", "name": "probe.lines"})
-        )["result"],
-        Value::Null
-    );
-    let reply = request(
-        &mut connection,
-        3,
-        "status.watch",
-        json!({"window": "w1", "name": "probe.lines", "surface": ""}),
-    );
-    assert_eq!(reply["error"]["code"], -32602);
-    let watched: Vec<Value> = fake
-        .calls()
-        .iter()
-        .filter(|(_, method, _)| method == "status.watch")
-        .map(|(_, _, params)| params.clone())
-        .collect();
-    assert_eq!(
-        watched,
-        [
-            json!({"name": "probe.lines", "surface": "tab-a"}),
-            json!({"name": "probe.lines"})
-        ]
-    );
-    assert_eq!(notifier.watches("w1").len(), 2);
-
-    notifier.changed(
-        "w1",
-        "probe.lines",
-        Some("tab-a"),
-        &raw(&json!(["a"])).unwrap(),
-    );
-    assert_eq!(
-        receive(&mut connection),
-        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
-        "params": {"window": "w1", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}}))
-    );
-    notifier.changed("w1", "probe.lines", None, &raw(&json!(["b"])).unwrap());
-    assert_eq!(
-        receive(&mut connection),
-        Some(json!({"jsonrpc": "2.0", "method": "status.changed",
-        "params": {"window": "w1", "name": "probe.lines", "value": ["b"]}}))
-    );
-
-    while seen.try_recv().is_ok() {}
-    request(&mut connection, 4, "status.unwatch", named);
-    let (_, method, params) = seen.recv().unwrap();
-    assert_eq!(method, "status.unwatch");
-    assert_eq!(params, json!({"name": "probe.lines", "surface": "tab-a"}));
-    assert!(
-        notifier.watched("w1", "probe.lines"),
-        "the watch without a surface remains"
-    );
-    endpoint.stop();
-}
-
-// contract: endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples
-#[test]
-fn names_must_have_the_owner_form() {
-    let config = folder::Folder::new();
-    let (fake, _) = Fake::new();
-    let endpoint = start(config.path(), "test-names", fake.clone());
-    let mut connection = open(&endpoint);
-    let reply = request(&mut connection, 9, "status.get", json!({"window": "w1"}));
-    assert_eq!(reply["error"]["code"], -32602, "missing name: {reply}");
-    for (id, name) in [
-        (1, json!("layout")),
-        (2, json!("Core.layout")),
-        (3, json!("core.")),
-        (4, json!(3)),
-    ] {
-        let reply = request(
-            &mut connection,
-            id,
-            "status.get",
-            json!({"window": "w1", "name": name}),
-        );
-        assert_eq!(reply["error"]["code"], -32602, "{name}");
-    }
-    assert!(fake.calls().is_empty());
-    assert!(endpoint::valid_name("core.surface.document") && endpoint::valid_name("plugin-x.a-1"));
-    endpoint.stop();
-}
-
-/// A page that records watch requests in the order of completion. The first status.unwatch does not finish until gate
-/// opens.
-struct GatedPage {
-    order: Mutex<Vec<String>>,
-    gate: Mutex<Option<Receiver<()>>>,
-    entered: Mutex<Sender<String>>,
-}
-
-impl Service for GatedPage {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "w1"
-    }
-
-    fn call(
-        &self,
-        _window: &str,
-        method: &str,
-        _params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        let _ = self.entered.lock().unwrap().send(method.to_string());
-        if method == "status.unwatch" {
-            let gate = self.gate.lock().unwrap().take();
-            if let Some(gate) = gate {
-                gate.recv().unwrap();
-            }
-        }
-        if method.starts_with("status.") && method != "status.get" {
-            self.order.lock().unwrap().push(method.to_string());
-        }
-        raw(&if method == "status.get" {
-            json!(0)
-        } else {
-            Value::Null
-        })
-    }
-}
-
-// contract: endpoint.watch.subscription-arrival-order, endpoint.watch.other-requests-not-blocked-by-pending-subscription
-#[test]
-fn subscription_changes_reach_the_page_in_arrival_order() {
-    let config = folder::Folder::new();
-    let (open_gate, gate) = mpsc::channel();
-    let (entered, calls) = mpsc::channel();
-    let page = Arc::new(GatedPage {
-        order: Mutex::new(Vec::new()),
-        gate: Mutex::new(Some(gate)),
-        entered: Mutex::new(entered),
-    });
-    let endpoint = Endpoint::start(
-        &config.path().join("sockets"),
-        config.path(),
-        "test-order",
-        page.clone(),
-    )
-    .unwrap();
-    let notifier = endpoint.notifier();
-    let mut connection = open(&endpoint);
-    let topic = json!({"window": "w1", "name": "core.layout"});
-    assert_eq!(
-        request(&mut connection, 1, "status.watch", topic.clone())["result"],
-        Value::Null
-    );
-    assert_eq!(calls.recv().unwrap(), "status.watch");
-
-    // An unwatch and a watch are sent one after the other. The response to another request is received before the page
-    // finishes the unwatch.
-    send(
-        &mut connection,
-        json!({"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": topic}),
-    );
-    send(
-        &mut connection,
-        json!({"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": topic}),
-    );
-    assert_eq!(calls.recv().unwrap(), "status.unwatch");
-    send(
-        &mut connection,
-        json!({"jsonrpc": "2.0", "id": 4, "method": "status.get", "params": topic}),
-    );
-    let mut replies = Vec::new();
-    let first = receive(&mut connection).unwrap();
-    replies.push(first["id"].clone());
-    assert!(notifier.watched("w1", "core.layout"));
-    open_gate.send(()).unwrap();
-    while replies.len() < 3 {
-        replies.push(receive(&mut connection).unwrap()["id"].clone());
-    }
-    assert_eq!(replies, [json!(4), json!(2), json!(3)]);
-    assert_eq!(
-        *page.order.lock().unwrap(),
-        ["status.watch", "status.unwatch", "status.watch"]
-    );
-    assert!(notifier.watched("w1", "core.layout"));
-    notifier.changed("w1", "core.layout", None, &raw(&json!(5)).unwrap());
-    assert_eq!(receive(&mut connection).unwrap()["params"]["value"], 5);
-    endpoint.stop();
-}
-
-/// A service that has the window main only after it was registered.
-struct Late(std::sync::atomic::AtomicBool);
-
-impl Service for Late {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "main" && self.0.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    fn call(
-        &self,
-        _: &str,
-        _: &str,
-        _: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        raw(&json!("answered"))
-    }
-}
-
 // contract: endpoint.discovery.written-after-first-window
 #[test]
 fn endpoint_file_is_written_only_after_the_first_window_exists() {
     let config = folder::Folder::new();
-    let service = Arc::new(Late(std::sync::atomic::AtomicBool::new(false)));
+    let page = CasePage::new(
+        &[],
+        vec![exchange(
+            "status.get",
+            json!({"name": "host.windows"}),
+            json!("answered"),
+        )],
+    );
     let endpoint = Endpoint::start(
         &config.path().join("sockets"),
         config.path(),
         "test-first",
-        service.clone(),
+        page.clone(),
     )
     .unwrap();
     let file = config.path().join("endpoint.json");
@@ -1125,7 +928,7 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
         .expect_err("endpoint.json was published for a window that does not exist");
     assert!(refused.contains("window main does not exist"), "{refused}");
     assert!(!file.exists(), "a refused publication wrote endpoint.json");
-    service.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    page.add_window("main");
     endpoint.publish("main").unwrap();
     let written: Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
     assert_eq!(written["address"], endpoint.address());
@@ -1137,43 +940,66 @@ fn endpoint_file_is_written_only_after_the_first_window_exists() {
         json!({"window": "main", "name": "host.windows"}),
     );
     assert_eq!(reply["result"], "answered", "{reply}");
+    assert_eq!(page.finish(), Vec::<String>::new());
     endpoint.stop();
     assert!(!file.exists());
 }
 
-const CLOSE_CHILD: &str = "SOKSAK_ENDPOINT_CLOSE_CHILD";
+// contract: diagnostics.objects.counts-host-objects
+#[cfg(feature = "diagnostics")]
+#[test]
+fn subscriber_count_follows_the_watches_of_a_window() {
+    // The page receives the first watch only: the second connection joins the watch, and the first connection leaves it.
+    let served = serve_page(
+        "test-subscribers",
+        vec![exchange(
+            "status.watch",
+            json!({"name": "core.layout"}),
+            Value::Null,
+        )],
+    );
+    let notifier = served.endpoint.notifier();
+    assert_eq!(notifier.subscribers("main"), 0);
+    let mut first = served.open();
+    let mut second = served.open();
+    request(
+        &mut first,
+        1,
+        "status.watch",
+        json!({"window": "main", "name": "core.layout"}),
+    );
+    assert_eq!(notifier.subscribers("main"), 1);
+    request(
+        &mut second,
+        2,
+        "status.watch",
+        json!({"window": "main", "name": "core.layout"}),
+    );
+    assert_eq!(notifier.subscribers("main"), 2);
+    assert_eq!(notifier.subscribers("w2"), 0);
+    request(
+        &mut first,
+        3,
+        "status.unwatch",
+        json!({"window": "main", "name": "core.layout"}),
+    );
+    assert_eq!(notifier.subscribers("main"), 1);
+    served.finish();
+}
 
-// contract: endpoint.transport.close-reason-is-recorded
+const READ_ERROR_CHILD: &str = "SOKSAK_ENDPOINT_READ_ERROR_CHILD";
+
+// A connection that ends inside a frame closes with the reason of the read, not with peer closed. The record is written by the
+// serve loop after it reads the end of the connection, and the wait ends at the batch that holds it.
 // contract: endpoint.close.reason-of-read-error
 #[test]
-fn the_endpoint_records_why_a_connection_closes() {
-    if let Some(config) = std::env::var_os(CLOSE_CHILD) {
+fn the_endpoint_records_a_read_error_inside_a_frame() {
+    if let Some(config) = std::env::var_os(READ_ERROR_CHILD) {
         let config = Path::new(&config);
         soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
         let writer = records::start_writer(config);
-        let (fake, calls) = Fake::new();
-        let endpoint = start(config, "test-close-reason", fake);
-        let mut connection = open(&endpoint);
-        connection.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
-        assert_eq!(receive(&mut connection), None);
-        let mut connection = open(&endpoint);
-        let body = b"{not json";
-        connection
-            .write_all(&(body.len() as u32).to_be_bytes())
-            .unwrap();
-        connection.write_all(body).unwrap();
-        assert_eq!(receive(&mut connection), None);
-        let mut connection = open(&endpoint);
-        send(&mut connection, json!([1, 2]));
-        assert_eq!(receive(&mut connection), None);
-        let mut connection = open(&endpoint);
-        send(
-            &mut connection,
-            json!({"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "w1"}}),
-        );
-        assert_eq!(receive(&mut connection), None);
-        // A frame that ends early closes with the reason of the read. The record is written by the serve loop after it
-        // reads the end of the connection, and the wait ends at the batch that holds it.
+        let page = CasePage::without_steps(&["main"]);
+        let endpoint = start(config, "test-read-error", page.clone());
         let mut connection = open(&endpoint);
         connection.write_all(&10u32.to_be_bytes()).unwrap();
         connection.write_all(b"{\"j").unwrap();
@@ -1181,23 +1007,9 @@ fn the_endpoint_records_why_a_connection_closes() {
         records::await_text(
             &writer,
             config,
-            "connection closed: connection closed inside a frame body",
+            "info host endpoint: connection closed: connection closed inside a frame body",
         );
-        // The record of a close by the peer is written before the page is told that the last watcher ended.
-        let mut connection = open(&endpoint);
-        request(
-            &mut connection,
-            1,
-            "status.watch",
-            json!({"window": "w1", "name": "core.layout"}),
-        );
-        drop(connection);
-        loop {
-            let (_, method, _) = calls.recv().unwrap();
-            if method == "status.unwatch" {
-                break;
-            }
-        }
+        assert_eq!(page.finish(), Vec::<String>::new());
         endpoint.stop();
         writer.flush().unwrap();
         return;
@@ -1206,286 +1018,15 @@ fn the_endpoint_records_why_a_connection_closes() {
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([
             "--exact",
-            "the_endpoint_records_why_a_connection_closes",
+            "the_endpoint_records_a_read_error_inside_a_frame",
             "--nocapture",
             "--test-threads=1",
         ])
-        .env(CLOSE_CHILD, config.path())
+        .env(READ_ERROR_CHILD, config.path())
         .stdin(std::process::Stdio::null())
         .output()
         .unwrap();
     child::require_success(&output, config.path());
-    let log = records::text_of(&records::read_events(&records::event_log_path(
-        config.path(),
-    )));
-    for reason in [
-        "frame of 1195725856 bytes exceeds the limit of 16777216",
-        "frame is not a JSON-RPC 2.0 request: {not json",
-        "frame is not a JSON-RPC 2.0 request: [1,2]",
-        "method \"page.eval\" is not declared",
-        "connection closed inside a frame body",
-        "peer closed",
-    ] {
-        let found = log.lines().any(|line| {
-            line.split_once(' ').is_some_and(|(_, rest)| {
-                rest == format!("info host endpoint: connection closed: {reason}")
-            })
-        });
-        assert!(found, "no close record {reason:?} in {log:?}");
-    }
-}
-
-/// A page whose status.get does not reply until gate opens; entered receives a signal when the request arrives.
-struct HeldPage {
-    gate: Mutex<Option<Receiver<()>>>,
-    entered: Mutex<Sender<()>>,
-}
-
-impl Service for HeldPage {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "w1"
-    }
-
-    fn call(
-        &self,
-        _window: &str,
-        _method: &str,
-        _params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        let _ = self.entered.lock().unwrap().send(());
-        let gate = self.gate.lock().unwrap().take();
-        if let Some(gate) = gate {
-            gate.recv().unwrap();
-        }
-        raw(&json!(7))
-    }
-}
-
-const PEER_CLOSED_CHILD: &str = "SOKSAK_ENDPOINT_PEER_CLOSED_CHILD";
-
-// A reply to a connection that the peer closed before the reply is not an error: the host records the reply as not sent.
-// contract: endpoint.close.reply-after-peer-close
-#[test]
-fn a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent() {
-    if let Some(config) = std::env::var_os(PEER_CLOSED_CHILD) {
-        let config = Path::new(&config);
-        soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
-        let writer = records::start_writer(config);
-        let (open_gate, gate) = mpsc::channel();
-        let (entered_tx, entered) = mpsc::channel();
-        let page = Arc::new(HeldPage {
-            gate: Mutex::new(Some(gate)),
-            entered: Mutex::new(entered_tx),
-        });
-        let endpoint =
-            Endpoint::start(&config.join("sockets"), config, "test-peer-closed", page).unwrap();
-        endpoint.publish("w1").unwrap();
-        let mut connection = open(&endpoint);
-        send(
-            &mut connection,
-            json!({"jsonrpc": "2.0", "id": 9, "method": "status.get",
-                "params": {"window": "w1", "name": "core.layout"}}),
-        );
-        entered.recv().unwrap();
-        drop(connection);
-        // The serve loop records the close by the peer before the page replies, so the reply meets a closed connection. The
-        // serve loop writes those records, and each wait ends at the batch that holds its record.
-        let wait_for = |text: &str| records::await_text(&writer, config, text);
-        wait_for("connection closed: peer closed");
-        open_gate.send(()).unwrap();
-        let log = wait_for("host endpoint: reply to 9 not sent: peer closed");
-        assert!(
-            !log.contains("error host endpoint reply"),
-            "the reply to a closed connection was an error: {log:?}"
-        );
-        endpoint.stop();
-        writer.flush().unwrap();
-        return;
-    }
-    let config = folder::Folder::new();
-    let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "a_reply_to_a_connection_that_the_peer_closed_is_recorded_as_not_sent",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env(PEER_CLOSED_CHILD, config.path())
-        .stdin(std::process::Stdio::null())
-        .output()
-        .unwrap();
-    child::require_success(&output, config.path());
-}
-
-const NO_RESULT_CHILD: &str = "SOKSAK_ENDPOINT_NO_RESULT_CHILD";
-
-// A request that ends without its result, the error 1005, writes the method and the reason to the application log before
-// the client receives the error.
-// contract: endpoint.no-result.is-recorded
-#[test]
-fn the_endpoint_records_a_request_that_ended_without_its_result() {
-    if let Some(config) = std::env::var_os(NO_RESULT_CHILD) {
-        let config = Path::new(&config);
-        soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
-        let writer = records::start_writer(config);
-        let (fake, _calls) = Fake::new();
-        *fake.without_result.lock().unwrap() = Some("status.get".to_string());
-        let endpoint = start(config, "test-no-result", fake);
-        let mut connection = open(&endpoint);
-        let reply = request(
-            &mut connection,
-            1,
-            "status.get",
-            json!({"window": "w1", "name": "core.layout"}),
-        );
-        assert_eq!(reply["error"]["code"], 1005);
-        endpoint.stop();
-        writer.flush().unwrap();
-        return;
-    }
-    let config = folder::Folder::new();
-    let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            "--exact",
-            "the_endpoint_records_a_request_that_ended_without_its_result",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .env(NO_RESULT_CHILD, config.path())
-        .stdin(std::process::Stdio::null())
-        .output()
-        .unwrap();
-    child::require_success(&output, config.path());
-    let log = records::text_of(&records::read_events(&records::event_log_path(
-        config.path(),
-    )));
-    let want = " error host endpoint no result: status.get: the document did not receive the input";
-    assert!(log.contains(want), "no {want:?} in {log}");
-    assert!(
-        !log.contains("endpoint timeout"),
-        "the log names a timeout: {log}"
-    );
-}
-
-/// A page that holds each command.run until the request ends on the host: entered receives a signal when the page received
-/// the request, and ended a signal when the end of its connection reached the request through its reply scope.
-struct ConnectionEndPage {
-    entered: Mutex<Sender<()>>,
-    ended: Mutex<Sender<()>>,
-}
-
-impl Service for ConnectionEndPage {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "w1"
-    }
-
-    fn call(
-        &self,
-        _window: &str,
-        method: &str,
-        _params: Map<String, Value>,
-        reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        if method != "command.run" {
-            return raw(&Value::Null);
-        }
-        let (end, connection_ended) = mpsc::channel();
-        reply
-            .expect("an endpoint request has its reply scope")
-            .after_connection_end(move || {
-                let _ = end.send(());
-            });
-        self.entered.lock().unwrap().send(()).unwrap();
-        connection_ended
-            .recv()
-            .expect("the end of the connection reaches the request");
-        self.ended.lock().unwrap().send(()).unwrap();
-        Err(Failure::new(1003, "the endpoint connection ended"))
-    }
-}
-
-// The end of the endpoint connection that sent a request ends the request on the host: the page request of a command.run
-// that its page holds ends when the client closes the connection, with no time limit before it.
-// contract: exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests
-#[test]
-fn the_end_of_the_endpoint_connection_ends_its_page_requests() {
-    let config = folder::Folder::new();
-    let (entered, entries) = mpsc::channel();
-    let (ended, ends) = mpsc::channel();
-    let page = Arc::new(ConnectionEndPage {
-        entered: Mutex::new(entered),
-        ended: Mutex::new(ended),
-    });
-    let endpoint = Endpoint::start(
-        &config.path().join("sockets"),
-        config.path(),
-        "test-connection-end",
-        page,
-    )
-    .unwrap();
-    endpoint.publish("w1").unwrap();
-    let mut connection = open(&endpoint);
-    send(
-        &mut connection,
-        json!({"jsonrpc": "2.0", "id": 1, "method": "command.run",
-            "params": {"window": "w1", "name": "probe.run", "params": {}}}),
-    );
-    entries.recv().unwrap();
-    assert!(
-        ends.try_recv().is_err(),
-        "the request ended while its connection is open"
-    );
-    drop(connection);
-    ends.recv().unwrap();
-    endpoint.stop();
-}
-
-// contract: diagnostics.objects.counts-host-objects
-#[cfg(feature = "diagnostics")]
-#[test]
-fn subscriber_count_follows_the_watches_of_a_window() {
-    let config = folder::Folder::new();
-    let (fake, _seen) = Fake::new();
-    let endpoint = start(config.path(), "test-subscribers", fake.clone());
-    let notifier = endpoint.notifier();
-    assert_eq!(notifier.subscribers("w1"), 0);
-    let mut first = open(&endpoint);
-    let mut second = open(&endpoint);
-    request(
-        &mut first,
-        1,
-        "status.watch",
-        json!({"window": "w1", "name": "core.layout"}),
-    );
-    assert_eq!(notifier.subscribers("w1"), 1);
-    request(
-        &mut second,
-        2,
-        "status.watch",
-        json!({"window": "w1", "name": "core.layout"}),
-    );
-    assert_eq!(notifier.subscribers("w1"), 2);
-    assert_eq!(notifier.subscribers("w2"), 0);
-    request(
-        &mut first,
-        3,
-        "status.unwatch",
-        json!({"window": "w1", "name": "core.layout"}),
-    );
-    assert_eq!(notifier.subscribers("w1"), 1);
 }
 
 const ACCEPT_CHILD: &str = "SOKSAK_ENDPOINT_ACCEPT_CHILD";
@@ -1499,9 +1040,9 @@ fn the_endpoint_records_an_accept_error() {
         let config = Path::new(&config);
         soksak_host::application_log::start_standard_error(config, "com.soksak.test").unwrap();
         let writer = records::start_writer(config);
-        let (fake, _) = Fake::new();
+        let page = CasePage::without_steps(&["main"]);
         endpoint::fail_accept_for_test(&config.join("sockets"), "accept fault");
-        let endpoint = start(config, "test-accept-error", fake);
+        let endpoint = start(config, "test-accept-error", page);
         // The record is written by the accept loop after accept returns, and the wait ends at the batch that holds it.
         records::await_text(&writer, config, "error host endpoint accept: accept fault");
         endpoint.stop();
@@ -1523,29 +1064,38 @@ fn the_endpoint_records_an_accept_error() {
     child::require_success(&output, config.path());
 }
 
-/// A service whose request ends the endpoint after its response: the end of a quit that has no ready window to close.
-struct Terminal {
+/// The window owner that stops the endpoint after the response of its request, as the quit of a host that has no ready window to
+/// close does: it registers the stop with the reply scope of the request and gives the request to the page.
+struct QuitOwner {
+    page: Arc<CasePage>,
     endpoint: Mutex<std::sync::Weak<Endpoint>>,
-    completed: Mutex<Sender<endpoint::ReplyOutcome>>,
+    completed: Mutex<mpsc::Sender<endpoint::ReplyOutcome>>,
 }
-impl Service for Terminal {
+
+impl Service for QuitOwner {
     fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([{"window":"w1"}]))
+        self.page.windows()
     }
+
     fn exists(&self, window: &str) -> bool {
-        window == "w1"
+        self.page.exists(window)
     }
-    fn unwatched(&self, _: &str, _: &str) {}
+
+    fn unwatched(&self, window: &str, name: &str) {
+        self.page.unwatched(window, name)
+    }
+
     fn call(
         &self,
-        _: &str,
-        _: &str,
-        _: Map<String, Value>,
+        window: &str,
+        method: &str,
+        params: Map<String, Value>,
         reply: Option<endpoint::ReplyScope>,
     ) -> Result<Box<RawValue>, Failure> {
         let endpoint = self.endpoint.lock().unwrap().clone();
         let completed = self.completed.lock().unwrap().clone();
         reply
+            .clone()
             .expect("external request owns its response")
             .after_response(move |outcome| {
                 // stop closes the real peer and takes its writer lock. It must run
@@ -1553,7 +1103,7 @@ impl Service for Terminal {
                 endpoint.upgrade().unwrap().stop();
                 completed.send(outcome).unwrap();
             });
-        raw(&Value::Null)
+        self.page.call(window, method, params, reply)
     }
 }
 
@@ -1563,7 +1113,16 @@ impl Service for Terminal {
 fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
     let config = folder::Folder::new();
     let (tx, rx) = mpsc::channel();
-    let service = Arc::new(Terminal {
+    let page = CasePage::new(
+        &["main"],
+        vec![exchange(
+            "command.run",
+            json!({"name": "probe.terminate"}),
+            Value::Null,
+        )],
+    );
+    let service = Arc::new(QuitOwner {
+        page: page.clone(),
         endpoint: Mutex::new(std::sync::Weak::new()),
         completed: Mutex::new(tx),
     });
@@ -1577,9 +1136,9 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
         .unwrap(),
     );
     *service.endpoint.lock().unwrap() = Arc::downgrade(&endpoint);
-    endpoint.publish("w1").unwrap();
+    endpoint.publish("main").unwrap();
     let mut client = endpoint_client::connect(endpoint.address());
-    let body = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":71,"method":"command.run","params":{"window":"w1","name":"probe.terminate"}})).unwrap();
+    let body = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":71,"method":"command.run","params":{"window":"main","name":"probe.terminate"}})).unwrap();
     client
         .write_all(&(body.len() as u32).to_be_bytes())
         .unwrap();
@@ -1590,21 +1149,17 @@ fn a_zero_ready_termination_intent_replies_before_the_actual_socket_closes() {
     assert_eq!(response, json!({"jsonrpc":"2.0","id":71,"result":null}));
     assert_eq!(rx.recv().unwrap(), endpoint::ReplyOutcome::Written);
     assert_eq!(endpoint::read_frame(&mut client).unwrap(), None);
+    assert_eq!(page.finish(), Vec::<String>::new());
 }
 
-/// Waits for the next `input.pointer` call of the page with the phase `phase` and returns its params. The release of a closed
-/// connection runs in the serve thread of that connection, which no call of the test is ordered after, so the wait ends with
-/// the call itself; a release that never comes leaves the test to the limit of its runner, which reports the stall.
-fn next_pointer(seen: &Receiver<(String, String, Value)>, phase: &str) -> Value {
-    loop {
-        let (window, method, params) = seen.recv().unwrap_or_else(|_| {
-            panic!("the page ended before an input.pointer {phase} reached it")
-        });
-        if method == "input.pointer" && params["phase"] == phase {
-            assert_eq!(window, "w1");
-            return params;
-        }
-    }
+/// The params of an `input.pointer` of the main pointer.
+fn main_pointer(phase: &str, x: Value, y: Value) -> Value {
+    json!({"x": x, "y": y, "phase": phase})
+}
+
+/// The params of the release that the endpoint delivers for the press of the main pointer at (x, y).
+fn main_release(x: f64, y: f64) -> Value {
+    json!({"pointer": "main", "x": x, "y": y, "phase": "up", "button": "left", "clicks": 1})
 }
 
 // The close of a connection releases the press that its down opened, at the point of its last delivered drag, and a press
@@ -1612,11 +1167,38 @@ fn next_pointer(seen: &Receiver<(String, String, Value)>, phase: &str) -> Value 
 // contract: endpoint.input.close-releases-presses
 #[test]
 fn the_close_of_a_connection_releases_its_presses() {
-    let config = folder::Folder::new();
-    let (fake, seen) = Fake::new();
-    let endpoint = start(config.path(), "test-press", fake.clone());
-    let mut first = open(&endpoint);
-    let pointer = |phase: &str, x: i64, y: i64| json!({"window": "w1", "pointer": "second", "x": x, "y": y, "phase": phase, "button": "right"});
+    let second = |phase: &str, x: i64, y: i64| json!({"pointer": "second", "x": x, "y": y, "phase": phase, "button": "right"});
+    let served = serve_page(
+        "test-press",
+        vec![
+            exchange("input.pointer", second("down", 10, 20), Value::Null),
+            exchange("input.pointer", second("drag", 30, 40), Value::Null),
+            exchange(
+                "input.pointer",
+                main_pointer("down", json!(1), json!(2)),
+                Value::Null,
+            ),
+            exchange(
+                "input.pointer",
+                main_pointer("up", json!(1), json!(2)),
+                Value::Null,
+            ),
+            // The release of the press of the first connection: the point of its last delivered drag.
+            exchange(
+                "input.pointer",
+                json!({"pointer": "second", "x": 30.0, "y": 40.0, "phase": "up", "button": "right", "clicks": 1}),
+                Value::Null,
+            ),
+            // The close found no other press: the next call of the page is the one of the second connection.
+            exchange(
+                "input.pointer",
+                main_pointer("move", json!(1), json!(2)),
+                Value::Null,
+            ),
+        ],
+    );
+    let mut first = served.open();
+    let pointer = |phase: &str, x: i64, y: i64| json!({"window": "main", "pointer": "second", "x": x, "y": y, "phase": phase, "button": "right"});
     assert_eq!(
         request(&mut first, 1, "input.pointer", pointer("down", 10, 20))["result"],
         Value::Null
@@ -1626,117 +1208,96 @@ fn the_close_of_a_connection_releases_its_presses() {
         Value::Null
     );
     // A press of the main pointer that an up of another connection ended is no press of this connection any more.
-    let main = |phase: &str| json!({"window": "w1", "x": 1, "y": 2, "phase": phase});
+    let main = |phase: &str| json!({"window": "main", "x": 1, "y": 2, "phase": phase});
     request(&mut first, 3, "input.pointer", main("down"));
-    let mut second = open(&endpoint);
-    request(&mut second, 1, "input.pointer", main("up"));
-    while seen.try_recv().is_ok() {}
+    let mut other = served.open();
+    request(&mut other, 1, "input.pointer", main("up"));
     drop(first);
-    let released = next_pointer(&seen, "up");
-    assert_eq!(
-        released,
-        json!({"pointer": "second", "x": 30.0, "y": 40.0, "phase": "up", "button": "right", "clicks": 1})
-    );
-    // The close found no other press: the next pointer call of the page is the one of the second connection.
-    request(&mut second, 2, "input.pointer", main("move"));
-    let next = next_pointer(&seen, "move");
-    assert_eq!(next["x"], 1);
-    assert!(
-        seen.try_recv().is_err(),
-        "the close released a press that an up had ended: {:?}",
-        fake.calls()
-    );
-    endpoint.stop();
+    // The release of a closed connection runs in the serve thread of that connection, which no call of the test is ordered
+    // after, so the test waits for the call of the page.
+    assert!(served.page.await_total(5), "the close released no press");
+    request(&mut other, 2, "input.pointer", main("move"));
+    served.finish();
 }
 
 // A release refused with 1007 is delivered at the next host.buttons mask 0, and not at a mask that is not 0.
 // contract: endpoint.input.close-releases-presses
 #[test]
 fn a_release_refused_while_a_button_is_held_waits_for_mask_zero() {
-    let config = folder::Folder::new();
-    let (fake, seen) = Fake::new();
-    let endpoint = start(config.path(), "test-press-held", fake.clone());
-    let notifier = endpoint.notifier();
-    let mut connection = open(&endpoint);
+    let served = serve_page(
+        "test-press-held",
+        vec![
+            exchange(
+                "input.pointer",
+                main_pointer("down", json!(5), json!(6)),
+                Value::Null,
+            ),
+            refused_exchange(
+                "input.pointer",
+                main_release(5.0, 6.0),
+                endpoint::BUTTON_HELD,
+                "a button is held",
+            ),
+            exchange("input.pointer", main_release(5.0, 6.0), Value::Null),
+        ],
+    );
+    let notifier = served.endpoint.notifier();
+    let mut connection = served.open();
     request(
         &mut connection,
         1,
         "input.pointer",
-        json!({"window": "w1", "x": 5, "y": 6, "phase": "down"}),
+        json!({"window": "main", "x": 5, "y": 6, "phase": "down"}),
     );
-    *fake.refusing.lock().unwrap() = Some(("up".into(), endpoint::BUTTON_HELD));
-    while seen.try_recv().is_ok() {}
     drop(connection);
-    next_pointer(&seen, "up");
-    *fake.refusing.lock().unwrap() = None;
+    assert!(served.page.await_total(2), "the close released no press");
     notifier.notify_watchers("host.buttons", &raw(&json!({"mask": 1})).unwrap());
     notifier.notify_watchers("host.buttons", &raw(&json!({"mask": 0})).unwrap());
-    let released = next_pointer(&seen, "up");
-    assert_eq!(
-        released,
-        json!({"pointer": "main", "x": 5.0, "y": 6.0, "phase": "up", "button": "left", "clicks": 1})
+    assert!(
+        served.page.await_total(3),
+        "the release was not delivered after mask 0"
     );
-    let ups = fake
-        .calls()
-        .iter()
-        .filter(|(_, method, params)| method == "input.pointer" && params["phase"] == "up")
-        .count();
-    assert_eq!(
-        ups,
-        2,
-        "the release was not delivered once after mask 0: {:?}",
-        fake.calls()
-    );
-    endpoint.stop();
+    served.finish();
 }
 
 // A release refused with 1011 is delivered at the next end of a press, and not at an input that ends no press.
 // contract: endpoint.input.close-releases-presses
 #[test]
 fn a_release_refused_for_another_pointer_is_delivered_at_the_end_of_a_press() {
-    let config = folder::Folder::new();
-    let (fake, seen) = Fake::new();
-    let endpoint = start(config.path(), "test-press-pointer-held", fake.clone());
-    let mut owner = open(&endpoint);
-    let mut other = open(&endpoint);
+    let second = |phase: &str| json!({"pointer": "second", "x": 0, "y": 0, "phase": phase});
+    let served = serve_page(
+        "test-press-pointer-held",
+        vec![
+            exchange(
+                "input.pointer",
+                main_pointer("down", json!(7), json!(8)),
+                Value::Null,
+            ),
+            refused_exchange(
+                "input.pointer",
+                main_release(7.0, 8.0),
+                endpoint::POINTER_HELD,
+                "another pointer holds its press",
+            ),
+            // A move of the other pointer ends no press, so the refused release is not delivered before it.
+            exchange("input.pointer", second("move"), Value::Null),
+            // The up of the other pointer ends a press, which lifts the refusal.
+            exchange("input.pointer", second("up"), Value::Null),
+            exchange("input.pointer", main_release(7.0, 8.0), Value::Null),
+        ],
+    );
+    let mut owner = served.open();
+    let mut other = served.open();
     request(
         &mut owner,
         1,
         "input.pointer",
-        json!({"window": "w1", "x": 7, "y": 8, "phase": "down"}),
+        json!({"window": "main", "x": 7, "y": 8, "phase": "down"}),
     );
-    *fake.refusing.lock().unwrap() = Some(("up".into(), endpoint::POINTER_HELD));
-    while seen.try_recv().is_ok() {}
     drop(owner);
-    next_pointer(&seen, "up");
-    *fake.refusing.lock().unwrap() = None;
-    // A move of the other pointer ends no press, so the refused release is not delivered before it.
-    let second =
-        |phase: &str| json!({"window": "w1", "pointer": "second", "x": 0, "y": 0, "phase": phase});
+    assert!(served.page.await_total(2), "the close released no press");
+    let second = |phase: &str| json!({"window": "main", "pointer": "second", "x": 0, "y": 0, "phase": phase});
     request(&mut other, 1, "input.pointer", second("move"));
-    loop {
-        let (_, method, params) = seen
-            .recv()
-            .expect("the page ended before the move of the other pointer reached it");
-        if method != "input.pointer" {
-            continue;
-        }
-        assert_ne!(
-            params["phase"], "up",
-            "the refused release was delivered before a press ended: {params}"
-        );
-        if params["phase"] == "move" {
-            break;
-        }
-    }
-    // The up of the other pointer ends a press, which lifts the refusal.
     request(&mut other, 2, "input.pointer", second("up"));
-    let ended = next_pointer(&seen, "up");
-    assert_eq!(ended["pointer"], "second");
-    let released = next_pointer(&seen, "up");
-    assert_eq!(
-        released,
-        json!({"pointer": "main", "x": 7.0, "y": 8.0, "phase": "up", "button": "left", "clicks": 1})
-    );
-    endpoint.stop();
+    served.finish();
 }

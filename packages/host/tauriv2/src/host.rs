@@ -22,6 +22,15 @@ pub use framework::Framework;
 pub use frontend::{Frontend, window_event};
 pub use menu::accelerator;
 
+/// Gives the builder of a window the platform options that every window of the host has (the title bar overlay of the project
+/// window and the first mouse of an inactive window on macOS). The framework applies it to each window that it creates; a
+/// program that creates a window of its own, as a fixture does, applies it to follow the same builder path.
+pub fn prepare_window<'a>(
+    builder: tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>,
+) -> Result<tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>, String> {
+    platform::prepare_window(builder)
+}
+
 /// The origin of the main page, which the start document answers with CORS.
 pub const PAGE_ORIGIN: &str = "tauri://localhost";
 

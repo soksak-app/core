@@ -1,0 +1,17 @@
+{
+  "name": "normal-shutdown-objects-invalid",
+  "description": "The shutdown check reads a diagnostics.objects reply without a session list, requests no quit and closes the connection.",
+  "replay": false,
+  "reason": "The case plays the requests of the normal shutdown check on a host whose state and shutdown the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.watch","params":{"window":"main","name":"host.windows"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"host.windows"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":[{"window":"main","ready":true}]}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.objects","params":{"window":"main"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"sessions":null}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.unwatch","params":{"window":"main","name":"host.windows"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}},
+    {"close":"client"}
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "window-check-start-tab-not-registered",
+  "description": "A ready start tab that registered no entry of the start plugin does not register it: the watch of core.surfaces ends with the close of the connection.",
+  "replay": false,
+  "reason": "The case plays the trace of the start state of a check on a workbench; the replay cannot arrange the layout of the workbench.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"id":"t1","plugin":"starter-a"}]},{"id":"lower","focused":false,"active":"b1","tabs":[{"id":"b1","plugin":"starter-b"}]}]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":[{"kind":"tab","surface":"t1","plugin":"starter-a","visible":true,"placeholder":"missing","status":{"phase":"loading"},"exposes":[]},{"kind":"tab","surface":"b1","plugin":"starter-b","visible":true,"placeholder":"missing","status":{"phase":"loading"},"exposes":[]},{"kind":"section","surface":"s1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]}]}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"command.run","params":{"window":"main","name":"core.card.add-tab","params":{"card":"upper","plugin":"startplugin"}}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"tab":"added-1"}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"command.run","params":{"window":"main","name":"core.tab.close","params":{"tab":"t1"}}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"command.run","params":{"window":"main","name":"core.card.add-tab","params":{"card":"lower","plugin":"startplugin"}}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":{"tab":"added-2"}}},
+    {"send":{"jsonrpc":"2.0","id":6,"method":"command.run","params":{"window":"main","name":"core.tab.close","params":{"tab":"b1"}}}},
+    {"reply":{"jsonrpc":"2.0","id":6,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":7,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":7,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"added-1","tabs":[{"id":"added-1","plugin":"startplugin"}]},{"id":"lower","focused":false,"active":"added-2","tabs":[{"id":"added-2","plugin":"startplugin"}]}]}}},
+    {"send":{"jsonrpc":"2.0","id":8,"method":"status.watch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":8,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":9,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":9,"result":[{"kind":"section","surface":"s1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]},{"kind":"tab","surface":"added-1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]},{"kind":"tab","surface":"added-2","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status startplugin.view"]}]}},
+    {"send":{"jsonrpc":"2.0","id":10,"method":"status.unwatch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":10,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":11,"method":"status.watch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":11,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":12,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":12,"result":[{"kind":"section","surface":"s1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]},{"kind":"tab","surface":"added-1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]},{"kind":"tab","surface":"added-2","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status startplugin.view"]}]}},
+    {"close":"host"}
+  ]
+}

@@ -12,15 +12,18 @@ use endpoint_client::Connection;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/tier_service.rs"]
+mod tier_service;
+
+use tier_service::TierService;
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::value::RawValue;
-use serde_json::{Map, Value, json};
-use soksak_host::endpoint::{self, Endpoint, Failure, Service, raw};
+use serde_json::{Value, json};
+use soksak_host::endpoint::{self, Endpoint};
 use soksak_host::event_log::{self, EventLog, Level, Options};
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::log_query::{QueryError, index_reporter, query_event_logs, start_log_indexer};
@@ -28,31 +31,6 @@ use soksak_sok::log_index::{read_log_index, update_log_index};
 
 /// The records of the host are process-wide, so the tests of this file that attach a writer run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
-
-/// A service that has only the window main and replies null.
-struct Fake;
-
-impl Service for Fake {
-    fn unwatched(&self, _window: &str, _name: &str) {}
-
-    fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([{"window": "main", "title": "Main", "project": null, "key": true}]))
-    }
-
-    fn exists(&self, window: &str) -> bool {
-        window == "main"
-    }
-
-    fn call(
-        &self,
-        _window: &str,
-        _method: &str,
-        _params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
-    ) -> Result<Box<RawValue>, Failure> {
-        raw(&Value::Null)
-    }
-}
 
 /// The lines of an event file of boot b1: `log.open` as seq 1 and then `host.x.y` events up to seq `count`.
 fn event_lines(count: i64) -> String {
@@ -93,7 +71,7 @@ fn with_endpoint<T>(config: &Path, body: impl FnOnce(&mut Connection) -> T) -> T
         &config.join("sockets"),
         config,
         "test-log-query",
-        Arc::new(Fake),
+        Arc::new(TierService::new(&[("main", "Main")])),
     )
     .unwrap();
     endpoint.publish("main").unwrap();

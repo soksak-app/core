@@ -1,0 +1,13 @@
+{
+  "name": "window-check-inactive-observation",
+  "description": "An inactive session reads host.window before its body and once more after its cleanups, and the two readings are compared.",
+  "replay": false,
+  "reason": "The case reads the activation observation of the window of the application, which a replay would not leave unchanged.",
+  "variables": {"before": {"type": "object", "example": {"active": false, "activationObservation": {"registered": true, "count": "0"}}}, "after": {"type": "object", "example": {"active": false, "activationObservation": {"registered": true, "count": "0"}}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": "$before"}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": "$after"}}
+  ]
+}

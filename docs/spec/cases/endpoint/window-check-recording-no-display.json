@@ -1,0 +1,10 @@
+{
+  "name": "window-check-recording-no-display",
+  "description": "A recording of a window on no display does not start: the refresh rate is null and nothing follows.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"refreshRate": null}}}
+  ]
+}

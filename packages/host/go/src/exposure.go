@@ -1238,9 +1238,9 @@ func native(read func() (string, error), into any, inspect func()) error {
 	return json.Unmarshal([]byte(text), into)
 }
 
-// nativeFacts puts into into the native JSON that read read from the native window of this window in one step of the UI thread.
+// nativeFactsText returns the native JSON that read read from the native window of this window in one step of the UI thread.
 // inspect runs after the read in the same step. A window that closed before that step gives 1003.
-func (s *Surfaces) nativeFacts(read func(window platform.Window) (string, error), into any, inspect func()) error {
+func (s *Surfaces) nativeFactsText(read func(window platform.Window) (string, error), inspect func()) (string, error) {
 	var text string
 	err := s.useWindow(func(window platform.Window) error {
 		var err error
@@ -1250,6 +1250,12 @@ func (s *Surfaces) nativeFacts(read func(window platform.Window) (string, error)
 		}
 		return err
 	})
+	return text, err
+}
+
+// nativeFacts puts into into the native JSON that nativeFactsText returns.
+func (s *Surfaces) nativeFacts(read func(window platform.Window) (string, error), into any, inspect func()) error {
+	text, err := s.nativeFactsText(read, inspect)
 	if err != nil {
 		return err
 	}
@@ -1497,8 +1503,8 @@ type WindowResponder struct {
 
 // windowResponder is the first responder of host.window: the class of the responder view, the web view that holds it (0 for
 // a view outside the web views), the surface host that contains it (0 for none), whether it is the main web view and whether
-// it is in the diagnostic input reference, read against the surface hosts, the documents and the modal web view of the window.
-func windowResponder(class string, view, surface uint64, main, reference bool, named map[uint64]string, documents map[uint64]DocumentKey, modalHandle uint64) WindowResponder {
+// it is in the diagnostic input reference, and whether the windows of the framework show a main page, read against the surface hosts, the documents and the modal web view of the window.
+func windowResponder(class string, view, surface uint64, main, reference, mainPage bool, named map[uint64]string, documents map[uint64]DocumentKey, modalHandle uint64) WindowResponder {
 	out := WindowResponder{Class: class, Owner: "native"}
 	if id, ok := named[surface]; ok && surface != 0 {
 		out.Surface = &id
@@ -1521,7 +1527,7 @@ func windowResponder(class string, view, surface uint64, main, reference bool, n
 		default:
 			out.Owner = "webview"
 		}
-	} else if surface == 0 && !reference && !framework.MainPage() {
+	} else if surface == 0 && !reference && !mainPage {
 		// A window without a main page draws the workbench in its content view, outside every web view and surface host. The
 		// input reference is a view of the host in that content view and not the workbench, so it stays a native view.
 		out.Owner = "workbench"
@@ -1615,13 +1621,18 @@ func (s *Surfaces) performanceProcesses() (PerformanceWindowProcesses, error) {
 	if err != nil {
 		return PerformanceWindowProcesses{}, err
 	}
+	return performanceProcessesOf(state), nil
+}
+
+// performanceProcessesOf is the processes of the window that its host.window value names.
+func performanceProcessesOf(state WindowStatus) PerformanceWindowProcesses {
 	processes := PerformanceWindowProcesses{
 		Page: state.PageProcess, Documents: make([]PerformanceDocumentProcess, 0, len(state.Documents)),
 	}
 	for _, document := range state.Documents {
 		processes.Documents = append(processes.Documents, PerformanceDocumentProcess{Surface: document.Surface, Document: document.Document, Process: document.Process})
 	}
-	return processes, nil
+	return processes
 }
 
 // registeredSurface returns the surface id that the registry names for a native surface view. A view without a
@@ -1655,11 +1666,10 @@ func modalOrder(nativeSurfaces, webviews int) int {
 
 // windowState reads the current value of host.window.
 func (s *Surfaces) windowState() (WindowStatus, error) {
-	var facts windowFacts
 	var named map[uint64]string
 	var documents map[uint64]DocumentKey
 	regions := []WindowRegion{}
-	err := s.nativeFacts(func(window platform.Window) (string, error) {
+	text, err := s.nativeFactsText(func(window platform.Window) (string, error) {
 		named = s.viewNames()
 		documents = s.documents.Names()
 		for _, key := range s.images.Names() {
@@ -1678,8 +1688,18 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			regions = append(regions, region)
 		}
 		return system.WindowFacts(window)
-	}, &facts, nil)
+	}, nil)
 	if err != nil {
+		return WindowStatus{}, err
+	}
+	return s.windowStatusFromFacts(text, framework.MainPage(), named, documents, regions)
+}
+
+// windowStatusFromFacts is the value of host.window for the native window facts text, read against the surface hosts named, the
+// documents and the regions of the window. mainPage tells whether the windows of the framework show a main page.
+func (s *Surfaces) windowStatusFromFacts(text string, mainPage bool, named map[uint64]string, documents map[uint64]DocumentKey, regions []WindowRegion) (WindowStatus, error) {
+	var facts windowFacts
+	if err := json.Unmarshal([]byte(text), &facts); err != nil {
 		return WindowStatus{}, err
 	}
 	if err := validateActivationObservation(facts.ActivationObservation); err != nil {
@@ -1697,7 +1717,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 		Controls: facts.Controls, Surfaces: []WindowSurface{}, Documents: []WindowDocument{}, Regions: regions,
 		Webviews: []WindowWebview{}, PagelessProcesses: facts.PagelessProcesses,
 	}
-	if framework.MainPage() {
+	if mainPage {
 		out.PageProcess = &facts.PageProcess
 	}
 	if s.window != nil {
@@ -1755,7 +1775,7 @@ func (s *Surfaces) windowState() (WindowStatus, error) {
 			out.Documents = append(out.Documents, windowDocument(key, order, view))
 		}
 	}
-	out.Responder = windowResponder(facts.Responder.Class, facts.Responder.Webview, facts.Responder.Surface, facts.Responder.Main, facts.Responder.Reference, named, documents, modalHandle)
+	out.Responder = windowResponder(facts.Responder.Class, facts.Responder.Webview, facts.Responder.Surface, facts.Responder.Main, facts.Responder.Reference, mainPage, named, documents, modalHandle)
 	sort.Slice(out.Regions, func(a, b int) bool {
 		if out.Regions[a].Surface != out.Regions[b].Surface {
 			return out.Regions[a].Surface < out.Regions[b].Surface
@@ -1840,15 +1860,22 @@ func (s *Surfaces) fullscreen(on bool) error {
 		return err
 	}
 	got := <-done
-	switch got.result {
+	return fullscreenAnswer(got.result, got.message)
+}
+
+// fullscreenAnswer is the answer of host.window.fullscreen to the end of the native change: nil for a finished transition, and for the
+// others the error with the native message, 1006 for a refusal, 1003 for the close of the window and 1005 for a started transition that
+// did not end.
+func fullscreenAnswer(result platform.FullscreenResult, message string) error {
+	switch result {
 	case platform.FullscreenDone:
 		return nil
 	case platform.FullscreenRefused:
-		return rpcError(codeInactive, "%s", got.message)
+		return rpcError(codeInactive, "%s", message)
 	case platform.FullscreenClosed:
-		return rpcError(codeNoWindow, "%s", got.message)
+		return rpcError(codeNoWindow, "%s", message)
 	default:
-		return rpcError(codeTimeout, "%s", got.message)
+		return rpcError(codeTimeout, "%s", message)
 	}
 }
 

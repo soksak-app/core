@@ -1,5 +1,5 @@
-//! Tests of the value of host.buttons and its notifications. A fake service replaces the window and the page of the
-//! endpoint.
+//! Tests of the value of host.buttons and its notifications. The page of the window is the page of an endpoint case
+//! (support/endpoint_case.rs), and the window owner answers host.buttons with the value of the buttons.
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -7,6 +7,10 @@ mod folder;
 #[path = "support/platform/platform.rs"]
 mod endpoint_client;
 
+#[path = "support/endpoint_case.rs"]
+mod endpoint_case;
+
+use endpoint_case::{CasePage, exchange};
 use endpoint_client::Connection;
 
 use std::path::Path;
@@ -17,40 +21,43 @@ use serde_json::{Map, Value, json};
 use soksak_host::buttons::Buttons;
 use soksak_host::endpoint::{self, Endpoint, Failure, Service, raw};
 
-/// A service that has only the window w1 and answers host.buttons with the value of buttons.
-struct Fake {
+/// The window owner of the endpoint with the window main: it answers host.buttons with the value of buttons and gives every other
+/// request to the page.
+struct ButtonsOwner {
+    page: Arc<CasePage>,
     buttons: OnceLock<Arc<Buttons>>,
 }
 
-impl Service for Fake {
-    fn unwatched(&self, _window: &str, _name: &str) {}
+impl Service for ButtonsOwner {
+    fn unwatched(&self, window: &str, name: &str) {
+        self.page.unwatched(window, name)
+    }
 
     fn windows(&self) -> Result<Value, Failure> {
-        Ok(json!([{"window": "w1", "title": "one", "project": null, "key": true}]))
+        self.page.windows()
     }
 
     fn exists(&self, window: &str) -> bool {
-        window == "w1"
+        self.page.exists(window)
     }
 
     fn call(
         &self,
-        _window: &str,
+        window: &str,
         method: &str,
         params: Map<String, Value>,
-        _reply: Option<soksak_host::endpoint::ReplyScope>,
+        reply: Option<soksak_host::endpoint::ReplyScope>,
     ) -> Result<Box<serde_json::value::RawValue>, Failure> {
         match (method, params.get("name").and_then(Value::as_str)) {
             ("status.get", Some("host.buttons")) => raw(&self.buttons.get().unwrap().value()),
-            _ => raw(&Value::Null),
+            _ => self.page.call(window, method, params, reply),
         }
     }
 }
 
-fn start(config: &Path, service: Arc<Fake>) -> Endpoint {
-    let endpoint =
-        Endpoint::start(&config.join("sockets"), config, "test-buttons", service).unwrap();
-    endpoint.publish("w1").unwrap();
+fn start(config: &Path, owner: Arc<ButtonsOwner>) -> Endpoint {
+    let endpoint = Endpoint::start(&config.join("sockets"), config, "test-buttons", owner).unwrap();
+    endpoint.publish("main").unwrap();
     endpoint
 }
 
@@ -76,7 +83,7 @@ fn next_mask(connection: &mut Connection) -> Value {
         .unwrap()
         .expect("no host.buttons notification");
     assert_eq!(got["method"], "status.changed", "{got}");
-    assert_eq!(got["params"]["window"], "w1", "{got}");
+    assert_eq!(got["params"]["window"], "main", "{got}");
     assert_eq!(got["params"]["name"], "host.buttons", "{got}");
     got["params"]["value"]["mask"].clone()
 }
@@ -85,17 +92,27 @@ fn next_mask(connection: &mut Connection) -> Value {
 #[test]
 fn buttons_notify_each_mask_change() {
     let config = folder::Folder::new();
-    let fake = Arc::new(Fake {
+    // The page receives the watch of host.buttons, which it answers with null.
+    let page = CasePage::new(
+        &["main"],
+        vec![exchange(
+            "status.watch",
+            json!({"name": "host.buttons"}),
+            Value::Null,
+        )],
+    );
+    let owner = Arc::new(ButtonsOwner {
+        page: page.clone(),
         buttons: OnceLock::new(),
     });
-    let endpoint = start(config.path(), fake.clone());
+    let endpoint = start(config.path(), owner.clone());
     let notifier = endpoint.notifier();
     let buttons = Arc::new(Buttons::new(move |value| {
         notifier.notify_watchers("host.buttons", &raw(&value).unwrap())
     }));
-    assert!(fake.buttons.set(buttons.clone()).is_ok());
+    assert!(owner.buttons.set(buttons.clone()).is_ok());
     let mut connection = endpoint_client::connect(endpoint.address());
-    let watch = json!({"window": "w1", "name": "host.buttons"});
+    let watch = json!({"window": "main", "name": "host.buttons"});
     assert_eq!(
         request(&mut connection, 1, "status.watch", watch.clone())["result"],
         Value::Null
@@ -118,6 +135,7 @@ fn buttons_notify_each_mask_change() {
         request(&mut connection, 3, "status.get", watch)["result"],
         json!({"mask": 0})
     );
+    assert_eq!(page.finish(), Vec::<String>::new());
     endpoint.stop();
 }
 

@@ -1,11 +1,10 @@
 // V7c and V7b at a display of 3 device pixels per point (scale 2 × frame factor 1.5), where the plane puts a card on thirds of
 // a point and the layout of the page measures its edges in 1/64 of a point (F715-2).
 // The plane, the compositor and the host module are the modules of the page; the host answers each preparation with the page-wire case
-// of the test (docs/spec/cases/page-wire/README.md). The test of a seated surface without a seat scale is the one that keeps replaced modules.
+// of the test (docs/spec/cases/page-wire/README.md).
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { JSDOM } from "jsdom";
-import { Soksak } from "soksak";
+import { seatScale } from "../verify-checks.js";
 import { selectPageWire } from "@soksak/runtime";
 import { openVerifyPlane, rect } from "./support/verify-plane.mjs";
 
@@ -83,31 +82,12 @@ test("V7b judges an applied rectangle on the grid of the scale that seated it an
 });
 
 // The compositor answers a visible surface of the host only with the scale that the host named (validatePlacementAnswer), so no
-// placement of the page seats a visible surface without a scale. Verification refuses such a record with its own error, and the record can
-// be given to verification only through a compositor that answers it, so this test keeps the replaced compositor and plane.
-test("V7b refuses a seated surface without the scale that seated it", { timeout: 5000 }, async (t) => {
-  const dom = new JSDOM('<div class="chrome-bar"></div><div id="stage"><div id="plane"><article class="card" data-card-id="one"><div class="chrome"></div><div class="status"></div><div class="slot" data-native-surface data-native-surface-id="probe"></div></article></div></div>');
-  const held = { document: globalThis.document, getComputedStyle: globalThis.getComputedStyle, devicePixelRatio: globalThis.devicePixelRatio };
-  globalThis.document = dom.window.document;
-  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
-  globalThis.devicePixelRatio = 3;
-  t.after(() => {
-    globalThis.document = held.document;
-    globalThis.getComputedStyle = held.getComputedStyle;
-    globalThis.devicePixelRatio = held.devicePixelRatio;
-    dom.window.close();
-  });
-  const plane = document.querySelector("#plane");
-  plane.getBoundingClientRect = () => rect(7, 83, 1186, 670);
+// placement of the page seats a visible surface without a scale. Verification refuses such a record with its own error; the check of the
+// record is seatScale, a function of the seated surface, so this test gives it the record.
+test("V7b refuses a seated surface without the scale that seated it", { timeout: 5000 }, () => {
   const declared = { x: 203, y: 354 + 1 / 3 + 33, w: 760, h: 315 + 2 / 3 - 56 };
-  const placed = { seq: 40, settled: true, surfaces: [{ id: "probe", visible: true, dim: false, declared, applied: declared }] };
-  t.mock.module("../compositor.js", { exports: { ahead: () => null, latest: () => null, placementPending: () => false, seated: () => placed } });
-  t.mock.module("../plane.js", { exports: {
-    currentGrid: () => new Soksak(undefined, { width: 1186, height: 670 }), dropBands: () => ({ headerPx: 32, footerPx: 22 }), plane,
-    presentedCardRect: () => undefined, railOutline: () => ({ shape: { sharp: 0, corners: 0, loops: [] }, rects: [], groups: [] }), tabsOf: () => [],
-  } });
-  const { verify: replaced } = await import("../verify.js?unscaled");
-  assert.throws(() => replaced(), /verify: seated surface probe has no seat scale/);
+  assert.throws(() => seatScale({ id: "probe", visible: true, dim: false, declared, applied: declared }), /verify: seated surface probe has no seat scale/);
+  assert.equal(seatScale({ id: "probe", visible: true, dim: false, declared, applied: declared, scale: 3 }), 3);
 });
 
 test("V7c names a surface drawn one device pixel lower than its prediction", { timeout: 5000 }, async () => {

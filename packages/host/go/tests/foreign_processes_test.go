@@ -1,6 +1,7 @@
 package host_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,9 +33,20 @@ func TestTheStartEndsNoProcessOfAnotherApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	config := t.TempDir()
-	record := fmt.Sprintf(`{"host_pid": %d, "children": [{"pid": %d, "kind": "Networking", "lstart": %q}]}`,
-		ended.Process.Pid, foreign.Process.Pid, strings.TrimSpace(string(lstart)))
-	if err := os.WriteFile(filepath.Join(config, "webkit-children.json"), []byte(record), 0o600); err != nil {
+	type child struct {
+		PID    int    `json:"pid"`
+		Kind   string `json:"kind"`
+		Lstart string `json:"lstart"`
+	}
+	record, err := json.Marshal(struct {
+		HostPID  int     `json:"host_pid"`
+		Children []child `json:"children"`
+	}{ended.Process.Pid, []child{{foreign.Process.Pid, "Networking", strings.TrimSpace(string(lstart))}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordFile := filepath.Join(config, "webkit-children.json")
+	if err := os.WriteFile(recordFile, record, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := host.PrepareConfigDirectory(config); err != nil {

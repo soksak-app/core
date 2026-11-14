@@ -59,13 +59,19 @@ type ClipboardViewPersistRequest struct {
 }
 
 // readViewPNG reads the PNG of the clipboard and puts it into the binary store of the view of surface as image/png, so the reply of
-// the view call carries its id (docs/spec/plugin-processes.md#binary-path). A clipboard without a PNG answers an absent PNG and puts
-// nothing. The caller must run this operation on the main thread.
+// the view call carries its id (docs/spec/plugin-processes.md#binary-path). The caller must run this operation on the main thread.
 func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {
 	value, err := system.ClipboardRead("png")
 	if err != nil {
 		return ClipboardViewReadResponse{}, err
 	}
+	return s.putViewPNG(surface, value)
+}
+
+// putViewPNG answers a PNG read for a view from the value that the clipboard holds: a clipboard without a PNG answers an absent PNG and
+// puts nothing, a PNG over the limit is refused, and a PNG within the limit is put into the binary store of the view of surface as
+// image/png and answered as a present PNG that names the id of the put. The caller must run this operation on the main thread.
+func (s *Surfaces) putViewPNG(surface string, value platform.ClipboardValue) (ClipboardViewReadResponse, error) {
 	if !value.Present {
 		return ClipboardViewReadResponse{Present: false, Type: "png"}, nil
 	}

@@ -4,20 +4,12 @@
 // opens, and a window that AppKit does not show fails with its number, also while the window server still lists it on screen
 // after its close; a child window ordered out is not taken.
 #import "../src/capture.m"
-#include <dlfcn.h>
 #import "support/temporary_folder.h"
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
-}
-
-static NSMutableArray<NSString *> *lookedUp;
-// The lookup of a macOS that lacks the function; every other name resolves as it does.
-static void *lookupWithoutWindowImage(void *handle, const char *name) {
-    [lookedUp addObject:[NSString stringWithUTF8String:name]];
-    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? NULL : dlsym(handle, name);
 }
 
 int main(void) { @autoreleasepool {
@@ -42,8 +34,8 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"the window server lists the ordered fixture window on screen with its bounds (%@)", listed]);
 
     const char *want = "CGWindowListCreateImageFromArray is not available on this macOS";
-    lookedUp = [NSMutableArray array];
-    captureLookup = lookupWithoutWindowImage;
+    // The fault point makes the lookup of the function find nothing, as on a macOS that lacks it.
+    setenv("SOKSAK_FAULT_CAPTURE_IMAGE", "missing", 1);
     char *error = NULL;
     check(!sp_capture_open(window.windowNumber, false, &error) && error != NULL && strcmp(error, want) == 0,
         [NSString stringWithFormat:@"the open of a recording fails without the function (\"%s\")", error ?: ""]);
@@ -53,9 +45,9 @@ int main(void) { @autoreleasepool {
         [NSString stringWithFormat:@"a still fails without the function (\"%s\")", error ?: ""]);
     free(error); error = NULL;
     check(![NSFileManager.defaultManager fileExistsAtPath:still], @"a still without the function writes no file");
-    check([lookedUp containsObject:@"CGWindowListCreateImageFromArray"], @"the capture looks the function up by its name");
 
-    captureLookup = dlsym;
+    unsetenv("SOKSAK_FAULT_CAPTURE_IMAGE");
+    check(windowImageFunction() != NULL, @"the lookup of the function by its name succeeds on this macOS");
     check(sp_capture_open(window.windowNumber, false, &error) && error == NULL,
         [NSString stringWithFormat:@"a window on screen opens for a recording (%s)", error ?: ""]);
     free(error); error = NULL;

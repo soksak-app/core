@@ -13,7 +13,7 @@ import (
 // Retirement/remount must prevent a NEW A session from being enqueued later.
 // contract: sidecars.view-send.generation-retired-during-start-creates-no-session
 func TestMountedSidecarEnqueueCannotCreateSessionAfterItsGenerationRetires(t *testing.T) {
-	s, service, fake := mountedSidecarProject(t)
+	s, service, views := mountedSidecarProject(t)
 	synctest.Test(t, func(t *testing.T) {
 		c := s.sidecars
 		service.outbox = make(chan queuedLine, 4) // channel ownership belongs to this synctest bubble
@@ -34,7 +34,7 @@ func TestMountedSidecarEnqueueCannotCreateSessionAfterItsGenerationRetires(t *te
 		synctest.Wait() // actual send is durably blocked on the existing admission gate
 		old, _ := s.documents.view("probe-surface")
 		s.viewRecords().specs["probe-surface"].start.Project = &SurfaceProject{ID: "project-b", Root: "/fixture/project-b"}
-		endView(t, s, fake, viewTestEpoch)
+		endView(t, s, views, viewTestEpoch)
 		next, ok := s.documents.view("probe-surface")
 		if !ok || next.generation == old.generation {
 			t.Fatal("fixture did not retire A and mount new B")

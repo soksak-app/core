@@ -1,0 +1,33 @@
+{
+  "name": "projects-switch-retained-origin",
+  "description": "Placeholder of retained-origin.",
+  "replay": false,
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"cid-1":{"type":"string","example":"pb4b4c425-76fe-4f9e-a224-0a1a5c1f877e.1","source":"page"},"last-opened-1":{"type":"integer","example":1794625099382,"source":"page"}},
+  "steps": [
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"project-retained-origin","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"space-retained-origin","title":"Hidden","layout":{"state":{"cards":[{"id":"hidden-card","data":{"activeId":"tab-retained-origin","tabs":[{"id":"tab-retained-origin","plugin":"retained-probe","origin":{"directory":"/work/retained-source"}}]}}]}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"setMenuLanguage","payload":"en"}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"project-retained-origin","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"space-retained-origin","title":"Hidden","layout":{"state":{"cards":[{"id":"hidden-card","data":{"activeId":"tab-retained-origin","tabs":[{"id":"tab-retained-origin","plugin":"retained-probe","origin":{"directory":"/work/retained-source"}}]}}]}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"workspace","payload":{"kind":"tabState"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"tabSessions"}}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"projectFolder","payload":"/work/one"}},
+    {"reply":{"result":{"root":"/work/one","identity":"1:1"}}},
+    {"call":{"name":"projectOpen","payload":{"id":"project-retained-origin","root":"/work/one","separate":true,"geometry":null},"cids":["$cid-1"]}},
+    {"reply":{"result":{"local":true,"staged":true}}},
+    {"call":{"name":"workspace","payload":{"kind":"snapshot"}}},
+    {"reply":{"result":{"common":{},"projects":[{"id":"project-retained-origin","root":"/work/one","identity":"1:1","title":"one","color":"#fff","named":1,"activeSpaceId":"spc-one","spaces":[{"id":"spc-one","title":"SPACE1","layout":{"state":{"cards":[],"name":"one"}}},{"id":"space-retained-origin","title":"Hidden","layout":{"state":{"cards":[{"id":"hidden-card","data":{"activeId":"tab-retained-origin","tabs":[{"id":"tab-retained-origin","plugin":"retained-probe","origin":{"directory":"/work/retained-source"}}]}}]}}}],"settings":{}}],"open":[]}}},
+    {"call":{"name":"projectShown","payload":{"project":{"id":"project-retained-origin","root":"/work/one","title":"one"}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"workspace","payload":{"kind":"patch","id":"project-retained-origin","patch":{"lastOpened":"$last-opened-1"}}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"windowReady"}},
+    {"reply":{"result":null}}
+  ]
+}

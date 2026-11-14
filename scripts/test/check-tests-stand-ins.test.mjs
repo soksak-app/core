@@ -44,10 +44,27 @@ test("reports each identifier or word that names a stand-in", () => {
   assert.deepEqual(findings.map(({ kind }) => kind), ["stand-in-name", "stand-in-name", "stand-in-name"]);
 });
 
-test("accepts real inputs: a fixture program, recorded bytes and a system folder on the search path", () => {
-  for (const name of ["clean-program.txt", "clean-data.txt", "clean-path.txt"]) {
+test("accepts the name of a declared dependency in an import specifier and reports the identifiers of the test", () => {
+  const name = "declared-dependency.txt";
+  const findings = findStandIns(`${FIXTURES}${name}`, readFixture(name), new Set(["fake-indexeddb"]));
+  assert.deepEqual(linesOf(findings, "stand-in-name"), [lineOf(name, "new IDBFactory()")]);
+  const undeclared = findStandIns(`${FIXTURES}${name}`, readFixture(name));
+  assert.deepEqual(linesOf(undeclared, "stand-in-name"),
+    [lineOf(name, "import { IDBFactory }"), lineOf(name, "await import("), lineOf(name, "new IDBFactory()")]);
+});
+
+test("accepts real inputs: a fixture program, recorded bytes, a system folder and a link to the installed tool on the search path", () => {
+  for (const name of ["clean-program.txt", "clean-data.txt", "clean-path.txt", "clean-path-link.txt"]) {
     assert.deepEqual(detect(name), [], name);
   }
+});
+
+test("does not judge the output fields of a tool recording and judges its other lines", () => {
+  assert.deepEqual(detect("recorded-output.json"), []);
+  const name = "recorded-text-judged.json";
+  assert.deepEqual(detect(name).map(({ kind, line }) => [kind, line]), [["stand-in-name", lineOf(name, '"recorded"')]]);
+  const unrecorded = "unrecorded-output.json";
+  assert.deepEqual(detect(unrecorded).map(({ kind, line }) => [kind, line]), [["stand-in-name", lineOf(unrecorded, '"stdout"')]]);
 });
 
 test("checks a record for identifiers only", () => {
@@ -59,7 +76,7 @@ test("skips the fixture folder, the rule document and sources outside the test a
   const fixtures = ["module-replacement.txt", "timer-replacement.txt", "global-replacement.txt", "inline-program.txt",
     "path-tool.txt", "stand-in-name.txt"].map((name) => `${FIXTURES}${name}`);
   assert.deepEqual(auditStandIns(fixtures), []);
-  assert.deepEqual(auditStandIns(["docs/operations/examples.md", "scripts/check-tests.mjs"]), []);
+  assert.deepEqual(auditStandIns(["docs/operations/examples.md", "docs/operations/examples.ko.md", "scripts/check-tests.mjs"]), []);
 });
 
 test("reports a test source that cannot be read as an unreadable finding", () => {

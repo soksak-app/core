@@ -10,9 +10,3 @@
 - (void)_setWindowResolution:(CGFloat)resolution;
 - (void)_adjustWindowResolution;
 @end
-
-@interface NSTextInputContext (SPPrivate)
-// Check-only: the call through which WebKit passes a key event of a web view to the input method of its input context; the
-// handler receives whether the input method took the event.
-- (void)handleEventByInputMethod:(NSEvent *)event completionHandler:(void (^)(BOOL handled))completionHandler;
-@end

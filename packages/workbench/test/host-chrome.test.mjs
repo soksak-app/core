@@ -1,11 +1,64 @@
 // A preparation holds the title bar height, and the page reads the window button region of the preparation whose presentation it confirmed as the committed state. No call
 // requests the title bar separately after drawing (docs/spec/native-surfaces.md#title-bar-height).
 import assert from "node:assert/strict";
-import { mock, test } from "node:test";
+import { test } from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
-import { clockAnswer, recordsOf } from "./support/records.mjs";
+import { drained } from "./support/drained.mjs";
+import { recordsOf } from "./support/records.mjs";
+
+// The views of the tests below are real mounts of the surface modules over their page-wire cases: a view that is authorized declares
+// its composition to the host, and the host answers the declaration after the test releases it when the case holds the reply.
 const emptySurfaceDeclarations = { status: [], commands: [], element: [] };
+const descriptor = (id) => ({ surfaceId: id, pluginId: "probe", declarations: emptySurfaceDeclarations, sidecars: [],
+  composition: { kind: "view", page: "ui/page.html" }, params: null, diagnostics: null, unload: false });
+
+let instance = 0;
+let pluginRegistered = false;
+/**
+ * Opens a document, sends the theme of the host and returns a new host module with the surface modules. mount(id) mounts the view id in
+ * its own slot, and the surface becomes declared only after authorize(id) and the host answer of its declaration.
+ */
+async function openViews(t, tokens = {}) {
+  const dom = new JSDOM('<div id="plane"></div>', { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  dom.window.ResizeObserver = class { observe() {} disconnect() {} };
+  dom.window.requestAnimationFrame = () => 1;
+  dom.window.cancelAnimationFrame = () => {};
+  const { registerPlugin } = await import("../registry.js");
+  const { seedSourceOrigins } = await import("../source-origins.js");
+  const { recordOrigin } = await import("../tab-reports.js");
+  const { setSurfaceTextSize } = await import("../text-size.js");
+  const modules = await import("../surface-modules.js");
+  const hostModule = await import(`../host.js?host-chrome-${++instance}`);
+  const { surfaces } = hostModule;
+  setSurfaceTextSize(() => 1);
+  if (!pluginRegistered) {
+    registerPlugin({ id: "probe", surface: () => null });
+    pluginRegistered = true;
+  }
+  await surfaces.theme({ scheme: "dark", tokens });
+  const mounted = [];
+  const mount = (id) => {
+    seedSourceOrigins({ floor: 1, views: { [id]: 1 } });
+    recordOrigin(id, null, "test fixture");
+    const slot = document.createElement("div");
+    document.querySelector("#plane").append(slot);
+    mounted.push(id);
+    return modules.mountSurface(slot, descriptor(id));
+  };
+  t.after(async () => {
+    for (const id of mounted) await modules.disposeSurface(id);
+    dom.window.close();
+  });
+  return { surfaces, modules, mount, onSurfacePrepared: hostModule.onSurfacePrepared };
+}
+
+const names = (wire) => wire.calls.map(({ name }) => name);
+const syncedViews = (wire) => wire.calls.filter(({ name }) => name === "syncSurfaces").map(({ payload }) => payload.surfaces.map(({ id }) => id));
+const view = (id, applied = { x: 0, y: 0, w: 3, h: 4 }, extra = {}) => ({ id, dim: false, visible: true,
+  surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
+  applied, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations }, ...extra });
 
 test("the preparation carries the title bar height and the presented chrome is the committed one", async () => {
   // The host replies of the case give the window button region of each preparation, which the page reads after its presentation.
@@ -165,29 +218,12 @@ test("a handed-over preparation sends no cancel and only a failed or cancelled n
 });
 
 test("a view surface carries its start values in the preparation and a surface without them carries none", async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: () => ({ surfaceId: "view" }),
-    compositionState: () => ({ state: "declared" }),
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      calls.push({ name, request });
-      if (name === "log") return clockAnswer(name, request);
-      if (name === "setTheme") return null;
-      if (name === "syncSurfaces") {
-        return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
-      }
-      if (name === "presentSurfaces") return request.placements;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?start");
-  const start = {
+  const wire = selectPageWire("host-chrome-start-values");
+  const { surfaces, modules, mount } = await openViews(t, { "--bg": "#000" });
+  mount("view");
+  modules.authorizeSurface("view");
+  await modules.waitSurfaceCompositionDeclared("view");
+  const values = {
     params: { path: "a.md" },
     origin: { directory: "/work/one" },
     project: { root: "/work/one" },
@@ -198,225 +234,96 @@ test("a view surface carries its start values in the preparation and a surface w
       { id: "view", dim: false, visible: true,
         surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" },
           params: { path: "a.md" }, declarations: { commands: [] } },
-        applied: { x: 0, y: 0, w: 3, h: 4 }, start },
+        applied: { x: 0, y: 0, w: 3, h: 4 }, start: values },
       { id: "dom", dim: false, visible: true,
         surface: { module: "surface-module", pluginId: "other", composition: { kind: "dom" } },
         applied: { x: 0, y: 4, w: 3, h: 4 } },
     ],
     settled: true, drawn: false, titlebar: 40,
   };
-  try {
-    await surfaces.theme({ scheme: "dark", tokens: { "--bg": "#000" } });
-    calls.length = 0;
-    await surfaces.place(record);
-    assert.equal(calls[0].request.surfaces[0].start.declarations, 0);
-    assert.deepEqual(calls[0].request.declarations, [start.declarations]);
-    assert.deepEqual({ params: calls[0].request.surfaces[0].start.params,
-      origin: calls[0].request.surfaces[0].start.origin, project: calls[0].request.surfaces[0].start.project },
-    { params: start.params, origin: start.origin, project: start.project });
-    assert.equal("start" in calls[0].request.surfaces[1], false);
-  } finally {
-    dom.window.close();
-  }
+  await surfaces.place(record);
+  const request = wire.calls.find(({ name }) => name === "syncSurfaces").payload;
+  assert.equal(request.surfaces[0].start.declarations, 0);
+  assert.deepEqual(request.declarations, [values.declarations]);
+  assert.deepEqual({ params: request.surfaces[0].start.params,
+    origin: request.surfaces[0].start.origin, project: request.surfaces[0].start.project },
+  { params: values.params, origin: values.origin, project: values.project });
+  assert.equal("start" in request.surfaces[1], false);
+  wire.finish();
 });
 
 // A declaration in flight is a host call that the host answers in its own step, so a placement waits for that answer and sends
 // the view (docs/spec/native-surfaces.md#view-surfaces, placement).
 test("native view placement waits for the answer of a composition declaration in flight", async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  let releaseComposition;
-  let declared = false;
-  const answered = new Promise((resolve) => { releaseComposition = () => { declared = true; resolve(); }; });
-  let waitCount = 0;
-  let announceWait;
-  const waitStarted = new Promise((resolve) => { announceWait = resolve; });
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: () => ({ surfaceId: "view-ready-barrier" }),
-    compositionState: (surfaceId) => {
-      assert.equal(surfaceId, "view-ready-barrier");
-      if (declared) return { state: "declared" };
-      waitCount++;
-      announceWait();
-      return { state: "declaring", answered };
-    },
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      calls.push({ name, request });
-      if (name === "log") return clockAnswer(name, request);
-      if (name === "setTheme") return null;
-      if (name === "syncSurfaces") return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
-      if (name === "presentSurfaces") return request.placements;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?composition-barrier");
-  const record = {
-    surfaces: [{ id: "view-ready-barrier", dim: false, visible: true,
-      surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } }],
-    settled: true, drawn: false, titlebar: 40,
-  };
-  try {
-    await surfaces.theme({ scheme: "dark", tokens: {} });
-    const placement = surfaces.place(record);
-    await waitStarted;
-    assert.equal(waitCount, 1, "the declaration in flight was not observed");
-    assert.equal(calls.some(({ name }) => name === "syncSurfaces"), false,
-      "native view placement began before the host answered the declaration in flight");
-    releaseComposition();
-    assert.deepEqual(await placement, { placements: [], deferred: [] });
-    assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").map(({ request }) => request.surfaces.map(({ id }) => id)),
-      [["view-ready-barrier"]], "the placement did not send the view after its declaration answered");
-  } finally {
-    dom.window.close();
-  }
+  const wire = selectPageWire("host-chrome-declaration-in-flight");
+  const { surfaces, modules, mount } = await openViews(t);
+  mount("view-ready-barrier");
+  modules.authorizeSurface("view-ready-barrier");
+  await drained();
+  assert.deepEqual(names(wire), ["setTheme", "compositionDeclare"], "the view did not send its declaration");
+  const placement = surfaces.place({ surfaces: [view("view-ready-barrier")], settled: true, drawn: false, titlebar: 40 });
+  await drained();
+  assert.equal(names(wire).includes("syncSurfaces"), false,
+    "native view placement began before the host answered the declaration in flight");
+  wire.release();
+  assert.deepEqual(await placement, { placements: [{ id: "view-ready-barrier", visible: true, scale: 2, x: 0, y: 0, w: 3, h: 4 }], deferred: [] });
+  assert.deepEqual(syncedViews(wire), [["view-ready-barrier"]], "the placement did not send the view after its declaration answered");
+  wire.finish();
 });
 
-// A declaration that the host refused, or a surface disposed before it declared, leaves no declaration in the host: the placement
-// defers that view and sends the rest of the window (docs/spec/native-surfaces.md#view-surfaces, placement).
-test("native view placement defers a view whose declaration was refused when its surface was disposed", async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  let refused = false;
-  let rejectComposition;
-  const answered = new Promise((resolve) => { rejectComposition = () => { refused = true; resolve(); }; });
-  let announceWait;
-  const waitStarted = new Promise((resolve) => { announceWait = resolve; });
-  const holds = [];
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: () => ({ surfaceId: "view-disposed" }),
-    compositionState: () => {
-      if (refused) return { state: "pending" };
-      announceWait();
-      return { state: "declaring", answered };
-    },
-    holdCompositionDeclarations: (ids) => { holds.push([...ids]); },
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      calls.push({ name, request });
-      if (name === "log") return clockAnswer(name, request);
-      if (name === "setTheme") return null;
-      if (name === "syncSurfaces") return { ticket: 1, placements: [], chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar } };
-      if (name === "presentSurfaces") return request.placements;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?composition-disposed");
-  const record = {
-    surfaces: [{ id: "view-disposed", dim: false, visible: true,
-      surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-      applied: { x: 0, y: 0, w: 3, h: 4 }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } }],
-    settled: true, drawn: true, titlebar: 40,
-  };
-  try {
-    await surfaces.theme({ scheme: "dark", tokens: {} });
-    const placement = surfaces.place(record);
-    await waitStarted;
-    rejectComposition();
-    assert.deepEqual(await placement, { placements: [], deferred: ["view-disposed"] },
-      "the placement did not defer the view whose declaration was refused");
-    assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").map(({ request }) => request.surfaces.map(({ id }) => id)),
-      [[]], "the placement sent a view that has no declaration");
-    assert.deepEqual(holds, [["view-disposed"]]);
-    assert.equal(surfaces.waitsForDeclaration("view-disposed"), true);
-  } finally {
-    dom.window.close();
-  }
+// A surface disposed before its declaration was answered leaves no declaration in the host: the placement defers that view and sends
+// the rest of the window (docs/spec/native-surfaces.md#view-surfaces, placement).
+test("native view placement defers a view whose surface was disposed before its declaration answered", async (t) => {
+  const wire = selectPageWire("host-chrome-declaration-disposed");
+  const { surfaces, modules, mount } = await openViews(t);
+  const mounting = mount("view-disposed");
+  modules.authorizeSurface("view-disposed");
+  await drained();
+  assert.deepEqual(names(wire), ["setTheme", "compositionDeclare"], "the view did not send its declaration");
+  const placement = surfaces.place({ surfaces: [view("view-disposed")], settled: true, drawn: true, titlebar: 40 });
+  await drained();
+  const disposing = modules.disposeSurface("view-disposed");
+  wire.release();
+  await mounting.catch(() => {});
+  await disposing;
+  assert.deepEqual(await placement, { placements: [], deferred: ["view-disposed"] },
+    "the placement did not defer the view whose surface was disposed");
+  assert.deepEqual(syncedViews(wire), [[]], "the placement sent a view that has no declaration");
+  assert.equal(surfaces.waitsForDeclaration("view-disposed"), true);
+  wire.finish();
 });
 
 // A preparation defers a view that has no mount yet; the drawn commit follows the plane draw that mounts it, and a declaration
 // that is in flight then is answered before the commit sends the view (docs/spec/native-surfaces.md#view-surfaces).
 test("an initial placement defers an unmounted view until its drawn commit", async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  const order = [];
-  let mounted = { surfaceId: "view-mount-order", disposed: true };
-  let declared = false;
-  let announceWait;
-  let releaseRegistration;
-  const waitStarted = new Promise((resolve) => { announceWait = resolve; });
-  const registrationReady = new Promise((resolve) => { releaseRegistration = resolve; });
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: (surfaceId) => surfaceId === "view-mount-order" ? mounted : null,
-    compositionState: (surfaceId) => {
-      assert.equal(mounted.disposed, false, `the composition of ${surfaceId} was read before its replacement was mounted`);
-      if (declared) return { state: "declared" };
-      order.push(`composition:${surfaceId}`);
-      announceWait();
-      return { state: "declaring", answered: registrationReady.then(() => { declared = true; }) };
-    },
-    holdCompositionDeclarations: (surfaceIds) => { order.push(`hold:${surfaceIds.join(",")}`); },
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      calls.push({ name, request });
-      if (name === "log") return clockAnswer(name, request);
-      if (name === "setTheme") return null;
-      if (name === "syncSurfaces") {
-        order.push("syncSurfaces");
-        return {
-          ticket: 1,
-          placements: request.surfaces.map((surface) => ({
-            id: surface.id, visible: true, scale: 2, x: surface.x, y: surface.y, w: surface.w, h: surface.h,
-          })),
-          chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar },
-        };
-      }
-      if (name === "presentSurfaces") {
-        order.push("presentSurfaces");
-        return request.placements;
-      }
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { surfaces } = await import("../host.js?initial-view-mount-order");
-  const record = (drawn) => {
-    return {
-      surfaces: [{ id: "view-mount-order", dim: false, visible: true,
-        surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-        applied: { x: 1, y: 2, w: 30, h: 40 }, start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } }],
-      settled: true, drawn, titlebar: 40,
-    };
-  };
-  try {
-    await surfaces.theme({ scheme: "dark", tokens: {} });
-    const first = await surfaces.place(record(false));
-    assert.deepEqual(first, { placements: [], deferred: ["view-mount-order"] },
-      "the unmounted view must be explicitly deferred without a fabricated placement");
-    assert.deepEqual(calls.find(({ name }) => name === "syncSurfaces").request.surfaces, [],
-      "the host declaration fence must not receive an unmounted view");
-    assert.equal(order.includes("composition:view-mount-order"), false,
-      "pre-draw placement waited for a replacement mount that drawing has not started");
+  const wire = selectPageWire("host-chrome-unmounted-view");
+  const { surfaces, modules, mount } = await openViews(t);
+  const record = (drawn) => ({ surfaces: [view("view-mount-order", { x: 1, y: 2, w: 30, h: 40 })], settled: true, drawn, titlebar: 40 });
+  const first = await surfaces.place(record(false));
+  assert.deepEqual(first, { placements: [], deferred: ["view-mount-order"] },
+    "the unmounted view must be explicitly deferred without a fabricated placement");
+  assert.deepEqual(wire.calls.find(({ name }) => name === "syncSurfaces").payload.surfaces, [],
+    "the host declaration fence must not receive an unmounted view");
+  assert.equal(names(wire).includes("compositionDeclare"), false,
+    "pre-draw placement waited for a replacement mount that drawing has not started");
 
-    // The plane draw mounts the view, whose declaration is in flight when the drawn commit starts.
-    mounted = { surfaceId: "view-mount-order", disposed: false };
-    const secondPending = surfaces.place(record(true));
-    await waitStarted;
-    assert.equal(calls.filter(({ name }) => name === "syncSurfaces").length, 1,
-      "the drawn view was sent while its declaration was in flight");
-    releaseRegistration();
-    const second = await secondPending;
-    assert.deepEqual(second, {
-      placements: [{ id: "view-mount-order", visible: true, scale: 2, x: 1, y: 2, w: 30, h: 40 }], deferred: [],
-    });
-    assert.deepEqual(calls.filter(({ name }) => name === "syncSurfaces").at(-1).request.surfaces.map(({ id }) => [id]),
-      [["view-mount-order"]], "the declared view was not sent after mount registration");
-    assert.deepEqual(order, ["hold:view-mount-order", "syncSurfaces", "composition:view-mount-order", "syncSurfaces", "presentSurfaces"]);
-  } finally {
-    dom.window.close();
-  }
+  // The plane draw mounts the view, whose declaration is in flight when the drawn commit starts.
+  mount("view-mount-order");
+  modules.authorizeSurface("view-mount-order");
+  await drained();
+  assert.deepEqual(names(wire), ["setTheme", "syncSurfaces", "compositionDeclare"], "the mounted view did not declare after the first reply");
+  const secondPending = surfaces.place(record(true));
+  await drained();
+  assert.equal(wire.calls.filter(({ name }) => name === "syncSurfaces").length, 1,
+    "the drawn view was sent while its declaration was in flight");
+  wire.release();
+  const second = await secondPending;
+  assert.deepEqual(second, {
+    placements: [{ id: "view-mount-order", visible: true, scale: 2, x: 1, y: 2, w: 30, h: 40 }], deferred: [],
+  });
+  assert.deepEqual(syncedViews(wire).at(-1), ["view-mount-order"], "the declared view was not sent after mount registration");
+  assert.deepEqual(names(wire), ["setTheme", "syncSurfaces", "compositionDeclare", "syncSurfaces", "presentSurfaces"]);
+  wire.finish();
 });
 
 // A preparation authorizes its surfaces through the prepared listeners only after it completes, and a listener added later receives the
@@ -424,48 +331,19 @@ test("an initial placement defers an unmounted view until its drawn commit", asy
 // preparation or presentation is the failure of the placing caller, which reports it, and is not reused for the next request at the
 // same geometry.
 test("a view preparation notifies its prepared listeners, presents each ticket once, and a rejected stage is not reused", async (t) => {
-  const dom = new JSDOM('<div id="plane"></div>');
-  globalThis.document = dom.window.document;
-  const calls = [];
-  const tickets = [];
-  let fail = null;
-  t.mock.module("../surface-modules.js", { namedExports: {
-    mountedSurface: (surfaceId) => ({ surfaceId }),
-    compositionState: () => ({ state: "declared" }),
-  } });
-  t.mock.module("@soksak/runtime", { namedExports: { host: {
-    on: () => {},
-    page: (path) => path,
-    call: async (name, request) => {
-      calls.push({ name, request });
-      if (name === "log") return clockAnswer(name, request);
-      if (name === "setTheme") return null;
-      if (name === fail) { fail = null; throw new Error(`injected ${name} failure`); }
-      if (name === "syncSurfaces") {
-        tickets.push(tickets.length + 1);
-        return {
-          ticket: tickets.at(-1),
-          placements: [
-            { id: "shown", x: 1, y: 2, w: 3, h: 4, visible: true },
-            { id: "hidden", x: 0, y: 0, w: 1, h: 1, visible: false },
-          ],
-          chrome: { controls: { x: 13, y: 13, w: 54, h: 14 }, row: request.titlebar },
-        };
-      }
-      if (name === "presentSurfaces") return request.placements;
-      throw new Error(`unexpected host call ${name}`);
-    },
-  } } });
-  const { onSurfacePrepared, surfaces } = await import("../host.js?presentation");
-  const view = (id, visible) => ({ id, dim: false, visible,
-    surface: { module: null, pluginId: "probe", composition: { kind: "view", page: "ui/page.html" } },
-    applied: { x: 0, y: 0, w: 3, h: 4 } });
-  const record = { surfaces: [view("shown", true), view("hidden", false)], settled: false, drawn: false, titlebar: 40 };
+  const wire = selectPageWire("host-chrome-presentation");
+  const { surfaces, modules, mount, onSurfacePrepared } = await openViews(t);
+  for (const id of ["shown", "hidden"]) {
+    mount(id);
+    modules.authorizeSurface(id);
+    await modules.waitSurfaceCompositionDeclared(id);
+  }
+  const record = { surfaces: [view("shown"), { ...view("hidden"), visible: false }], settled: false, drawn: false, titlebar: 40 };
+  const calls = wire.calls;
   const placing = () => calls.filter(({ name }) => name === "syncSurfaces" || name === "presentSurfaces");
   const prepared = [];
   const removePrepared = onSurfacePrepared((placements) => prepared.push(placements.map(({ id }) => id)));
   try {
-    await surfaces.theme({ scheme: "dark", tokens: {} });
     const preparation = await surfaces.place(record);
     assert.deepEqual(preparation.placements.map(({ id, visible }) => [id, visible]), [["shown", true], ["hidden", false]],
       "the preparation did not keep the visibility that the host placed");
@@ -478,23 +356,22 @@ test("a view preparation notifies its prepared listeners, presents each ticket o
     await surfaces.place({ ...record, drawn: true });
     await surfaces.place({ ...record, drawn: true });
     assert.deepEqual(placing().map(({ name }) => name), ["syncSurfaces", "presentSurfaces"], "a prepared ticket was presented twice");
-    const presented = placing()[1].request;
-    assert.equal(presented.ticket, tickets[0]);
+    const presented = placing()[1].payload;
+    assert.equal(presented.ticket, 1);
     assert.deepEqual(presented.placements.map(({ id, visible }) => [id, visible]), [["shown", true], ["hidden", false]],
       "the presentation did not keep the visibility of its preparation");
     for (const stage of ["syncSurfaces", "presentSurfaces"]) {
       calls.length = 0;
-      fail = stage;
       const changed = { ...record, settled: stage === "syncSurfaces" };
       if (stage === "syncSurfaces") {
-        await assert.rejects(surfaces.place(changed), /injected syncSurfaces failure/);
+        await assert.rejects(surfaces.place(changed), /surface "shown" changed its composition declaration/);
       } else {
         await surfaces.place(changed);
-        await assert.rejects(surfaces.place({ ...changed, drawn: true }), /injected presentSurfaces failure/);
+        await assert.rejects(surfaces.place({ ...changed, drawn: true }), /surface "shown" closed before presentation/);
       }
       // The page log that host.js loaded relays the records of the turn; a record of the rejection would be among them.
       await (await import("../page-log.js")).flushEvents();
-      assert.deepEqual(calls.flatMap((call) => recordsOf(call.name, call.request)), [],
+      assert.deepEqual(calls.flatMap((call) => recordsOf(call.name, call.payload)), [],
         `the ${stage} rejection that the placing caller received was written again`);
       calls.length = 0;
       await surfaces.place(changed);
@@ -504,6 +381,6 @@ test("a view preparation notifies its prepared listeners, presents each ticket o
     }
   } finally {
     removePrepared();
-    dom.window.close();
   }
+  wire.finish();
 });

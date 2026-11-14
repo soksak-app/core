@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
 // contract: view.presentation-wait.ends
@@ -86,55 +87,32 @@ func TestPresentationEndsTheWaitWithoutAnAbandonedEvent(t *testing.T) {
 	}
 }
 
-// deferredUIPlatform queues EnqueueUI work until the test runs the queue, as the UI queue does when the current framework event
-// callback has not ended.
-type deferredUIPlatform struct {
-	*lifecyclePlatform
-	queued []func()
-}
-
-func (p *deferredUIPlatform) EnqueueUI(run func()) error {
-	p.queued = append(p.queued, run)
-	return nil
-}
-
-func (p *deferredUIPlatform) runQueued() {
-	for len(p.queued) > 0 {
-		run := p.queued[0]
-		p.queued = p.queued[1:]
-		run()
-	}
-}
-
 // contract: view.presentation-wait.presented-before-end
 // A presentation that completes on its native callback ends the wait as presented before a later hide: the hide ends no wait, writes
 // no abandoned record and calls no native abandon, and the queued end of the presentation finds no wait.
 func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, native := newLifecycleSurfaces(t)
-	queue := &deferredUIPlatform{lifecyclePlatform: fake}
-	saved := system
-	system = queue
-	t.Cleanup(func() { system = saved })
+	s, views, native := newLifecycleSurfaces(t)
+	joins := &viewJoins{}
 	events := recordWindowEvents(s)
 	window := platform.Window(1)
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
-	if err := s.joinShownViews(window, 7, shown); err != nil {
+	if err := joins.shown(s, window, 7, shown); err != nil {
 		t.Fatalf("join: %v", err)
 	}
-	if len(fake.joins) != 1 {
-		t.Fatalf("the shown view joined %d transactions, want 1", len(fake.joins))
+	if len(joins.requests) != 1 {
+		t.Fatalf("the shown view joined %d transactions, want 1", len(joins.requests))
 	}
-	fake.joins[0].presented()
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", false, nullOriginStart()); err != nil {
-		t.Fatalf("hide the view: %v", err)
-	}
-	queue.runQueued()
+	// The native receiver of the presentation runs first, and the end that it queues for the UI thread runs after the hide.
+	request := joins.requests[0]
+	s.viewJoinPresented(request)
+	views.sync(t, s, native, false, nullOriginStart())
+	s.endPresentationWaitFor(request.surface, request.ticket, request.generation, "presented")
 	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 0 {
 		t.Fatalf("abandoned records after a completed presentation: %v, want none", got)
 	}
-	if fake.joins[0].abandons != 0 {
-		t.Fatalf("the hide abandoned the native join of a completed presentation %d times", fake.joins[0].abandons)
+	if joins.abandons[0] != 0 {
+		t.Fatalf("the hide abandoned the native join of a completed presentation %d times", joins.abandons[0])
 	}
 	if s.presentation.waits("probe-surface") {
 		t.Fatalf("the completed presentation left its wait open")
@@ -151,14 +129,15 @@ func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 // applies its invisibility, with one abandoned record.
 func TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, native := newLifecycleSurfaces(t)
+	s, views, native := newLifecycleSurfaces(t)
+	joins := &viewJoins{}
 	window := platform.Window(1)
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
-	if err := s.joinShownViews(window, 7, shown); err != nil {
+	if err := joins.shown(s, window, 7, shown); err != nil {
 		t.Fatalf("join: %v", err)
 	}
 	hidden := []Placement{{ID: "probe-surface", Visible: false}}
-	if err := s.joinShownViews(window, 8, hidden); err != nil {
+	if err := joins.shown(s, window, 8, hidden); err != nil {
 		t.Fatalf("present an invisible placement: %v", err)
 	}
 	if !s.presentation.waits("probe-surface") {
@@ -167,15 +146,13 @@ func TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync(t *testing.T) {
 	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 0 {
 		t.Fatalf("abandoned records at present: %v, want none", got)
 	}
-	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", false, nullOriginStart()); err != nil {
-		t.Fatalf("sync the hidden view: %v", err)
-	}
+	views.sync(t, s, native, false, nullOriginStart())
 	got := bufferedTraces(t, "host.trace.view.presentation-abandoned")
 	if len(got) != 1 || got[0]["surface"] != "probe-surface" || got[0]["reason"] != "hidden" {
 		t.Fatalf("abandoned records at sync: %v, want one hidden record for probe-surface", got)
 	}
-	if fake.joins[0].abandons != 1 {
-		t.Fatalf("the sync abandoned the native join %d times, want 1", fake.joins[0].abandons)
+	if joins.abandons[0] != 1 {
+		t.Fatalf("the sync abandoned the native join %d times, want 1", joins.abandons[0])
 	}
 }
 
@@ -193,12 +170,14 @@ func (f *runFrontend) Emit(name string, _ ...any) { f.events = append(f.events, 
 func TestTheCancelOfALayoutEndsTheRun(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
-		cancel func(*Surfaces) error
+		cancel func(*Surfaces, platform.Window) error
 	}{
-		{"ticket", func(s *Surfaces) error { return s.cancelLayoutPresentation(platform.Window(1), 41) }},
-		{"window", func(s *Surfaces) error { return s.cancelAllLayoutPresentations(platform.Window(1)) }},
+		{"ticket", func(s *Surfaces, window platform.Window) error { return s.cancelLayoutPresentation(window, 41) }},
+		{"window", func(s *Surfaces, window platform.Window) error { return s.cancelAllLayoutPresentations(window) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			useCurrentPlatformForViews(t)
+			window := support.Window(t, runOnMainThread, 320, 200)
 			s, _, _ := newLifecycleSurfaces(t)
 			frontend := &runFrontend{}
 			s.window = frontend
@@ -210,7 +189,9 @@ func TestTheCancelOfALayoutEndsTheRun(t *testing.T) {
 				t.Fatal("the settled wait ended while the run goes on")
 			default:
 			}
-			if err := tc.cancel(s); err != nil {
+			var cancelled error
+			runOnMainThread(func() { cancelled = tc.cancel(s, window) })
+			if err := cancelled; err != nil {
 				t.Fatalf("cancel the layout: %v", err)
 			}
 			select {

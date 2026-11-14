@@ -1,0 +1,14 @@
+{
+  "name": "plugin-operations-use-registry",
+  "description": "The page reads the plugin state without a registry, sets the registry, and reads the state again.",
+  "replay": false,
+  "reason": "The starter pack is installed from the registry into the configuration directory by the plugin operations of the host, whose state the Go producer does not build (docs/spec/cases/page-wire/README.md#limits).",
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":null,"index":null,"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":false,"starter":null}}},
+    {"call":{"name":"pluginsUseRegistry","payload":{"index":"https://127.0.0.1:8443/index.json"}}},
+    {"reply":{"result":{"index":"https://127.0.0.1:8443/index.json"}}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"https://127.0.0.1:8443/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":false,"starter":null}}}
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "section-view-read-content",
+  "description": "The ready status of a section view holds the content that it shows.",
+  "replay": false,
+  "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"probeplain.section.view.ready","surface":"spc-1/card-4:left/probeplain.section"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"ready":true,"content":"probeplain.section section","language":"plaintext"}}}
+  ]
+}

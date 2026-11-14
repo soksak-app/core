@@ -3,10 +3,12 @@
   "description": "The page opens the menu modal of an element at its rectangle in the page, then lays out the surfaces with no surface, and the sync request carries the rectangle of the open menu as its overlay; the host answers with no placement and the window chrome, and the page closes the modal by its element id, and the host answers the call with null.",
   "replay": false,
   "reason": "overlayShow opens a native modal view and syncSurfaces reserves the native placement of a window, and only the native host with a window produces their answers (the native tier of docs/operations/examples.md#test-kinds).",
-  "variables": {},
+  "variables": {
+    "menu-rect": { "type": "object", "example": { "x": 12.5, "y": 24.5, "w": 160.5, "h": 90.5 } }
+  },
   "steps": [
     { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 12.5, "y": 24.25, "w": 160.5, "h": 90.75 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 160.5, "h": 90.75 }, "className": "", "html": "", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
-    { "reply": { "result": null } },
+    { "reply": { "result": "$menu-rect" } },
     { "call": { "name": "syncSurfaces", "payload": { "settled": true, "overlays": [{ "x": 12.5, "y": 24.25, "w": 160.5, "h": 90.75 }], "surfaces": [], "declarations": [] } } },
     { "reply": { "result": { "placements": [], "chrome": { "controls": { "x": 13, "y": 13, "w": 54, "h": 14 }, "row": 40 } } } },
     { "call": { "name": "overlayHide", "payload": "menu" } },

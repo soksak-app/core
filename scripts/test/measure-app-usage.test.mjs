@@ -5,43 +5,103 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
+import { Session } from "@soksak/window-check/app.mjs";
+
 import { readB3Out, writeB3Out } from "../b3-out.mjs";
+import { launchdServicesOfResult } from "@soksak/window-check/stall-sample.mjs";
+import { footprintOfResult } from "../footprints.mjs";
 
 import {
-  applicationRows,
-  attributeWebKit,
+  applicationHost,
+  applicationRowsOf,
   B3_MEASUREMENTS,
   COUNT_WAIT_MS,
-  logLineCounts,
-  recordsOver,
+  countWaitMs,
+  cpuFigures,
+  cpuSecondsOf,
   cpuPercent,
-  execute,
   faultErrorCount,
+  framesQuietStep,
+  framesQuietWaitMs,
   gestureFigures,
   hostProcess,
-  measureApps,
-  measurePointer,
+  idleOutcome,
+  idleRemainingMs,
+  idleWaitMs,
+  intervalWaitMs,
+  keyReadingWaitMs,
+  logLineCounts,
+  movePointer,
+  notMeasuredLines,
+  outputOf,
   parseCpuSamples,
   parseCpuTime,
   parseOptions,
   parseProcessTable,
+  pointerGesture,
   pointerPath,
   prepareState,
-  readCpuSeconds,
+  QUIET_INTERVALS,
+  QUIET_MS,
+  readIdleTimeouts,
+  readWindowFrames,
+  recordsOver,
   requireOcclusion,
+  serveBlank,
   sidecarProcesses,
   STATES,
   totalsOf,
-  usageOutput,
-  untilFramesQuiet,
+  unattributedRows,
+  unreadOutcome,
   usageMeasurements,
-  waitIdle,
-  notMeasuredLines,
-  windowApplicationRows,
+  usageOutput,
+  webkitPidsOf,
+  webkitRows,
   windowRows,
+  windowRowsOf,
 } from "../measure-app-usage.mjs";
 
 const DIR = "/Users/tester/Library/Application Support/sok-check";
+
+// The recordings of the real tools (ps, launchctl, pgrep, footprint) that the judgements of the measurement read: each file holds the command
+// that produced it and its process result {status, stdout, stderr}, recorded on macOS with the names of the machine replaced
+// by neutral names (scripts/test/fixtures/measure-app-usage).
+const RECORDINGS = fileURLToPath(new URL("./fixtures/measure-app-usage/", import.meta.url));
+const recorded = (name) => JSON.parse(readFileSync(join(RECORDINGS, `${name}.json`), "utf8"));
+const PS = recorded("ps-table");
+const TABLE = parseProcessTable(PS.stdout);
+const PIDS = PS.pids;
+
+/**
+ * The session of the window w1 on a client that is connected to the player of the endpoint case `name`, with the disposable
+ * configuration folder of the application of the session. Closing the player fails when the case was not played.
+ */
+async function play(t, name, options) {
+  const server = await startCasePlayer(name, options);
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-measure-usage-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  const s = new Session({ name: "fixture", configDir }, client);
+  s.window = "w1";
+  return { s, server, configDir };
+}
+
+/** The policy file that the host writes for a value of the setting diagnostics.log (docs/spec/logging.md#policy-file). */
+function writePolicy(configDir, classes) {
+  const every = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error", ...classes };
+  writeFileSync(join(configDir, "log-policy.json"), JSON.stringify({ schema: 1, classes: every }));
+}
+
+/** Writes the policy file after the request that sets the value of diagnostics.log, as the host does when the page sends it. */
+function writePolicyOnSetting(server, configDir) {
+  server.events.on("request", ({ method, params }) => {
+    if (method === "command.run" && params.name === "core.settings.change" && params.params.key === "diagnostics.log") writePolicy(configDir, params.params.value);
+  });
+}
 
 test("parses the cpu time formats of ps", () => {
   assert.equal(parseCpuTime("0:01.23"), 1.23);
@@ -129,60 +189,31 @@ test("lists the sidecars whose executable is under the config dir", () => {
   ]);
 });
 
-/** The `launchctl print pid/<host>` output of a host whose WebKit services run as gpu, networking and webContent. */
-function launchdDomain({ gpu, networking, webContent }) {
-  return [
-    "pid/0 = {",
-    "\tservices = {",
-    "\t\t       0      - \tcom.apple.WebKit.GPU",
-    `\t\t   ${gpu}      - \tcom.apple.WebKit.GPU.79E5AEE6-A76D-4B8E-9BE4-197F4E2ACD4D`,
-    `\t\t   ${networking}      - \tcom.apple.WebKit.Networking.D60DD8E6-6C1D-45D1-AAA5-B4D63E6E2417`,
-    "\t\t       0      - \tcom.apple.WebKit.Networking",
-    `\t\t   ${webContent}      - \tcom.apple.WebKit.WebContent.042944D2-1A7A-492A-819D-BBAEEE5A28D3`,
-    "\t}",
-    "}",
-  ].join("\n");
-}
+/** The rows of the WebKit services of the recorded launchd domain `name` for the host of the data folder `configDir`. */
+const domainRows = (name, configDir) => {
+  const result = recorded(name);
+  return webkitRows(configDir, launchdServicesOfResult(result.pid, result));
+};
 
-test("attributes the WebKit services of two hosts that started in the same second by the launchd domain of each host", async () => {
-  const second = new Date(2026, 9, 18, 6, 52, 13).getTime();
-  const domains = new Map([
-    [100, launchdDomain({ gpu: 301, networking: 300, webContent: 302 })],
-    [200, launchdDomain({ gpu: 401, networking: 400, webContent: 402 })],
+test("attributes the WebKit services to the application whose launchd domain lists them, for the recorded domains of three applications", () => {
+  assert.deepEqual(domainRows("launchctl-print-all-services", DIR), [
+    { configDir: DIR, role: "webkit webcontent", pid: 1648, attribution: "launchd domain" },
+    { configDir: DIR, role: "webkit gpu", pid: 1413, attribution: "launchd domain" },
+    { configDir: DIR, role: "webkit networking", pid: 1635, attribution: "launchd domain" },
   ]);
-  const calls = [];
-  const run = (command, args) => {
-    calls.push([command, ...args]);
-    const host = Number(args[1].slice("pid/".length));
-    return { status: 0, stdout: domains.get(host), stderr: "" };
-  };
-  const result = await attributeWebKit(
-    [
-      { configDir: DIR, pid: 100, startedAt: second + 100 },
-      { configDir: "/Users/tester/other", pid: 200, startedAt: second + 400 },
-    ],
-    run,
-  );
-  assert.deepEqual(result.attributed, [
-    { configDir: DIR, role: "webkit gpu", pid: 301, attribution: "launchd domain" },
-    { configDir: DIR, role: "webkit networking", pid: 300, attribution: "launchd domain" },
-    { configDir: DIR, role: "webkit webcontent", pid: 302, attribution: "launchd domain" },
-    { configDir: "/Users/tester/other", role: "webkit gpu", pid: 401, attribution: "launchd domain" },
-    { configDir: "/Users/tester/other", role: "webkit networking", pid: 400, attribution: "launchd domain" },
-    { configDir: "/Users/tester/other", role: "webkit webcontent", pid: 402, attribution: "launchd domain" },
+  assert.deepEqual(domainRows("launchctl-print-gpu-only", "/Users/tester/other"), [
+    { configDir: "/Users/tester/other", role: "webkit gpu", pid: 1638, attribution: "launchd domain" },
   ]);
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(calls, [
-    ["/bin/launchctl", "print", "pid/100"],
-    ["/bin/launchctl", "print", "pid/200"],
+  assert.deepEqual(domainRows("launchctl-print-networking-only", "/Users/tester/another"), [
+    { configDir: "/Users/tester/another", role: "webkit networking", pid: 76149, attribution: "launchd domain" },
   ]);
+  assert.deepEqual(domainRows("launchctl-print-host", DIR), [], "a domain without a WebKit service has no row");
 });
 
-test("a host whose launchd domain cannot be read is an error that names the data folder", async () => {
-  const run = () => ({ status: 113, stdout: "", stderr: "Could not find domain for pid: 100" });
-  const result = await attributeWebKit([{ configDir: DIR, pid: 100 }], run);
-  assert.deepEqual(result.attributed, []);
-  assert.deepEqual(result.errors, [`webkit services of ${DIR}: launchctl print pid/100 exited with 113: Could not find domain for pid: 100`]);
+test("a host whose launchd domain cannot be read is an error that names the process", () => {
+  const refused = recorded("launchctl-print-refused");
+  assert.throws(() => launchdServicesOfResult(refused.pid, refused),
+    /^Error: launchctl print pid\/0 exited with 112: Bad request\.\nCould not find domain for pid: 0$/);
 });
 
 test("totals count the attributed rows only and sum the sidecars apart from the application", () => {
@@ -284,12 +315,36 @@ test("every window must be visible except the covered first window of S9", () =>
   assert.throws(() => requireOcclusion("S0", [{ window: "w1", occluded: "no" }]), /window w1 reports occluded "no", not a boolean/);
 });
 
-test("an idle wait over a window whose frames is null reports that no frame was read, and frames that hold still report quiet", async () => {
-  const s = fakeSession((kind, window, name) => (name === "core.surfaces" ? [] : {}));
-  const sleep = async () => {};
-  assert.equal(await waitIdle({ sessions: [s], frames: async () => [null], sleep }), "not measured");
-  assert.equal(await waitIdle({ sessions: [s], frames: async () => [12, null], sleep }), "not measured");
-  assert.equal(await waitIdle({ sessions: [s], frames: async () => [12, 40], sleep }), "quiet");
+test("an idle wait over a window whose frames is null reports that no frame was read, and the two readings 3 seconds apart are quiet", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-idle-null-frames");
+  assert.deepEqual(await readIdleTimeouts({ sessions: [s] }), []);
+  const previous = await readWindowFrames({ sessions: [s] });
+  const current = await readWindowFrames({ sessions: [s] });
+  assert.equal(framesQuietStep({ previous, current, interval: 1 }), "quiet");
+  assert.equal(idleOutcome(current), "not measured");
+  await server.played;
+});
+
+test("an idle wait over two windows reports that no frame was read when one of them reports frames null", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-idle-mixed-frames");
+  const sessions = [s, s.on("w2")];
+  assert.deepEqual(await readIdleTimeouts({ sessions }), []);
+  const previous = await readWindowFrames({ sessions });
+  const current = await readWindowFrames({ sessions });
+  assert.equal(framesQuietStep({ previous, current, interval: 1 }), "quiet");
+  assert.equal(idleOutcome(current), "not measured");
+  await server.played;
+});
+
+test("an idle wait over windows whose frames hold still reports quiet", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-idle-quiet-frames");
+  const sessions = [s, s.on("w2")];
+  assert.deepEqual(await readIdleTimeouts({ sessions }), []);
+  const previous = await readWindowFrames({ sessions });
+  const current = await readWindowFrames({ sessions });
+  assert.equal(framesQuietStep({ previous, current, interval: 1 }), "quiet");
+  assert.equal(idleOutcome(current), "quiet");
+  await server.played;
 });
 
 test("the report names the counters that no window reports and an idle wait that read no frame", () => {
@@ -304,66 +359,63 @@ test("the report names the counters that no window reports and an idle wait that
   assert.deepEqual(notMeasuredLines({ idle: null, marks: { before: [counted], after: [counted] } }), []);
 });
 
-test("a window whose frames is null waits 3 seconds once", async () => {
-  const waits = [];
-  await untilFramesQuiet({ frames: async () => [null], sleep: async (ms) => { waits.push(ms); } });
-  assert.deepEqual(waits, [3000]);
+test("the frames of every window must not change for 3 seconds, and the readings are 3 seconds apart", { timeout: 30000 }, async (t) => {
+  assert.equal(QUIET_MS, 3000);
+  const { s, server } = await play(t, "measure-idle-frames-change");
+  assert.deepEqual(await readIdleTimeouts({ sessions: [s] }), []);
+  const readings = [];
+  for (let reading = 0; reading < 3; reading++) readings.push(await readWindowFrames({ sessions: [s] }));
+  await server.played;
+  assert.deepEqual(readings.map(([frames]) => frames), [10, 12, 12]);
+  assert.deepEqual([1, 2].map((interval) => framesQuietStep({ previous: readings[interval - 1], current: readings[interval], interval })), ["again", "quiet"]);
+  assert.deepEqual(server.requests.map(({ params }) => params.name), ["core.surfaces", "host.window", "host.window", "host.window"], "the readings at the start, after 3 s and after 6 s");
 });
 
-// The default sleep is the real 3 s timer of the module; the test judges the returned frames, not the elapsed time.
-test("without sleep the quiet wait waits the 3 seconds of G2 on the timer of the module", { timeout: 10000 }, async () => {
-  assert.deepEqual(await untilFramesQuiet({ frames: async () => [340] }), [340]);
+test("the waits of the idle wait are functions of the instants of the readings: 3 seconds after the frames reading, the longest cursor idle timeout, 62 seconds after the marks, 10 seconds after the key and the interval after the first CPU reading", () => {
+  assert.deepEqual([100, 1100, 3100, 9000].map((now) => framesQuietWaitMs({ readAt: 100, now })), [3000, 2000, 0, 0]);
+  assert.deepEqual([0, 200, 700, 900].map((now) => idleRemainingMs({ readAt: 0, now, idleTimeouts: [500, 700] })), [700, 500, 0, 0]);
+  assert.equal(idleRemainingMs({ readAt: 0, now: 0, idleTimeouts: [] }), 0, "a window without a cursor tab waits no idle timeout");
+  assert.deepEqual([5, 40005, 62005, 70000].map((now) => countWaitMs({ markedAt: 5, now })), [62000, 22000, 0, 0]);
+  assert.deepEqual([7, 4007, 10007].map((now) => keyReadingWaitMs({ keyAt: 7, now })), [10000, 6000, 0]);
+  assert.deepEqual([0, 239000, 240000, 241000].map((now) => intervalWaitMs({ startedAt: 0, now, interval: 240 })), [240000, 1000, 0, 0]);
+  assert.throws(() => framesQuietWaitMs({ readAt: 100, now: 99 }), /the instant 99 ms is before the instant 100 ms/);
 });
 
-test("the frames of every window must not change for 3 seconds", async () => {
-  const values = [[10, null], [12, null], [12, null]];
-  const waits = [];
-  await untilFramesQuiet({ frames: async () => values.shift(), sleep: async (ms) => { waits.push(ms); } });
-  assert.deepEqual(waits, [3000, 3000]);
-  let frame = 0;
-  await assert.rejects(untilFramesQuiet({ frames: async () => [frame++], sleep: async () => {}, intervals: 2 }),
-    /the frames of the windows changed in each of 2 intervals of 3 s; frames 1 then 2/);
+test("the readings of the frames judge quiet at the first equal pair, again at a change, and fail when each of the 40 intervals changed", () => {
+  assert.equal(QUIET_INTERVALS, 40);
+  const judge = (previous, current, interval = 1) => framesQuietStep({ previous, current, interval });
+  assert.equal(judge([12, 40], [12, 40]), "quiet");
+  assert.equal(judge([null], [null]), "quiet", "a window whose frames is null counts no frame");
+  assert.equal(judge([10, null], [12, null]), "again");
+  assert.equal(judge([10], [12], QUIET_INTERVALS - 1), "again");
+  assert.equal(judge([3], [3], QUIET_INTERVALS), "quiet");
+  assert.throws(() => judge([1], [2], QUIET_INTERVALS), /the frames of the windows changed in each of 40 intervals of 3 s; frames 1 then 2/);
 });
 
-/** A session of a window check (get, run, request, until, on) whose answers come from answer(kind, window, name, params, surface). */
-function fakeSession(answer, window = "w1", calls = []) {
-  const entry = async (kind, name, params, surface) => {
-    calls.push(surface === undefined ? [kind, window, name, params] : [kind, window, name, params, surface]);
-    return answer(kind, window, name, params, surface);
-  };
-  return {
-    window,
-    calls,
-    on: (other) => fakeSession(answer, other, calls),
-    get: (name, surface) => entry("get", name, undefined, surface),
-    run: (name, params = {}, surface) => entry("run", name, params, surface),
-    request: (method, params = {}) => entry("request", method, params),
-    until: async (name, predicate, message, { surface } = {}) => {
-      const value = await entry("until", name, undefined, surface);
-      if (!predicate(value)) throw new Error(`until ${name} of ${window}: ${message}; value ${JSON.stringify(value)}`);
-      return value;
-    },
-  };
-}
+test("the idle wait before the frames is the longest cursor idle timeout, or none without a cursor tab", () => {
+  assert.equal(idleWaitMs([5000, 7000]), 7000);
+  assert.equal(idleWaitMs([7000, 5000]), 7000);
+  assert.equal(idleWaitMs([]), 0);
+});
 
-test("the idle wait waits for the cursor idle timeout of every tab whose plugin exposes its cursor status and then for 3 seconds without a frame", async () => {
-  const surfaces = [
-    { kind: "tab", surface: "tab-1", plugin: "probeinput", exposes: ["status probeinput.screen", "status probeinput.cursor"] },
-    { kind: "tab", surface: "tab-3", plugin: "rasterprobe", exposes: ["status rasterprobe.cursor"] },
-    { kind: "tab", surface: "tab-2", plugin: "probeplain", exposes: ["status probeplain.location"] },
-    { kind: "tab", surface: "tab-4", plugin: "probeunload", exposes: ["status probeinput.cursor"] },
-    { kind: "section", surface: "sec-1", plugin: "probecontributor", exposes: ["status probecontributor.cursor"] },
-  ];
-  const idle = { "tab-1": 5000, "tab-3": 7000 };
-  const s = fakeSession((kind, window, name, params, surface) => (name === "core.surfaces" ? surfaces : { idleTimeout: idle[surface] }));
-  const waits = [];
-  await waitIdle({ sessions: [s], frames: async () => [null], sleep: async (ms) => { waits.push(ms); } });
-  assert.deepEqual(waits, [7000, 3000]);
-  assert.deepEqual(s.calls.filter(([kind]) => kind === "get").map((call) => call.slice(2)),
-    [["core.surfaces", undefined], ["probeinput.cursor", undefined, "tab-1"], ["rasterprobe.cursor", undefined, "tab-3"]]);
-  const broken = fakeSession((kind, window, name) => (name === "core.surfaces" ? surfaces.slice(0, 1) : { idleTimeout: "5s" }));
-  await assert.rejects(waitIdle({ sessions: [broken], frames: async () => [null], sleep: async () => {} }),
-    /surface tab-1 of window w1 reports probeinput.cursor idleTimeout "5s", not a number of milliseconds/);
+test("the idle wait reads the cursor idle timeout of every tab whose plugin exposes its cursor status and then the frames", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-idle-cursor-tabs");
+  const idleTimeouts = await readIdleTimeouts({ sessions: [s] });
+  assert.deepEqual(idleTimeouts, [500, 700]);
+  assert.equal(idleWaitMs(idleTimeouts), 700);
+  const previous = await readWindowFrames({ sessions: [s] });
+  const current = await readWindowFrames({ sessions: [s] });
+  assert.equal(idleOutcome(current), "not measured");
+  assert.equal(framesQuietStep({ previous, current, interval: 1 }), "quiet");
+  await server.played;
+  assert.deepEqual(server.requests.filter(({ method }) => method === "status.get").map(({ params }) => [params.name, params.surface]).slice(0, 3),
+    [["core.surfaces", undefined], ["probeinput.cursor", "tab-1"], ["rasterprobe.cursor", "tab-3"]]);
+});
+
+test("a cursor status whose idle timeout is not a number of milliseconds fails the idle wait", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-idle-cursor-timeout-text");
+  await assert.rejects(readIdleTimeouts({ sessions: [s] }), /surface tab-1 of window w1 reports probeinput.cursor idleTimeout "5s", not a number of milliseconds/);
+  await server.played;
 });
 
 test("counts the error lines of the layout fault in the application log", () => {
@@ -458,372 +510,256 @@ test("the measurement does not import the real-input tool", () => {
   assert.doesNotMatch(readFileSync(fileURLToPath(new URL("../measure-app-usage.mjs", import.meta.url)), "utf8"), /e2e\/real|hid\.|bringFront|requireTrusted/);
 });
 
-test("the pointer step sends input.pointer moves without activating the window, and repeats them in the trace state of the frame records to read the U7 records", async () => {
-  const calls = [];
-  let frames = 340;
-  const moves = [];
-  const s = fakeSession((kind, window, name, params) => {
-    if (name === "input.pointer") {
-      moves.push(params);
-      if (moves.length % 61 === 0) frames += 4;
-      if (moves.length % 61 === 1) calls.push("moving");
-      return null;
-    }
-    calls.push(`${kind} ${name}`);
-    return name === "host.window" ? mygoWindow({ frames }) : null;
-  });
-  const result = await measurePointer({
-    s,
-    measure: async ({ span }) => { calls.push("measure"); await span(); calls.push("measured"); return { apps: [] }; },
-    frameRecords: async () => { calls.push("frameRecords"); },
-    restore: async () => { calls.push("restore"); },
-    tail: async () => { calls.push("tail"); return { "host-1-10": 100 }; },
-    records: async (since) => { calls.push(`records ${JSON.stringify(since)}`); return { records: u7Move(MOVES), dropped: [], fromSeq: 100, toSeq: 112 }; },
-  });
-  assert.deepEqual(calls, [
-    "get host.window",
-    "measure", "moving", "measured",
-    "frameRecords",
-    "get host.window", "tail", "moving", "get host.window", "request diagnostics.log.flush",
-    'records {"host-1-10":100}',
-    "restore",
-  ]);
-  assert.equal(moves.length, 122);
-  assert.deepEqual(moves[0], { x: 1, y: 380, phase: "move" });
-  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 });
+test("the pointer move sends input.pointer moves without activating the window, each after the answer of the one before it", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-pointer-move");
+  await movePointer(s, pointerPath(await s.get("host.window")));
+  await server.played;
+  const moves = server.requests.filter(({ method }) => method === "input.pointer");
+  assert.equal(moves.length, 61);
+  assert.deepEqual(moves[0].params, { window: "w1", x: 1, y: 380, phase: "move" });
 });
 
-test("the pointer step reads the frames of the gesture before the flush, so a frame presented after the flush is in neither", async () => {
-  // The host writes the U7 record of a presented frame to the files at the flush; a frame presents right after the flush.
-  let frames = 340;
-  let flushedFrames = 340;
-  let moved = 0;
-  const s = fakeSession((kind, window, name) => {
-    if (name === "input.pointer" && ++moved % 61 === 0) frames += 4;
-    if (name === "host.window") return mygoWindow({ frames });
-    if (name === "diagnostics.log.flush") {
-      flushedFrames = frames;
-      frames += 1;
-    }
-    return null;
-  });
-  const result = await measurePointer({
-    s,
-    measure: async ({ span }) => { await span(); return { apps: [] }; },
-    frameRecords: async () => {},
-    restore: async () => {},
-    tail: async () => ({ "host-1-10": 100 }),
-    records: async () => {
-      const moves = MOVES.slice(0, flushedFrames - 344);
-      return { records: u7Move(moves), dropped: [], fromSeq: 100, toSeq: 100 + moves.length * 3 };
-    },
-  });
-  assert.deepEqual(result.gesture, { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 });
+/** The values of the host in the cases of the repeated move: the log positions and the rows of the U7 records of the host process of the test. */
+function gestureValues() {
+  const host = `host-1-${process.pid}`;
+  const rows = (records) => records.map((event) => ({ role: "host", boot: `1-${process.pid}`, event }));
+  const moves = u7Move(MOVES);
+  return {
+    "tail-before": { [host]: 100 },
+    "tail-after": { [host]: 100 + moves.length },
+    "frame-rows": rows(moves.filter((record) => record.event === "host.frame.record")),
+    "step-rows": rows(moves.filter((record) => record.event === "host.frame.step")),
+  };
+}
+
+test("the repeated move sets the trace state of the frame records, reads the frames of the move before the flush, reads the U7 records and sets the trace state again", { timeout: 30000 }, async (t) => {
+  const { s, server, configDir } = await play(t, "measure-pointer-gesture", { values: gestureValues() });
+  writePolicyOnSetting(server, configDir);
+  const gesture = await pointerGesture({ s, status: await s.get("host.window"), trace: 0 });
+  await server.played;
+  assert.equal(server.requests.filter(({ method }) => method === "input.pointer").length, 61);
+  assert.deepEqual(gesture, { window: "w1", frameRecords: 4, moves: 4, p90Ms: 6, framesChange: 4 });
 });
 
-test("the pointer step of a window with a main page repeats the move and reads no U7 records", async () => {
-  const calls = [];
-  let moved = 0;
-  const s = fakeSession((kind, window, name) => {
-    if (name === "input.pointer" && ++moved % 61 === 1) calls.push("moving");
-    return name === "host.window" ? mygoWindow({ pageProcess: 501, frames: null }) : null;
-  });
-  const result = await measurePointer({
-    s,
-    measure: async ({ span }) => { await span(); return { apps: [] }; },
-    frameRecords: async () => { calls.push("frameRecords"); },
-    restore: async () => { calls.push("restore"); },
-    tail: async () => { throw new Error("tail read"); },
-    records: async () => { throw new Error("records read"); },
-  });
-  assert.deepEqual(calls, ["moving", "frameRecords", "moving", "restore"]);
-  assert.equal(result.gesture, null);
+test("the repeated move of a window with a main page repeats the move and reads no U7 records", { timeout: 30000 }, async (t) => {
+  const { s, server, configDir } = await play(t, "measure-pointer-gesture-main-page");
+  writePolicyOnSetting(server, configDir);
+  assert.equal(await pointerGesture({ s, status: await s.get("host.window"), trace: 0 }), null);
+  await server.played;
+  assert.equal(server.requests.some(({ method }) => method === "log.query"), false);
 });
 
-test("a move that input.pointer refuses fails the pointer step and sets the trace state again", async () => {
-  const calls = [];
-  let moved = 0;
-  const s = fakeSession((kind, window, name) => {
-    if (name === "input.pointer" && ++moved > 61) throw new Error("the window is not active (1006)");
-    return name === "host.window" ? mygoWindow({ frames: 10 }) : null;
-  });
-  await assert.rejects(measurePointer({
-    s,
-    measure: async ({ span }) => { await span(); return { apps: [] }; },
-    frameRecords: async () => { calls.push("frameRecords"); },
-    restore: async () => { calls.push("restore"); },
-    tail: async () => ({}),
-    records: async () => { throw new Error("records read"); },
-  }), /the window is not active \(1006\)/);
-  assert.deepEqual(calls, ["frameRecords", "restore"]);
+test("a move that input.pointer refuses fails the repeated move and sets the trace state again", { timeout: 30000 }, async (t) => {
+  const { s, server, configDir } = await play(t, "measure-pointer-gesture-refused", { values: { "tail-before": gestureValues()["tail-before"] } });
+  writePolicyOnSetting(server, configDir);
+  await assert.rejects(pointerGesture({ s, status: await s.get("host.window"), trace: 0 }), (error) => error.code === 1006 && /the window is not active/.test(error.message));
+  await server.played;
+  assert.deepEqual(server.requests.filter(({ method }) => method === "command.run").map(({ params }) => [params.params.key, params.params.value]).slice(-2),
+    [["diagnostics.log", {}], ["diagnostics.performance", false]]);
 });
 
 const URL_BLANK = "http://127.0.0.1:4100/blank";
 
-/**
- * The answers of a mygo application whose window w1 opens the fixture project with one tab t-old in card c1; the
- * entries of `answers` replace an answer by `<kind> <window> <name>`.
- */
-function appAnswers(answers = {}) {
-  const windows = [{ window: "w1", ready: true }];
-  return (kind, window, name, params, surface) => {
-    const key = `${kind} ${window} ${name}`;
-    if (key in answers) return typeof answers[key] === "function" ? answers[key](params, surface) : answers[key];
-    if (name === "core.window.new") {
-      windows.push({ window: "w2", ready: true });
-      return null;
-    }
-    if (name === "host.windows") return windows.map((entry) => ({ ...entry }));
-    if (name === "host.window") return mygoWindow(window === "w2" ? { frame: { x: 0, y: 0, width: 1320, height: 908 }, content: { x: 0, y: 28, width: params?.width ?? 1320, height: 880 } } : {});
-    if (name === "core.grid") return { cards: [{ id: "left", fixed: true, tabs: [] }, { id: "c1", fixed: false, tabs: [{ id: "t-old", plugin: "probeunload" }] }] };
-    if (name === "core.card.add-tab") return { tab: "t-term" };
-    if (name === "core.tab.close") return { closed: true };
-    if (name === "core.card.split") return { card: "c2", tab: "t-web" };
-    if (name === "core.surfaces") {
-      return [
-        { kind: "tab", surface: "t-term", plugin: "probeinput", exposes: ["status probeinput.cursor"], status: { phase: "ready", error: null } },
-        { kind: "tab", surface: "t-web", plugin: "probeplain", exposes: ["command probeplain.navigate", "status probeplain.location"], status: { phase: "ready", error: null } },
-      ];
-    }
-    if (name === "probeplain.location") return { url: URL_BLANK, loading: false, error: null, title: "blank" };
-    if (name === "core.settings-modal") return { open: true };
-    if (name === "core.screen") return { screen: "library", modal: null };
-    return null;
-  };
-}
-
-/** The dependencies of prepareState that record their calls into calls. */
-function prepareDeps(calls, overrides = {}) {
-  return {
-    applyTrace: async () => { calls.push("applyTrace"); },
-    serve: async () => { calls.push("serve"); return URL_BLANK; },
-    projectRoot: (name) => { calls.push(`projectRoot ${name}`); return `/var/tester/projects/${name}`; },
-    logPosition: () => { calls.push("logPosition"); return { "host-1-10.jsonl": { offset: 400, inode: "7" } }; },
-    untilFaultLine: async (position) => { calls.push(`untilFaultLine ${position["host-1-10.jsonl"].offset}`); },
-    remainingWebKit: async () => { calls.push("remainingWebKit"); return [{ role: "webkit gpu", pid: 300, bytes: 30 * MB }]; },
-    sleep: async (ms) => { calls.push(`sleep ${ms}`); },
-    ...overrides,
-  };
-}
-
-/** The calls of a prepared state without the reads of a status, which name what the preparation waits for. */
-const actions = (calls) => calls.filter((call) => typeof call === "string" || call[0] === "run" || call[0] === "request" || call[0] === "until");
-
-const S1_STEPS = [
-  ["run", "w1", "host.window.resize", { width: 1200, height: 760 }],
-  ["until", "w1", "host.window", undefined],
-  ["request", "w1", "diagnostics.fixture", {}],
-  "applyTrace",
-  ["run", "w1", "core.card.add-tab", { card: "c1", plugin: "probeinput" }],
-  ["run", "w1", "core.tab.close", { tab: "t-old" }],
-  ["until", "w1", "core.surfaces", undefined],
-  "serve",
-  ["run", "w1", "core.card.split", { card: "c1", side: "right", plugin: "probeplain" }],
-  ["until", "w1", "core.surfaces", undefined],
-  ["run", "w1", "probeplain.navigate", { url: URL_BLANK }, "t-web"],
-  ["until", "w1", "probeplain.location", undefined, "t-web"],
-];
+/** The data that prepareState takes: the trace state, the address of the blank page, and the folder of the second project of S11. */
+const prepareDeps = (extra = {}) => ({ trace: 0, url: URL_BLANK, ...extra });
 
 /** The plugins of the two tabs of S1: fixture plugins of e2e/fixtures. */
 const S1_PLUGINS = { tab: "probeinput", page: "probeplain" };
 
-test("S1 opens one tab of the tab plugin and one tab of the page plugin on the blank loopback page in a window of 1200 by 760 points", async () => {
-  const calls = [];
-  const s = fakeSession(appAnswers(), "w1", calls);
-  const context = await prepareState(s, "S1", prepareDeps(calls), S1_PLUGINS);
-  assert.deepEqual(actions(calls), S1_STEPS);
+/** The commands and requests of a prepared state in the order that the host received them, without the reads and the waits of a status. */
+const received = (server) => server.requests.filter(({ method }) => method !== "status.get" && !method.startsWith("status."))
+  .map(({ method, params }) => (method === "command.run" ? ["run", params.window, params.name, params.params, params.surface] : [method, params.window]));
+
+/** The commands that S1 and every state after it run before the part of the state itself. */
+const S1_STEPS = [
+  ["run", "w1", "host.window.resize", { width: 1200, height: 760 }, undefined],
+  ["diagnostics.fixture", "w1"],
+  ["run", "w1", "core.settings.change", { key: "diagnostics.log", value: {}, scope: "common" }, undefined],
+  ["run", "w1", "core.settings.change", { key: "diagnostics.performance", value: false, scope: "common" }, undefined],
+  ["run", "w1", "core.card.add-tab", { card: "c1", plugin: "probeinput" }, undefined],
+  ["run", "w1", "core.tab.close", { tab: "t-old" }, undefined],
+  ["run", "w1", "core.card.split", { card: "c1", side: "right", plugin: "probeplain" }, undefined],
+  ["run", "w1", "probeplain.navigate", { url: URL_BLANK }, "t-web"],
+];
+
+test("S1 opens one tab of the tab plugin and one tab of the page plugin on the blank loopback page in a window of 1200 by 760 points", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s1");
+  const context = await prepareState(s, "S1", prepareDeps(), S1_PLUGINS);
+  await server.played;
+  assert.deepEqual(received(server), S1_STEPS);
   assert.deepEqual(context, { state: "S1", windows: ["w1"], url: URL_BLANK, footprints: "settled" });
 });
 
-test("a state that starts from S1 requires the plugins of its tab and its page, and the page plugin must expose its navigate command and its location status", async () => {
+test("a state that starts from S1 requires the plugins of its tab and its page and the address of the blank page", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-no-request");
   for (const state of ["S1", "S9", "S11", "S12", "S15"]) {
-    await assert.rejects(prepareState(fakeSession(appAnswers(), "w1", []), state, prepareDeps([])), new RegExp(`^Error: ${state} prepares S1, which requires the plugins of its tab and its page$`));
-    await assert.rejects(prepareState(fakeSession(appAnswers(), "w1", []), state, prepareDeps([]), { tab: "probeinput" }), /which requires the plugins of its tab and its page/);
+    await assert.rejects(prepareState(s, state, prepareDeps()), new RegExp(`^Error: ${state} prepares S1, which requires the plugins of its tab and its page$`));
+    await assert.rejects(prepareState(s, state, prepareDeps(), { tab: "probeinput" }), /which requires the plugins of its tab and its page/);
+    await assert.rejects(prepareState(s, state, { trace: 0 }, S1_PLUGINS), new RegExp(`^Error: ${state} prepares S1, which requires the address of the blank page$`));
   }
-  const located = { kind: "tab", surface: "t-web", plugin: "probeclose", exposes: ["status probeclose.location"], status: { phase: "ready", error: null } };
-  const tabbed = { kind: "tab", surface: "t-term", plugin: "probeinput", exposes: [], status: { phase: "ready", error: null } };
-  const answers = appAnswers({ "get w1 core.surfaces": [tabbed, located], "until w1 core.surfaces": [tabbed, located] });
-  await assert.rejects(prepareState(fakeSession(answers, "w1", []), "S1", prepareDeps([]), { tab: "probeinput", page: "probeclose" }),
+  await assert.rejects(prepareState(s, "S11", prepareDeps(), S1_PLUGINS), /^Error: S11 requires the folder of its second project$/);
+  await assert.rejects(prepareState(s, "S2", prepareDeps()), /the state S2 is not one of S0, S0b, S1, S9, S11, S12, S14, S15/);
+  assert.deepEqual(server.requests, []);
+});
+
+test("the page plugin must expose its navigate command and its location status", { timeout: 30000 }, async (t) => {
+  const plugins = { tab: "probeinput", page: "probeclose" };
+  const navigate = await play(t, "measure-state-s1-navigate-missing");
+  await assert.rejects(prepareState(navigate.s, "S1", prepareDeps(), plugins),
     /^Error: the page plugin probeclose of S1 does not expose command probeclose\.navigate; surface t-web exposes \["status probeclose\.location"\]$/);
-  const bare = { ...located, exposes: [] };
-  const none = appAnswers({ "get w1 core.surfaces": [tabbed, bare], "until w1 core.surfaces": [tabbed, bare] });
-  await assert.rejects(prepareState(fakeSession(none, "w1", []), "S1", prepareDeps([]), { tab: "probeinput", page: "probeclose" }),
+  await navigate.server.played;
+  const bare = await play(t, "measure-state-s1-entries-missing");
+  await assert.rejects(prepareState(bare.s, "S1", prepareDeps(), plugins),
     /^Error: the page plugin probeclose of S1 does not expose command probeclose\.navigate and status probeclose\.location; surface t-web exposes \[\]$/);
+  await bare.server.played;
 });
 
-test("S0 and S14 keep the library screen, and S14 types one character into the library search 10 seconds before the reading", async () => {
-  const calls = [];
-  const s = fakeSession(appAnswers({ "get w1 core.surfaces": [] }), "w1", calls);
-  assert.deepEqual(await prepareState(s, "S0", prepareDeps(calls)), { state: "S0", windows: ["w1"], footprints: "settled" });
-  assert.deepEqual(actions(calls), S1_STEPS.slice(0, 2).concat(["applyTrace"]));
-  calls.length = 0;
-  assert.deepEqual(await prepareState(s, "S14", prepareDeps(calls)), { state: "S14", windows: ["w1"], footprints: "at-once" });
-  assert.deepEqual(actions(calls), S1_STEPS.slice(0, 2).concat([
-    "applyTrace",
-    ["run", "w1", "core.library.search.focus", {}],
-    ["request", "w1", "input.key", { key: "a", phase: "down" }],
-    ["request", "w1", "input.key", { key: "a", phase: "up" }],
-    "sleep 10000",
+test("S0 keeps the library screen of one window without a plugin view", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s0");
+  assert.deepEqual(await prepareState(s, "S0", prepareDeps()), { state: "S0", windows: ["w1"], footprints: "settled" });
+  await server.played;
+  assert.deepEqual(received(server), S1_STEPS.slice(0, 1).concat(S1_STEPS.slice(2, 4)));
+});
+
+test("S0 fails with plugin views or the workspace in the window", { timeout: 30000 }, async (t) => {
+  const shown = await play(t, "measure-state-s0-views");
+  await assert.rejects(prepareState(shown.s, "S0", prepareDeps()), /S0 requires a window without plugin views; window w1 shows t-term, t-web/);
+  await shown.server.played;
+  const project = await play(t, "measure-state-s0-project");
+  await assert.rejects(prepareState(project.s, "S0", prepareDeps()), /S0 requires the library screen; window w1 shows workspace/);
+  await project.server.played;
+});
+
+test("S14 keeps the library screen and types one character into the library search 10 seconds before the reading", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s14");
+  const { keyAt, ...context } = await prepareState(s, "S14", prepareDeps());
+  assert.deepEqual(context, { state: "S14", windows: ["w1"], footprints: "at-once" });
+  assert.equal(keyReadingWaitMs({ keyAt, now: keyAt }), 10000, "the reading is 10 seconds after the key");
+  await server.played;
+  assert.deepEqual(received(server), S1_STEPS.slice(0, 1).concat(S1_STEPS.slice(2, 4), [
+    ["run", "w1", "core.library.search.focus", {}, undefined],
+    ["input.key", "w1"],
+    ["input.key", "w1"],
   ]));
-  const shown = fakeSession(appAnswers(), "w1", []);
-  await assert.rejects(prepareState(shown, "S0", prepareDeps([])), /S0 requires a window without plugin views; window w1 shows t-term, t-web/);
-  const project = fakeSession(appAnswers({ "get w1 core.surfaces": [], "get w1 core.screen": { screen: "workspace", modal: null } }), "w1", []);
-  await assert.rejects(prepareState(project, "S0", prepareDeps([])), /S0 requires the library screen; window w1 shows workspace/);
+  assert.deepEqual(server.requests.filter(({ method }) => method === "input.key").map(({ params }) => [params.key, params.phase]), [["a", "down"], ["a", "up"]]);
 });
 
-test("S0b closes the project and waits for the exit of each WebContent process of a view page or a document region", async () => {
-  const calls = [];
-  const answers = appAnswers({
-    "get w1 core.project": { id: "p1" },
-    "get w1 host.window": mygoWindow({ documents: [{ surface: "tab-2", document: "doc-1", process: 902 }, { surface: "tab-5", document: "", process: 903 }] }),
-    "run w1 core.project.close": { closed: true },
-  });
-  const s = fakeSession(answers, "w1", calls);
-  const context = await prepareState(s, "S0b", prepareDeps(calls));
-  assert.deepEqual(actions(calls), S1_STEPS.slice(0, 2).concat([
-    "applyTrace",
-    ["run", "w1", "core.project.close", { id: "p1" }],
-    ["request", "w1", "diagnostics.process.exit", { pid: 902 }],
-    ["request", "w1", "diagnostics.process.exit", { pid: 903 }],
-    "remainingWebKit",
+test("S0b closes the project and waits for the exit of each WebContent process of a view page or a document region", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s0b");
+  const context = await prepareState(s, "S0b", prepareDeps());
+  await server.played;
+  assert.deepEqual(received(server), S1_STEPS.slice(0, 1).concat(S1_STEPS.slice(2, 4), [
+    ["run", "w1", "core.project.close", { id: "p1" }, undefined],
+    ["diagnostics.process.exit", "w1"],
+    ["diagnostics.process.exit", "w1"],
   ]));
-  assert.deepEqual(context, { state: "S0b", windows: ["w1"], footprints: "settled", exited: [902, 903], remaining: [{ role: "webkit gpu", pid: 300, bytes: 30 * MB }] });
-  const kept = fakeSession(appAnswers({ "get w1 core.project": { id: "p1" }, "run w1 core.project.close": { closed: false } }), "w1", []);
-  await assert.rejects(prepareState(kept, "S0b", prepareDeps([])), /core.project.close kept the project p1 \(closed false\)/);
+  assert.deepEqual(server.requests.filter(({ method }) => method === "diagnostics.process.exit").map(({ params }) => params.pid), [902, 903]);
+  assert.deepEqual(context, { state: "S0b", windows: ["w1"], footprints: "settled", exited: [902, 903] });
+  const kept = await play(t, "measure-state-s0b-kept");
+  await assert.rejects(prepareState(kept.s, "S0b", prepareDeps()), /core.project.close kept the project p1 \(closed false\)/);
+  await kept.server.played;
 });
 
-test("S9 places a second library window over the window of S1 and requires occluded true", async () => {
-  const calls = [];
-  let covered = false;
-  const answers = appAnswers({
-    "run w2 host.window.move": () => { covered = true; return null; },
-    "until w1 host.window": () => mygoWindow({ occluded: covered }),
-    "get w1 host.window": () => mygoWindow({ occluded: covered }),
-  });
-  const s = fakeSession(answers, "w1", calls);
-  const context = await prepareState(s, "S9", prepareDeps(calls), S1_PLUGINS);
-  assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
-    ["run", "w1", "core.window.new", {}],
-    ["until", "w1", "host.windows", undefined],
-    ["run", "w2", "host.window.resize", { width: 1320, height: 880 }],
-    ["until", "w2", "host.window", undefined],
-    ["run", "w2", "host.window.move", { x: 40, y: -10 }],
-    ["until", "w1", "host.window", undefined],
-  ]);
-  assert.deepEqual(context.windows, ["w1", "w2"]);
-  const open = fakeSession(appAnswers(), "w1", []);
-  await assert.rejects(prepareState(open, "S9", prepareDeps([]), S1_PLUGINS), /until host.window of w1: the second window did not cover window w1/);
-});
-
-test("S11 opens a second project window beside the window of S1", async () => {
-  const calls = [];
-  const s = fakeSession(appAnswers({ "until w2 host.window": () => mygoWindow({ frame: { x: 0, y: 0, width: 1200, height: 788 } }) }), "w1", calls);
-  const context = await prepareState(s, "S11", prepareDeps(calls), S1_PLUGINS);
-  assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
-    ["run", "w1", "core.window.new", {}],
-    ["until", "w1", "host.windows", undefined],
-    "projectRoot S11",
-    ["run", "w2", "core.project.open", { root: "/var/tester/projects/S11" }],
-    ["run", "w2", "host.window.resize", { width: 1200, height: 760 }],
-    ["until", "w2", "host.window", undefined],
-    ["run", "w2", "host.window.move", { x: 1300, y: 50 }],
+test("S9 places a second library window over the window of S1 and requires occluded true", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s9");
+  const context = await prepareState(s, "S9", prepareDeps(), S1_PLUGINS);
+  await server.played;
+  assert.deepEqual(received(server).slice(S1_STEPS.length), [
+    ["run", "w1", "core.window.new", {}, undefined],
+    ["run", "w2", "host.window.resize", { width: 1320, height: 880 }, undefined],
+    ["run", "w2", "host.window.move", { x: 40, y: -10 }, undefined],
   ]);
   assert.deepEqual(context.windows, ["w1", "w2"]);
 });
 
-test("S12 makes one layout draw fail and waits for its error line, and S15 opens the settings window", async () => {
-  const calls = [];
-  const s = fakeSession(appAnswers(), "w1", calls);
-  const context = await prepareState(s, "S12", prepareDeps(calls), S1_PLUGINS);
-  assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
-    "logPosition",
-    ["request", "w1", "diagnostics.layout.fail", {}],
-    ["run", "w1", "host.window.resize", { width: 1160, height: 760 }],
-    "untilFaultLine 400",
-    ["run", "w1", "host.window.resize", { width: 1200, height: 760 }],
-    ["until", "w1", "host.window", undefined],
-  ]);
-  assert.deepEqual(context.faultLog, { "host-1-10.jsonl": { offset: 400, inode: "7" } });
-  calls.length = 0;
-  await prepareState(s, "S15", prepareDeps(calls), S1_PLUGINS);
-  assert.deepEqual(actions(calls).slice(S1_STEPS.length), [
-    ["run", "w1", "core.settings.open", {}],
-    ["until", "w1", "core.settings-modal", undefined],
-  ]);
+test("S9 fails when the second window does not cover the window of S1", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s9-uncovered");
+  await assert.rejects(prepareState(s, "S9", prepareDeps(), S1_PLUGINS), /the second window did not cover window w1/);
+  await server.played;
 });
 
-/** The process outputs of a mygo application of MYGO with host 10, a sidecar 11, one document 902 and the WebKit GPU 300. */
-function mygoProcesses({ footprints, cpu }) {
-  return async (command, args) => {
-    const line = [command, ...args].join(" ");
-    const ok = (stdout) => ({ status: 0, stdout, stderr: "" });
-    if (line === "ps -axww -o pid=,command=") return ok(`   10 /Applications/sok-mygo.app/Contents/MacOS/soksak --config-dir ${MYGO}\n   11 ${MYGO}/sidecars/probe/bin/probe\n`);
-    if (line === `/b/sok windows --config-dir ${MYGO}`) return ok(JSON.stringify([{ window: "w1", ready: true }]));
-    if (line === `/b/sok status host.window --window w1 --config-dir ${MYGO}`) return ok(JSON.stringify(mygoWindow()));
-    if (line === "/bin/launchctl print pid/10") return ok(`\t\t   300      - \tcom.apple.WebKit.GPU.79E5AEE6-A76D-4B8E-9BE4-197F4E2ACD4D\n\t\t   902      - \tcom.apple.WebKit.WebContent.042944D2\n`);
-    if (command === "pgrep") return { status: 1, stdout: "", stderr: "" };
-    if (command === "footprint") {
-      const pid = Number(args[1]);
-      const [bytes, peak] = footprints(pid);
-      return ok(`    phys_footprint: ${bytes} B\n    phys_footprint_peak: ${peak} B\n`);
+test("S11 opens a second project window beside the window of S1", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s11");
+  const context = await prepareState(s, "S11", prepareDeps({ projectRoot: "/var/tester/projects/S11" }), S1_PLUGINS);
+  await server.played;
+  assert.deepEqual(received(server).slice(S1_STEPS.length), [
+    ["run", "w1", "core.window.new", {}, undefined],
+    ["run", "w2", "core.project.open", { root: "/var/tester/projects/S11" }, undefined],
+    ["run", "w2", "host.window.resize", { width: 1200, height: 760 }, undefined],
+    ["run", "w2", "host.window.move", { x: 1300, y: 50 }, undefined],
+  ]);
+  assert.deepEqual(context.windows, ["w1", "w2"]);
+});
+
+test("S12 makes one layout draw fail and waits for its error line in the application log", { timeout: 30000 }, async (t) => {
+  const { s, server, configDir } = await play(t, "measure-state-s12");
+  const log = join(configDir, "logs", "host-1-10.jsonl");
+  mkdirSync(join(configDir, "logs"));
+  writeFileSync(log, "");
+  // The host writes the error line of the fault after the request that causes it.
+  server.events.on("request", ({ method }) => {
+    if (method === "diagnostics.layout.fail") {
+      appendFileSync(log, `${JSON.stringify({ level: "error", layer: "workbench", seq: 1, event: "workbench.record.error", fields: { where: "surface presentation failed", text: "diagnostic layout fault" } })}\n`);
     }
-    if (line === "ps -axo pid=,time=") return ok(cpu().map(([pid, time]) => `${pid} ${time}`).join("\n"));
-    throw new Error(`unexpected process ${line}`);
-  };
-}
-
-test("measureApps reads a mygo application without a page row, settles its footprints and reads the marks around the cpu interval", async () => {
-  const order = [];
-  let reading = 0;
-  let cpuReads = 0;
-  const run = mygoProcesses({
-    footprints: (pid) => [pid * MB + (reading < 4 ? reading * 2 * MB : 0), pid * MB * 2],
-    cpu: () => (++cpuReads === 1 ? [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]] : [[10, "0:01.12"], [11, "0:00.50"], [902, "0:02.30"], [300, "0:00.20"]]),
   });
-  const counted = async (command, args) => {
-    if (command === "footprint" && args[1] === "10") reading += 1;
-    return run(command, args);
-  };
-  const result = await measureApps({
-    sok: "/b/sok", configDirs: [MYGO], interval: 240, footprints: "settled", run: counted, realpath: (path) => path,
-    sleep: async (ms) => { order.push(`sleep ${ms}`); },
-    marks: { before: async () => { order.push("before"); return "marks before"; }, after: async () => { order.push("after"); return "marks after"; } },
-  });
-  assert.deepEqual(result.errors, []);
-  const rows = result.apps[0].rows.map(({ role, pid, bytes, peakBytes, cpuSeconds }) => ({ role, pid, bytes, peakBytes, cpuSeconds: Number(cpuSeconds.toFixed(2)) }));
-  assert.deepEqual(rows, [
-    { role: "host", pid: 10, bytes: 10 * MB, peakBytes: 20 * MB, cpuSeconds: 0.12 },
-    { role: "sidecar probe", pid: 11, bytes: 11 * MB, peakBytes: 22 * MB, cpuSeconds: 0 },
-    { role: "document tab-2/doc-1", pid: 902, bytes: 902 * MB, peakBytes: 1804 * MB, cpuSeconds: 0.3 },
-    { role: "webkit gpu", pid: 300, bytes: 300 * MB, peakBytes: 600 * MB, cpuSeconds: 0.1 },
+  const context = await prepareState(s, "S12", prepareDeps(), S1_PLUGINS);
+  await server.played;
+  assert.deepEqual(received(server).slice(S1_STEPS.length), [
+    ["diagnostics.layout.fail", "w1"],
+    ["run", "w1", "host.window.resize", { width: 1160, height: 760 }, undefined],
+    ["run", "w1", "host.window.resize", { width: 1200, height: 760 }, undefined],
   ]);
-  assert.ok(result.apps[0].rows.every((row) => !row.role.startsWith("page")), "a window without a main page has a page row");
-  assert.equal(order.filter((entry) => entry === "sleep 3000").length, 5);
-  assert.equal(order.filter((entry) => entry === "sleep 2000").length, 4);
-  assert.deepEqual(order.slice(-3), ["before", "sleep 240000", "after"]);
-  assert.deepEqual(result.marks, { before: "marks before", after: "marks after" });
-  assert.equal(result.seconds, 240);
-  assert.deepEqual(result.apps[0].totals.sidecars.bytes, 11 * MB);
-  assert.deepEqual(result.apps[0].totals.application.bytes, (10 + 902 + 300) * MB);
+  assert.deepEqual(Object.keys(context.faultLog), ["host-1-10.jsonl"]);
+  assert.equal(context.faultLog["host-1-10.jsonl"].offset, 0, "the position is the end of the log before the request");
 });
 
-test("measureApps waits for the counts after the marks and before the first cpu reading, and counts the records over the interval", async () => {
-  const order = [];
-  let cpuReads = 0;
-  const run = mygoProcesses({
-    footprints: (pid) => [pid * MB, pid * MB * 2],
-    cpu: () => { order.push(`cpu ${++cpuReads}`); return [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]]; },
-  });
-  const result = await measureApps({
-    sok: "/b/sok", configDirs: [MYGO], interval: 240, footprints: "at-once", run, realpath: (path) => path,
-    sleep: async (ms) => { order.push(`sleep ${ms}`); },
-    marks: { before: async () => { order.push("before"); return []; }, after: async () => { order.push("after"); return []; } },
-    beforeCpu: async () => { order.push("counts written"); },
-    afterCpu: async () => { order.push("records read"); },
-  });
-  assert.deepEqual(result.errors, []);
-  const at = (name) => order.indexOf(name);
-  assert.ok(at("before") < at("counts written") && at("counts written") < at("cpu 1") && at("cpu 2") < at("records read") && at("records read") < at("after"), order.join(", "));
+test("S15 opens the settings window of S1", { timeout: 30000 }, async (t) => {
+  const { s, server } = await play(t, "measure-state-s15");
+  await prepareState(s, "S15", prepareDeps(), S1_PLUGINS);
+  await server.played;
+  assert.deepEqual(received(server).slice(S1_STEPS.length), [["run", "w1", "core.settings.open", {}, undefined]]);
+});
+
+test("the blank page of S1 is a loopback page that is titled blank and ends with its server", { timeout: 30000 }, async () => {
+  const blank = await serveBlank();
+  try {
+    assert.match(blank.url, /^http:\/\/127\.0\.0\.1:\d+\/blank$/);
+    const response = await fetch(blank.url);
+    assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+    assert.equal(await response.text(), "<!doctype html><title>blank</title>");
+  } finally {
+    await blank.close();
+  }
+});
+
+test("the processes of an application are its host, its sidecars and the WebKit services of the launchd domain of its host, read from the recorded process table", () => {
+  const configDir = PS.configDir;
+  const host = applicationHost({ table: TABLE, configDir, realPath: configDir });
+  assert.deepEqual(host, { pid: PIDS.host }, "the tools that carry --config-dir and the host launched through the link are no host of this folder");
+  const webkit = domainRows("launchctl-print-all-services", configDir);
+  assert.deepEqual(applicationRowsOf({ table: TABLE, configDir, realPath: configDir, host, webkit }), [
+    { role: "host", pid: PIDS.host, attribution: "config-dir argument" },
+    { role: "sidecar probe", pid: PIDS.sidecar, attribution: "executable path" },
+    { role: "webkit webcontent", pid: 1648, attribution: "launchd domain" },
+    { role: "webkit gpu", pid: 1413, attribution: "launchd domain" },
+    { role: "webkit networking", pid: 1635, attribution: "launchd domain" },
+  ]);
+});
+
+test("the host and the sidecar of a data folder that is named through a symbolic link are found by the real path of the folder", () => {
+  const { linkedConfigDir, linkedRealPath } = PS;
+  const host = applicationHost({ table: TABLE, configDir: linkedConfigDir, realPath: linkedRealPath });
+  assert.deepEqual(host, { pid: PIDS.linkedHost });
+  assert.deepEqual(applicationRowsOf({ table: TABLE, configDir: linkedConfigDir, realPath: linkedRealPath, host, webkit: [] }), [
+    { role: "host", pid: PIDS.linkedHost, attribution: "config-dir argument" },
+    { role: "sidecar worker", pid: PIDS.linkedSidecar, attribution: "executable path" },
+  ]);
+});
+
+test("a data folder without a host process in the process table is an error that names the folder", () => {
+  const withoutHost = TABLE.filter(({ pid }) => pid !== PIDS.host);
+  assert.throws(() => applicationHost({ table: withoutHost, configDir: PS.configDir, realPath: PS.configDir }),
+    new RegExp(`^Error: host of ${PS.configDir}: no host process has --config-dir ${PS.configDir}$`));
 });
 
 test("the wait for the counts is longer than the time a count of the gate waits for a write", () => {
@@ -857,62 +793,86 @@ function marksOfTwo({ frames = [[340, 340], [512, 513]], commandBuffers = [[338,
   return { before: mark(0), after: mark(1) };
 }
 
-/** The process outputs of mygoProcesses with 700, a WebKit networking process of another application. */
-function foreignProcesses({ footprintFails = () => false, foreignCpu, appCpu = () => [[10, "0:01.00"], [11, "0:00.50"], [902, "0:02.00"], [300, "0:00.10"]] }) {
-  let cpuReads = 0;
-  const run = mygoProcesses({
-    footprints: (pid) => [pid * MB, pid * MB * 2],
-    cpu: () => { cpuReads += 1; return [...appCpu(cpuReads), ...(foreignCpu(cpuReads) ? [[700, "0:00.10"]] : [])]; },
-  });
-  return async (command, args) => {
-    if (command === "pgrep" && args[1] === "com.apple.WebKit.Networking") return { status: 0, stdout: "700\n", stderr: "" };
-    if (command === "footprint" && args[1] === "700" && footprintFails()) return { status: 66, stdout: "", stderr: "footprint: Unable to find pid" };
-    return run(command, args);
-  };
-}
+const CPU_BEFORE = cpuSecondsOf(recorded("ps-cpu-before"));
+const CPU_AFTER = cpuSecondsOf(recorded("ps-cpu-after"));
+/** The interval, in seconds, of the two recorded CPU readings: the recording of the readings states it. */
+const CPU_SECONDS = 2;
 
-const measureForeign = (run) => measureApps({
-  sok: "/b/sok", configDirs: [MYGO], interval: 10, footprints: "at-once", run, realpath: (path) => path, sleep: async () => {},
+/** A measured entry of a process of the recording: the row and the place that names it in an error. */
+const entry = (role, pid, name) => ({ row: { role, pid }, where: `${name} ${role} (pid ${pid})` });
+
+test("the cpu readings of ps are the cpu seconds of every process, and a failing ps is an error that names the command", () => {
+  assert.equal(CPU_BEFORE.size, 8);
+  assert.equal(CPU_AFTER.size, 7, "the process that ended is not in the reading after the interval");
+  assert.equal(CPU_BEFORE.get(PIDS.busy), 1.02);
+  assert.equal(CPU_AFTER.get(PIDS.busy), 3.03);
+  assert.equal(CPU_BEFORE.get(PIDS.ender), 0);
+  assert.throws(() => cpuSecondsOf(recorded("ps-failure")), /^Error: ps -axo pid=,time= exited with 1: ps: bogus: keyword not found/);
+  assert.throws(() => outputOf("ps", ["-axo", "pid=,bogus="], recorded("ps-failure")), /^Error: ps -axo pid=,bogus= exited with 1: ps: bogus: keyword not found/);
 });
 
-test("measureApps leaves out a process of no application that ends between the cpu reads", async () => {
-  let gone = false;
-  const result = await measureForeign(foreignProcesses({
-    footprintFails: () => gone,
-    foreignCpu: (read) => { gone = read > 1; return !gone; },
-  }));
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.unattributed.rows, []);
-  assert.deepEqual(result.apps[0].rows.map(({ pid }) => pid), [10, 11, 902, 300]);
+test("the cpu figures of a process are its cpu seconds over the interval, and a process of the application that ends is an error", () => {
+  const measured = [entry("host", PIDS.host, PS.configDir), entry("sidecar probe", PIDS.sidecar, PS.configDir), entry("sidecar busy", PIDS.busy, PS.configDir)];
+  const result = cpuFigures({ measured, foreign: new Set(), cpuBefore: CPU_BEFORE, cpuAfter: CPU_AFTER, elapsed: CPU_SECONDS });
+  assert.deepEqual(result, { errors: [], ended: new Set() });
+  const [host, , busy] = measured.map(({ row }) => row);
+  assert.equal(host.cpuSeconds, 0);
+  assert.equal(Number(busy.cpuSeconds.toFixed(2)), 2.01);
+  assert.equal(Number(busy.cpuPercent.toFixed(2)), 100.5);
+  const ending = [entry("sidecar probe", PIDS.ender, PS.configDir)];
+  assert.deepEqual(cpuFigures({ measured: ending, foreign: new Set(), cpuBefore: CPU_BEFORE, cpuAfter: CPU_AFTER, elapsed: CPU_SECONDS }),
+    { errors: [`${PS.configDir} sidecar probe (pid ${PIDS.ender}): pid is not in the process table at both cpu reads`], ended: new Set() });
+  assert.deepEqual([ending[0].row.cpuSeconds, ending[0].row.cpuPercent], [null, null]);
 });
 
-test("measureApps leaves out a process of no application that ended before its first footprint", async () => {
-  const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: () => false }));
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.unattributed.rows, []);
+test("a decrease of the cpu time of a process is an error that names the process", () => {
+  const measured = [entry("sidecar busy", PIDS.busy, PS.configDir)];
+  assert.deepEqual(cpuFigures({ measured, foreign: new Set(), cpuBefore: CPU_AFTER, cpuAfter: CPU_BEFORE, elapsed: CPU_SECONDS }),
+    { errors: [`${PS.configDir} sidecar busy (pid ${PIDS.busy}): cpu time decreased from 3.03 to 1.02`], ended: new Set() });
 });
 
-test("measureApps leaves out a process of no application whose footprint fails while it ends", async () => {
-  // footprint no longer finds the process while the two cpu reads still list it; the read of the process table at the end does not.
-  const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: (read) => read <= 2 }));
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.unattributed.rows, []);
-  assert.deepEqual(result.apps[0].rows.map(({ pid }) => pid), [10, 11, 902, 300]);
+test("a process of no application that ends between the cpu reads leaves the list without an error", () => {
+  const measured = [entry("webkit networking", PIDS.ender, "unattributed"), entry("host", PIDS.host, PS.configDir)];
+  const result = cpuFigures({ measured, foreign: new Set([PIDS.ender]), cpuBefore: CPU_BEFORE, cpuAfter: CPU_AFTER, elapsed: CPU_SECONDS });
+  assert.deepEqual(result, { errors: [], ended: new Set([PIDS.ender]) });
+  assert.equal(measured[1].row.cpuSeconds, 0, "the other processes keep their figures");
 });
 
-test("measureApps reports a process of no application that runs and has no footprint", async () => {
-  const result = await measureForeign(foreignProcesses({ footprintFails: () => true, foreignCpu: () => true }));
-  assert.equal(result.errors.length, 1);
-  assert.match(result.errors[0], /unattributed webkit networking \(pid 700\): footprint -p 700 exited with 66/);
-  assert.deepEqual(result.unattributed.rows.map(({ pid }) => pid), [700]);
+test("the WebKit processes that no application claims are the unattributed rows, and pgrep without a match or with an invalid pattern is judged by its exit", () => {
+  const gpu = webkitPidsOf("GPU", recorded("pgrep-gpu"));
+  const networking = webkitPidsOf("Networking", recorded("pgrep-networking"));
+  assert.deepEqual(gpu, [1413, 1638, 90524].map((pid) => ({ pid, role: "webkit gpu" })));
+  assert.deepEqual(networking, [1635, 76149, 90525].map((pid) => ({ pid, role: "webkit networking" })));
+  assert.deepEqual(unattributedRows([...gpu, ...networking], new Set([1413, 1635, 1638])), [
+    { role: "webkit gpu", pid: 90524, attribution: "unattributed" },
+    { role: "webkit networking", pid: 76149, attribution: "unattributed" },
+    { role: "webkit networking", pid: 90525, attribution: "unattributed" },
+  ]);
+  assert.deepEqual(webkitPidsOf("GPU", recorded("pgrep-none")), [], "pgrep exits with 1 when no process matches");
+  assert.throws(() => webkitPidsOf("GPU", recorded("pgrep-invalid")), /^Error: pgrep failed: pgrep: Cannot compile regular expression/);
 });
 
-test("measureApps reports a process of the application that ends between the cpu reads", async () => {
-  const result = await measureForeign(foreignProcesses({
-    foreignCpu: () => true,
-    appCpu: (read) => [[10, "0:01.00"], ...(read === 1 ? [[11, "0:00.50"]] : []), [902, "0:02.00"], [300, "0:00.10"]],
-  }));
-  assert.deepEqual(result.errors, [`${MYGO} sidecar probe (pid 11): pid is not in the process table at both cpu reads`]);
+test("a footprint reading is the footprint and the peak of the recorded output, and a process that is gone is an error that names it", () => {
+  const running = recorded("footprint-running");
+  assert.deepEqual(footprintOfResult(running.pid, running), { bytes: 12027560, peakBytes: 12027560 });
+  const ended = recorded("footprint-ended");
+  assert.throws(() => footprintOfResult(ended.pid, ended), new RegExp(`^Error: footprint -p ${ended.pid} exited with 66: footprint: Unable to find pid for process matching '${ended.pid}'`));
+});
+
+test("a process of no application whose footprint cannot be read ended when the process table at the end does not hold it, and failed when it does", () => {
+  const ended = recorded("footprint-ended");
+  let failure;
+  try {
+    footprintOfResult(ended.pid, ended);
+  } catch (error) {
+    failure = `unattributed webkit networking (pid ${ended.pid}): ${error.message}`;
+  }
+  const unread = new Map([[ended.pid, failure]]);
+  assert.deepEqual(unreadOutcome({ unread, last: CPU_AFTER }), { failures: [], ended: [ended.pid] }, "the table at the end has no such process");
+  const outcome = unreadOutcome({ unread, last: CPU_BEFORE });
+  assert.equal(outcome.failures.length, 1);
+  assert.match(outcome.failures[0], new RegExp(`unattributed webkit networking \\(pid ${ended.pid}\\): footprint -p ${ended.pid} exited with 66`));
+  assert.deepEqual(outcome.ended, [], "the table still holds the process, so it has no footprint although it runs");
 });
 
 /** One application of measureApps of the mygo host: the host, a sidecar, a document process and the WebKit GPU and networking services. */
@@ -961,48 +921,24 @@ test("a host whose host.window reports no frame counters has no frames and comma
   assert.throws(() => usageMeasurements({ app: measuredApp(), marks: missing }), /window w2 has no mark after the last cpu reading/);
 });
 
-test("the process listing of a configuration folder holds its host, its sidecars and the WebKit services of the domain of its host", async () => {
-  const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [] });
-  assert.deepEqual(await applicationRows({ configDir: MYGO, run, realpath: (path) => path }), [
-    { role: "host", pid: 10, attribution: "config-dir argument" },
-    { role: "sidecar probe", pid: 11, attribution: "executable path" },
-    { role: "webkit gpu", pid: 300, attribution: "launchd domain" },
-    { role: "webkit webcontent", pid: 902, attribution: "launchd domain" },
-  ]);
-  const noHost = async (command, args) => (command === "ps" ? { status: 0, stdout: `   11 ${MYGO}/sidecars/probe/bin/probe\n`, stderr: "" } : run(command, args));
-  await assert.rejects(applicationRows({ configDir: MYGO, run: noHost, realpath: (path) => path }),
-    new RegExp(`host of ${MYGO}: no host process has --config-dir ${MYGO}`));
-});
-
-test("the executor resolves to the status and the output of a command, and to the error of a command that does not start", async () => {
-  const done = await execute(process.execPath, ["-e", "process.stdout.write('out'); process.stderr.write('err'); process.exit(3)"]);
-  assert.deepEqual([done.status, done.stdout, done.stderr, done.error], [3, "out", "err", undefined]);
-  const absent = await execute("/var/tester/no-such-command", []);
-  assert.equal(absent.error.code, "ENOENT");
-});
-
-test("the cpu reading runs ps -axo pid=,time= and names the command of a failure", async () => {
-  const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [[10, "0:01.25"], [902, "1:00.50"]] });
-  assert.deepEqual(await readCpuSeconds(run), new Map([[10, 1.25], [902, 60.5]]));
-  const failing = async () => ({ status: 1, stdout: "", stderr: "ps: no table" });
-  await assert.rejects(readCpuSeconds(failing), /ps -axo pid=,time= exited with 1: ps: no table/);
-});
-
-test("the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid", async () => {
-  const run = mygoProcesses({ footprints: () => [0, 0], cpu: () => [] });
+test("the processes of the windows of an application are its listing with the page and document rows of each window, one row per pid", () => {
+  const configDir = PS.configDir;
+  const host = applicationHost({ table: TABLE, configDir, realPath: configDir });
+  const listed = applicationRowsOf({ table: TABLE, configDir, realPath: configDir, host, webkit: domainRows("launchctl-print-all-services", configDir) });
   const statuses = [
-    { ...mygoWindow({ pageProcess: 902, documents: [] }), window: "w1" },
+    { ...mygoWindow({ pageProcess: 1648, documents: [] }), window: "w1" },
     { ...mygoWindow({ documents: [{ surface: "tab-2", document: "doc-1", process: 903 }, { surface: "tab-3", document: "doc-2", process: 0 }] }), window: "w2" },
   ];
-  assert.deepEqual(await windowApplicationRows({ configDir: MYGO, statuses, run, realpath: (path) => path }), {
+  assert.deepEqual(windowRowsOf({ configDir, listed, statuses }), {
     rows: [
-      { role: "host", pid: 10, attribution: "config-dir argument" },
-      { role: "sidecar probe", pid: 11, attribution: "executable path" },
-      { role: "page w1", pid: 902, attribution: "host.window" },
+      { role: "host", pid: PIDS.host, attribution: "config-dir argument" },
+      { role: "sidecar probe", pid: PIDS.sidecar, attribution: "executable path" },
+      { role: "page w1", pid: 1648, attribution: "host.window" },
       { role: "document tab-2/doc-1", pid: 903, attribution: "host.window" },
-      { role: "webkit gpu", pid: 300, attribution: "launchd domain" },
+      { role: "webkit gpu", pid: 1413, attribution: "launchd domain" },
+      { role: "webkit networking", pid: 1635, attribution: "launchd domain" },
     ],
-    errors: [`document tab-3/doc-2 of window w2 of ${MYGO}: no process (0)`],
+    errors: [`document tab-3/doc-2 of window w2 of ${configDir}: no process (0)`],
   });
 });
 

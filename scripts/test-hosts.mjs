@@ -43,15 +43,21 @@ export function parseContractCases(markdown) {
     if (cases.has(id)) throw new Error(`contract case ${id} is defined twice`);
     const [behavior, scope] = cells;
     if (!behavior) throw new Error(`contract case ${id} has no behavior`);
-    cases.set(id, { behavior, hosts: scopeHosts(id, scope) });
+    cases.set(id, { behavior, hosts: scopeHosts(id, scope), e2e: e2eScope(scope) });
   }
   if (cases.size === 0) throw new Error(`${SPEC} defines no contract cases`);
   return cases;
 }
 
+/** The window check file of a scope `e2e only: <path>`, or null for another scope. */
+function e2eScope(scope) {
+  return /^e2e only: (\S+?\.mjs)(: .*)?$/.exec(scope ?? '')?.[1] ?? null;
+}
+
 /** Returns the hosts of the scope of case id. */
 function scopeHosts(id, scope) {
   if (scope === 'all') return HOSTS;
+  if (e2eScope(scope)) return [];
   const limited = scope?.match(/^([a-z0-9]+(?:,\s*[a-z0-9]+)*) only(:\s*\S.*)?$/);
   if (!limited) throw new Error(`contract case ${id} has scope "${scope}"; use "all" or "<host>[, <host>] only: <reason>"`);
   if (!limited[2]) throw new Error(`contract case ${id} limits its scope without a reason`);
@@ -236,6 +242,24 @@ export function uncoveredCases(cases, declared) {
   for (const [id, contract] of cases) {
     for (const name of contract.hosts) {
       if (!declared.get(name)?.has(id)) errors.push(`${name} declares no test for contract case ${id}`);
+    }
+  }
+  return errors;
+}
+
+/**
+ * The errors of each case of the scope `e2e only: <path>`: the window check file that the scope names must exist and declare the case
+ * with a line `// contract: <id>`. The window checks run only locally (docs/operations/examples.md#test-kinds), so this check reads the
+ * declaration and does not run the file. read(path) returns the text of a repository file, or null when it does not exist.
+ */
+export function e2eDeclarationErrors(cases, read) {
+  const errors = [];
+  for (const [id, contract] of cases) {
+    if (!contract.e2e) continue;
+    const text = read(contract.e2e);
+    if (text === null) errors.push(`contract case ${id} names the window check ${contract.e2e}, which does not exist`);
+    else if (!text.split('\n').some((line) => /^\s*\/\/\s*contract:/.test(line) && line.split(/[:,]/).slice(1).map((item) => item.trim()).includes(id))) {
+      errors.push(`${contract.e2e} declares no contract case ${id}`);
     }
   }
   return errors;
@@ -541,6 +565,7 @@ function checkDeclarations(cases, rustItems, rustFailures = []) {
   hosts.find((host) => host.name === 'tauriv2').errors.push(...rustFailures);
   const { errors, declared } = auditDeclarations(cases, hosts);
   errors.push(...uncoveredCases(cases, declared));
+  errors.push(...e2eDeclarationErrors(cases, (path) => existsSync(join(ROOT, path)) ? readFileSync(join(ROOT, path), 'utf8') : null));
   for (const host of hosts) {
     const required = [...cases.values()].filter((contract) => contract.hosts.includes(host.name)).length;
     process.stdout.write(`${host.name}: ${declared.get(host.name).size} of ${required} contract cases declared; ${host.tests.length} tests\n`);

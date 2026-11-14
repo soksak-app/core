@@ -590,7 +590,9 @@ impl Workspace {
                 // change.
                 let patch = req.patch.unwrap_or_default();
                 let path = if req.id.is_some() {
-                    let at = at.ok_or("unknown project")?;
+                    let at = at.ok_or_else(|| {
+                        format!("unknown project: {}", req.id.as_deref().unwrap_or_default())
+                    })?;
                     if let Some(key) = COMMON_ONLY.iter().find(|key| patch.contains_key(*key)) {
                         return Err(format!("{key} is common-only"));
                     }

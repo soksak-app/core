@@ -1,0 +1,2863 @@
+{
+  "name": "keyboard-follow-ring",
+  "description": "The workbench follows the focus ring with the keyboard of the window: it sends surfaceFocus for the surface of the ring, decided at the release of a press, shows and hides a native modal (the host answers the show with the aligned rectangle of the modal), and answers each placement and responder move; the host answers the other calls with null, and the replies of the keyboard calls that a test holds are released by that test.",
+  "replay": false,
+  "reason": "The keyboard call and the modal need a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "tab-id-1": {
+      "type": "string",
+      "example": "tab-qormqd",
+      "source": "page"
+    },
+    "tab-id-2": {
+      "type": "string",
+      "example": "tab-knwajz",
+      "source": "page"
+    },
+    "tab-id-3": {
+      "type": "string",
+      "example": "tab-jrvv36",
+      "source": "page"
+    },
+    "tab-id-4": {
+      "type": "string",
+      "example": "tab-ukzlgm",
+      "source": "page"
+    },
+    "tab-id-5": {
+      "type": "string",
+      "example": "tab-o54i2c",
+      "source": "page"
+    },
+    "tab-id-6": {
+      "type": "string",
+      "example": "tab-mkg6xg",
+      "source": "page"
+    },
+    "tab-id-7": {
+      "type": "string",
+      "example": "tab-q5lhkf",
+      "source": "page"
+    },
+    "tab-id-8": {
+      "type": "string",
+      "example": "tab-cia4cv",
+      "source": "page"
+    },
+    "tab-id-9": {
+      "type": "string",
+      "example": "tab-o3f7g4",
+      "source": "page"
+    },
+    "tab-id-10": {
+      "type": "string",
+      "example": "tab-hwj6vx",
+      "source": "page"
+    },
+    "tab-id-11": {
+      "type": "string",
+      "example": "tab-okggcs",
+      "source": "page"
+    },
+    "tab-id-12": {
+      "type": "string",
+      "example": "tab-qv7d4j",
+      "source": "page"
+    },
+    "tab-id-13": {
+      "type": "string",
+      "example": "tab-sp36dd",
+      "source": "page"
+    },
+    "tab-id-14": {
+      "type": "string",
+      "example": "tab-6pycug",
+      "source": "page"
+    },
+    "tab-id-15": {
+      "type": "string",
+      "example": "tab-7nnpqf",
+      "source": "page"
+    },
+    "tab-id-16": {
+      "type": "string",
+      "example": "tab-ybmdto",
+      "source": "page"
+    },
+    "tab-id-17": {
+      "type": "string",
+      "example": "tab-fh2ows",
+      "source": "page"
+    },
+    "tab-id-18": {
+      "type": "string",
+      "example": "tab-dpu4ot",
+      "source": "page"
+    },
+    "tab-id-19": {
+      "type": "string",
+      "example": "tab-hmrexw",
+      "source": "page"
+    },
+    "tab-id-20": {
+      "type": "string",
+      "example": "tab-ukwwn2",
+      "source": "page"
+    },
+    "tab-id-21": {
+      "type": "string",
+      "example": "tab-x4vgfk",
+      "source": "page"
+    },
+    "tab-id-22": {
+      "type": "string",
+      "example": "tab-ub2gsi",
+      "source": "page"
+    },
+    "tab-id-23": {
+      "type": "string",
+      "example": "tab-4dilmd",
+      "source": "page"
+    },
+    "tab-id-24": {
+      "type": "string",
+      "example": "tab-33ebfg",
+      "source": "page"
+    },
+    "tab-id-25": {
+      "type": "string",
+      "example": "tab-nl24yu",
+      "source": "page"
+    },
+    "tab-id-26": {
+      "type": "string",
+      "example": "tab-g3gfyb",
+      "source": "page"
+    },
+    "tab-id-27": {
+      "type": "string",
+      "example": "tab-vkirnr",
+      "source": "page"
+    },
+    "tab-id-28": {
+      "type": "string",
+      "example": "tab-7s4oaa",
+      "source": "page"
+    },
+    "tab-id-29": {
+      "type": "string",
+      "example": "tab-iydhb3",
+      "source": "page"
+    },
+    "tab-id-30": {
+      "type": "string",
+      "example": "tab-swrm2x",
+      "source": "page"
+    },
+    "tab-id-31": {
+      "type": "string",
+      "example": "tab-b2ta2i",
+      "source": "page"
+    },
+    "tab-id-32": {
+      "type": "string",
+      "example": "tab-nx66wb",
+      "source": "page"
+    },
+    "tab-id-33": {
+      "type": "string",
+      "example": "tab-67rxzf",
+      "source": "page"
+    },
+    "tab-id-34": {
+      "type": "string",
+      "example": "tab-2aspui",
+      "source": "page"
+    },
+    "tab-id-35": {
+      "type": "string",
+      "example": "tab-6rd53v",
+      "source": "page"
+    },
+    "tab-id-36": {
+      "type": "string",
+      "example": "tab-z4bats",
+      "source": "page"
+    },
+    "tab-id-37": {
+      "type": "string",
+      "example": "tab-y5tr3y",
+      "source": "page"
+    },
+    "tab-id-38": {
+      "type": "string",
+      "example": "tab-lmmmuh",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "8915807a-a015-479b-bd59-2afd83c4e47e",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 2,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000241,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999785956,
+      "source": "page"
+    },
+    "tab-id-39": {
+      "type": "string",
+      "example": "tab-rpshjw",
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000651,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000195456,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000644,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5000189081,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000005986,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5005530164,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000006116,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5005660164,
+      "source": "page"
+    },
+    "tab-id-40": {
+      "type": "string",
+      "example": "tab-ywgaqa",
+      "source": "page"
+    },
+    "tab-id-41": {
+      "type": "string",
+      "example": "tab-tu4ffd",
+      "source": "page"
+    },
+    "tab-id-42": {
+      "type": "string",
+      "example": "tab-xqqywg",
+      "source": "page"
+    },
+    "tab-id-43": {
+      "type": "string",
+      "example": "tab-redhbu",
+      "source": "page"
+    },
+    "tab-id-44": {
+      "type": "string",
+      "example": "tab-svhqs5",
+      "source": "page"
+    },
+    "tab-id-45": {
+      "type": "string",
+      "example": "tab-bjxs27",
+      "source": "page"
+    },
+    "tab-id-46": {
+      "type": "string",
+      "example": "tab-5i63pi",
+      "source": "page"
+    },
+    "tab-id-47": {
+      "type": "string",
+      "example": "tab-rm7pco",
+      "source": "page"
+    },
+    "tab-id-48": {
+      "type": "string",
+      "example": "tab-q4htze",
+      "source": "page"
+    },
+    "tab-id-49": {
+      "type": "string",
+      "example": "tab-tcwjqq",
+      "source": "page"
+    },
+    "tab-id-50": {
+      "type": "string",
+      "example": "tab-zi4qdm",
+      "source": "page"
+    },
+    "tab-id-51": {
+      "type": "string",
+      "example": "tab-rb23cv",
+      "source": "page"
+    },
+    "tab-id-52": {
+      "type": "string",
+      "example": "tab-rlqmar",
+      "source": "page"
+    },
+    "tab-id-53": {
+      "type": "string",
+      "example": "tab-kgwldw",
+      "source": "page"
+    },
+    "tab-id-54": {
+      "type": "string",
+      "example": "tab-hsz2it",
+      "source": "page"
+    },
+    "tab-id-55": {
+      "type": "string",
+      "example": "tab-m3x2za",
+      "source": "page"
+    },
+    "tab-id-56": {
+      "type": "string",
+      "example": "tab-hpgbq5",
+      "source": "page"
+    },
+    "tab-id-57": {
+      "type": "string",
+      "example": "tab-4zjdoh",
+      "source": "page"
+    },
+    "tab-id-58": {
+      "type": "string",
+      "example": "tab-amhezv",
+      "source": "page"
+    },
+    "tab-id-59": {
+      "type": "string",
+      "example": "tab-5w5ykq",
+      "source": "page"
+    },
+    "tab-id-60": {
+      "type": "string",
+      "example": "tab-67hrpb",
+      "source": "page"
+    },
+    "tab-id-61": {
+      "type": "string",
+      "example": "tab-dst6sl",
+      "source": "page"
+    },
+    "tab-id-62": {
+      "type": "string",
+      "example": "tab-ablskw",
+      "source": "page"
+    },
+    "tab-id-63": {
+      "type": "string",
+      "example": "tab-mz4klt",
+      "source": "page"
+    },
+    "tab-id-64": {
+      "type": "string",
+      "example": "tab-6jvarp",
+      "source": "page"
+    },
+    "tab-id-65": {
+      "type": "string",
+      "example": "tab-qjmwaw",
+      "source": "page"
+    },
+    "tab-id-66": {
+      "type": "string",
+      "example": "tab-k6dnx5",
+      "source": "page"
+    },
+    "tab-id-67": {
+      "type": "string",
+      "example": "tab-ssprlx",
+      "source": "page"
+    },
+    "tab-id-68": {
+      "type": "string",
+      "example": "tab-tjeddu",
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000275442,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5274986956,
+      "source": "page"
+    },
+    "tab-id-69": {
+      "type": "string",
+      "example": "tab-2zxmry",
+      "source": "page"
+    },
+    "ts-us-8": {
+      "type": "integer",
+      "example": 1791000000275673,
+      "source": "page"
+    },
+    "mono-ns-8": {
+      "type": "integer",
+      "example": 5275217581,
+      "source": "page"
+    },
+    "ts-us-9": {
+      "type": "integer",
+      "example": 1791000000275666,
+      "source": "page"
+    },
+    "mono-ns-9": {
+      "type": "integer",
+      "example": 5275210331,
+      "source": "page"
+    },
+    "ts-us-10": {
+      "type": "integer",
+      "example": 1791000000275627,
+      "source": "page"
+    },
+    "mono-ns-10": {
+      "type": "integer",
+      "example": 5275172039,
+      "source": "page"
+    },
+    "ts-us-11": {
+      "type": "integer",
+      "example": 1791000000280751,
+      "source": "page"
+    },
+    "mono-ns-11": {
+      "type": "integer",
+      "example": 5280295456,
+      "source": "page"
+    },
+    "tab-id-70": {
+      "type": "string",
+      "example": "tab-gk466i",
+      "source": "page"
+    },
+    "tab-id-71": {
+      "type": "string",
+      "example": "tab-y2dfse",
+      "source": "page"
+    },
+    "tab-id-72": {
+      "type": "string",
+      "example": "tab-lspvd6",
+      "source": "page"
+    },
+    "tab-id-73": {
+      "type": "string",
+      "example": "tab-27lzuh",
+      "source": "page"
+    },
+    "ts-us-12": {
+      "type": "integer",
+      "example": 1791000000314327,
+      "source": "page"
+    },
+    "mono-ns-12": {
+      "type": "integer",
+      "example": 5313871706,
+      "source": "page"
+    },
+    "ts-us-13": {
+      "type": "integer",
+      "example": 1791000000314602,
+      "source": "page"
+    },
+    "mono-ns-13": {
+      "type": "integer",
+      "example": 5314146414,
+      "source": "page"
+    },
+    "ts-us-14": {
+      "type": "integer",
+      "example": 1791000000314560,
+      "source": "page"
+    },
+    "mono-ns-14": {
+      "type": "integer",
+      "example": 5314105122,
+      "source": "page"
+    },
+    "ts-us-15": {
+      "type": "integer",
+      "example": 1791000000314674,
+      "source": "page"
+    },
+    "mono-ns-15": {
+      "type": "integer",
+      "example": 5314218747,
+      "source": "page"
+    },
+    "tab-id-74": {
+      "type": "string",
+      "example": "tab-rks6nx",
+      "source": "page"
+    },
+    "tab-id-75": {
+      "type": "string",
+      "example": "tab-6fdhjl",
+      "source": "page"
+    },
+    "tab-id-76": {
+      "type": "string",
+      "example": "tab-e67ews",
+      "source": "page"
+    },
+    "tab-id-77": {
+      "type": "string",
+      "example": "tab-mv7sab",
+      "source": "page"
+    },
+    "tab-id-78": {
+      "type": "string",
+      "example": "tab-6k6m3u",
+      "source": "page"
+    },
+    "tab-id-79": {
+      "type": "string",
+      "example": "tab-v53fg2",
+      "source": "page"
+    },
+    "tab-id-80": {
+      "type": "string",
+      "example": "tab-qrfn6l",
+      "source": "page"
+    },
+    "tab-id-81": {
+      "type": "string",
+      "example": "tab-ay5zpk",
+      "source": "page"
+    },
+    "tab-id-82": {
+      "type": "string",
+      "example": "tab-5w2pfh",
+      "source": "page"
+    },
+    "tab-id-83": {
+      "type": "string",
+      "example": "tab-6kp23y",
+      "source": "page"
+    },
+    "tab-id-84": {
+      "type": "string",
+      "example": "tab-aa3iqo",
+      "source": "page"
+    },
+    "tab-id-85": {
+      "type": "string",
+      "example": "tab-ak7p52",
+      "source": "page"
+    },
+    "tab-id-86": {
+      "type": "string",
+      "example": "tab-4btaxy",
+      "source": "page"
+    },
+    "tab-id-87": {
+      "type": "string",
+      "example": "tab-muo637",
+      "source": "page"
+    },
+    "tab-id-88": {
+      "type": "string",
+      "example": "tab-trxii5",
+      "source": "page"
+    },
+    "ts-us-16": {
+      "type": "integer",
+      "example": 1791000000442065,
+      "source": "page"
+    },
+    "mono-ns-16": {
+      "type": "integer",
+      "example": 5441609581,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-1"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-2"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-3"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-4"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-5"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-5"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-6"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-7"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-8"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-9"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-10"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-11"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-12"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-13"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-14"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-15"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-16"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-15",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-17"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-18"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-17"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-19"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-20"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-19"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-21"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-22"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-23"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-22"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-24"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-25"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-26"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-24"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-27"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-28"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "keyboardMenu",
+          "title": "Menu",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 10,
+            "h": 10
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "",
+          "html": "",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(7, 8, 9)",
+          "radius": 4
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 10,
+          "h": 10
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "keyboardMenu"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-28"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-29"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-30"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-30"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-31"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-32"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-33"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-34"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-35"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-36"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-35"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-35",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-37"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-38"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-1",
+                "resolution_us": "$resolution-us-1"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "ring",
+                "target": "$tab-id-39",
+                "sent": "$tab-id-38",
+                "owed": true,
+                "decided": false,
+                "decision": "wait"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 110
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 2
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-39"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-5",
+              "mono_ns": "$mono-ns-5",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "placed",
+                "target": "$tab-id-39",
+                "sent": "$tab-id-38",
+                "owed": true,
+                "decided": false,
+                "decision": "send"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-39"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-6",
+              "mono_ns": "$mono-ns-6",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "responder",
+                "target": "$tab-id-39",
+                "sent": "$tab-id-39",
+                "owed": true,
+                "decided": false,
+                "decision": "send"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-40"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-41"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-42"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-41",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-43"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-44"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-45"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-45",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-46"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-47"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-48"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-46",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-49"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-50"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-51"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-49",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-52"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-53"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-54"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-54",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-55"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-56"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-57"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-57",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-58"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-59"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-60"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-60",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-61"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-62"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-63"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-63",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-64"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-65"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-66"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-66",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-67"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-68"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-7",
+              "mono_ns": "$mono-ns-7",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "ring",
+                "target": "$tab-id-69",
+                "sent": "$tab-id-68",
+                "owed": true,
+                "decided": false,
+                "decision": "wait"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null,
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-8",
+              "mono_ns": "$mono-ns-8",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 90
+              }
+            },
+            {
+              "ts_us": "$ts-us-9",
+              "mono_ns": "$mono-ns-9",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 4
+              }
+            },
+            {
+              "ts_us": "$ts-us-10",
+              "mono_ns": "$mono-ns-10",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "press",
+                "target": null,
+                "sent": "$tab-id-68",
+                "owed": true,
+                "decided": true,
+                "decision": "send"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-69"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-11",
+              "mono_ns": "$mono-ns-11",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "placed",
+                "target": "$tab-id-69",
+                "sent": null,
+                "owed": false,
+                "decided": false,
+                "decision": "send"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-70"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-71"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-70"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-70",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-72"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-73"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "keyboardMenu",
+          "title": "Menu",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 10,
+            "h": 10
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "",
+          "html": "",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(7, 8, 9)",
+          "radius": 4
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 10,
+          "h": 10
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-12",
+              "mono_ns": "$mono-ns-12",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "modal",
+                "target": null,
+                "sent": "$tab-id-73",
+                "owed": true,
+                "decided": false,
+                "decision": "modal"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-73",
+          "decided": true
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-13",
+              "mono_ns": "$mono-ns-13",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 13
+              }
+            },
+            {
+              "ts_us": "$ts-us-14",
+              "mono_ns": "$mono-ns-14",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "press",
+                "target": "$tab-id-73",
+                "sent": "$tab-id-73",
+                "owed": true,
+                "decided": true,
+                "decision": "modal"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "keyboardMenu"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-15",
+              "mono_ns": "$mono-ns-15",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.keyboard.follow",
+              "fields": {
+                "cause": "modal",
+                "target": "$tab-id-73",
+                "sent": "$tab-id-73",
+                "owed": true,
+                "decided": false,
+                "decision": "send"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-73"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-74"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-75"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "keyboardMenu",
+          "title": "Menu",
+          "rect": {
+            "x": 0,
+            "y": 0,
+            "w": 10,
+            "h": 10
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "",
+          "html": "",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(7, 8, 9)",
+          "radius": 4
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 0,
+          "y": 0,
+          "w": 10,
+          "h": 10
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "keyboardMenu"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-74"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-76"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-77"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-78"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-79"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-80"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-81"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": null
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-81"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-82"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-83"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-84"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-85"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-86"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-87"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-88"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "surfaceFocus",
+        "payload": {
+          "surface": "$tab-id-87"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null,
+        "held": true
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-16",
+              "mono_ns": "$mono-ns-16",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 48
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

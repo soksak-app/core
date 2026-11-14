@@ -63,6 +63,7 @@ function checkCase(kase, file) {
     if (kinds[0] === "send") {
       const raw = "raw_hex" in step.send;
       if (!raw && typeof step.send.method !== "string") fail(`${where} send must name a method`);
+      variablesIn(step.send, used);
     } else if (kinds[0] === "reply") {
       if (step.reply.jsonrpc !== "2.0" || !("id" in step.reply)) fail(`${where} reply must have jsonrpc 2.0 and an id`);
       variablesIn(step.reply, used);
@@ -171,8 +172,10 @@ export async function startCasePlayer(name, { pid = process.pid, values = {} } =
       socket.destroy();
       return;
     }
-    if (!isDeepStrictEqual(message, step.send)) {
-      fail(`step ${cursor}: the client sent ${JSON.stringify(message)}, the case expects ${JSON.stringify(step.send)}`);
+    // A frame of the client holds a variable only for a value that the host chose in an earlier reply, which the client repeats.
+    const expected = substitute(step.send);
+    if (!isDeepStrictEqual(message, expected)) {
+      fail(`step ${cursor}: the client sent ${JSON.stringify(message)}, the case expects ${JSON.stringify(expected)}`);
       socket.destroy();
       return;
     }

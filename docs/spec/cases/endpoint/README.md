@@ -19,7 +19,7 @@ A case is one tracked JSON file in this directory. The file name is `<name>.json
 | `variables` | no | The fields whose value the host chooses. Each variable is `"<name>": {"type": ..., "keys": [...], "example": ...}`; `keys` is optional and names the members that an object value has. |
 | `steps` | yes | The ordered steps. |
 
-A variable is written `$<name>` in a frame of the host. The first value that the host sends binds the variable, it must have the declared type and keys, and each later use of the variable must equal the first value.
+A variable is written `$<name>` in a frame of the host. The first value that the host sends binds the variable, it must have the declared type and keys, and each later use of the variable must equal the first value. The client players (`packages/client/testing/case-player.js`) also accept a variable in a frame of the client, for a value that the host chose in an earlier reply and that the client repeats (a log position): the player replaces it with the value that the test gives or with the example, and a case with such a variable has `replay: false`.
 
 ## Steps
 

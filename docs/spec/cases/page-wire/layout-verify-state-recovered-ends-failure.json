@@ -1,0 +1,349 @@
+{
+  "name": "layout-verify-state-recovered-ends-failure",
+  "description": "A failed layout writes its failure as a workbench error record, a later presented layout sends one wait for the presentation of the window, and the end of the failure sends a second wait; the host answers each wait with null.",
+  "replay": false,
+  "reason": "The wait for the presentation of the window needs a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "7a593040-d04d-4bdc-a588-83bb053ddff5",
+      "source": "page"
+    },
+    "trip-us-1": {
+      "type": "integer",
+      "example": 53,
+      "source": "page"
+    },
+    "resolution-us-1": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999999851,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999396039,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us-2": {
+      "type": "integer",
+      "example": 53,
+      "source": "page"
+    },
+    "resolution-us-2": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1790999999999851,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 4999396039,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us-3": {
+      "type": "integer",
+      "example": 53,
+      "source": "page"
+    },
+    "resolution-us-3": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1790999999999851,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 4999396039,
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us-4": {
+      "type": "integer",
+      "example": 53,
+      "source": "page"
+    },
+    "resolution-us-4": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-8": {
+      "type": "integer",
+      "example": 1790999999999851,
+      "source": "page"
+    },
+    "mono-ns-8": {
+      "type": "integer",
+      "example": 4999396039,
+      "source": "page"
+    },
+    "ts-us-9": {
+      "type": "integer",
+      "example": 1791000000004645,
+      "source": "page"
+    },
+    "mono-ns-9": {
+      "type": "integer",
+      "example": 5004189560,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-7",
+              "mono_ns": "$mono-ns-7",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us-4",
+                "resolution_us": "$resolution-us-4"
+              }
+            },
+            {
+              "ts_us": "$ts-us-8",
+              "mono_ns": "$mono-ns-8",
+              "start": "$page-identity",
+              "level": "error",
+              "event": "workbench.record.error",
+              "fields": {
+                "where": "workbench",
+                "text": "surface presentation failed: the current image raster did not present within 10s; pending tab-1/view generation 2 raster 1 sequence 0 presented 0/0 surface visible"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "waitPresented"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "waitPresented"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-9",
+              "mono_ns": "$mono-ns-9",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "frame",
+                "level": "debug",
+                "count": 10
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

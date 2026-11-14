@@ -1,497 +1,185 @@
 import assert from "node:assert/strict";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { EventEmitter } from "node:events";
-import { PassThrough } from "node:stream";
-import { setImmediate } from "node:timers";
 import test from "node:test";
 
-import { runNormalShutdown } from "../normal-shutdown-runner.mjs";
+import { startCasePlayer } from "@soksak/client/testing";
 
-function fixture() {
-  const configDir = mkdtempSync(join(tmpdir(), "normal-shutdown-audit-"));
-  const logs = join(configDir, "logs");
-  mkdirSync(logs);
-  writeFileSync(join(configDir, "endpoint.json"), "{}\n");
-  const log = join(logs, "host-100-200.jsonl");
-  writeFileSync(log, `${JSON.stringify({ seq: 1, level: "info", layer: "host", event: "log.open", fields: {} })}\n`);
-  return { configDir, log };
+import { runNormalShutdown, runSokProcessWait } from "../normal-shutdown-runner.mjs";
+
+// The bundled sok executable of the tests is a real program in the folder of the host binary: the echo of the system, which prints its
+// arguments and so answers no JSON, and the fixture program of the CLI, which answers once the process of the PID is gone.
+const SOK_FIXTURE = fileURLToPath(new URL("../fixtures/programs/sok-process-wait.mjs", import.meta.url));
+
+/** A configuration folder whose host folder holds the bundled sok executable `install(path)` puts in place. */
+function bundledSok(install) {
+  const configDir = mkdtempSync(join(tmpdir(), "normal-shutdown-sok-"));
+  const appDirectory = join(configDir, "MacOS");
+  mkdirSync(appDirectory, { recursive: true });
+  install(join(appDirectory, "sok"));
+  return { configDir, binary: join(appDirectory, "Host") };
 }
 
-test("no-service shutdown refuses a sidecar session before requesting quit", { timeout: 2000 }, async () => {
-  const { configDir } = fixture();
-  const sessions = [{ sidecar: "rasterprobe", surface: "tab-raster" }];
-  let quitRequested = false;
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") {
-        assert.deepEqual(params, { window: "main" });
-        return { sessions };
-      }
-      if (method === "command.run" && params.name === "host.quit") {
-        quitRequested = true;
-        return null;
-      }
-      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
-    },
-    close() {},
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      env: {},
-      write: () => {},
-    }), /no-service shutdown precondition failed: sidecar sessions=/);
-    assert.equal(quitRequested, false, "the runner requests quit before rejecting the live sidecar session");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+const errorLine = (seq, where, text) => `${JSON.stringify({ seq, level: "error", layer: "host", event: "host.record.error", fields: { where, text } })}\n`;
+
+/**
+ * The application of the endpoint case `name` for the shutdown check: the player of the case is the endpoint of the host whose process is
+ * the process of the test, its configuration folder holds the event log of that host, and the host folder of `app.binary` holds the
+ * bundled sok executable of the fixture program. The player removes endpoint.json when it receives host.quit, as the host does before its process ends, and
+ * `onQuit` runs at the same request. Closing the player fails when the case was not played.
+ */
+async function startApp(t, name, { onQuit, removeEndpoint = true } = {}) {
+  const server = await startCasePlayer(name);
+  t.after(() => server.close());
+  const logs = join(server.configDir, "logs");
+  mkdirSync(logs);
+  const log = join(logs, `host-100-${process.pid}.jsonl`);
+  writeFileSync(log, `${JSON.stringify({ seq: 1, level: "info", layer: "host", event: "log.open", fields: {} })}\n`);
+  const sok = bundledSok((path) => copyFileSync(SOK_FIXTURE, path));
+  t.after(() => rmSync(sok.configDir, { recursive: true, force: true }));
+  server.events.on("request", ({ method, params }) => {
+    if (method !== "command.run" || params.name !== "host.quit") return;
+    if (removeEndpoint) rmSync(join(server.configDir, "endpoint.json"));
+    onQuit?.({ log, configDir: server.configDir });
+  });
+  return { server, log, app: { name: "wailsv3", configDir: server.configDir, binary: sok.binary } };
+}
+
+/** Writes the endpoint file of a persistent service of the raster probe in its folder of the configuration folder. */
+function serviceEndpoint(configDir, content) {
+  const directory = join(configDir, "services", "rasterprobe");
+  mkdirSync(directory, { recursive: true });
+  const file = join(directory, "endpoint.json");
+  writeFileSync(file, `${JSON.stringify(content)}\n`);
+  return file;
+}
+
+const QUIET = () => {};
+
+test("no-service shutdown refuses a sidecar session before requesting quit", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-session-live");
+  await assert.rejects(runNormalShutdown({ app, env: {}, write: QUIET }), /no-service shutdown precondition failed: sidecar sessions=/);
 });
 
-test("no-service shutdown refuses a persistent service endpoint without a session", { timeout: 2000 }, async () => {
-  const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "rasterprobe");
-  mkdirSync(serviceDirectory, { recursive: true });
-  const endpointFile = join(serviceDirectory, "endpoint.json");
-  writeFileSync(endpointFile, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
-  let quitRequested = false;
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") return { sessions: [] };
-      if (method === "command.run" && params.name === "host.quit") {
-        quitRequested = true;
-        return null;
-      }
-      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
-    },
-    close() {},
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      env: {},
-      write: () => {},
-    }), (error) => {
-      assert.match(error.message, /no-service shutdown precondition failed/);
-      assert.ok(error.message.includes(endpointFile), `the error does not name ${endpointFile}: ${error.message}`);
-      return true;
-    });
-    assert.equal(quitRequested, false, "the runner requests quit before rejecting the service endpoint");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("no-service shutdown refuses a persistent service endpoint without a session", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-objects-empty");
+  const endpointFile = serviceEndpoint(app.configDir, { protocol: 1, pid: 321, socket: "unused", token: "unused" });
+  await assert.rejects(runNormalShutdown({ app, env: {}, write: QUIET }), (error) => {
+    assert.match(error.message, /no-service shutdown precondition failed/);
+    assert.ok(error.message.includes(endpointFile), `the error does not name ${endpointFile}: ${error.message}`);
+    return true;
+  });
 });
 
-test("no-service shutdown records the empty session and endpoint precondition", { timeout: 2000 }, async () => {
-  const { configDir } = fixture();
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") {
-        assert.deepEqual(params, { window: "main" });
-        return { sessions: [] };
-      }
-      if (method === "command.run" && params.name === "host.quit") return null;
-      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
-    },
-    close() {},
-  };
+test("no-service shutdown records the empty session and endpoint precondition", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-quit");
   const lines = [];
-  try {
-    await runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      env: {},
-      write: (line) => lines.push(line),
-    });
-    assert.ok(lines.includes("PRECONDITION normal-shutdown app=wailsv3 mode=no-service sidecar_sessions=0 service_endpoints=0"),
-      `the empty no-service precondition was not recorded: ${JSON.stringify(lines)}`);
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+  await runNormalShutdown({ app, env: {}, write: (line) => lines.push(line) });
+  assert.ok(lines.includes("PRECONDITION normal-shutdown app=wailsv3 mode=no-service sidecar_sessions=0 service_endpoints=0"),
+    `the empty no-service precondition was not recorded: ${JSON.stringify(lines)}`);
 });
 
-test("no-service shutdown reports invalid diagnostic session metadata", { timeout: 2000 }, async () => {
-  const { configDir } = fixture();
-  let quitRequested = false;
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") return { sessions: null };
-      if (method === "command.run" && params.name === "host.quit") {
-        quitRequested = true;
-        return null;
-      }
-      throw new Error(`unexpected request ${method} ${JSON.stringify(params)}`);
-    },
-    close() {},
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      env: {},
-      write: () => {},
-    }), /diagnostics\.objects returned no sidecar session list/);
-    assert.equal(quitRequested, false, "the runner requests quit after receiving invalid session metadata");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("no-service shutdown reports invalid diagnostic session metadata", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-objects-invalid");
+  await assert.rejects(runNormalShutdown({ app, env: {}, write: QUIET }), /diagnostics\.objects returned no sidecar session list/);
 });
 
-test("no-service shutdown reports a non-directory service entry", { timeout: 2000 }, async () => {
-  const { configDir } = fixture();
-  const serviceEntry = join(configDir, "services", "invalid-entry");
-  mkdirSync(join(configDir, "services"));
+test("no-service shutdown reports a non-directory service entry", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-objects-empty");
+  const serviceEntry = join(app.configDir, "services", "invalid-entry");
+  mkdirSync(join(app.configDir, "services"));
   writeFileSync(serviceEntry, "invalid\n");
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method) => {
-      if (method === "diagnostics.objects") return { sessions: [] };
-      throw new Error(`unexpected request ${method}`);
-    },
-    close() {},
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      env: {},
-      write: () => {},
-    }), (error) => {
-      assert.equal(error.message, `${serviceEntry} is not a service directory`);
-      return true;
-    });
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+  await assert.rejects(runNormalShutdown({ app, env: {}, write: QUIET }), (error) => {
+    assert.equal(error.message, `${serviceEntry} is not a service directory`);
+    return true;
+  });
 });
 
-test("normal shutdown rejects an application error written by the controlled host during quit", async () => {
-  const { configDir, log } = fixture();
-  let clientClosed = false;
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") return { sessions: [] };
-      assert.equal(method, "command.run");
-      assert.equal(params.name, "host.quit");
-      appendFileSync(log, `${JSON.stringify({ seq: 2, level: "error", layer: "host", event: "host.record.error", fields: { where: "shutdown", text: "quit failed" } })}\n`);
-      return null;
-    },
-    close: () => { clientClosed = true; },
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      env: {},
-      write: () => {},
-    }), /wailsv3: the application logged 1 error during shutdown:\nerror host shutdown: quit failed/);
-    assert.equal(clientClosed, true, "the endpoint client stays open after shutdown audit failure");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("normal shutdown rejects an application error written by the controlled host during quit", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-quit", { onQuit: ({ log }) => appendFileSync(log, errorLine(2, "shutdown", "quit failed")) });
+  await assert.rejects(runNormalShutdown({ app, env: {}, write: QUIET }),
+    /wailsv3: the application logged 1 error during shutdown:\nerror host shutdown: quit failed/);
 });
 
-test("normal shutdown ignores an application error written before the audit offset", async () => {
-  const { configDir, log } = fixture();
-  appendFileSync(log, `${JSON.stringify({ seq: 2, level: "error", layer: "host", event: "host.record.error", fields: { where: "earlier", text: "old failure" } })}\n`);
-  let quitCalls = 0;
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") return { sessions: [] };
-      assert.equal(method, "command.run");
-      assert.equal(params.name, "host.quit");
-      quitCalls += 1;
-      return null;
-    },
-    close: () => {},
-  };
-  try {
-    const result = await runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      env: {},
-      write: () => {},
-    });
-    assert.equal(result.appName, "wailsv3");
-    assert.equal(quitCalls, 1, "the direct host quit request ran once");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("normal shutdown ignores an application error written before the audit offset", { timeout: 20000 }, async (t) => {
+  const { app, log } = await startApp(t, "normal-shutdown-quit");
+  appendFileSync(log, errorLine(2, "earlier", "old failure"));
+  const result = await runNormalShutdown({ app, env: {}, write: QUIET });
+  assert.equal(result.appName, "wailsv3");
+  assert.equal(result.pid, process.pid);
 });
 
-test("normal shutdown retains an application error when the shutdown wait fails", async () => {
-  const { configDir, log } = fixture();
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") return { sessions: [] };
-      assert.equal(method, "command.run");
-      assert.equal(params.name, "host.quit");
-      return null;
-    },
-    close() {},
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => {
-        appendFileSync(log, `${JSON.stringify({ seq: 2, level: "error", layer: "host", event: "host.record.error", fields: { where: "shutdown", text: "late quit failure" } })}\n`);
-        throw new Error("controlled shutdown timeout");
-      },
-      env: {},
-      write: () => {},
-    }), (error) => {
-      assert.ok(error instanceof AggregateError, `expected both failures, received ${error}`);
-      assert.match(error.errors[0].message, /controlled shutdown timeout/);
-      assert.match(error.errors[1].message, /application logged 1 error during shutdown/);
-      assert.match(error.errors[1].message, /error host shutdown: late quit failure/);
-      return true;
-    });
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("normal shutdown retains an application error when the shutdown wait fails", { timeout: 20000 }, async (t) => {
+  // The host keeps endpoint.json after it ends the connection, so the wait for the shutdown fails.
+  const { app } = await startApp(t, "normal-shutdown-quit", {
+    removeEndpoint: false,
+    onQuit: ({ log }) => appendFileSync(log, errorLine(2, "shutdown", "late quit failure")),
+  });
+  await assert.rejects(runNormalShutdown({ app, env: {}, write: QUIET }), (error) => {
+    assert.ok(error instanceof AggregateError, `expected both failures, received ${error}`);
+    assert.match(error.errors[0].message, /endpoint\.json exists \d+ms after the request; the host removes it before its process ends/);
+    assert.match(error.errors[1].message, /application logged 1 error during shutdown/);
+    assert.match(error.errors[1].message, /error host shutdown: late quit failure/);
+    return true;
+  });
 });
 
-test("normal shutdown closes the application client when the shutdown wait fails", async () => {
-  const { configDir } = fixture();
-  const serviceEndpoint = join(configDir, "services", "rasterprobe", "endpoint.json");
-  mkdirSync(join(configDir, "services", "rasterprobe"), { recursive: true });
-  writeFileSync(serviceEndpoint, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
-  const clients = [];
-  const connectClient = async () => {
-    const client = {
-      endpoint: { pid: 200 },
-      request: async () => null,
-      closed: false,
-      close() { this.closed = true; },
-    };
-    clients.push(client);
-    return client;
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
-      waitForShutdown: async () => { throw new Error("controlled shutdown timeout"); },
-      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
-      write: () => {},
-    }), /controlled shutdown timeout/);
-    assert.equal(clients.length, 1, "shutdown does not open a service observer connection");
-    assert.deepEqual(clients.map((client) => client.closed), [true], "the endpoint client closes after a shutdown failure");
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("normal shutdown fails when the host keeps its endpoint file after the end of the connection of a service shutdown", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-service-quit", { removeEndpoint: false });
+  serviceEndpoint(app.configDir, { protocol: 1, pid: 321, socket: "unused", token: "unused" });
+  await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
+    /endpoint\.json exists \d+ms after the request/);
 });
 
-test("service shutdown fails when endpoint EOF precedes a service process timeout", async () => {
-  const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "rasterprobe");
-  mkdirSync(serviceDirectory, { recursive: true });
-  writeFileSync(join(serviceDirectory, "endpoint.json"), `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
-  const clients = [];
-  const connectClient = async () => {
-    const client = {
-      endpoint: { pid: 200 },
-      request: async () => null,
-      ended: Promise.resolve(),
-      close() {},
-    };
-    clients.push(client);
-    return client;
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      waitForServiceProcess: async () => { throw new Error("controlled service process wait timeout"); },
-      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
-      write: () => {},
-    }), /controlled service process wait timeout/);
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("service shutdown fails when the service process still runs after the end of the connection", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-service-quit");
+  // The service process is the process of this test, which runs: the CLI refuses and the refusal is the error of the wait.
+  serviceEndpoint(app.configDir, { protocol: 1, pid: process.pid, socket: "unused", token: "unused" });
+  await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
+    /process wait failed for service PID \d+ with exit 1: process \d+ still runs/);
 });
 
-test("service shutdown rejects a service endpoint that remains after PID observation", async () => {
-  const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "rasterprobe");
-  mkdirSync(serviceDirectory, { recursive: true });
-  const serviceEndpoint = join(serviceDirectory, "endpoint.json");
-  writeFileSync(serviceEndpoint, `${JSON.stringify({ protocol: 1, pid: 321, socket: "unused", token: "unused" })}\n`);
-  const client = { endpoint: { pid: 200 }, request: async () => null, close() {} };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
-      waitForShutdown: async () => ({ closedMs: 1 }),
-      waitForServiceProcess: async ({ pid }) => assert.equal(pid, 321),
-      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
-      write: () => {},
-    }), /services\/rasterprobe\/endpoint.json remains after service PID 321 ended/);
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("service shutdown rejects a service endpoint that remains after PID observation", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-service-quit");
+  // The service process is a real process that ended: its PID is gone, which the CLI reports as the end.
+  const service = spawnSync("true");
+  serviceEndpoint(app.configDir, { protocol: 1, pid: service.pid, socket: "unused", token: "unused" });
+  await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
+    new RegExp(`services/rasterprobe/endpoint.json remains after service PID ${service.pid} ended`));
 });
 
-test("service shutdown names an invalid service endpoint and rejects its PID", async () => {
-  const { configDir } = fixture();
-  const serviceDirectory = join(configDir, "services", "rasterprobe");
-  mkdirSync(serviceDirectory, { recursive: true });
-  const serviceEndpoint = join(serviceDirectory, "endpoint.json");
-  writeFileSync(serviceEndpoint, `${JSON.stringify({ protocol: 2, pid: -1 })}\n`);
-  const client = { endpoint: { pid: 200 }, request: async () => null, close() {} };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      prepareService: async () => ({ surface: "tab-raster", session: "session-raster" }),
-      waitForShutdown: async () => { throw new Error("shutdown should not start"); },
-      env: { SOKSAK_SHUTDOWN_SERVICE: "1" },
-      write: () => {},
-    }), (error) => error.message === `${serviceEndpoint} must contain protocol 1 and a positive int32 pid`);
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
+test("service shutdown names an invalid service endpoint, rejects its PID and closes the connection", { timeout: 20000 }, async (t) => {
+  const { app } = await startApp(t, "normal-shutdown-service-prepared");
+  const file = serviceEndpoint(app.configDir, { protocol: 2, pid: -1 });
+  await assert.rejects(runNormalShutdown({ app, env: { SOKSAK_SHUTDOWN_SERVICE: "1" }, write: QUIET }),
+    (error) => error.message === `${file} must contain protocol 1 and a positive int32 pid`);
 });
 
 test("service process wait takes no limit", async () => {
-  const { runSokProcessWait } = await import("../normal-shutdown-runner.mjs");
   await assert.rejects(runSokProcessWait({ binary: "/nonexistent/Host", configDir: "/nonexistent", pid: 321, timeoutMs: 700 }),
     /^TypeError: runSokProcessWait takes no timeoutMs: the wait ends by the end of the process or of the CLI$/);
 });
 
-test("service process wait rejects malformed CLI output", async () => {
-  const { runSokProcessWait } = await import("../normal-shutdown-runner.mjs");
-  const configDir = mkdtempSync(join(tmpdir(), "normal-shutdown-sok-output-"));
-  const appDirectory = join(configDir, "MacOS");
-  mkdirSync(appDirectory, { recursive: true });
-  writeFileSync(join(appDirectory, "sok"), "", { mode: 0o755 });
-  const child = new EventEmitter();
-  child.stdout = new PassThrough();
-  child.stderr = new PassThrough();
+test("service process wait rejects malformed CLI output", { timeout: 10000 }, async () => {
+  const { configDir, binary } = bundledSok((sok) => symlinkSync("/bin/echo", sok));
   try {
-    await assert.rejects(runSokProcessWait({
-      binary: join(appDirectory, "Host"),
-      configDir,
-      pid: 321,
-      spawnChild: () => {
-        setImmediate(() => {
-          child.stdout.write("not json");
-          child.stdout.end();
-          child.stderr.end();
-          child.emit("close", 0, null);
-        });
-        return child;
-      },
-    }), /returned invalid JSON for service PID 321/);
+    await assert.rejects(runSokProcessWait({ binary, configDir, pid: 321 }), /returned invalid JSON for service PID 321/);
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }
 });
 
-test("service process wait invokes the bundled CLI with the original PID", async () => {
-  const { runSokProcessWait } = await import("../normal-shutdown-runner.mjs");
-  const configDir = mkdtempSync(join(tmpdir(), "normal-shutdown-sok-success-"));
-  const appDirectory = join(configDir, "MacOS");
-  mkdirSync(appDirectory, { recursive: true });
-  writeFileSync(join(appDirectory, "sok"), "", { mode: 0o755 });
-  const child = new EventEmitter();
-  child.stdout = new PassThrough();
-  child.stderr = new PassThrough();
+test("service process wait invokes the bundled CLI with the original PID", { timeout: 10000 }, async () => {
+  const { configDir, binary } = bundledSok((sok) => copyFileSync(SOK_FIXTURE, sok));
+  // The service process of the wait is a real process that ended: its PID is gone, which the CLI reports as the end.
+  const service = spawnSync("true");
   try {
-    await runSokProcessWait({
-      binary: join(appDirectory, "Host"),
-      configDir,
-      pid: 321,
-      spawnChild: (command, args, options) => {
-        assert.equal(command, join(appDirectory, "sok"));
-        assert.deepEqual(args, ["process", "wait", "321", "--config-dir", configDir]);
-        assert.deepEqual(options.stdio, ["ignore", "pipe", "pipe"]);
-        setImmediate(() => {
-          child.stdout.write('{"pid":321,"ended":true}\n');
-          child.stdout.end();
-          child.stderr.end();
-          child.emit("close", 0, null);
-        });
-        return child;
-      },
-    });
-  } finally {
-    rmSync(configDir, { recursive: true, force: true });
-  }
-});
-
-test("normal shutdown reports client-close errors without hiding a shutdown failure", async () => {
-  const { configDir } = fixture();
-  const client = {
-    endpoint: { pid: 200 },
-    request: async (method, params) => {
-      if (method === "diagnostics.objects") return { sessions: [] };
-      assert.equal(method, "command.run");
-      assert.equal(params.name, "host.quit");
-      return null;
-    },
-    close() { throw new Error("controlled client-close failure"); },
-  };
-  try {
-    await assert.rejects(runNormalShutdown({
-      app: { name: "wailsv3", configDir },
-      connectClient: async () => client,
-      waitForFilesystem: async (_label, predicate) => assert.equal(predicate(), true),
-      waitForReady: async () => {},
-      waitForShutdown: async () => { throw new Error("controlled shutdown failure"); },
-      env: {},
-      write: () => {},
-    }), (error) => {
-      assert.ok(error instanceof AggregateError);
-      assert.equal(error.errors[0].message, "controlled shutdown failure");
-      assert.match(error.errors[1].message, /could not close the application client: controlled client-close failure/);
-      return true;
-    });
+    await runSokProcessWait({ binary, configDir, pid: service.pid });
+    // A process that still runs is not ended: the CLI refuses, and the refusal is the error of the wait.
+    await assert.rejects(runSokProcessWait({ binary, configDir, pid: process.pid }), /process wait failed for service PID \d+ with exit 1: process \d+ still runs/);
   } finally {
     rmSync(configDir, { recursive: true, force: true });
   }

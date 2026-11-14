@@ -18,7 +18,7 @@
     { "call": { "name": "performance", "payload": { "action": "on" } } },
     { "reply": { "result": null } },
     { "call": { "name": "overlayShow", "payload": { "id": "menu", "title": "Menu", "rect": { "x": 0, "y": 0, "w": 10, "h": 10 }, "mode": "menu", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(7, 8, 9)", "radius": 4 } } },
-    { "reply": { "result": null } },
+    { "reply": { "result": { "x": 0, "y": 0, "w": 10, "h": 10 } } },
     { "notice": { "event": "overlay-pick", "payload": { "id": "menu", "key": "core.modal.dismiss", "value": "" } } },
     { "call": { "name": "log", "payload": { "action": "clock" } } },
     { "reply": { "result": { "ts_us": "$ts-us", "mono_ns": "$mono-ns" } } },

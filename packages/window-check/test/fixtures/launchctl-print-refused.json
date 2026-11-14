@@ -1,0 +1,12 @@
+{
+  "recorded": "A request for a domain that does not exist: launchctl exits with 112. Command: /bin/launchctl print pid/0. Paths and application names are replaced by neutral names (the folder of the recording by /var/tester/rec, the node executable by /usr/local/bin/node, the home folder by /Users/tester, applications by sample-app-a, sample-app-b and sample-app-c).",
+  "command": [
+    "/bin/launchctl",
+    "print",
+    "pid/0"
+  ],
+  "status": 112,
+  "stdout": "",
+  "stderr": "Bad request.\nCould not find domain for pid: 0\n",
+  "pid": 0
+}

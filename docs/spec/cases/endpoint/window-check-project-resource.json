@@ -1,0 +1,17 @@
+{
+  "name": "window-check-project-resource",
+  "description": "A temporary project closes its child window, detaches the project that the application lists for its folder and flushes the projects.",
+  "replay": false,
+  "reason": "The case lists the folder that the test created, which the replay cannot know.",
+  "variables": {"root": {"type": "string", "example": "/tmp/project"}},
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"command.run","params":{"window":"project-window","name":"host.window.close","params":{}}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.projects"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":[{"id":"project","root":"$root"}]}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"command.run","params":{"window":"main","name":"core.project.close","params":{"id":"project"}}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"command.run","params":{"window":"main","name":"core.projects.flush","params":{}}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}}
+  ]
+}

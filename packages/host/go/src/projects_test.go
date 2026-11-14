@@ -7,13 +7,12 @@ import (
 	"testing"
 )
 
-func projectOpenFixture(t *testing.T) (*Host, *Surfaces, *channelPlatform, context.Context) {
+func projectOpenFixture(t *testing.T) (*Host, *Surfaces, context.Context) {
 	t.Helper()
-	fake := &channelPlatform{}
-	saved, savedFramework := system, framework
-	system, framework = fake, frameworkRecord{}
-	t.Cleanup(func() { system, framework = saved, savedFramework })
-	surfaces := &Surfaces{invoke: fake.runUITask, theme: Theme{Tokens: map[string]string{}}, events: func(string, any) {}}
+	savedFramework := framework
+	framework = frameworkRecord{}
+	t.Cleanup(func() { framework = savedFramework })
+	surfaces := &Surfaces{invoke: func(task func()) { task() }, theme: Theme{Tokens: map[string]string{}}, events: func(string, any) {}}
 	surfaces.projects = map[string]string{}
 	surfaces.titles = &titleRecord{}
 	surfaces.window = &frontendRecord{}
@@ -23,12 +22,12 @@ func projectOpenFixture(t *testing.T) (*Host, *Surfaces, *channelPlatform, conte
 	}
 	surfaces.host = host
 	windowContext := WithFrontend(context.Background(), surfaces.window)
-	return host, surfaces, fake, windowContext
+	return host, surfaces, windowContext
 }
 
 // contract: project.open.registers-owner-without-commit
 func TestProjectOpenRegistersOwnershipWithoutCommittingOrPosting(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	root := t.TempDir()
 	folder, err := ResolveProjectFolder(root)
 	if err != nil {
@@ -61,7 +60,7 @@ func TestProjectOpenRegistersOwnershipWithoutCommittingOrPosting(t *testing.T) {
 
 // contract: project.open.staged-until-shown
 func TestProjectOpenKeepsPendingReservationStagedUntilShown(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	root := t.TempDir()
 	folder, err := ResolveProjectFolder(root)
 	if err != nil {
@@ -102,7 +101,7 @@ func TestProjectOpenKeepsPendingReservationStagedUntilShown(t *testing.T) {
 
 // contract: project.shown-commits-after-page-ready, projects.shown.requires-project-field
 func TestProjectShownCommitsTheProjectAndNull(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	root := t.TempDir()
 	folder, err := ResolveProjectFolder(root)
 	if err != nil {
@@ -133,7 +132,7 @@ func TestProjectShownCommitsTheProjectAndNull(t *testing.T) {
 
 // contract: host-calls.decode.messages
 func TestProjectShownDecodesStandardArguments(t *testing.T) {
-	host, _, _, ctx := projectOpenFixture(t)
+	host, _, ctx := projectOpenFixture(t)
 	cases := []struct {
 		name string
 		raw  string
@@ -155,7 +154,7 @@ func TestProjectShownDecodesStandardArguments(t *testing.T) {
 
 // contract: project.open.prepare-before-show
 func TestProjectOpenKeepsCommittedRootUntilThePageSelectsTheNewRoot(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	oldRoot, err := ResolveProjectFolder(t.TempDir())
 	if err != nil {
 		t.Fatalf("resolve old project folder: %v", err)
@@ -189,7 +188,7 @@ func TestProjectOpenKeepsCommittedRootUntilThePageSelectsTheNewRoot(t *testing.T
 
 // contract: projects.shown-validates-before-commit
 func TestProjectShownRootMismatchDoesNotMutateProjectState(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	ownedRoot, err := ResolveProjectFolder(t.TempDir())
 	if err != nil {
 		t.Fatalf("resolve owned project folder: %v", err)
@@ -229,7 +228,7 @@ func TestProjectShownRootMismatchDoesNotMutateProjectState(t *testing.T) {
 
 // contract: projects.release-rolls-back-staged-owner
 func TestProjectReleaseRollsBackOnlyTheStagedOwner(t *testing.T) {
-	host, surfaces, _, _ := projectOpenFixture(t)
+	host, surfaces, _ := projectOpenFixture(t)
 	oldRoot, err := ResolveProjectFolder(t.TempDir())
 	if err != nil {
 		t.Fatalf("resolve committed project folder: %v", err)
@@ -279,7 +278,7 @@ func TestProjectReleaseRollsBackOnlyTheStagedOwner(t *testing.T) {
 
 // contract: host-calls.decode.messages, projects.shown.requires-project-field
 func TestProjectShownRejectsMalformedArgumentsWithoutMutation(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	surfaces.shown, surfaces.root, surfaces.title = "prj-old", "/projects/old", "Old"+titleSuffix()
 	surfaces.projects["prj-next"] = "/projects/next"
 	surfaces.pendingProjects = map[string]bool{"prj-next": true}
@@ -310,7 +309,7 @@ func TestProjectShownRejectsMalformedArgumentsWithoutMutation(t *testing.T) {
 
 // contract: project.shown.ignores-unknown-fields
 func TestProjectShownIgnoresUnknownOuterAndNestedFields(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	root, err := ResolveProjectFolder(t.TempDir())
 	if err != nil {
 		t.Fatalf("resolve project folder: %v", err)
@@ -347,7 +346,7 @@ func TestProjectShownIsExposedThroughTheBindingEntrance(t *testing.T) {
 
 // contract: project.open-ready-shown-order
 func TestProjectOpenKeepsTheCommittedProjectUntilThePageSelectsTheNewOne(t *testing.T) {
-	host, surfaces, _, ctx := projectOpenFixture(t)
+	host, surfaces, ctx := projectOpenFixture(t)
 	oldFolder, err := ResolveProjectFolder(t.TempDir())
 	if err != nil {
 		t.Fatalf("resolve old project folder: %v", err)

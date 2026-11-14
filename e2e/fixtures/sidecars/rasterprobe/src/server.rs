@@ -12,49 +12,13 @@ use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde_json::{Value, json};
 
 use crate::events::{EventLog, record};
-use crate::iosurface::Surface;
-use crate::service::{Child, Class, Conn, Handled, Identity, Level, Log, Platform, Service, Transfer};
-
-struct ProcessChild(std::process::Child);
-
-impl Child for ProcessChild {
-    fn pid(&self) -> u32 {
-        self.0.id()
-    }
-
-    fn close(&mut self) -> Result<(), String> {
-        drop(self.0.stdin.take());
-        let status = self.0.wait().map_err(|error| format!("wait for session process {}: {error}", self.0.id()))?;
-        if status.success() { Ok(()) } else { Err(format!("session process {} ended with {status}", self.0.id())) }
-    }
-}
-
-struct Processes(PathBuf);
-
-impl Platform for Processes {
-    fn transfer(&mut self, width: u32, height: u32) -> Result<Box<dyn Transfer>, String> {
-        Ok(Box::new(Surface::create(width, height)?))
-    }
-
-    fn child(&mut self, session: &str) -> Result<Box<dyn Child>, String> {
-        let child = Command::new(&self.0)
-            .arg("--session")
-            .arg(session)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|error| format!("start session process {session}: {error}"))?;
-        Ok(Box::new(ProcessChild(child)))
-    }
-}
+use crate::service::{Class, Conn, Handled, Identity, Level, Service};
 
 struct Shared {
     service: Mutex<Service>,
@@ -262,7 +226,7 @@ pub fn run(service_dir: &Path, log_dir: Option<PathBuf>) -> Result<(), String> {
     let executable = std::env::current_exe().map_err(|error| format!("current executable: {error}"))?;
     let log = EventLog::new(log_dir);
     log_start(&log, pid);
-    let service = Service::new(identity, Box::new(Processes(executable)), Box::new(log));
+    let service = Service::new(identity, executable, log);
     let endpoint = service_dir.join("endpoint.json");
     let shared = Arc::new(Shared {
         service: Mutex::new(service),

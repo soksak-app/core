@@ -1,0 +1,16 @@
+{
+  "name": "plugin-operations-replace",
+  "description": "The page replaces the service of the sidecar probe and reads the outdated sidecars again; the second replacement is refused, and the outdated sidecars are read again.",
+  "replay": false,
+  "reason": "The outdated sidecars and their replacement come from the running persistent services of the host, which the Go producer does not start.",
+  "steps": [
+    {"call":{"name":"sidecarsReplace","payload":{"sidecar":"probe"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"sidecarsOutdated"}},
+    {"reply":{"result":[]}},
+    {"call":{"name":"sidecarsReplace","payload":{"sidecar":"probe"}}},
+    {"reply":{"error":"sidecar probe: replace: close owner: boom"}},
+    {"call":{"name":"sidecarsOutdated"}},
+    {"reply":{"result":[{"sidecar":"probe","running":"0.0.3","installed":"0.0.7","sessions":0}]}}
+  ]
+}

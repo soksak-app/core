@@ -1,0 +1,12 @@
+{
+  "name": "window-check-recording-layout-trace-stop-fails",
+  "description": "The stop of the layout trace is refused after a failed action.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.layout.trace", "params": {"window": "main", "on": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.layout.trace", "params": {"window": "main", "on": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "error": {"code": 1004, "message": "no trace"}}}
+  ]
+}

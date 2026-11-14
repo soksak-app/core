@@ -9,7 +9,7 @@ import { Soksak } from "soksak";
 import { ahead, latest, placementPending, seated } from "./compositor.js";
 import { currentGrid, dropBands, plane, presentedCardRect, railOutline, tabsOf } from "./plane.js";
 import { isPlace } from "./registry.js";
-import { expectedRailLoops, windowSidebarsPlaced } from "./verify-checks.js";
+import { expectedRailLoops, seatScale, windowSidebarsPlaced } from "./verify-checks.js";
 import { cardRadius, value } from "./settings.js";
 import { gridScale } from "./device-grid.js";
 
@@ -303,8 +303,7 @@ export function verify(controls = null) {
   // default: when no layout has been seated yet, there is no surface to measure.
   for (const s of placed?.surfaces ?? []) {
     if (!s.visible || s.declared.w < 1 || s.declared.h < 1) continue;
-    const seat = s.scale;
-    if (!(seat > 0)) throw new Error(`verify: seated surface ${s.id} has no seat scale (${seat})`);
+    const seat = seatScale(s);
     // Both rectangles lie on the device pixels of the seat, so they are compared in whole device pixels; the fitted declared
     // rectangle is the largest one on that grid inside the declared one, so an applied edge outside it leaves the declared rectangle.
     const fit = fitted(s.declared, seat);

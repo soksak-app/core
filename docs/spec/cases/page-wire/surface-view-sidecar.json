@@ -1,0 +1,21 @@
+{
+  "name": "surface-view-sidecar",
+  "description": "A view sends to a sidecar that its surface does not declare, which the page refuses, and to the declared sidecar, which the page sends through the host with the source generation of the view.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"gated-count-1":{"type":"integer","example":1,"source":"page"},"ts-us-1":{"type":"integer","example":1791000000000001,"source":"page"},"mono-ns-1":{"type":"integer","example":5000000001,"source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-view-sidecar","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-view-sidecar-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"fixture-view-sidecar-surface","plugin":"fixture-view-sidecar","generation":1,"id":1,"command":"runtime.sidecar.send","params":{"id":"fixture-view-sidecar-surface","sidecar":"other-sidecar","body":{"n":1},"cids":[]}}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"error":{"code":-32000,"message":"surface fixture-view-sidecar-surface cannot send to sidecar other-sidecar"},"page":"$page-identity","generation":1,"surface":"fixture-view-sidecar-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"fixture-view-sidecar-surface","plugin":"fixture-view-sidecar","generation":1,"id":2,"command":"runtime.sidecar.send","params":{"id":"fixture-view-sidecar-surface","sidecar":"fixture-sidecar","body":{"n":2},"cids":[]}}}},
+    {"call":{"name":"viewSidecarSend","payload":{"source":"fixture-view-sidecar-surface","generation":1,"sidecar":"fixture-sidecar","surface":"fixture-view-sidecar-surface","body":{"n":2},"cids":[]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"fixture-view-sidecar-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-1","mono_ns":"$mono-ns-1","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":"$gated-count-1"}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

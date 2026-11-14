@@ -1,0 +1,22 @@
+{
+  "name": "window-check-stall-dump-closed",
+  "description": "The host ends the connection after it receives the stall dump and before it answers.",
+  "replay": false,
+  "reason": "The case sends a dump path that the replaying host would write goroutine stacks beside, so the replay cannot arrange it.",
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "diagnostics.stall.dump",
+        "params": {
+          "window": "main",
+          "path": "/x/logs/stall-10-7.txt"
+        }
+      }
+    },
+    {
+      "close": "host"
+    }
+  ]
+}

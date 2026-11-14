@@ -2,38 +2,40 @@
 // writes the settings, and the change answers once the host wrote them (docs/spec/external-sidebars.md#window-controls).
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { HostWorkspaceStore } from "../host-store.js";
 
 test("a switch reaches the drawing before the settings write, and answers after the write", async () => {
-  const realDocument = globalThis.document;
-  globalThis.document = { addEventListener: () => {}, documentElement: { dataset: {}, style: { setProperty() {} } } };
-  const memory = { common: {}, projects: [] };
+  const dom = new JSDOM("<body></body>", { url: "http://localhost/" });
+  globalThis.document = dom.window.document;
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The write of the settings is held until the test releases it.
+  const wire = selectPageWire("settings-switch-order");
   const order = [];
-  let answer = null;
-  let writeStarted = null;
-  const written = new Promise((resolve) => { writeStarted = resolve; });
+  // The page without an operation sink stores no first event of an operation, so the write carries no identifiers.
+  const { installOperationSink } = await import("../operations.js");
+  await import("../page-log.js");
+  installOperationSink(null);
   const { connectSettings, onSettingsChange, set: change, value } = await import("../settings.js?test=switch-order");
+  const { orderedCallsAnswered } = await import("../host.js");
   try {
-    await connectSettings({
-      snapshot: async () => structuredClone(memory),
-      settings: (id, values) => {
-        order.push(`write ${JSON.stringify(values)}`);
-        writeStarted();
-        return new Promise((resolve) => { answer = () => { memory.common = { ...memory.common, ...values }; resolve(); }; });
-      },
-      onChange: () => () => {},
-    });
+    await connectSettings(new HostWorkspaceStore(host));
+    await orderedCallsAnswered();
     onSettingsChange(() => order.push(`draw left ${value("left")}`));
     let answered = false;
     const pending = change({ left: false }, "common", "core.settings.set").then(() => { answered = true; });
     assert.deepEqual(order, ["draw left false"], "the change reached the drawing after the write started");
-    // The write starts after the snapshot is read, and the settings mock reports its start.
-    await written;
-    assert.deepEqual(order, ["draw left false", 'write {"left":false}']);
+    await orderedCallsAnswered();
+    // The write starts after the snapshot is read, and the page sends it to the host.
+    const written = wire.calls.filter(({ name, payload }) => name === "workspace" && payload.kind === "settings");
+    assert.deepEqual(written.map(({ payload }) => payload.patch), [{ left: false }]);
     assert.equal(answered, false, "the change answered before the host wrote the settings");
-    answer();
+    wire.release();
     await pending;
     assert.equal(answered, true);
+    await orderedCallsAnswered();
+    wire.finish();
   } finally {
-    globalThis.document = realDocument;
+    dom.window.close();
   }
 });

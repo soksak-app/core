@@ -1,0 +1,16 @@
+{
+  "name": "fixture-settings-closed-mygo",
+  "description": "A host without a main page closes the settings dialog when core.modal is empty.",
+  "replay": false,
+  "reason": "The case plays the requests of the start state of a check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"pageProcess":null,"modal":null}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.watch","params":{"window":"main","name":"core.modal"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"main","name":"core.modal"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.unwatch","params":{"window":"main","name":"core.modal"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}}
+  ]
+}

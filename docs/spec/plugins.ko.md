@@ -349,6 +349,7 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 | --- | --- |
 | `host` | 메인 페이지 호스트 인터페이스(`call`, `on`, `page`, `draggable`). 네이티브 호스트가 없으면 `null` |
 | `page` | 표면·모달 페이지 인터페이스(`theme`, `sidecar`, `exposure`, `document`, `modal`). 네이티브 호스트가 없으면 `null` |
+| `clock` | 페이지의 이벤트 배처가 읽는 페이지의 시계: `now()`는 밀리초 단위 읽은 값을 반환하고, `after(callback, ms)`는 그 시계로 `ms` 밀리초가 지나면 callback을 한 번 실행한다. 애플리케이션은 `@soksak/plugin-api/log-batch.js`의 `platformClock`을 내보내고, 테스트 런타임은 테스트가 순간을 주는 시계를 내보낸다 |
 | `openStore()` | 작업 공간 저장소를 반환한다. 브라우저 애플리케이션은 IndexedDB를, 네이티브 애플리케이션은 `HostWorkspaceStore`를 사용한다 |
 | `windows` | 창과 프로젝트 폴더 인터페이스. 네이티브 애플리케이션은 `@soksak/workbench/host-windows.js`의 `hostWindows(host)`를, 브라우저 애플리케이션은 자체 구현을 내보낸다 |
 

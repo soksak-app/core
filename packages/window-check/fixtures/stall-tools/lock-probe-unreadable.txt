@@ -1,0 +1,2 @@
+locked	-1	/tmp/record/held-c.data
+error	Permission denied	/tmp/record/denied.data

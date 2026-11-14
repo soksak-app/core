@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
 import { validateDiagnostics } from "@soksak/plugin-api";
+import { Session } from "@soksak/window-check/app.mjs";
 import { ANCHOR_PLUGIN, installedSectionViews, requireSectionDeclarations, SECTION_PLACEMENT, sectionViewDescriptor }
   from "../benchmark/cases/section-view.mjs";
 
@@ -145,35 +148,23 @@ test("a section view whose installed declaration the workbench refuses fails wit
   assert.throws(() => requireSectionDeclarations(twice), { message: "command probeplain.view.frames is declared twice" });
 });
 
-/**
- * A session whose statuses are `statuses` ({name: [value, ...]}): get answers the first value of a status, until the first value that
- * meets the predicate (or fails with the message of the wait), and run answers from `answers` ({command: (params, surface) => value}).
- */
-function fakeSession(statuses, answers = {}) {
-  const calls = [];
-  const cleanups = [];
-  const values = (name) => {
-    assert.ok(Object.hasOwn(statuses, name), `the fake session has no status ${name}`);
-    return typeof statuses[name] === "function" ? statuses[name]() : statuses[name];
-  };
-  return {
-    calls,
-    cleanups,
-    async get(name) { return values(name)[0]; },
-    async until(name, predicate, message, options) {
-      calls.push(["until", name, options]);
-      const value = values(name).find((item) => predicate(item));
-      if (value === undefined) throw new Error(message);
-      return value;
-    },
-    async run(name, params, surface) {
-      calls.push(["run", name, params, surface]);
-      assert.ok(Object.hasOwn(answers, name), `the fake session has no command ${name}`);
-      return answers[name](params, surface);
-    },
-    cleanup(action) { cleanups.push(action); },
-  };
+const app = { name: "fixture", configDir: mkdtempSync(join(tmpdir(), "section-view-session-")) };
+process.once("exit", () => rmSync(app.configDir, { recursive: true, force: true }));
+
+/** The check session on a client that is connected to the case player of the case `name`; closing the player fails when the case was not played. */
+async function play(t, name) {
+  const server = await startCasePlayer(`section-view-${name}`);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  return { s: new Session(app, client), server };
 }
+
+/** The commands that the player received, as [name, params, surface] of each. */
+const commands = (server) => server.requests.filter(({ method }) => method === "command.run").map(({ params }) => [params.name, params.params, params.surface]);
+
+/** The failure of a wait that no value satisfies: the case ends it with the close of the connection by the host. */
+const unsatisfied = (message) => ({ message: `fixture: ${message} (endpoint connection closed)` });
 
 const anchorTab = (id) => ({ id, plugin: ANCHOR_PLUGIN });
 const card = (id, h, tabs, rows = [0, 1]) => ({ id, x: 0, y: 0, w: 400, h, r0: rows[0], r1: rows[1], c0: 0, c1: 1, tabs });
@@ -188,74 +179,50 @@ test("the section placement anchors on the preferred card with a layoutprobe tab
     { message: "core.grid has no card with a layoutprobe tab, whose card-left sidebar shows the section view of probeplain" });
 });
 
-const sidebar = (id, sections) => ({ sidebar: id, placement: "card", card: id.split(":")[0], sections });
-const fixtureProject = { id: "project-1", root: "/config/test-project" };
+const open = (s, card, params = { section: "probeplain.section" }) => SECTION_PLACEMENT.open(s, { card, plugin: "probeplain", params });
 
-test("a section view starts in a new layoutprobe card split below the tallest layoutprobe card, as the section of its card-left sidebar", async () => {
-  const grid = { cards: [card("card-1", 200, [anchorTab("t-1")]), card("card-2", 420, [anchorTab("t-2")]),
-    card("card-3", 500, [{ id: "plain-1", plugin: "probeplain" }])] };
-  const split = { cards: [...grid.cards, { ...card("card-4", 200, [anchorTab("t-4")]), active: "t-4" }] };
-  const after = () => {
-    let done = false;
-    return { grid: () => [done ? split : grid], split: () => { done = true; return { card: "card-4", tab: "t-4" }; } };
-  };
-  const shown = after();
-  const s = fakeSession({
-    "core.project": [fixtureProject],
-    "core.grid": shown.grid,
-    "core.sidebars": [[sidebar("card-1:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-1:left/probeplain.section" }])],
-      [sidebar("card-1:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-1:left/probeplain.section" }]),
-        sidebar("card-4:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-4:left/probeplain.section" }])]],
-  }, { "core.card.split": shown.split });
-  const surface = await SECTION_PLACEMENT.open(s, { card: "card-1", plugin: "probeplain", params: { section: "probeplain.section" } });
-  assert.equal(surface, "spc-1/card-4:left/probeplain.section");
-  assert.deepEqual(s.calls[0], ["run", "core.card.split", { card: "card-2", side: "bottom", plugin: "layoutprobe" }, undefined]);
+test("a section view starts in a new layoutprobe card split below the tallest layoutprobe card, as the section of its card-left sidebar", async (t) => {
+  const { s, server } = await play(t, "open");
+  assert.equal(await open(s, "card-1"), "spc-1/card-4:left/probeplain.section");
+  await server.played;
+  assert.deepEqual(commands(server)[0], ["core.card.split", { card: "card-2", side: "bottom", plugin: "layoutprobe" }, undefined]);
   assert.equal(s.cleanups.length, 1);
-  await assert.rejects(SECTION_PLACEMENT.open(s, { card: "card-1", plugin: "probeplain", params: {} }),
+  await assert.rejects(open(s, "card-1", {}),
     { message: "the section placement of probeplain requires params.section, the id of the section, not undefined" });
-  const absent = fakeSession({ "core.project": [fixtureProject], "core.grid": [grid], "core.sidebars": [[]] }, { "core.card.split": () => ({ card: "card-4", tab: "t-4" }) });
-  await assert.rejects(SECTION_PLACEMENT.open(absent, { card: "card-1", plugin: "probeplain", params: { section: "probeplain.section" } }),
-    { message: "card card-4 did not show the section probeplain.section in its card-left sidebar card-4:left" });
-  const noTerminal = fakeSession({ "core.grid": [{ cards: [grid.cards[2]] }], "core.sidebars": [[]] });
-  await assert.rejects(SECTION_PLACEMENT.open(noTerminal, { card: "card-3", plugin: "probeplain", params: { section: "probeplain.section" } }),
+  const absent = await play(t, "open-absent");
+  await assert.rejects(open(absent.s, "card-1"),
+    unsatisfied("card card-4 did not show the section probeplain.section in its card-left sidebar card-4:left"));
+  const noTerminal = await play(t, "open-no-anchor");
+  await assert.rejects(open(noTerminal.s, "card-3"),
     { message: "core.grid has no card with a layoutprobe tab to split for the section view of probeplain" });
 });
 
-test("a section view that does not start in the fixture state fails with the expected and the actual state before it waits for readiness", async () => {
-  const sidebars = [[sidebar("card-4:left", [{ id: "probeplain.section", surfaceId: "spc-1/card-4:left/probeplain.section" }])]];
-  const anchor = card("card-2", 420, [anchorTab("t-2")]);
-  const opened = (project, measured) => fakeSession(
-    { "core.project": [project], "core.grid": [{ cards: [anchor, measured] }], "core.sidebars": sidebars },
-    { "core.card.split": () => ({ card: "card-4", tab: "t-4" }) });
-  const open = (s) => SECTION_PLACEMENT.open(s, { card: "card-2", plugin: "probeplain", params: { section: "probeplain.section" } });
-  const anchored = { ...card("card-4", 200, [anchorTab("t-4")]), active: "t-4" };
-  assert.equal(await open(opened(fixtureProject, anchored)), "spc-1/card-4:left/probeplain.section");
-  await assert.rejects(open(opened(null, anchored)),
+test("a section view that does not start in the fixture state fails with the expected and the actual state before it waits for readiness", async (t) => {
+  const started = async (name) => open((await play(t, name)).s, "card-2");
+  assert.equal(await started("state-ready"), "spc-1/card-4:left/probeplain.section");
+  await assert.rejects(started("state-no-project"),
     { message: "probeplain section view probeplain.section starts with the project test-project, not with no project" });
-  await assert.rejects(open(opened({ id: "project-2", root: "/config/other" }, anchored)),
+  await assert.rejects(started("state-other-project"),
     { message: "probeplain section view probeplain.section starts with the project test-project, not with /config/other" });
-  await assert.rejects(open(opened(fixtureProject, { ...card("card-4", 200, [{ id: "plain-1", plugin: "probeplain" }, anchorTab("t-4")]), active: "plain-1" })),
+  await assert.rejects(started("state-plain-active"),
     { message: "probeplain section view probeplain.section starts with a layoutprobe tab active in card card-4, not with probeplain" });
-  await assert.rejects(open(opened(fixtureProject, { ...card("card-4", 200, []), active: null })),
+  await assert.rejects(started("state-no-tab"),
     { message: "probeplain section view probeplain.section starts with a layoutprobe tab active in card card-4, not with no active tab" });
 });
 
-test("a section view closes with the card that holds its card sidebar", async () => {
-  const sidebars = [{ sidebar: "card-4:left", placement: "card", card: "card-4",
-    sections: [{ id: "probeplain.section", surfaceId: "spc-1/card-4:left/probeplain.section" }] }];
+test("a section view closes with the card that holds its card sidebar", async (t) => {
   const surface = "spc-1/card-4:left/probeplain.section";
-  const closed = fakeSession({ "core.sidebars": [sidebars], "core.surfaces": [[{ surface }], []] },
-    { "core.card.close": () => ({ closed: true }) });
-  await SECTION_PLACEMENT.close(closed, surface, { cleanup: false });
-  assert.deepEqual(closed.calls.filter(([kind]) => kind === "run"), [["run", "core.card.close", { card: "card-4" }, undefined]]);
-  const refused = fakeSession({ "core.sidebars": [sidebars], "core.surfaces": [[{ surface }]] }, { "core.card.close": () => ({ closed: false }) });
-  await assert.rejects(SECTION_PLACEMENT.close(refused, surface, { cleanup: true }),
+  const closed = await play(t, "close");
+  await SECTION_PLACEMENT.close(closed.s, surface, { cleanup: false });
+  await closed.server.played;
+  assert.deepEqual(commands(closed.server), [["core.card.close", { card: "card-4" }, undefined]]);
+  const refused = await play(t, "close-refused");
+  await assert.rejects(SECTION_PLACEMENT.close(refused.s, surface, { cleanup: true }),
     { message: /^card card-4 of section view spc-1\/card-4:left\/probeplain.section did not close during cleanup\n/ });
-  const kept = fakeSession({ "core.sidebars": [sidebars], "core.surfaces": [[{ surface }]] }, { "core.card.close": () => ({ closed: true }) });
-  await assert.rejects(SECTION_PLACEMENT.close(kept, surface, { cleanup: false }),
-    { message: `section view ${surface} remained registered after close` });
-  const lost = fakeSession({ "core.sidebars": [[]] });
-  await assert.rejects(SECTION_PLACEMENT.close(lost, surface, { cleanup: true }),
+  const kept = await play(t, "close-kept");
+  await assert.rejects(SECTION_PLACEMENT.close(kept.s, surface, { cleanup: false }), unsatisfied(`section view ${surface} remained registered after close`));
+  const lost = await play(t, "close-lost");
+  await assert.rejects(SECTION_PLACEMENT.close(lost.s, surface, { cleanup: true }),
     { message: `section view ${surface} is in no card sidebar during cleanup` });
 });
 
@@ -271,26 +238,26 @@ test("the section view descriptor waits for its declared ready status and reads 
   assert.equal(descriptor.expectedContent, "probeplain.section section");
   assert.equal(descriptor.readinessStatus, "probeplain.section.view.ready");
   const surface = "spc-1/card-4:left/probeplain.section";
-  const statusReads = [];
-  assert.equal(await descriptor.readContent({ async get(name, at) {
-    statusReads.push([name, at]);
-    return { ready: true, content: "probeplain.section section", language: "plaintext" };
-  } }, surface), "probeplain.section section", "the section view descriptor does not read the content of its ready status");
-  assert.deepEqual(statusReads, [["probeplain.section.view.ready", surface]]);
+  const content = await play(t, "read-content");
+  assert.equal(await descriptor.readContent(content.s, surface), "probeplain.section section",
+    "the section view descriptor does not read the content of its ready status");
+  assert.deepEqual(content.server.requests.map(({ method, params }) => [method, params.name, params.surface]),
+    [["status.get", "probeplain.section.view.ready", surface]]);
   const ready = { ready: true, content: "probeplain.section section", language: "plaintext" };
-  const s = fakeSession({ "probeplain.section.view.ready": [{ ready: false, content: "probeplain.section section", language: "plaintext" }, ready] },
-    { "probeplain.view.history": () => ({ length: 1 }) });
-  assert.deepEqual(await descriptor.readiness(s, surface), { historyEntries: 1, regionHistoryEntries: 0, status: ready });
-  assert.deepEqual(s.calls, [["until", "probeplain.section.view.ready", { surface }], ["run", "probeplain.view.history", {}, surface]]);
-  const other = fakeSession({ "probeplain.section.view.ready": [{ ...ready, content: "other" }] }, { "probeplain.view.history": () => ({ length: 1 }) });
-  await assert.rejects(descriptor.readiness(other, surface),
+  const readiness = await play(t, "readiness");
+  assert.deepEqual(await descriptor.readiness(readiness.s, surface), { historyEntries: 1, regionHistoryEntries: 0, status: ready });
+  await readiness.server.played;
+  assert.deepEqual(readiness.server.requests.filter(({ method }) => method === "status.watch").map(({ params }) => [params.name, params.surface]),
+    [["core.surfaces", undefined], ["probeplain.section.view.ready", surface]]);
+  assert.deepEqual(commands(readiness.server), [["probeplain.view.history", {}, surface]]);
+  const other = await play(t, "readiness-content");
+  await assert.rejects(descriptor.readiness(other.s, surface),
     { message: /^probeplain section view probeplain.section reported probeplain.section.view.ready on spc-1\/card-4:left\/probeplain.section with content that differs from its declaration\n/ });
-  const navigated = fakeSession({ "probeplain.section.view.ready": [ready] }, { "probeplain.view.history": () => ({ length: 2 }) });
-  await assert.rejects(descriptor.readiness(navigated, surface),
+  const navigated = await play(t, "readiness-navigated");
+  await assert.rejects(descriptor.readiness(navigated.s, surface),
     { message: /^probeplain section view probeplain.section history on spc-1\/card-4:left\/probeplain.section does not contain only its initial document\n/ });
-  assert.deepEqual(await descriptor.readDocument(fakeSession({}, { "probeplain.view.history": () => ({ length: 1 }) }), surface),
-    { historyEntries: 1, regionHistoryEntries: 0 });
-  await assert.rejects(descriptor.readDocument(fakeSession({}, { "probeplain.view.history": () => ({}) }), surface),
+  assert.deepEqual(await descriptor.readDocument((await play(t, "read-document")).s, surface), { historyEntries: 1, regionHistoryEntries: 0 });
+  await assert.rejects(descriptor.readDocument((await play(t, "read-document-no-length")).s, surface),
     { message: "probeplain section view probeplain.section answered probeplain.view.history on spc-1/card-4:left/probeplain.section without a length" });
 });
 
@@ -301,16 +268,15 @@ test("a section view trace starts and stops the content-frame observer on its su
   const descriptor = sectionViewDescriptor(installedSectionViews(configDir)[0]);
   const surface = "spc-1/card-4:left/probeplain.section";
   const started = { enabled: true, sourceClock: { monoNs: "1" } };
-  const frames = (answer) => fakeSession({}, { "probeplain.view.frames": ({ action }) => (action === "start" ? answer : { enabled: false }) });
-  const s = frames(started);
-  assert.deepEqual(await descriptor.startContentTrace(s, surface), started);
-  assert.deepEqual(await descriptor.stopContentTrace(s, surface), { enabled: false });
-  assert.deepEqual(s.calls, [["run", "probeplain.view.frames", { action: "start" }, surface], ["run", "probeplain.view.frames", { action: "stop" }, surface]]);
-  const unstarted = frames({ enabled: false });
-  await assert.rejects(descriptor.startContentTrace(unstarted, surface),
+  const s = await play(t, "trace");
+  assert.deepEqual(await descriptor.startContentTrace(s.s, surface), started);
+  assert.deepEqual(await descriptor.stopContentTrace(s.s, surface), { enabled: false });
+  assert.deepEqual(commands(s.server), [["probeplain.view.frames", { action: "start" }, surface], ["probeplain.view.frames", { action: "stop" }, surface]]);
+  const unstarted = await play(t, "trace-not-started");
+  await assert.rejects(descriptor.startContentTrace(unstarted.s, surface),
     { message: /^probeplain section view probeplain.section content-frame observer did not start on spc-1\/card-4:left\/probeplain.section\n/ });
-  assert.equal(unstarted.calls.length, 1);
-  const running = fakeSession({}, { "probeplain.view.frames": () => ({ enabled: true }) });
-  await assert.rejects(descriptor.stopContentTrace(running, surface),
+  assert.equal(unstarted.server.requests.length, 1);
+  const running = await play(t, "trace-not-stopped");
+  await assert.rejects(descriptor.stopContentTrace(running.s, surface),
     { message: /^probeplain section view probeplain.section content-frame observer did not stop on spc-1\/card-4:left\/probeplain.section\n/ });
 });

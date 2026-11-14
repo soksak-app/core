@@ -1,0 +1,8 @@
+{
+  "name": "projects-switch-import",
+  "description": "Placeholder of import.",
+  "replay": false,
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+  ]
+}

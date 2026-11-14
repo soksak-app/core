@@ -2,55 +2,47 @@ package host
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
-
-	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-// pageProcessPlatform reports the window facts of a window with a page process of pid.
-type pageProcessPlatform struct {
-	pagelessPlatform
-	pid int
+// windowFactsText is the native window facts text of a window with member, a JSON object member that ends with a comma or is
+// empty, and the members that every reading holds.
+func windowFactsText(member string) string {
+	return `{"pageProcess":0,` + member + `"nativeSurfaces":[],"webviews":[],"activationObservation":{"registered":false,"count":"0"}}`
 }
 
-func (p *pageProcessPlatform) WindowFacts(platform.Window) (string, error) {
-	text, err := json.Marshal(map[string]any{"pageProcess": p.pid, "nativeSurfaces": []any{}, "webviews": []any{}, "activationObservation": map[string]any{"registered": false, "count": "0"}})
-	return string(text), err
-}
-
-// mainPageFramework is pagelessFramework with a main page.
-type mainPageFramework struct{ pagelessFramework }
-
-func (mainPageFramework) MainPage() bool { return true }
-
-func pageProcessSurfaces(t *testing.T, selected Framework, pid int) *Surfaces {
+// windowStatusMembers is the host.window value of the native facts text of a window with no surface and no document, as its
+// members.
+func windowStatusMembers(t *testing.T, text string, mainPage bool) (map[string]json.RawMessage, error) {
 	t.Helper()
-	window := &elementWindow{}
-	window.native = platform.Window(1)
-	previousFramework, previousSystem := framework, system
-	framework, system = selected, &pageProcessPlatform{pid: pid}
-	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
-	s := NewSurfaces(window, nil)
-	s.name = "main"
-	s.host = &Host{quit: &Quit{}}
-	return s
+	s := &Surfaces{host: &Host{quit: &Quit{}}}
+	state, err := s.windowStatusFromFacts(text, mainPage, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &members); err != nil {
+		t.Fatal(err)
+	}
+	return members, nil
 }
 
 // contract: window.page-process.null-without-a-main-page
 func TestAWindowWithoutAMainPageReportsNoPageProcess(t *testing.T) {
-	s := pageProcessSurfaces(t, pagelessFramework{}, 0)
-	status, err := s.windowState()
+	s := &Surfaces{host: &Host{quit: &Quit{}}}
+	status, err := s.windowStatusFromFacts(windowFactsText(""), false, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if status.PageProcess != nil {
 		t.Fatalf("a window without a main page reports the page process %d, want null", *status.PageProcess)
 	}
-	processes, err := s.performanceProcesses()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if processes.Page != nil {
+	if processes := performanceProcessesOf(status); processes.Page != nil {
 		t.Fatalf("the sampler reads the page process %d of a window without a main page", *processes.Page)
 	}
 }
@@ -58,19 +50,16 @@ func TestAWindowWithoutAMainPageReportsNoPageProcess(t *testing.T) {
 // contract: window.page-process.null-without-a-main-page
 func TestAWindowWithAMainPageReportsItsPageProcess(t *testing.T) {
 	for _, pid := range []int{0, 4321} {
-		s := pageProcessSurfaces(t, mainPageFramework{}, pid)
-		status, err := s.windowState()
+		s := &Surfaces{host: &Host{quit: &Quit{}}}
+		text := fmt.Sprintf(`{"pageProcess":%d,"nativeSurfaces":[],"webviews":[],"activationObservation":{"registered":false,"count":"0"}}`, pid)
+		status, err := s.windowStatusFromFacts(text, true, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if status.PageProcess == nil || *status.PageProcess != pid {
 			t.Fatalf("a window with the page process %d reports %v", pid, status.PageProcess)
 		}
-		processes, err := s.performanceProcesses()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if processes.Page == nil || *processes.Page != pid {
+		if processes := performanceProcessesOf(status); processes.Page == nil || *processes.Page != pid {
 			t.Fatalf("the sampler reads %v for the page process %d", processes.Page, pid)
 		}
 	}

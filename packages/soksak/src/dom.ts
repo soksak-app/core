@@ -199,6 +199,14 @@ export class SoksakView {
    */
   private disarms = new Map<HTMLElement, () => void>();
   private observer: ResizeObserver | null = null;
+  private observeFrame: number | null = null;
+  /**
+   * Where the observation of the host size stands: `refused` by the options,
+   * `pending` until the animation frame that starts it, `observing`,
+   * `unavailable` when the environment has no ResizeObserver at that frame, or
+   * `stopped` by `destroy`.
+   */
+  observation: 'refused' | 'pending' | 'observing' | 'unavailable' | 'stopped' = 'refused';
   private resolution: MediaQueryList | null = null;
 
   private readonly resolutionChanged = (): void => {
@@ -243,30 +251,59 @@ export class SoksakView {
     this.prefix = options.classPrefix ?? 'sp';
     this.observeResolution();
 
-    if (options.observeResize !== false && typeof ResizeObserver !== 'undefined') {
-      this.observer = new ResizeObserver(() => {
-        // A hidden host reports 0x0. Resizing to that drops every px size to 0
-        // and showing the host again does not bring them back.
-        if (host.clientWidth <= 0 || host.clientHeight <= 0) return;
-        // A resize moves the boundary a drag is holding. The drag holds the
-        // position that boundary stood at when it was pressed, so it has to be
-        // carried by the same amount the resize moved it; otherwise the next
-        // move puts the boundary where it would have gone on the old plane.
-        const live = this.holds();
-        const was = live.map((drag) => this.grid.boundaryPos(drag.axis, drag.line));
-        this.grid.resize(host.clientWidth, host.clientHeight);
-        live.forEach((drag, i) => {
-          drag.base += this.grid.boundaryPos(drag.axis, drag.line) - was[i];
-          drag.stood = this.grid.boundaryPos(drag.axis, drag.line);
-        });
-        this.draw('resize');
+    // The start waits for an animation frame, which runs before that frame's
+    // observation round: an observation that starts during the round defers its
+    // first notifications and WebKit reports a loop error.
+    if (SoksakView.observesHost(options, true)) {
+      this.observation = 'pending';
+      this.observeFrame = host.ownerDocument.defaultView!.requestAnimationFrame(() => {
+        this.observeFrame = null;
+        if (!SoksakView.observesHost(options, typeof ResizeObserver !== 'undefined')) {
+          this.observation = 'unavailable';
+          return;
+        }
+        this.observer = new ResizeObserver(() => this.hostResized(host.clientWidth, host.clientHeight));
+        this.observer.observe(host);
+        this.observation = 'observing';
       });
-      this.observer.observe(host);
     }
     // Skip when the host has no layout: 0x0 would give every card no area.
     if (host.clientWidth > 0 && host.clientHeight > 0) {
       this.grid.resize(host.clientWidth, host.clientHeight);
     }
+  }
+
+  /**
+   * Whether a view with these options observes its host: the option does not
+   * refuse it and the environment has a ResizeObserver to observe with.
+   */
+  static observesHost(options: ViewOptions, observerAvailable: boolean): boolean {
+    return options.observeResize !== false && observerAvailable;
+  }
+
+  /**
+   * The reaction to one observation of the host size. Returns whether the
+   * grid took the size.
+   */
+  hostResized(width: number, height: number): boolean {
+    // A destroyed view has stopped observing; an observation in flight is dropped.
+    if (this.disposed) return false;
+    // A hidden host reports 0x0. Resizing to that drops every px size to 0
+    // and showing the host again does not bring them back.
+    if (width <= 0 || height <= 0) return false;
+    // A resize moves the boundary a drag is holding. The drag holds the
+    // position that boundary stood at when it was pressed, so it has to be
+    // carried by the same amount the resize moved it; otherwise the next
+    // move puts the boundary where it would have gone on the old plane.
+    const live = this.holds();
+    const was = live.map((drag) => this.grid.boundaryPos(drag.axis, drag.line));
+    this.grid.resize(width, height);
+    live.forEach((drag, i) => {
+      drag.base += this.grid.boundaryPos(drag.axis, drag.line) - was[i];
+      drag.stood = this.grid.boundaryPos(drag.axis, drag.line);
+    });
+    this.draw('resize');
+    return true;
   }
 
   /** Re-place every element from the grid. Cheap enough to call on every frame of a drag. */
@@ -1029,8 +1066,11 @@ export class SoksakView {
     for (const dispose of [...this.mouseDisposers.values()]) dispose();
     this.mouseDrag = null;
     for (const pointer of [...this.drags.keys()]) this.end(pointer);
+    if (this.observeFrame !== null) this.host.ownerDocument.defaultView!.cancelAnimationFrame(this.observeFrame);
+    this.observeFrame = null;
     this.observer?.disconnect();
     this.observer = null;
+    this.observation = 'stopped';
     this.resolution?.removeEventListener('change', this.resolutionChanged);
     this.resolution = null;
     for (const held of this.cardEls.values()) {

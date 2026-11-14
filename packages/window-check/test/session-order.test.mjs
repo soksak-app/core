@@ -8,15 +8,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { Session } from "../app.mjs";
+import { playSession } from "../fixtures/endpoint-player.mjs";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 
-test("a session raises and lowers its window through the host commands", () => {
-  const sent = [];
-  const session = { run: (name, params) => { sent.push([name, params]); return null; } };
-  Session.prototype.raise.call(session);
-  Session.prototype.lower.call(session);
-  assert.deepEqual(sent, [["host.window.raise", {}], ["host.window.lower", {}]]);
+test("a session raises and lowers its window through the host commands", { timeout: 5000 }, async (t) => {
+  // The case holds the two commands in their order: the player fails a request that is not in it.
+  const { session } = await playSession(t, Session, "window-check-order-commands", "mygo");
+  await session.raise();
+  await session.lower();
 });
 
 /** The JavaScript files under directory, without node_modules. */

@@ -1,0 +1,32 @@
+{
+  "name": "host-chrome-presentation",
+  "description": "A preparation of two views is presented once with its visibility; a refused preparation and a refused presentation are each followed by a request at the same geometry that the host accepts.",
+  "replay": false,
+  "reason": "The case holds the calls setTheme, compositionDeclare, syncSurfaces and presentSurfaces of a window, and the Go producer runs only the log and workspace calls without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{}}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"surface":"shown"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"surface":"hidden"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":false,"overlays":[],"surfaces":[{"id":"shown","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":true,"x":0,"y":0,"w":3,"h":4,"start":{"origin":{"directory":null},"declarations":0}},{"id":"hidden","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":false,"x":0,"y":0,"w":3,"h":4,"start":{"origin":{"directory":null},"declarations":0}}],"titlebar":40,"declarations":[{"status":[],"commands":[],"element":[]}]}}},
+    {"reply":{"result":{"ticket":1,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"chrome":{"controls":{"x":13,"y":13,"w":54,"h":14},"row":40}}}},
+    {"call":{"name":"presentSurfaces","payload":{"ticket":1,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"settled":false}}},
+    {"reply":{"result":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}]}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":true,"overlays":[],"surfaces":[{"id":"shown","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":true,"x":0,"y":0,"w":3,"h":4},{"id":"hidden","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":false,"x":0,"y":0,"w":3,"h":4}],"titlebar":40,"declarations":[]}}},
+    {"reply":{"error":"surface \"shown\" changed its composition declaration"}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":true,"overlays":[],"surfaces":[{"id":"shown","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":true,"x":0,"y":0,"w":3,"h":4,"start":{"origin":{"directory":null},"declarations":0}},{"id":"hidden","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":false,"x":0,"y":0,"w":3,"h":4,"start":{"origin":{"directory":null},"declarations":0}}],"titlebar":40,"declarations":[{"status":[],"commands":[],"element":[]}]}}},
+    {"reply":{"result":{"ticket":2,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"chrome":{"controls":{"x":13,"y":13,"w":54,"h":14},"row":40}}}},
+    {"call":{"name":"presentSurfaces","payload":{"ticket":2,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"settled":true}}},
+    {"reply":{"result":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}]}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":false,"overlays":[],"surfaces":[{"id":"shown","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":true,"x":0,"y":0,"w":3,"h":4},{"id":"hidden","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":false,"x":0,"y":0,"w":3,"h":4}],"titlebar":40,"declarations":[]}}},
+    {"reply":{"result":{"ticket":3,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"chrome":{"controls":{"x":13,"y":13,"w":54,"h":14},"row":40}}}},
+    {"call":{"name":"presentSurfaces","payload":{"ticket":3,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"settled":false}}},
+    {"reply":{"error":"surface \"shown\" closed before presentation"}},
+    {"call":{"name":"syncSurfaces","payload":{"settled":false,"overlays":[],"surfaces":[{"id":"shown","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":true,"x":0,"y":0,"w":3,"h":4},{"id":"hidden","dim":false,"plugin":"probe","composition":{"kind":"view","page":"ui/page.html"},"visible":false,"x":0,"y":0,"w":3,"h":4}],"titlebar":40,"declarations":[]}}},
+    {"reply":{"result":{"ticket":4,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"chrome":{"controls":{"x":13,"y":13,"w":54,"h":14},"row":40}}}},
+    {"call":{"name":"presentSurfaces","payload":{"ticket":4,"placements":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}],"settled":false}}},
+    {"reply":{"result":[{"id":"shown","visible":true,"scale":2,"x":1,"y":2,"w":3,"h":4},{"id":"hidden","visible":false,"x":0,"y":0,"w":1,"h":1}]}}
+  ]
+}

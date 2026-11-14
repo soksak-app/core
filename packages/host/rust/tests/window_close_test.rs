@@ -2,8 +2,7 @@
 //! regions and image regions, and the use of the native address of a closing window.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use soksak_host::documents::{Documents, Streams};
 use soksak_host::exposure::native_failure;
@@ -12,7 +11,7 @@ use soksak_host::surfaces::{
     WindowNative, close_registered_surface, close_window_surfaces, create_named_surface,
     removed_surfaces,
 };
-use soksak_host::windows::{MainStep, NativeFailure, use_owner};
+use soksak_host::windows::NativeFailure;
 
 fn key(surface: &str, name: &str) -> (String, String) {
     (surface.to_string(), name.to_string())
@@ -98,79 +97,12 @@ fn closing_a_window_reports_every_failure_and_closes_the_rest() {
     );
 }
 
-/// The main thread of the test. Work that another thread sent is run in order before the main thread runs the next
-/// step.
-#[derive(Default)]
-struct FakeMain {
-    pending: Mutex<Vec<MainStep>>,
-}
-
-impl FakeMain {
-    fn run(&self, step: MainStep) -> Result<(), String> {
-        let pending = std::mem::take(&mut *self.pending.lock().unwrap());
-        for task in pending {
-            task();
-        }
-        step();
-        Ok(())
-    }
-}
-
-/// A window of the test. A close closes the window on the main thread like the runtime.
-struct FakeWindow {
-    closed: AtomicBool,
-    /// When the address is read, it sends the close of this window to the main thread.
-    close_on_read: AtomicBool,
-}
-
-const FAKE_HANDLE: usize = 0x5157;
-
-fn fake_use(main: &Arc<FakeMain>, window: &Arc<FakeWindow>) -> Result<String, NativeFailure> {
-    let queue = main.clone();
-    let native = window.clone();
-    use_owner(
-        window.clone(),
-        |step| main.run(step),
-        move |window: &Arc<FakeWindow>| {
-            if window.closed.load(Ordering::SeqCst) {
-                return Ok(None);
-            }
-            if window.close_on_read.swap(false, Ordering::SeqCst) {
-                let closed = window.clone();
-                queue.pending.lock().unwrap().push(Box::new(move || {
-                    closed.closed.store(true, Ordering::SeqCst)
-                }));
-            }
-            Ok(Some(FAKE_HANDLE))
-        },
-        move |handle| {
-            // The native code sends a message to the window it received. If it receives the address of a closed window,
-            // it sends a message to that window.
-            if native.closed.load(Ordering::SeqCst) {
-                return Err(format!(
-                    "native code messaged the closed window {handle:#x}"
-                ));
-            }
-            Ok(format!("facts of {handle:#x}"))
-        },
-    )
-}
-
-// The native address of a window is read in the main-thread step that uses the address. A close that the main thread
-// handled after reading comes after that step, and a window that closed before the step is not passed to the native
-// code and is answered as Closed.
+// The request of a closed window ends with error 1003 for a window that does not exist. The use of the native address in the
+// step that reads it is checked by the window race test of the Tauri host
+// (packages/host/tauriv2/tests/window_race_test.rs).
 // contract: window-close.native-window.used-in-reading-step
 #[test]
-fn a_close_after_the_handle_read_does_not_reach_native_code() {
-    let main = Arc::new(FakeMain::default());
-    let window = Arc::new(FakeWindow {
-        closed: AtomicBool::new(false),
-        close_on_read: AtomicBool::new(true),
-    });
-    assert_eq!(fake_use(&main, &window), Ok("facts of 0x5157".to_string()));
-    assert_eq!(fake_use(&main, &window), Err(NativeFailure::Closed));
-    assert!(window.closed.load(Ordering::SeqCst));
-    // The request of a closed window ends with error 1003 for a window that does not exist.
+fn the_request_of_a_closed_window_ends_with_1003() {
     let failure = native_failure("w2", -32603)(NativeFailure::Closed);
     assert_eq!(
         (failure.code, failure.message.as_str()),

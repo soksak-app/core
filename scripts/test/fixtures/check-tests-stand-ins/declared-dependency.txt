@@ -1,0 +1,5 @@
+// A maintained IndexedDB implementation that a test imports by its package name.
+import { IDBFactory } from 'fake-indexeddb';
+const { IDBFactory: Factory } = await import("fake-indexeddb/lib/FDBFactory");
+// An identifier of the test itself still names a stand-in.
+const fakeStore = new IDBFactory();

@@ -1,0 +1,14 @@
+{
+  "name": "window-check-start-sidebar-no-card",
+  "description": "A card sidebar of a plugin that no card shows as an active tab fails after the link, when the grid names no such card.",
+  "replay": false,
+  "reason": "The case plays the trace of the start state of a check on a workbench; the replay cannot arrange the layout of the workbench.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"common":{},"values":{"sets":[]}}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.settings.link","params":{"place":"card-left","plugin":"startplugin","set":"x","scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"id":"t1","plugin":"starter-a"}]},{"id":"lower","focused":false,"active":"b1","tabs":[{"id":"b1","plugin":"starter-b"}]}]}}}
+  ]
+}

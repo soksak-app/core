@@ -3,7 +3,8 @@ import test from "node:test";
 import { createLayoutQueue, drawPrepared } from "../layout-queue.js";
 import { drained } from "./support/drained.mjs";
 
-// Runs the drawing order that the document queues for each layout with a fake preparation, drawing, and presentation.
+// Runs the drawing order that the document queues for each layout. The test passes the preparation, drawing, frame and presentation steps
+// that drawPrepared takes as parameters and settles each one at the point that its assertions name.
 function fixture() {
   const calls = [];
   const errors = [];
@@ -11,7 +12,7 @@ function fixture() {
   const prepared = Promise.withResolvers();
   const presented = Promise.withResolvers();
   const drawn = Promise.withResolvers();
-  // Each arrival resolves when the document calls the fake: the preparation, the frame request and the presentation request.
+  // Each arrival resolves when drawPrepared calls its step: the preparation, the frame request and the presentation request.
   const preparing = Promise.withResolvers();
   const framing = Promise.withResolvers();
   const presenting = Promise.withResolvers();

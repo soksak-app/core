@@ -1,0 +1,12 @@
+{
+  "name": "transcript-failed-send",
+  "description": "The host refuses the first transcript line with the text closed, and the page sends the second line after it.",
+  "replay": false,
+  "reason": "The producer does not close a connection, so the host gives no refusal for a transcript line.",
+  "steps": [
+    {"call":{"name":"log","payload":{"action":"transcript","start":"start-1","line":"host a null -> null"}}},
+    {"reply":{"error":"closed"}},
+    {"call":{"name":"log","payload":{"action":"transcript","start":"start-1","line":"host b null -> null"}}},
+    {"reply":{"result":null}}
+  ]
+}

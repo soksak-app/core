@@ -1930,9 +1930,7 @@ fn capture_stop(
         after,
         ..recorder(window, connection)?
     };
-    let (directory, count, recorded_window) = RECORDING
-        .finish(&recorder)
-        .map_err(|error| internal(format!("stop capture: {error}")))?;
+    let (directory, count, recorded_window) = RECORDING.finish(&recorder).map_err(internal)?;
     let stills = StillCounts {
         missed: recorder.platform.capture_missed().map_err(internal)?,
         late: recorder.platform.capture_late().map_err(internal)?,

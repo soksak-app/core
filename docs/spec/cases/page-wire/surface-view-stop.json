@@ -1,0 +1,14 @@
+{
+  "name": "surface-view-stop",
+  "description": "A view surface declares its composition, the host reports that the view stopped its restarts, and the surface is mounted again and declares its composition again.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-stopped-view","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-stopped-view-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-stopped","payload":{"surface":"fixture-stopped-view-surface","plugin":"fixture-stopped-view","reason":"the view failed 4 times within 300 seconds and is created again when its tab is reopened"}}},
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-stopped-view","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-stopped-view-surface"}}},
+    {"reply":{"result":null}}
+  ]
+}

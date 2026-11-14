@@ -31,14 +31,16 @@
 #include <notify.h>
 #include <stdlib.h>
 
-// The function that gives the image of a list of windows, looked up at each open and still through captureLookup, which a test
-// replaces with the lookup of a macOS that lacks it.
+// The function that gives the image of a list of windows, looked up with dlsym at each open, start and still. The fault point
+// SOKSAK_FAULT_CAPTURE_IMAGE=missing makes the result of the lookup absent, as on a macOS that lacks the function.
 typedef CGImageRef (*SPWindowImage)(CGRect, CFArrayRef, CGWindowImageOption);
-static void *(*captureLookup)(void *, const char *) = dlsym;
 static NSString *const kWindowImageMissing = @"CGWindowListCreateImageFromArray is not available on this macOS";
+static const char *captureFault(const char *name);
 
 static SPWindowImage windowImageFunction(void) {
-    return (SPWindowImage)captureLookup(RTLD_DEFAULT, "CGWindowListCreateImageFromArray");
+    SPWindowImage function = (SPWindowImage)dlsym(RTLD_DEFAULT, "CGWindowListCreateImageFromArray");
+    const char *fault = captureFault("SOKSAK_FAULT_CAPTURE_IMAGE");
+    return fault != NULL && strcmp(fault, "missing") == 0 ? NULL : function;
 }
 
 static uint64_t captureTicks(void) { return mach_absolute_time(); }
@@ -46,8 +48,11 @@ static uint64_t captureTicks(void) { return mach_absolute_time(); }
 // The fault points of the capture, which a failure that the real system does not produce on demand uses (docs/operations/examples.md#test-kinds).
 // The capture exists only in diagnostic builds, so only they read them. Each is an environment variable whose value names the failure:
 //   SOKSAK_FAULT_CAPTURE_TIMEBASE: any value makes the timebase read of a display-link callback fail after the real read.
-//   SOKSAK_FAULT_CAPTURE_IMAGE: none gives no image; slow-first holds the image of the first request of a recording until the
-//     fourth request began; hold-after-first holds the images of the requests after the first until the release notification.
+//   SOKSAK_FAULT_CAPTURE_IMAGE: missing makes the lookup of the window image function find nothing, so the open and the still fail
+//     with the error of a macOS that lacks it; none gives no image; slow-first holds the image of the first request of a recording
+//     until the fourth request began; hold-after-first holds the images of the requests after the first until the release
+//     notification; hold-third holds the third request until the release notification and then takes the real image;
+//     hold-third-none holds the third request until the release notification and then gives no image.
 //   SOKSAK_FAULT_CAPTURE_ENCODE: hold-after-first holds the compressions after the first until the release notification.
 // The release notification is the Darwin notification SP_CAPTURE_FAULT_RELEASE: it ends the waits that began before it, and a wait that
 // begins after it in the same recording does not hold. The requests are counted from the start of the recording.
@@ -302,6 +307,16 @@ static BOOL captureFaultNoImage(void) {
     const char *fault = captureFault("SOKSAK_FAULT_CAPTURE_IMAGE");
     if (fault == NULL) return NO;
     if (strcmp(fault, "none") == 0) return YES;
+    BOOL holdThirdNone = strcmp(fault, "hold-third-none") == 0;
+    if (holdThirdNone || strcmp(fault, "hold-third") == 0) {
+        NSCondition *state = captureFaultState();
+        [state lock];
+        NSUInteger request = ++captureFaultImageRequests;
+        [state broadcast];
+        while (request == 3 && captureFaultReleases == captureFaultReleasesAtStart) [state wait];
+        [state unlock];
+        return holdThirdNone && request == 3;
+    }
     BOOL slowFirst = strcmp(fault, "slow-first") == 0;
     if (!slowFirst && strcmp(fault, "hold-after-first") != 0) {
         sp_log_error("capture fault", "SOKSAK_FAULT_CAPTURE_IMAGE names no fault");
@@ -1369,6 +1384,9 @@ bool sp_capture_hold_new_window(char **errorOut) {
     }
     *errorOut = NULL;
     if (recordingActive()) return captureOperationFailure(errorOut, @"capture is already running");
+    // The failure of the wait that this hold begins is the error of the recordings, so the hold begins it without the failures of
+    // earlier waits, as the start of a recording does.
+    clearCaptureError();
     dispatch_semaphore_t shown = dispatch_semaphore_create(0);
     bool set = sp_window_show_hold_next(^(void *handle) {
         NSWindow *window = (NSWindow *)handle;

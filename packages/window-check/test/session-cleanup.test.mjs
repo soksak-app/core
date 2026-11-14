@@ -4,40 +4,25 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { connect } from "@soksak/client";
+import { startCasePlayer } from "@soksak/client/testing";
 import { Session } from "../app.mjs";
 
-const app = new URL("../app.mjs", import.meta.url).href;
+// The tracked programs of the runs: each is a check file that node:test runs in a process of its own.
+const probe = (name) => fileURLToPath(new URL(`../fixtures/session-probes/${name}`, import.meta.url));
 
 // Runs a check file whose body and cleanup both fail in a separate node:test run. How node:test handles the cleanup
 // error is the subject of the check, so the execution context of this check (NODE_TEST_CONTEXT) is not passed on.
-function run(t) {
-  const dir = mkdtempSync(join(tmpdir(), "soksak-session-cleanup-"));
-  t.after(() => rmSync(dir, { recursive: true }));
-  const file = join(dir, "probe.test.mjs");
-  writeFileSync(file, `import test from "node:test";
-import { finishSession } from ${JSON.stringify(app)};
-test("probe body fails", async (t) => {
-  const session = {
-    app: { name: "probe" },
-    cleanups: [async () => { throw new Error("probe press stayed open"); }, async () => {}],
-    checkEnded: async () => {},
-    stallSamples: new Set(),
-    expectedErrors: [],
-    recordingNotes: [],
-    markTest: async () => null,
-  };
-  t.after(() => finishSession(t, session, () => {}));
-  throw new Error("probe body failed");
-});
-`);
-  const { NODE_TEST_CONTEXT, ...environment } = process.env;
-  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
+function run() {
+  const { NODE_TEST_CONTEXT, SOKSAK_RUN_ID, SOKSAK_RUN_FOLDER, ...environment } = process.env;
+  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", probe("cleanup-fails.mjs")],
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
 }
 
 test("a cleanup failure is reported when the check body already failed", { timeout: 30000 }, (t) => {
-  const result = run(t);
+  const result = run();
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /probe body failed/);
   assert.match(result.stdout, /# cleanup failed: Error: probe press stayed open/);
@@ -45,124 +30,56 @@ test("a cleanup failure is reported when the check body already failed", { timeo
 
 // Runs a passing check whose cleanup steps fail in the first and the third step, in a separate node:test run, and prints the
 // order in which the steps ran.
-function runSteps(t) {
-  const dir = mkdtempSync(join(tmpdir(), "soksak-session-cleanup-steps-"));
-  t.after(() => rmSync(dir, { recursive: true }));
-  const file = join(dir, "probe.test.mjs");
-  writeFileSync(file, `import test from "node:test";
-import { Session, finishSession } from ${JSON.stringify(app)};
-test("probe body passes", async (t) => {
-  const session = {
-    app: { name: "probe" },
-    cleanups: [],
-    cleanup: Session.prototype.cleanup,
-    cleanupSteps: Session.prototype.cleanupSteps,
-    checkEnded: async () => {},
-    stallSamples: new Set(),
-    expectedErrors: [],
-    recordingNotes: [],
-    markTest: async () => null,
-  };
-  const ran = [];
-  // A cleanup registered before the steps runs after them, in the reverse order of registration.
-  session.cleanups.push(async () => { ran.push("earlier"); });
-  session.cleanupSteps(
-    async () => { ran.push("first"); throw new Error("probe first step failed"); },
-    async () => { ran.push("second"); },
-    async () => { ran.push("third"); throw new Error("probe third step failed"); });
-  t.after(async () => {
-    try {
-      await finishSession(t, session, () => {});
-    } finally {
-      process.stdout.write("steps ran: " + ran.join(" ") + "\\n");
-    }
-  });
-});
-`);
-  const { NODE_TEST_CONTEXT, ...environment } = process.env;
-  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
+function runSteps() {
+  const { NODE_TEST_CONTEXT, SOKSAK_RUN_ID, SOKSAK_RUN_FOLDER, ...environment } = process.env;
+  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", probe("cleanup-steps.mjs")],
     { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
 }
 
 test("cleanup steps run in their order after a failed step and every failure is reported", { timeout: 30000 }, (t) => {
-  const result = runSteps(t);
+  const result = runSteps();
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /steps ran: first second third earlier/);
   assert.match(result.stdout, /# cleanup failed: Error: probe first step failed/);
   assert.match(result.stdout, /# cleanup failed: Error: probe third step failed/);
 });
 
-/**
- * A fake endpoint answer of diagnostics.input.source: the role of the selected input source, or null for a source without a role, and
- * its opaque platform `source`. The person's source `person-source` has no role.
- */
-const sourceAnswer = (source) => ({ current: source.startsWith("role-") ? source.slice(5) : null, source });
+// Starts the case player of the case and connects the client of the package to it. Closing the player throws when the case was not
+// played to its end.
+async function play(t, name) {
+  const server = await startCasePlayer(name);
+  t.after(() => server.close());
+  const client = await connect({ configDir: server.configDir });
+  t.after(() => client.close());
+  return { server, client };
+}
 
-test("an input-source selection in a session tree restores the first source after baseline cleanup", { timeout: 10000 }, async () => {
+test("an input-source selection in a session tree restores the first source after baseline cleanup", { timeout: 10000 }, async (t) => {
+  const { server, client } = await play(t, "window-check-input-source-restore");
   const cleanupEvents = [];
-  let current = "person-source";
-  let sourceReads = 0;
-  let cleaning = false;
-  const client = {
-    endpoint: { pid: process.pid },
-    async request(method, params) {
-      assert.equal(method, "diagnostics.input.source");
-      if (params.select) current = `role-${params.select}`;
-      else if (params.restore) {
-        current = params.restore;
-        if (cleaning) cleanupEvents.push(`restore:${params.restore}`);
-      } else sourceReads++;
-      return sourceAnswer(current);
-    },
-  };
   const session = new Session({ name: "input-source", configDir: "/unused" }, client);
   session.cleanups.push(async () => {
-    cleaning = true;
     cleanupEvents.push("baseline");
   });
 
   await session.selectInputSource("korean");
   await session.on("child").selectInputSource("latin");
-  cleaning = true;
   for (const clean of session.cleanups.reverse()) await clean();
 
-  assert.deepEqual(cleanupEvents, ["baseline", "restore:person-source"]);
-  assert.equal(sourceReads, 1, "the session tree captures the original source once");
-  assert.equal(current, "person-source");
+  assert.deepEqual(cleanupEvents, ["baseline"]);
+  assert.deepEqual(server.requests.map(({ params }) => params.restore), [undefined, undefined, undefined, "person-source"],
+    "the session tree captures the original source once and restores it last");
 });
 
-test("an input-source selection fails when the endpoint reports another role than the selected one", { timeout: 10000 }, async () => {
-  const client = {
-    endpoint: { pid: process.pid },
-    async request(_method, params) { return params.select ? sourceAnswer("role-latin") : sourceAnswer("person-source"); },
-  };
+test("an input-source selection fails when the endpoint reports another role than the selected one", { timeout: 10000 }, async (t) => {
+  const { client } = await play(t, "window-check-input-source-not-selected");
   const session = new Session({ name: "input-source", configDir: "/unused" }, client);
   await assert.rejects(() => session.selectInputSource("korean"), /input source korean was not selected \(current latin\)/);
 });
 
-test("a child-first input-source restore uses the root window after the child closes", { timeout: 10000 }, async () => {
+test("a child-first input-source restore uses the root window after the child closes", { timeout: 10000 }, async (t) => {
+  const { server, client } = await play(t, "window-check-input-source-child-closed");
   const cleanupEvents = [];
-  const closed = new Set();
-  let current = "person-source";
-  const sourceWindows = [];
-  const client = {
-    endpoint: { pid: process.pid },
-    async request(method, params) {
-      if (method === "command.run" && params.name === "host.window.close") {
-        closed.add(params.window);
-        return null;
-      }
-      if (method !== "diagnostics.input.source") throw new Error(`unexpected request ${method}`);
-      if (closed.has(params.window)) throw new Error(`window ${params.window} is closed`);
-      sourceWindows.push(params.window);
-      if (params.select) current = `role-${params.select}`;
-      else if (params.restore) {
-        current = params.restore;
-        if (cleanupEvents.length) cleanupEvents.push(`restore:${params.window}:${params.restore}`);
-      }
-      return sourceAnswer(current);
-    },
-  };
   const root = new Session({ name: "input-source", configDir: "/unused" }, client);
   root.cleanups.push(async () => cleanupEvents.push("baseline"));
   const child = root.on("child");
@@ -175,9 +92,9 @@ test("a child-first input-source restore uses the root window after the child cl
   }
 
   assert.deepEqual(cleanupErrors, []);
-  assert.deepEqual(cleanupEvents, ["baseline", "restore:main:person-source"]);
-  assert.deepEqual(sourceWindows, ["child", "child", "main"]);
-  assert.equal(current, "person-source");
+  assert.deepEqual(cleanupEvents, ["baseline"]);
+  assert.deepEqual(server.requests.filter(({ method }) => method === "diagnostics.input.source").map(({ params }) => params.window),
+    ["child", "child", "main"]);
 });
 
 // A check that passes its body still fails on an error event that the application stored in its event log during the check.
@@ -202,47 +119,29 @@ function runLoggedError(t, expected, during) {
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
   const started = writeEventLog(dir, { before: [OPEN, PREVIOUS], during });
-  const file = join(dir, "probe.test.mjs");
-  writeFileSync(file, `import test from "node:test";
-import { finishSession } from ${JSON.stringify(app)};
-test("probe body passes", async (t) => {
-  const session = {
-    app: { name: "probe", configDir: ${JSON.stringify(dir)} },
-    cleanups: [],
-    checkEnded: async () => {},
-    stallSamples: new Set(),
-    eventStart: { "host-1-1.jsonl": { offset: ${started}, inode: ${JSON.stringify(String(statSync(join(dir, "logs", "host-1-1.jsonl"), { bigint: true }).ino))} } },
-    expectedErrors: ${expected},
-    recordings: new Set(),
-    recordingNotes: [],
-    markTest: async () => null,
-  };
-  t.after(() => finishSession(t, session, () => {}));
-});
-`);
-  const { NODE_TEST_CONTEXT, ...environment } = process.env;
-  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
-    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+  const { NODE_TEST_CONTEXT, SOKSAK_RUN_ID, SOKSAK_RUN_FOLDER, ...environment } = process.env;
+  return spawnSync(process.execPath, ["--test", "--test-reporter=tap", probe("logged-error.mjs")],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0", SESSION_PROBE: JSON.stringify({ configDir: dir, started, expected }) } });
 }
 
 const FAILED = event(3, "error", "host.test.failed", { text: "closed" });
 
 test("an error event of the event log fails the check unless it is declared", { timeout: 30000 }, (t) => {
-  const undeclared = runLoggedError(t, "[]", [FAILED, RESIZE]);
+  const undeclared = runLoggedError(t, [], [FAILED, RESIZE]);
   assert.equal(undeclared.status, 1, undeclared.stdout + undeclared.stderr);
   assert.match(undeclared.stdout, /# application error: error host host\.test\.failed: \{"text":"closed"\}/);
   assert.match(undeclared.stdout, /probe: the application logged 2 errors that the check did not declare/);
   assert.doesNotMatch(undeclared.stdout, /an error of the previous check/);
-  const declared = runLoggedError(t, "[/host\\.test\\.failed/, /ResizeObserver loop/]", [FAILED, RESIZE]);
+  const declared = runLoggedError(t, ["host\\.test\\.failed", "ResizeObserver loop"], [FAILED, RESIZE]);
   assert.equal(declared.status, 0, declared.stdout + declared.stderr);
 });
 
 test("a record event of level error fails the check as the line of the text form unless it is declared", { timeout: 30000 }, (t) => {
-  const result = runLoggedError(t, "[]", [RESIZE]);
+  const result = runLoggedError(t, [], [RESIZE]);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /# application error: error workbench workbench: ResizeObserver loop completed/);
   assert.match(result.stdout, /probe: the application logged 1 error that the check did not declare/);
-  const declared = runLoggedError(t, "[/ResizeObserver loop/]", [RESIZE]);
+  const declared = runLoggedError(t, ["ResizeObserver loop"], [RESIZE]);
   assert.equal(declared.status, 0, declared.stdout + declared.stderr);
   assert.match(declared.stdout, /# application error: error workbench workbench: ResizeObserver loop completed/);
 });
@@ -256,23 +155,9 @@ test("a recording folder that the check left fails the check and is preserved", 
   mkdirSync(join(dir, "logs"));
   writeEventLog(dir, { before: [OPEN], during: [] });
   mkdirSync(join(dir, "logs", "captures", "earlier"), { recursive: true });
-  const file = join(dir, "probe.test.mjs");
-  writeFileSync(file, `import test from "node:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { finishSession, recordingFolders } from ${JSON.stringify(app)};
-test("probe body passes", async (t) => {
-  const configDir = ${JSON.stringify(dir)};
-  const session = { app: { name: "probe", configDir }, cleanups: [], checkEnded: async () => {}, stallSamples: new Set(), eventStart: {}, expectedErrors: [], markTest: async () => null,
-    recordingsBefore: recordingFolders(configDir), recordings: new Set(), failedRecordings: new Map(), recordingNotes: [] };
-  mkdirSync(join(configDir, "logs", "captures", "left"));
-  writeFileSync(join(configDir, "logs", "captures", "left", "frame-0001.bgra"), "x");
-  t.after(() => finishSession(t, session, () => {}));
-});
-`);
-  const { NODE_TEST_CONTEXT, ...environment } = process.env;
-  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
-    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+  const { NODE_TEST_CONTEXT, SOKSAK_RUN_ID, SOKSAK_RUN_FOLDER, ...environment } = process.env;
+  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", probe("left-recording.mjs")],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0", SESSION_PROBE: JSON.stringify({ configDir: dir }) } });
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /untracked recording: .*captures\/left/);
   assert.match(result.stdout, /kept recording: .*captures\/left/);
@@ -284,43 +169,9 @@ test("a failed check preserves its capture without an opt-in", { timeout: 30000 
   t.after(() => rmSync(dir, { recursive: true }));
   mkdirSync(join(dir, "logs"));
   writeEventLog(dir, { before: [OPEN], during: [] });
-  const file = join(dir, "probe.test.mjs");
-  writeFileSync(file, `import test from "node:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { Session, finishSession, recordingFolders } from ${JSON.stringify(app)};
-test("probe body fails", async (t) => {
-  const configDir = ${JSON.stringify(dir)};
-  const captures = join(configDir, "logs", "captures");
-  mkdirSync(captures, { recursive: true });
-  let activeFrames;
-  const client = { endpoint: { pid: process.pid }, request: async (method) => {
-    if (method === "diagnostics.window.draw-covered") return null;
-    if (method === "status.get") return { refreshRate: 120 };
-    if (method === "diagnostics.capture.start") {
-      activeFrames = join(captures, "capture-1");
-      mkdirSync(activeFrames);
-      return { frames: activeFrames, window: 7 };
-    }
-    if (method === "diagnostics.capture.stop") return { frames: activeFrames, window: 7 };
-    throw new Error("unexpected request " + method);
-  } };
-  const session = new Session({ name: "probe", configDir }, client);
-  session.eventStart = {};
-  session.expectedErrors = [];
-  session.markTest = async () => null;
-  session.recordingsBefore = recordingFolders(configDir);
-  const recording = await session.record();
-  writeFileSync(join(recording.frames, "frame-0001.bgra"), "capture evidence");
-  mkdirSync(join(captures, "failed"), { recursive: true });
-  writeFileSync(join(captures, "failed", "frame-0001.bgra"), "capture evidence");
-  t.after(() => finishSession(t, session, () => {}));
-  throw new Error("probe body failed");
-});
-`);
-  const { NODE_TEST_CONTEXT, SOKSAK_KEEP_FAILURE_CAPTURE, ...environment } = process.env;
-  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", file],
-    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0" } });
+  const { NODE_TEST_CONTEXT, SOKSAK_KEEP_FAILURE_CAPTURE, SOKSAK_RUN_ID, SOKSAK_RUN_FOLDER, ...environment } = process.env;
+  const result = spawnSync(process.execPath, ["--test", "--test-reporter=tap", probe("failed-capture.mjs")],
+    { encoding: "utf8", timeout: 20000, env: { ...environment, FORCE_COLOR: "0", SESSION_PROBE: JSON.stringify({ configDir: dir }) } });
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stdout, /probe body failed/);
   assert.deepEqual(readdirSync(join(dir, "logs", "captures")).sort(), ["capture-1", "failed"]);

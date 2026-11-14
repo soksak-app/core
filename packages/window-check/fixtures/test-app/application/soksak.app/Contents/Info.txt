@@ -1,0 +1,1 @@
+The application bundle of the extraction test; the extraction needs one file in the folder.

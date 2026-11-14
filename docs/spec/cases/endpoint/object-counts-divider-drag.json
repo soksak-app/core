@@ -1,0 +1,26 @@
+{
+  "name": "object-counts-divider-drag",
+  "description": "The divider drag reads the first card of the grid, splits it, reads the grid again, drags the boundary at the column line of the split card with diagnostics.drag and closes the split card.",
+  "replay": false,
+  "reason": "The case plays the commands and the waits of the operations of an object-count measurement, which run sok processes and a client of the endpoint on a workbench that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"name":"core.grid","window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"main","fixed":false,"c0":1}]}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"exposure.list","params":{"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"status":[],"commands":[{"name":"core.card.split","description":"Splits a card and puts a new tab of a plugin in a new card on the named side of it: left, right, top, or bottom.","params":{"type":"object","properties":{"card":{"type":"string"},"side":{"enum":["left","right","top","bottom"]},"plugin":{"type":"string"}}},"result":{"type":"object","properties":{"card":{"type":"string"},"tab":{"type":"string"}}},"registered":true}],"element":[]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"name":"core.card.split","params":{"card":"main","side":"right","plugin":"probe"},"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"card":"split","tab":"t-2"}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"name":"core.grid","window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"main","fixed":false,"c0":1},{"id":"split","fixed":false,"c0":2}]}}},
+    {"close":"client"},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"diagnostics.drag","params":{"window":"w1","axis":"x","line":2,"dx":40,"dy":0,"ms":200,"times":1}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"from":{"x":610,"y":330},"steps":12,"took":205,"asked":200,"pressWaits":[3],"tripSteps":[12],"deliveries":{"press":[1],"step":[1],"release":[1]}}}},
+    {"send":{"jsonrpc":"2.0","id":1,"method":"exposure.list","params":{"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"status":[],"commands":[{"name":"core.card.close","description":"Closes a card with all its tabs. When a tab of the card is modified, the workbench asks about that tab first, the result is closed false, and the card closes after its modified tabs are saved or discarded.","params":{"type":"object","properties":{"card":{"type":"string"}}},"result":{"type":"object","properties":{"closed":{"type":"boolean"}}},"registered":true}],"element":[]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"name":"core.card.close","params":{"card":"split"},"window":"w1"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"closed":true}}},
+    {"close":"client"}
+  ]
+}

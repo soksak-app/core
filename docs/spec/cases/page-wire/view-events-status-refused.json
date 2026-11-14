@@ -1,0 +1,7 @@
+{
+  "name": "view-events-status-refused",
+  "description": "The page sends no call and registers no listener.",
+  "replay": true,
+  "steps": [
+  ]
+}

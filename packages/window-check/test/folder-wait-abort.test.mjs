@@ -1,27 +1,30 @@
 // At a high load the watch becomes active, or delivers a change, only after the process or the connection whose state a wait
-// awaits ended. The tests hold the watch past the abort of the signal of the wait (fault injection at @parcel/watcher: the
-// subscription resolves only after the test aborted the signal, and it reports no change) and require that the wait judges
+// awaits ended. The tests hold the watch past the abort of the signal of the wait (the fault point watchFault.start of folder-wait.mjs: the
+// real subscription starts only after the test aborted the signal) and require that the wait judges
 // the state of the folder at the abort.
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test, { mock } from "node:test";
+import test from "node:test";
 
+import { untilEndpoint } from "../endpoint-wait.mjs";
+import { endWatches, watchFault } from "../folder-wait.mjs";
+import { joinedFailure } from "../failure.mjs";
+
+// The fault point watchFault.start holds the start of the watch until the test releases it.
 let release = () => {};
-mock.module("@parcel/watcher", {
-  namedExports: {
-    subscribe: () => new Promise((resolve) => {
-      release = () => resolve({ unsubscribe: async () => {} });
-    }),
-  },
-});
-
-const { untilEndpoint } = await import("../endpoint-wait.mjs");
 
 function folder(t) {
   const dir = fs.mkdtempSync(join(tmpdir(), "folder-wait-abort-"));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  watchFault.start = () => new Promise((resolve) => { release = resolve; });
+  t.after(async () => {
+    watchFault.start = null;
+    const ended = await endWatches();
+    fs.rmSync(dir, { recursive: true, force: true });
+    if (ended.length === 1) throw ended[0];
+    if (ended.length > 1) throw joinedFailure(`${ended.length} watch ends failed`, ended);
+  });
   return dir;
 }
 

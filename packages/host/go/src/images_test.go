@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unsafe"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 type imageStatusTestOwner struct{}
@@ -543,57 +546,140 @@ func TestWindowRegionCountsTheFramesThatTheHostMarkedPresented(t *testing.T) {
 	presentedFrames(0, "a region attached again")
 }
 
-// blurPlatform records the background of each document and image region.
-type blurPlatform struct {
-	elementPlatform
-	documents map[unsafe.Pointer]bool
-	images    map[unsafe.Pointer]bool
+// regionsProbe is a window of the real platform with a surface that holds one image region and one document region, both of the real
+// platform, whose blur the platform reads back. The regions and the window close with the test.
+type regionsProbe struct {
+	*viewProbe
+	image    unsafe.Pointer
+	document unsafe.Pointer
 }
 
-func (p *blurPlatform) SetDocumentBackground(document unsafe.Pointer, enabled bool) {
-	p.documents[document] = enabled
+func newRegionsProbe(t *testing.T) *regionsProbe {
+	t.Helper()
+	probe := &regionsProbe{viewProbe: newViewProbe(t, Theme{})}
+	folder, err := filepath.Abs(filepath.Join("testdata", "view-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runOnMainThread(func() {
+		probe.image, err = system.CreateImage(probe.surface, "viewer", func(string) {}, nil)
+		if err != nil {
+			return
+		}
+		probe.document, err = system.CreateDocument(probe.surface, platform.DocumentOptions{Directory: viewStoreDirectory(t), Folder: folder, Plugin: "probe",
+			Label: ProcessLabel("probe", "page")}, func(string) {})
+	})
+	if err != nil {
+		t.Fatalf("create the regions: %v", err)
+	}
+	t.Cleanup(func() {
+		runOnMainThread(func() {
+			system.CloseImage(probe.image)
+			system.CloseDocument(probe.document)
+		})
+	})
+	return probe
 }
 
-func (p *blurPlatform) SetImageBackground(image unsafe.Pointer, enabled bool) {
-	p.images[image] = enabled
+// imageBlurred reads the blur of the image region from the facts that the platform reads of it.
+func (p *regionsProbe) imageBlurred(t *testing.T) bool {
+	t.Helper()
+	var blurred bool
+	runOnMainThread(func() { blurred = nativeImageBlurred(t, p.image) })
+	return blurred
+}
+
+// nativeImageBlurred reads the blur of the image region from the facts that the platform reads of it. It runs on the main thread.
+func nativeImageBlurred(t *testing.T, image unsafe.Pointer) bool {
+	facts, err := system.FactsImage(image)
+	if err != nil {
+		t.Errorf("the facts of the image region: %v", err)
+		return false
+	}
+	var read struct{ Blurred bool }
+	if err := json.Unmarshal([]byte(facts), &read); err != nil {
+		t.Errorf("the facts of the image region are not JSON: %v: %s", err, facts)
+	}
+	return read.Blurred
+}
+
+// moreImage creates another image region of the real platform in the surface, which closes with the test.
+func (p *regionsProbe) moreImage(t *testing.T, name string) unsafe.Pointer {
+	t.Helper()
+	var image unsafe.Pointer
+	var err error
+	runOnMainThread(func() { image, err = system.CreateImage(p.surface, name, func(string) {}, nil) })
+	if err != nil {
+		t.Fatalf("create the image region %s: %v", name, err)
+	}
+	t.Cleanup(func() { runOnMainThread(func() { system.CloseImage(image) }) })
+	return image
+}
+
+// documentBlurred reads the blur of the document region from the facts that the platform reads of the window: the document is the web
+// view of a document region of the window.
+func (p *regionsProbe) documentBlurred(t *testing.T) bool {
+	t.Helper()
+	var facts string
+	var err error
+	runOnMainThread(func() { facts, err = system.WindowFacts(p.window) })
+	if err != nil {
+		t.Fatalf("the facts of the window: %v", err)
+	}
+	var read struct {
+		Webviews []struct{ Document, Blurred bool }
+	}
+	if err := json.Unmarshal([]byte(facts), &read); err != nil {
+		t.Fatalf("the facts of the window are not JSON: %v: %s", err, facts)
+	}
+	for _, view := range read.Webviews {
+		if view.Document {
+			return view.Blurred
+		}
+	}
+	t.Fatalf("the window holds no document region: %s", facts)
+	return false
 }
 
 // contract: modal.dialog-blurs-each-document-and-image-region
 func TestADialogBlursEachDocumentAndImageRegion(t *testing.T) {
-	saved := system
-	t.Cleanup(func() { system = saved })
-	recorder := &blurPlatform{documents: map[unsafe.Pointer]bool{}, images: map[unsafe.Pointer]bool{}}
-	system = recorder
-	surfaces := &Surfaces{images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
-	var region byte
-	key := ImageKey{Surface: "tab-a", Name: "viewer"}
+	probe := newRegionsProbe(t)
+	surfaces := &Surfaces{invoke: func(task func()) { task() }, documents: NewDocuments(), images: NewImages()}
+	key := ImageKey{Surface: "probe-surface", Name: "viewer"}
 	if err := surfaces.images.Reserve(key, &ImageOwner{SidecarName: "viewer-sidecar", SidecarOwner: imageStatusTestOwner{}}); err != nil {
 		t.Fatal(err)
 	}
-	if !surfaces.images.Set(key, unsafe.Pointer(&region)) {
+	if !surfaces.images.Set(key, probe.image) {
 		t.Fatal("the image region was not attached")
 	}
+	documentKey := DocumentKey{Surface: "probe-surface", Name: "page"}
+	if err := surfaces.documents.Reserve(documentKey); err != nil {
+		t.Fatal(err)
+	}
+	if !surfaces.documents.Set(documentKey, probe.document) {
+		t.Fatal("the document region was not attached")
+	}
 	for _, enabled := range []bool{true, false} {
-		surfaces.setWorkbenchDialog(enabled)
-		if blurred, seen := recorder.images[unsafe.Pointer(&region)]; !seen || blurred != enabled {
-			t.Fatalf("the dialog is %t and the image region has the background %t (set: %t)", enabled, blurred, seen)
+		runOnMainThread(func() { surfaces.setWorkbenchDialog(enabled) })
+		if blurred := probe.imageBlurred(t); blurred != enabled {
+			t.Fatalf("the dialog is %t and the image region has the background %t", enabled, blurred)
+		}
+		if blurred := probe.documentBlurred(t); blurred != enabled {
+			t.Fatalf("the dialog is %t and the document region has the background %t", enabled, blurred)
 		}
 	}
 }
 
 // contract: modal.region-under-a-dialog-starts-blurred
 func TestAnImageRegionMadeUnderADialogStartsBlurred(t *testing.T) {
-	saved := system
-	t.Cleanup(func() { system = saved })
-	recorder := &blurPlatform{documents: map[unsafe.Pointer]bool{}, images: map[unsafe.Pointer]bool{}}
-	system = recorder
-	surfaces := &Surfaces{images: NewImages(), documents: NewDocuments(), invoke: func(task func()) { task() }}
-	var region byte
+	probe := newRegionsProbe(t)
 	for _, dialog := range []bool{true, false} {
-		surfaces.setWorkbenchDialog(dialog)
-		surfaces.seatImageBackground(unsafe.Pointer(&region))
-		if recorder.images[unsafe.Pointer(&region)] != dialog {
-			t.Fatalf("a region made with the dialog %t has the background %t", dialog, recorder.images[unsafe.Pointer(&region)])
+		runOnMainThread(func() {
+			probe.s.setWorkbenchDialog(dialog)
+			probe.s.seatImageBackground(probe.image)
+		})
+		if blurred := probe.imageBlurred(t); blurred != dialog {
+			t.Fatalf("a region made with the dialog %t has the background %t", dialog, blurred)
 		}
 	}
 }

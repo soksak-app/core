@@ -1,0 +1,8 @@
+{
+  "name": "transcript-off-failed",
+  "description": "The page sends no transcript line while the recording is off and for a call that failed.",
+  "replay": false,
+  "reason": "The case has no step: the page sends no call, so there is no reply for the producer to compare (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+  ]
+}

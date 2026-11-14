@@ -5,12 +5,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { host, selectPageWire } from "@soksak/runtime";
+import { HostWorkspaceStore } from "../host-store.js";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
 const pluginId = "fixture-frame-text";
 
-test("a frame factor change prepares the row of the next draw and writes the factor in that draw", { timeout: 5000 }, async (t) => {
+test("a frame factor change prepares the row of the next draw and writes the factor in that draw", { timeout: 5000 }, async () => {
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
+  // are imported, because host.js reads the host when it is imported.
+  const wire = selectPageWire("plane-frame-text");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
@@ -28,13 +34,6 @@ test("a frame factor change prepares the row of the next draw and writes the fac
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  t.mock.module("../surface-modules.js", { exports: {
-    mountedSurface: () => null,
-    mountSurface: () => Promise.resolve(), disposeSurface: () => Promise.resolve(),
-    placePluginPlaceholder: () => {},
-    surfaceForTab: (tab) => ({ module: "/fixture.js", composition: { kind: "dom" }, surfaceId: tab.id,
-      pluginId: tab.plugin, params: tab.params ?? null, declarations: {}, sidecars: [] }),
-  } });
   // The environment and the plugin are installed through the environment module, as the page installs them at its start.
   const { installEnvironment } = await import("../environment.js");
   installEnvironment({
@@ -51,15 +50,11 @@ test("a frame factor change prepares the row of the next draw and writes the fac
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 
-  const memory = { common: {}, projects: [] };
   const settings = await import("../settings.js");
-  await settings.connectSettings({
-    snapshot: async () => structuredClone(memory),
-    settings: async (_id, values) => { memory.common = { ...memory.common, ...values }; },
-    onChange: () => () => {},
-  });
+  await settings.connectSettings(new HostWorkspaceStore(host));
   const plane = await import("../plane.js");
   const compositor = await import("../compositor.js");
+  const { flushEvents } = await import("../page-log.js");
   const records = [];
   compositor.onCommit((record) => { records.push(record); });
   const root = document.documentElement;
@@ -109,6 +104,12 @@ test("a frame factor change prepares the row of the next draw and writes the fac
     assert.equal(drawnFactor(), "1.5", "the smaller factor reached the document before the prepared draw");
     held.draw();
     assert.equal(drawnFactor(), "1");
+    // The window closes here: the focus leaves the document, and the events that the gate refused are reported in the batch of the flush.
+    dom.window.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
+    assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord)), [], "the page reported an error");
+    wire.finish();
   } finally {
     dom.window.close();
   }

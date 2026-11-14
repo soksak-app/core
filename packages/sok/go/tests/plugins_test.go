@@ -605,10 +605,14 @@ func TestFileErrorsNameThePathAndTheReason(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(installed), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(installed, []byte("{}"), 0o000); err != nil {
+	state, err := os.ReadFile(filepath.Join("fixtures", "installed-empty.json"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	_, err := sok.ReadPluginsState(config, sok.CoreVersion)
+	if err := os.WriteFile(installed, state, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	_, err = sok.ReadPluginsState(config, sok.CoreVersion)
 	if chmodErr := os.Chmod(installed, 0o644); chmodErr != nil {
 		t.Fatal(chmodErr)
 	}

@@ -1,0 +1,19 @@
+{
+  "name": "plugin-operations-starter-install-refused",
+  "description": "The page records the pending starter job and reads the state again after the install of the plugin alpha was refused with a text.",
+  "replay": false,
+  "reason": "The install of a plugin changes the configuration directory, and the producer builds no state of the registry for the refusal of the starter install (docs/spec/cases/page-wire/README.md#limits).",
+  "variables": {"op-cid-1":{"type":"string","example":"p5a0c9e7b-1f2d-4c3e-8b4a-6d7e8f901231.1","source":"page"}},
+  "steps": [
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":null}}},
+    {"call":{"name":"pluginsStarter","payload":{"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}},
+    {"reply":{"result":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}}},
+    {"call":{"name":"pluginsRun","payload":{"action":"install","plugin":"alpha"},"cids":["$op-cid-1"]}},
+    {"reply":{"error":"starter install refused"}},
+    {"call":{"name":"pluginsState"}},
+    {"reply":{"result":{"core":"0.0.24","registry":"file:///registry/index.json","index":{"plugins":[],"revoked":{"plugins":[],"sidecars":[],"core":[]},"packs":[{"name":"starter","description":"Starter.","plugins":["alpha","beta"]}]},"installed":{"format":3,"plugins":{},"sidecars":{}},"firstRun":true,"starter":{"format":1,"state":"pending","pack":"starter","registry":"file:///registry/index.json","plugins":["alpha","beta"]}}}}
+  ]
+}

@@ -1,0 +1,1080 @@
+{
+  "name": "space-close-asks-session",
+  "description": "The page starts at the library, reads the registry with one project of three spaces, opens the project, shows the question about the modified tab of the active space twice, keeps the tab on the first answer, discards its changes on the second, and writes the layout of the project after each removal of a space.",
+  "replay": false,
+  "reason": "The page start sends the theme of the window, and the project open sends the folder, the open and the shown project of the window, and the question about a modified tab shows a native modal, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "language": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    },
+    "snapshot": {
+      "type": "object",
+      "example": {
+        "common": {
+          "diagnostics.log": {
+            "lifecycle": "info",
+            "call": "info"
+          }
+        },
+        "projects": [
+          {
+            "id": "prj-one",
+            "root": "/work/one",
+            "identity": "1:1",
+            "title": "one",
+            "color": "#fff",
+            "named": 2,
+            "activeSpaceId": "spc-aaaaaa",
+            "spaces": [
+              {
+                "id": "spc-aaaaaa",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-bbbbbb",
+                              "plugin": "fixture-space-close",
+                              "title": "document"
+                            }
+                          ],
+                          "activeId": "tab-bbbbbb"
+                        }
+                      }
+                    ]
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              },
+              {
+                "id": "spc-bbbbbb",
+                "title": "SPACE2",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-cccccc",
+                              "plugin": "fixture-space-close",
+                              "title": "document"
+                            }
+                          ],
+                          "activeId": "tab-cccccc"
+                        }
+                      }
+                    ]
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              },
+              {
+                "id": "spc-cccccc",
+                "title": "SPACE3",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-dddddd",
+                              "plugin": "fixture-space-close",
+                              "title": "document"
+                            }
+                          ],
+                          "activeId": "tab-dddddd"
+                        }
+                      }
+                    ]
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              }
+            ],
+            "settings": {}
+          }
+        ],
+        "open": []
+      },
+      "source": "host"
+    },
+    "cid": {
+      "type": "string",
+      "example": "p824054a1-cbc7-4f81-b949-7e6068f3a4df.1",
+      "source": "page"
+    },
+    "clock-ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "ts-us": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "824054a1-cbc7-4f81-b949-7e6068f3a4df",
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 5,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1790999999999973,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 4999517289,
+      "source": "page"
+    },
+    "opened-at": {
+      "type": "integer",
+      "example": 1794619464520,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000134456,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5134000664,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000134449,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5133993830,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "notificationState"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "authorization": "notDetermined",
+          "error": null
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "performance",
+        "payload": {
+          "action": "off"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "policy",
+          "classes": {
+            "lifecycle": "info",
+            "input": "error",
+            "call": "info",
+            "io": "error",
+            "frame": "error"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabState"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "tabSessions"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": []
+      }
+    },
+    {
+      "call": {
+        "name": "windowReady"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "projectFolder",
+        "payload": "/work/one"
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "root": "/work/one",
+          "identity": "1:1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "projectOpen",
+        "payload": {
+          "id": "prj-one",
+          "root": "/work/one",
+          "separate": true,
+          "geometry": null
+        },
+        "cids": [
+          "$cid"
+        ]
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "local": true
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "snapshot"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": "$snapshot"
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us",
+          "mono_ns": "$clock-mono-ns"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us",
+              "mono_ns": "$mono-ns",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.project.operation",
+              "fields": {
+                "action": "open",
+                "project": "prj-one"
+              },
+              "cids": [
+                "$cid"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "projectShown",
+        "payload": {
+          "project": {
+            "id": "prj-one",
+            "root": "/work/one",
+            "title": "one"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "lastOpened": "$opened-at"
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(255, 255, 255)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsRetain",
+        "payload": {
+          "surfaces": [
+            {
+              "surface": "tab-bbbbbb",
+              "plugin": "fixture-space-close",
+              "root": "/work/one"
+            },
+            {
+              "surface": "tab-dddddd",
+              "plugin": "fixture-space-close",
+              "root": "/work/one"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "closed": 0
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "spaces": [
+              {
+                "id": "spc-aaaaaa",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-bbbbbb",
+                              "plugin": "fixture-space-close",
+                              "title": "document",
+                              "origin": {
+                                "directory": null
+                              }
+                            }
+                          ],
+                          "activeId": "tab-bbbbbb"
+                        },
+                        "fixed": false
+                      }
+                    ],
+                    "paidBy": {}
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              },
+              {
+                "id": "spc-bbbbbb",
+                "title": "SPACE2",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-cccccc",
+                              "plugin": "fixture-space-close",
+                              "title": "document"
+                            }
+                          ],
+                          "activeId": "tab-cccccc"
+                        }
+                      }
+                    ]
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              },
+              {
+                "id": "spc-cccccc",
+                "title": "SPACE3",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-dddddd",
+                              "plugin": "fixture-space-close",
+                              "title": "document"
+                            }
+                          ],
+                          "activeId": "tab-dddddd"
+                        }
+                      }
+                    ]
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              }
+            ],
+            "activeSpaceId": "spc-aaaaaa",
+            "named": 2
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "spaces": [
+              {
+                "id": "spc-aaaaaa",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-bbbbbb",
+                              "plugin": "fixture-space-close",
+                              "title": "document",
+                              "origin": {
+                                "directory": null
+                              }
+                            }
+                          ],
+                          "activeId": "tab-bbbbbb"
+                        },
+                        "fixed": false
+                      }
+                    ],
+                    "paidBy": {}
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              },
+              {
+                "id": "spc-cccccc",
+                "title": "SPACE3",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-dddddd",
+                              "plugin": "fixture-space-close",
+                              "title": "document"
+                            }
+                          ],
+                          "activeId": "tab-dddddd"
+                        }
+                      }
+                    ]
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              }
+            ],
+            "activeSpaceId": "spc-aaaaaa",
+            "named": 2
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "overlayShow",
+        "payload": {
+          "id": "picker",
+          "title": "● document 탭에 저장하지 않은 변경이 있습니다",
+          "rect": {
+            "x": 2,
+            "y": 2,
+            "w": 0,
+            "h": 0
+          },
+          "mode": "menu",
+          "card": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0
+          },
+          "className": "picker",
+          "html": "<div class=\"picker__head\">● document 탭에 저장하지 않은 변경이 있습니다</div><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"discard\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:0}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">저장하지 않고 닫기</span><small></small></button><button class=\"picker__item\" data-expose=\"core.picker.item\" type=\"button\" data-key=\"keep\" data-active=\"false\" data-command=\"core.picker.pick\" data-params=\"{&quot;index&quot;:1}\"><svg data-expose=\"core.picker.item-icon\" viewBox=\"0 0 16 16\" aria-hidden=\"true\">undefined</svg><span class=\"picker__name\" data-expose=\"core.picker.item-name\">닫지 않기</span><small></small></button>",
+          "css": ".card { --bw: 1px; --divider: 1px; }",
+          "border": "rgb(255, 255, 255)",
+          "radius": 0
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "x": 2,
+          "y": 2,
+          "w": 1,
+          "h": 1
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "overlayHide",
+        "payload": "picker"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "sidecarsRetain",
+        "payload": {
+          "surfaces": [
+            {
+              "surface": "tab-dddddd",
+              "plugin": "fixture-space-close",
+              "root": "/work/one"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "closed": 0
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "spaces": [
+              {
+                "id": "spc-cccccc",
+                "title": "SPACE3",
+                "layout": {
+                  "state": {
+                    "xs": [
+                      0,
+                      1
+                    ],
+                    "ys": [
+                      0,
+                      1
+                    ],
+                    "cards": [
+                      {
+                        "id": "main",
+                        "c0": 0,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 1,
+                        "data": {
+                          "tabs": [
+                            {
+                              "id": "tab-dddddd",
+                              "plugin": "fixture-space-close",
+                              "title": "document",
+                              "origin": {
+                                "directory": null
+                              }
+                            }
+                          ],
+                          "activeId": "tab-dddddd"
+                        },
+                        "fixed": false
+                      }
+                    ],
+                    "paidBy": {}
+                  },
+                  "focusedId": "main",
+                  "windowSidebars": {},
+                  "named": 0,
+                  "sidebars": {}
+                }
+              }
+            ],
+            "activeSpaceId": "spc-cccccc",
+            "named": 2
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 7
+              }
+            },
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
+                "level": "debug",
+                "count": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

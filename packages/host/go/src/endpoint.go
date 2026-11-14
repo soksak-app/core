@@ -1434,13 +1434,14 @@ func exposureList(e *Endpoint, _ *endpointConn, params json.RawMessage, scope *R
 	} else if reply, err = e.backend.PageRequest(scope.Context(), window, "exposure.list", json.RawMessage(`{}`)); err != nil {
 		return nil, err
 	}
+	// A list that is not a JSON object (an array, null, a number, a string or a boolean) is refused with the text of the value,
+	// before the decoder reads the members, so the refusal does not carry the words of the decoder.
+	if trimmed := bytes.TrimSpace(reply); len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, rpcError(codeInternal, "page exposure.list is %s, not an object", reply)
+	}
 	var list map[string][]json.RawMessage
 	if err := json.Unmarshal(reply, &list); err != nil {
 		return nil, rpcError(codeInternal, "page exposure.list: %v", err)
-	}
-	// A JSON null is decoded as a nil map without an error, so it is rejected as a list that is not an object.
-	if list == nil {
-		return nil, rpcError(codeInternal, "page exposure.list is %s, not an object", reply)
 	}
 	for _, entry := range listedEntries(hostStatus, true) {
 		list["status"] = append(list["status"], mustJSON(entry))

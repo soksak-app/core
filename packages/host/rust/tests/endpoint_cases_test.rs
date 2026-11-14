@@ -480,6 +480,12 @@ fn command_window_missing() {
     play("command-window-missing", &[]);
 }
 
+// contract: endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text
+#[test]
+fn command_unknown_host() {
+    play("command-unknown-host", &["main"]);
+}
+
 /// The cases that this runner plays.
 const PLAYED: &[&str] = &[
     "framing-http-request-line",
@@ -491,6 +497,7 @@ const PLAYED: &[&str] = &[
     "error-invalid-params",
     "error-window-missing",
     "command-window-missing",
+    "command-unknown-host",
 ];
 
 /// The cases with replay true that this runner does not play, with the reason.
@@ -502,10 +509,6 @@ const OUTSIDE: &[(&str, &str)] = &[
     (
         "closed-by-client-pending",
         "the case has no host frame: its outcome is the client rejecting a pending request, which the client tests check",
-    ),
-    (
-        "command-unknown-host",
-        "the unknown host command is answered by the window service of the application, which needs a registered window",
     ),
     (
         "exposure-list",

@@ -807,6 +807,20 @@ bool surfaceLayoutKeysModalWaits(void *owner) {
     return keyWait(owner).modal;
 }
 
+void surfaceLayoutKeysWaitOpen(void *owner, bool decision) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    SPKeyWait *wait = openKeyWait(owner);
+    if (decision) wait.decision = YES;
+}
+
+bool surfaceLayoutKeysWaitState(void *owner, bool *decision, bool *modal) {
+    NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
+    SPKeyWait *wait = keyWait(owner);
+    *decision = wait.decision;
+    *modal = wait.modal;
+    return wait != nil;
+}
+
 void surfaceLayoutKeysModalEnded(void *owner) {
     NSCAssert(NSThread.isMainThread, @"the keyboard of a window belongs to the UI thread");
     SPKeyWait *wait = keyWait(owner);

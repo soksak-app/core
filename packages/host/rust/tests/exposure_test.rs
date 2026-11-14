@@ -7,7 +7,7 @@ mod records;
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex, mpsc};
 
 use serde_json::value::RawValue;
@@ -15,7 +15,7 @@ use serde_json::{Value, json};
 use soksak_host::event_log::EventLog;
 use soksak_host::event_record::use_host_event_log;
 use soksak_host::exposure::{self, Relay};
-use soksak_host::windows::{ListStep, list_entries, window_entry};
+use soksak_host::windows::{WindowData, listed_window, window_entry};
 
 /// The response text that a document sends.
 fn text(value: Value) -> Box<RawValue> {
@@ -978,111 +978,33 @@ fn an_open_window_lists_its_title_project_and_key_state() {
     );
 }
 
-/// The main thread of the test. Work that another thread sent is run in order before the main thread handles the next
-/// work.
-#[derive(Default)]
-struct FakeMain {
-    pending: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
-    running: AtomicBool,
-}
-
-impl FakeMain {
-    fn run_pending(&self) {
-        let tasks = std::mem::take(&mut *self.pending.lock().unwrap());
-        for task in tasks {
-            task();
-        }
-    }
-
-    /// Like send_user_message of tauri-runtime-wry, it answers at once on the main thread, and on another thread it
-    /// answers after the work sent earlier was handled.
-    fn query<T>(&self, answer: impl FnOnce() -> T) -> T {
-        if !self.running.load(Ordering::SeqCst) {
-            self.run_pending();
-        }
-        answer()
-    }
-
-    fn run(&self, step: ListStep) -> Result<Vec<Value>, String> {
-        self.run_pending();
-        self.running.store(true, Ordering::SeqCst);
-        let result = step();
-        self.running.store(false, Ordering::SeqCst);
-        self.run_pending();
-        result
-    }
-}
-
-/// A window of the test. A close sets closing like the runtime and then removes the window from the runtime.
-struct FakeWindow {
-    label: &'static str,
-    closing: AtomicBool,
-    present: AtomicBool,
-    /// When closing is read, it sends the close of this window to the main thread.
-    close_on_read: AtomicBool,
-}
-
-impl FakeWindow {
-    fn open(label: &'static str, close_on_read: bool) -> Arc<Self> {
-        Arc::new(Self {
-            label,
-            closing: AtomicBool::new(false),
-            present: AtomicBool::new(true),
-            close_on_read: AtomicBool::new(close_on_read),
-        })
-    }
-}
-
-fn fake_list(main: &Arc<FakeMain>, windows: &[Arc<FakeWindow>]) -> Result<Value, String> {
-    let queries = main.clone();
-    list_entries(
-        windows.to_vec(),
-        |step| main.run(step),
-        move |window: &Arc<FakeWindow>| {
-            let closing = window.closing.load(Ordering::SeqCst);
-            if window.close_on_read.swap(false, Ordering::SeqCst) {
-                let closed = window.clone();
-                queries.pending.lock().unwrap().push(Box::new(move || {
-                    closed.closing.store(true, Ordering::SeqCst);
-                    closed.present.store(false, Ordering::SeqCst);
-                }));
-            }
-            let present = || {
-                if window.present.load(Ordering::SeqCst) {
-                    Ok(())
-                } else {
-                    Err("runtime error: failed to receive message from webview".to_string())
-                }
-            };
-            window_entry(
-                window.label,
-                closing,
-                true,
-                String::new(),
-                || queries.query(|| present().map(|()| window.label.to_string())),
-                || queries.query(|| present().map(|()| false)),
-            )
-        },
-    )
-}
-
-// host.windows reads the closing, the title and the focus of a window in one main-thread step. A close that the main
-// thread handled during the list only removes that window from the list or puts it in, and does not make the list fail.
-// contract: exposure.windows.listed-in-one-main-thread-step
+// host.windows lists the records of a window as data: the entry holds the readiness, the project of the records, the title and
+// the key state that the lookups give, and a window whose close was accepted is left out without a lookup. The reads in one
+// main-thread step against a real Tauri application are checked by the window race test of the Tauri host
+// (packages/host/tauriv2/tests/window_race_test.rs).
+// contract: exposure.windows.entry-fields
 #[test]
-fn a_close_during_the_list_does_not_fail_the_list() {
-    let main = Arc::new(FakeMain::default());
-    let windows = [
-        FakeWindow::open("main", false),
-        FakeWindow::open("w2", true),
-    ];
-    let entry = |label: &str| json!({"ready": true, "window": label, "title": label, "project": null, "key": false});
+fn a_window_is_listed_from_its_records() {
+    let data = WindowData::default();
+    data.ready.store(true, Ordering::Relaxed);
+    *data.root.lock().unwrap() = "/tmp/project".into();
     assert_eq!(
-        fake_list(&main, &windows),
-        Ok(json!([entry("main"), entry("w2")]))
+        listed_window("main", &data, || Ok("project".into()), || Ok(true)),
+        Ok(Some(json!({
+            "ready": true, "window": "main", "title": "project",
+            "project": "/tmp/project", "key": true,
+        })))
     );
-    assert!(windows[1].closing.load(Ordering::SeqCst));
-    assert_eq!(fake_list(&main, &windows), Ok(json!([entry("main")])));
+    data.closing.store(true, Ordering::Relaxed);
+    assert_eq!(
+        listed_window(
+            "main",
+            &data,
+            || Err("the title of a closing window was read".into()),
+            || Err("the key state of a closing window was read".into()),
+        ),
+        Ok(None)
+    );
 }
 
 // contract: exposure.status-change.refuses-host-name

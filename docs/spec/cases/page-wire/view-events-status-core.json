@@ -1,0 +1,14 @@
+{
+  "name": "view-events-status-core",
+  "description": "The page pushes the first value and a changed value of a core status that the view watches.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.grid","value":{"tabs":2}},"surface":"probe-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.grid","value":{"tabs":3}},"surface":"probe-surface"}}},
+    {"reply":{"result":true}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.count","value":1},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

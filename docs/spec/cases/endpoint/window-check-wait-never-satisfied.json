@@ -1,0 +1,13 @@
+{
+  "name": "window-check-wait-never-satisfied",
+  "description": "A status watch whose first value does not satisfy the predicate stays open: the host answers status.watch and status.get with a value and sends nothing after it.",
+  "replay": false,
+  "reason": "The case ends with the application waiting for a value, which a replay cannot arrange.",
+  "variables": {"value": {"type": "object", "example": {"responder": null}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": "$value"}}
+  ]
+}

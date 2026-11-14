@@ -40,13 +40,52 @@ export function operationsFor(plugins) {
 const DRAG = { dx: 40, dy: 0, ms: 200, times: 1 };
 
 /**
- * The steps of the operations of operationsFor. run(args) runs sok with the arguments and returns its reply, request(method, params)
- * calls a method of the endpoint, until(name, predicate) resolves with the first value of the status of the window that satisfies
- * the predicate, and waitFor(check) resolves with the first truthy value of check(), which runs again after each change of the
- * statuses host.window and host.windows. windows are the windows before the first step, and projectRoot is the folder that the
- * project window opens.
+ * Runs `sok` with the arguments and the configuration folder of the application and resolves with its JSON output. A step of
+ * operationSteps declares each of its commands as the arguments of one run.
  */
-export function operationSteps({ window, windows, plugins, run, request, until, waitFor, projectRoot }) {
+export function sokRunner(sok, configDir) {
+  return (args) => execFileAsync(sok, [...args, "--config-dir", configDir], { encoding: "utf8" }).then(({ stdout }) => JSON.parse(stdout));
+}
+
+/**
+ * The notifications of the watched statuses host.window and host.windows: `notify()` counts one change after the first value of a
+ * watch and wakes the waiters, and `waitFor(check)` resolves with the first truthy value of check(), which runs again after each
+ * change that arrives after it started.
+ */
+export function statusChanges() {
+  const changes = { count: 0, waiters: [] };
+  const nextChange = () => new Promise((resolve) => changes.waiters.push(resolve));
+  return {
+    changes,
+    notify() {
+      changes.count += 1;
+      for (const waiter of changes.waiters.splice(0)) waiter();
+    },
+    async waitFor(check) {
+      for (;;) {
+        const next = nextChange();
+        const value = await check();
+        if (value) return value;
+        await next;
+      }
+    },
+  };
+}
+
+/**
+ * The steps of the operations of operationsFor. `sok` is the executable and `configDir` the configuration folder of the application,
+ * through which each command runs (sokRunner); `client` is the connection of the local endpoint, which calls the methods of a
+ * diagnostic build and watches statuses, and `statuses` (statusChanges) resolves the first truthy value of a check that runs again
+ * after each change of the statuses host.window and host.windows. windows are the windows before the first step, and projectRoot is
+ * the folder that the project window opens.
+ */
+export function operationSteps({ window, windows, plugins, sok, configDir, client, statuses, projectRoot }) {
+  const run = sokRunner(sok, configDir);
+  // diagnostics.objects and diagnostics.drag are methods of the local endpoint of a diagnostic build, not declared commands, so the
+  // client calls them.
+  const request = (method, params) => client.request(method, params);
+  const until = (name, predicate) => client.watch(window, name, predicate);
+  const { waitFor } = statuses;
   // core.grid is a status; its fixed cards are the sidebars, which hold no tab of a plugin card.
   const firstCard = async () => {
     const grid = await run(["status", "core.grid", "--window", window]);
@@ -332,24 +371,10 @@ if (import.meta.main) {
   const { sok, configDir } = options;
   const log = (line) => console.error(line);
 
-  // Notifications of the watched statuses: the count rises with each change after the first value of a watch.
-  const changes = { count: 0, waiters: [] };
-  const notify = () => {
-    changes.count += 1;
-    for (const waiter of changes.waiters.splice(0)) waiter();
-  };
-  const nextChange = () => new Promise((resolve) => changes.waiters.push(resolve));
-  /** Resolves with the first value of check() that is truthy; check runs again after each change that arrives after it started. */
-  const waitFor = async (check) => {
-    for (;;) {
-      const next = nextChange();
-      const value = await check();
-      if (value) return value;
-      await next;
-    }
-  };
+  const statuses = statusChanges();
+  const { changes, notify, waitFor } = statuses;
 
-  const run = (args) => execFileAsync(sok, [...args, "--config-dir", configDir], { encoding: "utf8" }).then(({ stdout }) => JSON.parse(stdout));
+  const run = sokRunner(sok, configDir);
   const runSync = (args) => JSON.parse(execFileSync(sok, [...args, "--config-dir", configDir], { encoding: "utf8" }));
 
   const windows = runSync(["windows"]);
@@ -391,13 +416,7 @@ if (import.meta.main) {
 
   const projectRoot = mkdtempSync(join(tmpdir(), "object-counts-project-"));
   const client = await connect({ configDir });
-  const operateSteps = operationSteps({
-    window, windows, plugins: options.plugins, run, projectRoot, waitFor,
-    // diagnostics.objects and diagnostics.drag are methods of the local endpoint of a diagnostic build, not declared commands, so the
-    // client calls them.
-    request: (method, params) => client.request(method, params),
-    until: (name, predicate) => client.watch(window, name, predicate),
-  });
+  const operateSteps = operationSteps({ window, windows, plugins: options.plugins, sok, configDir, client, statuses, projectRoot });
   const entries = [];
   try {
     await measure({

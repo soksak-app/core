@@ -1,0 +1,5 @@
+p63432
+cperl
+f3
+tREG
+n/tmp/record/alone.data

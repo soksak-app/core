@@ -1,0 +1,10 @@
+{
+  "name": "section-view-open-no-anchor",
+  "description": "A grid without a card that has a layout probe tab fails the open after core.grid is read.",
+  "replay": false,
+  "reason": "The case plays the requests of a section view check on a workbench with a layout that the replay cannot arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"card-3","x":0,"y":0,"w":400,"h":500,"r0":0,"r1":1,"c0":0,"c1":1,"tabs":[{"id":"plain-1","plugin":"probeplain"}]}]}}}
+  ]
+}

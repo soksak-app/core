@@ -2,7 +2,7 @@
 // The content is data of the user, so only the length and the first part of the sha256 are stated.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { pasteboardDifference, restorableItems, restoreFailure } from "../pasteboard.mjs";
+import { pasteboardDifference, releasePasteboard, restorableItems, restoreFailure } from "../pasteboard.mjs";
 
 const text = (value) => Buffer.from(value).toString("base64");
 
@@ -46,4 +46,9 @@ test("an item without readable data is not written back and is named with its ty
       "item 3: no readable data for public.rtf, so only its other types are restored",
     ],
   });
+});
+
+test("only a named pasteboard is released, so the general pasteboard of the person cannot be", () => {
+  assert.throws(() => releasePasteboard(null), /^TypeError: a released pasteboard needs a name$/);
+  assert.throws(() => releasePasteboard(""), /^TypeError: a released pasteboard needs a name$/);
 });

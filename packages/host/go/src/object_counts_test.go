@@ -3,9 +3,7 @@
 package host
 
 import (
-	"errors"
 	"testing"
-	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -29,25 +27,16 @@ func TestSurfaceCountFollowsTheViewsOfTheWindow(t *testing.T) {
 	}
 }
 
-// objectPlatform counts the objects of each page, and a window without a main page has no main web view to count.
-type objectPlatform struct {
-	pagelessPlatform
-}
-
-func (*objectPlatform) MainWebview(platform.Window) (unsafe.Pointer, error) {
-	return nil, errors.New("the window has no registered app DOM webview")
-}
-
-func (*objectPlatform) CountPageObjects(_ unsafe.Pointer, _ bool, done func(elements, documents int64, err error)) {
-	done(3, 1, nil)
-}
-
 // contract: diagnostics.objects.page-is-null-without-a-main-page
 func TestAWindowWithoutAMainPageCountsItsHostObjects(t *testing.T) {
 	window := &elementWindow{}
 	window.native = platform.Window(1)
+	native, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
 	previousFramework, previousSystem := framework, system
-	framework, system = pagelessFramework{window: window}, &objectPlatform{}
+	framework, system = pagelessFramework{window: window}, native
 	t.Cleanup(func() { framework, system = previousFramework, previousSystem })
 	sidecars, err := NewSidecars(nil, t.TempDir())
 	if err != nil {

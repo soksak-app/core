@@ -1,0 +1,26 @@
+{
+  "name": "view-calls-command-core-shortcut",
+  "description": "A view runs a core command of a workbench shortcut row, which then fails, and a core command that is no row, which fails; the page writes the failure record of the row only.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"ts-us-1":{"type":"integer","example":1791000000837040,"source":"page"},"mono-ns-1":{"type":"integer","example":5836584247,"source":"page"},"ts-us-2":{"type":"integer","example":1791000000837151,"source":"page"},"mono-ns-2":{"type":"integer","example":5836696164,"source":"page"},"ts-us-3":{"type":"integer","example":1791000000837150,"source":"page"},"mono-ns-3":{"type":"integer","example":5836694664,"source":"page"},"ts-us-4":{"type":"integer","example":1791000000837314,"source":"page"},"mono-ns-4":{"type":"integer","example":5836858956,"source":"page"},"ts-us-5":{"type":"integer","example":1791000000837313,"source":"page"},"mono-ns-5":{"type":"integer","example":5836858164,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"ts-us-6":{"type":"integer","example":1791000000000456,"source":"page"},"mono-ns-6":{"type":"integer","example":5000000789,"source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"probe","composition":{"kind":"view","page":"ui/page.html","regions":[],"overlays":[]},"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"core.library.search.focus","params":{}}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"core.library.search.focus","params":{}}}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"error","event":"workbench.input.shortcut.failed","fields":{"plugin":"probe","command":"core.library.search.focus"}}]}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"viewReply","payload":{"id":2,"error":{"code":-32000,"message":"no focus target"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":5}},{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"warn","count":1}}]}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":3,"command":"core.tab.select","params":{}}}},
+    {"call":{"name":"viewReply","payload":{"id":3,"error":{"code":-32000,"message":"no focus target"},"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"call":{"name":"log","payload":{"action":"batch","events":[{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"debug","count":2}},{"ts_us":"$ts-us-6","mono_ns":"$mono-ns-6","start":"$page-identity","level":"info","event":"workbench.log.gated","fields":{"class":"call","level":"warn","count":1}}]}}},
+    {"reply":{"result":null}}
+  ]
+}

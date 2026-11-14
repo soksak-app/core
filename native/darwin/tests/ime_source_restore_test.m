@@ -1,3 +1,7 @@
+// Judges the decisions of the input source restoration of the input method checks (support/ime_source_restore.m) as functions
+// of the readings that the system gave. Each case is a table row: the readings in, the errors out. The operations on the system
+// (TISSelectInputSource, the activation of the outer application) run in ime_source_restore_system_test, a test of
+// make test-app-activation.
 #import <Cocoa/Cocoa.h>
 #import "support/ime_source_restore.h"
 
@@ -10,152 +14,103 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-static NSMutableDictionary *fakeState(BOOL failABCSelection, BOOL failOuterSelection, BOOL failActivation) {
-    return [[@{@"source": ABC, @"frontmost": @200, @"outerPID": @100,
-        @"failABC": @(failABCSelection), @"failOuter": @(failOuterSelection), @"failActivation": @(failActivation),
-        @"calls": [NSMutableArray array]} mutableCopy] autorelease];
+static void checkErrors(NSArray<NSString *> *errors, NSString *expected, NSString *name) {
+    NSString *joined = [errors componentsJoinedByString:@"|"];
+    check([joined isEqualToString:expected], [NSString stringWithFormat:@"%@ (errors %@, expected %@)", name, joined, expected]);
 }
 
-static NSArray<NSString *> *restore(NSMutableDictionary *state) {
-    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) {
-        [state[@"calls"] addObject:[@"select:" stringByAppendingString:source]];
-        if (([source isEqualToString:ABC] && [state[@"failABC"] boolValue])
-            || ([source isEqualToString:KOREAN] && [state[@"failOuter"] boolValue])) return NO;
-        state[@"source"] = source;
-        return YES;
-    };
-    SPIMEReadSource read = ^NSString * { return state[@"source"]; };
-    SPIMEActivateProcess activate = ^BOOL(pid_t processIdentifier) {
-        [state[@"calls"] addObject:[NSString stringWithFormat:@"activate:%d", processIdentifier]];
-        if ([state[@"failActivation"] boolValue]) return NO;
-        state[@"frontmost"] = @(processIdentifier);
-        return YES;
-    };
-    SPIMEReadFrontmostProcess frontmost = ^pid_t { return [state[@"frontmost"] intValue]; };
-    return sp_ime_source_restore_errors(ABC, KOREAN, [state[@"outerPID"] intValue], read,
-        activate, frontmost, select);
-}
+typedef struct {
+    NSString *name;
+    NSString *expected;
+    BOOL selected;
+    NSString *actual;
+    NSString *errors;
+} SelectRow;
+
+typedef struct {
+    NSString *name;
+    NSString *baseline;
+    NSString *outer;
+    NSString *afterBaseline;
+    BOOL needed;
+} NeededRow;
+
+typedef struct {
+    NSString *name;
+    NSString *baseline;
+    NSString *outer;
+    pid_t outerProcess;
+    SPIMERestoreReadings readings;
+    NSString *errors;
+} RestoreRow;
 
 int main(void) { @autoreleasepool {
-    NSMutableDictionary *state = fakeState(NO, NO, NO);
-    NSArray<NSString *> *errors = restore(state);
-    check(errors.count == 0, [NSString stringWithFormat:@"the baseline source and outer state restore without errors (%@)", errors]);
-    check([[state[@"calls"] componentsJoinedByString:@","] isEqualToString:[NSString stringWithFormat:@"activate:100,select:%@", KOREAN]],
-        [NSString stringWithFormat:@"the sequence restores the outer app before restoring the outer source (%@)", state[@"calls"]]);
-    check([state[@"source"] isEqual:KOREAN] && [state[@"frontmost"] intValue] == 100,
-        @"the original outer source and frontmost process are restored");
-
-    state = fakeState(NO, NO, NO);
-    NSMutableArray<NSString *> *adoptionErrors = [NSMutableArray array];
-    __block NSUInteger keysSent = 0;
-    BOOL ran = sp_ime_source_run_after_adoption(ABC,
-        ^BOOL(NSString *source) { state[@"source"] = source; return YES; },
-        ^NSString * { return state[@"source"]; }, ^BOOL { return YES; }, ^{ keysSent++; }, adoptionErrors);
-    check(ran && keysSent == 1 && adoptionErrors.count == 0,
-        @"the gesture callback runs once after the source and context are adopted");
-
-    state = fakeState(YES, NO, NO);
-    state[@"source"] = KOREAN;
-    SPIMESelectAndAwaitSource select = ^BOOL(NSString *source) {
-        [state[@"calls"] addObject:[@"select:" stringByAppendingString:source]];
-        if (([source isEqualToString:ABC] && [state[@"failABC"] boolValue])
-            || ([source isEqualToString:KOREAN] && [state[@"failOuter"] boolValue])) return NO;
-        state[@"source"] = source;
-        return YES;
+    SelectRow selectRows[] = {
+        {@"a selected source that the system reports passes", ABC, YES, ABC, @""},
+        {@"a refused selection is reported with the source that stayed", ABC, NO, KOREAN,
+            @"input source com.apple.keylayout.ABC was not selected and adopted|"
+            @"input source after selection is com.apple.inputmethod.Korean.2SetKorean, expected com.apple.keylayout.ABC"},
+        {@"an unreadable source after the selection is reported", ABC, YES, nil,
+            @"input source after selection is unknown, expected com.apple.keylayout.ABC"},
+        {@"an empty expected source is reported alone", @"", YES, ABC, @"the expected input source is empty"},
     };
-    errors = sp_ime_source_select_errors(ABC, select, ^NSString * { return state[@"source"]; });
-    check(errors.count >= 2 && [errors.description containsString:@"not selected and adopted"]
-        && [errors.description containsString:@"expected com.apple.keylayout.ABC"],
-        [NSString stringWithFormat:@"failed ABC selection is reported before activation (%@)", errors]);
-    check([state[@"frontmost"] intValue] == 200 && [state[@"source"] isEqual:KOREAN],
-        @"a failed baseline selection does not claim that activation or the source changed");
+    for (size_t i = 0; i < sizeof selectRows / sizeof selectRows[0]; i++) {
+        checkErrors(sp_ime_source_select_verdict(selectRows[i].expected, selectRows[i].selected, selectRows[i].actual),
+            selectRows[i].errors, selectRows[i].name);
+    }
 
-    state = fakeState(NO, NO, YES);
-    errors = restore(state);
-    check([errors.description containsString:@"outer frontmost application was not restored"]
-        && [errors.description containsString:@"frontmost process after restoration is 200"],
-        [NSString stringWithFormat:@"application restoration failures are retained (%@)", errors]);
-    check([state[@"source"] isEqual:KOREAN], @"outer source cleanup still runs when app activation fails");
-
-    state = fakeState(NO, YES, NO);
-    errors = restore(state);
-    check([errors.description containsString:@"not selected and adopted"]
-        && [errors.description containsString:[NSString stringWithFormat:@"final input source is %@, expected outer source %@", ABC, KOREAN]],
-        [NSString stringWithFormat:@"outer source selection failure is reported (%@)", errors]);
-    check([state[@"frontmost"] intValue] == 100, @"outer app restoration remains verified when outer source restoration fails");
-
-    state = fakeState(NO, NO, NO);
-    keysSent = 0;
-    __block BOOL partialKoreanSelection = YES;
-    SPIMESelectAndAwaitSource partialSelect = ^BOOL(NSString *source) {
-        [state[@"calls"] addObject:[@"select:" stringByAppendingString:source]];
-        state[@"source"] = source;
-        if ([source isEqualToString:KOREAN] && partialKoreanSelection) {
-            partialKoreanSelection = NO;
-            return NO;
-        }
-        return YES;
+    NeededRow neededRows[] = {
+        {@"an outer source that differs from the baseline is selected", ABC, KOREAN, ABC, YES},
+        {@"an outer source that equals the baseline and the source after the restoration is not selected", ABC, ABC, ABC, NO},
+        {@"an outer source that equals the baseline but not the source after the restoration is selected", ABC, ABC, KOREAN, YES},
+        {@"an empty outer source is never selected", ABC, @"", ABC, NO},
     };
-    adoptionErrors = [NSMutableArray array];
-    ran = sp_ime_source_run_after_adoption(KOREAN, partialSelect,
-        ^NSString * { return state[@"source"]; }, ^BOOL { return YES; }, ^{ keysSent++; }, adoptionErrors);
-    check(!ran && keysSent == 0 && [adoptionErrors.description containsString:@"not selected and adopted"],
-        [NSString stringWithFormat:@"a partial Korean selection failure prevents gesture keys (%@; keys %@)", adoptionErrors, @(keysSent)]);
-    NSArray<NSString *> *cleanupErrors = sp_ime_source_cleanup_errors(ABC, KOREAN, [state[@"outerPID"] intValue],
-        ^NSString * { return state[@"source"]; },
-        ^BOOL(pid_t processIdentifier) {
-            [state[@"calls"] addObject:[NSString stringWithFormat:@"activate:%d", processIdentifier]];
-            state[@"frontmost"] = @(processIdentifier);
-            return YES;
-        },
-        ^pid_t { return [state[@"frontmost"] intValue]; }, partialSelect,
-        ^{ [state[@"calls"] addObject:[NSString stringWithFormat:@"close:%@", state[@"source"]]]; });
-    NSArray *expectedCleanup = @[
-        [@"select:" stringByAppendingString:KOREAN],
-        [@"select:" stringByAppendingString:ABC],
-        [@"close:" stringByAppendingString:ABC],
-        @"activate:100",
-        [@"select:" stringByAppendingString:KOREAN]
-    ];
-    check(cleanupErrors.count == 0 && [state[@"calls"] isEqual:expectedCleanup],
-        [NSString stringWithFormat:@"partial Korean failure cleanup selects ABC before closing, restores the outer app, then restores its source (errors %@; calls %@)",
-            cleanupErrors, state[@"calls"]]);
-    check([state[@"source"] isEqual:KOREAN] && [state[@"frontmost"] intValue] == 100,
-        @"partial selection failure cleanup verifies the original source and frontmost process");
+    for (size_t i = 0; i < sizeof neededRows / sizeof neededRows[0]; i++) {
+        BOOL needed = sp_ime_source_outer_selection_needed(neededRows[i].baseline, neededRows[i].outer,
+            neededRows[i].afterBaseline);
+        check(needed == neededRows[i].needed, [NSString stringWithFormat:@"%@ (needed %d)", neededRows[i].name, needed]);
+    }
 
-    state = fakeState(NO, NO, NO);
-    adoptionErrors = [NSMutableArray array];
-    keysSent = 0;
-    ran = sp_ime_source_run_after_adoption(KOREAN,
-        ^BOOL(NSString *source) { state[@"source"] = source; return YES; },
-        ^NSString * { return state[@"source"]; }, ^BOOL { return NO; }, ^{ keysSent++; }, adoptionErrors);
-    check(!ran && keysSent == 0 && [adoptionErrors.description containsString:@"active input context did not adopt"],
-        [NSString stringWithFormat:@"an unadopted context prevents gesture keys (%@; keys %@)", adoptionErrors, @(keysSent)]);
+    NSArray<NSString *> *selectError = @[@"input source com.apple.inputmethod.Korean.2SetKorean was not selected and adopted"];
+    checkErrors(sp_ime_source_adoption_verdict(KOREAN, @[], YES), @"",
+        @"a selected source and an adopting context let the gesture run");
+    checkErrors(sp_ime_source_adoption_verdict(KOREAN, selectError, YES), selectError[0],
+        @"a selection error prevents the gesture keys");
+    checkErrors(sp_ime_source_adoption_verdict(KOREAN, @[], NO),
+        @"the active input context did not adopt com.apple.inputmethod.Korean.2SetKorean",
+        @"an unadopted context prevents the gesture keys");
 
-    state = fakeState(NO, NO, NO);
-    state[@"source"] = KOREAN;
-    NSMutableArray<NSString *> *failedCleanupCalls = [NSMutableArray array];
-    cleanupErrors = sp_ime_source_cleanup_errors(ABC, KOREAN, [state[@"outerPID"] intValue],
-        ^NSString * { return state[@"source"]; },
-        ^BOOL(pid_t processIdentifier) {
-            [failedCleanupCalls addObject:[NSString stringWithFormat:@"activate:%d", processIdentifier]];
-            state[@"frontmost"] = @(processIdentifier);
-            return YES;
-        },
-        ^pid_t { return [state[@"frontmost"] intValue]; },
-        ^BOOL(NSString *source) {
-            [failedCleanupCalls addObject:[@"select:" stringByAppendingString:source]];
-            return NO;
-        },
-        ^{ [failedCleanupCalls addObject:[@"close:" stringByAppendingString:state[@"source"]]]; });
-    check(failedCleanupCalls.count == 4
-        && [failedCleanupCalls[0] isEqual:[@"select:" stringByAppendingString:ABC]]
-        && [failedCleanupCalls[1] isEqual:[@"close:" stringByAppendingString:KOREAN]]
-        && [failedCleanupCalls[2] isEqual:@"activate:100"]
-        && [failedCleanupCalls[3] isEqual:[@"select:" stringByAppendingString:KOREAN]]
-        && [cleanupErrors.description containsString:@"not selected and adopted"]
-        && [cleanupErrors.description containsString:@"expected com.apple.keylayout.ABC"],
-        [NSString stringWithFormat:@"failed ABC cleanup is reported while the context still closes before outer restoration (%@; calls %@)",
-            cleanupErrors, failedCleanupCalls]);
+    RestoreRow restoreRows[] = {
+        {@"the baseline source and outer state restore without errors", ABC, KOREAN, 100,
+            {ABC, YES, 100, ABC, YES, YES, KOREAN, KOREAN, 100}, @""},
+        {@"an outer source that equals the baseline needs no selection", ABC, ABC, 100,
+            {ABC, YES, 100, ABC, NO, NO, nil, ABC, 100}, @""},
+        {@"an application restoration failure is retained with the frontmost process", ABC, KOREAN, 100,
+            {ABC, NO, 200, ABC, YES, YES, KOREAN, KOREAN, 200},
+            @"the outer frontmost application was not restored|"
+            @"frontmost process after restoration is 200, expected 100|"
+            @"frontmost process after outer source restoration is 200, expected 100"},
+        {@"an outer source selection failure is reported with the final source", ABC, KOREAN, 100,
+            {ABC, YES, 100, ABC, YES, NO, ABC, ABC, 100},
+            @"input source com.apple.inputmethod.Korean.2SetKorean was not selected and adopted|"
+            @"input source after selection is com.apple.keylayout.ABC, expected com.apple.inputmethod.Korean.2SetKorean|"
+            @"final input source is com.apple.keylayout.ABC, expected outer source com.apple.inputmethod.Korean.2SetKorean"},
+        {@"a source that is not the baseline before and after the application restoration is reported", ABC, ABC, 100,
+            {KOREAN, YES, 100, KOREAN, YES, YES, ABC, ABC, 100},
+            @"input source before baseline restoration is com.apple.inputmethod.Korean.2SetKorean, expected com.apple.keylayout.ABC|"
+            @"input source after baseline application restoration is com.apple.inputmethod.Korean.2SetKorean, expected com.apple.keylayout.ABC"},
+        {@"a needed selection that did not run is reported", ABC, KOREAN, 100,
+            {ABC, YES, 100, ABC, NO, NO, nil, KOREAN, 100},
+            @"input source com.apple.inputmethod.Korean.2SetKorean was not selected and adopted|"
+            @"input source after selection is unknown, expected com.apple.inputmethod.Korean.2SetKorean"},
+        {@"empty sources and an invalid process identifier are each reported", @"", @"", 0,
+            {nil, NO, 0, nil, NO, NO, nil, nil, 0},
+            @"the baseline input source is empty|the outer input source is empty|"
+            @"the outer frontmost process identifier is invalid|the outer frontmost application was not restored"},
+    };
+    for (size_t i = 0; i < sizeof restoreRows / sizeof restoreRows[0]; i++) {
+        checkErrors(sp_ime_source_restore_verdict(restoreRows[i].baseline, restoreRows[i].outer,
+            restoreRows[i].outerProcess, restoreRows[i].readings), restoreRows[i].errors, restoreRows[i].name);
+    }
     return failures ? 1 : 0;
 } }

@@ -3,29 +3,20 @@
 // whose text the caller stated reaches the page as a person's key does, keydown, keypress, beforeinput and input, and inserts
 // that text through the text input of the web view whatever the input source of the system is: a Korean text and an accented
 // Latin letter reach the focused field, a key down that the page cancels inserts nothing, and a named key runs the command of its
-// key binding. The input context of the test answers each key as an input method that does not serve the window does: it takes
-// the key and answers nothing, which the input context of a person's system does once the application has been active, so no
-// result depends on the state of the input method of the system.
+// key binding. The web view answers without an input context while such a key is delivered (docs/spec/exposure.md#virtual-key-window),
+// so the key never reaches the input method and no result depends on the state of the input method of the system. The record of
+// each key down states whether its text went through the text input of the web view (`virtualKeyText`).
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
-#import <objc/runtime.h>
 #import "event_ring.h"
 #import "input_inject.h"
 #import "input_virtual.h"
-#import "private/appkit.h"
 #import "support/event_wait.h"
 #import "support/records.h"
 #import "webview_input.h"
 #import "window_facts.h"
 
 static int failures;
-// The key downs that reached the input method of an input context.
-static int inputMethodKeyDowns;
-// The input method of a window that it does not serve takes the key and answers nothing.
-static void inputMethodTakesAndAnswersNothing(NSTextInputContext *self, SEL selector, NSEvent *event, void (^handled)(BOOL)) {
-    if (event.type == NSEventTypeKeyDown) inputMethodKeyDowns++;
-    handled(YES);
-}
 static void check(BOOL ok, NSString *message) {
     fprintf(ok ? stdout : stderr, "%s: %s\n", ok ? "PASS" : "FAIL", message.UTF8String);
     if (!ok) failures++;
@@ -93,6 +84,18 @@ static NSArray<NSString *> *type(NSWindow *window, WKWebView *view, const char *
     return evaluate(view, @"events.slice()");
 }
 
+// The key down record of the key states whether the web view took it without an input context, which keeps the key away from the
+// input method (`inputContextAbsent`), for every key that reaches the web view.
+static BOOL recordsContextAbsent(NSString *records) {
+    BOOL seen = NO;
+    for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
+        if (![line containsString:@"input inject"] || ![line containsString:@"\"down\":true"]) continue;
+        seen = YES;
+        if (![line containsString:@"\"inputContextAbsent\":true"]) return NO;
+    }
+    return seen;
+}
+
 // The key down record of the key states whether its stated text went through the text input of a web view.
 static BOOL recordsTextInput(NSString *records, BOOL typed) {
     for (NSString *line in [records componentsSeparatedByString:@"\n"]) {
@@ -116,8 +119,7 @@ static BOOL recordsTextInput(NSString *records, BOOL typed) {
 
 static NSString *value(WKWebView *view) { return evaluate(view, @"document.getElementById('field').value"); }
 
-// Real WebKit editing differs from the synchronous fake Clipboard responder:
-// inspect this fixture's own input after an evaluation roundtrip, not a timer.
+// Real WebKit editing runs in the web process: inspect this fixture's own input after an evaluation roundtrip, not a timer.
 static void checkWebKitEditEquivalents(NSWindow *window, WKWebView *view) {
     NSMenu *previousMenu = [NSApp.mainMenu retain];
     NSPasteboard *board = NSPasteboard.generalPasteboard;
@@ -181,8 +183,6 @@ int main(void) { @autoreleasepool {
     const int8_t everything[SP_CLASS_COUNT] = {SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE, SP_EVENT_TRACE};
     check(sp_event_set_policy(everything), @"the policy stores every level of every class");
     [NSApplication sharedApplication];
-    Method inputMethod = class_getInstanceMethod(NSTextInputContext.class, @selector(handleEventByInputMethod:completionHandler:));
-    IMP originalInputMethod = method_setImplementation(inputMethod, (IMP)inputMethodTakesAndAnswersNothing);
 
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 420, 300)
         styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -225,6 +225,7 @@ int main(void) { @autoreleasepool {
         check(same, [NSString stringWithFormat:@"the key with the text %@ gives the page %@ (got %@)",
             text, [expected componentsJoinedByString:@", "], [events componentsJoinedByString:@", "]]);
         check(recordsTextInput(records, YES), [NSString stringWithFormat:@"the key down record states the text input (records %@)", records]);
+        check(recordsContextAbsent(records), [NSString stringWithFormat:@"the web view takes the key down without an input context (records %@)", records]);
     }
     check([value(view) isEqual:@"한글é"], [NSString stringWithFormat:@"the field holds the stated texts (value %@)", value(view)]);
 
@@ -233,6 +234,7 @@ int main(void) { @autoreleasepool {
     NSArray *events = type(window, view, "k", @"ㅋ", &records);
     check([events isEqual:@[@"keydown:ㅋ", @"keyup:ㅋ"]] && [value(view) isEqual:@"한글é"],
         [NSString stringWithFormat:@"a cancelled key down inserts nothing (events %@, value %@)", [events componentsJoinedByString:@", "], value(view)]);
+    check(recordsContextAbsent(records), [NSString stringWithFormat:@"the web view takes the cancelled key down without an input context (records %@)", records]);
     evaluate(view, @"cancel=false");
 
     // A named key runs the command of its key binding: Backspace deletes the last character.
@@ -240,18 +242,9 @@ int main(void) { @autoreleasepool {
     check([value(view) isEqual:@"한글"], [NSString stringWithFormat:@"Backspace deletes the last character (events %@, value %@)",
         [events componentsJoinedByString:@", "], value(view)]);
     check(recordsTextInput(records, NO), [NSString stringWithFormat:@"the key down record of a named key states no text input (records %@)", records]);
-    check(inputMethodKeyDowns == 0, [NSString stringWithFormat:@"no key down reaches the input method, got %d", inputMethodKeyDowns]);
+    check(recordsContextAbsent(records), [NSString stringWithFormat:@"the web view takes the named key down without an input context (records %@)", records]);
 
-    // The typing cases above deliberately use a handled-YES/no-command input
-    // context. Native editing must be an independent control with AppKit's
-    // original implementation; that fake would consume its editing commands.
-    method_setImplementation(inputMethod, originalInputMethod);
-    @try {
-        printf("CONTROL: real WebKit editing uses the original AppKit input method implementation; dispatch order unchanged\n");
-        checkWebKitEditEquivalents(window, view);
-    } @finally {
-        method_setImplementation(inputMethod, (IMP)inputMethodTakesAndAnswersNothing);
-    }
+    checkWebKitEditEquivalents(window, view);
 
     [window close];
     [window release];

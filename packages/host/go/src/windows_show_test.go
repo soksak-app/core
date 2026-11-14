@@ -13,31 +13,19 @@ import (
 // showWithoutHostChild marks the child process that shows a window with no registered platform.
 const showWithoutHostChild = "SOKSAK_SHOW_WITHOUT_HOST_CHILD"
 
-// showPlatform records the windows that the show of a framework passed to the registered platform.
-type showPlatform struct {
-	platform.Platform
-	shown []platform.Window
-}
-
-func (p *showPlatform) ShowWindow(window platform.Window) error {
-	p.shown = append(p.shown, window)
-	return nil
-}
-
 // contract: application.window.show-reaches-the-registered-platform-before-the-host-starts
 // The show of a framework window reaches the registered platform although no start of the host selected one, as in a process
-// that configures the mygo application without starting the host (docs/spec/hosts.md#launch-activation).
+// that configures the mygo application without starting the host (docs/spec/hosts.md#launch-activation). The registered platform
+// is the native platform, which shows no window that does not exist, so the show of window 0 returns, and a host that read the
+// platform of its start (nil here) would end in a nil dereference.
 func TestAWindowShowsThroughTheRegisteredPlatformBeforeTheHostStarts(t *testing.T) {
 	previous := system
 	system = nil
 	t.Cleanup(func() { system = previous })
-	fake := &showPlatform{}
-	t.Cleanup(platform.Substitute(fake))
-	window := platform.Window(1)
-	ShowWindow(window)
-	if len(fake.shown) != 1 || fake.shown[0] != window {
-		t.Fatalf("the registered platform showed %v, want the one window %v", fake.shown, window)
+	if _, err := platform.Current(); err != nil {
+		t.Fatalf("the native platform is not registered: %v", err)
 	}
+	runOnMainThread(func() { ShowWindow(platform.Window(0)) })
 }
 
 // contract: application.window.show-without-a-registered-platform-ends-through-the-fatal-error

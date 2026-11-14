@@ -1,0 +1,12 @@
+{
+  "name": "view-events-native-once",
+  "description": "The host sends one event of the view, and the page pushes it with its data.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"listen":{"event":"probe.changed"}},
+    {"notice":{"event":"probe.changed","payload":{"surface":"probe-surface","count":1}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"probe.changed","data":{"surface":"probe-surface","count":1},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

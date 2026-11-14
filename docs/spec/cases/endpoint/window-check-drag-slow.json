@@ -1,0 +1,14 @@
+{
+  "name": "window-check-drag-slow",
+  "description": "A drag that the host reports as slower than the pace it was asked for.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":true}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"diagnostics.drag","params":{"window":"main","axis":"x","line":0,"dx":10,"dy":0,"ms":400,"times":2,"capture":false}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"took":1700,"asked":800,"pressWaits":[4,31],"handled":[400.4,300.2,2],"deliveries":{"press":[9,12],"step":[3,20,1],"release":[8,15]}}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":false}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}}
+  ]
+}

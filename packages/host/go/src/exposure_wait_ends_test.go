@@ -9,18 +9,6 @@ import (
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
-// pendingSettledPlatform is the platform of a settled wait whose screen never presents: its settled wait answers nothing,
-// and settled receives one signal each time a wait reaches the settled step.
-type pendingSettledPlatform struct {
-	platform.Platform
-	settled chan struct{}
-}
-
-func (p pendingSettledPlatform) AfterSettled(platform.Window, unsafe.Pointer, func(float64, error)) error {
-	p.settled <- struct{}{}
-	return nil
-}
-
 // presentedResult runs host.window.presented of s and returns the channel of its result.
 func presentedResult(s *Surfaces) <-chan error {
 	return presentedResultOf(context.Background(), s)
@@ -53,19 +41,16 @@ func expectRPCCode(t *testing.T, result <-chan error, code int, what string) *RP
 // limit of its own.
 // contract: exposure.window-presented.ends-by-events
 func TestTheCloseOfTheWindowEndsAPresentedWait(t *testing.T) {
-	native := platform.Window(1)
-	s := settledSurfaces(t, &settledFrontend{window: native, present: func() {}}, nil)
-	saved := system
-	fake := pendingSettledPlatform{settled: make(chan struct{}, 1)}
-	system = fake
-	t.Cleanup(func() { system = saved })
-	result := presentedResult(s)
-	<-fake.settled
-	select {
-	case err := <-result:
-		t.Fatalf("the presented wait ended at its settled step before its screen presented: %v", err)
-	default:
+	s := realSettledSurfaces(t, true)
+	native := s.window.NativeWindow()
+	// The settled screen of a window with an open layout transaction presents after the transaction ends, so the wait stays open.
+	var opened error
+	runOnMainThread(func() { _, opened = beginLayout(native, 1) })
+	if opened != nil {
+		t.Fatal(opened)
 	}
+	t.Cleanup(func() { runOnMainThread(func() { system.CancelLayout(native) }) })
+	result := presentedResult(s)
 	s.endWindow()
 	expectRPCCode(t, result, codeNoWindow, "the presented wait of a closed window")
 }
@@ -75,8 +60,7 @@ func TestTheCloseOfTheWindowEndsAPresentedWait(t *testing.T) {
 // the wait reaches the modal ends it the same way, and the test sends the end right after it starts the wait.
 // contract: exposure.window-presented.ends-by-events
 func TestTheEndOfTheProcessOfAnOpenModalEndsItsPaintWait(t *testing.T) {
-	native := platform.Window(1)
-	s := settledSurfaces(t, &settledFrontend{window: native, present: func() {}}, &settledPlatform{window: native, displayed: 4})
+	s := realSettledSurfaces(t, true)
 	s.modalPaintChange = make(chan struct{})
 	handle := unsafe.Pointer(new(int))
 	const viewID = 876543
@@ -93,8 +77,7 @@ func TestTheEndOfTheProcessOfAnOpenModalEndsItsPaintWait(t *testing.T) {
 // not presented its first frame.
 func unpaintedModalSurfaces(t *testing.T) *Surfaces {
 	t.Helper()
-	native := platform.Window(1)
-	s := settledSurfaces(t, &settledFrontend{window: native, present: func() {}}, &settledPlatform{window: native, displayed: 4})
+	s := realSettledSurfaces(t, true)
 	s.modalPaintChange = make(chan struct{})
 	handle := unsafe.Pointer(new(int))
 	const viewID = 876544
@@ -133,20 +116,8 @@ func TestTheWindowThePageAndTheConnectionEndThePaintWaitOfPresented(t *testing.T
 	})
 }
 
-// fullscreenPlatform is the platform of a full screen test: its change answers result and message at once.
-type fullscreenPlatform struct {
-	platform.Platform
-	result  platform.FullscreenResult
-	message string
-}
-
-func (p fullscreenPlatform) Fullscreen(_ platform.Window, _ bool, done func(platform.FullscreenResult, string)) error {
-	done(p.result, p.message)
-	return nil
-}
-
-// host.window.fullscreen answers once with the result of the native change: a refusal is 1006, the close of the window
-// is 1003 and a started transition that did not end is 1005, each with the native message.
+// host.window.fullscreen answers once with the result of the native change: a refusal is 1006, the close of the window is 1003 and a
+// started transition that did not end is 1005, each with the native message.
 // contract: exposure.fullscreen.answers-once-by-its-event
 func TestTheFullScreenChangeAnswersWithItsNativeResult(t *testing.T) {
 	cases := []struct {
@@ -161,26 +132,25 @@ func TestTheFullScreenChangeAnswersWithItsNativeResult(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.message, func(t *testing.T) {
-			native := platform.Window(1)
-			s := settledSurfaces(t, &settledFrontend{window: native}, nil)
-			saved := system
-			system = fullscreenPlatform{result: c.result, message: c.message}
-			t.Cleanup(func() { system = saved })
-			result := make(chan error, 1)
-			go func() { result <- s.fullscreen(true) }()
-			rpc := expectRPCCode(t, result, c.code, "the full screen change")
-			if rpc.Message != c.message {
-				t.Fatalf("the full screen change failed with %q, want the native message %q", rpc.Message, c.message)
+			var rpc *RPCError
+			if err := fullscreenAnswer(c.result, c.message); !errors.As(err, &rpc) || rpc.Code != c.code || rpc.Message != c.message {
+				t.Fatalf("the full screen change answered %v, want the code %d with the native message %q", err, c.code, c.message)
 			}
 		})
 	}
-	native := platform.Window(1)
-	s := settledSurfaces(t, &settledFrontend{window: native}, nil)
-	saved := system
-	system = fullscreenPlatform{result: platform.FullscreenDone}
-	t.Cleanup(func() { system = saved })
-	if err := s.fullscreen(false); err != nil {
+	if err := fullscreenAnswer(platform.FullscreenDone, ""); err != nil {
 		t.Fatalf("a finished transition failed: %v", err)
+	}
+}
+
+// The window of the real platform that no one showed refuses the change with the message of the native layer, which the command answers
+// with its code.
+// contract: exposure.fullscreen.answers-once-by-its-event
+func TestTheFullScreenChangeOfAWindowThatIsNotShownIsRefused(t *testing.T) {
+	s := realSettledSurfaces(t, true)
+	var rpc *RPCError
+	if err := s.fullscreen(true); !errors.As(err, &rpc) || rpc.Code != codeInactive || rpc.Message != "the window is not shown" {
+		t.Fatalf("the full screen change of a window that is not shown answered %v, want 1006 with the native message", err)
 	}
 }
 

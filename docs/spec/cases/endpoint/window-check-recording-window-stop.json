@@ -1,0 +1,19 @@
+{
+  "name": "window-check-recording-window-stop",
+  "description": "A recording of a window reads the refresh rate of the window, holds the covered drawing, starts with one still each refresh and 4096 stills, stops without a time and releases the hold.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "variables": {"started": {"type": "object", "keys": ["frames", "window"], "example": {"frames": "/captures/capture-1", "window": 7}}, "stop": {"type": "object", "keys": ["frames", "stills", "window", "count", "missed", "late", "longestGap"], "example": {"frames": "/captures/capture-1", "stills": "/captures/capture-1/stills.jsonl", "window": 7, "count": 2, "missed": 4094, "late": 0, "longestGap": 8.3}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"refreshRate": 120}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "diagnostics.capture.start", "params": {"window": "main", "gap": 8.333333333333334, "frames": 4096}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": "$started"}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "diagnostics.capture.stop", "params": {"window": "main"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": "$stop"}},
+    {"send": {"jsonrpc": "2.0", "id": 5, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 5, "result": null}}
+  ]
+}

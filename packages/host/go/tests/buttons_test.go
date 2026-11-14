@@ -7,9 +7,9 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
-// buttonsBackend is a fakeBackend that answers host.buttons with the value of buttons.
+// buttonsBackend is the window owner of the endpoint that answers host.buttons with the value of buttons.
 type buttonsBackend struct {
-	*fakeBackend
+	*casePage
 	buttons *host.Buttons
 }
 
@@ -17,7 +17,7 @@ func (b buttonsBackend) HostStatus(window, name string) (any, error) {
 	if name == "host.buttons" {
 		return b.buttons.Value(), nil
 	}
-	return b.fakeBackend.HostStatus(window, name)
+	return b.casePage.HostStatus(window, name)
 }
 
 // nextMask reads the mask of the next notification of host.buttons.
@@ -41,7 +41,7 @@ func nextMask(t *testing.T, read func() (message, error)) uint64 {
 
 // contract: exposure.host-buttons.notifies-mask-change
 func TestButtonsNotifyEachMaskChange(t *testing.T) {
-	backend := buttonsBackend{fakeBackend: newFakeBackend()}
+	backend := buttonsBackend{casePage: newTierBackend([]string{"main"})}
 	endpoint, address, _ := serve(t, &backend)
 	backend.buttons = host.NewButtons(func(value map[string]any) { endpoint.NotifyWatchers("host.buttons", value) })
 	conn := dial(t, address)

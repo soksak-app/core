@@ -1,0 +1,12 @@
+{
+  "name": "view-events-push-refused",
+  "description": "The host refuses the push of an event because the view has no ready document.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"listen":{"event":"probe.changed"}},
+    {"notice":{"event":"probe.changed","payload":{"surface":"probe-surface"}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"probe.changed","data":{"surface":"probe-surface"},"surface":"probe-surface"}}},
+    {"reply":{"error":"probe-surface has no ready document"}}
+  ]
+}

@@ -1,7 +1,6 @@
 package host_test
 
 import (
-	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"regexp"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -25,137 +23,45 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
-// fakeBackend imitates one window ("main") and its page. It records page requests and replies with null.
-type fakeBackend struct {
-	mu       sync.Mutex
-	requests []string
-	// bodies are the params of the page requests. They are in the same order as requests.
-	bodies   []string
-	commands []string
-	keys     []host.KeyInput
-	texts    []host.TextInput
-	pointers []host.PointerInput
-	// When held exists, the first request of holdMethod signals entered and does not reply until held closes.
-	held       chan struct{}
-	holdMethod string
-	entered    chan struct{}
-	holding    bool
-	// unwatched receives a signal each time the page receives status.unwatch.
-	unwatched chan struct{}
-	// watched receives a signal each time the page receives status.watch.
-	watched chan struct{}
-	// failures are the errors that a page request returns for each method.
-	failures map[string]error
-	// replies are the results that a page request returns for each method.
-	replies map[string]json.RawMessage
-	// hostWatches are the starts and the ends of the watches of host statuses that reached the host, "<window> <name> on|off".
-	hostWatches []string
-	// dialogAnswers are the answers of input.dialog.answer that reached the host.
-	dialogAnswers []host.DialogAnswer
+// pageExchange is one request that the endpoint relays to the page and the result that the page answers: the page follows its
+// exchanges in order, as the page steps of an endpoint case do.
+func pageExchange(name, payload, result string) casePageExchange {
+	exchange := casePageExchange{call: casePageCall{Name: name}, reply: casePageReply{Result: json.RawMessage(result)}}
+	if payload != "" {
+		exchange.call.Payload = json.RawMessage(payload)
+	}
+	return exchange
 }
 
-func newFakeBackend() *fakeBackend {
-	return &fakeBackend{unwatched: make(chan struct{}, 8), watched: make(chan struct{}, 8)}
+// heldPageExchange is a pageExchange whose reply the page gives only when the test calls release of the page.
+func heldPageExchange(name, payload, result string) casePageExchange {
+	exchange := pageExchange(name, payload, result)
+	exchange.reply.Held = true
+	return exchange
 }
 
-func (b *fakeBackend) Windows() []host.WindowEntry {
-	return []host.WindowEntry{{Window: "main", Title: "Main", Key: true}}
-}
-
-func (b *fakeBackend) HasWindow(window string) bool { return window == "main" }
-
-func (b *fakeBackend) PageRequest(_ context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
-	b.mu.Lock()
-	b.requests = append(b.requests, method)
-	b.bodies = append(b.bodies, string(params))
-	hold := method == b.holdMethod && b.held != nil && !b.holding
-	if hold {
-		b.holding = true
-	}
-	b.mu.Unlock()
-	if hold {
-		b.entered <- struct{}{}
-		<-b.held
-	}
-	if method == "status.unwatch" {
-		b.unwatched <- struct{}{}
-	}
-	// A test that does not read every signal must not block the page request, so a full channel drops the signal.
-	if method == "status.watch" {
-		select {
-		case b.watched <- struct{}{}:
-		default:
+// servePage is serve with the window "main" whose page follows exchanges. When the test ends, a deviation of the endpoint from the
+// exchanges, and an exchange that it did not send, fail the test.
+func servePage(t *testing.T, exchanges ...casePageExchange) (*host.Endpoint, string, string, *casePage) {
+	t.Helper()
+	page := newTierBackend([]string{"main"})
+	page.script = exchanges
+	endpoint, address, config := serve(t, page)
+	t.Cleanup(func() {
+		// A request that a closed connection of the test ends, such as the last status.unwatch, may still be on its way.
+		for {
+			page.mu.Lock()
+			sent := page.next >= len(page.script)
+			page.mu.Unlock()
+			if sent || !page.awaitCall() {
+				break
+			}
 		}
-	}
-	b.mu.Lock()
-	failure := b.failures[method]
-	reply, replied := b.replies[method]
-	b.mu.Unlock()
-	if failure != nil {
-		return nil, failure
-	}
-	if replied {
-		return reply, nil
-	}
-	if method == "exposure.list" {
-		return json.RawMessage(`{"status":[{"name":"core.layout","registered":true}],"commands":[],"element":[]}`), nil
-	}
-	return json.RawMessage(`null`), nil
-}
-
-func (b *fakeBackend) HostStatus(window, name string) (any, error) {
-	return map[string]any{"key": true}, nil
-}
-
-func (b *fakeBackend) HostCommand(window, name string, params json.RawMessage, _ *host.ReplyScope) (any, error) {
-	b.mu.Lock()
-	b.commands = append(b.commands, name)
-	b.mu.Unlock()
-	return nil, nil
-}
-
-func (b *fakeBackend) Pointer(window string, input host.PointerInput) error {
-	b.mu.Lock()
-	b.pointers = append(b.pointers, input)
-	b.mu.Unlock()
-	return nil
-}
-
-func (b *fakeBackend) Text(window string, input host.TextInput) error {
-	b.mu.Lock()
-	b.texts = append(b.texts, input)
-	b.mu.Unlock()
-	return nil
-}
-
-func (b *fakeBackend) HostWatched(window, name string, on bool) {
-	state := "off"
-	if on {
-		state = "on"
-	}
-	b.mu.Lock()
-	b.hostWatches = append(b.hostWatches, window+" "+name+" "+state)
-	b.mu.Unlock()
-}
-
-func (b *fakeBackend) DialogAnswer(window string, answer host.DialogAnswer) error {
-	b.mu.Lock()
-	b.dialogAnswers = append(b.dialogAnswers, answer)
-	b.mu.Unlock()
-	return nil
-}
-
-func (b *fakeBackend) Key(window string, input host.KeyInput) error {
-	b.mu.Lock()
-	b.keys = append(b.keys, input)
-	b.mu.Unlock()
-	return nil
-}
-
-func (b *fakeBackend) seen() ([]string, []string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return append([]string(nil), b.requests...), append([]string(nil), b.commands...)
+		for _, problem := range page.finish() {
+			t.Errorf("the page of the endpoint: %s", problem)
+		}
+	})
+	return endpoint, address, config, page
 }
 
 // serve starts the endpoint with a loopback listener and, when the window main exists, writes endpoint.json. The transport of the endpoint is created by the operating system implementation,
@@ -339,8 +245,8 @@ func builtWith(tag string) bool {
 
 // contract: endpoint.diagnostics.methods-exist-only-in-diagnostic-builds
 func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
-	backend := newFakeBackend()
-	_, address, _ := serve(t, backend)
+	// The page has no exchange: a diagnostic method that reaches it in a release build fails the test at its end.
+	_, address, _, _ := servePage(t)
 	conn := dial(t, address)
 	params := map[string]any{"window": "main", "on": false}
 	if builtWith("diagnostics") {
@@ -352,9 +258,6 @@ func TestDiagnosticMethodsExistOnlyInDiagnosticBuilds(t *testing.T) {
 	}
 	send(t, conn, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "diagnostics.transcript", "params": params})
 	expectClosed(t, conn)
-	if requests, _ := backend.seen(); len(requests) != 0 {
-		t.Fatalf("a diagnostic method reached the page in a release build: %v", requests)
-	}
 }
 
 // contract: endpoint.input.pointer-button-held-message

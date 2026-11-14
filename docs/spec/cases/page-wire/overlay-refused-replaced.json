@@ -21,7 +21,7 @@
     { "call": { "name": "overlayHide", "payload": "menu" } },
     { "reply": { "result": null, "held": true } },
     { "call": { "name": "overlayShow", "payload": { "id": "dialog", "title": "Dialog", "rect": { "x": 0, "y": 0, "w": 1024, "h": 768 }, "mode": "dialog", "card": { "x": 0, "y": 0, "w": 0, "h": 0 }, "className": "", "html": "", "css": "", "border": "rgb(1, 2, 3)", "radius": 0 } } },
-    { "reply": { "result": { "x": 0, "y": 0, "w": 10, "h": 10 } } },
+    { "reply": { "result": { "x": 0, "y": 0, "w": 1024, "h": 768 } } },
     { "call": { "name": "overlayHide", "payload": "dialog" } },
     { "reply": { "result": null } }
   ]

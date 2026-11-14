@@ -1,6 +1,6 @@
 // Checks runtime.clipboard of createViewBridge over a jsdom window on soksak://probe/. A PNG of a view call travels through the
 // binary path of the view (docs/spec/plugin-processes.md#binary-path): persistPNG uploads the bytes and sends their id, and a png read
-// downloads the bytes of the id that the reply names. The fetch of the window is a fake that records each request.
+// downloads the bytes of the id that the reply names. jsdom has no fetch of the soksak scheme, so the window gets a fetch that records each request and answers from the responses of the case.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

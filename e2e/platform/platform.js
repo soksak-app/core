@@ -13,11 +13,11 @@ const APPLICATIONS = ["wailsv3", "tauriv2", "mygo"];
  * The executables of the debug applications in the cargo target directory `target`, as the SOKSAK_BINARY_<APP> variables of the
  * harness, from the declared application artifact of the platform.
  */
-export async function debugBinaries(target, { platform = process.platform } = {}) {
+export async function debugBinaries(target) {
   const entries = [];
   for (const app of APPLICATIONS) {
-    const artifact = await applicationArtifact(join(target, "debug"), app, { platform });
-    entries.push([`SOKSAK_BINARY_${app.toUpperCase()}`, (await applicationExecutables(artifact, app, { platform })).application]);
+    const artifact = await applicationArtifact(join(target, "debug"), app);
+    entries.push([`SOKSAK_BINARY_${app.toUpperCase()}`, (await applicationExecutables(artifact, app)).application]);
   }
   return Object.fromEntries(entries);
 }

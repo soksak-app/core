@@ -1,0 +1,14 @@
+{
+  "name": "window-check-drag-covered",
+  "description": "A drag draws the regions of the window during the gesture and ends the drawing after it.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":true}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"diagnostics.drag","params":{"window":"main","axis":"x","line":0,"dx":10,"dy":0,"ms":100,"times":1,"capture":false}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"took":100,"asked":100}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.window.draw-covered","params":{"window":"main","draw":false}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}}
+  ]
+}

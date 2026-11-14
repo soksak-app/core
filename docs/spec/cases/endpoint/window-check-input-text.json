@@ -1,0 +1,14 @@
+{
+  "name": "window-check-input-text",
+  "description": "The steps of a composition are input.text requests with the step, its text and its ranges, and unmark without a text.",
+  "replay": false,
+  "reason": "The case sends text input that the replay would deliver to a document of the application.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"input.text","params":{"window":"main","phase":"mark","text":"\ud55c","selection":{"start":0,"length":1}}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"input.text","params":{"window":"main","phase":"insert","text":"\ud55c\uae00","replacement":{"start":2,"length":1}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"input.text","params":{"window":"main","phase":"unmark"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":null}}
+  ]
+}

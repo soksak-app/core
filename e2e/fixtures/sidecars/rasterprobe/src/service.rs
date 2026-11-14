@@ -1,6 +1,6 @@
 // The protocol state of the persistent service (docs/spec/persistent-services.md, docs/spec/sidecars.md#messages and #image-envelope,
 // docs/spec/native-surfaces.md#image-regions). It takes one line of one connection at a time and returns the lines to write; the
-// socket, the transfer images and the session processes are behind the Platform, so the state runs in a unit test.
+// socket is the one of server.rs; the transfer images are IOSurfaces (iosurface.rs) and each session has one child process.
 //
 // Requests of the page, by `operation`:
 //   open {image?, color?, rows?, textSize?}  opens the session of the surface, which starts one child process, or reattaches to it;
@@ -20,9 +20,13 @@
 // The host reads the member `image` of every body that the service sends as an image envelope (docs/spec/sidecars.md#image-envelope),
 // so only a frame and a detach answer carry it.
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use serde_json::{Map, Value, json};
 
+use crate::events::EventLog;
+use crate::iosurface::Surface as Transfer;
 use crate::raster::{Grid, Rgb, Scene};
 
 /// The name of the sidecar in its events, `sidecar.rasterprobe.*`.
@@ -68,33 +72,32 @@ pub enum Class {
     Frame = 4,
 }
 
-/// The event log of the service.
-pub trait Log: Send + Sync {
-    #[allow(clippy::too_many_arguments)]
-    fn event(&self, level: Level, class: Class, event: &str, surface: Option<&str>, session: Option<&str>, cids: &[String], fields: Value);
-}
+/// The process of one session: it ends when its input ends.
+pub struct Child(std::process::Child);
 
-/// One transfer image that the service paints and the host looks up by its id and nonce.
-pub trait Transfer: Send {
-    fn id(&self) -> u32;
-    fn nonce(&self) -> [u8; 16];
-    fn size(&self) -> (u32, u32);
-    /// Whether the window server presents the image, so that the service must not write it.
-    fn in_use(&self) -> bool;
-    fn paint(&mut self, scene: &Scene) -> Result<(), String>;
-}
+impl Child {
+    fn start(executable: &Path, session: &str) -> Result<Child, String> {
+        let child = Command::new(executable)
+            .arg("--session")
+            .arg(session)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|error| format!("start session process {session}: {error}"))?;
+        Ok(Child(child))
+    }
 
-/// The process of one session.
-pub trait Child: Send {
-    fn pid(&self) -> u32;
+    fn pid(&self) -> u32 {
+        self.0.id()
+    }
+
     /// Ends the process and reaps it.
-    fn close(&mut self) -> Result<(), String>;
-}
-
-/// What the service creates: transfer images and session processes.
-pub trait Platform: Send {
-    fn transfer(&mut self, width: u32, height: u32) -> Result<Box<dyn Transfer>, String>;
-    fn child(&mut self, session: &str) -> Result<Box<dyn Child>, String>;
+    fn close(&mut self) -> Result<(), String> {
+        drop(self.0.stdin.take());
+        let status = self.0.wait().map_err(|error| format!("wait for session process {}: {error}", self.0.id()))?;
+        if status.success() { Ok(()) } else { Err(format!("session process {} ended with {status}", self.0.id())) }
+    }
 }
 
 /// A connection of the socket.
@@ -131,7 +134,7 @@ pub struct Identity {
 struct Session {
     id: String,
     root: String,
-    child: Box<dyn Child>,
+    child: Child,
     color: Rgb,
     rows: u32,
     factor: f64,
@@ -185,7 +188,7 @@ struct Surface {
     image: Option<Image>,
     /// The image name and generation of the last detach.
     retired: Option<(String, u64)>,
-    slots: HashMap<u64, Box<dyn Transfer>>,
+    slots: HashMap<u64, Transfer>,
     next_slot: u64,
     /// The frame that waits for its answer, and the frames that the host holds by its leases.
     in_flight: Option<(Ident, u64)>,
@@ -241,8 +244,9 @@ struct Detach {
 
 pub struct Service {
     identity: Identity,
-    platform: Box<dyn Platform>,
-    log: Box<dyn Log>,
+    /// The executable that each session process runs.
+    executable: PathBuf,
+    log: EventLog,
     /// The client (configuration directory) of each authenticated connection.
     clients: HashMap<Conn, String>,
     surfaces: HashMap<(String, String), Surface>,
@@ -304,10 +308,10 @@ fn base64(bytes: &[u8]) -> String {
 }
 
 impl Service {
-    pub fn new(identity: Identity, platform: Box<dyn Platform>, log: Box<dyn Log>) -> Service {
+    pub fn new(identity: Identity, executable: PathBuf, log: EventLog) -> Service {
         Service {
             identity,
-            platform,
+            executable,
             log,
             clients: HashMap::new(),
             surfaces: HashMap::new(),
@@ -318,8 +322,8 @@ impl Service {
         }
     }
 
-    pub fn log(&self) -> &dyn Log {
-        &*self.log
+    pub fn log(&self) -> &EventLog {
+        &self.log
     }
 
     fn event(&self, level: Level, class: Class, name: &str, surface: Option<&str>, session: Option<&str>, cids: &[String], fields: Value) {
@@ -663,7 +667,7 @@ impl Service {
         if created {
             self.next_session += 1;
             let id = format!("s{}", self.next_session);
-            let child = self.platform.child(&id)?;
+            let child = Child::start(&self.executable, &id)?;
             let state = self.surfaces.get_mut(key).expect("the surface message entered the surface");
             let root = state.root.clone();
             state.session = Some(Session { id, root, child, color, rows, factor });
@@ -895,7 +899,7 @@ impl Service {
             .min();
         let slot = match free {
             Some(slot) => slot,
-            None => match self.platform.transfer(config.width, config.height) {
+            None => match Transfer::create(config.width, config.height) {
                 Ok(transfer) => {
                     state.next_slot += 1;
                     state.slots.insert(state.next_slot, transfer);
@@ -965,403 +969,6 @@ impl Service {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Default)]
-    struct Shared {
-        transfers: u32,
-        painted: Vec<(u32, Scene)>,
-        in_use: Vec<u32>,
-        children: Vec<String>,
-        closed: Vec<String>,
-        events: Vec<(String, Value)>,
-    }
-
-    struct FakeTransfer(u32, (u32, u32), Arc<Mutex<Shared>>);
-
-    impl Transfer for FakeTransfer {
-        fn id(&self) -> u32 {
-            self.0
-        }
-        fn nonce(&self) -> [u8; 16] {
-            [self.0 as u8; 16]
-        }
-        fn size(&self) -> (u32, u32) {
-            self.1
-        }
-        fn in_use(&self) -> bool {
-            self.2.lock().unwrap().in_use.contains(&self.0)
-        }
-        fn paint(&mut self, scene: &Scene) -> Result<(), String> {
-            self.2.lock().unwrap().painted.push((self.0, *scene));
-            Ok(())
-        }
-    }
-
-    struct FakeChild(String, Arc<Mutex<Shared>>);
-
-    impl Child for FakeChild {
-        fn pid(&self) -> u32 {
-            1000 + self.0[1..].parse::<u32>().unwrap()
-        }
-        fn close(&mut self) -> Result<(), String> {
-            self.1.lock().unwrap().closed.push(self.0.clone());
-            Ok(())
-        }
-    }
-
-    struct Fake(Arc<Mutex<Shared>>);
-
-    impl Platform for Fake {
-        fn transfer(&mut self, width: u32, height: u32) -> Result<Box<dyn Transfer>, String> {
-            let mut shared = self.0.lock().unwrap();
-            shared.transfers += 1;
-            Ok(Box::new(FakeTransfer(100 + shared.transfers, (width, height), Arc::clone(&self.0))))
-        }
-        fn child(&mut self, session: &str) -> Result<Box<dyn Child>, String> {
-            self.0.lock().unwrap().children.push(session.to_string());
-            Ok(Box::new(FakeChild(session.to_string(), Arc::clone(&self.0))))
-        }
-    }
-
-    struct FakeLog(Arc<Mutex<Shared>>);
-
-    impl Log for FakeLog {
-        fn event(&self, _: Level, _: Class, event: &str, surface: Option<&str>, _: Option<&str>, cids: &[String], fields: Value) {
-            self.0.lock().unwrap().events.push((event.to_string(), json!({"surface": surface, "cids": cids, "fields": fields})));
-        }
-    }
-
-    fn service() -> (Service, Arc<Mutex<Shared>>) {
-        let shared = Arc::new(Mutex::new(Shared::default()));
-        let identity = Identity { version: "0.0.40".into(), pid: 77, token: "secret".into(), directory: "/config/services/x".into() };
-        (Service::new(identity, Box::new(Fake(Arc::clone(&shared))), Box::new(FakeLog(Arc::clone(&shared)))), shared)
-    }
-
-    fn send(service: &mut Service, conn: Conn, line: Value) -> Vec<Value> {
-        service.line(conn, &line.to_string()).out.into_iter().map(|out| { assert_eq!(out.conn, conn); out.line }).collect()
-    }
-
-    fn hello(service: &mut Service, conn: Conn) {
-        let lines = send(service, conn, json!({"operation": "hello", "protocol": 1, "token": "secret", "client": "/config"}));
-        assert_eq!(lines, [json!({"operation": "hello", "protocol": 1, "version": "0.0.40", "ok": true})]);
-    }
-
-    fn page(surface: &str, body: Value) -> Value {
-        json!({"surface": surface, "root": "/project", "cids": ["b.1"], "body": body})
-    }
-
-    fn host(surface: &str, image: Value) -> Value {
-        json!({"surface": surface, "root": "/project", "body": {"image": image}})
-    }
-
-    fn bodies(lines: &[Value]) -> Vec<Value> {
-        lines.iter().map(|line| line["body"].clone()).collect()
-    }
-
-    #[test]
-    fn hello_needs_the_token_and_protocol_and_reports_the_version() {
-        let (mut service, _) = service();
-        let refused = service.line(1, &json!({"operation": "hello", "protocol": 1, "token": "wrong", "client": "/c"}).to_string());
-        assert!(refused.close);
-        assert_eq!(refused.out[0].line, json!({"operation": "hello", "ok": false, "error": "authentication failed"}));
-        let refused = service.line(2, &json!({"operation": "hello", "protocol": 2, "token": "secret", "client": "/c"}).to_string());
-        assert_eq!(refused.out[0].line["error"], "protocol must be 1");
-        hello(&mut service, 3);
-    }
-
-    #[test]
-    fn an_open_with_an_image_draws_once_the_region_draws_at_its_configured_raster() {
-        let (mut service, shared) = service();
-        hello(&mut service, 1);
-        let lines = send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster", "rows": 3, "color": "#102030"})));
-        assert_eq!(lines.len(), 1);
-        assert_eq!(lines[0]["cids"], json!(["b.1"]));
-        let session = &lines[0]["body"];
-        assert_eq!((session["event"].as_str(), session["session"].as_str(), session["created"].as_bool()), (Some("session"), Some("s1"), Some(true)));
-        assert_eq!(session["service"], json!({"pid": 77, "version": "0.0.40", "directory": "/config/services/x"}));
-        assert_eq!((session["child"].as_u64(), session["mode"].as_str(), session["rows"].as_u64()), (Some(1001), Some("image"), Some(3)));
-
-        assert!(send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 2, "drawing": true, "hidden": false}}))).is_empty(),
-            "nothing is drawn before the raster is configured");
-        let lines = send(&mut service, 1, host("tab-1",
-            json!({"configure": {"name": "raster", "generation": 2, "raster": 5, "width": 160, "height": 96, "scale": 2.0}})));
-        let bodies = bodies(&lines);
-        assert_eq!(bodies[0]["image"], json!({"name": "raster", "generation": 2, "raster": 5,
-            "token": {"kind": "iosurface-global", "id": 101, "nonce": "ZWVlZWVlZWVlZWVlZWVlZQ=="},
-            "width": 160, "height": 96, "scale": 2.0, "format": "bgra8", "sequence": 1}));
-        assert_eq!(bodies[1]["event"], "frame");
-        assert_eq!(bodies[1]["grid"], json!({"rows": 3, "cols": 10, "cellWidth": 16, "cellHeight": 32}));
-        assert_eq!((bodies[1]["rows"].as_u64(), bodies[1]["color"].as_str(), bodies[1]["marker"].as_str()), (Some(3), Some("#102030"), Some("#020001")));
-        assert!(bodies[1]["draw_us"].is_u64(), "the frame reports its paint time: {}", bodies[1]);
-        let painted = shared.lock().unwrap().painted.clone();
-        assert_eq!(painted.len(), 1);
-        assert_eq!((painted[0].1.rows, painted[0].1.sequence), (3, 1));
-    }
-
-    #[test]
-    fn a_frame_waits_for_the_answer_of_the_frame_in_flight_and_reuses_released_images() {
-        let (mut service, shared) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        let opened = send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        assert_eq!(opened[1]["body"]["image"]["sequence"], 1, "the open draws the configured raster");
-        let rows = send(&mut service, 1, page("tab-1", json!({"operation": "rows", "count": 1})));
-        assert_eq!(bodies(&rows), [json!({"event": "rows", "count": 1})], "a frame in flight holds the next frame");
-        let next = send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}})));
-        assert_eq!(next[0]["body"]["image"]["sequence"], 2);
-        assert_eq!(next[0]["body"]["image"]["token"]["id"], 102, "the leased image is held, so another is created");
-        send(&mut service, 1, host("tab-1", json!({"released": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}})));
-        send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 2}})));
-        shared.lock().unwrap().in_use.push(101);
-        let third = send(&mut service, 1, page("tab-1", json!({"operation": "rows", "count": 0})));
-        assert_eq!(third[1]["body"]["image"]["token"]["id"], 103, "an image in use by the window server is not written");
-        send(&mut service, 1, host("tab-1", json!({"consumed": {"name": "raster", "generation": 1, "raster": 1, "sequence": 3}})));
-        shared.lock().unwrap().in_use.clear();
-        let fourth = send(&mut service, 1, page("tab-1", json!({"operation": "color", "color": "#ffffff"})));
-        assert_eq!(fourth[1]["body"]["image"]["token"]["id"], 101, "a released image that left use is written again");
-    }
-
-    #[test]
-    fn a_region_that_does_not_draw_gets_no_frame_until_it_draws() {
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": false, "hidden": true}})));
-        let lines = send(&mut service, 1, host("tab-1",
-            json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        assert!(lines.is_empty());
-        let lines = send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        assert_eq!(lines[0]["body"]["image"]["sequence"], 1);
-    }
-
-    #[test]
-    fn a_refused_frame_ends_its_wait_and_the_new_raster_is_drawn() {
-        // A shown region is announced as drawing before its new raster, so the frame of the old raster is in flight when the
-        // configure arrives; the host refuses it with the error answer of docs/spec/sidecars.md#image-envelope, whose member
-        // error is the reason beside the identity of the frame.
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}})));
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": false, "hidden": true}})));
-        let shown = send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        assert_eq!((shown[0]["body"]["image"]["raster"].as_u64(), shown[0]["body"]["image"]["sequence"].as_u64()), (Some(1), Some(2)));
-        let configured = send(&mut service, 1, host("tab-1",
-            json!({"configure": {"name": "raster", "generation": 1, "raster": 2, "width": 8, "height": 16, "scale": 1.0}})));
-        assert!(configured.is_empty(), "the frame in flight holds the frame of the new raster");
-        let refused = send(&mut service, 1, host("tab-1",
-            json!({"error": "stale", "name": "raster", "generation": 1, "raster": 1, "sequence": 2})));
-        assert_eq!(refused.len(), 2, "the refusal ends the wait and the due frame is drawn: {refused:?}");
-        assert_eq!((refused[0]["body"]["image"]["raster"].as_u64(), refused[0]["body"]["image"]["sequence"].as_u64()), (Some(2), Some(1)));
-        let state = send(&mut service, 1, page("tab-1", json!({"operation": "state"})));
-        assert_eq!(state[0]["body"]["error"], Value::Null, "a stale frame is no failure of the region");
-        let failed = send(&mut service, 1, host("tab-1",
-            json!({"error": "presentFailed", "name": "raster", "generation": 1, "raster": 2, "sequence": 1})));
-        assert!(failed.is_empty(), "a failed frame draws nothing until the host configures again: {failed:?}");
-        let state = send(&mut service, 1, page("tab-1", json!({"operation": "state"})));
-        assert_eq!(state[0]["body"]["error"], "presentFailed", "the session reports the reason of a failed frame");
-    }
-
-    #[test]
-    fn a_detach_leaves_the_session_headless_and_follows_the_result_table() {
-        let (mut service, shared) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 3, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        let detach = |service: &mut Service, request: &str, name: &str, generation: u64| {
-            let lines = send(service, 1, host("tab-1", json!({"detach": {"request": request, "name": name, "generation": generation}})));
-            lines[0]["body"]["image"]["detached"].clone()
-        };
-        assert_eq!(detach(&mut service, "r0", "other", 3), json!({"request": "r0", "name": "other", "generation": 3, "ok": false, "error": "imageNameMismatch"}));
-        assert_eq!(detach(&mut service, "r1", "raster", 2)["error"], "staleGeneration");
-        assert_eq!(detach(&mut service, "r1", "raster", 2)["currentGeneration"], 3, "a replayed request keeps its result while no newer owner exists");
-        assert_eq!(detach(&mut service, "r2", "raster", 4), json!({"request": "r2", "name": "raster", "generation": 4, "ok": false, "error": "futureGeneration", "currentGeneration": 3}));
-        assert_eq!(detach(&mut service, "r3", "raster", 3), json!({"request": "r3", "name": "raster", "generation": 3, "ok": true, "result": "detached"}));
-        assert_eq!(detach(&mut service, "r3", "raster", 3)["result"], "detached", "the same request replays its result");
-        assert_eq!(detach(&mut service, "r3", "raster", 9)["error"], "requestMismatch");
-        assert_eq!(detach(&mut service, "r4", "raster", 3)["result"], "alreadyDetached");
-        assert_eq!(detach(&mut service, "r5", "raster", 1)["error"], "staleGeneration");
-        let state = send(&mut service, 1, page("tab-1", json!({"operation": "state"})));
-        assert_eq!((state[0]["body"]["mode"].as_str(), state[0]["body"]["session"].as_str()), (Some("headless"), Some("s1")));
-        let headless = send(&mut service, 1, page("tab-1", json!({"operation": "open"})));
-        assert_eq!((headless[0]["body"]["created"].as_bool(), headless[0]["body"]["mode"].as_str()), (Some(false), Some("headless")));
-        let late = send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 3, "raster": 2, "width": 8, "height": 16, "scale": 1.0}})));
-        assert!(late.is_empty(), "a configure of the detached generation is refused");
-        assert_eq!(shared.lock().unwrap().children, ["s1"], "the detach and the headless open start no process");
-        let modes: Vec<Value> = shared.lock().unwrap().events.iter()
-            .filter(|(name, _)| name == "sidecar.rasterprobe.surface_mode").map(|(_, event)| event["fields"].clone()).collect();
-        assert_eq!(modes, [json!({"mode": "image", "cause": "open"}), json!({"mode": "image", "cause": "configure"}),
-            json!({"mode": "headless", "cause": "detach"}), json!({"mode": "headless", "cause": "open"})]);
-
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 5, "drawing": true, "hidden": false}})));
-        assert_eq!(detach(&mut service, "r6", "raster", 5)["result"], "detached", "a requested image without configuration detaches");
-        let mut fresh = Service::new(service.identity.clone(), Box::new(Fake(Arc::clone(&shared))), Box::new(FakeLog(Arc::clone(&shared))));
-        hello(&mut fresh, 1);
-        assert_eq!(detach(&mut fresh, "r7", "raster", 1)["result"], "alreadyAbsent");
-    }
-
-    #[test]
-    fn an_open_without_image_is_refused_while_the_surface_holds_one() {
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        let lines = send(&mut service, 1, page("tab-1", json!({"operation": "open"})));
-        assert_eq!(lines[0]["body"]["error"], "imageAttached");
-        assert!(lines[0]["body"]["reason"].as_str().unwrap().contains("holds image raster"));
-    }
-
-    #[test]
-    fn requests_are_recorded_with_their_cids_and_unknown_operations_fail() {
-        let (mut service, shared) = service();
-        hello(&mut service, 1);
-        let lines = send(&mut service, 1, page("tab-1", json!({"operation": "rows", "count": 2})));
-        assert_eq!(bodies(&lines), [json!({"error": "no session for surface tab-1"})]);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open"})));
-        let lines = send(&mut service, 1, page("tab-1", json!({"operation": "dance"})));
-        assert_eq!(bodies(&lines), [json!({"error": "unknown operation dance"})]);
-        let refused = send(&mut service, 1, page("tab-1", json!({"operation": "input", "text": "a"})));
-        assert_eq!(bodies(&refused), [json!({"error": "input requires a non-negative integer sequence"})]);
-        let input = send(&mut service, 1, page("tab-1", json!({"operation": "input", "sequence": 1, "text": "a"})));
-        assert_eq!(input[0]["cids"], json!(["b.1"]));
-        let requests: Vec<Value> = shared.lock().unwrap().events.iter()
-            .filter(|(name, _)| name == "sidecar.rasterprobe.request").map(|(_, event)| event.clone()).collect();
-        assert_eq!(requests.len(), 5);
-        assert_eq!(requests[4]["cids"], json!(["b.1"]));
-        assert_eq!(requests[4]["fields"]["operation"], "input");
-        assert_eq!(requests[4]["surface"], "tab-1");
-    }
-
-    #[test]
-    fn sessions_outlive_their_connection_and_close_by_closed_retain_and_owner_close() {
-        let (mut service, shared) = service();
-        hello(&mut service, 1);
-        for surface in ["tab-1", "tab-2", "tab-3"] {
-            send(&mut service, 1, page(surface, json!({"operation": "open"})));
-        }
-        assert!(!service.connection_closed(1).exit);
-        hello(&mut service, 2);
-        let again = send(&mut service, 2, page("tab-1", json!({"operation": "open"})));
-        assert_eq!((again[0]["body"]["session"].as_str(), again[0]["body"]["created"].as_bool()), (Some("s1"), Some(false)));
-        let closed = send(&mut service, 2, json!({"surface": "tab-1", "root": "/project", "closed": true}));
-        assert_eq!(closed, [json!({"surface": "tab-1", "closed": true})]);
-        let retained = send(&mut service, 2, json!({"operation": "retain", "request": "k1", "surfaces": [{"surface": "tab-2", "root": "/project"}]}));
-        assert_eq!(retained, [json!({"operation": "retained", "request": "k1", "ok": true, "closed": 1})]);
-        let refused = send(&mut service, 2, json!({"operation": "retain", "request": "k2", "surfaces": [{"surface": "tab-2"}]}));
-        assert_eq!(refused[0]["ok"], false);
-        let early = send(&mut service, 2, json!({"operation": "shutdown", "request": "q0"}));
-        assert_eq!(early[0]["error"], "shutdown is accepted only after close-owner");
-        let owner = send(&mut service, 2, json!({"operation": "close-owner", "request": "o1"}));
-        assert_eq!(owner, [json!({"operation": "closed-owner", "request": "o1", "ok": true})]);
-        let shutdown = send(&mut service, 2, json!({"operation": "shutdown", "request": "q1"}));
-        assert_eq!(shutdown, [json!({"operation": "shutdown", "request": "q1", "ok": true})]);
-        assert_eq!(shared.lock().unwrap().closed, ["s1", "s3", "s2"]);
-        assert!(service.connection_closed(2).exit, "the service exits once the shut-down client is gone");
-    }
-
-    #[test]
-    fn the_end_of_a_connection_ends_its_images_and_a_new_configure_draws_again() {
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        service.connection_closed(1);
-        hello(&mut service, 2);
-        send(&mut service, 2, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        let lines = send(&mut service, 2, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        assert_eq!(lines[0]["body"]["image"]["sequence"], 1, "the new connection draws from the first sequence");
-    }
-
-    #[test]
-    fn each_input_makes_a_frame_whose_event_names_the_inputs_it_presents() {
-        let (mut service, shared) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"})));
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}})));
-        let first = send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}})));
-        assert_eq!(bodies(&first)[1]["inputs"], json!([]), "a frame that follows no input names none");
-        let input = |sequence: u64| page("tab-1", json!({"operation": "input", "sequence": sequence, "actions": [], "preedit": null}));
-        // The frame of the configure is in flight, so the inputs wait for its answer and the next frame presents both.
-        let held = send(&mut service, 1, input(1));
-        assert_eq!(bodies(&held), [json!({"event": "input", "received": {"operation": "input", "sequence": 1, "actions": [], "preedit": null}})]);
-        send(&mut service, 1, input(2));
-        let next = send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}})));
-        let next = bodies(&next);
-        assert_eq!((next[0]["image"]["sequence"].as_u64(), next[1]["event"].as_str(), next[1]["sequence"].as_u64()), (Some(2), Some("frame"), Some(2)));
-        assert_eq!(next[1]["inputs"], json!([1, 2]));
-        // With no frame in flight, an input draws its own frame right after its answer.
-        send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 2}})));
-        let own = bodies(&send(&mut service, 1, input(3)));
-        assert_eq!((own[0]["event"].as_str(), own[1]["image"]["sequence"].as_u64(), own[2]["inputs"].clone()), (Some("input"), Some(3), json!([3])));
-        let rows = bodies(&send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 3}}))));
-        assert!(rows.is_empty(), "no input and no change makes no frame: {rows:?}");
-        assert_eq!(shared.lock().unwrap().painted.len(), 3);
-
-        // A region that does not draw keeps the last PENDING_INPUTS inputs for its next frame.
-        send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": false, "hidden": true}})));
-        for sequence in 4..(4 + PENDING_INPUTS as u64 + 2) {
-            send(&mut service, 1, input(sequence));
-        }
-        let shown = bodies(&send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}}))));
-        let inputs: Vec<u64> = shown[1]["inputs"].as_array().unwrap().iter().filter_map(Value::as_u64).collect();
-        assert_eq!(inputs, (6..(6 + PENDING_INPUTS as u64)).collect::<Vec<u64>>());
-    }
-
-    #[test]
-    fn a_headless_session_answers_input_without_a_frame() {
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        send(&mut service, 1, page("tab-1", json!({"operation": "open"})));
-        let lines = send(&mut service, 1, page("tab-1", json!({"operation": "input", "sequence": 1, "actions": [], "preedit": null})));
-        assert_eq!(bodies(&lines), [json!({"event": "input", "received": {"operation": "input", "sequence": 1, "actions": [], "preedit": null}})]);
-    }
-
-    #[test]
-    fn only_a_frame_and_a_detach_answer_carry_the_member_image() {
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        let mut lines = Vec::new();
-        lines.extend(send(&mut service, 1, page("tab-1", json!({"operation": "open", "image": "raster"}))));
-        lines.extend(send(&mut service, 1, host("tab-1", json!({"drawing": {"name": "raster", "generation": 1, "drawing": true, "hidden": false}}))));
-        lines.extend(send(&mut service, 1, host("tab-1", json!({"configure": {"name": "raster", "generation": 1, "raster": 1, "width": 8, "height": 16, "scale": 1.0}}))));
-        for body in [json!({"operation": "state"}), json!({"operation": "rows", "count": 1}), json!({"operation": "color", "color": "#101010"}),
-            json!({"operation": "textSize", "factor": 1.5}), json!({"operation": "input", "sequence": 1, "actions": [], "preedit": null}),
-            json!({"operation": "open", "image": "raster"}), json!({"operation": "open"}), json!({"operation": "dance"})] {
-            lines.extend(send(&mut service, 1, page("tab-1", body)));
-        }
-        lines.extend(send(&mut service, 1, host("tab-1", json!({"leased": {"name": "raster", "generation": 1, "raster": 1, "sequence": 1}}))));
-        lines.extend(send(&mut service, 1, host("tab-1", json!({"detach": {"request": "d1", "name": "raster", "generation": 1}}))));
-        lines.extend(send(&mut service, 1, page("tab-1", json!({"operation": "state"}))));
-        lines.extend(send(&mut service, 1, page("tab-1", json!({"operation": "close"}))));
-        let sessions: Vec<&Value> = lines.iter().map(|line| &line["body"]).filter(|body| body["event"] == "session" || body["event"] == "state").collect();
-        assert!(sessions.len() >= 3, "the reports of the session were sent: {lines:?}");
-        assert!(sessions.iter().all(|body| body.get("region").is_some()), "a session report names its region: {sessions:?}");
-        let mut frames = 0;
-        for line in &lines {
-            let Some(image) = line["body"].get("image") else { continue };
-            let image = image.as_object().unwrap_or_else(|| panic!("the member image is not an envelope: {line}"));
-            if image.contains_key("detached") {
-                assert_eq!(image.len(), 1, "a detach answer holds only detached: {line}");
-            } else {
-                assert!(image.contains_key("token") && image.contains_key("sequence"), "the member image is not a frame: {line}");
-                frames += 1;
-            }
-        }
-        assert!(frames >= 2, "the frames were sent: {lines:?}");
-    }
-
-    #[test]
-    fn kill_ends_the_service_without_an_answer() {
-        let (mut service, _) = service();
-        hello(&mut service, 1);
-        let handled = service.line(1, &page("tab-1", json!({"operation": "kill"})).to_string());
-        assert!(handled.kill);
-        assert!(handled.out.is_empty());
-    }
 
     #[test]
     fn base64_encodes_with_padding() {

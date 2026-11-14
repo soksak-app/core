@@ -16,7 +16,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
   // The calls of the page to the host, as {name, request}.
   const hostCalls = () => wire.calls.map(({ name, payload }) => ({ name, request: payload }));
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;

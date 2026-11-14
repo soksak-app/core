@@ -1,0 +1,10 @@
+{
+  "name": "view-events-log-levels",
+  "description": "The page pushes the stored log levels of the view after the policy changed to debug at the class frame.",
+  "replay": false,
+  "reason": "The page pushes the event to the view that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"log.levels","data":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"debug"},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

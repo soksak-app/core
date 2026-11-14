@@ -114,14 +114,17 @@ pub struct ViewReadResponse {
     pub binary: Option<String>,
 }
 
-/// Reads the PNG of the clipboard through read and puts it as image/png through put, which answers its id in the binary store of the
-/// view, so the reply of the view call carries the id (docs/spec/plugin-processes.md#binary-path). A clipboard without a PNG answers an
-/// absent PNG and puts nothing.
-pub(crate) fn read_view_png_with(
-    read: impl FnOnce() -> Result<ClipboardValue, String>,
-    put: impl FnOnce(&[u8]) -> Result<String, String>,
+/// Answers a PNG read for a view from the value that the clipboard holds: a clipboard without a PNG answers an absent PNG and puts
+/// nothing, a PNG over the limit is refused, and a PNG within the limit is put as image/png into the binary store of the view of surface
+/// through put, which mints its id, and answered as a present PNG that names the id (docs/spec/plugin-processes.md#binary-path). The caller
+/// must satisfy the thread precondition of the supplied native put.
+pub fn put_view_png(
+    documents: &crate::documents::Documents,
+    surface: &str,
+    value: ClipboardValue,
+    put: impl FnOnce(usize, &[u8], &str) -> Result<String, String>,
 ) -> Result<ViewReadResponse, String> {
-    match read()? {
+    match value {
         ClipboardValue::Absent => Ok(ViewReadResponse {
             present: false,
             kind: "png",
@@ -134,7 +137,13 @@ pub(crate) fn read_view_png_with(
             Ok(ViewReadResponse {
                 present: true,
                 kind: "png",
-                binary: Some(put(&bytes)?),
+                binary: Some(crate::documents::put_view_binary_of(
+                    documents,
+                    surface,
+                    &bytes,
+                    "image/png",
+                    put,
+                )?),
             })
         }
         other => Err(format!("the clipboard PNG read returned {other:?}")),
@@ -142,7 +151,7 @@ pub(crate) fn read_view_png_with(
 }
 
 /// Takes the bytes of the PNG of a view through take and persists them under root, and returns the path of the file.
-pub(crate) fn persist_view_png_at(
+pub fn persist_view_png_at(
     root: &Path,
     take: impl FnOnce() -> Result<Vec<u8>, String>,
 ) -> Result<String, String> {
@@ -160,17 +169,11 @@ pub fn read_view_png(
     let surface = request.surface;
     exposure::on_main(window, move || {
         let platform = platform::current()?;
-        read_view_png_with(
-            || platform.clipboard_read("png"),
-            |bytes| {
-                crate::documents::put_view_binary_of(
-                    &data.documents,
-                    &surface,
-                    bytes,
-                    "image/png",
-                    |handle, bytes, kind| platform.put_document_binary(handle, bytes, kind),
-                )
-            },
+        put_view_png(
+            &data.documents,
+            &surface,
+            platform.clipboard_read("png")?,
+            |handle, bytes, kind| platform.put_document_binary(handle, bytes, kind),
         )
     })
 }

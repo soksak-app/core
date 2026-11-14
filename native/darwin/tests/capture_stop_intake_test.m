@@ -7,7 +7,6 @@
 #import "support/records.h"
 #import "support/run_until.h"
 #import "support/temporary_folder.h"
-#include <stdatomic.h>
 #include <stdlib.h>
 
 static int failures;
@@ -16,32 +15,19 @@ static void check(BOOL condition, NSString *message) {
     if (!condition) failures++;
 }
 
-// The window server of the test: each call gives an opaque image of the window's device-pixel size. The third call of a recording
-// holds until the test releases it, so a still is in flight when the requests close; with heldFails it then gives no image.
-static size_t imageWidth, imageHeight;
-static atomic_int calls;
-static atomic_bool heldFails;
-static dispatch_semaphore_t heldEntered, heldRelease;
-static CGImageRef heldWindowImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
-    (void)rect; (void)windows; (void)options;
-    if (atomic_fetch_add(&calls, 1) == 2) {
-        dispatch_semaphore_signal(heldEntered);
-        dispatch_semaphore_wait(heldRelease, DISPATCH_TIME_FOREVER);
-        if (atomic_load(&heldFails)) return NULL;
-    }
-    CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context = CGBitmapContextCreate(NULL, imageWidth, imageHeight, 8, 0, srgb,
-        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
-    CGColorSpaceRelease(srgb);
-    if (context == NULL) return NULL;
-    CGContextSetRGBFillColor(context, 0.1, 0.7, 0.3, 1);
-    CGContextFillRect(context, CGRectMake(0, 0, imageWidth, imageHeight));
-    CGImageRef made = CGBitmapContextCreateImage(context);
-    CGContextRelease(context);
-    return made;
-}
-static void *lookupHeldWindowImage(void *handle, const char *name) {
-    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)heldWindowImage : dlsym(handle, name);
+// The window server is the real one. The fault point SOKSAK_FAULT_CAPTURE_IMAGE holds the third request of a recording, so a
+// still is in flight when the requests close, until the test posts the release notification; hold-third-none then gives no image
+// and hold-third takes the real image.
+// Waits until the third request of the recording is in the window server.
+static BOOL thirdRequestEntered(void) {
+    NSCondition *state = captureFaultState();
+    NSDate *limit = [NSDate dateWithTimeIntervalSinceNow:30];
+    BOOL entered = YES;
+    [state lock];
+    while (captureFaultImageRequests < 3 && entered) entered = [state waitUntilDate:limit];
+    entered = captureFaultImageRequests >= 3;
+    [state unlock];
+    return entered;
 }
 
 static uint64_t ticks(id value) {
@@ -59,8 +45,7 @@ static NSArray<NSDictionary *> *lifecycle(NSArray<NSDictionary *> *events, NSStr
 // fails the held still gives no image.
 static void recordWithHeldStill(NSWindow *window, NSString *directory, BOOL fails) {
     NSString *label = fails ? @"a held still that fails" : @"a held still that is written";
-    atomic_store(&calls, 0);
-    atomic_store(&heldFails, fails);
+    setenv("SOKSAK_FAULT_CAPTURE_IMAGE", fails ? "hold-third-none" : "hold-third", 1);
     [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:NO attributes:nil error:NULL];
     char *error = NULL;
     bool opened = sp_capture_open(window.windowNumber, false, &error);
@@ -82,7 +67,7 @@ static void recordWithHeldStill(NSWindow *window, NSString *directory, BOOL fail
         && [firsts[0][@"fields"][@"session"] isEqual:session] && [firsts[0][@"fields"][@"index"] intValue] == 0,
         [NSString stringWithFormat:@"%@: the start stores one start and one first-still event of its session (%@)", label, startEvents]);
     // The third still is in the window server: a stop at this time ends at a later still, while this one is in flight.
-    dispatch_semaphore_wait(heldEntered, DISPATCH_TIME_FOREVER);
+    check(thirdRequestEntered(), [NSString stringWithFormat:@"%@: the third still is in the window server", label]);
     double after = sp_capture_clock();
     mach_timebase_info_data_t timebase = recording.timebase;
     uint64_t afterTicks = (uint64_t)(after * 1e6 * timebase.denom / timebase.numer);
@@ -105,7 +90,7 @@ static void recordWithHeldStill(NSWindow *window, NSString *directory, BOOL fail
     int callsAtClose = 0;
     @synchronized (recording) { callsAtClose = (int)recording.nextIndex; }
     uint64_t releasedTicks = mach_absolute_time();
-    dispatch_semaphore_signal(heldRelease);
+    check(notify_post(SP_CAPTURE_FAULT_RELEASE) == NOTIFY_STATUS_OK, [NSString stringWithFormat:@"%@: the release notification is posted", label]);
     sp_run_until("the stop returns", ^BOOL { return stopped; });
     NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()];
     if (fails) {
@@ -117,9 +102,14 @@ static void recordWithHeldStill(NSWindow *window, NSString *directory, BOOL fail
         check(written > 0 && stopError.length == 0,
             [NSString stringWithFormat:@"the stop writes the recording without error (%d, %@)", written, stopError]);
     }
-    check(atomic_load(&calls) == callsAtClose, [NSString stringWithFormat:
+    NSCondition *requestState = captureFaultState();
+    [requestState lock];
+    int windowServerCalls = (int)captureFaultImageRequests;
+    [requestState unlock];
+    unsetenv("SOKSAK_FAULT_CAPTURE_IMAGE");
+    check(windowServerCalls == callsAtClose, [NSString stringWithFormat:
         @"%@: no still is requested after the requests close (%d requested at the close, %d window server calls)", label,
-        callsAtClose, atomic_load(&calls)]);
+        callsAtClose, windowServerCalls]);
 
     NSString *rowsText = [NSString stringWithContentsOfFile:[directory stringByAppendingPathComponent:@"stills.jsonl"]
         encoding:NSUTF8StringEncoding error:NULL];
@@ -194,19 +184,11 @@ int main(void) { @autoreleasepool {
     // commits it, and the window server lists the window once the commit returns.
     [window orderBack:nil];
     [CATransaction flush];
-    imageWidth = (size_t)(60 * window.backingScaleFactor);
-    imageHeight = (size_t)(40 * window.backingScaleFactor);
-    heldEntered = dispatch_semaphore_create(0);
-    heldRelease = dispatch_semaphore_create(0);
-    captureLookup = lookupHeldWindowImage;
     // The failing recording comes first, so the recording after it shows that its error stays with it.
     recordWithHeldStill(window, [directory stringByAppendingPathComponent:@"failed"], YES);
     recordWithHeldStill(window, [directory stringByAppendingPathComponent:@"written"], NO);
-    captureLookup = dlsym;
     [window close];
     [window release];
-    dispatch_release(heldEntered);
-    dispatch_release(heldRelease);
     fprintf(stderr, "%s: capture stop seals the requests (%.1fms)\n", failures ? "FAIL" : "PASS",
         (CACurrentMediaTime() - began) * 1000);
     return failures ? 1 : 0;

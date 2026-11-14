@@ -55,7 +55,7 @@
     { "call": { "name": "overlayUpdate", "payload": { "id": "debug", "html": "<p></p>" } } },
     { "reply": { "result": null } },
     { "call": { "name": "overlayPlace", "payload": { "id": "debug", "rect": { "x": 0, "y": 0, "w": 1, "h": 1 } } } },
-    { "reply": { "result": null } },
+    { "reply": { "result": { "x": 0, "y": 0, "w": 0, "h": 0 } } },
     { "call": { "name": "big", "payload": { "text": "$big-text" } } },
     { "reply": { "result": null } },
     {

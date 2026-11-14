@@ -19,7 +19,8 @@ registry.declare("core", {
   element: [],
 });
 const calls = [];
-// Each test sets onCall to the function that it waits for; the fakes call it with the parameters of every run.
+// The handlers of the declared commands record each run. Each test sets onCall to the function that it waits for; the handlers call it with
+// the parameters of every run.
 let onCall = () => {};
 registry.command("core.fixture.press", (params) => { calls.push(["press", params]); onCall(params); return "pressed"; });
 registry.command("core.fixture.put", (params) => { calls.push(["put", params]); onCall(params); });

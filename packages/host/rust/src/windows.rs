@@ -821,22 +821,38 @@ pub(crate) fn list(app: &AppHandle) -> Result<serde_json::Value, String> {
         windows,
         |step| crate::exposure::app_on_main(app, step),
         |(window, data)| {
-            let root = data
-                .root
-                .lock()
-                // default: a lock that a panicking thread poisoned still holds the root webview of the window, which is
-                // only read; the panic hook records the panic.
-                .unwrap_or_else(PoisonError::into_inner)
-                .clone();
-            window_entry(
+            listed_window(
                 window.label(),
-                data.closing.load(Ordering::Relaxed),
-                data.ready.load(Ordering::Relaxed),
-                root,
+                data,
                 || window.title().map_err(|e| e.to_string()),
                 || window.is_focused().map_err(|e| e.to_string()),
             )
         },
+    )
+}
+
+/// The host.windows entry of the window with the records data: it reads the close state, the readiness and the project of
+/// the records, and the title and the key state that the lookups title and key read from the runtime.
+pub fn listed_window(
+    label: &str,
+    data: &WindowData,
+    title: impl FnOnce() -> Result<String, String>,
+    key: impl FnOnce() -> Result<bool, String>,
+) -> Result<Option<serde_json::Value>, String> {
+    let root = data
+        .root
+        .lock()
+        // default: a lock that a panicking thread poisoned still holds the root webview of the window, which is only read;
+        // the panic hook records the panic.
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    window_entry(
+        label,
+        data.closing.load(Ordering::Relaxed),
+        data.ready.load(Ordering::Relaxed),
+        root,
+        title,
+        key,
     )
 }
 
@@ -1901,7 +1917,7 @@ pub(crate) fn end_reloads(data: &WindowData, result: Result<(), ReloadEnd>) {
 /// stays open, and the page answers the question or its end does (`answer_close_question`). The close of a window whose page
 /// is not ready is not blocked, so the window soon disappears from the runtime and is removed from the list. Returns whether
 /// the window stays open.
-fn close_requested(data: &WindowData, ready: bool, ask: impl FnOnce()) -> bool {
+pub fn close_requested(data: &WindowData, ready: bool, ask: impl FnOnce()) -> bool {
     if ready {
         data.close_asked.store(true, Ordering::SeqCst);
         ask();

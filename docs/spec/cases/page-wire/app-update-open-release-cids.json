@@ -1,0 +1,12 @@
+{
+  "name": "app-update-open-release-cids",
+  "description": "The page reads a candidate and opens its release page with the correlation identifiers of the command that causes it.",
+  "replay": false,
+  "reason": "The linkOpen call opens a page in the default application of the person, which the Go producer does not run.",
+  "steps": [
+    {"call":{"name":"appUpdateState"}},
+    {"reply":{"result":{"version":"0.0.8","available":{"version":"0.0.9","release":{"url":"https://github.com/soksak-app/core/releases/download/v0.0.9/soksak-0.0.9-darwin-arm64-wailsv3.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}}}},
+    {"call":{"name":"linkOpen","payload":{"url":"https://github.com/soksak-app/core/releases/tag/v0.0.9"},"cids":["p1700000000000.6"]}},
+    {"reply":{"result":null}}
+  ]
+}

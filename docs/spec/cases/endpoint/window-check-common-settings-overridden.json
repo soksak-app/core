@@ -1,0 +1,16 @@
+{
+  "name": "window-check-common-settings-overridden",
+  "description": "The cleanup of keepCommonSettings restores a common value that the project of the check overrides.",
+  "replay": false,
+  "reason": "The case drives the diagnostic requests of a window check, which need a display, a recording folder or a state that the replay does not arrange.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"values":{"mode":"light"},"common":{"mode":"dark"},"saving":false}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"mode":"light"},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"main","name":"core.settings"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"values":{"mode":"light"},"common":{"mode":"light"},"saving":false}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"command.run","params":{"window":"main","name":"core.settings.set","params":{"patch":{"mode":"dark"},"scope":"common"}}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}}
+  ]
+}

@@ -168,6 +168,8 @@ function checkSidebars(values) {
 let common = {};
 let overrides = {};
 let projectId = null;
+// The folder of the project whose settings the window shows, from the snapshot that applied them; null for the library.
+let projectRoot = null;
 /* Whether a refresh reported the stored switch at the start of the page; only a later change takes the change path. */
 let reported = false;
 let store;
@@ -346,6 +348,7 @@ export function beginSettings(snapshot, id) {
   checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(nextCommon), applied(nextOverrides)));
   projectId = id;
+  projectRoot = project?.root ?? null;
   common = nextCommon;
   overrides = nextOverrides;
   apply();
@@ -372,6 +375,7 @@ async function refresh(read = () => store.snapshot()) {
   if (project) validateValues(nextOverrides, projectSettingsFile(project));
   checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(snapshot.common), applied(nextOverrides)));
+  projectRoot = project?.root ?? null;
   if (JSON.stringify(common) !== JSON.stringify(snapshot.common) || JSON.stringify(overrides) !== JSON.stringify(nextOverrides)) {
     common = snapshot.common;
     overrides = nextOverrides;
@@ -402,6 +406,8 @@ export async function selectProject(id) {
 }
 
 export const settingProject = () => projectId;
+/** The folder of the project whose settings the window shows, or null for the library. */
+export const settingProjectRoot = () => projectRoot;
 /** The sets and links of a project that is not necessarily the selected one: its own overrides over the common settings. */
 export function projectSidebars(project) {
   // default: a project that overrides no setting has no settings.

@@ -6,7 +6,6 @@
 #import "../src/window_reveal.h"
 #import "support/event_wait.h"
 #import "support/temporary_folder.h"
-#include <dlfcn.h>
 
 static int failures;
 static void check(BOOL condition, NSString *message) {
@@ -47,18 +46,6 @@ static NSString *taken(char *error) {
     return text;
 }
 
-// A window server that gives no image, as a still of the start that fails: the lookup of the capture returns this function in
-// place of CGWindowListCreateImageFromArray while failStill is set.
-static BOOL failStill;
-static CGImageRef noImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
-    (void)rect; (void)windows; (void)options;
-    return NULL;
-}
-static void *lookupFailingStill(void *handle, const char *name) {
-    if (failStill && strcmp(name, "CGWindowListCreateImageFromArray") == 0) return (void *)noImage;
-    return dlsym(handle, name);
-}
-
 // The width and height of a recorded frame, from the uint32 values at the start of its file.
 static BOOL frameSize(NSString *path, uint32_t size[2]) {
     NSData *data = [NSData dataWithContentsOfFile:path];
@@ -71,7 +58,6 @@ int main(void) { @autoreleasepool {
     [NSApplication sharedApplication];
     [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     [NSApp finishLaunching];
-    captureLookup = lookupFailingStill;
     uint64_t token = 1;
 
     // A show without a hold puts the window on screen when it returns, as before the hold existed.
@@ -192,10 +178,11 @@ int main(void) { @autoreleasepool {
         free(failure);
         failure = NULL;
         if (refusedOpened) {
-            failStill = YES;
+            // The fault point gives the window server request of still 0 no image.
+            setenv("SOKSAK_FAULT_CAPTURE_IMAGE", "none", 1);
             refusedStarted = sp_capture_start([directory stringByAppendingPathComponent:@"refused"].fileSystemRepresentation,
                 1000.0 / 60, 0, 4096, refusedStart, &failure);
-            failStill = NO;
+            unsetenv("SOKSAK_FAULT_CAPTURE_IMAGE");
             refusedStartError = [taken(failure) retain];
         }
     });

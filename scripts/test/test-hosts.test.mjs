@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { cargoCommand } from '@soksak/window-check/cargo.mjs';
-import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, harnessLessTestFiles, parseDeclarations, selectRustDeclarations, uncoveredCases } from '../test-hosts.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, harnessLessTestFiles, parseDeclarations, selectRustDeclarations, uncoveredCases, e2eDeclarationErrors } from '../test-hosts.mjs';
 
 const SPEC = `# Hosts
 
@@ -579,4 +579,14 @@ test('the test targets without the test harness are read from the manifests of t
     rmSync(root, { recursive: true, force: true });
   }
   assert.ok(harnessLessTestFiles().has('packages/host/rust/tests/page_start_main_thread_test.rs'));
+});
+
+test('a case with the scope e2e only needs its window check file to declare it', { timeout: 1000 }, () => {
+  const section = (rows) => `\n## Contract cases\n\n| Case | Behavior | Scope |\n| --- | --- | --- |\n${rows}\n`;
+  const cases = parseContractCases(section('| `a.b` | x | e2e only: e2e/a.test.mjs: the recorder needs a display |'));
+  assert.deepEqual(cases.get('a.b').hosts, []);
+  assert.equal(cases.get('a.b').e2e, 'e2e/a.test.mjs');
+  assert.deepEqual(e2eDeclarationErrors(cases, () => '// contract: c.d, a.b\nimport x'), []);
+  assert.deepEqual(e2eDeclarationErrors(cases, () => '// contract: c.d\n'), ['e2e/a.test.mjs declares no contract case a.b']);
+  assert.deepEqual(e2eDeclarationErrors(cases, () => null), ['contract case a.b names the window check e2e/a.test.mjs, which does not exist']);
 });

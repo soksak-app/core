@@ -1,0 +1,10 @@
+{
+  "name": "view-events-run-start",
+  "description": "The page pushes the event run-start for the one start of a run while the view subscribes.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"run-start","data":{},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

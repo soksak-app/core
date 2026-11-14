@@ -1,16 +1,22 @@
 // The placeholder reasons missing, disabled, reload and host describe designed states of a saved layout that names a plugin that is not loaded
 // (docs/spec/plugins.md#plugins-that-are-not-loaded). They are not failures, so they write no error through the error display path (F217).
-// This test is a regression guard: the reason unread is the only one that shows an error, and it is tested in plane-placeholder-error.test.mjs.
+// This test is a regression guard: the reason unread is the only one that shows an error, and it is tested in plane-placeholder-error.test.mjs. The reason
+// host is a page without a host, which plane-placeholder-host.test.mjs draws.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
+import { recordsOf, shownRecord } from "./support/records.mjs";
 
 const pluginId = "fixture-placeholder-reasons";
 
-test("the placeholder reasons that are designed states write no error", { timeout: 5000 }, async (t) => {
+test("the placeholder reasons that the host state gives write no error", { timeout: 5000 }, async () => {
+  // The host calls of the page are answered by the page-wire case (docs/spec/cases/page-wire/README.md). The case is selected before the modules of the page
+  // are imported, because host.js reads the host when it is imported.
+  const wire = selectPageWire("plane-placeholder-reasons");
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   // matchMedia, which JSDOM does not have. The view uses it only to subscribe to resolution changes, and this test does not change the resolution.
   dom.window.matchMedia = (query) => ({ media: query, matches: true,
     addEventListener: () => {}, removeEventListener: () => {} });
@@ -31,30 +37,9 @@ test("the placeholder reasons that are designed states write no error", { timeou
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  const reports = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => reports.push(line) } });
-  // The calls of the error display path. A designed placeholder must not reach it.
-  const errorCalls = [];
-  const actualErrors = await import("../shown-errors.js");
-  t.mock.module("../shown-errors.js", { exports: {
-    showError: (element, where, text, detail) => {
-      errorCalls.push({ kind: "show", where, text });
-      return actualErrors.showError(element, where, text, detail);
-    },
-    hideError: (element, where) => {
-      errorCalls.push({ kind: "hide", where });
-      return actualErrors.hideError(element, where);
-    },
-  } });
-  // The plugin state that each reason reads. The test changes it and then runs the listeners that the plane registered for plugin changes.
-  const state = { hosted: true, rows: [] };
-  const listeners = [];
-  const actualInstalled = await import("../installed-plugins.js");
-  t.mock.module("../installed-plugins.js", { exports: { ...actualInstalled,
-    pluginOperations: { get hosted() { return state.hosted; }, failure: () => null, status: () => ({ plugins: state.rows }) },
-    onPluginOperations: (fn) => { listeners.push(fn); },
-  } });
+  // The plugin state that each reason reads is the answer of the host to the read of the plugin state. The read tells the listeners that the plane registered for plugin changes.
+  const { pluginOperations } = await import("../installed-plugins.js");
+  const { flushEvents } = await import("../page-log.js");
   // The environment of the page: one tab of a plugin that is not installed in the environment, so the plugin is not loaded.
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
@@ -75,24 +60,22 @@ test("the placeholder reasons that are designed states write no error", { timeou
     const drawHeld = () => { const draw = held; held = null; draw(); };
     plane.adopt(plane.fresh(), "spc-aaaaaa");
     drawHeld();
-    const cases = [
-      { reason: "missing", set: () => { state.hosted = true; state.rows = []; } },
-      { reason: "disabled", set: () => { state.hosted = true; state.rows = [{ id: pluginId, installed: { enabled: false } }]; } },
-      { reason: "reload", set: () => { state.hosted = true; state.rows = [{ id: pluginId, installed: { enabled: true } }]; } },
-      { reason: "host", set: () => { state.hosted = false; state.rows = []; } },
-    ];
-    for (const { reason, set } of cases) {
-      set();
-      for (const listener of listeners) listener();
+    // The host answers the three reads in this order: the plugin is not installed, it is installed disabled, and it is installed enabled but not loaded.
+    for (const reason of ["missing", "disabled", "reload"]) {
+      await pluginOperations.refresh();
       drawHeld();
       const line = document.querySelector(`[data-plugin-placeholder="${reason}"] p`);
       assert.ok(line?.textContent, `the ${reason} placeholder is not drawn`);
       assert.equal(line.dataset.error, undefined, `the ${reason} placeholder is marked as an error`);
+      assert.equal(document.querySelector("[data-error]"), null, `the ${reason} placeholder reached the error display path`);
     }
-    // The surface status row also withdraws its own error on every state, so only the show calls and the placeholder places are judged.
-    assert.deepEqual(errorCalls.filter((call) => call.kind === "show"), [], "a designed placeholder reason reached the error display path");
-    assert.deepEqual(errorCalls.filter((call) => call.where?.endsWith(" placeholder")), [], "a designed placeholder reason withdrew a placeholder place");
-    assert.deepEqual(reports, [], "a designed placeholder reason wrote an error to the application log");
+    // The error display path writes every error it shows to the application log, so an error record in the batches of the page is a placeholder that showed an error.
+    await flushEvents();
+    assert.deepEqual(wire.calls.flatMap(({ name, payload }) => recordsOf(name, payload).map(shownRecord)), [], "a designed placeholder reason wrote an error to the application log");
+    dom.window.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    await flushEvents();
+    wire.finish();
   } finally {
     dom.window.close();
   }

@@ -32,6 +32,26 @@ name = "page_start_main_thread_test"
 harness = false
 required-features = ["host-test"]
 
+# The reports of the memory pressure source belong to the main thread, so this target runs its tests on the main thread of its
+# process; it answers --list and --exact as the harness does.
+# The binary store of a view belongs to its native document, and the native layer runs only on the main thread, so this target runs
+# its tests on the main thread of its process with a real window, surface and view; it answers --list and --exact as the harness does.
+[[test]]
+name = "view_binary_test"
+harness = false
+required-features = ["host-test"]
+
+[[test]]
+name = "memory_pressure_test"
+harness = false
+
+# The hold of a new window is native AppKit state, which belongs to the main thread, so this target runs its tests on the main
+# thread of its process against the real recorder of the platform; it answers --list and --exact as the harness does.
+[[test]]
+name = "recording_hold_test"
+harness = false
+required-features = ["diagnostics"]
+
 # The heartbeat of the stall watch is answered by the main run loop of a process, and the libtest harness runs each test on a
 # thread of its own, so this target runs its tests on the main thread of its process and each test runs its scenario in a child
 # process of the same binary, whose main thread runs the run loop; it answers --list and --exact as the harness does.

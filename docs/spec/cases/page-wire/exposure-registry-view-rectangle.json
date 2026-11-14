@@ -1,0 +1,16 @@
+{
+  "name": "exposure-registry-view-rectangle",
+  "description": "The page forwards the element.rect request of a view surface to the host, and the surface answers with its local rectangle.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"element.rect","params":{"name":"probe.lines","surface":"tab-a"}}}},
+    {"reply":{"result":{"result":{"x":12,"y":24,"width":80,"height":30}}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-b","method":"element.rect","params":{"name":"probe.lines","surface":"tab-b"}}}},
+    {"reply":{"result":{"result":{"x":12,"y":24,"width":80,"height":30}}}},
+    {"call":{"name":"exposureForward","payload":{"id":3,"surface":"tab-b","method":"element.rect","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":{"x":12,"y":24,"width":80,"height":30}}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"surface":"tab-b","method":"element.rect","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":{"x":12,"y":24,"width":80,"height":30}}}}
+  ]
+}

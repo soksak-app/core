@@ -21,7 +21,7 @@ func TestWindowSidecarAdmissionCannotReviveAfterMountedViewRetires(t *testing.T)
 }
 
 func testWindowSidecarMountDuringStart(t *testing.T, retire bool) {
-	s, service, _ := mountedSidecarProject(t)
+	s, service, views := mountedSidecarProject(t)
 	const surface = "background-owner"
 	synctest.Test(t, func(t *testing.T) {
 		service.outbox = make(chan queuedLine, 4)
@@ -42,9 +42,7 @@ func testWindowSidecarMountDuringStart(t *testing.T, retire bool) {
 		probe := s.viewRecords().specs["probe-surface"]
 		spec := s.viewRecords().track(surface, native, "probe", "ui/page.html", true)
 		spec.directory, spec.folder = probe.directory, probe.folder
-		if err := s.syncView(surface, native, "probe", "ui/page.html", true, start); err != nil {
-			t.Fatal(err)
-		}
+		views.syncSurface(t, s, surface, native, true, start)
 		if _, ok := s.documents.view(surface); !ok {
 			t.Fatal("B did not actually mount")
 		}
@@ -52,7 +50,7 @@ func testWindowSidecarMountDuringStart(t *testing.T, retire bool) {
 			t.Fatal("B must have sent no session request before admission resumes")
 		}
 		if retire {
-			s.closeSurfaceDocuments(surface)
+			s.closeSurfaceDocumentsWith(surface, func(unsafe.Pointer) {})
 			if _, exists := s.documents.view(surface); exists {
 				t.Fatal("B did not actually retire")
 			}

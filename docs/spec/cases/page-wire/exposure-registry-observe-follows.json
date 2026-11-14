@@ -1,0 +1,16 @@
+{
+  "name": "exposure-registry-observe-follows",
+  "description": "The page watches a status on the surface that registers, moves the watch to the requested surface when it registers, and ends the watches.",
+  "replay": false,
+  "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"call":{"name":"exposureForward","payload":{"id":1,"surface":"tab-a","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":2,"surface":"tab-a","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":3,"surface":"tab-b","method":"status.watch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}},
+    {"call":{"name":"exposureForward","payload":{"id":4,"surface":"tab-b","method":"status.unwatch","params":{"name":"probe.lines"}}}},
+    {"reply":{"result":{"result":null}}}
+  ]
+}

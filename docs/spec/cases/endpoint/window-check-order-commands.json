@@ -1,0 +1,12 @@
+{
+  "name": "window-check-order-commands",
+  "description": "The raise and the lower of a window are the commands host.window.raise and host.window.lower.",
+  "replay": false,
+  "reason": "The case orders the window of the application, which the replay leaves unchanged.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"command.run","params":{"window":"main","name":"host.window.raise","params":{}}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"command.run","params":{"window":"main","name":"host.window.lower","params":{}}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":null}}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "surface-view-mounted",
+  "description": "A view surface declares its composition.",
+  "replay": false,
+  "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
+  "steps": [
+    {"call":{"name":"compositionDeclare","payload":{"plugin":"fixture-mounted-view","composition":{"kind":"view","page":"ui/page.html"},"surface":"fixture-mounted-view-surface"}}},
+    {"reply":{"result":null}}
+  ]
+}

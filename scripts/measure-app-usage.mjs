@@ -54,7 +54,6 @@
 //
 //   node scripts/measure-app-usage.mjs --sok PATH --config-dir DIR [--config-dir DIR ...] --trace 0|1|frame-records [--interval SECONDS]
 //     [--state S0|S0b|S1|S9|S11|S12|S14|S15] [--tab-plugin ID --page-plugin ID] [--idle] [--step pointer] [--b3-out FILE] [--json]
-import { execFile } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createServer } from "node:http";
 import { basename, isAbsolute, join, posix } from "node:path";
@@ -64,11 +63,12 @@ import { connect } from "@soksak/client";
 import { Session } from "@soksak/window-check/app.mjs";
 import { currentEventOffsets, readEventErrors, untilEventLine } from "@soksak/window-check/event-log.mjs";
 import { readPolicy } from "@soksak/window-check/log-policy.mjs";
-import { launchdServices } from "@soksak/window-check/stall-sample.mjs";
+import { launchdServicesOfResult } from "@soksak/window-check/stall-sample.mjs";
 import { catalogOf } from "./check-events.mjs";
 import { b3Conditions, b3End, writeB3Out } from "./b3-out.mjs";
 import { readFootprint, settledFootprints } from "./footprints.mjs";
 import { percentile, requireCompleteGesture, stepTimes, U7_EVENTS } from "./frame-records.mjs";
+import { delay, execute, instant, remainingMs } from "./measure-tools.mjs";
 import { applyTrace, FRAME_RECORDS, parseTrace, traceSettings } from "./measure-trace.mjs";
 
 /** Executables of the tools that run this measurement; their command lines name the data folder, but they are not the application. */
@@ -81,8 +81,8 @@ export const STATES = ["S0", "S0b", "S1", "S9", "S11", "S12", "S14", "S15"];
 export const WINDOW_SIZE = Object.freeze({ width: 1200, height: 760 });
 
 /** The time without a change of frames after which a window is quiet, and the intervals after which frames that keep changing fail. */
-const QUIET_MS = 3000;
-const QUIET_INTERVALS = 40;
+export const QUIET_MS = 3000;
+export const QUIET_INTERVALS = 40;
 /** S14 reads its footprints this long after the key, while the caret blinks (G3). */
 const KEY_READING_MS = 10000;
 /** The covering window of S9 exceeds the window by this margin on each side, so that it also covers the shadow of the window. */
@@ -96,8 +96,6 @@ const POINTER_MOVES = 60;
 /** The plugins of the tabs of S1. */
 /** The states that start from S1, which require the plugins of its two tabs. */
 export const S1_STATES = ["S1", "S9", "S11", "S12", "S15"];
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Parses a CPU time of ps, [[dd-]hh:]mm:ss.ss, into seconds. */
 export function parseCpuTime(text) {
@@ -211,29 +209,31 @@ const WEBKIT_ROLES = [
   ["com.apple.WebKit.WebContent.", "webkit webcontent"],
 ];
 
+/** The rows of the WebKit services among `services` of the launchd domain of the host of configDir. */
+export function webkitRows(configDir, services) {
+  const rows = [];
+  for (const service of services) {
+    const role = WEBKIT_ROLES.find(([prefix]) => service.label.startsWith(prefix))?.[1];
+    if (role !== undefined) rows.push({ configDir, role, pid: service.pid, attribution: "launchd domain" });
+  }
+  return rows;
+}
+
 /**
  * Attributes the WebKit services to the applications. Each host is { configDir, pid }. A WebKit service belongs to the
  * application whose host has it in its launchd domain. `launchctl print pid/<host>` is read because it is the only interface
  * that lists the services of another process; a start time or an open file does not separate two applications that started in
  * the same second or share a file. Returns the attributed rows in the order of the hosts and the errors of the hosts whose
  * domain cannot be read.
- *
- * run(command, args)  an executor that resolves to {status, stdout, stderr}. The tests replace it.
  */
-export async function attributeWebKit(hosts, run) {
+export async function attributeWebKit(hosts) {
   const attributed = [];
   const errors = [];
   for (const { configDir, pid } of hosts) {
-    let services;
     try {
-      services = await launchdServices(pid, run);
+      attributed.push(...webkitRows(configDir, launchdServicesOfResult(pid, await execute("/bin/launchctl", ["print", `pid/${pid}`]))));
     } catch (error) {
       errors.push(`webkit services of ${configDir}: ${error.message}`);
-      continue;
-    }
-    for (const service of services) {
-      const role = WEBKIT_ROLES.find(([prefix]) => service.label.startsWith(prefix))?.[1];
-      if (role !== undefined) attributed.push({ configDir, role, pid: service.pid, attribution: "launchd domain" });
     }
   }
   return { attributed, errors };
@@ -306,23 +306,40 @@ const sameFrames = (a, b) => a.length === b.length && a.every((value, index) => 
 const framesText = (frames) => frames.map(String).join(" ");
 
 /**
- * Waits until frames of host.window of every window has not changed for 3 seconds; a window whose frames is null waits the 3 seconds
- * (docs/spec/hosts.md, G2). frames() returns the frames of each window, and sleep(ms) waits, by default on the timer that
- * measureApps uses, so a caller writes no timer of its own. The host notifies host.window watchers
- * when settled changes, not at each frame, and frames counts every frame, so two readings 3 seconds apart are the rule itself.
+ * The judgement of the reading `current` of the frames of every window that follows the reading `previous` by 3 seconds, at the
+ * `interval` of the wait (counted from 1): `quiet` when no window changed, `again` when one changed, and an error when the frames
+ * changed in each of the QUIET_INTERVALS intervals.
  */
-export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIET_INTERVALS }) {
-  let previous = await frames();
-  for (let interval = 1; interval <= intervals; interval++) {
-    await sleep(QUIET_MS);
-    const current = await frames();
-    if (sameFrames(previous, current)) return current;
-    if (interval === intervals) {
-      throw new Error(`the frames of the windows changed in each of ${intervals} intervals of 3 s; frames ${framesText(previous)} then ${framesText(current)}`);
-    }
-    previous = current;
+export function framesQuietStep({ previous, current, interval }) {
+  if (sameFrames(previous, current)) return "quiet";
+  if (interval === QUIET_INTERVALS) {
+    throw new Error(`the frames of the windows changed in each of ${QUIET_INTERVALS} intervals of 3 s; frames ${framesText(previous)} then ${framesText(current)}`);
   }
-  throw new Error(`untilFramesQuiet needs at least 1 interval, not ${intervals}`);
+  return "again";
+}
+
+/** The milliseconds that remain at the instant `now` of the 3 seconds after the frames reading at the instant `readAt`. */
+export function framesQuietWaitMs({ readAt, now }) {
+  return remainingMs({ since: readAt, now, ms: QUIET_MS });
+}
+
+/**
+ * Waits until frames of host.window of every window has not changed for 3 seconds; a window whose frames is null waits the 3 seconds
+ * (docs/spec/hosts.md, G2). frames() returns the frames of each window. The host notifies host.window watchers
+ * when settled changes, not at each frame, and frames counts every frame, so two readings 3 seconds apart are the rule itself: each
+ * wait is framesQuietWaitMs from the instant of the reading before it, and framesQuietStep judges each pair of readings.
+ */
+export async function untilFramesQuiet({ frames }) {
+  let previous = await frames();
+  let readAt = instant();
+  for (let interval = 1; interval <= QUIET_INTERVALS; interval++) {
+    await delay(framesQuietWaitMs({ readAt, now: instant() }));
+    const current = await frames();
+    if (framesQuietStep({ previous, current, interval }) === "quiet") return current;
+    previous = current;
+    readAt = instant();
+  }
+  throw new Error("untilFramesQuiet needs at least 1 interval");
 }
 
 /**
@@ -332,6 +349,21 @@ export async function untilFramesQuiet({ frames, sleep = delay, intervals = QUIE
  * Those writes belong to the preparation and are no cost of the settled state.
  */
 export const COUNT_WAIT_MS = 62000;
+
+/** The milliseconds that remain at the instant `now` of the wait for the counts after the marks of the instant `markedAt`. */
+export function countWaitMs({ markedAt, now }) {
+  return remainingMs({ since: markedAt, now, ms: COUNT_WAIT_MS });
+}
+
+/** The milliseconds that remain at the instant `now` of the wait for the key of S14 after the key at the instant `keyAt`. */
+export function keyReadingWaitMs({ keyAt, now }) {
+  return remainingMs({ since: keyAt, now, ms: KEY_READING_MS });
+}
+
+/** The milliseconds that remain at the instant `now` of the CPU interval of `interval` seconds that began at the instant `startedAt`. */
+export function intervalWaitMs({ startedAt, now, interval }) {
+  return remainingMs({ since: startedAt, now, ms: interval * 1000 });
+}
 
 /** The number of lines of each event log of the configuration folder, which it reads without a request to the application. */
 export function logLineCounts(configDir) {
@@ -355,14 +387,19 @@ export function cursorTabs(surfaces) {
   return surfaces.filter((surface) => surface.kind === "tab" && surface.exposes?.includes(`status ${surface.plugin}.cursor`));
 }
 
-/**
- * Waits for the cursor idle timeout of every cursor tab of every window and then until frames has not changed for 3 seconds (G2). The
- * idle timeout is a time after the last input, the preparation, that no status announces, so a timer of the longest timeout waits it.
- * sessions holds a session of each window, frames() returns the frames of each window and sleep(ms) waits. It resolves "quiet" when every
- * window reports its frames, and "not measured" when a window reports null: that wait read nothing of the window.
- */
-export async function waitIdle({ sessions, frames, sleep }) {
-  let longest = 0;
+/** The milliseconds of the idle wait before the 3 seconds without a frame: the longest of the cursor idle timeouts, 0 without one. */
+export function idleWaitMs(idleTimeouts) {
+  return Math.max(0, ...idleTimeouts);
+}
+
+/** The milliseconds that remain at the instant `now` of the idle wait of `idleTimeouts` (idleWaitMs) that began at the instant `readAt`. */
+export function idleRemainingMs({ readAt, now, idleTimeouts }) {
+  return remainingMs({ since: readAt, now, ms: idleWaitMs(idleTimeouts) });
+}
+
+/** The cursor idle timeouts, in milliseconds, of every cursor tab of every window of `sessions`, a session of each window. */
+export async function readIdleTimeouts({ sessions }) {
+  const idleTimeouts = [];
   for (const s of sessions) {
     const surfaces = await s.get("core.surfaces");
     if (!Array.isArray(surfaces)) throw new Error(`core.surfaces of window ${s.window} is not a list (${JSON.stringify(surfaces)})`);
@@ -371,12 +408,35 @@ export async function waitIdle({ sessions, frames, sleep }) {
       if (!Number.isFinite(idleTimeout) || idleTimeout < 0) {
         throw new Error(`surface ${surface} of window ${s.window} reports ${plugin}.cursor idleTimeout ${JSON.stringify(idleTimeout)}, not a number of milliseconds`);
       }
-      longest = Math.max(longest, idleTimeout);
+      idleTimeouts.push(idleTimeout);
     }
   }
-  if (longest > 0) await sleep(longest);
-  const quiet = await untilFramesQuiet({ frames, sleep });
-  return quiet.every(Number.isInteger) ? "quiet" : "not measured";
+  return idleTimeouts;
+}
+
+/** The frames of host.window of the window of each of `sessions`. */
+export async function readWindowFrames({ sessions }) {
+  const values = [];
+  for (const s of sessions) values.push((await s.get("host.window")).frames);
+  return values;
+}
+
+/** The result of an idle wait from the quiet frames: "quiet" when every window reports its frames, "not measured" when a window reports null. */
+export function idleOutcome(frames) {
+  return frames.every(Number.isInteger) ? "quiet" : "not measured";
+}
+
+/**
+ * Waits for the cursor idle timeout of every cursor tab of every window and then until the frames of host.window have not changed for
+ * 3 seconds (G2). The idle timeout is a time after the last input, the preparation, that no status announces, so a wait of the
+ * longest timeout (idleRemainingMs) waits it. sessions holds a session of each window. It resolves "quiet" when every
+ * window reports its frames, and "not measured" when a window reports null: that wait read nothing of the window.
+ */
+export async function waitIdle({ sessions }) {
+  const idleTimeouts = await readIdleTimeouts({ sessions });
+  const readAt = instant();
+  await delay(idleRemainingMs({ readAt, now: instant(), idleTimeouts }));
+  return idleOutcome(await untilFramesQuiet({ frames: () => readWindowFrames({ sessions }) }));
 }
 
 /**
@@ -434,47 +494,79 @@ export function pointerPath({ content }) {
 }
 
 /** Delivers the moves of path with input.pointer of the window of s, each after the answer of the one before it, without activating it. */
-async function movePointer(s, path) {
+export async function movePointer(s, path) {
   for (const point of path) await s.request("input.pointer", { ...point, phase: "move" });
 }
 
 /**
- * The pointer step of G2 and G8 in the window of the session s, already the key window and not occluded, because input.pointer refuses
- * a move in another window (1006). It takes no permission, activates nothing and leaves the cursor: it measures the moves of input.pointer across the window with measure({ span }), which reads the settled footprints
- * before and after the span and the CPU time over it. It then sets the trace state of the frame records
- * (frameRecords; FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose host.window reports pageProcess null,
- * reads the U7 records of that move (tail and records), gives them to gestureFigures, and sets the trace state of the measurement again
- * (restore), also when the step fails. It reads frames after the move before diagnostics.log.flush, so the record of every frame that the
- * change of frames counts is in the files that records reads.
+ * The repeated move of the pointer step in the window of the session s, which `status` (host.window before the first move) describes.
+ * It sets the trace state of the frame records (FRAME_RECORDS of scripts/measure-trace.mjs), repeats the move and, for a window whose
+ * host.window reports pageProcess null, reads the U7 records of that move (the log query of the connection of s), gives them to
+ * gestureFigures, and sets the trace state of the measurement again (`trace`), also when the step fails. It reads frames after the move
+ * before diagnostics.log.flush, so the record of every frame that the change of frames counts is in the files that the query reads.
+ * A window with a main page has no U7 records, and the result is null.
  */
-export async function measurePointer({ s, measure, frameRecords, restore, tail, records }) {
-  const status = await s.get("host.window");
-  const path = pointerPath(status);
-  const move = await measure({ span: () => movePointer(s, path) });
-  await frameRecords();
+export async function pointerGesture({ s, status, trace }) {
+  const { client, app } = s;
+  const setTrace = (state) => applyTrace((name, params) => s.run(name, params), state, app.configDir, { ended: client.ended });
+  await setTrace(FRAME_RECORDS);
   let gesture = null;
   try {
+    const path = pointerPath(status);
     if (status.pageProcess === null) {
       const { frames: framesBefore } = await s.get("host.window");
-      const since = await tail();
+      const since = await logTail(client);
       await movePointer(s, path);
       const { frames: framesAfter } = await s.get("host.window");
       await s.request("diagnostics.log.flush");
-      const read = await records(since);
+      const read = await gestureRecords(client, since);
       gesture = { window: s.window, ...gestureFigures({ ...read, window: s.window, framesBefore, framesAfter }) };
     } else {
       await movePointer(s, path);
     }
   } catch (error) {
     try {
-      await restore();
+      await setTrace(trace);
     } catch (restoreError) {
       throw new AggregateError([error, restoreError], `the pointer step failed (${error.message}) and setting the trace state again failed (${restoreError.message})`);
     }
     throw error;
   }
-  await restore();
-  return { move, gesture };
+  await setTrace(trace);
+  return gesture;
+}
+
+/** All rows of a log.query, page by page. */
+async function queryRows(client, query) {
+  const rows = [];
+  for (let after; ;) {
+    const page = await client.request("log.query", after === undefined ? query : { ...query, after });
+    rows.push(...page.rows);
+    if (page.next === null) return rows;
+    after = page.next;
+  }
+}
+
+/** The greatest seq of each process of the log now (the tail of log.query). */
+async function logTail(client) {
+  return (await client.request("log.query", { channel: "all", order: "desc", limit: 1 })).tail;
+}
+
+/** The name `<role>-<boot>` of the host process pid among the processes of a log tail. */
+function hostName(tail, pid) {
+  const names = Object.keys(tail).filter((name) => name.startsWith("host-") && name.endsWith(`-${pid}`));
+  if (names.length !== 1) throw new Error(`the log tail names ${names.length} processes of the host ${pid}: ${Object.keys(tail).join(", ")}`);
+  return names[0];
+}
+
+/** The U7 records, the records of dropped events and the seq range of the host of the connection after the log position `since`. */
+async function gestureRecords(client, since) {
+  const name = hostName(since, client.endpoint.pid);
+  const own = (rows) => rows.filter((row) => `${row.role}-${row.boot}` === name).map((row) => row.event);
+  const records = [];
+  for (const event of [U7_EVENTS.frame, U7_EVENTS.step]) records.push(...own(await queryRows(client, { channel: "all", event, since })));
+  const dropped = own(await queryRows(client, { channel: "all", event: "log.dropped", since }));
+  return { records, dropped, fromSeq: since[name], toSeq: (await logTail(client))[name] };
 }
 
 /** Sets the content of the window of s to size and waits until host.window reports it. */
@@ -528,10 +620,10 @@ async function requireLibrary(s, state) {
 }
 
 /**
- * S0b: closes the project of the window, waits with diagnostics.process.exit for each WebContent process of a view page or a document
- * region that host.window listed before the close, and returns them with the WebKit processes that remain (G1).
+ * S0b: closes the project of the window and waits with diagnostics.process.exit for each WebContent process of a view page or a document
+ * region that host.window listed before the close. Returns the exited processes; the WebKit processes that remain (G1) are read after it.
  */
-async function closeProject(s, deps) {
+async function closeProject(s) {
   const project = await s.get("core.project");
   if (typeof project?.id !== "string") throw new Error(`S0b requires a window that shows a project; window ${s.window} shows ${JSON.stringify(project)}`);
   const { documents } = await s.get("host.window");
@@ -547,20 +639,18 @@ async function closeProject(s, deps) {
   for (const pid of exited) await s.request("diagnostics.process.exit", { pid });
   const { screen } = await s.get("core.screen");
   if (screen !== "library") throw new Error(`S0b requires the library screen after the close; window ${s.window} shows ${screen}`);
-  return { exited, remaining: await deps.remainingWebKit() };
+  return { exited };
 }
 
 /**
  * S1: the fixture project with one tab of the plugin `plugins.tab` and, beside it, one tab of the plugin `plugins.page` on the blank page of
- * the loopback server of deps.serve(). The page plugin must expose the command `<page>.navigate` and the status `<page>.location`; a
- * missing entry fails and is named. The trace state is set after the fixture, which resets the common settings. Returns the address of
- * the page.
+ * the loopback server at `url`. The page plugin must expose the command `<page>.navigate` and the status `<page>.location`; a
+ * missing entry fails and is named. The trace state is set after the fixture, which resets the common settings.
  */
-async function prepareS1(s, deps, plugins) {
+async function prepareS1(s, { trace, url }, plugins) {
   await s.request("diagnostics.fixture");
-  await deps.applyTrace();
+  await applyTraceOf(s, trace);
   const { card } = await openOnlyTab(s, plugins.tab);
-  const url = await deps.serve();
   const { tab } = await s.run("core.card.split", { card, side: "right", plugin: plugins.page });
   const required = [`command ${plugins.page}.navigate`, `status ${plugins.page}.location`];
   let seen = null;
@@ -577,38 +667,67 @@ async function prepareS1(s, deps, plugins) {
   await s.run(`${plugins.page}.navigate`, { url }, tab);
   await s.until(`${plugins.page}.location`, (at) => at.url === url && !at.loading && at.error === null && at.title === "blank",
     `surface ${tab} did not load ${url}`, { surface: tab });
-  return url;
+}
+
+/** Sets the trace state of the measurement in the application of the session s. */
+function applyTraceOf(s, trace) {
+  return applyTrace((name, params) => s.run(name, params), trace, s.app.configDir, { ended: s.client.ended });
+}
+
+/** The blank page of S1: a loopback server that answers `<!doctype html><title>blank</title>`. Returns its address and its end. */
+export async function serveBlank() {
+  const server = createServer((request, response) => {
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end("<!doctype html><title>blank</title>");
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return { url: `http://127.0.0.1:${server.address().port}/blank`, close: () => new Promise((resolve) => server.close(resolve)) };
+}
+
+/**
+ * Waits until the application of the session s writes the error line of the layout fault after the log position `position`
+ * (currentEventOffsets of the configuration folder).
+ */
+async function untilFaultLine(s, position) {
+  const { configDir } = s.app;
+  const catalog = catalogOf(JSON.parse(readFileSync(CATALOG, "utf8")), configDir);
+  await untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1,
+    { catalog, records: ["host.record.error", "workbench.record.error"], ended: s.client.ended });
 }
 
 /**
  * Prepares state in the window of the session s through declared commands, in a window of 1200 by 760 points (B3). deps holds
- * applyTrace() (the trace state of the measurement), serve() (the address of the blank page), projectRoot(name) (a project folder),
- * logPosition() and untilFaultLine(position) (the application log), remainingWebKit() (the WebKit processes of the application with their
- * footprints) and sleep(ms). plugins holds the plugin ids { tab, page } of S1, which the states of S1_STATES require. Returns { state, windows, footprints } with the windows of the state, the footprint rule (`settled`, or
- * `at-once` for S14) and the readings of the state: url (S1 and the states after it), exited and remaining (S0b) and faultLog (S12).
+ * trace (the trace state of the measurement), url (the address of the blank page that serveBlank serves, which the states of
+ * S1_STATES require) and projectRoot (the project folder of the second window of S11). plugins holds the plugin ids { tab, page } of S1,
+ * which the states of S1_STATES require. Returns { state, windows, footprints } with the windows of the state, the footprint rule
+ * (`settled`, or `at-once` for S14) and the readings of the state: url (S1 and the states after it), exited (S0b), faultLog (S12) and keyAt
+ * (S14, the instant of the key).
  */
 export async function prepareState(s, state, deps, plugins = {}) {
   if (!STATES.includes(state)) throw new Error(`the state ${state} is not one of ${STATES.join(", ")}`);
   if (S1_STATES.includes(state) && (!plugins.tab || !plugins.page)) throw new Error(`${state} prepares S1, which requires the plugins of its tab and its page`);
+  if (S1_STATES.includes(state) && typeof deps.url !== "string") throw new Error(`${state} prepares S1, which requires the address of the blank page`);
+  if (state === "S11" && typeof deps.projectRoot !== "string") throw new Error("S11 requires the folder of its second project");
   await resize(s, WINDOW_SIZE);
   const context = { state, windows: [s.window], footprints: state === "S14" ? "at-once" : "settled" };
   if (state === "S0b") {
-    await deps.applyTrace();
-    return { ...context, ...(await closeProject(s, deps)) };
+    await applyTraceOf(s, deps.trace);
+    return { ...context, ...(await closeProject(s)) };
   }
   if (state === "S0" || state === "S14") {
-    await deps.applyTrace();
+    await applyTraceOf(s, deps.trace);
     await requireLibrary(s, state);
     if (state === "S14") {
       await s.run("core.library.search.focus");
       await s.request("input.key", { key: "a", phase: "down" });
       await s.request("input.key", { key: "a", phase: "up" });
-      // S14 reads 10 seconds after the key while the caret blinks; no status marks that time.
-      await deps.sleep(KEY_READING_MS);
+      // S14 reads 10 seconds after the key while the caret blinks; no status marks that time, so the caller waits keyReadingWaitMs from keyAt.
+      context.keyAt = instant();
     }
     return context;
   }
-  context.url = await prepareS1(s, deps, plugins);
+  await prepareS1(s, deps, plugins);
+  context.url = deps.url;
   if (state === "S9") {
     const cover = await newWindow(s);
     await resize(cover, { width: WINDOW_SIZE.width + 2 * COVER_MARGIN, height: WINDOW_SIZE.height + 2 * COVER_MARGIN });
@@ -618,16 +737,16 @@ export async function prepareState(s, state, deps, plugins = {}) {
     context.windows.push(cover.window);
   } else if (state === "S11") {
     const second = await newWindow(s);
-    await second.run("core.project.open", { root: deps.projectRoot("S11") });
+    await second.run("core.project.open", { root: deps.projectRoot });
     await resize(second, WINDOW_SIZE);
     const { frame } = await s.get("host.window");
     await second.run("host.window.move", { x: frame.x + frame.width, y: frame.y });
     context.windows.push(second.window);
   } else if (state === "S12") {
-    const position = deps.logPosition();
+    const position = currentEventOffsets(s.app.configDir);
     await s.request("diagnostics.layout.fail");
     await s.run("host.window.resize", { width: WINDOW_SIZE.width - FAULT_RESIZE, height: WINDOW_SIZE.height });
-    await deps.untilFaultLine(position);
+    await untilFaultLine(s, position);
     await resize(s, WINDOW_SIZE);
     context.faultLog = position;
   } else if (state === "S15") {
@@ -826,77 +945,92 @@ export function parseOptions(args) {
   };
 }
 
-/** Runs a command and resolves to the process result {status, stdout, stderr, error} that launchdServices reads. */
-export function execute(command, args) {
-  return new Promise((resolve) => {
-    execFile(command, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-      resolve({ status: error ? error.code : 0, stdout, stderr, error: error && typeof error.code !== "number" ? error : undefined });
-    });
-  });
-}
-
-/** The standard output of a command that must succeed; a failure names the command and its output. */
-async function outputOf(run, command, args) {
-  const result = await run(command, args);
+/** The standard output of the process result of a command that must succeed; a failure names the command and its output. */
+export function outputOf(command, args, result) {
   if (result.error) throw new Error(`${command} ${args.join(" ")}: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${result.status}: ${String(result.stderr).trim()}`);
   return result.stdout;
 }
 
-/** The CPU seconds of every process, as a map from pid to seconds, from ps -axo pid=,time=; run is the executor of execute. */
-export async function readCpuSeconds(run) {
-  return parseCpuSamples(await outputOf(run, "ps", ["-axo", "pid=,time="]));
+/** The standard output of a command that must succeed. */
+async function toolOutput(command, args) {
+  return outputOf(command, args, await execute(command, args));
 }
 
-/** The running WebKit GPU and networking processes of every application, as { pid, role }. pgrep exits with 1 when none runs. */
-async function webkitPids(run) {
+/** The CPU seconds of every process, as a map from pid to seconds, from the result of ps -axo pid=,time=. */
+export function cpuSecondsOf(result) {
+  return parseCpuSamples(outputOf("ps", ["-axo", "pid=,time="], result));
+}
+
+/** The CPU seconds of every process, as a map from pid to seconds, read with ps -axo pid=,time=. */
+export async function readCpuSeconds() {
+  return cpuSecondsOf(await execute("ps", ["-axo", "pid=,time="]));
+}
+
+/** The running WebKit GPU or networking processes (`name` GPU or Networking) of every application, as { pid, role }, from the result of pgrep -f com.apple.WebKit.<name>. pgrep exits with 1 when none runs. */
+export function webkitPidsOf(name, result) {
+  if (result.status === 1) return [];
+  if (result.error || result.status !== 0) throw new Error(`pgrep failed: ${result.error?.message ?? String(result.stderr).trim()}`);
+  return result.stdout.split("\n").filter((line) => line !== "").map((pid) => ({ pid: Number(pid), role: `webkit ${name.toLowerCase()}` }));
+}
+
+/** The running WebKit GPU and networking processes of every application, as { pid, role }. */
+async function webkitPids() {
   const found = [];
-  for (const name of ["GPU", "Networking"]) {
-    const result = await run("pgrep", ["-f", `com.apple.WebKit.${name}`]);
-    if (result.status === 1) continue;
-    if (result.error || result.status !== 0) throw new Error(`pgrep failed: ${result.error?.message ?? String(result.stderr).trim()}`);
-    for (const pid of result.stdout.split("\n").filter((line) => line !== "")) found.push({ pid: Number(pid), role: `webkit ${name.toLowerCase()}` });
-  }
+  for (const name of ["GPU", "Networking"]) found.push(...webkitPidsOf(name, await execute("pgrep", ["-f", `com.apple.WebKit.${name}`])));
   return found;
 }
 
 /** The host.window reply of a window through sok. */
-async function windowStatus(text, sok, configDir, window) {
-  return JSON.parse(await text(sok, ["status", "host.window", "--window", window, "--config-dir", configDir]));
+async function windowStatus(sok, configDir, window) {
+  return JSON.parse(await toolOutput(sok, ["status", "host.window", "--window", window, "--config-dir", configDir]));
+}
+
+/**
+ * The host process of the application of the configuration folder configDir, read from the process table `table`. A missing or duplicate
+ * host is an error that names the data folder. realPath is the real path of the data folder.
+ */
+export function applicationHost({ table, configDir, realPath }) {
+  try {
+    return hostProcess(table, configDir, realPath);
+  } catch (error) {
+    throw new Error(`host of ${configDir}: ${error.message}`);
+  }
 }
 
 /**
  * The processes of the application of the configuration folder configDir, each as { role, pid, attribution }: its host, the process whose
  * command line has --config-dir configDir, its sidecars, the processes whose executable is under configDir/sidecars/, and the WebKit
- * GPU, networking and WebContent services of the launchd domain of its host. A missing or duplicate host and a launchd domain that
- * cannot be read are errors. run(command, args) resolves to {status, stdout, stderr, error}, and realpath(path) is the real path.
+ * GPU, networking and WebContent services of the launchd domain of its host (`webkit`, the attributed rows of attributeWebKit).
  */
-export async function applicationRows({ configDir, run = execute, realpath = realpathSync }) {
-  const table = parseProcessTable(await outputOf(run, "ps", ["-axww", "-o", "pid=,command="]));
-  const realPath = realpath(configDir);
-  let host;
-  try {
-    host = hostProcess(table, configDir, realPath);
-  } catch (error) {
-    throw new Error(`host of ${configDir}: ${error.message}`);
-  }
-  const webkit = await attributeWebKit([{ configDir, pid: host.pid }], run);
-  if (webkit.errors.length > 0) throw new Error(webkit.errors.join("; "));
+export function applicationRowsOf({ table, configDir, realPath, host, webkit }) {
   return [
     { role: "host", pid: host.pid, attribution: "config-dir argument" },
     ...sidecarProcesses(table, configDir, realPath),
-    ...webkit.attributed.map(({ role, pid, attribution }) => ({ role, pid, attribution })),
+    ...webkit.map(({ role, pid, attribution }) => ({ role, pid, attribution })),
   ];
 }
 
 /**
- * The processes of the application of configDir with its windows: the rows of applicationRows and the page and document rows of each
- * window (windowRows) from statuses, the host.window replies of its windows, each carrying `window`, its identifier. A page or document
- * process that host.window reports is a row of its window, so the WebKit row of the launchd domain with the same pid is left out. The
- * errors are those of windowRows.
+ * The processes of the application of the configuration folder configDir, read with ps and launchctl (applicationRowsOf). A missing or
+ * duplicate host and a launchd domain that cannot be read are errors.
  */
-export async function windowApplicationRows({ configDir, statuses, run = execute, realpath = realpathSync }) {
-  const listed = await applicationRows({ configDir, run, realpath });
+export async function applicationRows({ configDir }) {
+  const table = parseProcessTable(await toolOutput("ps", ["-axww", "-o", "pid=,command="]));
+  const realPath = realpathSync(configDir);
+  const host = applicationHost({ table, configDir, realPath });
+  const webkit = await attributeWebKit([{ configDir, pid: host.pid }]);
+  if (webkit.errors.length > 0) throw new Error(webkit.errors.join("; "));
+  return applicationRowsOf({ table, configDir, realPath, host, webkit: webkit.attributed });
+}
+
+/**
+ * The processes of the application of configDir with its windows: the rows `listed` of applicationRowsOf and the page and document rows
+ * of each window (windowRows) from statuses, the host.window replies of its windows, each carrying `window`, its identifier. A page or
+ * document process that host.window reports is a row of its window, so the WebKit row of the launchd domain with the same pid is left
+ * out. The errors are those of windowRows.
+ */
+export function windowRowsOf({ configDir, listed, statuses }) {
   const shown = [];
   const errors = [];
   for (const status of statuses) {
@@ -915,19 +1049,24 @@ export async function windowApplicationRows({ configDir, statuses, run = execute
   };
 }
 
+/** The processes of the application of configDir with its windows (applicationRows and windowRowsOf). */
+export async function windowApplicationRows({ configDir, statuses }) {
+  return windowRowsOf({ configDir, listed: await applicationRows({ configDir }), statuses });
+}
+
 /** The windows of one application with the host.window reply of each window, which carries `window`, its identifier. */
-async function windowStatuses(configDir, sok, errors, text) {
+async function windowStatuses(configDir, sok, errors) {
   const statuses = [];
   let windows = [];
   try {
-    windows = JSON.parse(await text(sok, ["windows", "--config-dir", configDir])).map(({ window }) => window);
+    windows = JSON.parse(await toolOutput(sok, ["windows", "--config-dir", configDir])).map(({ window }) => window);
   } catch (error) {
     errors.push(`windows of ${configDir}: ${error.message}`);
   }
   for (const window of windows) {
     let status;
     try {
-      status = await windowStatus(text, sok, configDir, window);
+      status = await windowStatus(sok, configDir, window);
     } catch (error) {
       errors.push(`page of window ${window} of ${configDir}: ${error.message}`);
       continue;
@@ -937,84 +1076,20 @@ async function windowStatuses(configDir, sok, errors, text) {
   return { statuses, windows };
 }
 
+/** The rows of the WebKit processes `found` that no application claims, as unattributed. `claimed` is the set of the pids that applications claim. */
+export function unattributedRows(found, claimed) {
+  return found.filter(({ pid }) => !claimed.has(pid)).map(({ pid, role }) => ({ role, pid, attribution: "unattributed" }));
+}
+
 /**
- * Measures the processes of the applications of configDirs. footprints is `settled` (read after the settle rule of G3) or `at-once`;
- * settleAfter also reads the settled footprints after the span as bytesAfter. span() is the interval of the CPU readings, by default
- * INTERVAL seconds; marks.before() and marks.after() run right before the first and right after the last CPU reading, and their results
- * are returned as marks. The peak footprint of each process is read after the last CPU reading. run(command, args), sleep(ms) and
- * realpath(path) are the process executor, the timer and the real path, which the tests replace.
+ * The CPU figures of the measured rows over `elapsed` seconds from the CPU readings cpuBefore and cpuAfter (Map pid -> seconds): sets
+ * cpuSeconds and cpuPercent of each row, null for a row that has an error. A process of no application (`foreign`, a set of pids) that is
+ * not in both readings has ended and leaves the list without an error; any other missing process, and a decrease of the CPU time, is an
+ * error that names the process. Returns { errors, ended } with the pids that ended.
  */
-export async function measureApps({
-  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks, beforeCpu, afterCpu,
-  run = execute, sleep = delay, realpath = realpathSync,
-}) {
-  if (footprints !== "settled" && footprints !== "at-once") throw new Error(`footprints must be settled or at-once, not ${JSON.stringify(footprints)}`);
+export function cpuFigures({ measured, foreign, cpuBefore, cpuAfter, elapsed }) {
   const errors = [];
-  const text = (command, args) => outputOf(run, command, args);
-  const apps = [];
-  const claimed = new Set();
-  for (const configDir of configDirs) {
-    const shown = await windowStatuses(configDir, sok, errors, text);
-    const { rows, errors: rowErrors } = await windowApplicationRows({ configDir, statuses: shown.statuses, run, realpath });
-    errors.push(...rowErrors);
-    // The WebKit GPU and networking processes of the launchd domain belong to the application, so pgrep does not list them as unattributed.
-    for (const row of rows.filter(({ attribution }) => attribution === "launchd domain")) claimed.add(row.pid);
-    apps.push({ configDir, rows, windows: shown.windows });
-  }
-  const unattributed = (await webkitPids(run))
-    .filter(({ pid }) => !claimed.has(pid))
-    .map(({ pid, role }) => ({ role, pid, attribution: "unattributed" }));
-
-  const groups = [...apps.map((app) => ({ name: app.configDir, rows: app.rows })), { name: "unattributed", rows: unattributed }];
-  const measured = groups.flatMap(({ name, rows }) => rows.map((row) => ({ row, where: `${name} ${row.role} (pid ${row.pid})` })));
-  const readCpu = () => readCpuSeconds(run);
-  // A process of no application that ends during the measurement is no failure of the application and leaves the list.
-  const foreign = new Set(unattributed.map(({ pid }) => pid));
   const ended = new Set();
-  // A process whose footprint cannot be read is reported once, whatever the number of readings.
-  const failures = new Set();
-  // A process of no application whose footprint cannot be read is judged by the process table at the end of the measurement: footprint
-  // stops finding a process that ends before the process table drops it.
-  const unread = new Map();
-  const footprintOf = async ({ row, where }) => {
-    if (ended.has(row.pid)) return null;
-    try {
-      return await readFootprint(row.pid, run);
-    } catch (error) {
-      if (!foreign.has(row.pid)) failures.add(`${where}: ${error.message}`);
-      else if (!unread.has(row.pid)) unread.set(row.pid, `${where}: ${error.message}`);
-      return null;
-    }
-  };
-  const readFootprints = async () => {
-    const values = new Map();
-    for (const entry of measured) {
-      const reading = await footprintOf(entry);
-      if (reading !== null) values.set(entry.row.pid, reading.bytes);
-    }
-    return values;
-  };
-  const readFrames = async () => {
-    const frames = [];
-    for (const app of apps) for (const window of app.windows) frames.push((await windowStatus(text, sok, app.configDir, window)).frames);
-    return frames;
-  };
-  const first = footprints === "settled"
-    ? await settledFootprints({ readFootprints, readFrames, sleep })
-    : { footprints: await readFootprints() };
-  for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
-
-  const before = marks ? await marks.before() : undefined;
-  if (beforeCpu) await beforeCpu();
-  const cpuBefore = await readCpu();
-  const started = performance.now();
-  if (span) await span();
-  // The fixed sampling interval is the measurement itself; no status notification marks the end of a CPU interval.
-  else await sleep(interval * 1000);
-  const cpuAfter = await readCpu();
-  if (afterCpu) await afterCpu();
-  const elapsed = span ? (performance.now() - started) / 1000 : interval;
-  const after = marks ? await marks.after() : undefined;
   for (const { row, where } of measured) {
     if (!cpuBefore.has(row.pid) || !cpuAfter.has(row.pid)) {
       if (foreign.has(row.pid)) {
@@ -1035,19 +1110,113 @@ export async function measureApps({
       row.cpuPercent = null;
     }
   }
+  return { errors, ended };
+}
+
+/**
+ * The judgement of the footprint readings that failed: `unread` is the Map pid -> failure of the processes of no application whose
+ * footprint could not be read, and `last` is the process table of the end of the measurement (a Map pid -> seconds). footprint stops
+ * finding a process that ends before the process table drops it, so a process that is in the table still runs and its failure is an
+ * error, and a process that is not in it ended. Returns { failures, ended }.
+ */
+export function unreadOutcome({ unread, last }) {
+  const failures = [];
+  const ended = [];
+  for (const [pid, failure] of unread) {
+    if (last.has(pid)) failures.push(failure);
+    else ended.push(pid);
+  }
+  return { failures, ended };
+}
+
+/**
+ * Measures the processes of the applications of configDirs. footprints is `settled` (read after the settle rule of G3) or `at-once`;
+ * settleAfter also reads the settled footprints after the span as bytesAfter. span() is the interval of the CPU readings, by default
+ * INTERVAL seconds (intervalWaitMs from the instant after the first CPU reading); marks.before() and marks.after() run right before the
+ * first and right after the last CPU reading, and their results are returned as marks. The peak footprint of each process is read after
+ * the last CPU reading. The processes are read with ps, pgrep, launchctl, footprint and sok, and the judgements are the functions of
+ * their results above.
+ */
+export async function measureApps({
+  sok, configDirs, interval, footprints = "settled", settleAfter = false, span, marks, beforeCpu, afterCpu,
+}) {
+  if (footprints !== "settled" && footprints !== "at-once") throw new Error(`footprints must be settled or at-once, not ${JSON.stringify(footprints)}`);
+  const errors = [];
+  const apps = [];
+  const claimed = new Set();
+  for (const configDir of configDirs) {
+    const shown = await windowStatuses(configDir, sok, errors);
+    const { rows, errors: rowErrors } = await windowApplicationRows({ configDir, statuses: shown.statuses });
+    errors.push(...rowErrors);
+    // The WebKit GPU and networking processes of the launchd domain belong to the application, so pgrep does not list them as unattributed.
+    for (const row of rows.filter(({ attribution }) => attribution === "launchd domain")) claimed.add(row.pid);
+    apps.push({ configDir, rows, windows: shown.windows });
+  }
+  const unattributed = unattributedRows(await webkitPids(), claimed);
+
+  const groups = [...apps.map((app) => ({ name: app.configDir, rows: app.rows })), { name: "unattributed", rows: unattributed }];
+  const measured = groups.flatMap(({ name, rows }) => rows.map((row) => ({ row, where: `${name} ${row.role} (pid ${row.pid})` })));
+  // A process of no application that ends during the measurement is no failure of the application and leaves the list.
+  const foreign = new Set(unattributed.map(({ pid }) => pid));
+  const ended = new Set();
+  // A process whose footprint cannot be read is reported once, whatever the number of readings.
+  const failures = new Set();
+  // A process of no application whose footprint cannot be read is judged by the process table at the end of the measurement
+  // (unreadOutcome).
+  const unread = new Map();
+  const footprintOf = async ({ row, where }) => {
+    if (ended.has(row.pid)) return null;
+    try {
+      return await readFootprint(row.pid);
+    } catch (error) {
+      if (!foreign.has(row.pid)) failures.add(`${where}: ${error.message}`);
+      else if (!unread.has(row.pid)) unread.set(row.pid, `${where}: ${error.message}`);
+      return null;
+    }
+  };
+  const readFootprints = async () => {
+    const values = new Map();
+    for (const entry of measured) {
+      const reading = await footprintOf(entry);
+      if (reading !== null) values.set(entry.row.pid, reading.bytes);
+    }
+    return values;
+  };
+  const readFrames = async () => {
+    const frames = [];
+    for (const app of apps) for (const window of app.windows) frames.push((await windowStatus(sok, app.configDir, window)).frames);
+    return frames;
+  };
+  const first = footprints === "settled"
+    ? await settledFootprints({ readFootprints, readFrames })
+    : { footprints: await readFootprints() };
+  for (const { row } of measured) row.bytes = first.footprints.get(row.pid) ?? null;
+
+  const before = marks ? await marks.before() : undefined;
+  if (beforeCpu) await beforeCpu();
+  const cpuBefore = await readCpuSeconds();
+  const startedAt = instant();
+  if (span) await span();
+  // The fixed sampling interval is the measurement itself; no status notification marks the end of a CPU interval.
+  else await delay(intervalWaitMs({ startedAt, now: instant(), interval }));
+  const cpuAfter = await readCpuSeconds();
+  if (afterCpu) await afterCpu();
+  const elapsed = span ? (instant() - startedAt) / 1000 : interval;
+  const after = marks ? await marks.after() : undefined;
+  const figures = cpuFigures({ measured, foreign, cpuBefore, cpuAfter, elapsed });
+  errors.push(...figures.errors);
+  for (const pid of figures.ended) ended.add(pid);
   if (settleAfter) {
-    const later = await settledFootprints({ readFootprints, readFrames, sleep });
+    const later = await settledFootprints({ readFootprints, readFrames });
     for (const { row } of measured) row.bytesAfter = later.footprints.get(row.pid) ?? null;
   }
   for (const entry of measured) {
     entry.row.peakBytes = (await footprintOf(entry))?.peakBytes ?? null;
   }
   if (unread.size > 0) {
-    const last = await readCpu();
-    for (const [pid, failure] of unread) {
-      if (last.has(pid)) failures.add(failure);
-      else ended.add(pid);
-    }
+    const outcome = unreadOutcome({ unread, last: await readCpuSeconds() });
+    for (const failure of outcome.failures) failures.add(failure);
+    for (const pid of outcome.ended) ended.add(pid);
   }
   errors.push(...failures);
   const remaining = unattributed.filter(({ pid }) => !ended.has(pid));
@@ -1063,29 +1232,6 @@ export async function measureApps({
 
 /** The event catalog of this repository with the catalogs of the sidecars installed in the configuration folder. */
 const CATALOG = fileURLToPath(new URL("../docs/spec/events.json", import.meta.url));
-
-/** All rows of a log.query, page by page. */
-async function queryRows(client, query) {
-  const rows = [];
-  for (let after; ;) {
-    const page = await client.request("log.query", after === undefined ? query : { ...query, after });
-    rows.push(...page.rows);
-    if (page.next === null) return rows;
-    after = page.next;
-  }
-}
-
-/** The greatest seq of each process of the log now (the tail of log.query). */
-async function logTail(client) {
-  return (await client.request("log.query", { channel: "all", order: "desc", limit: 1 })).tail;
-}
-
-/** The name `<role>-<boot>` of the host process pid among the processes of a log tail. */
-function hostName(tail, pid) {
-  const names = Object.keys(tail).filter((name) => name.startsWith("host-") && name.endsWith(`-${pid}`));
-  if (names.length !== 1) throw new Error(`the log tail names ${names.length} processes of the host ${pid}: ${Object.keys(tail).join(", ")}`);
-  return names[0];
-}
 
 /** The state of one window before or after the CPU readings: occluded, the frame counters and the runtime figures of diagnostics.objects. */
 async function windowMark(s) {
@@ -1115,50 +1261,33 @@ async function measureOptions(options) {
       s.window = windows[0].window;
       sessions.push({ configDir, client, s, windows: windows.map(({ window }) => window) });
     }
-    const traceOf = ({ s, configDir }) => () => applyTrace((name, params) => s.run(name, params), trace, configDir, { ended: s.client.ended });
     let context = null;
     if (state !== null) {
-      const [{ configDir, client, s }] = sessions;
-      const catalog = catalogOf(JSON.parse(readFileSync(CATALOG, "utf8")), configDir);
-      context = await prepareState(s, state, {
-        applyTrace: traceOf(sessions[0]),
-        serve: async () => {
-          const server = createServer((request, response) => {
-            response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
-            response.end("<!doctype html><title>blank</title>");
-          });
-          await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-          cleanups.push(() => new Promise((resolve) => server.close(resolve)));
-          return `http://127.0.0.1:${server.address().port}/blank`;
-        },
-        projectRoot: (name) => {
-          // The project folder of a second window lives in the disposable configuration folder of the measured application.
-          const root = join(configDir, "app-usage-projects", name);
-          mkdirSync(root, { recursive: true });
-          return root;
-        },
-        logPosition: () => currentEventOffsets(configDir),
-        untilFaultLine: (position) => untilEventLine(configDir, position, (line) => faultErrorCount([line]) === 1,
-          { catalog, records: ["host.record.error", "workbench.record.error"], ended: client.ended }),
-        remainingWebKit: async () => {
-          const remaining = [];
-          for (const { role, pid } of (await applicationRows({ configDir })).filter(({ attribution }) => attribution === "launchd domain")) {
-            remaining.push({ role, pid, bytes: (await readFootprint(pid, execute)).bytes });
-          }
-          return remaining;
-        },
-        sleep: delay,
-      }, plugins);
+      const [{ configDir, s }] = sessions;
+      const deps = { trace };
+      if (S1_STATES.includes(state)) {
+        const blank = await serveBlank();
+        cleanups.push(blank.close);
+        deps.url = blank.url;
+      }
+      if (state === "S11") {
+        // The project folder of a second window lives in the disposable configuration folder of the measured application.
+        deps.projectRoot = join(configDir, "app-usage-projects", "S11");
+        mkdirSync(deps.projectRoot, { recursive: true });
+      }
+      context = await prepareState(s, state, deps, plugins);
+      if (state === "S14") await delay(keyReadingWaitMs({ keyAt: context.keyAt, now: instant() }));
+      if (state === "S0b") {
+        context.remaining = [];
+        for (const { role, pid } of (await applicationRows({ configDir })).filter(({ attribution }) => attribution === "launchd domain")) {
+          context.remaining.push({ role, pid, bytes: (await readFootprint(pid)).bytes });
+        }
+      }
       sessions[0].windows = context.windows;
     } else {
-      for (const session of sessions) await traceOf(session)();
+      for (const { s } of sessions) await applyTraceOf(s, trace);
     }
     const windowSessions = sessions.flatMap(({ s, windows }) => windows.map((window) => s.on(window)));
-    const frames = async () => {
-      const values = [];
-      for (const s of windowSessions) values.push((await s.get("host.window")).frames);
-      return values;
-    };
     const marksOf = async () => {
       const marks = [];
       for (const { configDir, s, windows } of sessions) {
@@ -1170,12 +1299,13 @@ async function measureOptions(options) {
       return marks;
     };
     for (const mark of await marksOf()) requireOcclusion(state, mark.windows);
-    const idleResult = idle ? await waitIdle({ sessions: windowSessions, frames, sleep: delay }) : null;
+    const idleResult = idle ? await waitIdle({ sessions: windowSessions }) : null;
     let lines;
+    let markedAt;
     let recordsOverCpu;
     const settled = !idle ? {} : {
       beforeCpu: async () => {
-        await delay(COUNT_WAIT_MS);
+        await delay(countWaitMs({ markedAt, now: instant() }));
         lines = configDirs.map(logLineCounts);
       },
       afterCpu: async () => {
@@ -1183,30 +1313,15 @@ async function measureOptions(options) {
       },
     };
     const measure = (extra) => measureApps({
-      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: marksOf, after: marksOf }, ...settled, ...extra,
+      sok, configDirs, interval, footprints: context?.footprints ?? "settled", marks: { before: async () => { const marks = await marksOf(); markedAt = instant(); return marks; }, after: marksOf }, ...settled, ...extra,
     });
     let measurement;
     let gesture;
     if (step === "pointer") {
-      const [{ configDir, client, s }] = sessions;
-      const pid = client.endpoint.pid;
-      const pointer = await measurePointer({
-        s,
-        measure: ({ span }) => measure({ span, settleAfter: true }),
-        frameRecords: () => applyTrace((name, params) => s.run(name, params), FRAME_RECORDS, configDir, { ended: s.client.ended }),
-        restore: traceOf(sessions[0]),
-        tail: () => logTail(client),
-        records: async (since) => {
-          const name = hostName(since, pid);
-          const own = (rows) => rows.filter((row) => `${row.role}-${row.boot}` === name).map((row) => row.event);
-          const records = [];
-          for (const event of [U7_EVENTS.frame, U7_EVENTS.step]) records.push(...own(await queryRows(client, { channel: "all", event, since })));
-          const dropped = own(await queryRows(client, { channel: "all", event: "log.dropped", since }));
-          return { records, dropped, fromSeq: since[name], toSeq: (await logTail(client))[name] };
-        },
-      });
-      measurement = pointer.move;
-      gesture = pointer.gesture;
+      const [{ s }] = sessions;
+      const status = await s.get("host.window");
+      measurement = await measure({ span: () => movePointer(s, pointerPath(status)), settleAfter: true });
+      gesture = await pointerGesture({ s, status, trace });
     } else {
       measurement = await measure({});
     }

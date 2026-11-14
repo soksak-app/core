@@ -243,7 +243,7 @@ test("visibility: ancestor with display:none hides element", () => {
 
 test("visibility: normal element is visible", () => {
   const f = fixture();
-  // The element has the width and height received from the mock getBoundingClientRect.
+  // The element has the width and height that the layout data of the fixture gives getBoundingClientRect.
   const insets = regionInsets(f.element, f.window);
   assert.equal(insets.visible, true, "normal element with size is visible");
 });

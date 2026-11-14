@@ -1,0 +1,30 @@
+{
+  "name": "window-check-start-named-plugin",
+  "description": "A start layout whose focused card holds an installed tab of the start plugin keeps that tab; the other card gets a tab of the placeholder plugin, and the placeholder closes after the new tab is added.",
+  "replay": false,
+  "reason": "The case plays the trace of the start state of a check on a workbench; the replay cannot arrange the layout of the workbench.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"id":"t1","plugin":"named"}]},{"id":"lower","focused":false,"active":"b1","tabs":[{"id":"b1","plugin":"starter-b"}]}]}}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":[{"kind":"tab","surface":"t1","plugin":"named","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status named.view"]},{"kind":"tab","surface":"b1","plugin":"starter-b","visible":true,"placeholder":"missing","status":{"phase":"loading"},"exposes":[]},{"kind":"section","surface":"s1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]}]}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"command.run","params":{"window":"main","name":"core.card.add-tab","params":{"card":"lower","plugin":"startplugin"}}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"tab":"added-1"}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"command.run","params":{"window":"main","name":"core.tab.close","params":{"tab":"b1"}}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":{"cards":[{"id":"left","fixed":true,"focused":false,"active":null},{"id":"upper","focused":true,"active":"t1","tabs":[{"id":"t1","plugin":"named"}]},{"id":"lower","focused":false,"active":"added-1","tabs":[{"id":"added-1","plugin":"startplugin"}]}]}}},
+    {"send":{"jsonrpc":"2.0","id":6,"method":"status.watch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":6,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":7,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":7,"result":[{"kind":"tab","surface":"t1","plugin":"named","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status named.view"]},{"kind":"section","surface":"s1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]},{"kind":"tab","surface":"added-1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status startplugin.view"]}]}},
+    {"send":{"jsonrpc":"2.0","id":8,"method":"status.unwatch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":8,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":9,"method":"status.watch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":9,"result":null}},
+    {"send":{"jsonrpc":"2.0","id":10,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":10,"result":[{"kind":"tab","surface":"t1","plugin":"named","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status named.view"]},{"kind":"section","surface":"s1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":[]},{"kind":"tab","surface":"added-1","plugin":"startplugin","visible":true,"placeholder":null,"status":{"phase":"ready"},"exposes":["status startplugin.view"]}]}},
+    {"send":{"jsonrpc":"2.0","id":11,"method":"status.unwatch","params":{"window":"main","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":11,"result":null}}
+  ]
+}

@@ -2019,7 +2019,7 @@ func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 	}
 }
 
-// replaceService is a fake persistent service (a message of a surface has no operation at its top level) that the host replaces: its first connection reports the old version,
+// replaceService is the peer of the host that a persistent service has on its endpoint socket (a message of a surface has no operation at its top level): the host replaces it. Its first connection reports the old version,
 // acknowledges close-owner and shutdown and then ends; its second connection reports the installed version.
 type replaceService struct {
 	listener   net.Listener
@@ -2029,7 +2029,7 @@ type replaceService struct {
 	// afterShutdown runs after the service answered shutdown, while its process still runs.
 	process *exec.Cmd
 	// folder holds the executable that the host starts for the installed service: it announces the endpoint of this
-	// fake service and keeps a process of its own.
+	// service and keeps a process of its own.
 	folder    string
 	endsAfter time.Duration
 	// hold, when set, keeps the first service from answering close-owner until it is closed; closeOwner receives a

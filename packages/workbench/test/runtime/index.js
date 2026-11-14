@@ -1,8 +1,11 @@
 // The runtime for workbench tests. It has no native host unless a test selects the page-wire case that answers the calls of the page.
 import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { openPageWire } from "./page-wire.js";
+import { createPageClock } from "./page-clock.js";
 
 export let host = null;
+// The clock that the event batcher of the page reads; a test moves it with `clock.advance(ms)`.
+export const clock = createPageClock();
 export const page = null;
 
 export const openStore = () => {

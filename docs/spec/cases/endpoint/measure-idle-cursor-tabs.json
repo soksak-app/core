@@ -1,0 +1,18 @@
+{
+  "name": "measure-idle-cursor-tabs",
+  "description": "The idle wait reads the cursor status of each tab whose plugin exposes it, not of the tabs without it or of a section, and then the frames of the window.",
+  "replay": false,
+  "reason": "The replies are the recorded replies of the host for one preparation or reading of the measurement; the replay cannot arrange the application state that they describe.",
+  "steps": [
+    {"send":{"jsonrpc":"2.0","id":1,"method":"status.get","params":{"window":"w1","name":"core.surfaces"}}},
+    {"reply":{"jsonrpc":"2.0","id":1,"result":[{"kind":"tab","surface":"tab-1","plugin":"probeinput","exposes":["status probeinput.screen","status probeinput.cursor"]},{"kind":"tab","surface":"tab-3","plugin":"rasterprobe","exposes":["status rasterprobe.cursor"]},{"kind":"tab","surface":"tab-2","plugin":"probeplain","exposes":["status probeplain.location"]},{"kind":"tab","surface":"tab-4","plugin":"probeunload","exposes":["status probeinput.cursor"]},{"kind":"section","surface":"sec-1","plugin":"probecontributor","exposes":["status probecontributor.cursor"]}]}},
+    {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"w1","name":"probeinput.cursor","surface":"tab-1"}}},
+    {"reply":{"jsonrpc":"2.0","id":2,"result":{"idleTimeout":500}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.get","params":{"window":"w1","name":"rasterprobe.cursor","surface":"tab-3"}}},
+    {"reply":{"jsonrpc":"2.0","id":3,"result":{"idleTimeout":700}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"status.get","params":{"window":"w1","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":4,"result":{"frame":{"x":100,"y":50,"width":1200,"height":788},"content":{"x":0,"y":28,"width":1200,"height":760},"occluded":false,"pageProcess":null,"frames":null,"commandBuffers":338,"settled":true,"documents":[{"surface":"tab-2","document":"doc-1","process":902}],"regions":[{"surface":"tab-1","name":"screen","presentedFrames":120}]}}},
+    {"send":{"jsonrpc":"2.0","id":5,"method":"status.get","params":{"window":"w1","name":"host.window"}}},
+    {"reply":{"jsonrpc":"2.0","id":5,"result":{"frame":{"x":100,"y":50,"width":1200,"height":788},"content":{"x":0,"y":28,"width":1200,"height":760},"occluded":false,"pageProcess":null,"frames":null,"commandBuffers":338,"settled":true,"documents":[{"surface":"tab-2","document":"doc-1","process":902}],"regions":[{"surface":"tab-1","name":"screen","presentedFrames":120}]}}}
+  ]
+}

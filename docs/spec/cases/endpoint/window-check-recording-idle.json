@@ -1,0 +1,9 @@
+{
+  "name": "window-check-recording-idle",
+  "description": "A session that sends no request.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "steps": [
+
+  ]
+}

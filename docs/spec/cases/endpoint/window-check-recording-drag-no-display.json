@@ -1,0 +1,16 @@
+{
+  "name": "window-check-recording-drag-no-display",
+  "description": "A captured drag of a window on no display asks for no recording and sends no stop.",
+  "replay": false,
+  "reason": "The case sends capture requests that need a display and a recording folder of the host, so the replay cannot arrange them.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.get", "params": {"window": "main", "name": "host.window"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"refreshRate": null}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "diagnostics.drag", "params": {"window": "main", "axis": "y", "line": 1, "dx": 0, "dy": 10, "ms": 100, "times": 1, "capture": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": {"took": 100, "asked": 100}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "diagnostics.window.draw-covered", "params": {"window": "main", "draw": false}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": null}}
+  ]
+}

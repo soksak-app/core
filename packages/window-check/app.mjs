@@ -4,6 +4,7 @@
 // <tmpdir>/soksak-check-<app>`, and the harness connects through the endpoint.json of that folder. The specification is
 // in docs/spec/endpoint.md and docs/spec/exposure.md.
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { appendFileSync, closeSync, existsSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { loadavg, tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -275,9 +276,10 @@ function afterSession(t, finish, dispose) {
   finishes.push({ finish, dispose });
 }
 
-export async function open(t, app, { clipboard = false, inactive = false } = {}) {
+export async function open(t, app, { clipboard = false, inactive = false, pasteboard: pasteboardName = null } = {}) {
   if (typeof inactive !== "boolean") throw new TypeError("inactive must be a boolean");
   if (typeof clipboard !== "boolean") throw new TypeError("clipboard must be a boolean");
+  if (pasteboardName !== null && typeof pasteboardName !== "string") throw new TypeError("pasteboard must be the name of a pasteboard or null");
   if (!requiredApps(process.env).includes(app.name)) return null;
   if (!existsSync(app.binary)) {
     throw new Error(
@@ -332,12 +334,12 @@ export async function open(t, app, { clipboard = false, inactive = false } = {})
     session.eventBoot = sessionEventBoot(app.configDir, client.endpoint.pid);
     session.recordingsBefore = recordingFolders(app.configDir);
     if (clipboard) {
-      const pasteboard = readPasteboard();
+      const pasteboard = readPasteboard(pasteboardName);
       session.cleanup(() => {
         const { items, skipped } = restorableItems(pasteboard);
         for (const line of skipped) t.diagnostic(`${app.name}: pasteboard ${line}`);
-        const written = writePasteboard(items);
-        const failure = restoreFailure(items, written, readPasteboard());
+        const written = writePasteboard(items, pasteboardName);
+        const failure = restoreFailure(items, written, readPasteboard(pasteboardName));
         if (failure !== null) throw new Error(`${app.name}: the pasteboard after the check differs from before it: ${failure}`);
       });
     }
@@ -566,6 +568,9 @@ export class Session {
     // The stall samples that requests of the session started after STALL_AFTER, each as a promise of {line} or {error}.
     // finishSession waits for each one and reports it, so no sample process outlives the check.
     this.stallSamples = new Set();
+    // The start of each of those samples is announced as the event "started" with the text that names its request, so a check that
+    // waits for a stall waits on the event.
+    this.stalls = new EventEmitter();
     // The display time that presented() read last; the planned length of a stop of a recording counts from it.
     this.displayed = undefined;
     // The requests of the session that have no answer yet, by a key of each request, with the text that names it. checkEnded reads
@@ -713,6 +718,7 @@ export class Session {
     other.testName = this.testName;
     other.presses = this.presses;
     other.stallSamples = this.stallSamples;
+    other.stalls = this.stalls;
     other.unanswered = this.unanswered;
     other.started = this.started;
     other.window = window;
@@ -748,7 +754,10 @@ export class Session {
       throw error;
     }).finally(() => this.unanswered.delete(key));
     return whilePending(answer, what, sample, (text) => this.step(text),
-      (started) => this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error }))),
+      (started) => {
+        this.stallSamples.add(started.then((line) => ({ line }), (error) => ({ error })));
+        this.stalls.emit("started", what);
+      },
       plannedLength(method, params, this.displayed), this.stallAfter);
   }
 
@@ -1270,7 +1279,7 @@ export function whilePending(promise, what, sample, report, hold, planned = 0, a
         throw new Error(line);
       },
     ));
-  }, stallDeadline(started, planned, after) - performance.now());
+  }, Math.max(0, stallDeadline(started, planned, after) - performance.now()));
   return promise.finally(() => clearTimeout(stall));
 }
 

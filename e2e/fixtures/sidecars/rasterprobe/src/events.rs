@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde_json::{Map, Value, json};
 
-use crate::service::{Class, Level, Log};
+use crate::service::{Class, Level};
 
 unsafe extern "C" {
     /// The monotonic clock of docs/spec/logging.md#event (`CLOCK_UPTIME_RAW` on macOS) in nanoseconds.
@@ -249,8 +249,9 @@ impl EventLog {
     }
 }
 
-impl Log for EventLog {
-    fn event(&self, level: Level, class: Class, event: &str, surface: Option<&str>, session: Option<&str>, cids: &[String], fields: Value) {
+impl EventLog {
+    #[allow(clippy::too_many_arguments)]
+    pub fn event(&self, level: Level, class: Class, event: &str, surface: Option<&str>, session: Option<&str>, cids: &[String], fields: Value) {
         // default: a lock that a panicking thread poisoned still holds the counters and files, which stay usable.
         let mut inner = self.inner.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         self.refresh(&mut inner);

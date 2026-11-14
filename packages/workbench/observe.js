@@ -21,7 +21,8 @@ import { host } from "@soksak/runtime";
 import { currentGrid, surfaceInput } from "./plane.js";
 
 // Writes the observations that the ResizeObserver loop deferred to the application log (G1.4-115). It is replaced before the plane and the regions create observers.
-watchResizeLoop(globalThis, log);
+// A window without a ResizeObserver delivers no observation, so it has no loop to record; the view of the plane reports that state as its `observation` (SoksakView).
+if (typeof globalThis.ResizeObserver === "function") watchResizeLoop(globalThis, log);
 
 registry.method("diagnostics.fixture", async (params) => {
   const { prepareFixture } = await import("./diagnostic-fixture.js");

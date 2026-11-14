@@ -1,5 +1,7 @@
 // The close boundary consumes a surface's modified report; a successful save reply alone does not make a tab clean
-// (docs/spec/plugins.md#tab-reports). The surface command is controlled here while the plane and reports are real.
+// (docs/spec/plugins.md#tab-reports). The plane, the reports and the registry are real; the host answers the save command that the registry
+// forwards to the surface through the page-wire case plane-close-modified-session (docs/spec/cases/page-wire/README.md), which holds each
+// reply until the test releases it.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -8,24 +10,25 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { selectPageWire } from "@soksak/runtime";
 
 const behaviorName = "modified tabs require a clean save before tab or window closure";
 const pluginId = "fixture-close-modified";
 const saveName = `${pluginId}.save`;
 
-const deferred = () => {
-  let resolve, reject;
-  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-  return { promise, resolve, reject };
-};
+// The case is selected before the modules are imported, because the page reads the host when it imports them.
+const wire = selectPageWire("plane-close-modified-session");
+const drained = () => new Promise((resolve) => setImmediate(resolve));
 
 test(behaviorName, { timeout: 5000 }, async (t) => {
-  const dom = new JSDOM(readFileSync(new URL("../index.html", import.meta.url), "utf8"), { url: "http://localhost/" });
+  const dom = new JSDOM(readFileSync(new URL("../index.html", import.meta.url), "utf8"), { url: "http://localhost/", pretendToBeVisual: true });
   t.after(() => dom.window.close());
   dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener() {}, removeEventListener() {} });
   for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document,
     getComputedStyle: dom.window.getComputedStyle.bind(dom.window), CSS: dom.window.CSS,
     PointerEvent: dom.window.PointerEvent, MouseEvent: dom.window.MouseEvent,
+    addEventListener: dom.window.addEventListener.bind(dom.window), dispatchEvent: dom.window.dispatchEvent.bind(dom.window),
+    ErrorEvent: dom.window.ErrorEvent,
     // The plane aligns itself to the device pixel grid of this scale on every draw (device-grid.js).
     devicePixelRatio: dom.window.devicePixelRatio })) {
     const before = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -40,11 +43,8 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   style.textContent = ".card { --bw: 1px; --divider: 1px; }";
   document.head.appendChild(style);
 
-  // The page has no host in this test, so it is not native. Without a host, report writes the error to console.error and stores no record, so
-  // the test keeps this replacement of the report to observe the lines that the plane writes to the application log.
-  const logged = [];
-  const actualHost = await import("../host.js");
-  t.mock.module("../host.js", { exports: { ...actualHost, report: (line) => logged.push(line) } });
+  // JSDOM has no adoptedStyleSheets, which the page reads when it shows a modal; no sheet is adopted here.
+  Object.defineProperty(document, "adoptedStyleSheets", { value: [] });
   // The environment of the page: the plugin with the command that saves its tabs (surface.save), and the card with two tabs.
   const { installEnvironment } = await import("../environment.js");
   assert.deepEqual(installEnvironment({
@@ -63,18 +63,28 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   const { registry } = await import("../exposure.js");
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const reports = await import("../tab-reports.js");
+  const { installCoreExposure } = await import("../core-exposure.js");
   const plane = await import("../plane.js");
-  let reply = null;
-  const saves = [];
-  // The save command of a surface runs in the document of its view, and the registry of a page without a host cannot forward a command to a
-  // surface (exposureForward is a host call), so the reply of the save command is controlled here.
-  t.mock.method(registry, "run", (name, params, tab) => {
-    assert.equal(name, saveName);
-    assert.deepEqual(params, {});
-    assert.ok(reply, "save has a controlled reply");
-    saves.push(tab);
-    return reply.promise;
+  const { flushEvents } = await import("../page-log.js");
+  // The registry of the page connects to the host, so it forwards the command of a surface to the surface.
+  await installCoreExposure({
+    library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
+    drawn: async () => {},
   });
+  // The lines that the plane wrote to the application log: the error records of the log batches that the page sent to the host.
+  const loggedLines = async () => {
+    await flushEvents();
+    return wire.calls.filter(({ name, payload }) => name === "log" && payload.action === "batch")
+      .flatMap(({ payload }) => payload.events).filter(({ event }) => event === "workbench.record.error")
+      .map(({ fields }) => `${fields.where}: ${fields.text}`);
+  };
+  // The tabs for which the registry forwarded the save command to the surface, in order.
+  // The page forwards the command to the surface with the request {id, surface, method, params}.
+  let origin = 0;
+  const saves = () => wire.calls.slice(origin).filter(({ name }) => name === "exposureForward").map(({ payload }) => payload.surface);
+  // The ids of the tabs come from a source that draws successive bytes, so that the case records them.
+  let draws = 0;
+  const random = (buffer) => { buffer.fill(draws++ % 32); };
 
   let held = null;
   const decisions = new Set();
@@ -86,13 +96,13 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   const tabs = () => plane.currentGrid().card("main").data.tabs;
   const has = (id) => tabs().some((tab) => tab.id === id);
   const fresh = () => {
-    plane.closePicker("fixture reset");
+        plane.closePicker("fixture reset");
     if (plane.currentGrid()) for (const tab of tabs()) reports.forgetTab(tab.id);
-    plane.adopt(plane.fresh(), "spc-aaaaaa");
+    plane.adopt(plane.fresh(random), "spc-aaaaaa");
     draw();
-    reply = deferred();
-    saves.length = 0;
-    logged.length = 0;
+    // Each tab of the surface registers the save command that its plugin declares, as the host reports a registration of the surface.
+    for (const tab of tabs()) registry.registered({ surface: tab.id, kind: "command", name: saveName });
+    origin = wire.calls.length;
     return tabs()[0].id;
   };
   const decision = (id) => new Promise((resolve) => {
@@ -119,29 +129,31 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   plane.pickItem(2);
   assert.equal(has(id), true, "keep preserves the modified tab");
   assert.equal(plane.pickerState().open, false);
-  assert.deepEqual(saves, []);
+  assert.deepEqual(saves(), []);
 
   id = fresh();
   reports.reportModified(id, true);
   await ask(id);
   plane.pickItem(0);
-  assert.deepEqual(saves, [id], "save targets the tab that requested closure");
+  await drained();
+  assert.deepEqual(saves(), [id], "save targets the tab that requested closure");
   assert.equal(has(id), true, "a pending save cannot close its tab");
   let decided = decision(id);
-  reply.resolve(null);
+  wire.release();
   await decided;
   assert.equal(has(id), true, "a save reply that leaves unsaved edits must retain the tab");
   assert.equal(reports.tabModified(id), true);
   assert.equal(reports.tabError(id), `저장하지 못했습니다 · ${saveName} left the tab modified`);
   draw();
-  assert.ok(logged.some((line) => line.includes(`${saveName} left the tab modified`)), "the refusal reaches the error display log");
+  assert.ok((await loggedLines()).some((line) => line.includes(`${saveName} left the tab modified`)), "the refusal reaches the error display log");
 
   id = fresh();
   reports.reportModified(id, true);
   await ask(id);
   plane.pickItem(0);
+  await drained();
   decided = decision(id);
-  reply.reject(new Error("write refused"));
+  wire.release();
   await decided;
   assert.equal(has(id), true, "a failed save must retain the tab");
   assert.equal(reports.tabError(id), `저장하지 못했습니다 · ${saveName}: write refused`);
@@ -160,8 +172,9 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
       reports.reportModified(dirty, true);
       await ask(dirty);
       plane.pickItem(0);
+      await drained();
       const failed = decision(dirty);
-      reply.reject(new Error("first write refused"));
+      wire.release();
       await failed;
       assert.equal(has(dirty), true, "the failed attempt must retain the same dirty tab for retry");
       assert.equal(reports.tabModified(dirty), true);
@@ -169,12 +182,12 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
       assert.equal(reports.tabError(dirty), failure);
       assert.equal(closures, 0);
       draw();
-      assert.ok(logged.some((line) => line.includes(failure)), "the failed attempt must remain observable in the error log");
+      assert.ok((await loggedLines()).some((line) => line.includes(failure)), "the failed attempt must remain observable in the error log");
 
-      reply = deferred();
       await ask(dirty);
       plane.pickItem(0);
-      assert.deepEqual(saves, [dirty, dirty], "retry must run save again for the same dirty tab");
+      await drained();
+      assert.deepEqual(saves(), [dirty, dirty], "retry must run save again for the same dirty tab");
       assert.equal(has(dirty), true, "the retry must retain the same tab while its save is pending");
       assert.equal(reports.tabModified(dirty), true);
       assert.equal(reports.tabError(dirty), failure, "starting a retry must not erase the first failure");
@@ -191,14 +204,14 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
       reports.reportModified(dirty, false);
       assert.equal(has(dirty), true, "a clean retry report must still wait for that retry's reply");
       assert.equal(closures, 0, "the failed attempt must not close the tab during the retry");
-      reply.resolve(null);
+      wire.release();
       await closed;
       assert.equal(closures, 1, "the same tab must close exactly once after its retry succeeds");
       assert.deepEqual(tabs().map(({ id }) => id), [other], "save recovery must leave the other tab unchanged");
       assert.equal(reports.tabError(dirty), null);
       reports.reportTitle(other, "still open");
       assert.equal(closures, 1, "a later report must not repeat the recovered close");
-      assert.deepEqual(saves, [dirty, dirty]);
+      assert.deepEqual(saves(), [dirty, dirty]);
     } finally {
       decisions.delete(observe);
     }
@@ -208,10 +221,11 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   reports.reportModified(id, true);
   await ask(id);
   plane.pickItem(0);
+  await drained();
   decided = decision(id);
   reports.reportModified(id, false);
   assert.equal(has(id), true, "a clean report still waits for the pending save reply");
-  reply.resolve(null);
+  wire.release();
   await decided;
   assert.equal(has(id), false, "a successful clean save closes the tab");
   assert.equal(tabs().length, 1);
@@ -220,14 +234,15 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   assert.deepEqual(await plane.closeTabById(id), { closed: true });
   assert.equal(has(id), false, "an unmodified tab closes without a save or confirmation");
   assert.equal(plane.pickerState().open, false);
-  assert.deepEqual(saves, []);
+  assert.deepEqual(saves(), []);
 
   id = fresh();
   reports.reportModified(id, true);
   let allowed = plane.settleModifiedTabsToClose();
   assert.equal(plane.pickerState().open, true);
   plane.pickItem(0);
-  reply.resolve(null);
+  await drained();
+  wire.release();
   assert.equal(await allowed, false, "window closure must be refused when a save leaves unsaved edits");
   assert.equal(has(id), true);
   assert.equal(reports.tabError(id), `저장하지 못했습니다 · ${saveName} left the tab modified`);
@@ -236,10 +251,13 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   reports.reportModified(id, true);
   allowed = plane.settleModifiedTabsToClose();
   plane.pickItem(0);
+  await drained();
   reports.reportModified(id, false);
-  reply.resolve(null);
+  wire.release();
   assert.equal(await allowed, true, "a clean completed save permits window closure");
   assert.equal(has(id), true, "window-close permission does not remove the tab itself");
+  await flushEvents();
+  wire.finish();
 });
 
 test("close boundary owner assertions detect missing guards and blocked save recovery", { timeout: 30000 }, (t) => {
@@ -256,7 +274,7 @@ test("close boundary owner assertions detect missing guards and blocked save rec
   // This is an independent test runner. Inheriting the outer worker context makes Node skip its tests.
   const environment = { ...process.env };
   delete environment.NODE_TEST_CONTEXT;
-  const run = () => spawnSync(process.execPath, ["--test", "--experimental-test-module-mocks", "--test-reporter=tap",
+  const run = () => spawnSync(process.execPath, ["--test", "--test-reporter=tap",
     `--test-name-pattern=^${behaviorName}$`, join(copy, "test", "plane-close-modified.test.mjs")],
   { cwd: copy, env: environment, encoding: "utf8", timeout: 10000 });
   const baseline = run();
