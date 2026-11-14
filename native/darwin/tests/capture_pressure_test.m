@@ -1,4 +1,6 @@
-// Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits. A
+// Injects writer capacity, window server and file write faults into the real still recording, and checks the ends of its waits.
+// The window server is the real one; its failures use the fault points SOKSAK_FAULT_CAPTURE_IMAGE and SOKSAK_FAULT_CAPTURE_ENCODE
+// of the capture (capture.m). A
 // still whose encoded frame would pass the 128 MiB byte limit of the writer fails without holding its request, and one whose
 // encoded bytes fit is written and gives them back; a still requested while 8 stills are in flight, waiting for their image or
 // compressing their pixels, fails at its request; the last still of the largest plan is written; a still 0 without an image fails
@@ -13,6 +15,7 @@
 #import "support/run_until.h"
 #import "support/temporary_folder.h"
 #include <stdatomic.h>
+#include <notify.h>
 
 static int failures;
 static void check(BOOL ok, NSString *label) {
@@ -22,9 +25,10 @@ static void check(BOOL ok, NSString *label) {
 
 // The worker and the main-thread function of a host: on another thread both run the block directly (main_thread.h).
 static void directly(void (^work)(void)) { work(); }
-#define STUB_V(result, name, parameters) static result stub_##name parameters {}
-#define STUB(mode, result, name, parameters, arguments) STUB_##mode(result, name, parameters)
-SP_HOST_DIAGNOSTIC_CALLBACKS(STUB)
+// The entries of the diagnostic callback table that this test never calls: the table installs only when every entry is set.
+#define UNUSED_V(result, name, parameters) static result unused_##name parameters {}
+#define UNUSED(mode, result, name, parameters, arguments) UNUSED_##mode(result, name, parameters)
+SP_HOST_DIAGNOSTIC_CALLBACKS(UNUSED)
 
 // The answers of the scheduled capture calls, which reach the main thread as events.
 static int captureAnswers;
@@ -42,62 +46,23 @@ static void captureAnswered(uintptr_t context, long result, char *failure) {
     });
 }
 
-// The window server of the test: an opaque image of the device-pixel size of the window, or no image.
-static size_t imageWidth, imageHeight;
-static atomic_bool noImage;
-static CGImageRef testWindowImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
-    (void)rect; (void)windows; (void)options;
-    if (atomic_load(&noImage)) return NULL;
+// An opaque image of width x height device pixels, as the window server gives a still.
+static CGImageRef solidImage(size_t width, size_t height) {
     CGColorSpaceRef srgb = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef context = CGBitmapContextCreate(NULL, imageWidth, imageHeight, 8, 0, srgb,
+    CGContextRef context = CGBitmapContextCreate(NULL, width, height, 8, 0, srgb,
         (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
     CGColorSpaceRelease(srgb);
     if (context == NULL) return NULL;
     CGContextSetRGBFillColor(context, 0.8, 0.2, 0.2, 1);
-    CGContextFillRect(context, CGRectMake(0, 0, imageWidth, imageHeight));
+    CGContextFillRect(context, CGRectMake(0, 0, width, height));
     CGImageRef made = CGBitmapContextCreateImage(context);
     CGContextRelease(context);
     return made;
 }
-static void *lookupTestWindowImage(void *handle, const char *name) {
-    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)testWindowImage : dlsym(handle, name);
-}
 
-// A window server whose first image, still 0, comes only after three later stills were requested: the stills after a slow still 0
-// are requested at their planned times, as the stills after any slow still are.
-static atomic_int slowCalls;
-static dispatch_semaphore_t slowRelease;
-static CGImageRef slowFirstImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
-    int call = atomic_fetch_add(&slowCalls, 1) + 1;
-    if (call == 1) dispatch_semaphore_wait(slowRelease, DISPATCH_TIME_FOREVER);
-    else if (call == 4) dispatch_semaphore_signal(slowRelease);
-    return testWindowImage(rect, windows, options);
-}
-static void *lookupSlowFirstImage(void *handle, const char *name) {
-    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)slowFirstImage : dlsym(handle, name);
-}
-
-// A window server that gives still 0 and then holds every image until the test releases it, as a window server that does not
-// answer: the stills requested after still 0 wait for their image.
-static atomic_int heldCalls;
-static atomic_bool imagesHeld;
-static dispatch_semaphore_t heldRelease;
-static CGImageRef heldImage(CGRect rect, CFArrayRef windows, CGWindowImageOption options) {
-    if (atomic_fetch_add(&heldCalls, 1) > 0 && atomic_load(&imagesHeld)) dispatch_semaphore_wait(heldRelease, DISPATCH_TIME_FOREVER);
-    return testWindowImage(rect, windows, options);
-}
-static void *lookupHeldImage(void *handle, const char *name) {
-    return strcmp(name, "CGWindowListCreateImageFromArray") == 0 ? (void *)heldImage : dlsym(handle, name);
-}
-
-// An LZ4 encoder that holds every compression while the test holds them, until the test releases it, as a compression that has
-// not finished: a still whose compression is held has its image and its pixels and stays in flight.
-static atomic_bool encodesHeld;
-static dispatch_semaphore_t encodeRelease;
-static size_t heldEncode(uint8_t *destination, size_t capacity, const uint8_t *source, size_t length, void *scratch,
-    compression_algorithm algorithm) {
-    if (atomic_load(&encodesHeld)) dispatch_semaphore_wait(encodeRelease, DISPATCH_TIME_FOREVER);
-    return compression_encode_buffer(destination, capacity, source, length, scratch, algorithm);
+// Ends the held requests of the fault points of the capture.
+static void releaseHeldRequests(void) {
+    check(notify_post(SP_CAPTURE_FAULT_RELEASE) == NOTIFY_STATUS_OK, @"the release notification of the capture faults is posted");
 }
 
 static NSWindow *makeWindow(void) {
@@ -163,8 +128,7 @@ int main(void) { @autoreleasepool {
     // The still path from the image to the frame writer, with controlled writer capacity.
     SPCaptureTarget *target = [[[SPCaptureTarget alloc] init] autorelease];
     target.screen = CGRectMake(0, 0, 4, 4);
-    imageWidth = 4; imageHeight = 4;
-    CGImageRef image = testWindowImage(CGRectNull, NULL, 0);
+    CGImageRef image = solidImage(4, 4);
     check(image != NULL, @"the controlled still has an image");
     NSString *exhausted = folder(root, @"exhausted");
     SPCaptureRecording *recording = rowsRecording(exhausted, 1);
@@ -175,7 +139,7 @@ int main(void) { @autoreleasepool {
         && encodedBytes(7680 * 4320 * 4) <= kCapturePendingBytes && kCapturePendingBytes / 2 < encodedBytes(7680 * 4320 * 4),
         [NSString stringWithFormat:@"the writer limit is the smallest power of two that holds one incompressible still of a 7680x4320 display (%zu, %zu)",
             kCapturePendingBytes, encodedBytes(7680 * 4320 * 4)]);
-    capturePendingBytes = kCapturePendingBytes;
+    check(reservePending(kCapturePendingBytes), @"the fixture reserves the whole writer capacity");
     // The still runs on this thread: a still that waited for writer capacity would hold it here, and the check after it is
     // reached by the return of the still.
     bool returned = false;
@@ -197,13 +161,11 @@ int main(void) { @autoreleasepool {
     // free it is written, and the writer gives them back.
     SPCaptureTarget *wide = [[[SPCaptureTarget alloc] init] autorelease];
     wide.screen = CGRectMake(0, 0, 256, 256);
-    imageWidth = 256; imageHeight = 256;
-    CGImageRef uniform = testWindowImage(CGRectNull, NULL, 0);
-    imageWidth = 4; imageHeight = 4;
+    CGImageRef uniform = solidImage(256, 256);
     NSString *boundary = folder(root, @"boundary");
     recording = rowsRecording(boundary, 3);
     clearCaptureError();
-    capturePendingBytes = 0;
+    releasePending(kCapturePendingBytes);
     processStill(recording, 0, wide, uniform, mach_absolute_time(), mach_absolute_time());
     dispatch_sync(captureWriter, ^{});
     unsigned long long encodedSize = [[NSFileManager.defaultManager attributesOfItemAtPath:
@@ -212,9 +174,9 @@ int main(void) { @autoreleasepool {
         && encodedSize < frameBytes(256 * 256 * 4) / 16,
         [NSString stringWithFormat:@"a written still gives back its bytes, and its encoded frame is far smaller than its pixels (%llu of %zu, %zu held)",
             encodedSize, frameBytes(256 * 256 * 4), capturePendingBytes]);
-    capturePendingBytes = kCapturePendingBytes - (size_t)encodedSize + 1;
+    check(reservePending(kCapturePendingBytes - (size_t)encodedSize + 1), @"the fixture leaves one byte short of the encoded still free");
     processStill(recording, 1, wide, uniform, mach_absolute_time(), mach_absolute_time());
-    capturePendingBytes = kCapturePendingBytes - (size_t)encodedSize;
+    releasePending(1);
     processStill(recording, 2, wide, uniform, mach_absolute_time(), mach_absolute_time());
     dispatch_sync(captureWriter, ^{});
     check([recording.rows[1][@"outcome"] isEqual:@"failed"]
@@ -222,7 +184,7 @@ int main(void) { @autoreleasepool {
         && [recording.rows[2][@"outcome"] isEqual:@"written"] && capturePendingBytes == kCapturePendingBytes - (size_t)encodedSize,
         [NSString stringWithFormat:@"the writer admits a still whose encoded bytes fit and refuses one byte more (%@, %@, %zu)",
             recording.rows[1], recording.rows[2][@"outcome"], capturePendingBytes]);
-    capturePendingBytes = 0;
+    releasePending(kCapturePendingBytes - (size_t)encodedSize);
     if (uniform) CGImageRelease(uniform);
 
     NSString *available = folder(root, @"available");
@@ -242,11 +204,8 @@ int main(void) { @autoreleasepool {
 
     // The recordings of a window through the window server of the test.
     NSWindow *window = makeWindow();
-    imageWidth = (size_t)(60 * window.backingScaleFactor);
-    imageHeight = (size_t)(40 * window.backingScaleFactor);
-    captureLookup = lookupTestWindowImage;
 
-    atomic_store(&noImage, true);
+    setenv("SOKSAK_FAULT_CAPTURE_IMAGE", "none", 1);
     char *operationError = NULL;
     check(sp_capture_open(window.windowNumber, false, &operationError), @"the window opens for a recording without images");
     free(operationError); operationError = NULL;
@@ -261,12 +220,10 @@ int main(void) { @autoreleasepool {
         encoding:NSUTF8StringEncoding error:NULL];
     check([imagelessRows containsString:@"\"outcome\":\"failed\""] && [imagelessRows containsString:want],
         @"the failed start records its failed still 0 in stills.jsonl");
-    atomic_store(&noImage, false);
+    unsetenv("SOKSAK_FAULT_CAPTURE_IMAGE");
 
     // Still 0 completes only after stills 1 to 3 were requested, so each of them is requested before still 0 completed.
-    slowRelease = dispatch_semaphore_create(0);
-    atomic_store(&slowCalls, 0);
-    captureLookup = lookupSlowFirstImage;
+    setenv("SOKSAK_FAULT_CAPTURE_IMAGE", "slow-first", 1);
     if (startRecording(window, folder(root, @"slow-first"), 10, 4096, 5)) {
         int written = sp_capture_stop(0, 6);
         NSString *rowsText = [NSString stringWithContentsOfFile:[root stringByAppendingPathComponent:@"slow-first/stills.jsonl"]
@@ -287,15 +244,11 @@ int main(void) { @autoreleasepool {
         check(written >= 4 && before == 3, [NSString stringWithFormat:@"the stills after a slow still 0 are requested before it "
             "completes (%d written, %lu of stills 1 to 3 requested before still 0 completed)", written, (unsigned long)before]);
     }
-    captureLookup = lookupTestWindowImage;
-    dispatch_release(slowRelease);
+    unsetenv("SOKSAK_FAULT_CAPTURE_IMAGE");
 
     // While the window server holds the images of stills 1 to 8, still 9 finds 8 stills waiting for their image and fails at its
     // request; it does not wait for them.
-    heldRelease = dispatch_semaphore_create(0);
-    atomic_store(&heldCalls, 0);
-    atomic_store(&imagesHeld, true);
-    captureLookup = lookupHeldImage;
+    setenv("SOKSAK_FAULT_CAPTURE_IMAGE", "hold-after-first", 1);
     clearCaptureError();
     if (startRecording(window, folder(root, @"in-flight"), 10, 4096, 7)) {
         SPCaptureRecording *current = nil;
@@ -317,28 +270,23 @@ int main(void) { @autoreleasepool {
             && [ninth[@"windows"] isEqual:@[]] && completedBefore == 0,
             [NSString stringWithFormat:@"still 9 fails at its request while stills 1 to 8 wait for their image (%@, %lu of them completed)",
                 ninth, (unsigned long)completedBefore]);
-        atomic_store(&imagesHeld, false);
-        for (int index = 0; index < 8; index++) dispatch_semaphore_signal(heldRelease);
+        releaseHeldRequests();
         int written = sp_capture_stop(0, 8);
         check(written >= 9 && strstr(sp_capture_error(), [NSString stringWithFormat:@"still 9: %@", want].UTF8String) != NULL,
             [NSString stringWithFormat:@"the refused still is an error of the recording, and the held stills are written (%d, %@)",
                 written, errorText()]);
         [current release];
     }
-    captureLookup = lookupTestWindowImage;
-    dispatch_release(heldRelease);
+    unsetenv("SOKSAK_FAULT_CAPTURE_IMAGE");
     clearCaptureError();
 
     // A still stays in flight until it has released its pixels after their compression: once the compressions are held after
     // still 0, 8 stills that have their image compress and the next request fails at once. The memory of the stills before
     // compression is so at most 8 frames of pixels.
-    encodeRelease = dispatch_semaphore_create(0);
-    atomic_store(&encodesHeld, false);
-    captureEncode = heldEncode;
+    setenv("SOKSAK_FAULT_CAPTURE_ENCODE", "hold-after-first", 1);
     if (startRecording(window, folder(root, @"in-flight-compression"), 10, 4096, 42)) {
         SPCaptureRecording *current = nil;
         @synchronized ([SPCaptureRecording class]) { current = [captureRecording retain]; }
-        atomic_store(&encodesHeld, true);
         NSString *want = [NSString stringWithFormat:@"capture in-flight capacity exceeded (%lu stills)", (unsigned long)kCaptureInFlight];
         // 8 stills hold their image and their pixels, and a request after them is refused.
         sp_run_until("a still is refused while 8 compressions are held", ^BOOL {
@@ -362,8 +310,7 @@ int main(void) { @autoreleasepool {
         check(inFlight == 8 && held == 8,
             [NSString stringWithFormat:@"a still stays in flight until its compression ends: a request fails while 8 stills with their image compress (%lu with their image unsettled, %lu in flight)",
                 (unsigned long)held, (unsigned long)inFlight]);
-        atomic_store(&encodesHeld, false);
-        for (NSUInteger index = 0; index < kCaptureInFlight; index++) dispatch_semaphore_signal(encodeRelease);
+        releaseHeldRequests();
         int written = sp_capture_stop(0, 43);
         NSUInteger left = 0;
         @synchronized (current) { left = current.stillsInFlight; }
@@ -371,8 +318,7 @@ int main(void) { @autoreleasepool {
             written, (unsigned long)left, errorText()]);
         [current release];
     }
-    captureEncode = compression_encode_buffer;
-    dispatch_release(encodeRelease);
+    unsetenv("SOKSAK_FAULT_CAPTURE_ENCODE");
     clearCaptureError();
 
     fprintf(stderr, "START: the ends of the capture waits\n");
@@ -499,7 +445,7 @@ int main(void) { @autoreleasepool {
     // closes another window, whose close ends the wait of the stop, and the stop answers its context once.
     hostInstallMainThread(directly, directly);
     sp_host_diagnostic_callbacks diagnostics = {0};
-#define INITIALIZE_DIAGNOSTIC(mode, result, name, parameters, arguments) diagnostics.name = stub_##name;
+#define INITIALIZE_DIAGNOSTIC(mode, result, name, parameters, arguments) diagnostics.name = unused_##name;
     SP_HOST_DIAGNOSTIC_CALLBACKS(INITIALIZE_DIAGNOSTIC)
 #undef INITIALIZE_DIAGNOSTIC
     diagnostics.capture_answered = captureAnswered;
@@ -610,7 +556,6 @@ int main(void) { @autoreleasepool {
         check([errorText() containsString:@"no still was requested at the requested time before the fixture ended the stop"],
             [NSString stringWithFormat:@"stop reports the separate end of its wait (%@)", errorText()]);
     }
-    captureLookup = dlsym;
     [window close];
     [window release];
     fprintf(stderr, "%s: capture pressure and still-result isolation (%.1fms)\n",

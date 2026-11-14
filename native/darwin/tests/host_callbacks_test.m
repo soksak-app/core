@@ -20,11 +20,13 @@ static int completionLeases;
 - (void)dealloc { completionLeases--; [super dealloc]; }
 @end
 
-#define STUB_V(result, name, parameters) static result stub_##name parameters {}
-#define STUB_R(result, name, parameters) static result stub_##name parameters { return 0; }
-#define STUB(mode, result, name, parameters, arguments) STUB_##mode(result, name, parameters)
-SP_HOST_CALLBACKS(STUB)
-SP_HOST_DIAGNOSTIC_CALLBACKS(STUB)
+// The entries of the callback tables that a case does not judge. A table installs only when every entry is set, so each case
+// that judges one entry sets the others to these functions, which take their arguments and return 0.
+#define UNUSED_V(result, name, parameters) static result unused_##name parameters {}
+#define UNUSED_R(result, name, parameters) static result unused_##name parameters { return 0; }
+#define UNUSED(mode, result, name, parameters, arguments) UNUSED_##mode(result, name, parameters)
+SP_HOST_CALLBACKS(UNUSED)
+SP_HOST_DIAGNOSTIC_CALLBACKS(UNUSED)
 
 static int failures;
 static void check(bool passed, const char *name) {
@@ -91,7 +93,7 @@ int main(void) { @autoreleasepool {
     checkMissing("surface_pressed", ^{ hostRunOnWorker(^{ sp_host_callback_surface_pressed(0, NULL); }); });
     sp_host_callbacks callbacks = {0};
     check(sp_host_callbacks_install(NULL) != NULL, "a missing callback table is rejected");
-#define INITIALIZE(mode, result, name, parameters, arguments) callbacks.name = stub_##name;
+#define INITIALIZE(mode, result, name, parameters, arguments) callbacks.name = unused_##name;
     SP_HOST_CALLBACKS(INITIALIZE)
 #define MISSING(mode, result, name, parameters, arguments) { \
     sp_host_callbacks incomplete = callbacks; incomplete.name = NULL; \
@@ -136,7 +138,7 @@ int main(void) { @autoreleasepool {
     check(completed && completionLeases == 0, "presentation completion invokes and releases its transferred block on the main thread");
     checkMissing("process_exit_answered", ^{ hostRunOnWorker(^{ sp_host_diagnostic_callback_process_exit_answered(0, false); }); });
     sp_host_diagnostic_callbacks diagnostics = {0};
-#define INITIALIZE_DIAGNOSTIC(mode, result, name, parameters, arguments) diagnostics.name = stub_##name;
+#define INITIALIZE_DIAGNOSTIC(mode, result, name, parameters, arguments) diagnostics.name = unused_##name;
     SP_HOST_DIAGNOSTIC_CALLBACKS(INITIALIZE_DIAGNOSTIC)
 #define MISSING_DIAGNOSTIC(mode, result, name, parameters, arguments) { \
     sp_host_diagnostic_callbacks incomplete = diagnostics; incomplete.name = NULL; \

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- native capture 시험이 timebase, 창 image, 압축의 선언된 fault point 와 함께 실제 clock, Mach timebase, display link, 창 image 로 실행되고, still 의 단계 시각은 그 시각을 data 로 받는 함수가 정하며, process identity 시험은 시험 build 의 fault point 와 함께 실제 LaunchServices 에 등록한다 (F795-6).
 - workbench 의 picker close, stale layout, sidebar section 시험이 page 의 실제 host, plugin, console module 로 실행된다. picker close 시험은 page-wire case 를 재생하고 stale layout 시험은 stream 위의 실제 console 에서 page 의 오류를 읽는다. library plugin 시험은 index.html 의 document 를 읽고 설치된 plugin module 을 아직 대체한다 (F795-10).
 - script 시험이 입력 program 과 file 을 scripts/test/fixtures 아래 추적되는 폴더에서 복사하고, process identity build 시험이 인자를 기록하는 명령 대신 make 의 dry run 으로 명령을 나열하고 실제 clang 과 ar 로 build 한다 (F795-4).
 - workbench 의 tab session, performance trace, page log, theme 배치, keyboard 배치, layout 실패 시험이 page-wire case 위에서 page 의 실제 host, store, log module 로 실행된다. case 는 page 의 flush 가 보내는 batch 에 log gate 의 count 를 기록한다 (F795-10).

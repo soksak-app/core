@@ -89,5 +89,9 @@ typedef struct {
 // Decides one display-link callback from its values. The values are data: no clock or window is read.
 SPDisplayLinkDecision sp_capture_display_link_decision(SPDisplayLinkSample sample);
 
+// The Darwin notification that ends the held requests of the capture fault points (SOKSAK_FAULT_CAPTURE_IMAGE and
+// SOKSAK_FAULT_CAPTURE_ENCODE, capture.m).
+#define SP_CAPTURE_FAULT_RELEASE "app.soksak.capture.fault.release"
+
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.
 void sp_capture_test_report_error(const char *message);

@@ -68,7 +68,7 @@ repeat: $(BUILD)/$(TEST)
 	done; echo "PASS: $(TEST) passed $(COUNT) consecutive runs"
 
 $(TEST_EXECUTABLE): tests/process_identity_test.m src/process_identity.m include/soksak_process_identity.h src/private/launch_services.h src/private/process_identity_internal.h | $(BUILD)
-	@clang $(CFLAGS) -DSOKSAK_PROCESS_IDENTITY_TESTING -Iinclude -Isrc $< src/process_identity.m $(FRAMEWORKS) -framework Foundation -o $@
+	@clang $(CFLAGS) -DSOKSAK_PROCESS_IDENTITY_TESTING -DSOKSAK_PROCESS_IDENTITY_DIAGNOSTICS -Iinclude -Isrc $< src/process_identity.m $(FRAMEWORKS) -framework Foundation -o $@
 
 clean:
 	@rm -rf $(BUILD) $(LIBRARY) $(LIBDIR)/pkgconfig/soksak-process-identity.pc

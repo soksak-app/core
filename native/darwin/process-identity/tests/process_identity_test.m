@@ -5,60 +5,16 @@
 #import "private/process_identity_internal.h"
 
 static int failures;
-static int registerStatus;
-static int setStatus;
-static SPLSASNRef currentASN;
-static CFTypeRef copiedName;
-static NSUInteger registerCalls;
-static NSUInteger asnCalls;
-static NSUInteger setCalls;
-static NSUInteger copyCalls;
-static CFTypeRef setValue;
 
 static void check(BOOL condition, NSString *message) {
     fprintf(condition ? stdout : stderr, "%s: %s\n", condition ? "PASS" : "FAIL", message.UTF8String);
     if (!condition) failures++;
 }
-static OSStatus registerApplication(CFDictionaryRef info, ProcessSerialNumber *serial) {
-    (void)info; (void)serial; registerCalls++; return registerStatus;
-}
-static SPLSASNRef currentApplicationASN(void) { asnCalls++; return currentASN; }
-static OSStatus setApplicationInformationItem(SPLSSessionID session, SPLSASNRef asn, CFStringRef key,
-    CFTypeRef value, CFDictionaryRef *information) {
-    (void)session; (void)asn; (void)key; (void)information; setCalls++;
-    setValue = value ? CFRetain(value) : NULL; return setStatus;
-}
-static CFTypeRef copyApplicationInformationItem(SPLSSessionID session, SPLSASNRef asn, CFTypeRef key) {
-    (void)session; (void)asn; (void)key; copyCalls++; return copiedName ? CFRetain(copiedName) : NULL;
-}
-// The live services observe the LaunchServices display name at the moment registration returns, which is the first moment
-// another process such as lsappinfo can list the process; the observation runs before the display-name set call.
-static CFTypeRef registeredName;
-static OSStatus registerApplicationAndObserve(CFDictionaryRef info, ProcessSerialNumber *serial) {
-    OSStatus status = _RegisterApplication(info, serial);
-    if (status == noErr) registeredName = _LSCopyApplicationInformationItem(SPLSDefaultSessionID,
-        _LSGetCurrentApplicationASN(), _kLSDisplayNameKey);
-    return status;
-}
-static const SPProcessIdentityServices observedLaunchServices = {
-    .register_application = registerApplicationAndObserve,
-    .current_application_asn = _LSGetCurrentApplicationASN,
-    .set_application_information_item = _LSSetApplicationInformationItem,
-    .copy_application_information_item = _LSCopyApplicationInformationItem,
-};
-static const SPProcessIdentityServices fakeServices = {
-    .register_application = registerApplication,
-    .current_application_asn = currentApplicationASN,
-    .set_application_information_item = setApplicationInformationItem,
-    .copy_application_information_item = copyApplicationInformationItem,
-};
-static void resetServices(void) {
-    registerStatus = noErr; setStatus = noErr; currentASN = (SPLSASNRef)0x1;
-    if (copiedName) CFRelease(copiedName);
-    copiedName = CFStringCreateWithCString(kCFAllocatorDefault, "soksak://sidecar/probe", kCFStringEncodingASCII);
-    registerCalls = asnCalls = setCalls = copyCalls = 0;
-    if (setValue) CFRelease(setValue);
-    setValue = NULL;
+// The fault point SOKSAK_FAULT_PROCESS_IDENTITY of the diagnostics build replaces the result of one LaunchServices call after the
+// real call ran; each case sets it for the failure that the real LaunchServices does not produce on demand.
+static void setFault(const char *fault) {
+    if (fault) setenv("SOKSAK_FAULT_PROCESS_IDENTITY", fault, 1);
+    else unsetenv("SOKSAK_FAULT_PROCESS_IDENTITY");
 }
 
 int main(void) { @autoreleasepool {
@@ -67,66 +23,62 @@ int main(void) { @autoreleasepool {
     if (!symbol) return 1;
     typedef int (*SetDisplayName)(const char *, char *, size_t);
     SetDisplayName setDisplayName = (SetDisplayName)symbol;
-    void *seamSymbol = dlsym(RTLD_DEFAULT, "sp_process_set_display_name_with_services");
-    check(seamSymbol != NULL, @"the native test build exposes its injected service seam");
-    if (!seamSymbol) return 1;
-    typedef int (*SetWithServices)(const char *, char *, size_t, const SPProcessIdentityServices *);
-    SetWithServices setWithServices = (SetWithServices)seamSymbol;
     char error[512] = {0};
 
-    resetServices();
-    check(setWithServices("soksak://sidecar/Probe", error, sizeof(error), &fakeServices) != 0 &&
-        strstr(error, "invalid process display name") != NULL && registerCalls == 0,
-        @"an invalid display name fails before LaunchServices registration");
-    resetServices(); registerStatus = -5;
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == -5 &&
-        strstr(error, "LaunchServices registration failed with status -5") != NULL && asnCalls == 0,
-        @"a registration failure is returned with its operation and status");
-    resetServices(); currentASN = NULL;
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) != 0 &&
-        strstr(error, "current process ASN") != NULL && setCalls == 0,
-        @"a missing current process ASN is reported");
-    resetServices(); setStatus = -7;
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == -7 &&
-        strstr(error, "LaunchServices display name set failed with status -7") != NULL && copyCalls == 0,
-        @"a display-name set failure is returned with its operation and status");
-    resetServices();
-    CFRelease(copiedName);
-    copiedName = CFStringCreateWithCString(kCFAllocatorDefault, "soksak://sidecar/other", kCFStringEncodingASCII);
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) != 0 &&
-        strstr(error, "LaunchServices display name readback found \"soksak://sidecar/other\", expected \"soksak://sidecar/probe\"") != NULL,
-        [NSString stringWithFormat:@"a mismatched display-name readback fails and names the value it found: %s", error]);
-    resetServices();
-    CFRelease(copiedName); copiedName = NULL;
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == EIO &&
-        strstr(error, "LaunchServices display name readback found no value") != NULL,
-        [NSString stringWithFormat:@"a display-name readback without a value names the missing value: %s", error]);
-    resetServices();
-    CFRelease(copiedName); copiedName = CFRetain(kCFBooleanTrue);
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == EIO &&
-        strstr(error, "LaunchServices display name readback found a value of type CFBoolean") != NULL,
-        [NSString stringWithFormat:@"a display-name readback of another type names the type: %s", error]);
-    resetServices();
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &fakeServices) == 0 &&
-        setValue != NULL && CFEqual(setValue, copiedName) && registerCalls == 1 && asnCalls == 1 && setCalls == 1 && copyCalls == 1,
-        @"the service sequence sets and verifies the exact display name");
-
-    // This case runs before any other live registration of the process, so the observation shows the first listed name.
-    memset(error, 0, sizeof(error));
-    check(setWithServices("soksak://sidecar/probe", error, sizeof(error), &observedLaunchServices) == 0 &&
-        registeredName != NULL && CFGetTypeID(registeredName) == CFStringGetTypeID() &&
-        CFEqual(registeredName, CFSTR("soksak://sidecar/probe")),
-        [NSString stringWithFormat:@"LaunchServices lists the process with its display name from its registration: found %@, error %s",
-            registeredName, error]);
+    // This case runs before any other registration of the process, so the observation shows the first listed name: the process
+    // registers with the check-in dictionary of the production API and the real LaunchServices lists the display name.
+    CFStringRef probe = CFSTR("soksak://sidecar/probe");
+    CFDictionaryRef info = sp_process_copy_check_in_information(probe);
+    check(info != NULL && _RegisterApplication(info, NULL) == noErr, @"the real LaunchServices registers the process with the production check-in dictionary");
+    if (info) CFRelease(info);
+    CFTypeRef registeredName = _LSCopyApplicationInformationItem(SPLSDefaultSessionID, _LSGetCurrentApplicationASN(), _kLSDisplayNameKey);
+    check(registeredName != NULL && CFGetTypeID(registeredName) == CFStringGetTypeID() && CFEqual(registeredName, probe),
+        [NSString stringWithFormat:@"LaunchServices lists the process with its display name from its registration: found %@", registeredName]);
     if (registeredName) CFRelease(registeredName);
 
+    // A fault that follows the failing call is never reached, so an error that names the failing call shows that the later calls did not run.
+    setFault("register:-5");
+    check(setDisplayName("soksak://sidecar/Probe", error, sizeof(error)) != 0 &&
+        strstr(error, "invalid process display name") != NULL,
+        @"an invalid display name fails before LaunchServices registration");
+    setFault("register:-5,asn,set:-7,readback:none");
+    check(setDisplayName("soksak://sidecar/probe", error, sizeof(error)) == -5 &&
+        strstr(error, "LaunchServices registration failed with status -5") != NULL,
+        [NSString stringWithFormat:@"a registration failure is returned with its operation and status, before the ASN is read: %s", error]);
+    setFault("asn,set:-7,readback:none");
+    check(setDisplayName("soksak://sidecar/probe", error, sizeof(error)) != 0 &&
+        strstr(error, "current process ASN") != NULL,
+        [NSString stringWithFormat:@"a missing current process ASN is reported before the display name is set: %s", error]);
+    setFault("set:-7,readback:none");
+    check(setDisplayName("soksak://sidecar/probe", error, sizeof(error)) == -7 &&
+        strstr(error, "LaunchServices display name set failed with status -7") != NULL,
+        [NSString stringWithFormat:@"a display-name set failure is returned with its operation and status, before the readback: %s", error]);
+    setFault("readback:string:soksak://sidecar/other");
+    check(setDisplayName("soksak://sidecar/probe", error, sizeof(error)) != 0 &&
+        strstr(error, "LaunchServices display name readback found \"soksak://sidecar/other\", expected \"soksak://sidecar/probe\"") != NULL,
+        [NSString stringWithFormat:@"a mismatched display-name readback fails and names the value it found: %s", error]);
+    setFault("readback:none");
+    check(setDisplayName("soksak://sidecar/probe", error, sizeof(error)) == EIO &&
+        strstr(error, "LaunchServices display name readback found no value") != NULL,
+        [NSString stringWithFormat:@"a display-name readback without a value names the missing value: %s", error]);
+    setFault("readback:boolean");
+    check(setDisplayName("soksak://sidecar/probe", error, sizeof(error)) == EIO &&
+        strstr(error, "LaunchServices display name readback found a value of type CFBoolean") != NULL,
+        [NSString stringWithFormat:@"a display-name readback of another type names the type: %s", error]);
+
+    setFault(NULL);
     memset(error, 0, sizeof(error));
-    int status = setDisplayName("soksak://sidecar/probe", error, sizeof(error));
-    check(status == 0, [NSString stringWithFormat:@"LaunchServices accepts the production display name: %s", error]);
+    // LaunchServices applies the check-in dictionary only at the first registration, so a name that differs from the first one is
+    // listed only when the set call of the sequence made it exact.
+    CFStringRef second = CFSTR("soksak://sidecar/second");
+    check(setDisplayName("soksak://sidecar/second", error, sizeof(error)) == 0,
+        [NSString stringWithFormat:@"LaunchServices accepts the production display name: %s", error]);
+    CFTypeRef verified = _LSCopyApplicationInformationItem(SPLSDefaultSessionID, _LSGetCurrentApplicationASN(), _kLSDisplayNameKey);
+    check(verified != NULL && CFGetTypeID(verified) == CFStringGetTypeID() && CFEqual(verified, second),
+        @"the real LaunchServices readback holds the exact display name that the sequence set");
+    if (verified) CFRelease(verified);
     check(setDisplayName("soksak://sidecar/Bad", error, sizeof(error)) != 0 &&
         strstr(error, "invalid process display name") != NULL,
         @"the public API rejects an invalid display name with an explicit error");
-    if (copiedName) CFRelease(copiedName);
-    if (setValue) CFRelease(setValue);
     return failures ? 1 : 0;
 } }

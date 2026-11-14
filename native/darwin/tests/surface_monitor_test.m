@@ -7,10 +7,12 @@
 #include "main_thread.h"
 #include "webview_geometry.h"
 
-#define STUB_V(result, name, parameters) static result stub_##name parameters {}
-#define STUB_R(result, name, parameters) static result stub_##name parameters { return 0; }
-#define STUB(mode, result, name, parameters, arguments) STUB_##mode(result, name, parameters)
-SP_HOST_CALLBACKS(STUB)
+// The entries of the callback table that this test never judges: the table installs only when every entry is set, and the
+// input monitor of the window calls the entry of the press once.
+#define UNUSED_V(result, name, parameters) static result unused_##name parameters {}
+#define UNUSED_R(result, name, parameters) static result unused_##name parameters { return 0; }
+#define UNUSED(mode, result, name, parameters, arguments) UNUSED_##mode(result, name, parameters)
+SP_HOST_CALLBACKS(UNUSED)
 
 static int failures;
 static void check(BOOL passed, NSString *name) {
@@ -43,7 +45,7 @@ static int stepsOfKeyDown(NSWindow *window) {
 
 int main(void) { @autoreleasepool {
     sp_host_callbacks callbacks = {0};
-#define ENTRY(mode, result, name, parameters, arguments) callbacks.name = stub_##name;
+#define ENTRY(mode, result, name, parameters, arguments) callbacks.name = unused_##name;
     SP_HOST_CALLBACKS(ENTRY)
 #undef ENTRY
     if (sp_host_callbacks_install(&callbacks) != NULL) {

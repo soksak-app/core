@@ -26,8 +26,8 @@ clang -Wall -Werror -O2 \
   $(PKG_CONFIG_PATH="$config_path" pkg-config --libs soksak-process-identity) \
   -o "$install_root/consumer_test"
 "$install_root/consumer_test"
-if nm -gU "$package_dir/lib/libsoksak-process-identity.a" | grep -F sp_process_set_display_name_with_services >/dev/null; then
-  printf 'FAIL: the package exports the native test injection seam\n' >&2
+if strings -a "$package_dir/lib/libsoksak-process-identity.a" | grep -F -e sp_process_copy_check_in_information -e SOKSAK_FAULT_PROCESS_IDENTITY >/dev/null; then
+  printf 'FAIL: the package exports the native test seam or its fault point\n' >&2
   exit 1
 fi
 if otool -L "$install_root/consumer_test" | grep -F "$package_dir" >/dev/null; then

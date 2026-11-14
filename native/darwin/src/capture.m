@@ -28,6 +28,8 @@
 #include <zlib.h>
 #include <sys/mman.h>
 #include <os/lock.h>
+#include <notify.h>
+#include <stdlib.h>
 
 // The function that gives the image of a list of windows, looked up at each open and still through captureLookup, which a test
 // replaces with the lookup of a macOS that lacks it.
@@ -39,14 +41,48 @@ static SPWindowImage windowImageFunction(void) {
     return (SPWindowImage)captureLookup(RTLD_DEFAULT, "CGWindowListCreateImageFromArray");
 }
 
-// The clock of the stage ticks and the timebase reader of the display-link callback, which a test replaces with a clock of known
-// values and with a reader that fails.
-static uint64_t (*captureRawClock)(void) = mach_absolute_time;
-static kern_return_t (*captureReadTimebase)(mach_timebase_info_t) = mach_timebase_info;
-// The LZ4 encoder of a still, which a test replaces with one that holds the compression until the test releases it.
-static size_t (*captureEncode)(uint8_t *, size_t, const uint8_t *, size_t, void *, compression_algorithm) = compression_encode_buffer;
+static uint64_t captureTicks(void) { return mach_absolute_time(); }
 
-static uint64_t captureTicks(void) { return captureRawClock(); }
+// The fault points of the capture, which a failure that the real system does not produce on demand uses (docs/operations/examples.md#test-kinds).
+// The capture exists only in diagnostic builds, so only they read them. Each is an environment variable whose value names the failure:
+//   SOKSAK_FAULT_CAPTURE_TIMEBASE: any value makes the timebase read of a display-link callback fail after the real read.
+//   SOKSAK_FAULT_CAPTURE_IMAGE: none gives no image; slow-first holds the image of the first request of a recording until the
+//     fourth request began; hold-after-first holds the images of the requests after the first until the release notification.
+//   SOKSAK_FAULT_CAPTURE_ENCODE: hold-after-first holds the compressions after the first until the release notification.
+// The release notification is the Darwin notification SP_CAPTURE_FAULT_RELEASE: it ends the waits that began before it, and a wait that
+// begins after it in the same recording does not hold. The requests are counted from the start of the recording.
+static const char *captureFault(const char *name) {
+    const char *value = getenv(name);
+    return value != NULL && value[0] != '\0' ? value : NULL;
+}
+
+static kern_return_t captureReadTimebase(mach_timebase_info_t timebase) {
+    kern_return_t result = mach_timebase_info(timebase);
+    return captureFault("SOKSAK_FAULT_CAPTURE_TIMEBASE") != NULL ? KERN_FAILURE : result;
+}
+
+static NSUInteger captureFaultImageRequests, captureFaultEncodeRequests, captureFaultReleases, captureFaultReleasesAtStart;
+
+// The state of the held requests: the number of requests of each kind in the recording and the releases that arrived. A request
+// holds while no release arrived since the start of the recording.
+static NSCondition *captureFaultState(void) {
+    static dispatch_once_t once;
+    static NSCondition *condition;
+    dispatch_once(&once, ^{
+        condition = [[NSCondition alloc] init];
+        int token = 0;
+        uint32_t status = notify_register_dispatch(SP_CAPTURE_FAULT_RELEASE, &token,
+            dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(int unused) {
+            (void)unused;
+            [condition lock];
+            captureFaultReleases++;
+            [condition broadcast];
+            [condition unlock];
+        });
+        if (status != NOTIFY_STATUS_OK) sp_log_error("capture fault", "the release notification could not be registered");
+    });
+    return condition;
+}
 
 static double ticksToMilliseconds(uint64_t ticks, mach_timebase_info_data_t timebase) {
     return (double)ticks * timebase.numer / timebase.denom / 1e6;
@@ -260,10 +296,62 @@ static CGRect imageScreen(SPCaptureTarget *target) {
     return CGRectIsNull(screen) ? target.screen : screen;
 }
 
+// Applies SOKSAK_FAULT_CAPTURE_IMAGE to a request of the window server: it waits as the fault names, and returns whether the fault
+// gives no image.
+static BOOL captureFaultNoImage(void) {
+    const char *fault = captureFault("SOKSAK_FAULT_CAPTURE_IMAGE");
+    if (fault == NULL) return NO;
+    if (strcmp(fault, "none") == 0) return YES;
+    BOOL slowFirst = strcmp(fault, "slow-first") == 0;
+    if (!slowFirst && strcmp(fault, "hold-after-first") != 0) {
+        sp_log_error("capture fault", "SOKSAK_FAULT_CAPTURE_IMAGE names no fault");
+        return YES;
+    }
+    NSCondition *state = captureFaultState();
+    [state lock];
+    NSUInteger request = ++captureFaultImageRequests;
+    [state broadcast];
+    if (slowFirst) {
+        while (request == 1 && captureFaultImageRequests < 4) [state wait];
+    } else {
+        while (request > 1 && captureFaultReleases == captureFaultReleasesAtStart) [state wait];
+    }
+    [state unlock];
+    return NO;
+}
+
+// Applies SOKSAK_FAULT_CAPTURE_ENCODE to a compression.
+static void captureFaultEncode(void) {
+    const char *fault = captureFault("SOKSAK_FAULT_CAPTURE_ENCODE");
+    if (fault == NULL) return;
+    if (strcmp(fault, "hold-after-first") != 0) {
+        sp_log_error("capture fault", "SOKSAK_FAULT_CAPTURE_ENCODE names no fault");
+        return;
+    }
+    NSCondition *state = captureFaultState();
+    [state lock];
+    NSUInteger request = ++captureFaultEncodeRequests;
+    while (request > 1 && captureFaultReleases == captureFaultReleasesAtStart) [state wait];
+    [state unlock];
+}
+
+// Starts counting the requests of a recording for the fault points.
+static void captureFaultStart(void) {
+    // Without a fault point the recording registers no notification and holds no state.
+    if (captureFault("SOKSAK_FAULT_CAPTURE_IMAGE") == NULL && captureFault("SOKSAK_FAULT_CAPTURE_ENCODE") == NULL) return;
+    NSCondition *state = captureFaultState();
+    [state lock];
+    captureFaultImageRequests = 0;
+    captureFaultEncodeRequests = 0;
+    captureFaultReleasesAtStart = captureFaultReleases;
+    [state unlock];
+}
+
 // The image of target with its pixels copied, or NULL. The image that the window server returns refers to the surfaces of the
 // windows until its pixels are read, and a read after a later commit holds that later content, so the copy is part of the still:
 // the time read after this call is the time by which the still holds its pixels. The caller releases the image.
 static CGImageRef takeImage(SPWindowImage function, SPCaptureTarget *target) {
+    if (captureFaultNoImage()) return NULL;
     CGWindowImageOption options = kCGWindowImageBestResolution | (target.display ? 0 : kCGWindowImageBoundsIgnoreFraming);
     CGImageRef image = function(target.request, target.windowIDs, options);
     if (image == NULL) return NULL;
@@ -882,14 +970,51 @@ static NSString *fileFailure(NSString *operation, NSString *path, int error) {
     return [NSString stringWithFormat:@"%@ %@: %s", operation, path, strerror(error)];
 }
 
+// The stage ticks of still index, which each take the instant that its caller read from the clock: the write start and the write
+// completion of the worker, the enqueue on the writer, and the start and the completion of the writer.
+static void recordWriteStages(SPCaptureRecording *recording, NSUInteger index, uint64_t started, uint64_t completed) {
+    @synchronized (recording) {
+        NSMutableDictionary *row = recording.rows[index];
+        row[@"writeStartTime"] = tickString(started);
+        row[@"writeCompleteTime"] = tickString(completed);
+    }
+}
+
+static void recordWriterEnqueued(SPCaptureRecording *recording, NSUInteger index, uint64_t enqueued) {
+    @synchronized (recording) { recording.rows[index][@"writerEnqueuedTime"] = tickString(enqueued); }
+}
+
+static void recordWriterStages(SPCaptureRecording *recording, NSUInteger index, uint64_t started, uint64_t completed) {
+    @synchronized (recording) {
+        NSMutableDictionary *row = recording.rows[index];
+        row[@"writerStartTime"] = tickString(started);
+        row[@"writerCompleteTime"] = tickString(completed);
+    }
+}
+
+// Records the request and the completion instants of still index with its windows, counts the completion, and returns whether the
+// request reached the stop time of the recording for the first time.
+static BOOL recordStillRequest(SPCaptureRecording *recording, NSUInteger index, SPCaptureTarget *target, uint64_t requested,
+    uint64_t completed) {
+    BOOL reached = NO;
+    @synchronized (recording) {
+        NSMutableDictionary *row = recording.rows[index];
+        row[@"requested"] = tickString(requested);
+        row[@"completed"] = tickString(completed);
+        row[@"windows"] = target.windows ?: @[];
+        recording.completedCount++;
+        reached = recording.stopArmed && !recording.stopReached && requested >= recording.stopAfterTicks;
+        if (reached) recording.stopReached = YES;
+    }
+    return reached;
+}
+
 // Writes the encoded frame of still index, bytes long in a mapping of mapped bytes, on the serial writer: first to a .partial file
 // that is renamed when whole. The writer unmaps the frame and gives its bytes back to the limit of the writer.
 static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t *encoded, size_t bytes, size_t mapped) {
     NSString *name = [NSString stringWithFormat:@"frame-%04lu.bgra", (unsigned long)index];
     NSString *path = [recording.directory stringByAppendingPathComponent:name];
-    @synchronized (recording) {
-        recording.rows[index][@"writerEnqueuedTime"] = tickString(captureTicks());
-    }
+    recordWriterEnqueued(recording, index, captureTicks());
     dispatch_async(captureWriter, ^{
         uint64_t writerStarted = captureTicks();
         NSString *failure = nil;
@@ -914,10 +1039,7 @@ static void writeFrame(SPCaptureRecording *recording, NSUInteger index, uint8_t 
         }
         unmapBuffer(encoded, mapped);
         releasePending(bytes);
-        @synchronized (recording) {
-            recording.rows[index][@"writerStartTime"] = tickString(writerStarted);
-            recording.rows[index][@"writerCompleteTime"] = tickString(captureTicks());
-        }
+        recordWriterStages(recording, index, writerStarted, captureTicks());
         if (failure != nil) stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the frame was not written: %@", failure], nil);
         else stillOutcome(recording, index, @"written", nil, name);
     });
@@ -934,7 +1056,8 @@ static uint8_t *encodeFrame(const uint8_t *frame, size_t pixels, size_t *bytes, 
     if (encoded != NULL) {
         memcpy(encoded, frame, kFrameHeader);
         memcpy(encoded + kFrameHeader, "LZ4S", 4);
-        compressed = captureEncode(encoded + kFrameEncodedHeader, capacity, frame + kFrameHeader, pixels, NULL, COMPRESSION_LZ4_RAW);
+        captureFaultEncode();
+        compressed = compression_encode_buffer(encoded + kFrameEncodedHeader, capacity, frame + kFrameHeader, pixels, NULL, COMPRESSION_LZ4_RAW);
         uint32_t count = (uint32_t)compressed;
         uint32_t checksum = (uint32_t)crc32(0, frame + kFrameHeader, (uInt)pixels);
         memcpy(encoded + kFrameHeader + 4, &count, sizeof count);
@@ -1045,11 +1168,7 @@ static void processStill(SPCaptureRecording *recording, NSUInteger index, SPCapt
     NSString *encodeFailure = nil;
     uint8_t *encoded = encodeFrame(frame, pixels, &bytes, &mapped, &encodeFailure);
     unmapBuffer(frame, frameBytes(pixels));
-    @synchronized (recording) {
-        NSMutableDictionary *row = recording.rows[index];
-        row[@"writeStartTime"] = tickString(processStarted);
-        row[@"writeCompleteTime"] = tickString(captureTicks());
-    }
+    recordWriteStages(recording, index, processStarted, captureTicks());
     if (encoded == NULL) {
         stillOutcome(recording, index, @"failed", [NSString stringWithFormat:@"the frame was not written: %@", encodeFailure], nil);
         return;
@@ -1078,16 +1197,7 @@ static void takeStill(SPCaptureRecording *recording, NSUInteger index, SPCapture
     requested = captureTicks();
     CGImageRef image = takeImage(recording.function, target);
     uint64_t completed = captureTicks();
-    BOOL reached = NO;
-    @synchronized (recording) {
-        NSMutableDictionary *row = recording.rows[index];
-        row[@"requested"] = tickString(requested);
-        row[@"completed"] = tickString(completed);
-        row[@"windows"] = target.windows ?: @[];
-        recording.completedCount++;
-        reached = recording.stopArmed && !recording.stopReached && requested >= recording.stopAfterTicks;
-        if (reached) recording.stopReached = YES;
-    }
+    BOOL reached = recordStillRequest(recording, index, target, requested, completed);
     if (reached) dispatch_semaphore_signal(recording.stopSignal);
     // Every way out of processStill has unmapped the pixels of the still, so the still leaves the in-flight limit with its image.
     processStill(recording, index, target, image, requested, completed);
@@ -1575,6 +1685,7 @@ bool sp_capture_start(const char *directory, double gap, double seconds, int fra
         [captureRecording release];
         captureRecording = [recording retain];
     }
+    captureFaultStart();
     observeCaptureWindows();
     emitLifecycle(recording, @"start", SP_EVENT_DEBUG, nil, nil);
     // The strict timer requests stills 1 and later at their planned times.

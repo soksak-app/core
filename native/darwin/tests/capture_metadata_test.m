@@ -30,15 +30,19 @@ static uint64_t rawMachForMediaTime(double seconds, mach_timebase_info_data_t ti
     return (uint64_t)roundl((long double)seconds * 1e9L * (long double)timebase.denom / (long double)timebase.numer);
 }
 
-@interface SPFakeDisplayLink : NSObject
-@property (nonatomic) NSUInteger invalidationCount;
-@property (nonatomic) int invalidationThread;
-- (void)invalidate;
+// The target of a real display link. The link holds its target until it is invalidated, so the thread on which the target is
+// released is the thread on which the link was invalidated.
+static int linkTargetReleases;
+static int linkTargetReleaseThread = -1;
+@interface SPLinkTarget : NSObject
+- (void)displayLinkDidRefresh:(CADisplayLink *)link;
 @end
-@implementation SPFakeDisplayLink
-- (void)invalidate {
-    self.invalidationCount++;
-    self.invalidationThread = NSThread.isMainThread ? 1 : 0;
+@implementation SPLinkTarget
+- (void)displayLinkDidRefresh:(CADisplayLink *)link { (void)link; }
+- (void)dealloc {
+    __atomic_store_n(&linkTargetReleaseThread, NSThread.isMainThread ? 1 : 0, __ATOMIC_RELAXED);
+    __atomic_add_fetch(&linkTargetReleases, 1, __ATOMIC_RELAXED);
+    [super dealloc];
 }
 @end
 
@@ -123,12 +127,17 @@ static void stillImage(SPCaptureRecording *recording, NSUInteger index, NSData *
     dispatch_sync(captureWriter, ^{});
 }
 
-// A clock that gives 100, 200, ... in the order of its reads, and a timebase reader that fails.
-static _Atomic uint64_t fixedClockReads;
-static uint64_t fixedClock(void) { return 100 * (atomic_fetch_add(&fixedClockReads, 1) + 1); }
-static kern_return_t failingTimebase(mach_timebase_info_t info) { (void)info; return KERN_FAILURE; }
+// A window that the window server lists, from which a real display link is made.
+static NSWindow *linkWindow(Class windowClass) {
+    NSWindow *window = [[windowClass alloc] initWithContentRect:NSMakeRect(0, 0, 10, 10)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    [window orderBack:nil];
+    [CATransaction flush];
+    return window;
+}
 
-// A window server image whose provider reads the capture clock at the first read of its pixels: the image that the window server
+// A window server image whose provider reads the clock at the first read of its pixels: the image that the window server
 // returns reads the window surfaces only when its pixels are read. Its pixels are #32c8c8 in Display P3, a colour that a conversion
 // to sRGB changes, as the window server gives the pixels in the colour space of the display.
 static NSData *lazyPixels(void) {
@@ -259,27 +268,46 @@ int main(void) { @autoreleasepool {
         && [stored[@"frame"] isEqual:@"frame-0000.bgra"]
         && rows[1][@"frame"] == NSNull.null && [rows[1][@"outcome"] isEqual:@"failed"],
         @"the still row preserves stage ticks as decimal strings, absent stages as null, and the actual mach timebase");
-    // Each stage keeps the tick of its own clock read: with a clock that gives 100, 200, ... in the order of its reads, the stages
-    // of a still hold the values of their reads in the order of the still path.
-    NSString *fixedDirectory = subdirectory(directory, @"still-fixed-clock");
-    SPCaptureRecording *fixedRecording = makeRecording(fixedDirectory, 1);
-    atomic_store(&fixedClockReads, 0);
-    captureRawClock = fixedClock;
-    stillImage(fixedRecording, 0, opaquePixels(8, 4, 90), 8, 4, CGRectMake(0, 0, 4, 2), stillRequested, stillCompleted);
-    captureRawClock = mach_absolute_time;
-    NSDictionary *fixedRow = nil;
-    @synchronized (fixedRecording) { fixedRow = [[fixedRecording.rows[0] copy] autorelease]; }
-    NSArray *fixedStages = stageTicks(fixedRow, @[@"writeStartTime", @"writeCompleteTime", @"writerEnqueuedTime",
-        @"writerStartTime", @"writerCompleteTime"]);
-    check([fixedStages isEqual:@[@"100", @"200", @"300", @"400", @"500"]] && [fixedRow[@"outcome"] isEqual:@"written"],
-        [NSString stringWithFormat:@"each still stage holds the tick of its own clock read (%@)", fixedStages]);
+    // Each stage keeps the tick of its own clock read: the five stages of a still hold the reads of the clock in the order of the
+    // still path, all between the read before the still and the read after it.
+    NSString *orderedDirectory = subdirectory(directory, @"still-stage-order");
+    SPCaptureRecording *orderedRecording = makeRecording(orderedDirectory, 1);
+    uint64_t beforeStill = mach_absolute_time();
+    stillImage(orderedRecording, 0, opaquePixels(8, 4, 90), 8, 4, CGRectMake(0, 0, 4, 2), stillRequested, stillCompleted);
+    uint64_t afterStill = mach_absolute_time();
+    NSDictionary *orderedRow = nil;
+    @synchronized (orderedRecording) { orderedRow = [[orderedRecording.rows[0] copy] autorelease]; }
+    NSArray *stageNames = @[@"writeStartTime", @"writeCompleteTime", @"writerEnqueuedTime", @"writerStartTime", @"writerCompleteTime"];
+    NSArray *orderedStages = stageTicks(orderedRow, stageNames);
+    BOOL stagesOrdered = [orderedRow[@"outcome"] isEqual:@"written"];
+    uint64_t previousStage = beforeStill;
+    for (NSString *name in stageNames) {
+        uint64_t stage = ticks(orderedRow[name]);
+        stagesOrdered = stagesOrdered && stage >= previousStage && stage <= afterStill;
+        previousStage = stage;
+    }
+    check(stagesOrdered, [NSString stringWithFormat:@"each still stage holds the tick of its own clock read, in the order of the still path, between %llu and %llu (%@)",
+        (unsigned long long)beforeStill, (unsigned long long)afterStill, orderedStages]);
+    // The stage recorders take their instants as data: five declared instants 100 ... 500, one per stage in the order of the still
+    // path, give exactly those stage values, and no other stage of the row changes.
+    SPCaptureRecording *tableRecording = makeRecording(subdirectory(directory, @"still-stage-table"), 1);
+    recordWriteStages(tableRecording, 0, 100, 200);
+    recordWriterEnqueued(tableRecording, 0, 300);
+    recordWriterStages(tableRecording, 0, 400, 500);
+    NSDictionary *tableRow = nil;
+    @synchronized (tableRecording) { tableRow = [[tableRecording.rows[0] copy] autorelease]; }
+    NSArray *tableStages = stageTicks(tableRow, stageNames);
+    check([tableStages isEqual:@[@"100", @"200", @"300", @"400", @"500"]] && [tableRow[@"outcome"] isEqual:@"not-requested"]
+        && tableRow[@"requested"] == NSNull.null && tableRow[@"completed"] == NSNull.null,
+        [NSString stringWithFormat:@"each still stage records exactly the instant given for it (%@)", tableStages]);
+    [tableRecording release];
     clearCaptureError();
-    check(finalizeCaptureArtifacts(fixedRecording), [NSString stringWithFormat:@"the fixed-clock recording finalizes (%s)",
+    check(finalizeCaptureArtifacts(orderedRecording), [NSString stringWithFormat:@"the stage-order recording finalizes (%s)",
         sp_capture_error()]);
-    [fixedRecording release];
+    [orderedRecording release];
     clearCaptureError();
-    // A still reads the pixels of its image between its request and its completion: with the clock that gives 100, 200, ...,
-    // the request is read at 200, the pixels at 300 and the completion at 400, and the frame holds the pixels.
+    // A still reads the pixels of its image between its request and its completion: the pixels are read after the request tick
+    // and before the completion tick, and the frame holds the pixels.
     NSString *lazyDirectory = subdirectory(directory, @"still-pixel-read");
     SPCaptureRecording *lazyRecording = makeRecording(lazyDirectory, 1);
     lazyRecording.function = lazyWindowImage;
@@ -289,17 +317,30 @@ int main(void) { @autoreleasepool {
     lazyTarget.request = CGRectNull;
     lazyTarget.screen = CGRectMake(0, 0, 4, 2);
     atomic_store(&lazyReadTick, 0);
-    atomic_store(&fixedClockReads, 0);
-    captureRawClock = fixedClock;
     takeStill(lazyRecording, 0, lazyTarget);
     dispatch_sync(captureWriter, ^{});
-    captureRawClock = mach_absolute_time;
     NSDictionary *lazyRow = nil;
     @synchronized (lazyRecording) { lazyRow = [[lazyRecording.rows[0] copy] autorelease]; }
-    check([lazyRow[@"requested"] isEqual:@"200"] && atomic_load(&lazyReadTick) == 300 && [lazyRow[@"completed"] isEqual:@"400"]
-        && [lazyRow[@"outcome"] isEqual:@"written"],
+    // The request and completion instants of a still are recorded exactly as given, and the stop is reached at the first request
+    // at or after the stop time.
+    SPCaptureRecording *requestRecording = makeRecording(subdirectory(directory, @"still-request-table"), 1);
+    SPCaptureTarget *requestTarget = [[[SPCaptureTarget alloc] init] autorelease];
+    requestTarget.windows = @[@(requestRecording.windowNumber)];
+    requestRecording.stopArmed = YES;
+    requestRecording.stopAfterTicks = 200;
+    BOOL requestReached = recordStillRequest(requestRecording, 0, requestTarget, 200, 400);
+    BOOL requestReachedAgain = recordStillRequest(requestRecording, 0, requestTarget, 300, 500);
+    NSDictionary *requestRow = nil;
+    @synchronized (requestRecording) { requestRow = [[requestRecording.rows[0] copy] autorelease]; }
+    check(requestReached && !requestReachedAgain && [requestRow[@"requested"] isEqual:@"300"] && [requestRow[@"completed"] isEqual:@"500"]
+        && requestRecording.completedCount == 2 && requestRecording.stopReached,
+        @"a still records the given request and completion instants and reaches the stop once");
+    [requestRecording release];
+    uint64_t lazyRequested = ticks(lazyRow[@"requested"]), lazyCompleted = ticks(lazyRow[@"completed"]);
+    uint64_t lazyRead = atomic_load(&lazyReadTick);
+    check(lazyRequested < lazyRead && lazyRead < lazyCompleted && [lazyRow[@"outcome"] isEqual:@"written"],
         [NSString stringWithFormat:@"a still reads the pixels of its image between its request and its completion (requested %@, "
-            "pixels read %llu, completed %@, %@)", lazyRow[@"requested"], (unsigned long long)atomic_load(&lazyReadTick),
+            "pixels read %llu, completed %@, %@)", lazyRow[@"requested"], (unsigned long long)lazyRead,
             lazyRow[@"completed"], lazyRow[@"outcome"]]);
     // The frame holds the bytes of the image in its own colour space, and the row names that space and its ICC profile file.
     NSData *lazyFrame = [lazyRow[@"frame"] isKindOfClass:NSString.class] ? readCaptureFrame([NSData dataWithContentsOfFile:
@@ -330,10 +371,10 @@ int main(void) { @autoreleasepool {
     // A still that took its image and failed after naming its colour space has no frame, so it names no colour space.
     NSString *fullDirectory = subdirectory(directory, @"writer-full");
     SPCaptureRecording *fullRecording = makeRecording(fullDirectory, 1);
-    size_t heldBytes = capturePendingBytes;
-    capturePendingBytes = kCapturePendingBytes;
+    size_t freeBytes = kCapturePendingBytes - capturePendingBytes;
+    check(reservePending(freeBytes), @"the fixture reserves the writer capacity that is free");
     stillImage(fullRecording, 0, opaquePixels(8, 4, 90), 8, 4, CGRectMake(0, 0, 4, 2), stillRequested, stillCompleted);
-    capturePendingBytes = heldBytes;
+    releasePending(freeBytes);
     NSDictionary *fullRow = nil;
     @synchronized (fullRecording) { fullRow = [[fullRecording.rows[0] copy] autorelease]; }
     check([fullRow[@"outcome"] isEqual:@"failed"] && fullRow[@"frame"] == NSNull.null
@@ -358,12 +399,15 @@ int main(void) { @autoreleasepool {
     // A display-link callback whose timebase read fails is rejected with an explicit capture error and records nothing; after the
     // stop, a callback whose timebase read would fail records nothing and leaves no error for the next capture.
     SPCaptureRecording *timebaseFailure = makeRecording(subdirectory(directory, @"display-link-timebase-failure"), 0);
-    SPFakeDisplayLink *liveLink = [SPFakeDisplayLink new];
-    timebaseFailure.displayLink = (CADisplayLink *)liveLink;
+    NSWindow *failureWindow = linkWindow(NSWindow.class);
+    SPLinkTarget *liveTarget = [SPLinkTarget new];
+    CADisplayLink *liveLink = [[failureWindow displayLinkWithTarget:liveTarget selector:@selector(displayLinkDidRefresh:)] retain];
+    check(liveLink != nil, @"a real display link is made from a window that the window server lists");
+    timebaseFailure.displayLink = liveLink;
     clearCaptureError();
-    captureReadTimebase = failingTimebase;
-    [timebaseFailure displayLinkDidRefresh:(CADisplayLink *)liveLink];
-    captureReadTimebase = mach_timebase_info;
+    setenv("SOKSAK_FAULT_CAPTURE_TIMEBASE", "the fixture timebase read failed", 1);
+    [timebaseFailure displayLinkDidRefresh:liveLink];
+    unsetenv("SOKSAK_FAULT_CAPTURE_TIMEBASE");
     check([timebaseFailure.displayLinkState isEqual:@"incomplete"] && timebaseFailure.displayLinkObservations.count == 0
         && timebaseFailure.omittedDisplayLinkObservations == 1
         && [[NSString stringWithUTF8String:sp_capture_error()]
@@ -372,17 +416,17 @@ int main(void) { @autoreleasepool {
             sp_capture_error()]);
     [timebaseFailure stopDisplayLinkObservation];
     clearCaptureError();
-    captureReadTimebase = failingTimebase;
-    atomic_store(&fixedClockReads, 0);
-    captureRawClock = fixedClock;
-    [timebaseFailure displayLinkDidRefresh:(CADisplayLink *)liveLink];
-    captureRawClock = mach_absolute_time;
-    captureReadTimebase = mach_timebase_info;
+    setenv("SOKSAK_FAULT_CAPTURE_TIMEBASE", "the fixture timebase read failed", 1);
+    [timebaseFailure displayLinkDidRefresh:liveLink];
+    unsetenv("SOKSAK_FAULT_CAPTURE_TIMEBASE");
     check(timebaseFailure.omittedDisplayLinkObservations == 1 && timebaseFailure.displayLinkObservations.count == 0
-        && atomic_load(&fixedClockReads) == 0 && strlen(sp_capture_error()) == 0,
-        @"a late display-link callback after stop whose clock and timebase would fail records nothing and reports no error into the next capture");
+        && strlen(sp_capture_error()) == 0,
+        @"a late display-link callback after stop whose timebase read would fail records nothing and reports no error into the next capture");
     [timebaseFailure release];
     [liveLink release];
+    [liveTarget release];
+    [failureWindow close];
+    [failureWindow release];
 
     SPCaptureRecording *unencodable = makeRecording(subdirectory(directory, @"stills-encode"), 2);
     unencodable.rows[1][@"error"] = [[[NSObject alloc] init] autorelease];
@@ -400,15 +444,17 @@ int main(void) { @autoreleasepool {
 
     // The release of the display-link resources.
     SPCaptureRecording *releaseFixture = [SPCaptureRecording new];
-    NSWindow *retainedWindow = [[SPDisplayWindowReleaseProbe alloc] initWithContentRect:NSMakeRect(0, 0, 10, 10)
-        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
-    retainedWindow.releasedWhenClosed = NO;
-    SPFakeDisplayLink *fakeLink = [SPFakeDisplayLink new];
-    fakeLink.invalidationThread = -1;
+    NSWindow *retainedWindow = linkWindow(SPDisplayWindowReleaseProbe.class);
+    SPLinkTarget *releaseTarget = [SPLinkTarget new];
     releaseFixture.displayWindow = retainedWindow;
-    releaseFixture.displayLink = (CADisplayLink *)fakeLink;
+    releaseFixture.displayLink = [retainedWindow displayLinkWithTarget:releaseTarget selector:@selector(displayLinkDidRefresh:)];
+    check(releaseFixture.displayLink != nil, @"a real display link is made for the release fixture");
+    // The link holds the target until it is invalidated.
+    [releaseTarget release];
     __block int backgroundStopReturned = 0;
     displayWindowReleaseThread = -1;
+    linkTargetReleases = 0;
+    linkTargetReleaseThread = -1;
     trackDisplayWindowReleases = 1;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
         [releaseFixture stopDisplayLinkObservation];
@@ -416,18 +462,19 @@ int main(void) { @autoreleasepool {
     });
     // The background stop runs the invalidation and the release on the main queue, which the run loop of this thread serves.
     sp_run_until("the background stop of the display link", ^BOOL {
-        return __atomic_load_n(&backgroundStopReturned, __ATOMIC_RELAXED) != 0;
+        return __atomic_load_n(&backgroundStopReturned, __ATOMIC_RELAXED) != 0
+            && __atomic_load_n(&linkTargetReleases, __ATOMIC_RELAXED) != 0;
     });
     trackDisplayWindowReleases = 0;
-    check(fakeLink.invalidationCount == 1 && fakeLink.invalidationThread == 1
+    check(__atomic_load_n(&linkTargetReleases, __ATOMIC_RELAXED) == 1 && __atomic_load_n(&linkTargetReleaseThread, __ATOMIC_RELAXED) == 1
         && __atomic_load_n(&displayWindowReleaseThread, __ATOMIC_RELAXED) == 1
         && releaseFixture.displayLinkStopped && releaseFixture.displayLink == nil && releaseFixture.displayWindow == nil,
         @"a background stop invalidates the display link and releases the retained window on the main thread");
     [releaseFixture stopDisplayLinkObservation];
-    check(fakeLink.invalidationCount == 1, @"a second stop does not invalidate the display link again");
+    check(__atomic_load_n(&linkTargetReleases, __ATOMIC_RELAXED) == 1 && releaseFixture.displayLink == nil,
+        @"a second stop does not invalidate the display link again");
     [retainedWindow close];
     [retainedWindow release];
-    [fakeLink release];
     [releaseFixture release];
 
     // The display-link trace.
