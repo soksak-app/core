@@ -1087,6 +1087,7 @@ fn invalid_json_closes_connection() {
 | `sidecars.end.is-the-process-exit` | 표준 입출력 사이드카는 새 프로세스 그룹의 leader로 시작한다. 그 종료가 프로세스 그룹과 읽기를 끝내므로, 출력을 열어 둔 프로세스가 실행 중인 사이드카의 실패나 중지를 붙잡지 않는다. | all |
 | `sidecars.end.a-group-of-ended-processes-has-ended` | 프로세스가 모두 끝나 시스템이 신호를 EPERM으로 거절하는 프로세스 그룹에 보내는 강제 종료 신호와 종료 신호는 leader가 reap된 뒤에도 성공한다. 호스트는 그 거절을 그룹 프로세스들의 상태로 판단하고, 실행 중인 프로세스만 그것을 error로 만든다. | all |
 | `sidecars.end.group-ends-before-leader-reap` | 표준 입출력 sidecar 의 exit wait 는 끝난 프로세스를 reap 하기 전에 그 process group 을 끝낸다. 그룹이 끝나는 동안 leader 는 아무도 reap 하지 않은 호스트의 프로세스이므로 그 pid 는 자기 그룹만 가리키고 다른 프로세스를 가리키지 않으며, 그룹이 끝난 뒤 호스트는 그 그룹에 다른 신호를 보내지 않는다. | all |
+| `sidecars.end.names-the-system-error-by-its-number` | 시스템이 ESRCH나 EPERM이 아닌 error로 거절한 프로세스 그룹의 강제 종료 신호와 종료 신호, 그리고 실패한 그룹 프로세스 읽기는 두 호스트 모두 system error를 그 번호로 쓴다. 문구는 `end process group <pid>: errno <n>`, `terminate process group <pid>: errno <n>`이고, 읽기가 실패하면 system error 자리에 `read the processes of the group: errno <n>`이 온다. | all |
 | `sidecars-transport.stop.waits-for-no-room` | 중지는 영속 서비스의 `close-owner`와 `shutdown`을 그 queue에 자리를 기다리지 않고 보낸다. 가득 찬 queue는 닫기를 그 자리에서 실패시키고 연결을 끝낸다. | all |
 | `project.open-ready-shown-order` | project를 열 때 workbench가 새 project를 선택하기 전까지 이전에 commit된 project를 유지하며, 선택 전에는 staged project를 게시하지 않는다. | all |
 | `project.open.prepare-before-show` | 이미 보이는 project를 다시 열 때 workbench가 그 project의 root를 선택하기 전까지 commit된 root를 유지한다. | all |

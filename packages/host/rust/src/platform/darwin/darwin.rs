@@ -29,6 +29,9 @@ use super::{
 mod capture;
 #[path = "child_process.rs"]
 mod child_process;
+#[cfg(test)]
+#[path = "child_process_test.rs"]
+mod child_process_test;
 #[path = "clipboard.rs"]
 mod clipboard;
 #[path = "diagnostic_reports.rs"]

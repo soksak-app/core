@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 두 host의 process group 오류가 system 오류를 `errno <n>`로 적는다 (F830-2).
 - Go host가 Rust host처럼 종료된 sidecar의 process group을 leader reap 전에 끝내고, 끝난 뒤에는 group signal을 보내지 않는다 (F830-1).
 - 두 host는 group signal이 EPERM으로 답하면 process table에서 member를 읽고, member가 모두 zombie이거나 종료 중인 process group을 끝난 것으로 본다 (F830).
 - Go host의 page end fixture test가 native test 지원의 verification case를 선언한다 (F825-1).

@@ -33,15 +33,29 @@ pub fn terminate_process_group(pid: u32) -> Result<(), String> {
 /// the host may not signal, is an error that names the processes that run.
 fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
     let group = i32::try_from(pid).map_err(|_| "out of range".to_string())?;
-    if unsafe { libc::kill(-group, signal) } == 0 {
+    let answer = if unsafe { libc::kill(-group, signal) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    };
+    group_signal_result(answer, || running_group_processes(group))
+}
+
+/// Judges the answer of a signal to a process group (signal_process_group); `running` reads the processes of the group
+/// that run.
+pub(super) fn group_signal_result(
+    answer: std::io::Result<()>,
+    running: impl FnOnce() -> std::io::Result<Vec<i32>>,
+) -> Result<(), String> {
+    let Err(error) = answer else {
         return Ok(());
-    }
-    let error = std::io::Error::last_os_error();
+    };
     match error.raw_os_error() {
         Some(libc::ESRCH) => Ok(()),
         Some(libc::EPERM) => {
-            let running = running_group_processes(group)
-                .map_err(|error| format!("read the processes of the group: {error}"))?;
+            let running = running().map_err(|error| {
+                format!("read the processes of the group: {}", system_error(&error))
+            })?;
             if running.is_empty() {
                 return Ok(());
             }
@@ -51,7 +65,16 @@ fn signal_process_group(pid: u32, signal: i32) -> Result<(), String> {
                 running.join(", ")
             ))
         }
-        _ => Err(error.to_string()),
+        _ => Err(system_error(&error)),
+    }
+}
+
+/// Names a system error by its number, `errno <n>`, the form of the system error text of both hosts; an error without a
+/// number keeps its text.
+fn system_error(error: &std::io::Error) -> String {
+    match error.raw_os_error() {
+        Some(errno) => format!("errno {errno}"),
+        None => error.to_string(),
     }
 }
 

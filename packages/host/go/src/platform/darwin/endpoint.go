@@ -239,25 +239,40 @@ func (implementation) TerminateProcessGroup(pid int) error {
 // runs is the end of the group, as ESRCH is; EPERM while one runs, which the kernel does for a process that the host may not
 // signal, is an error that names the processes that run.
 func signalProcessGroup(pid int, signal syscall.Signal) error {
-	err := syscall.Kill(-pid, signal)
+	return groupSignalResult(syscall.Kill(-pid, signal), func() ([]int, error) { return runningGroupProcesses(pid) })
+}
+
+// groupSignalResult judges the answer err of a signal to a process group (signalProcessGroup); running reads the processes of the
+// group that run.
+func groupSignalResult(err error, running func() ([]int, error)) error {
 	switch {
 	case err == nil, errors.Is(err, syscall.ESRCH):
 		return nil
 	case !errors.Is(err, syscall.EPERM):
-		return err
+		return systemError(err)
 	}
-	running, err := runningGroupProcesses(pid)
+	members, err := running()
 	if err != nil {
-		return fmt.Errorf("read the processes of the group: %w", err)
+		return fmt.Errorf("read the processes of the group: %w", systemError(err))
 	}
-	if len(running) == 0 {
+	if len(members) == 0 {
 		return nil
 	}
-	names := make([]string, len(running))
-	for i, member := range running {
+	names := make([]string, len(members))
+	for i, member := range members {
 		names[i] = fmt.Sprintf("pid %d", member)
 	}
 	return fmt.Errorf("operation not permitted; running: %s", strings.Join(names, ", "))
+}
+
+// systemError names a system error by its number, `errno <n>`, the form of the system error text of both hosts; an error without
+// a number keeps its text.
+func systemError(err error) error {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return fmt.Errorf("errno %d", int(errno))
+	}
+	return err
 }
 
 // sZomb and pWExit are SZOMB and P_WEXIT of <sys/proc.h>, which golang.org/x/sys/unix does not declare: the process is a zombie,
