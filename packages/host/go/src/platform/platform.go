@@ -735,6 +735,8 @@ type Platform interface {
 	TerminateProcessGroup(pid int) error
 	// ExitedByTermination answers whether an ended process ended by the terminate signal.
 	ExitedByTermination(state *os.ProcessState) bool
+	// WaitProcessExit waits until the child process pid exits, without reaping it, so its owner still reaps it.
+	WaitProcessExit(pid int) error
 	// ReadAvailable reads into buffer what the pipe file holds now, without waiting: it returns io.EOF when the pipe holds
 	// nothing or its writers closed it. Clear the read deadline of file before calling it.
 	ReadAvailable(file *os.File, buffer []byte) (int, error)

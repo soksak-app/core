@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use super::{
-    Failure, Message, Outgoing, Owner, QueuedLine, Replacement, ReplyWaiters, Sidecars,
-    await_replaced_service, send_close_owner_and_shutdown,
+    Failure, Message, Outgoing, Owner, ProcessExit, QueuedLine, Replacement, ReplyWaiters,
+    Sidecars, await_replaced_service, send_close_owner_and_shutdown,
 };
 
 // A stop sends close-owner without waiting for room in the queue of the service: a full queue fails the close at once.
@@ -121,4 +121,53 @@ fn a_stop_ends_the_wait_of_a_replacement() {
     );
     service.kill().unwrap();
     service.wait().unwrap();
+}
+
+// The exit wait of a sidecar ends the process group of the exited process before it reaps that process, so while the group
+// ends the leader is a process of the host that no one reaped and its pid names its group and no other process
+// (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.group-ends-before-leader-reap
+#[test]
+fn a_group_ends_before_its_leader_is_reaped() {
+    let platform = crate::platform::current().unwrap();
+    let mut command = Command::new("true");
+    platform.new_process_group(&mut command).unwrap();
+    let mut leader = command.spawn().unwrap();
+    let pid = leader.id();
+    // The signal 0 reaches a process that exists, and a zombie that no one reaped exists; after the reap the pid names no
+    // process.
+    let exists = || {
+        let id = i32::try_from(pid).unwrap();
+        if unsafe { libc::kill(id, 0) } == 0 {
+            return true;
+        }
+        let error = std::io::Error::last_os_error();
+        assert_eq!(error.raw_os_error(), Some(libc::ESRCH), "signal 0 to {pid}");
+        false
+    };
+    let exit = ProcessExit::new();
+    let status = thread::scope(|scope| {
+        // The reap waits for the end of the group.
+        let reap = scope.spawn(|| exit.reap(&mut leader));
+        platform.wait_process_exit(pid).unwrap();
+        let mut ended = false;
+        exit.end_group(|| {
+            ended = true;
+            assert!(
+                exists(),
+                "the leader {pid} was reaped before the end of its group"
+            );
+            platform.end_process_group(pid)
+        })
+        .unwrap();
+        assert!(ended, "the exit wait did not end the group");
+        reap.join().unwrap().unwrap()
+    });
+    assert!(status.success(), "the leader {pid} ended with {status}");
+    assert!(
+        !exists(),
+        "the leader {pid} is not reaped after the exit wait"
+    );
+    exit.signal_group(|| panic!("a signal reached the group after its end"))
+        .unwrap();
 }

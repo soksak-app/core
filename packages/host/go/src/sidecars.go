@@ -151,10 +151,50 @@ type sidecar struct {
 	waited  chan struct{}
 	state   *os.ProcessState
 	waitErr error
+	// exit orders the end of the process group of a sidecar on standard input and output before the reap of its leader.
+	exit processExit
 	// stderrEnded closes when the copy of the standard error ended and wrote its last text.
 	stderrEnded chan struct{}
 	// begin starts the write and read goroutines of a registered process.
 	begin func()
+}
+
+// processExit is the exit of the process of a sidecar on standard input and output, which orders the end of its process group
+// before its reap (docs/spec/sidecars.md#declaration-and-startup). The exit wait reads the exit without reaping it and then
+// ends the group; it reaps the process only after that end. So until the end of the group its leader is a process of the host
+// that no one reaped, and its pid names its group in every signal and no other process. After the end of the group no process
+// of the group runs, and a signal has nothing to end.
+type processExit struct {
+	mu         sync.Mutex
+	groupEnded bool
+}
+
+// signalGroup sends a signal to the process group through signal while the group has not ended; after its end nothing of it
+// runs, so nothing is sent.
+func (e *processExit) signalGroup(signal func() error) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.groupEnded {
+		return nil
+	}
+	return signal()
+}
+
+// endAndReap waits through waitExit for the exit of leader, ends its process group through end and reaps leader. It reports
+// the failures of the exit wait and of the end through failed, which do not stop the reap, and returns the result of the reap.
+func (e *processExit) endAndReap(leader *os.Process, waitExit func(pid int) error, end func() error,
+	failed func(error)) (*os.ProcessState, error) {
+	if err := waitExit(leader.Pid); err != nil {
+		failed(err)
+	}
+	e.mu.Lock()
+	ended := end()
+	e.groupEnded = true
+	e.mu.Unlock()
+	if ended != nil {
+		failed(ended)
+	}
+	return leader.Wait()
 }
 
 // SidecarOwner is the window that owns a surface. It provides the root of sidecar messages and receives events.
@@ -1431,7 +1471,7 @@ func (c *Sidecars) killQuitStop(processes []*sidecar) {
 			LogError("sidecar "+process.name, fmt.Sprintf("second quit: %v", platformErr))
 			continue
 		}
-		if err := current.EndProcessGroup(pid); err != nil {
+		if err := process.exit.signalGroup(func() error { return current.EndProcessGroup(pid) }); err != nil {
 			LogError("sidecar "+process.name, fmt.Sprintf("second quit: %v", err))
 		}
 	}
@@ -1505,7 +1545,8 @@ func (c *Sidecars) stopProcesses(processes []*sidecar, detach, quit bool, ended 
 			LogError("sidecar "+process.name, fmt.Sprintf("terminate: %v", platformErr))
 			continue
 		}
-		if err := current.TerminateProcessGroup(process.cmd.Process.Pid); err != nil {
+		pid := process.cmd.Process.Pid
+		if err := process.exit.signalGroup(func() error { return current.TerminateProcessGroup(pid) }); err != nil {
 			LogError("sidecar "+process.name, fmt.Sprintf("terminate: %v", err))
 		}
 	}
@@ -1962,14 +2003,13 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		surfaces:     make(map[string]bool),
 	}
 	stdoutOutput, stderrOutput := &exitPipe{file: stdout}, &exitPipe{file: stderr}
-	// The end of the sidecar is the exit of its process, which the wait reports: the host then ends its process group and the
-	// reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
+	// The end of the sidecar is the exit of its process, which the wait reports: the host then ends its process group, reaps the
+	// process and ends the reads of both outputs (docs/spec/sidecars.md#declaration-and-startup).
 	routine.Go("sidecar-wait", func() {
-		process.state, process.waitErr = cmd.Process.Wait()
+		pid := cmd.Process.Pid
+		process.state, process.waitErr = process.exit.endAndReap(cmd.Process, current.WaitProcessExit,
+			func() error { return current.EndProcessGroup(pid) }, func(err error) { LogError("sidecar "+name, err) })
 		close(process.waited)
-		if err := current.EndProcessGroup(cmd.Process.Pid); err != nil {
-			LogError("sidecar "+name, err)
-		}
 		for _, output := range []*exitPipe{stdoutOutput, stderrOutput} {
 			if err := output.end(); err != nil {
 				LogError("sidecar "+name, fmt.Sprintf("end output: %v", err))
@@ -2479,7 +2519,7 @@ func (c *Sidecars) read(process *sidecar, output io.Reader, stdout io.Closer) {
 	}
 	// The protocol state after a failure is undefined, so the process group is ended.
 	reason := violation
-	if err := endProcessGroup(process.cmd.Process.Pid); err != nil {
+	if err := process.exit.signalGroup(func() error { return endProcessGroup(process.cmd.Process.Pid) }); err != nil {
 		reason = fmt.Sprintf("%s; kill: %v", reason, err)
 	}
 	<-process.waited

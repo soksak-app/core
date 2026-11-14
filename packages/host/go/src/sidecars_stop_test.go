@@ -2,10 +2,15 @@ package host
 
 import (
 	"context"
+	"errors"
 	"net"
+	"os"
 	"os/exec"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 )
 
 // A stop sends close-owner without waiting for room in the queue of the service: a full queue fails the close at once and ends the
@@ -115,5 +120,71 @@ func TestAStopEndsTheWaitOfAReplacement(t *testing.T) {
 	case <-exited:
 		t.Fatal("the wait ended by the exit of the service process and not by the stop")
 	default:
+	}
+}
+
+// The exit wait of a sidecar ends the process group of the exited process before it reaps that process, so while the group
+// ends the leader is a process of the host that no one reaped and its pid names its group and no other process
+// (docs/spec/sidecars.md#declaration-and-startup).
+// contract: sidecars.end.group-ends-before-leader-reap
+func TestAGroupEndsBeforeItsLeaderIsReaped(t *testing.T) {
+	current, err := platform.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	leader := exec.Command("true")
+	if err := current.NewProcessGroup(leader); err != nil {
+		t.Fatal(err)
+	}
+	if err := leader.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := leader.Process.Pid
+	// The signal 0 reaches a process that exists, and a zombie that no one reaped exists; after the reap the pid names no
+	// process.
+	exists := func() (bool, error) {
+		process, err := os.FindProcess(pid)
+		if err != nil {
+			return false, err
+		}
+		switch err := process.Signal(syscall.Signal(0)); {
+		case err == nil:
+			return true, nil
+		case errors.Is(err, os.ErrProcessDone):
+			return false, nil
+		default:
+			return false, err
+		}
+	}
+	var exit processExit
+	ended := false
+	state, err := exit.endAndReap(leader.Process, current.WaitProcessExit, func() error {
+		ended = true
+		unreaped, err := exists()
+		if err != nil {
+			return err
+		}
+		if !unreaped {
+			t.Errorf("the leader %d was reaped before the end of its group", pid)
+		}
+		return current.EndProcessGroup(pid)
+	}, func(err error) { t.Error(err) })
+	if err != nil {
+		t.Fatalf("reap the leader %d: %v", pid, err)
+	}
+	if !ended {
+		t.Fatal("the exit wait did not end the group")
+	}
+	if !state.Success() {
+		t.Fatalf("the leader %d ended with %v", pid, state)
+	}
+	if unreaped, err := exists(); err != nil || unreaped {
+		t.Fatalf("the leader %d is not reaped after the exit wait: exists %v, %v", pid, unreaped, err)
+	}
+	if err := exit.signalGroup(func() error {
+		t.Error("a signal reached the group after its end")
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 }

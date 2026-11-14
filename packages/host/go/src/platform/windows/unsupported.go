@@ -616,6 +616,10 @@ func (implementation) ExitedByTermination(*os.ProcessState) bool {
 	return false
 }
 
+func (implementation) WaitProcessExit(int) error {
+	return unsupported("process exit wait")
+}
+
 func (implementation) ReadAvailable(*os.File, []byte) (int, error) {
 	return 0, unsupported("available pipe read")
 }
