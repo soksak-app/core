@@ -7,10 +7,14 @@ mod folder;
 #[path = "support/platform/platform.rs"]
 mod endpoint_client;
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/endpoint_case.rs"]
 mod endpoint_case;
+#[path = "support/records.rs"]
+mod records;
 
-use endpoint_case::{CasePage, exchange};
+use endpoint_case::CasePage;
 use endpoint_client::Connection;
 
 use std::path::Path;

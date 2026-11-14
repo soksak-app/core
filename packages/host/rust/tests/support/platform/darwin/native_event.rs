@@ -1,4 +1,5 @@
 //! The record of the native ring through the native library.
+#![allow(dead_code)]
 
 use std::ffi::{CStr, CString, c_char};
 

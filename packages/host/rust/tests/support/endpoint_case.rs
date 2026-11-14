@@ -6,7 +6,8 @@
 //! the case has no step for as a problem of the case. The request, the reply and the end of the connection run through the relay
 //! of the host (`Relay`), so the end of the connection of a held request ends it as it does in the host.
 //!
-//! A test file includes this file as `mod endpoint_case`, with `mod folder` and `mod endpoint_client` at its root.
+//! A test file includes this file as `mod endpoint_case`, with `mod folder`, `mod endpoint_client`, `mod child` and `mod records`
+//! at its root.
 
 #![allow(dead_code)]
 
@@ -25,11 +26,7 @@ use soksak_host::exposure::Relay;
 
 use crate::endpoint_client::{self, Connection};
 use crate::folder::Folder;
-
-#[path = "child.rs"]
-mod child;
-#[path = "records.rs"]
-mod records;
+use crate::{child, records};
 
 /// The largest frame of the framing (docs/spec/endpoint.md#framing).
 const MAX_FRAME: usize = 16 * 1024 * 1024;

@@ -81,7 +81,7 @@ fn the_memory_pressure_level_validates() -> Result<(), String> {
     Ok(())
 }
 
-const TESTS: &[(&str, fn() -> Result<(), String>)] = &[
+const TESTS: &[main_thread::MainTest] = &[
     (
         "the_memory_pressure_relays_level_and_seq",
         the_memory_pressure_relays_level_and_seq,

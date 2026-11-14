@@ -94,7 +94,7 @@ fn the_start_of_a_page_runs_as_a_step_of_the_main_thread() -> Result<(), String>
     Ok(())
 }
 
-const TESTS: &[(&str, fn() -> Result<(), String>)] = &[(
+const TESTS: &[main_thread::MainTest] = &[(
     "the_start_of_a_page_runs_as_a_step_of_the_main_thread",
     the_start_of_a_page_runs_as_a_step_of_the_main_thread,
 )];

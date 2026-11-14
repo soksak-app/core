@@ -15,6 +15,8 @@ mod endpoint_case;
 
 use endpoint_case::{Exchange, exchange, serve_page};
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/records.rs"]
 mod records;
 

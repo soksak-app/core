@@ -10,8 +10,12 @@ mod endpoint_client;
 
 use endpoint_client::Connection;
 
+#[path = "support/child.rs"]
+mod child;
 #[path = "support/endpoint_case.rs"]
 mod endpoint_case;
+#[path = "support/records.rs"]
+mod records;
 
 use endpoint_case::{exchange, serve_page};
 

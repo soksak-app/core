@@ -46,7 +46,10 @@ struct Case {
 struct Step {
     call: Option<Call>,
     reply: Option<Reply>,
+    // A notice or a request step is accepted by the reader and rejected by the replay with its own error.
+    #[allow(dead_code)]
     notice: Option<Value>,
+    #[allow(dead_code)]
     request: Option<Value>,
 }
 
@@ -100,7 +103,7 @@ fn run_case(name: &str, file: &Path) -> Result<(), String> {
             case.plugin
         ));
     }
-    if case.steps.len() % 2 != 0 {
+    if !case.steps.len().is_multiple_of(2) {
         return Err("the steps are not call and reply pairs".into());
     }
     let writer = CaseWriter::start(false);

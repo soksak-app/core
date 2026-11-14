@@ -149,7 +149,7 @@ fn run_case(name: &str, file: &Path) -> Result<(), String> {
             ));
         }
     }
-    if case.steps.len() % 2 != 0 {
+    if !case.steps.len().is_multiple_of(2) {
         return Err("the steps are not call and reply pairs".into());
     }
     // A case with no steps sends no call, so the producer has no call to run and the case passes with nothing to compare.

@@ -1,5 +1,4 @@
-#[path = "../tests/support/folder.rs"]
-mod folder;
+use crate::test_folder as folder;
 
 use std::sync::mpsc::{self, Receiver, Sender, sync_channel};
 use std::sync::{Arc, Mutex, Weak};

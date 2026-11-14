@@ -18,7 +18,7 @@ mod sidecar_recorder;
 use serde_json::value::RawValue;
 use sidecar_recorder::{SendAsRecorder, SidecarRecorder, failing_owner, owner};
 use soksak_host::sidecars::{
-    ClosingSurface, Failure, Message, MessageLine, SidecarDeclaration, Sidecars, read_message_line,
+    ClosingSurface, Failure, MessageLine, SidecarDeclaration, Sidecars, read_message_line,
 };
 
 /// The writer of the records is process-wide, so the tests that attach it run one at a time.
@@ -2259,9 +2259,6 @@ fn in_writer_child(test: &str, marker: &str) -> bool {
     );
     false
 }
-
-const FIXTURE_SIDECAR: &str =
-    r#"{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}"#;
 
 // contract: sidecars.lifetime.first-output-after-spawn-is-recorded
 #[test]
