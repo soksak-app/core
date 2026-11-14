@@ -13,8 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6", "dynamic-acl", "x11", "dbus", "unstable"] }
-soksak-host = { path = "../../../../rust" }
-soksak-host-tauriv2 = { path = "../../.." }
+soksak-host = { workspace = true }
+soksak-host-tauriv2 = { workspace = true }
 serde_json = "1"
 
 [build-dependencies]
