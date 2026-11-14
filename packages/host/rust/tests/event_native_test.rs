@@ -1,12 +1,18 @@
-//! The pull of the native ring (docs/spec/logging.md#writers): the writer of the host takes the records of the native
-//! library when the ring wakes it and at its batch interval, stores them in the layer `native` with the time the library gave, and counts the records
-//! it refuses and the events the ring refused.
+//! The pull of the native ring against the real ring of the process (docs/spec/logging.md#writers): the scheduling of the writer
+//! that pulls the ring and the loss of a ring that overflows. The decoder, the refused records and the stored form of the decoded
+//! events are data tests of src/event_log_native_test.rs.
 
 #[path = "support/folder.rs"]
 mod folder;
 
+#[path = "support/child.rs"]
+mod child;
+
 #[path = "support/records.rs"]
 mod records;
+
+#[path = "support/platform/native_event.rs"]
+mod native_event;
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -16,59 +22,10 @@ use std::time::Duration;
 
 use serde_json::Value;
 use soksak_host::event_log::{self, Channel, EventLog, Level, Options, Rouser};
+use soksak_host::platform;
 
-/// A record of the class call as the native library drains it; the names of the tests that use it are not in the catalog.
-fn native_record(ts: u64, level: u8, name: &str, fields: &str) -> Vec<u8> {
-    native_record_with(ts, ts % 1_000_000 + 9_000, level, "", name, fields)
-}
-
-fn native_record_with(
-    ts: u64,
-    mono: u64,
-    level: u8,
-    cids: &str,
-    name: &str,
-    fields: &str,
-) -> Vec<u8> {
-    native_record_of_class(ts, mono, level, 2, cids, name, fields)
-}
-
-/// A record as the native library drains it: a 4-byte length, then the wall clock (8 bytes), the monotonic clock (8), the
-/// level (1 byte), the class (1 byte), the length of the name (1 byte), the length of the cids (2), the name, the cids as a list
-/// separated by commas and the fields, in the byte order of the host.
-fn native_record_of_class(
-    ts: u64,
-    mono: u64,
-    level: u8,
-    class: u8,
-    cids: &str,
-    name: &str,
-    fields: &str,
-) -> Vec<u8> {
-    let mut body = Vec::new();
-    body.extend_from_slice(&ts.to_ne_bytes());
-    body.extend_from_slice(&mono.to_ne_bytes());
-    body.push(level);
-    body.push(class);
-    body.push(name.len() as u8);
-    body.extend_from_slice(&(cids.len() as u16).to_ne_bytes());
-    body.extend_from_slice(name.as_bytes());
-    body.extend_from_slice(cids.as_bytes());
-    body.extend_from_slice(fields.as_bytes());
-    let mut record = (body.len() as u32).to_ne_bytes().to_vec();
-    record.extend_from_slice(&body);
-    record
-}
-
-/// The ring of a test: its bytes are handed out once, as the drain of the native ring does, and its loss is reported once.
-#[derive(Default)]
-struct FakeRing {
-    bytes: Vec<u8>,
-    loss_events: u64,
-    loss_bytes: u64,
-    debug_events: u64,
-    debug_bytes: u64,
-}
+/// The native ring belongs to the process, so the tests that record into it or pull it run one at a time.
+static SERIAL: Mutex<()> = Mutex::new(());
 
 fn read(path: &Path) -> Vec<Value> {
     fs::read_to_string(path)
@@ -78,19 +35,8 @@ fn read(path: &Path) -> Vec<Value> {
         .collect()
 }
 
-/// Starts a writer with the policy of every level; the ring holds what it holds when the policy is stored, so the records
-/// follow `log.policy` in the file.
-fn start(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> EventLog {
-    let held = std::mem::take(&mut *ring.lock().unwrap());
-    let log = records::start_every_level(ring_options(directory, ring, interval)).unwrap();
-    *ring.lock().unwrap() = held;
-    log
-}
-
-/// The options of a writer that pulls the ring, with no way to wake it.
-fn ring_options(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> Options {
-    let pull_ring = Arc::clone(ring);
-    let loss_ring = Arc::clone(ring);
+/// The options of a writer that pulls the native ring of the platform, as the host writer does, with no way to wake it.
+fn platform_options(directory: &Path, interval: Duration) -> Options {
     Options {
         directory: directory.to_path_buf(),
         role: "host".into(),
@@ -99,24 +45,18 @@ fn ring_options(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duratio
         queue_bytes: 64 * 1024,
         batch_interval: interval,
         rotate_bytes: 1 << 30,
-        pull: Some(Box::new(move |buffer: &mut [u8]| {
-            let mut ring = pull_ring.lock().unwrap();
-            let n = ring.bytes.len().min(buffer.len());
-            buffer[..n].copy_from_slice(&ring.bytes[..n]);
-            ring.bytes.drain(..n);
-            Ok(n)
+        pull: Some(Box::new(|buffer: &mut [u8]| {
+            platform::current()?.pull_native_events(buffer)
         })),
-        pull_loss: Some(Box::new(move |channel| {
-            let mut ring = loss_ring.lock().unwrap();
-            match channel {
-                Channel::Debug => (
-                    std::mem::take(&mut ring.debug_events),
-                    std::mem::take(&mut ring.debug_bytes),
-                ),
-                Channel::Other => (
-                    std::mem::take(&mut ring.loss_events),
-                    std::mem::take(&mut ring.loss_bytes),
-                ),
+        pull_loss: Some(Box::new(|channel: Channel| {
+            match platform::current()
+                .and_then(|system| system.take_native_event_loss(channel.index() as u8))
+            {
+                Ok(loss) => loss,
+                Err(error) => {
+                    eprintln!("event writer: the loss of the native ring cannot be read: {error}");
+                    (0, 0)
+                }
             }
         })),
         wake: Some(Box::new(|_| Ok(()))),
@@ -168,9 +108,9 @@ impl Waking {
     }
 }
 
-/// A writer with the ring and the handle that wakes it, after it took what its start left and slept.
-fn start_waking(directory: &Path, ring: &Arc<Mutex<FakeRing>>, interval: Duration) -> Waking {
-    waking(ring_options(directory, ring, interval))
+/// A writer with the native ring of the platform and the handle that wakes it, after it took what its start left and slept.
+fn start_waking(directory: &Path, interval: Duration) -> Waking {
+    waking(platform_options(directory, interval))
 }
 
 /// A writer with the options and the handle that wakes it, after it took what its start left and slept.
@@ -201,220 +141,13 @@ fn waking(mut options: Options) -> Waking {
     waking
 }
 
-// contract: log.native.stores-pulled-records-in-the-layer-native
-#[test]
-fn the_writer_stores_pulled_native_records_in_the_layer_native() {
-    let ring = Arc::new(Mutex::new(FakeRing {
-        bytes: [
-            native_record(
-                1_791_000_000_000_001,
-                1,
-                "native.test.first",
-                r#"{"index":1}"#,
-            ),
-            native_record(1_791_000_000_000_002, 0, "native.test.second", "{}"),
-        ]
-        .concat(),
-        ..FakeRing::default()
-    }));
-    let directory = folder::Folder::new();
-    let log = start(directory.path(), &ring, Duration::from_millis(20));
-    let path = log.path().to_path_buf();
-    log.flush().unwrap();
-    let events = read(&path);
-    assert_eq!(events.len(), 4, "{events:?}");
-    assert_eq!(events[2]["event"], "native.test.first");
-    assert_eq!(events[3]["event"], "native.test.second");
-    assert_eq!(events[2]["layer"], "native");
-    assert_eq!(events[2]["ts_us"], 1_791_000_000_000_001u64);
-    assert_eq!(events[2]["mono_ns"], 9_001u64);
-    assert!(events[2].get("cids").is_none());
-    assert_eq!(events[2]["level"], "warn");
-    assert_eq!(events[2]["seq"], 3);
-    assert_eq!(events[2]["fields"]["index"], 1);
-    assert_eq!(events[3]["level"], "error");
-}
-
-// contract: log.native.counts-refused-records-and-ring-loss
-#[test]
-fn a_refused_native_record_and_the_loss_of_the_ring_are_counted_as_dropped() {
-    let mut truncated = native_record(1_791_000_000_000_005, 2, "native.test.cut", r#"{"a":1}"#);
-    truncated[..4].copy_from_slice(&500u32.to_ne_bytes());
-    let ring = Arc::new(Mutex::new(FakeRing {
-        bytes: [
-            native_record(1_791_000_000_000_001, 2, "native.test.ok", "{}"),
-            native_record(1_791_000_000_000_002, 2, "host.test.forged", "{}"),
-            native_record(1_791_000_000_000_003, 2, "native.test.fields", "{broken"),
-            native_record(1_791_000_000_000_004, 9, "native.test.level", "{}"),
-            native_record_with(
-                1_791_000_000_000_006,
-                5,
-                2,
-                "b1.\"1",
-                "native.test.cid",
-                "{}",
-            ),
-            native_record_with(
-                1_791_000_000_000_007,
-                5,
-                2,
-                "b1.1,,b1.2",
-                "native.test.cid",
-                "{}",
-            ),
-            native_record_with(1_791_000_000_000_008, 0, 2, "", "native.test.clock", "{}"),
-            native_record_of_class(
-                1_791_000_000_000_009,
-                5_000_000_009,
-                2,
-                9,
-                "",
-                "native.test.class",
-                "{}",
-            ),
-            // A declared event whose record gives another class than the catalog is a defect of the producer and is refused.
-            native_record_of_class(
-                1_791_000_000_000_010,
-                5_000_000_010,
-                2,
-                0,
-                "",
-                "native.input.source_changed",
-                "{}",
-            ),
-            truncated,
-        ]
-        .concat(),
-        loss_events: 3,
-        loss_bytes: 120,
-        debug_events: 2,
-        debug_bytes: 40,
-    }));
-    let directory = folder::Folder::new();
-    let log = start(directory.path(), &ring, Duration::from_millis(20));
-    let path = log.path().to_path_buf();
-    log.flush().unwrap();
-    let events = read(&path);
-    let stored = events
-        .iter()
-        .filter(|event| event["event"] == "native.test.ok")
-        .count();
-    let dropped = |reason: &str, channel: &str| -> u64 {
-        events
-            .iter()
-            .filter(|event| {
-                event["event"] == "log.dropped"
-                    && event["fields"]["reason"] == reason
-                    && event["fields"]["channel"] == channel
-            })
-            .map(|event| event["fields"]["count"].as_u64().unwrap())
-            .sum()
-    };
-    assert_eq!(stored, 1, "{events:?}");
-    // The loss of the ring names the channel of the refused events; a record that cannot be decoded has no level and is counted in
-    // the channel other.
-    assert_eq!(
-        dropped("the native ring was full", "other"),
-        3,
-        "{events:?}"
-    );
-    assert_eq!(
-        dropped("the native ring was full", "debug"),
-        2,
-        "{events:?}"
-    );
-    assert_eq!(
-        dropped("a native record was refused", "other"),
-        9,
-        "{events:?}"
-    );
-}
-
-// contract: log.native.stores-the-class-of-a-pulled-record
-#[test]
-fn a_pulled_native_record_of_a_declared_event_stores_the_catalog_class_and_an_undeclared_one_stores_none()
- {
-    let ring = Arc::new(Mutex::new(FakeRing {
-        bytes: [
-            native_record_of_class(
-                1_791_000_000_000_001,
-                5_000_000_001,
-                2,
-                1,
-                "",
-                "native.input.source_changed",
-                "{}",
-            ),
-            native_record_of_class(
-                1_791_000_000_000_002,
-                5_000_000_002,
-                2,
-                1,
-                "",
-                "native.test.surprise",
-                "{}",
-            ),
-        ]
-        .concat(),
-        ..FakeRing::default()
-    }));
-    let directory = folder::Folder::new();
-    let log = start(directory.path(), &ring, Duration::from_millis(20));
-    let path = log.path().to_path_buf();
-    log.flush().unwrap();
-    let events = read(&path);
-    assert_eq!(events.len(), 4, "{events:?}");
-    assert_eq!(events[2]["class"], "input");
-    assert!(events[2].get("undeclared").is_none());
-    assert_eq!(events[3]["undeclared"], true);
-    assert!(events[3].get("class").is_none());
-}
-
-// contract: log.native.stores-clock-and-cids-of-pulled-records
-#[test]
-fn a_pulled_native_record_keeps_its_clock_and_cids() {
-    let ring = Arc::new(Mutex::new(FakeRing {
-        bytes: [
-            native_record_with(
-                1_791_000_000_000_001,
-                77_000_000_001,
-                2,
-                "b1.4,b1.5",
-                "native.test.input",
-                r#"{"k":1}"#,
-            ),
-            native_record_with(
-                1_791_000_000_000_002,
-                77_000_000_002,
-                2,
-                "",
-                "native.test.plain",
-                "{}",
-            ),
-        ]
-        .concat(),
-        ..FakeRing::default()
-    }));
-    let directory = folder::Folder::new();
-    let log = start(directory.path(), &ring, Duration::from_millis(20));
-    let path = log.path().to_path_buf();
-    log.flush().unwrap();
-    let events = read(&path);
-    assert_eq!(events.len(), 4, "{events:?}");
-    assert_eq!(events[2]["mono_ns"], 77_000_000_001u64);
-    assert_eq!(events[2]["cids"], serde_json::json!(["b1.4", "b1.5"]));
-    assert_eq!(events[2]["fields"]["k"], 1);
-    assert_eq!(events[3]["mono_ns"], 77_000_000_002u64);
-    assert!(events[3].get("cids").is_none());
-}
-
 // contract: log.native.wake-stores-a-record-at-once
 #[test]
 fn a_wake_of_the_ring_stores_its_record_at_once() {
-    let ring = Arc::new(Mutex::new(FakeRing::default()));
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let directory = folder::Folder::new();
-    let waking = start_waking(directory.path(), &ring, NO_INTERVAL);
-    ring.lock().unwrap().bytes = native_record(1_791_000_000_000_001, 2, "native.test.late", "{}");
+    let waking = start_waking(directory.path(), NO_INTERVAL);
+    assert!(native_event::record(c"native.test.late"));
     waking.rouser.wake();
     waking.wait_for("native.test.late");
 }
@@ -422,10 +155,10 @@ fn a_wake_of_the_ring_stores_its_record_at_once() {
 // contract: log.native.close-stores-the-ring
 #[test]
 fn close_stores_the_records_of_the_ring_without_a_wake() {
-    let ring = Arc::new(Mutex::new(FakeRing::default()));
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let directory = folder::Folder::new();
-    let waking = start_waking(directory.path(), &ring, NO_INTERVAL);
-    ring.lock().unwrap().bytes = native_record(1_791_000_000_000_001, 2, "native.test.late", "{}");
+    let waking = start_waking(directory.path(), NO_INTERVAL);
+    assert!(native_event::record(c"native.test.late"));
     waking.log.close();
     assert!(stores(waking.log.path(), "native.test.late"));
 }
@@ -435,14 +168,14 @@ fn close_stores_the_records_of_the_ring_without_a_wake() {
 // contract: log.writer.sleeps-with-nothing-to-write
 #[test]
 fn a_writer_with_nothing_to_write_does_not_pull() {
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let pulls = Arc::new(AtomicU64::new(0));
-    let ring = Arc::new(Mutex::new(FakeRing::default()));
     let directory = folder::Folder::new();
     let counted = Arc::clone(&pulls);
-    let mut options = ring_options(directory.path(), &ring, Duration::from_millis(5));
-    options.pull = Some(Box::new(move |_: &mut [u8]| {
+    let mut options = platform_options(directory.path(), Duration::from_millis(5));
+    options.pull = Some(Box::new(move |buffer: &mut [u8]| {
         counted.fetch_add(1, Ordering::SeqCst);
-        Ok(0)
+        platform::current()?.pull_native_events(buffer)
     }));
     let waking = waking(options);
     assert_eq!(
@@ -463,9 +196,9 @@ fn a_writer_with_nothing_to_write_does_not_pull() {
 // contract: log.writer.stores-the-first-event-at-once
 #[test]
 fn a_writer_that_slept_stores_the_first_event_at_once_and_gathers_the_next() {
-    let ring = Arc::new(Mutex::new(FakeRing::default()));
+    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
     let directory = folder::Folder::new();
-    let waking = start_waking(directory.path(), &ring, NO_INTERVAL);
+    let waking = start_waking(directory.path(), NO_INTERVAL);
     let log = &waking.log;
     assert!(log.emit(Level::Info, "host.test.first", &serde_json::json!({})));
     waking.wait_for("host.test.first");
@@ -479,4 +212,97 @@ fn a_writer_that_slept_stores_the_first_event_at_once_and_gathers_the_next() {
         "the writes for the two events of an interval and the close, want the one of the close"
     );
     assert!(stores(log.path(), "host.test.second") && stores(log.path(), "host.test.third"));
+}
+
+/// Marks the child process of the test of the loss of a full ring: the ring and its loss counts belong to the process, so the test
+/// runs in a child of this test binary that no other test used.
+const LOSS_CHILD: &str = "SOKSAK_NATIVE_RING_LOSS_CHILD";
+
+/// The class call and the levels info and debug as numbers of the native library; the channels other and debug store them.
+const CLASS_CALL: u8 = 2;
+const LEVEL_INFO: u8 = 2;
+const LEVEL_DEBUG: u8 = 3;
+
+/// A ring that no writer drains fills; the events that it refuses are counted by the channel of their level and reach the log as
+/// the loss of the ring. The records come from the real producer function of the native library.
+fn loss_scenario(directory: &Path) {
+    let system = platform::current().unwrap();
+    // The default policy of the native library stores only errors.
+    system.set_native_event_policy([4, 4, 4, 4, 4]).unwrap();
+    // A record of 100 KiB: the ring of 4 MiB holds a few dozen, and two of them fit the buffer of one pull.
+    let fields = format!(r#"{{"pad":"{}"}}"#, "x".repeat(100 << 10));
+    const NAME: &str = "native.test.fill";
+    const LIMIT: usize = 256;
+    let (mut stored, mut refused_other, mut refused_debug) = (0usize, 0u64, 0u64);
+    while native_event::record_with_fields(CLASS_CALL, LEVEL_INFO, NAME, &fields) {
+        stored += 1;
+        assert!(
+            stored <= LIMIT,
+            "the ring held {stored} records without a writer"
+        );
+    }
+    refused_other += 1;
+    // The records that follow have the size of the refused one, so a full ring refuses each, in the channel of its level.
+    for _ in 0..2 {
+        assert!(
+            !native_event::record_with_fields(CLASS_CALL, LEVEL_INFO, NAME, &fields),
+            "a record was stored in the full ring"
+        );
+        refused_other += 1;
+    }
+    for _ in 0..2 {
+        assert!(
+            !native_event::record_with_fields(CLASS_CALL, LEVEL_DEBUG, NAME, &fields),
+            "a record of the channel debug was stored in the full ring"
+        );
+        refused_debug += 1;
+    }
+    let log =
+        records::start_every_level(platform_options(directory, Duration::from_millis(20))).unwrap();
+    log.flush().unwrap();
+    let (mut pulled, mut dropped, mut other, mut debug) = (0usize, 0u64, 0u64, 0u64);
+    for event in records::read_events(log.path()) {
+        if event["event"] == NAME {
+            pulled += 1;
+        } else if event["event"] == "log.dropped" {
+            let fields = &event["fields"];
+            let count = fields["count"].as_u64().unwrap();
+            assert_eq!(fields["reason"], "the native ring was full", "{event}");
+            dropped += count;
+            match fields["channel"].as_str().unwrap() {
+                "other" => other += count,
+                "debug" => debug += count,
+                channel => panic!("dropped in the channel {channel}: {event}"),
+            }
+        }
+    }
+    assert_eq!(
+        (pulled, dropped),
+        (stored, refused_other + refused_debug),
+        "pulled of the stored records, dropped of the refused"
+    );
+    // The loss of the ring names the channel of the refused events.
+    assert_eq!((other, debug), (refused_other, refused_debug));
+}
+
+// contract: log.native.counts-refused-records-and-ring-loss
+#[test]
+fn the_loss_of_a_full_ring_is_counted_as_dropped_by_channel() {
+    if let Some(directory) = std::env::var_os(LOSS_CHILD) {
+        loss_scenario(Path::new(&directory));
+        return;
+    }
+    let directory = folder::Folder::new();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "the_loss_of_a_full_ring_is_counted_as_dropped_by_channel",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(LOSS_CHILD, directory.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    child::require_success(&output, directory.path());
 }

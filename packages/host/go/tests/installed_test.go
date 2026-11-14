@@ -251,7 +251,7 @@ func TestAnUnreadableInstallationStartsTheSidecarsWithoutDeclarations(t *testing
 			t.Errorf("%s: the start failed: %v", name, err)
 			continue
 		}
-		err = sidecars.Send(support.NewFakeOwner("/projects/a"), "@scope/sidecar-worker", "s1", json.RawMessage(`{}`))
+		err = support.NewSidecarRecorder(t, "/projects/a").Send(sidecars, "@scope/sidecar-worker", "s1", json.RawMessage(`{}`))
 		if want := "sidecar @scope/sidecar-worker is not declared by any plugin"; err == nil || err.Error() != want {
 			t.Errorf("%s: send error = %v, want %q", name, err, want)
 		}
@@ -271,7 +271,7 @@ func installedSendError(t *testing.T, config, name string) string {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	err = sidecars.Send(support.NewFakeOwner("/projects/a"), name, "s1", json.RawMessage(`{}`))
+	err = support.NewSidecarRecorder(t, "/projects/a").Send(sidecars, name, "s1", json.RawMessage(`{}`))
 	if err == nil {
 		t.Fatalf("a send to %s succeeded", name)
 	}

@@ -8,8 +8,7 @@ import (
 // contract: view.origin.current-callback-is-dispatched
 func TestCurrentViewCallbackEntersDispatch(t *testing.T) {
 	isolateTraceRecords(t)
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
 	channel, ok := s.documents.view("probe-surface")
@@ -32,8 +31,7 @@ func TestCurrentViewCallbackEntersDispatch(t *testing.T) {
 // contract: view.origin.retired-callback-is-cancelled
 func TestRetiredViewCallbackDoesNotReachDispatch(t *testing.T) {
 	isolateTraceRecords(t)
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
 	retired, oldGeneration := retireAndReplaceView(t, s, fake)
@@ -68,8 +66,7 @@ func TestRetiredViewCallbackDoesNotReachDispatch(t *testing.T) {
 // contract: view.origin.retired-producer-error-is-preserved
 func TestRetiredViewCallbackPreservesItsProducerError(t *testing.T) {
 	isolateTraceRecords(t)
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	retired, oldGeneration := retireAndReplaceView(t, s, fake)
 	before := len(bufferedTraces(t, "host.record.error"))
@@ -107,8 +104,7 @@ func TestRetiredViewCallbackPreservesMalformedAndTransportErrors(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			isolateTraceRecords(t)
-			clock := &fakeClock{}
-			s, fake, _ := newLifecycleSurfaces(t, clock)
+			s, fake, _ := newLifecycleSurfaces(t)
 			s.views = map[string]*nativeWebview{"probe-surface": {}}
 			retired, oldGeneration := retireAndReplaceView(t, s, fake)
 			before := len(bufferedTraces(t, "host.record.error"))
@@ -129,8 +125,7 @@ func TestRetiredViewCallbackPreservesMalformedAndTransportErrors(t *testing.T) {
 // contract: view.origin.retired-malformed-envelope-is-reported
 func TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError(t *testing.T) {
 	isolateTraceRecords(t)
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	_, retiredGeneration := retireAndReplaceView(t, s, fake)
 	current, ok := s.documents.view("probe-surface")
@@ -165,8 +160,7 @@ func TestRetiredGenerationMalformedInnerEnvelopeKeepsItsChannelError(t *testing.
 
 // contract: view.channel.overflow-closes
 func TestViewChannelOverflowClosesTheViewAndCreatesItAgain(t *testing.T) {
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	first := fake.created[0]
 	full := `{"message":{"event":"view.error","plugin":"probe","reason":"queue full for probe"}}`
 	channel, _ := s.documents.view("probe-surface")
@@ -191,7 +185,7 @@ func retireAndReplaceView(t *testing.T, s *Surfaces, fake *lifecyclePlatform) (u
 		t.Fatalf("initial view state: channel %v, created %d", ok, len(fake.created))
 	}
 	retired := fake.created[0]
-	endView(t, s, fake)
+	endView(t, s, fake, viewTestEpoch)
 	current, ok := s.documents.view("probe-surface")
 	if !ok || current.generation == old.generation || len(fake.created) != 2 {
 		t.Fatalf("replacement view: channel %+v, created %d; want a new generation and one new view", current, len(fake.created))

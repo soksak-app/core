@@ -32,10 +32,9 @@ func viewStopReason() string {
 	return fmt.Sprintf("the view failed %d times within %d seconds and is created again when its tab is reopened", viewRestartLimit, int(viewRestartWindow/time.Second))
 }
 
-// viewLifecycle counts the failures of each view surface and keeps the record that creates its view again. now is the clock of the
-// failures; the tests replace it. The host calls it on the UI thread only.
+// viewLifecycle counts the failures of each view surface and keeps the record that creates its view again. The failures are instants
+// that the caller passes, so the decision is a function of its inputs. The host calls it on the UI thread only.
 type viewLifecycle struct {
-	now      func() time.Time
 	specs    map[string]*viewSpec
 	failures map[string][]time.Time
 	stopped  map[string]bool
@@ -43,9 +42,9 @@ type viewLifecycle struct {
 	live map[string]bool
 }
 
-// newViewLifecycle returns the lifecycle of the view surfaces with the clock now.
-func newViewLifecycle(now func() time.Time) *viewLifecycle {
-	return &viewLifecycle{now: now, specs: map[string]*viewSpec{}, failures: map[string][]time.Time{}, stopped: map[string]bool{}, live: map[string]bool{}}
+// newViewLifecycle returns the lifecycle of the view surfaces, which holds no clock.
+func newViewLifecycle() *viewLifecycle {
+	return &viewLifecycle{specs: map[string]*viewSpec{}, failures: map[string][]time.Time{}, stopped: map[string]bool{}, live: map[string]bool{}}
 }
 
 // track records the view of surface and returns its record. A record of another plugin is replaced, so its folder is resolved again.
@@ -60,13 +59,12 @@ func (l *viewLifecycle) track(surface string, native unsafe.Pointer, plugin, pag
 	return spec
 }
 
-// fail records a failure of the view of surface at the time of the clock and reports whether the view may be created again.
+// fail records a failure of the view of surface at the instant now and reports whether the view may be created again.
 // The fourth failure within viewRestartWindow stops the restarts, and a stopped surface records no further failure.
-func (l *viewLifecycle) fail(surface string) bool {
+func (l *viewLifecycle) fail(surface string, now time.Time) bool {
 	if l.stopped[surface] {
 		return false
 	}
-	now := l.now()
 	kept := make([]time.Time, 0, viewRestartLimit)
 	for _, at := range l.failures[surface] {
 		if now.Sub(at) < viewRestartWindow {
@@ -125,10 +123,10 @@ func (e viewOverflow) Error() string { return e.reason }
 // viewQueueFullPrefix starts the reason of a view.error message whose message queue is full (docs/spec/native-surfaces.md#view-surfaces).
 const viewQueueFullPrefix = "queue full for "
 
-// viewRecords returns the lifecycle of the view surfaces, which starts with the wall clock when the surface is first used.
+// viewRecords returns the lifecycle of the view surfaces, which is created when the surface is first used.
 func (s *Surfaces) viewRecords() *viewLifecycle {
 	if s.lifecycle == nil {
-		s.lifecycle = newViewLifecycle(time.Now)
+		s.lifecycle = newViewLifecycle()
 	}
 	return s.lifecycle
 }

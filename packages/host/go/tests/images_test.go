@@ -11,7 +11,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"unsafe"
 
@@ -52,43 +51,7 @@ func declareImages(directory, sidecar string) []host.SidecarDeclaration {
 	return []host.SidecarDeclaration{{Name: imageSidecar, Folder: directory, Data: []byte(sidecar)}}
 }
 
-// fakeImageOwner is a window that records the sidecar events it received.
-type fakeImageOwner struct {
-	root   string
-	mu     sync.Mutex
-	events []host.SidecarMessage
-	seen   chan struct{}
-	// taken is the index in events of the event that the next call of next returns.
-	taken int
-}
-
-func newFakeImageOwner(root string) *fakeImageOwner {
-	return &fakeImageOwner{root: root, seen: make(chan struct{}, 16)}
-}
-
-func (o *fakeImageOwner) ProjectRoot() string { return o.root }
-
-func (o *fakeImageOwner) Emit(string, ...any) {}
-
-func (o *fakeImageOwner) DeliverSidecarMessage(message host.SidecarMessage) {
-	o.mu.Lock()
-	o.events = append(o.events, message)
-	o.mu.Unlock()
-	o.seen <- struct{}{}
-}
-
-// next waits for the next sidecar event and returns it in the order of delivery, as FakeOwner.Next does.
-func (o *fakeImageOwner) next(t *testing.T) host.SidecarMessage {
-	t.Helper()
-	<-o.seen
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	event := o.events[o.taken]
-	o.taken++
-	return event
-}
-
-// echoSidecarsForImages creates a channel that declares a fake sidecar that outputs the lines it received as they are.
+// echoSidecarsForImages creates a channel that declares a sidecar that outputs the lines it received as they are.
 func echoSidecarsForImages(t *testing.T) (*host.Sidecars, string) {
 	t.Helper()
 	directory := t.TempDir()
@@ -146,7 +109,7 @@ func TestImageFromAnotherSidecarIsRefused(t *testing.T) {
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 
 	var a int
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	if err := images.Reserve(key, owner); err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -191,7 +154,7 @@ func TestAttachedImageIsPresented(t *testing.T) {
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 
 	var a int
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	if err := images.Reserve(key, owner); err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -289,7 +252,7 @@ func TestReleasedSurfaceIsAnsweredReleased(t *testing.T) {
 func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 
 	firstGeneration := images.BeginGeneration(key.Surface)
@@ -339,7 +302,7 @@ func TestOnlyTheCurrentGenerationRasterAndSequenceCanBePresented(t *testing.T) {
 func TestPresentationWaitTracksTheVisibleCurrentRaster(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
@@ -424,7 +387,7 @@ func TestPresentationWaitEndsByTheEndOfItsSupplierAndWritesNoLogLine(t *testing.
 		}
 		images := host.NewImages()
 		key := host.ImageKey{Surface: "tab-1", Name: "view"}
-		owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+		owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 		var handle int
 		if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 			t.Fatalf("attach image: %v", err)
@@ -462,7 +425,7 @@ func TestSurfaceVisibilitySurvivesFirstDocumentNavigation(t *testing.T) {
 	images.RemoveSurface(key.Surface)
 	images.BeginGeneration(key.Surface)
 	var handle int
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
 	}
@@ -476,7 +439,7 @@ func TestSurfaceVisibilitySurvivesFirstDocumentNavigation(t *testing.T) {
 func TestHiddenSurfaceDefersRasterConfiguration(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "hidden", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
@@ -509,7 +472,7 @@ func TestHiddenSurfaceDefersRasterConfiguration(t *testing.T) {
 func TestFrameThatBecomesStaleBeforeMainThreadPresentationIsRejected(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
@@ -733,7 +696,7 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 	key2 := host.ImageKey{Surface: "tab-1", Name: "other"}
 	key3 := host.ImageKey{Surface: "tab-2", Name: "view"}
 
-	owner := &host.ImageOwner{SidecarName: "sidecar", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar", SidecarOwner: support.NewSidecarRecorder(t, "")}
 
 	// Registers 2 images in tab-1
 	if err := images.Reserve(key1, owner); err != nil {
@@ -808,7 +771,7 @@ func TestEnvelopeFromTheAttachedSidecarIsPresented(t *testing.T) {
 
 	var a int
 	// The images that a specific sidecar attached
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	if err := images.Reserve(key, owner); err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -873,7 +836,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
 
 	var a int
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	if err := images.Reserve(key, owner); err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -972,7 +935,7 @@ func TestPresentationFailureIsReported(t *testing.T) {
 func attachImage(t *testing.T, images *host.Images, key host.ImageKey) {
 	t.Helper()
 	var handle int
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach %v: %v", key, err)
 	}
@@ -1069,11 +1032,11 @@ func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testin
 	terminal := host.ImageKey{Surface: "tab-1", Name: "view"}
 	browser := host.ImageKey{Surface: "tab-2", Name: "view"}
 	var a, b int
-	if err := images.Reserve(terminal, &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}); err != nil {
+	if err := images.Reserve(terminal, &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}); err != nil {
 		t.Fatalf("reserve terminal failed: %v", err)
 	}
 	images.Set(terminal, unsafe.Pointer(&a))
-	if err := images.Reserve(browser, &host.ImageOwner{SidecarName: "sidecar-b", SidecarOwner: newFakeImageOwner("")}); err != nil {
+	if err := images.Reserve(browser, &host.ImageOwner{SidecarName: "sidecar-b", SidecarOwner: support.NewSidecarRecorder(t, "")}); err != nil {
 		t.Fatalf("reserve browser failed: %v", err)
 	}
 	images.Set(browser, unsafe.Pointer(&b))
@@ -1111,7 +1074,7 @@ func TestInvalidatingASidecarResendsItsConfigureAndLeavesOtherSidecars(t *testin
 func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "returning", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
@@ -1134,7 +1097,7 @@ func TestShownSurfaceReconfiguresItsRaster(t *testing.T) {
 func TestShownSurfacePresentsFromItsNewRaster(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "returning", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
@@ -1193,7 +1156,7 @@ func TestPresentationOutcomeNamesTheCurrentFrameOfAFailure(t *testing.T) {
 func TestReattachingInTheSameGenerationContinuesTheRaster(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 	images.BeginGeneration(key.Surface)
 	if err := images.Reserve(key, owner); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
@@ -1342,7 +1305,7 @@ func TestImageFrameRefusalsAreRecorded(t *testing.T) {
 func TestPresentedFrameIdentityIsReported(t *testing.T) {
 	images := host.NewImages()
 	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}
+	owner := &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}
 	var handle int
 
 	images.BeginGeneration(key.Surface)
@@ -1444,7 +1407,7 @@ func attachedDrawingImage(t *testing.T, images *host.Images, surface string) hos
 	t.Helper()
 	key := host.ImageKey{Surface: surface, Name: "view"}
 	var handle int
-	if err := images.Reserve(key, &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: newFakeImageOwner("")}); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
+	if err := images.Reserve(key, &host.ImageOwner{SidecarName: "sidecar-a", SidecarOwner: support.NewSidecarRecorder(t, "")}); err != nil || !images.Set(key, unsafe.Pointer(&handle)) {
 		t.Fatalf("attach image: %v", err)
 	}
 	return key

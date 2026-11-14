@@ -2,17 +2,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// A document of a surface asks the host for the log policy at its load (action policy-read); the fake host answers it with the
+// A document of a surface asks the host for the log policy at its load (action policy-read); the host interface below answers it with the
 // default policy and does not record it.
 const policyRead = { classes: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" } };
 
 test("Tauri page regions expose operations but only composition places geometry", async () => {
-  // Records every call that goes through the mocked Tauri invoke.
+  // Records every call that goes through the Tauri invoke of the page environment.
   const recorded = [];
   const logged = [];
   const eventListeners = {};
 
-  // Mocks the Tauri runtime interface.
+  // The Tauri runtime interface that the page environment provides.
   globalThis.window = {
     __TAURI__: {
       core: {
@@ -69,20 +69,9 @@ test("Tauri page regions expose operations but only composition places geometry"
     },
   };
 
-  // Mocks a location that has a surface id.
+  // A location that has a surface id.
   globalThis.location = {
     search: "?id=s1",
-  };
-
-  // Mocks URLSearchParams.
-  globalThis.URLSearchParams = class {
-    constructor(search) {
-      this.search = search;
-    }
-    get(key) {
-      if (key === "id") return "s1";
-      return null;
-    }
   };
 
   // Imports the runtime module (an IIFE that captures global values).

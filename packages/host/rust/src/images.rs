@@ -1252,11 +1252,11 @@ fn create(
                     &name,
                     (generation, raster, sequence),
                     |root, body| {
-                        window.state::<WindowSidecars>().send_in_root(
+                        window.state::<WindowSidecars>().send_at_root(
                             &window,
                             &sidecar,
                             &surface,
-                            root,
+                            &root,
                             body,
                             &[],
                         )

@@ -101,6 +101,31 @@ const (
 	ChannelDebug = sok.ChannelDebug
 )
 
+// UseNativeRing makes the writer pull the native ring of system, wake when the ring holds something, and take the loss of the ring.
+// A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
+func (options *EventLogOptions) UseNativeRing(system platform.Platform) error {
+	if _, err := system.PullNativeEvents(make([]byte, 1)); err != nil {
+		return err
+	}
+	if err := system.SetEventBoot(processBoot()); err != nil {
+		return err
+	}
+	wake, err := nativeWake(system)
+	if err != nil {
+		return err
+	}
+	options.Pull = system.PullNativeEvents
+	options.Wake = wake
+	options.PullLoss = func(channel Channel) (uint64, uint64) {
+		events, bytes, err := system.TakeNativeEventLoss(uint8(channel))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "event writer: the loss of the native ring cannot be read: %v\n", err)
+		}
+		return events, bytes
+	}
+	return nil
+}
+
 // StartEventLog creates the folder (mode 0700) and the file (mode 0600), writes log.open and starts the writer of the layer
 // host. A writer of the host always rotates and always applies the retention.
 func StartEventLog(options EventLogOptions) (*EventLog, error) {
@@ -174,31 +199,15 @@ func StartHostEventLog(config string) (*EventLog, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A platform that cannot pull the native ring fails here, at the start, instead of running without native events.
-	if _, err := system.PullNativeEvents(make([]byte, 1)); err != nil {
-		return nil, err
-	}
-	if err := system.SetEventBoot(processBoot()); err != nil {
-		return nil, err
-	}
-	wake, err := nativeWake(system)
-	if err != nil {
-		return nil, err
-	}
-	return StartEventLog(EventLogOptions{
-		Pull: system.PullNativeEvents,
-		Wake: wake,
-		PullLoss: func(channel Channel) (uint64, uint64) {
-			events, bytes, err := system.TakeNativeEventLoss(uint8(channel))
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "event writer: the loss of the native ring cannot be read: %v\n", err)
-			}
-			return events, bytes
-		},
+	options := EventLogOptions{
 		Directory: filepath.Join(config, "logs"), Role: "host", Boot: processBoot(),
 		QueueEvents: hostQueueEvents, QueueBytes: hostQueueBytes, BatchInterval: hostBatchInterval,
 		RotateBytes: hostRotateBytes, PolicyPath: filepath.Join(config, "log-policy.json"), RetentionBytes: hostRetentionBytes,
-	})
+	}
+	if err := options.UseNativeRing(system); err != nil {
+		return nil, err
+	}
+	return StartEventLog(options)
 }
 
 // StartHostLogPolicy applies and watches the policy file of the host writer (StartLogPolicy) and then installs the activity
@@ -264,7 +273,6 @@ func nativePuller(pull func(buffer []byte) (int, error), pullLoss func(Channel) 
 		if pulled == nil {
 			pulled = make([]byte, nativePullBytes)
 		}
-		var refused, refusedBytes uint64
 		for pass := 0; pass < nativePullPasses; pass++ {
 			n, err := pull(pulled)
 			if err != nil {
@@ -274,30 +282,38 @@ func nativePuller(pull func(buffer []byte) (int, error), pullLoss func(Channel) 
 			if n == 0 {
 				break
 			}
-			for offset := 0; offset < n; {
-				length, event, err := nativeEventOf(pulled[offset:n])
-				if err != nil {
-					// The rest of the buffer cannot be located after a record whose length is wrong.
-					fmt.Fprintf(os.Stderr, "event writer: a native record was refused: %v\n", err)
-					refused++
-					refusedBytes += uint64(n - offset)
-					if length == 0 {
-						break
-					}
-				} else {
-					accept(event)
-				}
-				offset += length
-			}
+			nativeRecordsOf(pulled[:n], accept, lost)
 		}
-		// A record that cannot be decoded has no level, so its loss is counted in the channel other.
-		lost(refused, refusedBytes, "a native record was refused", ChannelOther)
 		if pullLoss != nil {
 			for channel := ChannelOther; channel < sok.ChannelCount; channel++ {
 				events, bytes := pullLoss(channel)
 				lost(events, bytes, "the native ring was full", channel)
 			}
 		}
+	}
+}
+
+// nativeRecordsOf gives the event of each record in buffer, which holds the whole records that a drain of the ring gives, to accept.
+// A record that cannot be decoded is reported on the standard error and counted as lost with the reason; it has no level, so its
+// loss is counted in the channel other. A record whose length is wrong ends the buffer, because the rest cannot be located after it.
+func nativeRecordsOf(buffer []byte, accept func(sok.RelayedEvent), lost func(events, bytes uint64, reason string, channel Channel)) {
+	var refused, refusedBytes uint64
+	for offset := 0; offset < len(buffer); {
+		length, event, err := nativeEventOf(buffer[offset:])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "event writer: a native record was refused: %v\n", err)
+			refused++
+			refusedBytes += uint64(len(buffer) - offset)
+			if length == 0 {
+				break
+			}
+		} else {
+			accept(event)
+		}
+		offset += length
+	}
+	if refused > 0 {
+		lost(refused, refusedBytes, "a native record was refused", ChannelOther)
 	}
 }
 

@@ -32,6 +32,13 @@ name = "page_start_main_thread_test"
 harness = false
 required-features = ["host-test"]
 
+# The heartbeat of the stall watch is answered by the main run loop of a process, and the libtest harness runs each test on a
+# thread of its own, so this target runs its tests on the main thread of its process and each test runs its scenario in a child
+# process of the same binary, whose main thread runs the run loop; it answers --list and --exact as the harness does.
+[[test]]
+name = "stall_watch_test"
+harness = false
+
 # A measurement prints numbers and asserts nothing (docs/spec/logging.md#writers).
 [[bench]]
 name = "event_log_benchmark"
@@ -94,6 +101,10 @@ windows = { version = "0.62", features = [
 hex = "0.4"
 notify = "8.2"
 sha2 = "0.10"
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+# The stall watch test runs the main run loop of its child process on the main thread (tests/stall_watch_test.rs).
+core-foundation = "0.10"
 
 [lints]
 workspace = true

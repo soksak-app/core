@@ -64,73 +64,154 @@ func FixtureSidecars(t *testing.T, directory, control string) *host.Sidecars {
 	return sidecars
 }
 
-// FakeOwner is a window that records the sidecar events and the failure events it received.
-type FakeOwner struct {
-	Root     string
-	Mu       sync.Mutex
-	Events   []host.SidecarMessage
-	Seen     chan struct{}
-	Failures chan any
-	// next is the index in Events of the event that the next call of Next returns.
-	next int
+// SidecarFailure is the sidecar-failure event value (docs/spec/sidecars.md#failure).
+type SidecarFailure = host.SidecarFailure
+
+// SidecarRecorder is the owner of the sidecar sends of a test. It records each message and each failure that the real
+// sidecar code delivers to it, in the order of delivery, and answers nothing: the project root that a send uses is data that
+// Send passes to the sidecars. A delivery never waits for the test, so the reader of a sidecar is never blocked by it.
+type SidecarRecorder struct {
+	// Root is the project root that Send passes to the sidecars; a test changes it between sends.
+	Root string
+	t    *testing.T
+
+	mu       sync.Mutex
+	messages []host.SidecarMessage
+	failures []SidecarFailure
+	// nextMessage and nextFailure are the indexes of the record that the next wait returns.
+	nextMessage, nextFailure int
+	// changed is closed and replaced at each record, so a waiting call wakes without the recorder waiting for anyone.
+	changed chan struct{}
 }
 
-// NewFakeOwner is a FakeOwner of the project root root.
-func NewFakeOwner(root string) *FakeOwner {
-	return &FakeOwner{Root: root, Seen: make(chan struct{}, 16), Failures: make(chan any, 16)}
-}
-
-func (o *FakeOwner) ProjectRoot() string { return o.Root }
-
-func (o *FakeOwner) Emit(name string, data ...any) {
-	if name == "sidecar-failure" && len(data) == 1 {
-		o.Failures <- data[0]
-	}
-}
-
-func (o *FakeOwner) DeliverSidecarMessage(message host.SidecarMessage) {
-	o.Mu.Lock()
-	o.Events = append(o.Events, message)
-	o.Mu.Unlock()
-	o.Seen <- struct{}{}
-}
-
-// Next waits for the next sidecar event and returns it, in the order of delivery: each delivery adds one notice to Seen, so the
-// event of a notice is the one after the event of the notice before it, whether or not later events arrived meanwhile. The runner
-// ends a check whose event does not come.
-func (o *FakeOwner) Next(t *testing.T) host.SidecarMessage {
+// NewSidecarRecorder is a recorder that sends with the project root root. At the end of the test it reports each failure
+// that the test did not take.
+func NewSidecarRecorder(t *testing.T, root string) *SidecarRecorder {
 	t.Helper()
-	<-o.Seen
-	o.Mu.Lock()
-	defer o.Mu.Unlock()
-	event := o.Events[o.next]
-	o.next++
-	return event
+	recorder := &SidecarRecorder{Root: root, t: t, changed: make(chan struct{})}
+	t.Cleanup(func() {
+		recorder.mu.Lock()
+		defer recorder.mu.Unlock()
+		for _, failure := range recorder.failures[recorder.nextFailure:] {
+			t.Errorf("sidecar failure that the test did not take: %+v", failure)
+		}
+	})
+	return recorder
 }
 
-// SidecarFailure is the JSON form of the sidecar-failure event value (docs/spec/sidecars.md#failure).
-type SidecarFailure struct {
-	Sidecar string `json:"sidecar"`
-	Surface string `json:"surface"`
-	Reason  string `json:"reason"`
+// Send sends body of surface to the sidecar name with the root of the recorder.
+func (o *SidecarRecorder) Send(sidecars *host.Sidecars, name, surface string, body json.RawMessage) error {
+	return o.SendWithCids(sidecars, name, surface, body, nil)
 }
 
-// Failure waits for the next failure event and returns it in the JSON form. The runner ends a check whose failure does not come.
-func (o *FakeOwner) Failure(t *testing.T) SidecarFailure {
+// SendWithCids is Send of a request that continues the inputs named by cids.
+func (o *SidecarRecorder) SendWithCids(sidecars *host.Sidecars, name, surface string, body json.RawMessage, cids []string) error {
+	return sidecars.SendAtRoot(o, name, surface, o.Root, body, cids)
+}
+
+// ProjectRoot is the project root of the window, which a send of the host that names no root, such as the image detach of a
+// reload, reads.
+func (o *SidecarRecorder) ProjectRoot() string {
+	return o.Root
+}
+
+// record appends add to the records under the mutex and wakes the waiting calls.
+func (o *SidecarRecorder) record(add func()) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	add()
+	close(o.changed)
+	o.changed = make(chan struct{})
+}
+
+func (o *SidecarRecorder) Emit(name string, data ...any) {
+	if failure, ok := failureOf(name, data); ok {
+		o.record(func() { o.failures = append(o.failures, failure) })
+		return
+	}
+	o.t.Errorf("unexpected event %q with %d values", name, len(data))
+}
+
+// failureOf is the failure that the event name with data carries.
+func failureOf(name string, data []any) (SidecarFailure, bool) {
+	if name != "sidecar-failure" || len(data) != 1 {
+		return SidecarFailure{}, false
+	}
+	failure, ok := data[0].(SidecarFailure)
+	return failure, ok
+}
+
+func (o *SidecarRecorder) DeliverSidecarMessage(message host.SidecarMessage) {
+	o.record(func() { o.messages = append(o.messages, message) })
+}
+
+// Next waits for the next sidecar message and returns it, in the order of delivery. The runner ends a check whose message does
+// not come.
+func (o *SidecarRecorder) Next(t *testing.T) host.SidecarMessage {
 	t.Helper()
-	value := <-o.Failures
-	data, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
+	for {
+		o.mu.Lock()
+		if o.nextMessage < len(o.messages) {
+			message := o.messages[o.nextMessage]
+			o.nextMessage++
+			o.mu.Unlock()
+			return message
+		}
+		changed := o.changed
+		o.mu.Unlock()
+		<-changed
 	}
-	var failure SidecarFailure
-	if err := json.Unmarshal(data, &failure); err != nil {
-		t.Fatal(err)
-	}
-	return failure
 }
 
-// ProcessID is the process id that the fake sidecar recorded.
+// Pending returns the next sidecar message that arrived and was not taken, without waiting; ok is false when none arrived.
+func (o *SidecarRecorder) Pending() (message host.SidecarMessage, ok bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.nextMessage == len(o.messages) {
+		return host.SidecarMessage{}, false
+	}
+	message = o.messages[o.nextMessage]
+	o.nextMessage++
+	return message, true
+}
+
+// Delivered returns every message that arrived, taken or not, in the order of delivery.
+func (o *SidecarRecorder) Delivered() []host.SidecarMessage {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]host.SidecarMessage(nil), o.messages...)
+}
+
+// Failure waits for the next failure event and returns it. The runner ends a check whose failure does not come.
+func (o *SidecarRecorder) Failure(t *testing.T) SidecarFailure {
+	t.Helper()
+	for {
+		o.mu.Lock()
+		if o.nextFailure < len(o.failures) {
+			failure := o.failures[o.nextFailure]
+			o.nextFailure++
+			o.mu.Unlock()
+			return failure
+		}
+		changed := o.changed
+		o.mu.Unlock()
+		<-changed
+	}
+}
+
+// PendingFailure returns the next failure that arrived and was not taken, without waiting; ok is false when none arrived.
+func (o *SidecarRecorder) PendingFailure() (failure SidecarFailure, ok bool) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.nextFailure == len(o.failures) {
+		return SidecarFailure{}, false
+	}
+	failure = o.failures[o.nextFailure]
+	o.nextFailure++
+	return failure, true
+}
+
+// ProcessID is the process id that the fixture sidecar recorded.
 func ProcessID(t *testing.T, directory string) int {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(directory, "pid"))
@@ -144,17 +225,6 @@ func ProcessID(t *testing.T, directory string) int {
 	return pid
 }
 
-// HarnessOwner is a window of the persistent transport tests that passes each sidecar message to Seen.
-type HarnessOwner struct {
-	Root string
-	Seen chan host.SidecarMessage
-}
-
-func (o *HarnessOwner) ProjectRoot() string { return o.Root }
-func (o *HarnessOwner) Emit(string, ...any) {}
-
-func (o *HarnessOwner) DeliverSidecarMessage(message host.SidecarMessage) { o.Seen <- message }
-
 // HarnessDeclarations is the declaration of one persistent sidecar installed in folder.
 func HarnessDeclarations(folder string) []host.SidecarDeclaration {
 	return []host.SidecarDeclaration{{Name: "fixture-service", Folder: folder,
@@ -162,8 +232,8 @@ func HarnessDeclarations(folder string) []host.SidecarDeclaration {
 }
 
 // SendOpen sends the open request to fixture-service and returns its result. The runner ends a check whose send does not return.
-func SendOpen(sidecars *host.Sidecars, owner *HarnessOwner) error {
-	return sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+func SendOpen(sidecars *host.Sidecars, owner *SidecarRecorder) error {
+	return owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 }
 
 // SocketParent is a short temporary directory that fits within the socket path length limit.

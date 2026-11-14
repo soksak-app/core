@@ -44,7 +44,7 @@ func TestViewSidecarSendNeverBorrowsTheSuccessorGenerationOrMountRoot(t *testing
 		t.Fatal(err)
 	}
 	s.viewRecords().specs["probe-surface"].start.Project = &SurfaceProject{ID: "project-b", Root: "/fixture/project-b"}
-	endView(t, s, fake)
+	endView(t, s, fake, viewTestEpoch)
 	next, ok := s.documents.view("probe-surface")
 	if !ok || next.generation == old.generation {
 		t.Fatal("fixture did not replace A with B")

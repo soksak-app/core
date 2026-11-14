@@ -1,11 +1,11 @@
 package host_test
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -15,14 +15,30 @@ import (
 	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
+// listCase plays the case of an exposure.list exchange and returns the list that the host answered, which the case types.
+func listCase(t *testing.T, name string) json.RawMessage {
+	t.Helper()
+	kase, err := loadEndpointCase(filepath.Join(endpointCaseDirectory(t), name+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound, err := playEndpointCase(t, kase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, err := json.Marshal(bound["list"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return list
+}
+
 // contract: exposure.list.appends-host-entries-registered
 func TestExposureListAppendsHostEntries(t *testing.T) {
-	_, address, _ := serve(t, newFakeBackend())
-	conn := dial(t, address)
-	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
+	result := listCase(t, "exposure-list-host-entries")
 	// The list keeps the members of the page's list: status, commands and element.
 	var members map[string]json.RawMessage
-	if err := json.Unmarshal(got.Result, &members); err != nil {
+	if err := json.Unmarshal(result, &members); err != nil {
 		t.Fatal(err)
 	}
 	if keys := slices.Sorted(maps.Keys(members)); !slices.Equal(keys, []string{"commands", "element", "status"}) || string(members["element"]) != "[]" {
@@ -38,7 +54,7 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 			Registered bool
 		}
 	}
-	if err := json.Unmarshal(got.Result, &list); err != nil {
+	if err := json.Unmarshal(result, &list); err != nil {
 		t.Fatal(err)
 	}
 	names := map[string]bool{}
@@ -47,24 +63,19 @@ func TestExposureListAppendsHostEntries(t *testing.T) {
 	}
 	for _, name := range []string{"core.layout", "host.buttons", "host.dialog", "host.log", "host.window", "host.windows", "host.screens", "host.dock", "host.window.close", "host.window.fullscreen", "host.window.move", "host.window.raise", "host.window.lower", "host.dock.select", "host.hit", "host.quit"} {
 		if !names[name] {
-			t.Fatalf("%s is missing or unregistered in %s", name, got.Result)
+			t.Fatalf("%s is missing or unregistered in %s", name, result)
 		}
 	}
 }
 
+// The case has no page call for the list of the owner host, so a request that the endpoint sent to the page fails the case, and
+// the case holds the refusal of another owner.
 // contract: exposure.list.host-owner-without-page
 func TestExposureListOfTheHostOwnerDoesNotAskThePage(t *testing.T) {
-	backend := newFakeBackend()
-	backend.failures = map[string]error{"exposure.list": &host.RPCError{Code: 1003, Message: "the main page is not ready"}}
-	_, address, _ := serve(t, backend)
-	conn := dial(t, address)
-	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main", "owner": "host"})
-	if got.Error != nil {
-		t.Fatalf("exposure.list of the host owner failed: %+v", got.Error)
-	}
+	result := listCase(t, "exposure-list-host-owner")
 	// The host declares no element entry, so the host list holds an empty element.
 	var members map[string]json.RawMessage
-	if err := json.Unmarshal(got.Result, &members); err != nil {
+	if err := json.Unmarshal(result, &members); err != nil {
 		t.Fatal(err)
 	}
 	if keys := slices.Sorted(maps.Keys(members)); !slices.Equal(keys, []string{"commands", "element", "status"}) || string(members["element"]) != "[]" {
@@ -76,36 +87,24 @@ func TestExposureListOfTheHostOwnerDoesNotAskThePage(t *testing.T) {
 			Registered bool
 		}
 	}
-	if err := json.Unmarshal(got.Result, &list); err != nil {
+	if err := json.Unmarshal(result, &list); err != nil {
 		t.Fatal(err)
 	}
 	quit := false
 	for _, entry := range append(list.Status, list.Commands...) {
 		if !strings.HasPrefix(entry.Name, "host.") || !entry.Registered {
-			t.Fatalf("entry %s registered %v in the host list %s", entry.Name, entry.Registered, got.Result)
+			t.Fatalf("entry %s registered %v in the host list %s", entry.Name, entry.Registered, result)
 		}
 		quit = quit || entry.Name == "host.quit"
 	}
 	if !quit {
-		t.Fatalf("host.quit is missing from %s", got.Result)
-	}
-	backend.mu.Lock()
-	asked := slices.Contains(backend.requests, "exposure.list")
-	backend.mu.Unlock()
-	if asked {
-		t.Fatal("exposure.list of the host owner asked the page")
-	}
-	other := call(t, conn, 2, "exposure.list", map[string]any{"window": "main", "owner": "core"})
-	if other.Error == nil || other.Error.Message != "exposure.list owner must be host" {
-		t.Fatalf("exposure.list of another owner answered %+v", other)
+		t.Fatalf("host.quit is missing from %s", result)
 	}
 }
 
 // contract: exposure.list.host-entries-exact-sorted-set, exposure.list.host-entries-described, exposure.list.host-quit-result-null
 func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
-	_, address, _ := serve(t, newFakeBackend())
-	conn := dial(t, address)
-	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
+	result := listCase(t, "exposure-list-host-entries")
 	type entry struct {
 		Name        string
 		Description string
@@ -113,7 +112,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 		Result      json.RawMessage
 	}
 	var list struct{ Status, Commands []entry }
-	if err := json.Unmarshal(got.Result, &list); err != nil {
+	if err := json.Unmarshal(result, &list); err != nil {
 		t.Fatal(err)
 	}
 	names := func(entries []entry) []string {
@@ -159,9 +158,7 @@ func TestExposureListHostEntriesAreSortedAndDescribed(t *testing.T) {
 
 // contract: exposure.list.host-hit-kinds
 func TestHostHitDeclaresTheWorkbenchDocumentAndNativeKinds(t *testing.T) {
-	_, address, _ := serve(t, newFakeBackend())
-	conn := dial(t, address)
-	got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main", "owner": "host"})
+	result := listCase(t, "exposure-list-host-owner")
 	type command struct {
 		Name   string
 		Result struct {
@@ -169,40 +166,26 @@ func TestHostHitDeclaresTheWorkbenchDocumentAndNativeKinds(t *testing.T) {
 		}
 	}
 	var list struct{ Commands []command }
-	if err := json.Unmarshal(got.Result, &list); err != nil {
+	if err := json.Unmarshal(result, &list); err != nil {
 		t.Fatal(err)
 	}
 	at := slices.IndexFunc(list.Commands, func(e command) bool { return e.Name == "host.hit" })
 	if at < 0 {
-		t.Fatalf("host.hit is missing from %s", got.Result)
+		t.Fatalf("host.hit is missing from %s", result)
 	}
 	if kinds := list.Commands[at].Result.Properties.Kind.Enum; !slices.Equal(kinds, []string{"workbench", "document", "native"}) {
 		t.Fatalf("host.hit kinds %v, want workbench, document and native", kinds)
 	}
 }
 
-// listBackend is a fakeBackend that converts the exposure.list reply of the page to reply.
-type listBackend struct {
-	*fakeBackend
-	reply json.RawMessage
-}
-
-func (b listBackend) PageRequest(ctx context.Context, window, method string, params json.RawMessage) (json.RawMessage, error) {
-	if method == "exposure.list" {
-		return b.reply, nil
-	}
-	return b.fakeBackend.PageRequest(ctx, window, method, params)
-}
-
 // contract: exposure.list.non-object-list-rejected
 func TestExposureListRejectsANonObjectPageList(t *testing.T) {
-	for _, reply := range []string{`[]`, `null`, `3`, `"list"`} {
-		_, address, _ := serve(t, listBackend{fakeBackend: newFakeBackend(), reply: json.RawMessage(reply)})
-		conn := dial(t, address)
-		got := call(t, conn, 1, "exposure.list", map[string]any{"window": "main"})
-		if got.Error == nil || got.Error.Code != -32603 {
-			t.Fatalf("page list %s: result %s, error %v", reply, got.Result, got.Error)
-		}
+	kase, err := loadEndpointCase(filepath.Join(endpointCaseDirectory(t), "exposure-list-not-object.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := playEndpointCase(t, kase); err != nil {
+		t.Fatal(err)
 	}
 }
 

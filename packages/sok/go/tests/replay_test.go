@@ -2,8 +2,8 @@ package tests
 
 // `sok debug replay` (docs/spec/replay.md#command): the events of a session are replayed by the replay executable that an
 // installed sidecar declares, and every stored hash of the sidecar and of the page is compared with the replayed one. The
-// replay executable of these tests is a shell script that stands in for the engine of a sidecar: it counts the bytes of the
-// inputs it reads and prints that count as the hash of each frame record.
+// replay executable of these tests is the tracked fixture program replayFixture: it counts the bytes of the inputs it reads and
+// prints that count as the hash of each frame record.
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -19,20 +20,19 @@ import (
 
 const logOpen = `{"ts_us":%d,"mono_ns":%d,"seq":1,"level":"info","layer":"%s","event":"log.open","fields":{"schema":3,"pid":1,"role":"%s","boot":"b1"}}`
 
-// replayFixture prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
-const replayFixture = `#!/bin/sh
-total=0
-while IFS= read -r line; do
-  case "$line" in
-    *'"event":"sidecar.probe.input"'*)
-      hex=${line#*'"hex":"'}; hex=${hex%%'"'*}
-      total=$((total + ${#hex} / 2)) ;;
-    *'"class":"frame"'*)
-      sequence=${line#*'"sequence":'}; sequence=${sequence%%[,\}]*}
-      printf '{"sequence":%s,"hash":"%064d"}\n' "$sequence" "$total" ;;
-  esac
-done
-`
+// replayFixture is the replay executable of the tests (docs/spec/cases/log-contract/replay/engine.sh): for each frame record it
+// reads, it prints the number of bytes of the inputs read so far as 64 decimal digits.
+var replayFixture = readReplayFixture()
+
+func readReplayFixture() string {
+	_, here, _, _ := runtime.Caller(0)
+	file := filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "docs", "spec", "cases", "log-contract", "replay", "engine.sh")
+	text, err := os.ReadFile(file)
+	if err != nil {
+		panic(fmt.Sprintf("the replay executable of the tests cannot be read: %v", err))
+	}
+	return string(text)
+}
 
 // replayInputs names the events of the probe sidecar of each kind of replay input.
 const replayInputs = `{"output":"sidecar.probe.input","write":"sidecar.probe.write","resize":"sidecar.probe.resize","selection":"sidecar.probe.selection","viewport":"sidecar.probe.viewport","theme":"sidecar.probe.theme"}`
@@ -80,6 +80,14 @@ func standardEvents() replayEvents {
 			frame("plugin", 1045, 3, 3, "s1", digits(4)),
 		},
 	}
+}
+
+// engineEvents is standardEvents whose first input holds the given bytes, which direct the behavior of the replay executable
+// (docs/spec/cases/log-contract/replay/engine.sh).
+func engineEvents(hex string) replayEvents {
+	events := standardEvents()
+	events.sidecar[1] = input(1010, 2, 2, "s1", hex)
+	return events
 }
 
 func writeReplayFile(t *testing.T, path, text string, mode os.FileMode) {
@@ -236,9 +244,9 @@ func TestReplayRefusesWhatItCannotCompare(t *testing.T) {
 		{"no sidecar declares the role", standardEvents(), replayFixture, "other", []string{"s1"}, "sok: replay session s1: no installed sidecar declares the replay role probe\n"},
 		{"no frame record", noFrame, replayFixture, "probe", []string{"s1"}, "sok: replay session s1: no frame record to compare\n"},
 		{"a stored hash is not a hash", badStored, replayFixture, "probe", []string{"s1"}, "sok: replay session s1: sequence 2 layer sidecar: the stored hash is not 64 lowercase hexadecimal characters: \"ABC\"\n"},
-		{"the executable fails", standardEvents(), "#!/bin/sh\necho engine broke >&2\nexit 3\n", "probe", []string{"s1"}, "sok: replay session s1: replay.sh exited with status 3: engine broke\n"},
-		{"the executable prints a line that is not a hash", standardEvents(), "#!/bin/sh\necho nope\n", "probe", []string{"s1"}, "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n"},
-		{"the executable prints no hash for a frame record", standardEvents(), "#!/bin/sh\ncat >/dev/null\n", "probe", []string{"s1"}, "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n"},
+		{"the executable fails", engineEvents("0bad"), replayFixture, "probe", []string{"s1"}, "sok: replay session s1: replay.sh exited with status 3: engine broke\n"},
+		{"the executable prints a line that is not a hash", engineEvents("0bee"), replayFixture, "probe", []string{"s1"}, "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n"},
+		{"the executable prints no hash for a frame record", engineEvents("0ba0"), replayFixture, "probe", []string{"s1"}, "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n"},
 	}
 	for _, c := range cases {
 		config := replayConfig(t, c.events, c.script, c.role)

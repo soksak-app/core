@@ -80,7 +80,7 @@ func TestPersistentServiceStartsInANewSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/session", Seen: make(chan host.SidecarMessage, 4)}
+	owner := support.NewSidecarRecorder(t, "/session")
 	if err := support.SendOpen(sidecars, owner); err != nil {
 		t.Fatal(err)
 	}

@@ -2024,7 +2024,7 @@ impl<O: Owner> Sidecars<O> {
         cids: &[String],
     ) -> Result<(), String> {
         let current = owner.root()?;
-        self.send_in_root(owner, name, surface, current, body, cids)
+        self.send_at_root(owner, name, surface, &current, body, cids)
     }
 
     /// Sends a request of a page. A page outlives the close of its project for a moment, and its request then starts no
@@ -2050,16 +2050,17 @@ impl<O: Owner> Sidecars<O> {
         if !known && current.is_empty() {
             return Err(format!("sidecar {name}: surface {surface} has no project"));
         }
-        self.send_in_root(owner, name, surface, current, body, cids)
+        self.send_at_root(owner, name, surface, &current, body, cids)
     }
 
-    /// Sends a page request with current as the root of the surface unless the surface has a recorded root.
-    pub(crate) fn send_in_root(
+    /// Sends a page request of a caller that states the project root of a surface that has no session yet: the session of the
+    /// surface keeps the root that it started with, and `root` starts the session of a surface that has none.
+    pub fn send_at_root(
         &self,
         owner: &O,
         name: &str,
         surface: &str,
-        current: String,
+        root: &str,
         body: &RawValue,
         cids: &[String],
     ) -> Result<(), String> {
@@ -2071,11 +2072,15 @@ impl<O: Owner> Sidecars<O> {
                 // default: a lock that a panicking thread poisoned still holds the surface roots, which are only read; the
                 // panic hook records the panic.
                 .unwrap_or_else(PoisonError::into_inner);
-            // default: a surface with no recorded directory starts from the current project root of the window.
-            state.roots.get(surface).cloned().unwrap_or(current)
+            state
+                .roots
+                .get(surface)
+                .cloned()
+                // default: a surface with no recorded directory starts from the root that the caller states.
+                .unwrap_or_else(|| root.to_string())
         };
 
-        self.send_at_root(owner, name, surface, root, Payload { body, cids }, None)
+        self.send_with_authority(owner, name, surface, root, Payload { body, cids }, None)
     }
 
     pub(crate) fn send_from_window(
@@ -2102,7 +2107,7 @@ impl<O: Owner> Sidecars<O> {
         if root.is_empty() {
             return Err(format!("sidecar {name}: surface {surface} has no project"));
         }
-        self.send_at_root(
+        self.send_with_authority(
             owner,
             name,
             surface,
@@ -2121,7 +2126,7 @@ impl<O: Owner> Sidecars<O> {
         cids: &[String],
         authority: &crate::documents::ViewSidecarAuthority<'_>,
     ) -> Result<(), String> {
-        self.send_at_root(
+        self.send_with_authority(
             owner,
             name,
             surface,
@@ -2131,7 +2136,7 @@ impl<O: Owner> Sidecars<O> {
         )
     }
 
-    fn send_at_root(
+    fn send_with_authority(
         &self,
         owner: &O,
         name: &str,

@@ -19,5 +19,8 @@
     ".": "./client.js",
     "./frame.js": "./frame.js",
     "./testing": "./testing/case-player.js"
-  }
+  },
+  "specFiles": [
+    "docs/spec/cases/endpoint/"
+  ]
 }

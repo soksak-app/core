@@ -111,7 +111,7 @@ func (p *deferredUIPlatform) runQueued() {
 // no abandoned record and calls no native abandon, and the queued end of the presentation finds no wait.
 func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, native := newLifecycleSurfaces(t, &fakeClock{})
+	s, fake, native := newLifecycleSurfaces(t)
 	queue := &deferredUIPlatform{lifecyclePlatform: fake}
 	saved := system
 	system = queue
@@ -151,7 +151,7 @@ func TestAHideAfterAPresentedCallbackEndsNoWait(t *testing.T) {
 // applies its invisibility, with one abandoned record.
 func TestAnInvisiblePlacementAtPresentEndsNoWaitUntilItsSync(t *testing.T) {
 	isolateTraceRecords(t)
-	s, fake, native := newLifecycleSurfaces(t, &fakeClock{})
+	s, fake, native := newLifecycleSurfaces(t)
 	window := platform.Window(1)
 	shown := []Placement{{ID: "probe-surface", Visible: true}}
 	if err := s.joinShownViews(window, 7, shown); err != nil {
@@ -199,7 +199,7 @@ func TestTheCancelOfALayoutEndsTheRun(t *testing.T) {
 		{"window", func(s *Surfaces) error { return s.cancelAllLayoutPresentations(platform.Window(1)) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, _, _ := newLifecycleSurfaces(t, &fakeClock{})
+			s, _, _ := newLifecycleSurfaces(t)
 			frontend := &runFrontend{}
 			s.window = frontend
 			s.run(true)

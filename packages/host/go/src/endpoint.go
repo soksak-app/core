@@ -1542,6 +1542,20 @@ func inputPointer(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Reply
 	if err != nil {
 		return nil, err
 	}
+	input, err := pointerInput(params)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.backend.Pointer(window, input); err != nil {
+		return nil, err
+	}
+	e.pointerDelivered(c, window, input)
+	return nil, nil
+}
+
+// pointerInput reads the params of input.pointer into the input that the backend delivers and rejects each invalid value with the
+// error -32602.
+func pointerInput(params json.RawMessage) (PointerInput, error) {
 	var p struct {
 		Pointer        *string
 		X, Y           *float64
@@ -1552,15 +1566,15 @@ func inputPointer(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Reply
 		Clicks         *int
 	}
 	if err := decode(params, &p); err != nil {
-		return nil, err
+		return PointerInput{}, err
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(params, &fields); err != nil {
-		return nil, rpcError(codeInvalidParams, "%v", err)
+		return PointerInput{}, rpcError(codeInvalidParams, "%v", err)
 	}
 	for field := range fields {
 		if !pointerFields[field] {
-			return nil, rpcError(codeInvalidParams, "input.pointer has no field %s", field)
+			return PointerInput{}, rpcError(codeInvalidParams, "input.pointer has no field %s", field)
 		}
 	}
 	pointer := mainPointer
@@ -1568,41 +1582,36 @@ func inputPointer(e *Endpoint, c *endpointConn, params json.RawMessage, _ *Reply
 		pointer = *p.Pointer
 	}
 	if !pointerName(pointer) {
-		return nil, rpcError(codeInvalidParams, "pointer must be 1 to %d characters of a-z, 0-9 and -", pointerNameMax)
+		return PointerInput{}, rpcError(codeInvalidParams, "pointer must be 1 to %d characters of a-z, 0-9 and -", pointerNameMax)
 	}
 	if p.X == nil || p.Y == nil {
-		return nil, rpcError(codeInvalidParams, "x and y are required")
+		return PointerInput{}, rpcError(codeInvalidParams, "x and y are required")
 	}
 	if !pointerPhases[p.Phase] {
-		return nil, rpcError(codeInvalidParams, "phase must be move, down, drag, up, or scroll")
+		return PointerInput{}, rpcError(codeInvalidParams, "phase must be move, down, drag, up, or scroll")
 	}
 	button := "left"
 	if p.Button != nil {
 		button = *p.Button
 	}
 	if button != "left" && button != "right" {
-		return nil, rpcError(codeInvalidParams, "button must be left or right")
+		return PointerInput{}, rpcError(codeInvalidParams, "button must be left or right")
 	}
 	if p.Activate && p.Phase != "move" {
-		return nil, rpcError(codeInvalidParams, "activate applies only to phase move")
+		return PointerInput{}, rpcError(codeInvalidParams, "activate applies only to phase move")
 	}
 	clicks := 1
 	if p.Clicks != nil {
 		if p.Phase != "down" && p.Phase != "up" {
-			return nil, rpcError(codeInvalidParams, "clicks applies only to phase down or up")
+			return PointerInput{}, rpcError(codeInvalidParams, "clicks applies only to phase down or up")
 		}
 		if *p.Clicks < 1 || *p.Clicks > pointerClicksMax {
-			return nil, rpcError(codeInvalidParams, "clicks must be from 1 to %d", pointerClicksMax)
+			return PointerInput{}, rpcError(codeInvalidParams, "clicks must be from 1 to %d", pointerClicksMax)
 		}
 		clicks = *p.Clicks
 	}
-	input := PointerInput{Pointer: pointer, X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button, DeltaX: p.DeltaX, DeltaY: p.DeltaY,
-		Activate: p.Activate, Clicks: clicks}
-	if err := e.backend.Pointer(window, input); err != nil {
-		return nil, err
-	}
-	e.pointerDelivered(c, window, input)
-	return nil, nil
+	return PointerInput{Pointer: pointer, X: *p.X, Y: *p.Y, Phase: p.Phase, Button: button, DeltaX: p.DeltaX, DeltaY: p.DeltaY,
+		Activate: p.Activate, Clicks: clicks}, nil
 }
 
 // modifierBits are the modifiers names of input.key and the bits of the native input.
@@ -1613,6 +1622,16 @@ func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScop
 	if err != nil {
 		return nil, err
 	}
+	input, err := keyInput(params)
+	if err != nil {
+		return nil, err
+	}
+	return nil, e.backend.Key(window, input)
+}
+
+// keyInput reads the params of input.key into the input that the backend delivers and rejects each invalid value with the error
+// -32602.
+func keyInput(params json.RawMessage) (KeyInput, error) {
 	var k struct {
 		Key       string
 		Text      string
@@ -1620,23 +1639,23 @@ func inputKey(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScop
 		Phase     string
 	}
 	if err := decode(params, &k); err != nil {
-		return nil, err
+		return KeyInput{}, err
 	}
 	if k.Key == "" {
-		return nil, rpcError(codeInvalidParams, "key is required")
+		return KeyInput{}, rpcError(codeInvalidParams, "key is required")
 	}
 	if k.Phase != "down" && k.Phase != "up" {
-		return nil, rpcError(codeInvalidParams, "phase must be down or up")
+		return KeyInput{}, rpcError(codeInvalidParams, "phase must be down or up")
 	}
 	var mask uint
 	for _, name := range k.Modifiers {
 		bit, ok := modifierBits[name]
 		if !ok {
-			return nil, rpcError(codeInvalidParams, "modifier %q is not shift, control, option, or command", name)
+			return KeyInput{}, rpcError(codeInvalidParams, "modifier %q is not shift, control, option, or command", name)
 		}
 		mask |= bit
 	}
-	return nil, e.backend.Key(window, KeyInput{Key: k.Key, Text: k.Text, Modifiers: mask, Down: k.Phase == "down"})
+	return KeyInput{Key: k.Key, Text: k.Text, Modifiers: mask, Down: k.Phase == "down"}, nil
 }
 
 // textRange is a range of input.text: {start, length} in UTF-16 code units.
@@ -1664,6 +1683,16 @@ func inputDialogAnswer(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *
 	if err != nil {
 		return nil, err
 	}
+	answer, err := dialogAnswerInput(params)
+	if err != nil {
+		return nil, err
+	}
+	return nil, e.backend.DialogAnswer(window, answer)
+}
+
+// dialogAnswerInput reads the params of input.dialog.answer into the answer that the host receives and rejects each invalid value
+// with the error -32602.
+func dialogAnswerInput(params json.RawMessage) (DialogAnswer, error) {
 	var fields struct {
 		ID      *string   `json:"id"`
 		Paths   *[]string `json:"paths"`
@@ -1671,24 +1700,24 @@ func inputDialogAnswer(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *
 		Replace *bool     `json:"replace"`
 	}
 	if err := decode(params, &fields); err != nil {
-		return nil, err
+		return DialogAnswer{}, err
 	}
 	if fields.ID == nil || *fields.ID == "" {
-		return nil, rpcError(codeInvalidParams, "id must be a non-empty string")
+		return DialogAnswer{}, rpcError(codeInvalidParams, "id must be a non-empty string")
 	}
 	answer := DialogAnswer{ID: *fields.ID, Cancel: fields.Cancel != nil && *fields.Cancel, Replace: fields.Replace != nil && *fields.Replace}
 	switch {
 	case answer.Cancel && fields.Paths != nil:
-		return nil, rpcError(codeInvalidParams, "an answer gives paths or cancel, not both")
+		return DialogAnswer{}, rpcError(codeInvalidParams, "an answer gives paths or cancel, not both")
 	case answer.Cancel && fields.Replace != nil:
-		return nil, rpcError(codeInvalidParams, "a cancel takes no replace")
+		return DialogAnswer{}, rpcError(codeInvalidParams, "a cancel takes no replace")
 	case !answer.Cancel && fields.Paths == nil:
-		return nil, rpcError(codeInvalidParams, "an answer gives paths or cancel: true")
+		return DialogAnswer{}, rpcError(codeInvalidParams, "an answer gives paths or cancel: true")
 	}
 	if fields.Paths != nil {
 		answer.Paths = *fields.Paths
 	}
-	return nil, e.backend.DialogAnswer(window, answer)
+	return answer, nil
 }
 
 func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {
@@ -1696,6 +1725,16 @@ func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplySco
 	if err != nil {
 		return nil, err
 	}
+	input, err := textInput(params)
+	if err != nil {
+		return nil, err
+	}
+	return nil, e.backend.Text(window, input)
+}
+
+// textInput reads the params of input.text into the composition step that the backend delivers and rejects each invalid value
+// with the error -32602.
+func textInput(params json.RawMessage) (TextInput, error) {
 	var t struct {
 		Phase       string
 		Text        *string
@@ -1703,7 +1742,7 @@ func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplySco
 		Replacement *textRange
 	}
 	if err := decode(params, &t); err != nil {
-		return nil, err
+		return TextInput{}, err
 	}
 	input := TextInput{ReplacementStart: -1}
 	switch t.Phase {
@@ -1714,36 +1753,37 @@ func inputText(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplySco
 	case "unmark":
 		input.Phase = TextUnmark
 	default:
-		return nil, rpcError(codeInvalidParams, "phase must be mark, insert or unmark")
+		return TextInput{}, rpcError(codeInvalidParams, "phase must be mark, insert or unmark")
 	}
 	if input.Phase == TextUnmark {
 		if t.Text != nil || t.Selection != nil || t.Replacement != nil {
-			return nil, rpcError(codeInvalidParams, "unmark takes no text, selection or replacement")
+			return TextInput{}, rpcError(codeInvalidParams, "unmark takes no text, selection or replacement")
 		}
-		return nil, e.backend.Text(window, input)
+		return input, nil
 	}
 	if t.Text == nil {
-		return nil, rpcError(codeInvalidParams, "text is required")
+		return TextInput{}, rpcError(codeInvalidParams, "text is required")
 	}
 	input.Text = *t.Text
 	units := len(utf16.Encode([]rune(input.Text)))
 	if input.Phase == TextMark {
 		input.SelectionStart = units
 	}
+	var err error
 	if t.Selection != nil {
 		if input.Phase != TextMark {
-			return nil, rpcError(codeInvalidParams, "selection applies to mark")
+			return TextInput{}, rpcError(codeInvalidParams, "selection applies to mark")
 		}
 		if input.SelectionStart, input.SelectionLength, err = t.Selection.read("selection", units); err != nil {
-			return nil, err
+			return TextInput{}, err
 		}
 	}
 	if t.Replacement != nil {
 		if input.ReplacementStart, input.ReplacementLength, err = t.Replacement.read("replacement", -1); err != nil {
-			return nil, err
+			return TextInput{}, err
 		}
 	}
-	return nil, e.backend.Text(window, input)
+	return input, nil
 }
 
 // The method name of the request. A request without one has an empty string.

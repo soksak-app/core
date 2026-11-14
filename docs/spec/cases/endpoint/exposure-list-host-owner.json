@@ -1,0 +1,15 @@
+{
+  "name": "exposure-list-host-owner",
+  "description": "exposure.list of the owner host is answered without the page, and an owner other than host is refused with -32602.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "variables": {"list": {"type": "object", "keys": ["status", "commands", "element"], "example": {"status": [], "commands": [], "element": []}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "exposure.list", "params": {"window": "main", "owner": "host"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": "$list"}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": {"window": "main", "owner": "core"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "error": {"code": -32602, "message": "exposure.list owner must be host"}}}
+  ]
+}

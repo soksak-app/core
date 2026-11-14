@@ -9,14 +9,13 @@ import (
 // A view that the host creates receives, before its page loads, the document-start script that sets window.sokTheme to the frozen theme
 // current at creation, so the first page script reads the tokens.
 func TestViewCreationAddsTheThemeScriptBeforeTheLoad(t *testing.T) {
-	clock := &fakeClock{}
 	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}, scripts: map[unsafe.Pointer][]string{}}
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
 	s := &Surfaces{
 		documents: NewDocuments(),
-		lifecycle: newViewLifecycle(clock.now),
+		lifecycle: newViewLifecycle(),
 		host:      &Host{configDir: "/config"},
 		events:    func(string, any) {},
 		theme:     Theme{Scheme: "dark", Tokens: map[string]string{"surface": "#101010"}},

@@ -407,8 +407,6 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
         sample: Arc::new(|path| platform::current()?.sample_threads(path)),
         folder: directory.join("logs"),
         emit_host: Arc::new(event_record::emit_host),
-        clock: None,
-        wait: None,
         stop_waits: None,
     });
     app.manage(StallWatchStop(std::sync::Mutex::new(Some(Box::new(

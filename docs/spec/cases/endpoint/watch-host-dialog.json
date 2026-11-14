@@ -1,0 +1,22 @@
+{
+  "name": "watch-host-dialog",
+  "description": "The first watch of host.dialog of a window and the end of its last watch reach the host; a watch of another connection while one stands and the end of a watch that is not the last do not, and none of them reaches the page.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "host.dialog"}}},
+    {"connection": "a", "reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"watched": ["main host.dialog on"]},
+    {"connection": "b", "send": {"jsonrpc": "2.0", "id": 2, "method": "status.watch", "params": {"window": "main", "name": "host.dialog"}}},
+    {"connection": "b", "reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"watched": ["main host.dialog on"]},
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": {"window": "main", "name": "host.dialog"}}},
+    {"connection": "a", "reply": {"jsonrpc": "2.0", "id": 3, "result": null}},
+    {"watched": ["main host.dialog on"]},
+    {"connection": "b", "send": {"jsonrpc": "2.0", "id": 4, "method": "status.unwatch", "params": {"window": "main", "name": "host.dialog"}}},
+    {"connection": "b", "reply": {"jsonrpc": "2.0", "id": 4, "result": null}},
+    {"watched": ["main host.dialog on", "main host.dialog off"]}
+  ]
+}

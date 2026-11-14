@@ -1,0 +1,31 @@
+{
+  "name": "watch-per-connection",
+  "description": "A change reaches only the connections that watch the status, a watch is released per connection, the page receives the first watch and the last release only, and the registry of watches follows them.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"watching": {"window": "main", "name": "core.layout", "value": false}},
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"connection": "a", "reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"watching": {"window": "main", "name": "core.layout", "value": true}},
+    {"watching": {"window": "main", "name": "core.other", "value": false}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "core.layout", "value": 1}}}},
+    {"connection": "a", "notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "core.layout", "value": 1}}},
+    {"connection": "b", "send": {"jsonrpc": "2.0", "id": 2, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"connection": "b", "reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 3, "method": "status.unwatch", "params": {"window": "main", "name": "core.layout"}}},
+    {"connection": "a", "reply": {"jsonrpc": "2.0", "id": 3, "result": null}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "core.layout", "value": 2}}}},
+    {"connection": "b", "notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "core.layout", "value": 2}}},
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 4, "method": "windows.list"}},
+    {"connection": "a", "reply": {"jsonrpc": "2.0", "id": 4, "result": [{"window": "main", "title": "", "project": null, "key": false, "ready": false}]}},
+    {"connection": "b", "close": "client"},
+    {"page": {"call": {"name": "status.unwatch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"watching": {"window": "main", "name": "core.layout", "value": false}}
+  ]
+}

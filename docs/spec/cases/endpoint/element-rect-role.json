@@ -1,0 +1,18 @@
+{
+  "name": "element-rect-role",
+  "description": "element.rect answers the rectangle that the page reports with its role member, whether the role is a name or null.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "element.rect", "params": {"window": "main", "name": "core.save"}}},
+    {"page": {"call": {"name": "element.rect", "payload": {"name": "core.save"}}}},
+    {"page": {"reply": {"result": {"x": 1, "y": 2, "width": 3, "height": 4, "zoom": 1, "role": "button"}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": {"x": 1, "y": 2, "width": 3, "height": 4, "zoom": 1, "role": "button"}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "element.rect", "params": {"window": "main", "name": "core.save"}}},
+    {"page": {"call": {"name": "element.rect", "payload": {"name": "core.save"}}}},
+    {"page": {"reply": {"result": {"x": 1, "y": 2, "width": 3, "height": 4, "zoom": 1, "role": null}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": {"x": 1, "y": 2, "width": 3, "height": 4, "zoom": 1, "role": null}}}
+  ]
+}

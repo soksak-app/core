@@ -127,12 +127,6 @@ func TestDiagnosticDragCaptureTakesAPlan(t *testing.T) {
 	}
 }
 
-type fakeCaptureStatus struct {
-	missed int
-	late   int
-	gap    float64
-}
-
 type captureStartProbe struct {
 	plan     CapturePlan
 	failStop bool
@@ -185,14 +179,10 @@ func TestRecordingFinishReportsTheRecordedWindow(t *testing.T) {
 	}
 }
 
-func (c fakeCaptureStatus) Missed() int         { return c.missed }
-func (c fakeCaptureStatus) Late() int           { return c.late }
-func (c fakeCaptureStatus) LongestGap() float64 { return c.gap }
-
 // contract: diagnostics.capture-stop.payload-reports-stills
 func TestCaptureStopPayloadReportsStills(t *testing.T) {
 	window := 31
-	payload := captureStopPayload(fakeCaptureStatus{missed: 2, late: 1, gap: 42.5}, "/tmp/frames", 598, &window)
+	payload := captureStopPayload(captureStatus{Missed: 2, Late: 1, LongestGap: 42.5}, "/tmp/frames", 598, &window)
 	want := map[string]any{
 		"window":      31,
 		"frames":      "/tmp/frames",
@@ -214,7 +204,7 @@ func TestCaptureStopPayloadReportsStills(t *testing.T) {
 		}
 	}
 	// A display recording has no window of its own: the member is null, not absent.
-	display := captureStopPayload(fakeCaptureStatus{}, "/tmp/frames", 3, nil)
+	display := captureStopPayload(captureStatus{}, "/tmp/frames", 3, nil)
 	if value, ok := display["window"]; !ok || value != nil {
 		t.Errorf("the stop of a display recording reports window %#v (present %t), want null", value, ok)
 	}

@@ -20,10 +20,10 @@ import (
 var closedSurfaces = []string{"s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"}
 
 // sendUntilFull sends big on s1 until the queue refuses it.
-func sendUntilFull(t *testing.T, sidecars *host.Sidecars, owner host.SidecarOwner, big json.RawMessage) {
+func sendUntilFull(t *testing.T, sidecars *host.Sidecars, owner *support.SidecarRecorder, big json.RawMessage) {
 	t.Helper()
 	for i := 0; i < 4000; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}
@@ -84,10 +84,10 @@ func TestAReplyHeldForTheQueueIsWrittenBeforeALaterLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/p")
+	owner := support.NewSidecarRecorder(t, "/p")
 	// A line larger than any pipe of the sidecar keeps the writer inside it.
 	huge := json.RawMessage(`{"data":"` + strings.Repeat("y", 512*1024) + `"}`)
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", huge); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", huge); err != nil {
 		t.Fatal(err)
 	}
 	readFIFO(t, taken)
@@ -152,15 +152,15 @@ func TestEveryPendingReplyIsFlushedAfterTheQueueDrains(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/p")
+	owner := support.NewSidecarRecorder(t, "/p")
 	// The first line registers s1 and holds the writer; the next lines register the surfaces to close (Close notifies only
 	// registered surfaces).
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"hold":"`+strings.Repeat("y", 512*1024)+`"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"hold":"`+strings.Repeat("y", 512*1024)+`"}`)); err != nil {
 		t.Fatal(err)
 	}
 	readFIFO(t, taken)
 	for _, s := range closedSurfaces {
-		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -257,16 +257,16 @@ func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/p")
+	owner := support.NewSidecarRecorder(t, "/p")
 	for _, s := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}
@@ -282,25 +282,12 @@ func TestACloseThatFindsRoomWritesNoBufferedRecord(t *testing.T) {
 	}
 	f.Write([]byte("go\n"))
 	f.Close()
-	// The fake owner blocks on its full channel, so the receipts are taken until the sidecar has ended.
-	receipts := make(chan struct{})
-	finished := make(chan struct{})
-	go func() {
-		for count := 0; ; count++ {
-			if count == 10 {
-				close(receipts)
-			}
-			select {
-			case <-owner.Seen:
-			case <-finished:
-				return
-			}
-		}
-	}()
-	<-receipts
+	// The receipts of the sidecar show that the writer has taken lines out of the queue.
+	for range 10 {
+		owner.Next(t)
+	}
 	sidecars.Close("s2")
 	sidecars.Stop()
-	close(finished)
 	if refused := " info host sidecar @fixture/sidecar-echo: close s2: outbox full, buffered"; strings.Contains(written(), refused) {
 		t.Errorf("the log has %q:\n%s", refused, written())
 	}
@@ -323,11 +310,11 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/p")
+	owner := support.NewSidecarRecorder(t, "/p")
 
 	// Surface registration
 	for _, s := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, s, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -336,7 +323,7 @@ func TestOrderIsCorrectWhenStopFlushesBufferedMessages(t *testing.T) {
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}

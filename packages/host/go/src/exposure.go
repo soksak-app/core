@@ -286,6 +286,12 @@ func (r *Relay[T]) Request(target T, send func(id uint64) error) ExposureResult 
 	return r.request(context.Background(), target, 0, send)
 }
 
+// RequestContext is Request of the endpoint connection ctx: the end of ctx ends the request as End does, and a ctx that already ended
+// sends nothing.
+func (r *Relay[T]) RequestContext(ctx context.Context, target T, send func(id uint64) error) ExposureResult {
+	return r.request(ctx, target, 0, send)
+}
+
 // RequestOf is Request for a forward that serves the request origin: it lives only while origin waits. A forward whose origin
 // does not wait is not sent and is refused at once with 1003; the end of origin ends a waiting forward with no result.
 func (r *Relay[T]) RequestOf(origin uint64, target T, send func(id uint64) error) ExposureResult {

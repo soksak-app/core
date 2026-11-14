@@ -136,3 +136,73 @@ func TestStallStepDecidesEachBeatFromItsReadings(t *testing.T) {
 		})
 	}
 }
+
+// stallLoopCase is one beat of the loop of the watch as data: the outcome of the beat, the sample that runs and whether the stop came,
+// and the decision of the loop.
+type stallLoopCase struct {
+	name     string
+	outcome  stallOutcome
+	sampling bool
+	stopped  bool
+	want     stallLoopDecision
+}
+
+var stallLoopCases = []stallLoopCase{
+	{
+		name:    "a beat with no open stall blocks until the run loop wakes",
+		outcome: stallOutcome{next: stallIdle},
+		want:    stallLoopDecision{sample: stallActionNone, awaitAwake: true},
+	},
+	{
+		name:    "a beat that keeps a stall open keeps the beat",
+		outcome: stallOutcome{next: stallState{stalledFrom: 500}},
+		want:    stallLoopDecision{sample: stallActionNone},
+	},
+	{
+		name:    "a beat that ends a stall blocks until the run loop wakes",
+		outcome: stallOutcome{next: stallIdle, record: "host.stall.resumed", level: LevelInfo},
+		want:    stallLoopDecision{sample: stallActionNone, awaitAwake: true},
+	},
+	{
+		name:    "a stall starts its sample and keeps the beat",
+		outcome: stallOutcome{next: stallState{stalledFrom: 0}, starts: true, record: "host.stall", level: LevelWarn},
+		want:    stallLoopDecision{sample: stallActionStart},
+	},
+	{
+		name:     "a stall during a running sample reports the running sample",
+		outcome:  stallOutcome{next: stallState{stalledFrom: 0}, starts: true, record: "host.stall", level: LevelWarn},
+		sampling: true,
+		want:     stallLoopDecision{sample: stallActionRunning},
+	},
+	{
+		name:    "a stall after the stop is not recorded and ends the watch",
+		outcome: stallOutcome{next: stallState{stalledFrom: 0}, starts: true, record: "host.stall", level: LevelWarn},
+		stopped: true,
+		want:    stallLoopDecision{sample: stallActionStopped},
+	},
+	{
+		name:     "a stall after the stop during a running sample ends the watch",
+		outcome:  stallOutcome{next: stallState{stalledFrom: 0}, starts: true, record: "host.stall", level: LevelWarn},
+		sampling: true,
+		stopped:  true,
+		want:     stallLoopDecision{sample: stallActionStopped},
+	},
+	{
+		name:     "a beat that starts no stall leaves a running sample and the stop to the loop condition",
+		outcome:  stallOutcome{next: stallIdle},
+		sampling: true,
+		stopped:  true,
+		want:     stallLoopDecision{sample: stallActionNone, awaitAwake: true},
+	},
+}
+
+// contract: host.stall.sample-keeps-the-watch-running, host.stall.stop-waits-for-the-sample, host.stall.ends-when-the-run-loop-waits
+func TestStallLoopStepDecidesTheSampleAndTheWaitOfEachBeat(t *testing.T) {
+	for _, c := range stallLoopCases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := stallLoopStep(c.outcome, c.sampling, c.stopped); got != c.want {
+				t.Fatalf("decision %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}

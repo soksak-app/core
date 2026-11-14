@@ -1,0 +1,16 @@
+{
+  "name": "undeclared-methods-removed",
+  "description": "page.eval, dom.rect and dom.act are not declared: each closes its connection without a response and none reaches the page. An element is measured with element.rect and acted on with element.act.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "main", "name": "core.card"}}},
+    {"connection": "a", "close": "host"},
+    {"connection": "b", "send": {"jsonrpc": "2.0", "id": 1, "method": "dom.rect", "params": {"window": "main", "name": "core.card"}}},
+    {"connection": "b", "close": "host"},
+    {"connection": "c", "send": {"jsonrpc": "2.0", "id": 1, "method": "dom.act", "params": {"window": "main", "name": "core.card"}}},
+    {"connection": "c", "close": "host"}
+  ]
+}

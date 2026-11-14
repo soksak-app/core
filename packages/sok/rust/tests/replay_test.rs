@@ -1,7 +1,7 @@
 //! `sok debug replay` (docs/spec/replay.md#command): the events of a session are replayed by the replay executable that an
 //! installed sidecar declares, and every stored hash of the sidecar and of the page is compared with the replayed one. The replay
-//! executable of these tests is a shell script that stands in for the engine of a sidecar: it counts the bytes of the inputs it
-//! reads and prints that count as the hash of each frame record.
+//! executable of these tests is the tracked fixture program REPLAY_FIXTURE: it counts the bytes of the inputs it reads and prints
+//! that count as the hash of each frame record.
 
 #[path = "log_support_test.rs"]
 mod log_support;
@@ -11,20 +11,12 @@ use std::path::{Path, PathBuf};
 
 use log_support::{Folder, temp_dir};
 
-/// Prints, for each frame record it reads, the number of bytes of the inputs read so far as 64 decimal digits.
-const REPLAY_FIXTURE: &str = r#"#!/bin/sh
-total=0
-while IFS= read -r line; do
-  case "$line" in
-    *'"event":"sidecar.probe.input"'*)
-      hex=${line#*'"hex":"'}; hex=${hex%%'"'*}
-      total=$((total + ${#hex} / 2)) ;;
-    *'"class":"frame"'*)
-      sequence=${line#*'"sequence":'}; sequence=${sequence%%[,\}]*}
-      printf '{"sequence":%s,"hash":"%064d"}\n' "$sequence" "$total" ;;
-  esac
-done
-"#;
+/// The replay executable of the tests (docs/spec/cases/log-contract/replay/engine.sh): for each frame record it reads, it prints
+/// the number of bytes of the inputs read so far as 64 decimal digits.
+const REPLAY_FIXTURE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../docs/spec/cases/log-contract/replay/engine.sh"
+));
 
 fn log_open(ts: i64, layer: &str, role: &str) -> String {
     format!(
@@ -32,7 +24,6 @@ fn log_open(ts: i64, layer: &str, role: &str) -> String {
     )
 }
 
-/// The hash that the probe script prints for a count of bytes.
 /// The events of the probe sidecar of each kind of replay input.
 const REPLAY_INPUTS: &str = r#"{"output":"sidecar.probe.input","write":"sidecar.probe.write","resize":"sidecar.probe.resize","selection":"sidecar.probe.selection","viewport":"sidecar.probe.viewport","theme":"sidecar.probe.theme"}"#;
 
@@ -87,6 +78,14 @@ fn standard_events() -> Events {
             frame("plugin", 1045, 3, 3, "s1", &digits(4)),
         ],
     }
+}
+
+/// `standard_events` whose first input holds the given bytes, which direct the behavior of the replay executable
+/// (docs/spec/cases/log-contract/replay/engine.sh).
+fn engine_events(hex: &str) -> Events {
+    let mut events = standard_events();
+    events.sidecar[1] = input(1010, 2, 2, "s1", hex);
+    events
 }
 
 fn write_file(path: &Path, text: &str, mode: u32) {
@@ -424,24 +423,24 @@ fn replay_refuses_what_it_cannot_compare() {
         ),
         refused(
             "the executable fails",
-            standard_events(),
-            "#!/bin/sh\necho engine broke >&2\nexit 3\n",
+            engine_events("0bad"),
+            REPLAY_FIXTURE,
             "probe",
             vec!["s1"],
             "sok: replay session s1: replay.sh exited with status 3: engine broke\n",
         ),
         refused(
             "the executable prints a line that is not a hash",
-            standard_events(),
-            "#!/bin/sh\necho nope\n",
+            engine_events("0bee"),
+            REPLAY_FIXTURE,
             "probe",
             vec!["s1"],
             "sok: replay session s1: replay output line 1 is not {\"sequence\": <integer>, \"hash\": <64 lowercase hexadecimal characters>}: nope\n",
         ),
         refused(
             "the executable prints no hash for a frame record",
-            standard_events(),
-            "#!/bin/sh\ncat >/dev/null\n",
+            engine_events("0ba0"),
+            REPLAY_FIXTURE,
             "probe",
             vec!["s1"],
             "sok: replay session s1: the replay executable reported no hash for the frame record at sequence 2\n",

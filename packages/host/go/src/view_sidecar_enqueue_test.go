@@ -34,7 +34,7 @@ func TestMountedSidecarEnqueueCannotCreateSessionAfterItsGenerationRetires(t *te
 		synctest.Wait() // actual send is durably blocked on the existing admission gate
 		old, _ := s.documents.view("probe-surface")
 		s.viewRecords().specs["probe-surface"].start.Project = &SurfaceProject{ID: "project-b", Root: "/fixture/project-b"}
-		endView(t, s, fake)
+		endView(t, s, fake, viewTestEpoch)
 		next, ok := s.documents.view("probe-surface")
 		if !ok || next.generation == old.generation {
 			t.Fatal("fixture did not retire A and mount new B")

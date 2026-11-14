@@ -34,16 +34,16 @@ func blockedSidecar(t *testing.T, root string, surfaces int, now func() time.Tim
 		t.Fatal(err)
 	}
 	sidecars.Now = now
-	owner := support.NewFakeOwner(root)
+	owner := support.NewSidecarRecorder(t, root)
 	for i := 1; i <= surfaces; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, fmt.Sprintf("s%d", i), json.RawMessage(`{}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, fmt.Sprintf("s%d", i), json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// A line larger than the pipe of the sidecar (64 KiB at most on macOS) keeps the writer inside its write, so it takes no more
 	// lines from the queue; a surface line of a long root does the same. The fixture waits until the writer starts that line.
 	blocker := json.RawMessage(`{"data":"` + strings.Repeat("b", 2<<20) + `"}`)
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", blocker); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", blocker); err != nil {
 		t.Fatal(err)
 	}
 	if err := sidecars.AwaitWriting(support.EchoSidecar, 64<<10); err != nil {
@@ -52,7 +52,7 @@ func blockedSidecar(t *testing.T, root string, surfaces int, now func() time.Tim
 	big := json.RawMessage(`{"data":"` + strings.Repeat("x", 20*1024) + `"}`)
 	full := false
 	for i := 0; i < 4000 && !full; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", big); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", big); err != nil {
 			if !strings.Contains(err.Error(), "is not keeping up") {
 				t.Fatal(err)
 			}

@@ -681,10 +681,12 @@ func (c platformCapture) ReleaseNewWindow() {
 	}
 }
 
-type captureStatus interface {
-	Missed() int
-	Late() int
-	LongestGap() float64
+// captureStatus is the frame status of a recording reported by its stop: the frames that were missed and that were late, and the
+// longest gap between two frames in ms.
+type captureStatus struct {
+	Missed     int
+	Late       int
+	LongestGap float64
 }
 
 // captureStopPayload is the reply of the stop of a recording; window is the window server number of the recorded window, nil
@@ -696,9 +698,9 @@ func captureStopPayload(c captureStatus, directory string, count int, window *in
 		"stills":      filepath.Join(directory, "stills.jsonl"),
 		"displayLink": filepath.Join(directory, "display-link.json"),
 		"count":       count,
-		"missed":      c.Missed(),
-		"late":        c.Late(),
-		"longestGap":  c.LongestGap(),
+		"missed":      c.Missed,
+		"late":        c.Late,
+		"longestGap":  c.LongestGap,
 	}
 	return payload
 }
@@ -1432,14 +1434,9 @@ func diagnosticCaptureStop(e *Endpoint, c *endpointConn, params json.RawMessage,
 	if err != nil {
 		return nil, err
 	}
-	return captureStopPayload(captureStatusAdapter{capture}, directory, count, window), nil
+	status := captureStatus{Missed: capture.CaptureMissed(), Late: capture.CaptureLate(), LongestGap: capture.CaptureLongestGap()}
+	return captureStopPayload(status, directory, count, window), nil
 }
-
-type captureStatusAdapter struct{ platformCapture }
-
-func (c captureStatusAdapter) Missed() int         { return c.CaptureMissed() }
-func (c captureStatusAdapter) Late() int           { return c.CaptureLate() }
-func (c captureStatusAdapter) LongestGap() float64 { return c.CaptureLongestGap() }
 
 // diagnosticLogFlush waits until the records written so far are in the event log of the host.
 func diagnosticLogFlush(e *Endpoint, _ *endpointConn, params json.RawMessage, _ *ReplyScope) (any, error) {

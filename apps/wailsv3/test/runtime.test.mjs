@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { register, registerHooks } from "node:module";
 import test from "node:test";
 
-// A document of a surface asks the host for the log policy at its load (action policy-read); the fake host answers it with the
+// A document of a surface asks the host for the log policy at its load (action policy-read); the host interface below answers it with the
 // default policy and does not record it.
 const policyRead = { classes: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" } };
 

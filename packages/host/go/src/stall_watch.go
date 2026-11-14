@@ -36,10 +36,9 @@ const (
 // AwaitAwake blocks while that run loop waits and returns while it does not. Schedule reads the scheduling priority of the process and
 // the CPU time of its threads, which the stall and its end carry; a read that fails is the error record `stall watch`.
 // Sample writes the stacks of the threads of the process into a file, Folder is the logs folder and EmitHost stores an event of
-// the host. Clock is the time since the watch started, which measures the lateness of the watch's own wake, and Wait waits one
-// beat; nil takes the monotonic clock and time.Sleep. StopWaits is called by the stop when it begins to wait for a sample that
-// runs, before it waits; a check releases the sample that it holds after this event, so a stop that returns before it finds the
-// sample running. nil calls nothing.
+// the host. StopWaits is called by the stop when it begins to wait for a sample that runs, before it waits; a check releases the
+// sample that it holds (the fault point SOKSAK_FAULT_STALL_SAMPLE, stall_fault.go) after this event, so a stop that returns
+// before it finds the sample running. nil calls nothing.
 type StallWatchOptions struct {
 	Heartbeat  func() (now, answered time.Duration)
 	AwaitAwake func()
@@ -47,8 +46,6 @@ type StallWatchOptions struct {
 	Sample     func(path string) error
 	Folder     string
 	EmitHost   func(Level, string, map[string]any)
-	Clock      func() time.Duration
-	Wait       func(time.Duration)
 	StopWaits  func()
 }
 
@@ -141,19 +138,54 @@ func stallStep(state stallState, reading stallReading) stallOutcome {
 	return stallOutcome{next: state}
 }
 
+// stallAction is what the watch does with the sample of a beat.
+type stallAction int
+
+const (
+	// stallActionNone is the action of a beat that starts no stall.
+	stallActionNone stallAction = iota
+	// stallActionStart starts the sample of the stall.
+	stallActionStart
+	// stallActionRunning reports the stall as a sample that cannot start, because the sample of an earlier stall still runs.
+	stallActionRunning
+	// stallActionStopped ends the watch without a record: the stop came before the stall was recorded.
+	stallActionStopped
+)
+
+// stallLoopDecision is what the loop of the watch does after one beat: the action on the sample and whether the watch blocks until
+// the run loop of the watched thread wakes.
+type stallLoopDecision struct {
+	sample     stallAction
+	awaitAwake bool
+}
+
+// stallLoopStep is the decision of the loop on the outcome of one beat, from whether the sample of an earlier stall runs and
+// whether the stop came. An open stall keeps the beat: the heartbeat of the beat was sent before the run loop could start to wait,
+// so a stall that ended in that wait has its end only from the next heartbeat, which the wait answers with its start. The watch
+// blocks only while no stall is open, which is also the only time the run loop of the watched thread waits.
+func stallLoopStep(outcome stallOutcome, sampling, stopped bool) stallLoopDecision {
+	decision := stallLoopDecision{awaitAwake: outcome.next.stalledFrom < 0}
+	switch {
+	case !outcome.starts:
+	case stopped:
+		decision.sample, decision.awaitAwake = stallActionStopped, false
+	case sampling:
+		decision.sample = stallActionRunning
+	default:
+		decision.sample = stallActionStart
+	}
+	return decision
+}
+
+// stallSamplePath is the file of the sample of a stall in the logs folder.
+func stallSamplePath(folder string) string {
+	return filepath.Join(folder, fmt.Sprintf("stall-host-%d-%d.txt", os.Getpid(), time.Now().UnixMilli()))
+}
+
 // StartStallWatch starts the watch and returns the function that stops it. The watch ends after the beat that is running. The stop
 // starts no sample after it and returns when the running sample ended and stored its `host.stall.sampled`, so the process of the
 // sample does not outlive the host and the stall keeps its dump.
 func StartStallWatch(options StallWatchOptions) func() {
-	clock := options.Clock
-	if clock == nil {
-		start := time.Now()
-		clock = func() time.Duration { return time.Since(start) }
-	}
-	wait := options.Wait
-	if wait == nil {
-		wait = time.Sleep
-	}
 	var stopped, sampling atomic.Bool
 	// samples holds the running sample; ending guards stopped against the start of a sample, so the stop waits for every sample that
 	// started.
@@ -165,11 +197,11 @@ func StartStallWatch(options StallWatchOptions) func() {
 		options.Heartbeat()
 		state := stallState{stalledFrom: -1}
 		for !stopped.Load() {
-			before := clock()
-			wait(stallBeat)
+			before := time.Now()
+			time.Sleep(stallBeat)
 			// The lateness of this beat: the time that the watch slept beyond stallBeat. When the whole process is not scheduled, the
 			// watch wakes late as well as the main thread; when the main thread is blocked, the watch wakes on time.
-			watchLate := clock() - before - stallBeat
+			watchLate := time.Since(before) - stallBeat
 			if watchLate < 0 {
 				watchLate = 0
 			}
@@ -181,46 +213,52 @@ func StartStallWatch(options StallWatchOptions) func() {
 			}
 			outcome := stallStep(state, reading)
 			if outcome.starts {
+				ending.Lock()
+			}
+			decision := stallLoopStep(outcome, sampling.Load(), stopped.Load())
+			if decision.sample == stallActionStopped {
 				// A stall that the watch finds after its stop is not recorded: the host ends, and the stop waits only for a sample
 				// that started before it.
-				ending.Lock()
-				if stopped.Load() {
-					ending.Unlock()
-					return
-				}
+				ending.Unlock()
+				return
 			}
 			state = outcome.next
 			if outcome.scheduleErr != nil {
 				LogError("stall watch", outcome.scheduleErr.Error())
 			}
 			if outcome.record != "" {
+				// events: host.stall, host.stall.resumed
 				options.EmitHost(outcome.level, outcome.record, outcome.fields)
 			}
-			if outcome.starts {
-				path := filepath.Join(options.Folder, fmt.Sprintf("stall-host-%d-%d.txt", os.Getpid(), time.Now().UnixMilli()))
-				if !sampling.CompareAndSwap(false, true) {
-					ending.Unlock()
-					options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": stallSampleRunning})
-				} else {
-					samples.Add(1)
-					ending.Unlock()
-					// A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that time is not
-					// read as lateness of the main thread.
-					routine.Go("stall-sample", func() {
-						defer samples.Done()
-						defer sampling.Store(false)
-						if err := options.Sample(path); err != nil {
-							options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": err.Error()})
-						} else {
-							options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path})
-						}
-					})
-				}
+			switch decision.sample {
+			case stallActionRunning:
+				ending.Unlock()
+				path := stallSamplePath(options.Folder)
+				options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": stallSampleRunning})
+			case stallActionStart:
+				// Only this goroutine starts a sample, and the sample ends by itself, so the flag that the decision read stays false
+				// until this store.
+				sampling.Store(true)
+				samples.Add(1)
+				ending.Unlock()
+				path := stallSamplePath(options.Folder)
+				// A sample lasts for seconds on a loaded system. The watch keeps sending heartbeats meanwhile, so that time is not
+				// read as lateness of the main thread.
+				routine.Go("stall-sample", func() {
+					defer samples.Done()
+					defer sampling.Store(false)
+					err := stallSampleFault()
+					if err == nil {
+						err = options.Sample(path)
+					}
+					if err != nil {
+						options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path, "error": err.Error()})
+					} else {
+						options.EmitHost(LevelWarn, "host.stall.sampled", map[string]any{"path": path})
+					}
+				})
 			}
-			// An open stall keeps the beat: the heartbeat of this check was sent before the run loop could start to wait, so a
-			// stall that ended in that wait has its end only from the next heartbeat, which the wait answers with its start. The
-			// watch blocks only while no stall is open, which is also the only time the run loop of the watched thread waits.
-			if state.stalledFrom < 0 {
+			if decision.awaitAwake {
 				options.AwaitAwake()
 			}
 		}

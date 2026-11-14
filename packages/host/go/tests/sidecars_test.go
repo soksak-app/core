@@ -44,8 +44,8 @@ func TestSidecarProcessDoesNotReceiveItsDisplayNameFromTheHost(t *testing.T) {
 	control := "record-env SOKSAK_SIDECAR_DISPLAY_NAME " + filepath.Join(directory, "display-name") + "\n" +
 		`on 1 reply {"surface":"s1","body":"ok"}` + "\non any echo\n"
 	sidecars := fixtureSidecarsWithManifest(t, directory, control, `{"executable":"fixture","protocol":1,"displayName":"soksak://sidecar/probe"}`)
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
 		t.Fatal(err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" || string(event.Body) != `"ok"` {
@@ -65,8 +65,8 @@ func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
 	// The body is the string of x characters that fills the line limit beside the surface and the quotes of the message.
 	padding := support.MessageLimit - len(`{"surface":"s1","body":"`) - len(`"}`)
 	sidecars := fixtureSidecars(t, t.TempDir(), fmt.Sprintf("on 1 pad s1 %d\non any echo\n", padding))
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	event := owner.Next(t)
@@ -74,10 +74,8 @@ func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
 	if event.Surface != "s1" || len(body) != padding+2 || strings.Trim(body[1:len(body)-1], "x") != "" || body[0] != '"' || body[len(body)-1] != '"' {
 		t.Fatalf("message at the limit: surface %q, body length %d, want %d", event.Surface, len(body), padding+2)
 	}
-	select {
-	case value := <-owner.Failures:
+	if value, ok := owner.PendingFailure(); ok {
 		t.Fatalf("message at the limit produced a failure: %+v", value)
-	default:
 	}
 }
 
@@ -87,31 +85,29 @@ func TestSidecarOutputCloseNotifiesEachSurface(t *testing.T) {
 	directory := t.TempDir()
 	sidecars := fixtureSidecars(t, directory, "append-pid "+filepath.Join(directory, "pids")+"\n"+
 		`on 1 reply {"surface":"s1","body":"recorded"}`+"\non 2 exit 3\n")
-	first, second := support.NewFakeOwner("/projects/a"), support.NewFakeOwner("/projects/b")
-	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	first, second := support.NewSidecarRecorder(t, "/projects/a"), support.NewSidecarRecorder(t, "/projects/b")
+	if err := first.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	first.Next(t)
-	if err := sidecars.Send(second, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := second.Send(sidecars, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	for surface, owner := range map[string]*support.FakeOwner{"s1": first, "s2": second} {
+	for surface, owner := range map[string]*support.SidecarRecorder{"s1": first, "s2": second} {
 		failure := owner.Failure(t)
 		if failure.Sidecar != support.EchoSidecar || failure.Surface != surface || failure.Reason != "output closed: exit status 3" {
 			t.Fatalf("%s: failure = %+v", surface, failure)
 		}
 	}
 	// A send after the failure starts a new process.
-	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := first.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatalf("send after failure: %v", err)
 	}
 	// The new process recorded its pid when it answers, before the stop ends it.
 	first.Next(t)
 	sidecars.Stop()
-	select {
-	case value := <-first.Failures:
+	if value, ok := first.PendingFailure(); ok {
 		t.Fatalf("output end while stopping produced a failure: %+v", value)
-	default:
 	}
 	data, err := os.ReadFile(filepath.Join(directory, "pids"))
 	if err != nil {
@@ -139,11 +135,11 @@ func echoSidecars(t *testing.T) (*host.Sidecars, string) {
 // contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	first, second := support.NewFakeOwner("/projects/a"), support.NewFakeOwner("/projects/b")
-	if err := sidecars.Send(first, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	first, second := support.NewSidecarRecorder(t, "/projects/a"), support.NewSidecarRecorder(t, "/projects/b")
+	if err := first.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(second, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := second.Send(sidecars, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if event := first.Next(t); event.Sidecar != support.EchoSidecar || event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
@@ -152,7 +148,7 @@ func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 	if event := second.Next(t); event.Surface != "s2" {
 		t.Fatalf("second window event = %+v", event)
 	}
-	if err := sidecars.Send(second, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "another window") {
+	if err := second.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "another window") {
 		t.Fatalf("send to another window's surface = %v", err)
 	}
 	sidecars.CloseOwner(first)
@@ -173,15 +169,15 @@ func TestSidecarMessagesReachTheOwningWindowOnly(t *testing.T) {
 // contract: sidecars.protocol.surface-keeps-its-first-root
 func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	// The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
 	owner.Next(t)
 	// Even after the same window changed to another project, a surface that is already open sends with the first root.
 	owner.Root = "/projects/b"
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.CloseOwner(owner)
@@ -202,12 +198,12 @@ func TestSurfaceKeepsTheRootItWasOpenedWith(t *testing.T) {
 // contract: sidecars.send.rejects-undeclared-sidecar, sidecars.send.rejects-after-stop
 func TestUndeclaredAndStoppedSidecarsAreRejected(t *testing.T) {
 	sidecars, _ := echoSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, "other", "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared") {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, "other", "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared") {
 		t.Fatalf("undeclared sidecar = %v", err)
 	}
 	sidecars.Stop()
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "stopped") {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "stopped") {
 		t.Fatalf("send after stop = %v", err)
 	}
 }
@@ -219,7 +215,7 @@ func TestMissingSidecarExecutableFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(support.NewFakeOwner("/"), support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "sidecar "+support.EchoSidecar) {
+	if err := support.NewSidecarRecorder(t, "/").Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "sidecar "+support.EchoSidecar) {
 		t.Fatalf("missing executable = %v", err)
 	}
 }
@@ -229,8 +225,8 @@ func TestSidecarReceivesTheLogDirectory(t *testing.T) {
 	directory := t.TempDir()
 	sidecars := fixtureSidecars(t, directory, "record-argv "+filepath.Join(directory, "argv")+"\n"+
 		`on 1 reply {"surface":"s1","body":"ok"}`+"\non any echo\n")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
@@ -257,14 +253,14 @@ func TestDeclaringAddsSidecarsInstalledAfterTheStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "is not declared by any plugin") {
 		t.Fatalf("send before the declaration = %v", err)
 	}
 	if err := sidecars.Declare(support.Declare(directory, `{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" || string(event.Body) != `{"operation":"open"}` {
@@ -303,7 +299,7 @@ func TestInvalidSidecarDeclarationsAreNotDeclared(t *testing.T) {
 			t.Errorf("%s: the construction failed: %v", name, err)
 			continue
 		}
-		err = sidecars.Send(support.NewFakeOwner("/projects/a"), support.EchoSidecar, "s1", json.RawMessage(`{}`))
+		err = support.NewSidecarRecorder(t, "/projects/a").Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`))
 		want := "sidecar " + support.EchoSidecar + ": " + filepath.Join(directory, "sidecar.json") + ": " + c.reason
 		if err == nil || err.Error() != want {
 			t.Errorf("%s: send error = %v, want %q", name, err, want)
@@ -327,11 +323,11 @@ func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
 		t.Fatalf("send to the refused sidecar = %v, want %q", err, refused)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" {
@@ -341,10 +337,10 @@ func TestAnInvalidDeclarationLeavesTheOtherSidecarsDeclared(t *testing.T) {
 	if err := sidecars.Declare(declarations); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
+	if err := owner.Send(sidecars, earlier, "s2", json.RawMessage(`{}`)); err == nil || err.Error() != refused {
 		t.Fatalf("send to the refused sidecar after the declaration = %v, want %q", err, refused)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"next"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"next"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if event := owner.Next(t); string(event.Body) != `{"operation":"next"}` {
@@ -368,7 +364,7 @@ func TestPersistentTransportAcceptsNonCanonicalConfigDirectory(t *testing.T) {
 		t.Fatalf("non-canonical config directory was rejected: %v", err)
 	}
 	// There is no executable, so the service start fails, and before that the service directory is created under the configuration directory.
-	err = sidecars.Send(support.NewFakeOwner("/projects/test"), support.EchoSidecar, "s1", json.RawMessage(`{}`))
+	err = support.NewSidecarRecorder(t, "/projects/test").Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`))
 	if err == nil || !strings.Contains(err.Error(), "sidecar") {
 		t.Fatalf("send = %v, want a sidecar start error", err)
 	}
@@ -384,7 +380,7 @@ func TestApplicationWithoutSidecarsRejectsSends(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(support.NewFakeOwner("/"), support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared by any plugin") {
+	if err := support.NewSidecarRecorder(t, "/").Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil || !strings.Contains(err.Error(), "not declared by any plugin") {
 		t.Fatalf("send = %v", err)
 	}
 }
@@ -415,10 +411,10 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	owner := support.NewFakeOwner("/projects/test")
+	owner := support.NewSidecarRecorder(t, "/projects/test")
 
 	// The first Send to the fast sidecar launches that process, so the send of property 1 goes to a running process.
-	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"start"}`)); err != nil {
+	if err := owner.Send(sidecars, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"start"}`)); err != nil {
 		t.Fatalf("fast start: %v", err)
 	}
 
@@ -428,7 +424,7 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	var lastErr error
 	sentCount := 0
 	for i := 0; i < 500; i++ { // At most 500 attempts
-		err := sidecars.Send(owner, "@fixture/sidecar-slow", "s1", largeBody)
+		err := owner.Send(sidecars, "@fixture/sidecar-slow", "s1", largeBody)
 		if err != nil {
 			lastErr = err
 			if strings.Contains(err.Error(), "is not keeping up") {
@@ -449,7 +445,7 @@ func TestSlowSidecarDoesNotBlockOtherSends(t *testing.T) {
 	// Property 1: even when the channel of the slow sidecar is full, Send() to the fast sidecar does not block. The slow sidecar
 	// reads nothing until the stop, so a send that waits for its channel does not return, and the check stops at the limit of its
 	// runner.
-	if err := sidecars.Send(owner, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"test"}`)); err != nil {
+	if err := owner.Send(sidecars, "@fixture/sidecar-fast", "s2", json.RawMessage(`{"data":"test"}`)); err != nil {
 		t.Fatalf("fast send: %v", err)
 	}
 
@@ -472,10 +468,10 @@ func TestStopGracefulShutdown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	owner := support.NewFakeOwner("/projects/test")
+	owner := support.NewSidecarRecorder(t, "/projects/test")
 
 	// Starts the sidecar.
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 
@@ -500,8 +496,8 @@ func TestStopClosesUnreadOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" {
@@ -530,8 +526,8 @@ func TestStopReadsOutputToItsEnd(t *testing.T) {
 		"at-eof write "+`{"surface":"s1","closed":true}`+"\n"+
 		"at-eof flood 3000 "+`{"surface":"s1","body":"late"}`+"\n"+
 		"at-eof append "+filepath.Join(directory, "finished")+" finished\n")
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" {
@@ -561,8 +557,8 @@ func TestStopReportsExitStatus(t *testing.T) {
 		"signal HUP": "error host sidecar @fixture/sidecar-echo: exited while stopping: signal 1\n",
 	} {
 		sidecars := fixtureSidecars(t, t.TempDir(), "ignore-term\non any echo\nat-eof "+ending+"\n")
-		owner := support.NewFakeOwner("/projects/test")
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+		owner := support.NewSidecarRecorder(t, "/projects/test")
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 			t.Fatalf("send: %v", err)
 		}
 		if event := owner.Next(t); event.Surface != "s1" {
@@ -585,8 +581,8 @@ func TestAStopTerminatesASidecarThatIgnoresItsInput(t *testing.T) {
 	directory := t.TempDir()
 	holdPipe(t, filepath.Join(directory, "hold"))
 	sidecars := fixtureSidecars(t, directory, "hold "+filepath.Join(directory, "hold")+"\n")
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	// A stop that waits for no exit and kills does not return before the exit, and a stop that waits forever stops at the limit
@@ -601,9 +597,9 @@ func TestAStopTerminatesASidecarThatIgnoresItsInput(t *testing.T) {
 // contract: sidecars.close.keeps-other-sessions
 func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	for _, surface := range []string{"s1", "state:files:p1"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -612,7 +608,7 @@ func TestClosingASurfaceKeepsOtherSessions(t *testing.T) {
 	sidecars.Close("s1")
 	// Even after the project of the window left, a session that was not closed sends with the first root.
 	owner.Root = ""
-	if err := sidecars.Send(owner, support.EchoSidecar, "state:files:p1", json.RawMessage(`{"operation":"watch"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "state:files:p1", json.RawMessage(`{"operation":"watch"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Stop()
@@ -653,11 +649,11 @@ func TestCloseReachesOnlyTheSidecarThatHoldsTheSurface(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, second, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := owner.Send(sidecars, second, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	// The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line. The two
@@ -717,8 +713,8 @@ func TestClosedSurfaceStaysClosingUntilTheSidecarAnswers(t *testing.T) {
 	// Returns the line it received as it is. Returning a closed line is the reply to closed.
 	sidecars := closingSidecars(t, "on any echo\n")
 	snapshots := closingSnapshots(sidecars)
-	owner := support.NewFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/closing")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -736,8 +732,8 @@ func TestFailedCloseAnswerIsLogged(t *testing.T) {
 	sidecars := closingSidecars(t, "on match *closed* reply "+`{"surface":"s1","closed":true,"error":"busy"}`+"\non any echo\n")
 	snapshots := closingSnapshots(sidecars)
 	written := support.CaptureLog(t)
-	owner := support.NewFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/closing")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -761,8 +757,8 @@ func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
 			atEnd <- written()
 		}
 	}
-	owner := support.NewFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/closing")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -775,12 +771,11 @@ func TestFailedCloseAnswerIsLoggedBeforeTheClosingEntryEnds(t *testing.T) {
 // contract: sidecars.close.unexpected-answer-fails
 func TestCloseAnswerForAnOpenSurfaceFailsTheSidecar(t *testing.T) {
 	sidecars := closingSidecars(t, "on 1 reply "+`{"surface":"s1","closed":true}`+"\non any drop\n")
-	owner := support.NewFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/closing")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
-	failure := <-owner.Failures
-	if got := failure.(host.SidecarFailure).Reason; got != "unexpected close answer for s1" {
+	if got := owner.Failure(t).Reason; got != "unexpected close answer for s1" {
 		t.Fatalf("failure reason = %q", got)
 	}
 }
@@ -803,8 +798,8 @@ func TestDeclarationReplacesASidecarWhoseFolderChanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	owner := support.NewFakeOwner("/projects/replace")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/replace")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(owner.Next(t).Body); got != `{"from":"first"}` {
@@ -813,16 +808,14 @@ func TestDeclarationReplacesASidecarWhoseFolderChanged(t *testing.T) {
 	if err := sidecars.Declare(support.Declare(second, data)); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":2}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":2}`)); err != nil {
 		t.Fatal(err)
 	}
 	if got := string(owner.Next(t).Body); got != `{"from":"second"}` {
 		t.Fatalf("the answer after the folder changed = %s, want the sidecar of the new folder", got)
 	}
-	select {
-	case failure := <-owner.Failures:
+	if failure, ok := owner.PendingFailure(); ok {
 		t.Fatalf("replacing the sidecar reported a failure: %v", failure)
-	default:
 	}
 }
 
@@ -840,9 +833,9 @@ func TestRepeatedCloseAwaitsEachAnswer(t *testing.T) {
 		return written.Write(p)
 	}))
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
-	owner := support.NewFakeOwner("/projects/closing")
+	owner := support.NewSidecarRecorder(t, "/projects/closing")
 	for round := 0; round < 2; round++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 			t.Fatal(err)
 		}
 		owner.Next(t)
@@ -852,7 +845,7 @@ func TestRepeatedCloseAwaitsEachAnswer(t *testing.T) {
 	for len(nextClosing(t, snapshots)) != 0 {
 	}
 	// The echo of a later request follows both answers in the output, so a failure of either answer arrives first.
-	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"data":2}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s2", json.RawMessage(`{"data":2}`)); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
@@ -868,8 +861,8 @@ func TestEndedSidecarLeavesNoClosingSurface(t *testing.T) {
 	// Replies to the first request, and when it receives closed, it ends without a reply.
 	sidecars := closingSidecars(t, "on 1 echo\non 2 exit 0\n")
 	snapshots := closingSnapshots(sidecars)
-	owner := support.NewFakeOwner("/projects/closing")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/closing")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"data":1}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("s1")
@@ -892,8 +885,8 @@ func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 func TestTheStandardErrorOfASidecarIsWrittenAsRecords(t *testing.T) {
 	written := support.CaptureLog(t)
 	sidecars := fixtureSidecars(t, t.TempDir(), "stderr first line\nstderr-raw no line feed\non any echo\n")
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"test":"data"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" {
@@ -919,8 +912,8 @@ func TestTheRelayRecordsEveryMessageWithItsWholeBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = host.PerformanceCommand(map[string]any{"action": "off"}) })
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input","bytes":"7ZWc"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input","bytes":"7ZWc"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	if event := owner.Next(t); event.Surface != "s1" {
@@ -958,12 +951,12 @@ func TestSidecarRequestWithCorrelationIdentifiersIsRecordedAsAnEvent(t *testing.
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	sidecars, _ := echoSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", body); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", body); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
@@ -1025,25 +1018,35 @@ func TestAMessageOfASidecarReachesItsOwnerWithTheIdentifiersOfItsRequest(t *test
 	// The replies are records: without a writer of this test the host holds them for the writer of the next test.
 	support.StartWriter(t, t.TempDir())
 	sidecars := replySidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := owner.Next(t).Cids; fmt.Sprint(got) != "[b1.7 b1.8]" {
 		t.Fatalf("the message names %v, want both identifiers of its request", got)
 	}
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.9"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.9"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := owner.Next(t).Cids; fmt.Sprint(got) != "[b1.9]" {
 		t.Fatalf("the message names %v, want the identifier of its request", got)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", body); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", body); err != nil {
 		t.Fatal(err)
 	}
 	if got := owner.Next(t).Cids; len(got) != 0 {
 		t.Fatalf("a message without identifiers names %v", got)
+	}
+	requireHeldOutputEnd(t, owner)
+}
+
+// requireHeldOutputEnd takes the failure of the reply fixture, whose hold step ends with the end of its replies file, so the
+// sidecar closes its output with the exit status 0.
+func requireHeldOutputEnd(t *testing.T, owner *support.SidecarRecorder) {
+	t.Helper()
+	if failure := owner.Failure(t); failure.Sidecar != support.EchoSidecar || failure.Surface != "s1" || failure.Reason != "output closed: exit status 0" {
+		t.Fatalf("failure %+v, want the output end of the reply fixture", failure)
 	}
 }
 
@@ -1052,21 +1055,22 @@ func TestAReplyOfASidecarIsRecordedWithTheIdentifiersOfItsRequest(t *testing.T) 
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	sidecars := replySidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.9"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.9"}); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", body); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", body); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
 	owner.Next(t)
+	requireHeldOutputEnd(t, owner)
 	replies := sidecarReplies(t, log, config)
 	if len(replies) != 3 {
 		t.Fatalf("%d events host.sidecar.reply, want 3 (an error with identifiers, an answer with identifiers, an error without): %v", len(replies), replies)
@@ -1101,12 +1105,12 @@ func TestTheFailureOfASidecarIsTheFailedReplyOfItsPendingRequests(t *testing.T) 
 	config := t.TempDir()
 	log := support.StartWriter(t, config)
 	sidecars := fixtureSidecars(t, t.TempDir(), "on 1 drop\non 2 exit 3\n")
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	body := json.RawMessage(`{"operation":"input"}`)
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.7"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.7"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", body, []string{"b1.8"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", body, []string{"b1.8"}); err != nil {
 		t.Fatal(err)
 	}
 	failure := owner.Failure(t)
@@ -1134,12 +1138,12 @@ func TestSidecarLifetimeIsRecordedAsEvents(t *testing.T) {
 	// The first process ends at its first line. The second process has the ran file, so it jumps to the label after the exit.
 	sidecars := fixtureSidecars(t, directory, "if-present "+ran+" second\ntouch "+ran+"\nskip-line\nexit 3\nlabel second\nignore-term\n"+
 		`on 1 reply {"surface":"s2","body":"trapped"}`+"\non any drop\n")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	owner.Failure(t)
-	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
@@ -1199,8 +1203,8 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 	// that no sample of the sampler runs among the samples below.
 	waitForFirstSample(t)
 	sidecars := fixtureSidecars(t, t.TempDir(), "on any drop\n")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	host.PerformanceSample()
@@ -1237,11 +1241,11 @@ func TestTheSamplerNamesARunningSidecarUntilItEnds(t *testing.T) {
 // contract: sidecars.protocol.request-line-carries-cids
 func TestSidecarRequestCarriesTheCorrelationIdentifiers(t *testing.T) {
 	sidecars, record := echoSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`), []string{"b1.7", "b1.8"}); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`), []string{"b1.7", "b1.8"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
 	owner.Next(t)
@@ -1267,9 +1271,9 @@ func TestAnImageOfAClosedSurfaceIsAnsweredClosed(t *testing.T) {
 	sidecars := fixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\non 1 drop\non 2 drop\n"+
 		`on 3 reply {"surface":"s2","body":{"image":{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{"id":7,"kind":"iosurface-global"},"width":10}}}`+
 		"\non 4 reply-raw s1\non any drop\n")
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	for _, surface := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1325,8 +1329,8 @@ func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	sidecars := fixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\n"+
 		`on 1 reply {"surface":"s1","body":{"event":"state"}}`+"\non any drop\n")
 	log := support.UseEventLog(t)
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	owner.Next(t)
@@ -1375,8 +1379,8 @@ func TestStandardIOSidecarFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 func TestSidecarWithoutAnswerRecordsStartAndNoFirstOutput(t *testing.T) {
 	sidecars := fixtureSidecars(t, t.TempDir(), "on any drop\n")
 	log := support.UseEventLog(t)
-	owner := support.NewFakeOwner("/projects/test")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/test")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatalf("send: %v", err)
 	}
 	sidecars.Stop()
@@ -1443,10 +1447,10 @@ func restartSidecars(t *testing.T) (*host.Sidecars, string, *restartClock) {
 }
 
 // sendAt moves the clock to offset and sends an open request of surface from owner.
-func sendAt(t *testing.T, clock *restartClock, sidecars *host.Sidecars, owner *support.FakeOwner, surface string, offset time.Duration) error {
+func sendAt(t *testing.T, clock *restartClock, sidecars *host.Sidecars, owner *support.SidecarRecorder, surface string, offset time.Duration) error {
 	t.Helper()
 	clock.set(offset)
-	return sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`))
+	return owner.Send(sidecars, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`))
 }
 
 // touchFile creates the empty file name in directory.
@@ -1458,7 +1462,7 @@ func touchFile(t *testing.T, directory, name string) {
 }
 
 // requireInvalidFailure waits for the next failure of the owner and checks that the sidecar failed with an invalid message.
-func requireInvalidFailure(t *testing.T, owner *support.FakeOwner, offset time.Duration) {
+func requireInvalidFailure(t *testing.T, owner *support.SidecarRecorder, offset time.Duration) {
 	t.Helper()
 	if failure := owner.Failure(t); failure.Sidecar != support.EchoSidecar || failure.Surface != "s1" || !strings.Contains(failure.Reason, "invalid message") {
 		t.Fatalf("failure at %v = %+v", offset, failure)
@@ -1476,7 +1480,7 @@ func requireRestartLimit(t *testing.T, err error, offset time.Duration) {
 // contract: sidecars.restart.three-failures-restart
 func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
@@ -1491,10 +1495,8 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 	// The answer comes after the check of the file, so the restarted process writes no invalid message after it, and a failure
 	// that its start caused is delivered before it.
 	owner.Next(t)
-	select {
-	case value := <-owner.Failures:
+	if value, ok := owner.PendingFailure(); ok {
 		t.Fatalf("the restarted sidecar failed: %+v", value)
-	default:
 	}
 	// The restarted sidecar does not read its input and ends at the terminate signal of the stop.
 	sidecars.Stop()
@@ -1504,7 +1506,7 @@ func TestSidecarRestartsAfterThreeFailuresWithinTheWindow(t *testing.T) {
 func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
 	log := support.UseEventLog(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
@@ -1540,7 +1542,7 @@ func TestSidecarStopsAtTheFourthFailureWithinTheWindow(t *testing.T) {
 // contract: sidecars.restart.old-failure-not-counted
 func TestSidecarCountsOnlyFailuresWithinTheWindow(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	// The failure at 0 seconds is more than 300 seconds before the failure at 305 seconds, so it is not counted there.
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 305 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
@@ -1564,7 +1566,7 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 	sidecars, directory, clock := restartSidecars(t)
 	log := support.UseEventLog(t)
 	support.TraceOn(t)
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		if err := sendAt(t, clock, sidecars, owner, "s1", offset); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
@@ -1611,7 +1613,7 @@ func TestSurfaceOpenClearsTheRestartLimit(t *testing.T) {
 func TestRestartRefusesAnAlreadyOpenSurface(t *testing.T) {
 	sidecars, _, clock := restartSidecars(t)
 	// s3 is open: its request failed the first process, which is not the process that stopped.
-	first, second := support.NewFakeOwner("/projects/b"), support.NewFakeOwner("/projects/a")
+	first, second := support.NewSidecarRecorder(t, "/projects/b"), support.NewSidecarRecorder(t, "/projects/a")
 	if err := sendAt(t, clock, sidecars, first, "s3", 0); err != nil {
 		t.Fatal(err)
 	}
@@ -1633,7 +1635,7 @@ func TestRestartRefusesAnAlreadyOpenSurface(t *testing.T) {
 }
 
 // requireInvalidFailure3 waits for the next failure of owner and checks that the surface failed with an invalid message.
-func requireInvalidFailure3(t *testing.T, owner *support.FakeOwner, surface string, offset time.Duration) {
+func requireInvalidFailure3(t *testing.T, owner *support.SidecarRecorder, surface string, offset time.Duration) {
 	t.Helper()
 	if failure := owner.Failure(t); failure.Sidecar != support.EchoSidecar || failure.Surface != surface || !strings.Contains(failure.Reason, "invalid message") {
 		t.Fatalf("failure of %s at %v = %+v", surface, offset, failure)

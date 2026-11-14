@@ -23,14 +23,13 @@ func nullOriginStart() ViewStart {
 // A view that the host creates receives, before its page loads, the document-start script that sets window.sokSurface to the
 // frozen start values {surface, params, origin, project, declarations, diagnostics, section} of its surface, so the first page script reads them.
 func TestViewCreationAddsTheStartValuesScriptBeforeTheLoad(t *testing.T) {
-	clock := &fakeClock{}
 	fake := &lifecyclePlatform{ended: map[unsafe.Pointer]func(){}, responsiveness: map[unsafe.Pointer]func(bool){}, scripts: map[unsafe.Pointer][]string{}}
 	saved := system
 	system = fake
 	t.Cleanup(func() { system = saved })
 	s := &Surfaces{
 		documents: NewDocuments(),
-		lifecycle: newViewLifecycle(clock.now),
+		lifecycle: newViewLifecycle(),
 		host:      &Host{configDir: "/config"},
 		events:    func(string, any) {},
 	}

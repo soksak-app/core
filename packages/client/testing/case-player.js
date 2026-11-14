@@ -32,6 +32,10 @@ function variablesIn(value, names) {
   return names;
 }
 
+// The members of a step that name its kind. The steps page, log, watching and watched belong to a case with the page "scripted"
+// (docs/spec/cases/endpoint/README.md).
+const STEP_KINDS = ["send", "reply", "notify", "close", "page", "log", "watching", "watched"];
+
 // Checks the form of a case; a case that does not have it is an error that names the file.
 function checkCase(kase, file) {
   const fail = (reason) => {
@@ -53,8 +57,9 @@ function checkCase(kase, file) {
   const used = new Set();
   kase.steps.forEach((step, index) => {
     const where = `step ${index}`;
-    const kinds = step && typeof step === "object" ? ["send", "reply", "notify", "close"].filter((kind) => kind in step) : [];
-    if (kinds.length !== 1) fail(`${where} must have exactly one of send, reply, notify and close`);
+    const kinds = step && typeof step === "object" ? STEP_KINDS.filter((kind) => kind in step) : [];
+    if (kinds.length !== 1) fail(`${where} must have exactly one of ${STEP_KINDS.join(", ")}`);
+    if ("connection" in step && (typeof step.connection !== "string" || step.connection === "")) fail(`${where} connection must be a non-empty string`);
     if (kinds[0] === "send") {
       const raw = "raw_hex" in step.send;
       if (!raw && typeof step.send.method !== "string") fail(`${where} send must name a method`);
@@ -66,8 +71,11 @@ function checkCase(kase, file) {
         fail(`${where} notify must be a JSON-RPC 2.0 notification without an id`);
       }
       variablesIn(step.notify, used);
-    } else if (step.close !== "host" && step.close !== "client") {
-      fail(`${where} close must be host or client`);
+    } else if (kinds[0] === "close") {
+      if (step.close !== "host" && step.close !== "client") fail(`${where} close must be host or client`);
+    } else if (kase.page !== "scripted") {
+      // The steps page, log, watching and watched belong to the cases whose page is a script of the case, which only the producers of the host play.
+      fail(`${where} has a ${kinds[0]} step, which only a case with the page "scripted" has`);
     }
   });
   for (const name of used) if (!Object.hasOwn(variables, name)) fail(`variable $${name} is not declared`);

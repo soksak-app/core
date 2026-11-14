@@ -8,6 +8,11 @@ pub fn record(_name: &CStr) -> bool {
 }
 
 /// Fails the test: the native ring is not supported on Windows.
+pub fn record_with_fields(_class: u8, _level: u8, _name: &str, _fields: &str) -> bool {
+    panic!("the native ring is not supported on Windows")
+}
+
+/// Fails the test: the native ring is not supported on Windows.
 pub fn wake_is_ready() -> bool {
     panic!("the native ring is not supported on Windows")
 }

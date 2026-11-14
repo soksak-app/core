@@ -1,4 +1,4 @@
-//! Sidecar persistent transport tests. They use a fake window and a service endpoint harness.
+//! Sidecar persistent transport tests. They use a recorder of the sidecar messages as the window and a service endpoint harness.
 
 #[path = "support/folder.rs"]
 mod folder;
@@ -16,47 +16,14 @@ use std::process::Command;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/sidecar_recorder.rs"]
+mod sidecar_recorder;
 
 use serde_json::value::RawValue;
+use sidecar_recorder::{SendAsRecorder, SidecarRecorder, failing_owner, owner};
 use soksak_host::sidecars::{
-    Failure, Message, OutdatedSidecar, Owner, RetainedSurface, SidecarDeclaration, Sidecars,
+    Message, OutdatedSidecar, RetainedSurface, SidecarDeclaration, Sidecars,
 };
-
-#[derive(Clone)]
-struct FakeOwner {
-    key: String,
-    root: String,
-    sent: Sender<Message>,
-}
-
-impl Owner for FakeOwner {
-    fn key(&self) -> String {
-        self.key.clone()
-    }
-    fn root(&self) -> Result<String, String> {
-        Ok(self.root.clone())
-    }
-
-    fn deliver(&self, message: Message) {
-        let _ = self.sent.send(message);
-    }
-    fn deliver_failure(&self, failure: Failure) {
-        // These checks do not assert failures, so failures are left in the check output.
-        eprintln!("sidecar failure: {failure:?}");
-    }
-}
-
-fn owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>) {
-    let (sent, received) = channel();
-    (
-        FakeOwner {
-            key: key.into(),
-            root: root.into(),
-            sent,
-        },
-        received,
-    )
-}
 
 fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
@@ -107,7 +74,7 @@ fn sidecar_process_does_not_receive_its_display_name_from_the_host() {
     )
     .unwrap();
     let (owner, events) = owner("display-name", "/projects/display-name");
-    sidecars.send(&owner, ECHO, "s1", &raw("{}")).unwrap();
+    sidecars.send_as(&owner, ECHO, "s1", &raw("{}")).unwrap();
     let event = events.recv().unwrap();
     assert_eq!(event.surface, "s1");
     let environment = std::fs::read_to_string(&display_name_path).unwrap();
@@ -158,14 +125,14 @@ fn sidecar_declaration_requires_one_display_name_component() {
         let executable_directory = folder::Folder::new();
         let config_directory = folder::Folder::new();
         // The invalid declaration leaves the sidecar undeclared, and a send to it names its sidecar.json and the field.
-        let sidecars = Sidecars::<FakeOwner>::new(
+        let sidecars = Sidecars::<SidecarRecorder>::new(
             &declare(&files(manifest), executable_directory.path()),
             config_directory.path().to_path_buf(),
         )
         .unwrap_or_else(|error| panic!("{manifest}: the construction failed: {error}"));
         let (window, _events) = owner("a", "/projects/a");
         let error = sidecars
-            .send(&window, "@fixture/sidecar-echo", "s1", &raw("{}"))
+            .send_as(&window, "@fixture/sidecar-echo", "s1", &raw("{}"))
             .unwrap_err();
         let path = executable_directory.path().join("sidecar.json");
         assert_eq!(
@@ -241,7 +208,7 @@ fn a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface() {
     .unwrap();
     let (owner, events) = owner("first", "/projects/first");
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let opened = events.recv().unwrap();
     assert!(opened.body.get().contains("open"), "{}", opened.body.get());
@@ -255,7 +222,7 @@ fn a_page_reload_sends_no_message_to_a_persistent_sidecar_of_the_surface() {
     )
     .unwrap();
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"marker"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"marker"}"#))
         .unwrap();
     let next = events.recv().unwrap();
     assert!(
@@ -352,10 +319,10 @@ fn concurrent_hosts_share_an_authenticated_service_endpoint() {
     let (first_owner, first_events) = owner("first", "/projects/first");
     let (second_owner, second_events) = owner("second", "/projects/second");
     first
-        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&first_owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     second
-        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+        .send_as(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(first_events.recv().unwrap().surface, "s1");
     assert_eq!(second_events.recv().unwrap().surface, "s2");
@@ -466,10 +433,10 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     let (second_owner, second_events) = owner("second", "/projects/second");
 
     first
-        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&first_owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     second
-        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+        .send_as(&second_owner, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(first_events.recv().unwrap().surface, "s1");
     assert_eq!(second_events.recv().unwrap().surface, "s2");
@@ -477,10 +444,10 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     // restart reacts only to EOF, so the arrival of the connection event of each instance is the evidence that the
     // service cut that connection.
     first
-        .send(&first_owner, ECHO, "s1", &raw(r#"{"operation":"drop"}"#))
+        .send_as(&first_owner, ECHO, "s1", &raw(r#"{"operation":"drop"}"#))
         .unwrap();
     second
-        .send(&second_owner, ECHO, "s2", &raw(r#"{"operation":"drop"}"#))
+        .send_as(&second_owner, ECHO, "s2", &raw(r#"{"operation":"drop"}"#))
         .unwrap();
     let await_revived = |label: &str, events: &Receiver<Message>| loop {
         let message = events
@@ -499,7 +466,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
     await_revived("second", &second_events);
 
     first
-        .send(
+        .send_as(
             &first_owner,
             ECHO,
             "s1",
@@ -507,7 +474,7 @@ fn persistent_transport_reconnects_after_connection_loss_and_preserves_owner() {
         )
         .unwrap();
     second
-        .send(
+        .send_as(
             &second_owner,
             ECHO,
             "s2",
@@ -566,7 +533,7 @@ fn persistent_transport_rejects_unsupported_hello_protocol_without_replacing_end
     .unwrap();
     let (window, _events) = owner("protocol", "/projects/protocol");
     let error = sidecars
-        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap_err();
     assert!(
         error.contains("protocol mismatch in hello response"),
@@ -618,7 +585,7 @@ fn persistent_transport_rejects_a_failed_hello() {
     .unwrap();
     let (window, _events) = owner("auth", "/projects/auth");
     let error = sidecars
-        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap_err();
     assert!(error.contains("authentication handshake failed"), "{error}");
     server.join().unwrap();
@@ -694,7 +661,7 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     });
 
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().surface, "surface");
     assert!(
@@ -736,7 +703,7 @@ fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacemen
     .unwrap();
     let (owner, _events) = owner("unreachable", "/projects/unreachable");
     let error = sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap_err();
     assert!(error.contains("connect authenticated service"), "{error}");
     assert_eq!(std::fs::read(&endpoint_path).unwrap(), original);
@@ -820,7 +787,7 @@ fn persistent_stop_closes_owner_then_requests_service_shutdown() {
     .unwrap();
     let (owner, _events) = owner("shutdown", "/projects/shutdown");
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars.stop();
     service.join().unwrap();
@@ -903,7 +870,7 @@ fn persistent_stop_does_not_log_its_own_close_as_a_read_error() {
     .unwrap();
     let (owner, _events) = owner("own", "/projects/own");
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars.stop();
     release.send(()).unwrap();
@@ -988,7 +955,7 @@ fn a_second_quit_ends_the_connection_of_a_service_that_the_quit_stop_waits_for()
         .unwrap();
         let (owner, _events) = owner("second-quit", "/projects/second-quit");
         sidecars
-            .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+            .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         let (end, ended) = channel::<()>();
         assert!(
@@ -1096,7 +1063,7 @@ fn persistent_stop_accepts_the_answer_to_a_close_sent_before_the_stop() {
     .unwrap();
     let (owner, _events) = owner("late", "/projects/late");
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars.retain(&owner, &|_| false).unwrap();
     sidecars.stop();
@@ -1194,7 +1161,7 @@ fn persistent_stop_answers_a_discarded_image_before_service_shutdown() {
     .unwrap();
     let (window, events) = owner("late-image", "/projects/late-image");
     sidecars
-        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().body.get(), r#"{"event":"opened"}"#);
     sidecars.retain(&window, &|_| false).unwrap();
@@ -1240,7 +1207,7 @@ fn stdio_stop_cancels_an_image_emitted_after_stdin_eof() {
     .unwrap();
     let (window, events) = owner("stdio-late-image", "/projects/stdio-late-image");
     sidecars
-        .send(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().body.get(), r#"{"event":"opened"}"#);
 
@@ -1346,7 +1313,7 @@ fn persistent_retain_sends_only_layout_surfaces() {
     assert_eq!(empty["surfaces"], serde_json::json!([]), "no kept surface");
     let (owner, _events) = owner("retain", "/live");
     sidecars
-        .send(&owner, ECHO, "sent", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "sent", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let closed = sidecars
         .retain_sessions(&[RetainedSurface {
@@ -1434,7 +1401,7 @@ fn an_unanswered_retain_ends_with_its_connection() {
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
-    let sidecars = Sidecars::<FakeOwner>::new(
+    let sidecars = Sidecars::<SidecarRecorder>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
@@ -1496,7 +1463,7 @@ fn persistent_retain_after_stop_sends_nothing() {
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
-    let sidecars = Sidecars::<FakeOwner>::new(
+    let sidecars = Sidecars::<SidecarRecorder>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
@@ -1520,7 +1487,7 @@ fn persistent_retain_skips_a_service_without_endpoint() {
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
-    let sidecars = Sidecars::<FakeOwner>::new(
+    let sidecars = Sidecars::<SidecarRecorder>::new(
         &declare(&fixture, executable_directory.path()),
         config_directory.path().to_path_buf(),
     )
@@ -1602,7 +1569,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
     .unwrap();
     let (owner, events) = owner("only", "/projects/only");
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().surface, "s1");
 
@@ -1616,7 +1583,7 @@ fn persistent_transport_revives_a_lost_connection_without_a_send() {
 
     // The next send passes through the connection that was established again.
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     let echoed = events.recv().unwrap();
     assert_eq!(echoed.surface, "s1");
@@ -1678,7 +1645,7 @@ fn persistent_transport_reports_a_failed_revive_to_the_owner() {
     .unwrap();
     let (owner, events) = owner("only", "/projects/only");
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().surface, "s1");
     service.join().unwrap();
@@ -1771,11 +1738,11 @@ fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
     let (sender, sender_events) = owner("sender", "/projects/sender");
     let (other, other_events) = owner("other", "/projects/other");
     sidecars
-        .send(&sender, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&sender, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(sender_events.recv().unwrap().surface, "surface-1");
     sidecars
-        .send(
+        .send_as(
             &other,
             "@fixture/sidecar-stdio",
             "surface-2",
@@ -1830,7 +1797,7 @@ fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
         }
     });
     sidecars
-        .send(&sender, ECHO, "surface-1", &raw(r#"{"operation":"input"}"#))
+        .send_as(&sender, ECHO, "surface-1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     let announced = (0..2)
         .map(|_| sender_events.recv().unwrap())
@@ -1851,29 +1818,6 @@ fn persistent_connection_notice_reaches_only_the_surfaces_that_sent() {
     }
     sidecars.stop();
     revived_service.join().unwrap();
-}
-
-/// A window that receives sidecar messages and failures separately.
-#[derive(Clone)]
-struct FailureOwner {
-    sent: Sender<Message>,
-    failed: Sender<Failure>,
-}
-
-impl Owner for FailureOwner {
-    fn key(&self) -> String {
-        "only".into()
-    }
-    fn root(&self) -> Result<String, String> {
-        Ok("/projects/only".into())
-    }
-
-    fn deliver(&self, message: Message) {
-        let _ = self.sent.send(message);
-    }
-    fn deliver_failure(&self, failure: Failure) {
-        let _ = self.failed.send(failure);
-    }
 }
 
 /// A service that answers a connection with hello, receives one request line and then writes payload. It ends when the
@@ -1919,11 +1863,9 @@ fn expect_connection_failure(payload: Vec<u8>, reason: &str) {
         config_directory.path().to_path_buf(),
     )
     .unwrap();
-    let (sent, messages) = channel();
-    let (failed, failures) = channel();
-    let owner = FailureOwner { sent, failed };
+    let (owner, messages, failures) = failing_owner("only", "/projects/only");
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let failure = failures
         .recv()
@@ -2042,7 +1984,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
     .unwrap();
     let (window, _events) = owner("start", "/projects/start");
     sidecars
-        .send(
+        .send_as(
             &window,
             "@fixture/sidecar-fast",
             "fast-surface",
@@ -2051,7 +1993,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
         .unwrap();
     thread::scope(|scope| {
         let service = scope.spawn(|| {
-            sidecars.send(
+            sidecars.send_as(
                 &window,
                 ECHO,
                 "service-surface",
@@ -2060,7 +2002,7 @@ fn persistent_start_does_not_delay_other_sidecars() {
         });
         hello_received.recv().unwrap();
         sidecars
-            .send(
+            .send_as(
                 &window,
                 "@fixture/sidecar-fast",
                 "fast-surface",
@@ -2132,8 +2074,9 @@ fn the_stop_does_not_wait_for_a_start() {
     let sidecars = &sidecars;
     let window = &window;
     thread::scope(|scope| {
-        let start = scope
-            .spawn(move || sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#)));
+        let start = scope.spawn(move || {
+            sidecars.send_as(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        });
         hello_received.recv().unwrap();
         let (stopped, stop_returned) = channel();
         scope.spawn(move || {
@@ -2160,8 +2103,8 @@ fn the_stop_does_not_wait_for_a_start() {
 }
 
 /// Sends an open request to the sidecar and returns the result of the send.
-fn send_open(sidecars: &Sidecars<FakeOwner>, window: &FakeOwner) -> Result<(), String> {
-    sidecars.send(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+fn send_open(sidecars: &Sidecars<SidecarRecorder>, window: &SidecarRecorder) -> Result<(), String> {
+    sidecars.send_as(window, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
 }
 
 /// Makes the FIFO path and holds its write end until the returned file is dropped. A fixture process that reads it ends
@@ -2392,7 +2335,7 @@ fn a_message_of_a_persistent_service_reaches_its_owner_with_the_identifiers_of_i
     let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
     let (owner, events) = owner("cids", "/projects/cids");
     sidecars
-        .send_with_cids(
+        .send_with_cids_as(
             &owner,
             ECHO,
             "surface",
@@ -2502,7 +2445,7 @@ fn persistent_service_starts_in_a_new_session() {
     });
 
     sidecars
-        .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().surface, "surface");
     let environment = std::fs::read_to_string(&display_name_path).unwrap();
@@ -2660,7 +2603,7 @@ fn a_persistent_service_of_another_version_is_reported_outdated() {
         let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
         let (owner, events) = owner("version", "/projects/version");
         sidecars
-            .send(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
+            .send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         events.recv().unwrap();
         assert_eq!(sidecars.outdated(), want, "hello version {version:?}");
@@ -2698,7 +2641,7 @@ fn a_lost_connection_is_reported_as_an_error_line() {
     );
 }
 
-/// A fake persistent service that the host replaces: its first connection reports the old version, acknowledges
+/// A persistent service that the host replaces: its first connection reports the old version, acknowledges
 /// close-owner and shutdown and then ends; its second connection reports the installed version.
 struct ReplaceService {
     /// The top-level operations that the first connection received (a message of a surface has none).
@@ -2787,7 +2730,7 @@ fn serve_replace_service(
         .expect("spawn sleep");
     let process_id = process.id();
     let process = Arc::new(Mutex::new(process));
-    // The executable that the host starts for the installed service announces the endpoint of this fake service.
+    // The executable that the host starts for the installed service announces the endpoint of this service.
     // It records its process identifier, so the check can see whether the process ends with the test.
     let installed_pid_path = executable_directory.join("installed.pid");
     // With held bytes, the installed process touches that much memory before it sleeps. Ending such a process takes the
@@ -2902,7 +2845,10 @@ fn serve_replace_service(
     }
 }
 
-fn replace_sidecars(config_directory: &Path, executable_directory: &Path) -> Sidecars<FakeOwner> {
+fn replace_sidecars(
+    config_directory: &Path,
+    executable_directory: &Path,
+) -> Sidecars<SidecarRecorder> {
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
@@ -2924,7 +2870,7 @@ fn layout_surface(surface: &str) -> RetainedSurface {
 /// Checks that the service keeps running after the calls that may replace it returned: each such call records the
 /// replacement that it decides before it returns, and a replacement sends close-owner only after that record, so no
 /// record and no close-owner mean that no replacement runs.
-fn assert_no_replacement(service: &ReplaceService, sidecars: &Sidecars<FakeOwner>) {
+fn assert_no_replacement(service: &ReplaceService, sidecars: &Sidecars<SidecarRecorder>) {
     let replacing = sidecars.replacing();
     assert!(replacing.is_empty(), "the host replaces {replacing:?}");
     let operations = service.operations.lock().unwrap().clone();
@@ -2952,7 +2898,7 @@ fn an_outdated_service_is_replaced() {
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     assert_eq!(
@@ -3000,7 +2946,7 @@ fn a_service_that_is_not_outdated_is_not_replaced() {
     assert!(error.contains(ECHO), "{error}");
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     let error = sidecars.replace(ECHO).unwrap_err();
@@ -3025,7 +2971,7 @@ fn a_service_of_an_undeclared_sidecar_is_ended() {
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     sidecars.declare(&[]).unwrap();
@@ -3075,7 +3021,7 @@ fn an_outdated_service_is_replaced_when_its_sessions_end() {
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     sidecars.retain_sessions(&[]).unwrap();
@@ -3108,7 +3054,7 @@ fn an_outdated_service_keeps_a_surface_that_a_layout_holds() {
         .unwrap();
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     sidecars.retain(&owner, &|_| false).unwrap();
@@ -3174,7 +3120,7 @@ fn an_outdated_service_waits_for_the_first_layout_list() {
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     sidecars.retain(&owner, &|_| false).unwrap();
@@ -3210,7 +3156,7 @@ fn a_replaced_service_starts_after_the_end_of_its_process() {
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("replace", "/projects/replace");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     sidecars.replace(ECHO).unwrap();
@@ -3282,7 +3228,7 @@ fn the_hello_carries_the_configuration_directory_as_client() {
     let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf()).unwrap();
     let (owner, events) = owner("client", "/projects/client");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     let request = hello.recv().unwrap();
@@ -3351,7 +3297,7 @@ fn a_persistent_connection_has_no_deadline_after_its_hello() {
     .unwrap();
     let (owner, events) = owner("silence", "/projects/silence");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     if let Ok(early) = events.try_recv() {
         panic!(
@@ -3439,7 +3385,7 @@ fn stop_does_not_close_the_owner_again_while_a_replacement_closes_it() {
     ));
     let (owner, _events) = owner("replacing", "/projects/replacing");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     // The service sends no message to the owner, so the check does not wait for one: the loop below waits until the
     // service has read the close-owner of the replacement.
@@ -3487,7 +3433,7 @@ fn detach_closes_the_connection_of_a_persistent_service_without_closing_the_owne
     let sidecars = replace_sidecars(config_directory.path(), executable_directory.path());
     let (owner, events) = owner("detach", "/projects/detach");
     sidecars
-        .send(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "surface-1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     events.recv().unwrap();
     sidecars.detach();
@@ -3602,7 +3548,7 @@ fn persistent_connections_are_recorded_as_events() {
         .unwrap();
         let (owner, events) = owner("only", "/projects/only");
         sidecars
-            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         events.recv().unwrap(); // the echo
         events.recv().unwrap(); // the notice of the reconnection
@@ -3715,7 +3661,7 @@ fn persistent_spawned_service_first_answer_after_spawn_is_recorded() {
         .unwrap();
         let (owner, events) = owner("only", "/projects/only");
         sidecars
-            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         events.recv().unwrap(); // the echo
         sidecars.stop();
@@ -3851,12 +3797,10 @@ fn a_persistent_service_end_stops_the_restarts_before_the_spawn() {
         let sidecars = Sidecars::new(&declarations, config_directory.path().to_path_buf())
             .unwrap()
             .with_clock(move || clock_of_sidecars.read());
-        let (sent, messages) = channel();
-        let (failed, failures) = channel();
-        let owner = FailureOwner { sent, failed };
+        let (owner, messages, failures) = failing_owner("only", "/projects/only");
         let send = |surface: &str, seconds: u64| {
             clock.set(Duration::from_secs(seconds));
-            sidecars.send(&owner, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            sidecars.send_as(&owner, ECHO, surface, &raw(r#"{"operation":"open"}"#))
         };
         let exited = format!("sidecar {ECHO}: service exited before endpoint");
         for seconds in [0, 10, 20] {
@@ -4032,13 +3976,11 @@ fn persistent_protocol_violations_stop_the_restarts() {
     )
     .unwrap()
     .with_clock(move || clock_of_sidecars.read());
-    let (sent, _messages) = channel();
-    let (failed, failures) = channel();
-    let owner = FailureOwner { sent, failed };
+    let (owner, _messages, failures) = failing_owner("only", "/projects/only");
     for seconds in [0, 10, 20, 30] {
         clock.set(Duration::from_secs(seconds));
         sidecars
-            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         let failure = failures
             .recv()
@@ -4051,7 +3993,7 @@ fn persistent_protocol_violations_stop_the_restarts() {
     service.join().unwrap();
     clock.set(Duration::from_secs(40));
     assert_eq!(
-        sidecars.send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#)),
+        sidecars.send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#)),
         Err(format!("sidecar {ECHO}: restart limit")),
         "send at 40s"
     );
@@ -4078,7 +4020,7 @@ fn image_detach_acknowledgements_are_not_delivered_as_surface_messages() {
     let (owner, events) = owner("image-detach", "/projects/image-detach");
 
     sidecars
-        .send(
+        .send_as(
             &owner,
             ECHO,
             "surface-1",
@@ -4156,7 +4098,7 @@ fn a_page_reload_returns_before_the_image_detach_acknowledgement() {
     .unwrap();
     let (owner, events) = owner("first", "/projects/first");
     sidecars
-        .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let opened = events.recv().unwrap();
     assert!(opened.body.get().contains("open"), "{}", opened.body.get());

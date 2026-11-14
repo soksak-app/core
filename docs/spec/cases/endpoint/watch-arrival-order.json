@@ -1,0 +1,25 @@
+{
+  "name": "watch-arrival-order",
+  "description": "Subscription changes of one status reach the page in the order in which they arrived, although the page has not answered the first, and the connection watches after a watch, an unwatch and a watch.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null, "held": true}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": {"window": "main", "name": "core.layout"}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"release": true}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": null}},
+    {"page": {"call": {"name": "status.unwatch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "core.layout", "value": 5}}}},
+    {"notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "core.layout", "value": 5}}}
+  ]
+}

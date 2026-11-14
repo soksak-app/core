@@ -1,0 +1,31 @@
+{
+  "name": "watch-surface-separate",
+  "description": "A watch with a surface and a watch without one are forwarded to the page separately, a change names its surface only for a watch with one, an empty surface is refused, and the release of the surface watch keeps the other watch.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "probe.lines", "surface": "tab-a"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "probe.lines", "surface": "tab-a"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.watch", "params": {"window": "main", "name": "probe.lines"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "probe.lines"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": {"window": "main", "name": "probe.lines", "surface": ""}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "error": {"code": -32602, "message": "surface must not be empty"}}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}}}},
+    {"notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "probe.lines", "surface": "tab-a", "value": ["a"]}}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "probe.lines", "value": ["b"]}}}},
+    {"notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "probe.lines", "value": ["b"]}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "status.unwatch", "params": {"window": "main", "name": "probe.lines", "surface": "tab-a"}}},
+    {"page": {"call": {"name": "status.unwatch", "payload": {"name": "probe.lines", "surface": "tab-a"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": null}},
+    {"watching": {"window": "main", "name": "probe.lines", "value": true}},
+    {"page": {"notice": {"event": "status.changed", "payload": {"window": "main", "name": "probe.lines", "value": ["c"]}}}},
+    {"notify": {"jsonrpc": "2.0", "method": "status.changed", "params": {"window": "main", "name": "probe.lines", "value": ["c"]}}}
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "input-delivered",
+  "description": "input.pointer, input.key, input.text and input.dialog.answer answer null when the host delivers the input, and an answer of a dialog without an id is refused with -32602.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": {"window": "main", "x": 1, "y": 2, "phase": "move"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "input.key", "params": {"window": "main", "key": "a", "phase": "down"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "input.text", "params": {"window": "main", "phase": "insert", "text": "a"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "input.dialog.answer", "params": {"window": "main", "id": "d1", "paths": ["/saved/host.jsonl"]}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 5, "method": "input.dialog.answer", "params": {"window": "main", "id": "d4", "cancel": true}}},
+    {"reply": {"jsonrpc": "2.0", "id": 5, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 6, "method": "input.dialog.answer", "params": {"window": "main", "paths": ["/a"]}}},
+    {"reply": {"jsonrpc": "2.0", "id": 6, "error": {"code": -32602, "message": "id must be a non-empty string"}}}
+  ]
+}

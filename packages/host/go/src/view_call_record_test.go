@@ -482,7 +482,7 @@ func TestViewRuntimeLogNativeReplyPostFailureIsReported(t *testing.T) {
 func TestRetiredViewRuntimeLogDoesNotWriteThroughReplacement(t *testing.T) {
 	if config := os.Getenv(viewLogDeliveryChild); config != "" {
 		log := startViewRecordWriter(t, config)
-		s, fake, _ := newLifecycleSurfaces(t, &fakeClock{})
+		s, fake, _ := newLifecycleSurfaces(t)
 		s.host.events = log
 		if err := s.ViewMessage("probe-surface", `{"message":{"event":"view.ready","plugin":"probe","document":"doc-1","time_origin":1234.5}}`); err != nil {
 			t.Fatal(err)

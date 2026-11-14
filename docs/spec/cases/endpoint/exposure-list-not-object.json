@@ -1,0 +1,27 @@
+{
+  "name": "exposure-list-not-object",
+  "description": "A list of the page that is not an object (an array, null, a number or a string) is answered with the internal error -32603.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "variables": {"message-array": {"type": "string", "example": "page exposure.list: the list is not an object (array)"}, "message-null": {"type": "string", "example": "page exposure.list: the list is not an object (null)"}, "message-number": {"type": "string", "example": "page exposure.list: the list is not an object (number)"}, "message-string": {"type": "string", "example": "page exposure.list: the list is not an object (string)"}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "exposure.list", "params": {"window": "main"}}},
+    {"page": {"call": {"name": "exposure.list", "payload": {}}}},
+    {"page": {"reply": {"result": []}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message": "$message-array"}}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "exposure.list", "params": {"window": "main"}}},
+    {"page": {"call": {"name": "exposure.list", "payload": {}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "error": {"code": -32603, "message": "$message-null"}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "exposure.list", "params": {"window": "main"}}},
+    {"page": {"call": {"name": "exposure.list", "payload": {}}}},
+    {"page": {"reply": {"result": 3}}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "error": {"code": -32603, "message": "$message-number"}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "exposure.list", "params": {"window": "main"}}},
+    {"page": {"call": {"name": "exposure.list", "payload": {}}}},
+    {"page": {"reply": {"result": "list"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "error": {"code": -32603, "message": "$message-string"}}}
+  ]
+}

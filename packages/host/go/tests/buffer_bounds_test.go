@@ -101,9 +101,9 @@ func TestALineThatIsWrittenAtOnceStoresNoWriteWait(t *testing.T) {
 	// The clock of the sidecars does not move, so each line is written at once by the clock that the write waits read.
 	still := time.Unix(1, 0)
 	sidecars.Now = func() time.Time { return still }
-	owner := support.NewFakeOwner("/p")
+	owner := support.NewSidecarRecorder(t, "/p")
 	for i := 0; i < 10; i++ {
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}

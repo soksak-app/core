@@ -1,0 +1,12 @@
+{
+  "name": "window-param-missing",
+  "description": "A request that names a window without a non-empty string, or names none, is answered with the invalid-params error -32602 and does not reach the page.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"name": "core.layout"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": -32602, "message": "window must be a non-empty string"}}}
+  ]
+}

@@ -77,8 +77,7 @@ func tracesOf(t *testing.T, event string) []map[string]any {
 // does the same with responsive true. Neither notice closes or creates a view, because no call of the view ends.
 func TestViewResponsivenessNoticeIsRelayedWithoutEndingTheView(t *testing.T) {
 	isolateTraceRecords(t)
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	s.views = map[string]*nativeWebview{"probe-surface": {}}
 	events := recordWindowEvents(s)
 	receive := fake.responsiveness[fake.created[0]]
@@ -115,8 +114,7 @@ func TestViewResponsivenessNoticeIsRelayedWithoutEndingTheView(t *testing.T) {
 // host.trace.view.process-ready.
 func TestViewProcessEventsMarkTheRequestAndTheFirstReadyMessage(t *testing.T) {
 	isolateTraceRecords(t)
-	clock := &fakeClock{}
-	s, _, _ := newLifecycleSurfaces(t, clock)
+	s, _, _ := newLifecycleSurfaces(t)
 	requests := bufferedTraces(t, "host.trace.view.process-request")
 	if len(requests) != 1 || requests[0]["surface"] != "probe-surface" || requests[0]["plugin"] != "probe" {
 		t.Fatalf("host.trace.view.process-request records: %v, want one for probe-surface", requests)

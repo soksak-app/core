@@ -32,5 +32,12 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
+	if scenario := os.Getenv(stallScenarioChild); scenario != "" {
+		if err := runStallScenario(scenario); err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
 }

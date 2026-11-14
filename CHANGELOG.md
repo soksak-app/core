@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The Go host plays the scripted-page endpoint cases, and the endpoint inputs are functions of their params; the stall watch of both hosts decides each beat in a loop step that a table tests and runs the real run loop with SOKSAK_FAULT_STALL_SAMPLE; the native event ring tests store through the producer function of the native library; the view lifecycle and the surface dispatch take their instants as data; and the sidecar tests record the messages and failures of a window (F795-8, F795-9).
 - The native capture tests run the real clock, Mach timebase, display link and window images with the declared fault points of the timebase, the window image and the compression, the stage instants of a still are set by functions that take them as data, and the process identity tests register with the real LaunchServices with the fault point of its test build (F795-6).
 - The picker close, stale layout and sidebar section tests of the workbench run the real host, plugin and console modules of the page: the picker close test plays a page-wire case and the stale layout test reads the errors of the page from a real console on a stream; the library plugin test reads the document of index.html and still replaces the installed plugin module (F795-10).
 - The script tests copy their input programs and files from tracked folders under scripts/test/fixtures, and the process identity build test lists the commands with the dry run of make and builds with the real clang and ar instead of commands that recorded their arguments (F795-4).

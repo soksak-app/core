@@ -1,660 +1,712 @@
-//! The watch of the main thread records a stall, the stacks of the threads and the end of the stall without a window check.
+//! The watch of the main thread records a stall, the stacks of the threads and the end of the stall against the real platform
+//! (docs/spec/logging.md, stalls). The main run loop answers the heartbeat on the main thread only while the thread runs it, so
+//! this target runs its tests on the main thread of its process (`harness = false` in Cargo.toml) and each test runs its
+//! scenario in a child process of the same binary: the main thread of the child runs the main run loop or holds the thread. The
+//! watch stores its records in the event log of the configuration folder of the test, which the test reads. The decision of
+//! each beat is a function of its readings, which the table tests in src/stall_watch_test.rs judge with exact values.
 
+#[cfg(target_os = "macos")]
 #[path = "support/folder.rs"]
 mod folder;
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc;
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+#[cfg(target_os = "macos")]
+#[path = "support/records.rs"]
+mod records;
 
-use soksak_host::event_log::Level;
-use soksak_host::stall_watch::{
-    AwaitAwake, Clock, Heartbeat, Schedule, StallWatchOptions, Wait, start_stall_watch,
-};
+#[cfg(target_os = "macos")]
+#[path = "support/main_thread.rs"]
+mod main_thread;
 
-/// The run loop of a main thread that always handles an event.
-fn never_waits() -> AwaitAwake {
-    Box::new(|| Ok(()))
-}
+#[cfg(target_os = "macos")]
+mod system {
+    use std::ffi::c_void;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::sync::{Arc, Condvar, Mutex, Once};
+    use std::time::{Duration, Instant};
 
-/// The schedule of a process that the system runs in the foreground and that used no CPU time.
-fn foreground() -> Schedule {
-    Box::new(|| Ok((31, 0)))
-}
-
-/// Blocks the thread of a watch whose test ended, so that the watch neither spins nor records after its test.
-fn park_for_good() -> ! {
-    loop {
-        std::thread::park();
-    }
-}
-
-/// A clock that the test moves. The wait of each beat tells the test that the watch parked there, and the watch takes the
-/// beat when the test lets it, late by an extra time that models a process that the system does not schedule for that long.
-/// The watch handles a beat in full before it waits for the next one, so the place where it parks is the event after which
-/// that beat stores nothing more.
-struct SteppedTime {
-    now: Arc<Mutex<Duration>>,
-    parks: mpsc::SyncSender<&'static str>,
-    parked: mpsc::Receiver<&'static str>,
-    proceed: mpsc::Sender<Duration>,
-    taken: Arc<Mutex<mpsc::Receiver<Duration>>>,
-}
-
-impl SteppedTime {
-    fn new() -> Self {
-        let (parks, parked) = mpsc::sync_channel(0);
-        let (proceed, taken) = mpsc::channel();
-        Self {
-            now: Arc::new(Mutex::new(Duration::ZERO)),
-            parks,
-            parked,
-            proceed,
-            taken: Arc::new(Mutex::new(taken)),
-        }
-    }
-
-    fn clock(&self) -> Clock {
-        let now = Arc::clone(&self.now);
-        Arc::new(move || *now.lock().unwrap())
-    }
-
-    fn advance(&self, length: Duration) {
-        *self.now.lock().unwrap() += length;
-    }
-
-    /// The park of the watch at a place: "beat" for the wait of a beat and "awake" for the wait of the run loop.
-    fn park(&self) -> impl Fn(&'static str) + Send + Sync + use<> {
-        let parks = Mutex::new(self.parks.clone());
-        move |place| {
-            if parks.lock().unwrap().send(place).is_err() {
-                park_for_good();
-            }
-        }
-    }
-
-    fn wait(&self) -> Wait {
-        let park = self.park();
-        let taken = Arc::clone(&self.taken);
-        let now = Arc::clone(&self.now);
-        Arc::new(move |beat| {
-            park("beat");
-            match taken.lock().unwrap().recv() {
-                Ok(extra) => *now.lock().unwrap() += beat + extra,
-                Err(_) => park_for_good(),
-            }
-        })
-    }
-
-    /// Requires that the watch parks next at `place`.
-    fn require_park(&self, place: &str) {
-        let got = self.parked.recv().expect("the watch did not park");
-        assert_eq!(got, place, "the place where the watch parked");
-    }
-
-    /// Lets the watch that parked at a beat take it, late by `extra`, and requires that it parks next at `place`.
-    fn beat(&self, extra: Duration, place: &str) {
-        self.proceed.send(extra).unwrap();
-        self.require_park(place);
-    }
-
-    /// Lets the watch take `count` beats on time, each followed by the wait of the next beat.
-    fn beats(&self, count: usize) {
-        for _ in 0..count {
-            self.beat(Duration::ZERO, "beat");
-        }
-    }
-}
-
-/// The records of a watch: their names, levels and fields, and a notice of each record.
-#[derive(Clone)]
-struct Records {
-    stored: Arc<Mutex<Vec<(String, Level, serde_json::Value)>>>,
-    added: Arc<(Mutex<usize>, Condvar)>,
-}
-
-impl Records {
-    fn new() -> Self {
-        Self {
-            stored: Arc::new(Mutex::new(Vec::new())),
-            added: Arc::new((Mutex::new(0), Condvar::new())),
-        }
-    }
-
-    fn emit(&self) -> soksak_host::stall_watch::Emit {
-        let records = self.clone();
-        Arc::new(move |level, event, fields| {
-            records
-                .stored
-                .lock()
-                .unwrap()
-                .push((event.to_string(), level, fields));
-            let (count, added) = &*records.added;
-            *count.lock().unwrap() += 1;
-            added.notify_all();
-        })
-    }
-
-    fn names(&self) -> Vec<String> {
-        self.stored
-            .lock()
-            .unwrap()
-            .iter()
-            .map(|(name, _, _)| name.clone())
-            .collect()
-    }
-
-    fn fields(&self, index: usize) -> serde_json::Value {
-        self.stored.lock().unwrap()[index].2.clone()
-    }
-
-    /// Checks the records that the beats stored, after the watch parked.
-    fn require(&self, want: &[&str]) {
-        assert_eq!(self.names(), want, "the records of the watch");
-    }
-
-    /// Checks the records that the beats stored, after the watch parked, while the sample of the stall runs apart from the beats
-    /// and ends without a wait of its own: its `host.stall.sampled` comes before or after that park, so it is not one of them.
-    fn require_beats(&self, want: &[&str]) {
-        let names: Vec<String> = self
-            .names()
-            .into_iter()
-            .filter(|name| name != "host.stall.sampled")
-            .collect();
-        assert_eq!(names, want, "the records that the beats stored");
-    }
-
-    /// Waits for the records of a sample, which ends apart from the beats.
-    fn wait_for(&self, want: &[&str]) {
-        let (count, added) = &*self.added;
-        let mut seen = count.lock().unwrap();
-        while self.names() != want {
-            seen = added.wait(seen).unwrap();
-        }
-    }
-}
-
-/// A main run loop that waits or handles an event, with the state that the observers of the platform write: the start of a
-/// wait and a wake are answers, and while it waits a heartbeat sends nothing and returns the start of the wait as both
-/// times. While held it takes no heartbeat. The watch parks in its wait as "awake" of the stepped clock.
-#[derive(Default)]
-struct RunLoopState {
-    wakes: bool,
-    held: bool,
-    answered: Duration,
-    heartbeats: usize,
-}
-
-struct FakeRunLoop {
-    state: Mutex<RunLoopState>,
-    awake: Condvar,
-    clock: Clock,
-}
-
-impl FakeRunLoop {
-    fn new(clock: Clock) -> Arc<Self> {
-        Arc::new(Self {
-            state: Mutex::new(RunLoopState::default()),
-            awake: Condvar::new(),
-            clock,
-        })
-    }
-
-    fn heartbeat(self: &Arc<Self>) -> Heartbeat {
-        let run_loop = Arc::clone(self);
-        Box::new(move || {
-            let mut state = run_loop.state.lock().unwrap();
-            if !state.wakes {
-                return Ok((state.answered, state.answered));
-            }
-            state.heartbeats += 1;
-            let now = (run_loop.clock)();
-            if !state.held {
-                state.answered = now;
-            }
-            Ok((now, state.answered))
-        })
-    }
-
-    fn await_awake(self: &Arc<Self>, time: &SteppedTime) -> AwaitAwake {
-        let run_loop = Arc::clone(self);
-        let park = time.park();
-        Box::new(move || {
-            if run_loop.state.lock().unwrap().wakes {
-                return Ok(());
-            }
-            park("awake");
-            let mut state = run_loop.state.lock().unwrap();
-            while !state.wakes {
-                state = run_loop.awake.wait(state).unwrap();
-            }
-            Ok(())
-        })
-    }
-
-    fn wake(&self, held: bool) {
-        let mut state = self.state.lock().unwrap();
-        state.wakes = true;
-        state.held = held;
-        state.answered = (self.clock)();
-        self.awake.notify_all();
-    }
-
-    fn wait(&self) {
-        let mut state = self.state.lock().unwrap();
-        state.wakes = false;
-        state.held = false;
-        state.answered = (self.clock)();
-    }
-
-    fn sent(&self) -> usize {
-        self.state.lock().unwrap().heartbeats
-    }
-}
-
-// contract: host.stall.recorded-without-a-check
-#[test]
-fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() {
-    // A fake main thread that answers each heartbeat until the test holds it.
-    let time = SteppedTime::new();
-    let run_loop = FakeRunLoop::new(time.clock());
-    run_loop.wake(false);
-    let records = Records::new();
-    let sampled = Arc::new(Mutex::new(Vec::new()));
-    let samples = Arc::clone(&sampled);
-    let folder = folder::Folder::new();
-    let stop = start_stall_watch(StallWatchOptions {
-        heartbeat: run_loop.heartbeat(),
-        await_awake: run_loop.await_awake(&time),
-        schedule: foreground(),
-        sample: Arc::new(move |path| {
-            samples.lock().unwrap().push(path.to_path_buf());
-            Ok(())
-        }),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: None,
-    });
-    // The first heartbeat and two beats are answered. The main thread is held from 500 ms, and the fourth beat after that is
-    // 1000 ms late; the sample of that stall ends before the next beat.
-    time.require_park("beat");
-    time.beats(2);
-    run_loop.wake(true);
-    time.beats(4);
-    records.require_beats(&["host.stall"]);
-    records.wait_for(&["host.stall", "host.stall.sampled"]);
-    // The main thread answers again, and the next beat at 1750 ms is the end of the stall.
-    run_loop.wake(false);
-    time.beats(1);
-    records.require(&["host.stall", "host.stall.sampled", "host.stall.resumed"]);
-    stop();
-    assert_eq!(records.fields(0)["late_ms"], 1000);
-    let fields = records.fields(1);
-    let path = fields["path"].as_str().unwrap();
-    assert!(path.contains("stall-host-"), "{path}");
-    assert_eq!(
-        sampled.lock().unwrap().as_slice(),
-        [std::path::PathBuf::from(path)]
-    );
-    assert_eq!(records.fields(2)["stalled_ms"], 1250);
-    // The stall and its dump are warnings, which the policy stores through the gate exception of passes_every_gate; the end
-    // of the stall is info.
-    for (name, level, _) in records.stored.lock().unwrap().iter() {
-        let want = if name == "host.stall.resumed" {
-            Level::Info
-        } else {
-            Level::Warn
-        };
-        assert_eq!(*level, want, "{name}");
-    }
-}
-
-/// Runs the watch with a main thread that never takes a task, and returns the fields of the first `host.stall` record. The
-/// first beat is late by `extra`.
-fn first_stall(extra: Duration) -> serde_json::Value {
-    let time = SteppedTime::new();
-    let records = Records::new();
-    let folder = folder::Folder::new();
-    let stop = start_stall_watch(StallWatchOptions {
-        // The main thread never answers, so the time of the answer stays the time of the first heartbeat, the start of the
-        // clock.
-        heartbeat: {
-            let clock = time.clock();
-            Box::new(move || Ok((clock(), Duration::ZERO)))
-        },
-        await_awake: never_waits(),
-        schedule: foreground(),
-        sample: Arc::new(|_path| Ok(())),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: None,
-    });
-    time.require_park("beat");
-    let mut late = extra;
-    for _ in 0..4 {
-        time.beat(late, "beat");
-        late = Duration::ZERO;
-        if let Some(name) = records.names().first() {
-            assert_eq!(name, "host.stall", "the first record");
-            stop();
-            return records.fields(0);
-        }
-    }
-    panic!("no host.stall record after 4 beats of a main thread that never answers");
-}
-
-// contract: host.stall.watch-late-separates-scheduling
-#[test]
-fn a_stall_of_an_unscheduled_process_carries_its_lateness_in_the_watch() {
-    // The first beat is 1600 ms late for the watch and for the main thread alike, so the stall is seen at 1850 ms.
-    let fields = first_stall(Duration::from_millis(1600));
-    assert_eq!(fields["late_ms"], 1850, "{fields}");
-    assert_eq!(fields["watch_late_ms"], 1600, "{fields}");
-}
-
-// contract: host.stall.watch-late-separates-blocked-main
-#[test]
-fn a_stall_of_a_blocked_main_thread_has_no_lateness_in_the_watch() {
-    // The watch wakes on every beat; the main thread never runs the heartbeat, so the stall is seen at 1000 ms.
-    let fields = first_stall(Duration::ZERO);
-    assert_eq!(fields["late_ms"], 1000, "{fields}");
-    assert_eq!(fields["watch_late_ms"], 0, "{fields}");
-}
-
-// contract: host.stall.sample-keeps-the-watch-running
-#[test]
-fn a_sample_of_the_threads_does_not_stop_the_watch() {
-    // A fake main thread and a sample that lasts until the test ends it, as a sample of a loaded system lasts for seconds.
-    let time = SteppedTime::new();
-    let run_loop = FakeRunLoop::new(time.clock());
-    run_loop.wake(false);
-    let records = Records::new();
-    let (release, released) = mpsc::channel::<()>();
-    let released = Mutex::new(released);
-    let folder = folder::Folder::new();
-    let stop = start_stall_watch(StallWatchOptions {
-        heartbeat: run_loop.heartbeat(),
-        await_awake: run_loop.await_awake(&time),
-        schedule: foreground(),
-        sample: Arc::new(move |_path| released.lock().unwrap().recv().map_err(|e| e.to_string())),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: None,
-    });
-    // Holds the main thread for four beats, which is a stall, and answers again on the next beat, which ends it.
-    let stall_and_end = |want: &[&str]| {
-        run_loop.wake(true);
-        time.beats(4);
-        run_loop.wake(false);
-        time.beats(1);
-        records.require(want);
+    use core_foundation::date::CFDate;
+    use core_foundation::runloop::{
+        CFRunLoop, CFRunLoopRunResult, CFRunLoopTimer, CFRunLoopTimerRef, kCFRunLoopDefaultMode,
     };
-    time.require_park("beat");
-    time.beats(1);
-    stall_and_end(&["host.stall", "host.stall.resumed"]);
-    stall_and_end(&[
-        "host.stall",
-        "host.stall.resumed",
-        "host.stall",
-        "host.stall.sampled",
-        "host.stall.resumed",
-    ]);
-    release.send(()).unwrap();
-    records.wait_for(&[
-        "host.stall",
-        "host.stall.resumed",
-        "host.stall",
-        "host.stall.sampled",
-        "host.stall.resumed",
-        "host.stall.sampled",
-    ]);
-    stop();
-    for (event, _, fields) in records.stored.lock().unwrap().iter() {
-        if event == "host.stall" {
-            assert_eq!(fields["late_ms"], 1000, "a main thread held for four beats");
+    use serde_json::Value;
+    use soksak_host::event_log::EventLog;
+    use soksak_host::event_record::{emit_host, use_host_event_log};
+    use soksak_host::platform;
+    use soksak_host::stall_watch::{Heartbeat, StallWatchOptions, StopWaits, start_stall_watch};
+
+    use crate::main_thread::{self, MainTest};
+    use crate::{folder, records};
+
+    /// The environment variable that names the scenario that a child process runs.
+    const SCENARIO: &str = "SOKSAK_STALL_SCENARIO";
+    /// The environment variable that names the configuration folder of the scenario.
+    const CONFIG: &str = "SOKSAK_STALL_CONFIG";
+    /// The time after which a scenario that still waits for a record ends with an error.
+    const DEADLINE: Duration = Duration::from_secs(30);
+    /// The fault point of the sample of a stall, which names the FIFO that holds the sample (src/stall_fault.rs).
+    #[cfg(feature = "diagnostics")]
+    const FAULT_STALL_SAMPLE: &str = "SOKSAK_FAULT_STALL_SAMPLE";
+
+    unsafe extern "C" {
+        fn sp_stall_counts(sent: *mut u64, sent_in_wait: *mut u64, answered: *mut u64);
+    }
+
+    /// The number of heartbeats that sent their block to the main thread since the start of the process.
+    fn heartbeats_sent() -> u64 {
+        let (mut sent, mut sent_in_wait, mut answered) = (0u64, 0u64, 0u64);
+        unsafe { sp_stall_counts(&mut sent, &mut sent_in_wait, &mut answered) };
+        sent
+    }
+
+    extern "C" fn never_fires(_timer: CFRunLoopTimerRef, _info: *mut c_void) {}
+
+    /// Runs the main run loop of the calling thread, which must be the main thread, for `duration`. The run loop waits for an
+    /// event while it has none, and wakes when the time ends. A run loop whose mode has no source or timer returns at once
+    /// instead of waiting, so a timer that fires after a day keeps the default mode.
+    fn pump(duration: Duration) -> Result<(), String> {
+        static PREPARED: Once = Once::new();
+        PREPARED.call_once(|| {
+            let timer = CFRunLoopTimer::new(
+                CFDate::now().abs_time() + 86_400.0,
+                0.0,
+                0,
+                0,
+                never_fires,
+                std::ptr::null_mut(),
+            );
+            CFRunLoop::get_main().add_timer(&timer, unsafe { kCFRunLoopDefaultMode });
+        });
+        match CFRunLoop::run_in_mode(unsafe { kCFRunLoopDefaultMode }, duration, false) {
+            CFRunLoopRunResult::TimedOut => Ok(()),
+            other => Err(format!(
+                "the run loop ended with {other:?} before its time of {duration:?}"
+            )),
         }
     }
-    assert_eq!(
-        records.fields(3)["error"],
-        "a sample of the threads is still running"
-    );
-    assert!(
-        records.fields(5).get("error").is_none(),
-        "{}",
-        records.fields(5)
-    );
-}
 
-// contract: host.stall.waiting-run-loop-takes-no-heartbeat
-#[test]
-fn a_run_loop_that_waits_takes_no_heartbeat() {
-    let time = SteppedTime::new();
-    let run_loop = FakeRunLoop::new(time.clock());
-    let records = Records::new();
-    let folder = folder::Folder::new();
-    let stop = start_stall_watch(StallWatchOptions {
-        heartbeat: run_loop.heartbeat(),
-        await_awake: run_loop.await_awake(&time),
-        schedule: foreground(),
-        sample: Arc::new(|_path| Ok(())),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: None,
-    });
+    /// The names of the records that the watch stored, and a notice of each record.
+    struct Names {
+        stored: Mutex<Vec<String>>,
+        changed: Condvar,
+    }
 
-    // The run loop waits from the start of the watch, and the watch parks in that wait before it sends anything.
-    time.require_park("awake");
-    assert_eq!(run_loop.sent(), 0, "heartbeats to a run loop that waits");
-
-    // It wakes and the beats start.
-    run_loop.wake(false);
-    time.require_park("beat");
-    time.beats(3);
-    assert_eq!(run_loop.sent(), 4, "the first heartbeat and three beats");
-
-    // It waits again: the beat after that parks the watch in the wait, so a time much longer than a beat sends nothing and
-    // stores nothing.
-    run_loop.wait();
-    time.beat(Duration::ZERO, "awake");
-    let sent = run_loop.sent();
-    time.advance(Duration::from_secs(10));
-    assert_eq!(run_loop.sent(), sent, "heartbeats to a run loop that waits");
-
-    // The wake ends the block, and the 10 s of the wait are no lateness.
-    run_loop.wake(false);
-    time.require_park("beat");
-    time.beats(4);
-    assert_eq!(run_loop.sent(), sent + 4, "the heartbeats after the wake");
-    records.require(&[]);
-
-    // A run loop that wakes and does not turn is a stall, measured from its wake.
-    run_loop.wait();
-    time.beat(Duration::ZERO, "awake");
-    run_loop.wake(true);
-    time.require_park("beat");
-    time.beats(4);
-    records.require_beats(&["host.stall"]);
-    records.wait_for(&["host.stall", "host.stall.sampled"]);
-    assert_eq!(records.fields(0)["late_ms"], 1000, "late_ms from the wake");
-    assert_eq!(records.fields(0)["watch_late_ms"], 0);
-    stop();
-    run_loop.wake(false);
-}
-
-// contract: host.stall.ends-when-the-run-loop-waits
-#[test]
-fn a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends() {
-    let time = SteppedTime::new();
-    let run_loop = FakeRunLoop::new(time.clock());
-    let records = Records::new();
-    let folder = folder::Folder::new();
-    let (release, released) = mpsc::channel::<()>();
-    let released = Mutex::new(released);
-    let stop = start_stall_watch(StallWatchOptions {
-        heartbeat: run_loop.heartbeat(),
-        await_awake: run_loop.await_awake(&time),
-        schedule: foreground(),
-        sample: Arc::new(move |_path| released.lock().unwrap().recv().map_err(|e| e.to_string())),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: None,
-    });
-    time.require_park("awake");
-    run_loop.wake(true);
-    time.require_park("beat");
-    time.beats(4);
-    records.require(&["host.stall"]);
-
-    // The main thread returns and its run loop waits before the next beat: the watch stores the end and parks in that wait,
-    // while the sample goes on apart from it.
-    run_loop.wait();
-    time.beat(Duration::ZERO, "awake");
-    records.require(&["host.stall", "host.stall.resumed"]);
-    release.send(()).unwrap();
-    records.wait_for(&["host.stall", "host.stall.resumed", "host.stall.sampled"]);
-    assert_eq!(records.fields(1)["stalled_ms"], 1000);
-    stop();
-    run_loop.wake(false);
-}
-
-// contract: host.stall.stop-waits-for-the-sample
-#[test]
-fn stopping_the_watch_waits_for_the_running_sample() {
-    // The main thread never answers, so the fourth beat of the stepped clock is a stall that starts a sample. The sample
-    // lasts until the test ends it, as the sample of the system lasts for a second, and the stop of the watch comes while it
-    // runs.
-    let time = SteppedTime::new();
-    let records = Records::new();
-    let folder = folder::Folder::new();
-    let (started, starts) = mpsc::channel::<()>();
-    let started = Mutex::new(started);
-    let (release, released) = mpsc::channel::<()>();
-    let released = Mutex::new(released);
-    let samples = Arc::new(AtomicUsize::new(0));
-    let ended = Arc::new(AtomicBool::new(false));
-    let counted = Arc::clone(&samples);
-    let finished = Arc::clone(&ended);
-    let (waits, waiting) = mpsc::channel::<()>();
-    let stop = start_stall_watch(StallWatchOptions {
-        heartbeat: {
-            let clock = time.clock();
-            Box::new(move || Ok((clock(), Duration::ZERO)))
-        },
-        await_awake: never_waits(),
-        schedule: foreground(),
-        sample: Arc::new(move |_path| {
-            counted.fetch_add(1, Ordering::SeqCst);
-            started
-                .lock()
-                .unwrap()
-                .send(())
-                .map_err(|e| e.to_string())?;
-            released.lock().unwrap().recv().map_err(|e| e.to_string())?;
-            finished.store(true, Ordering::SeqCst);
-            Ok(())
-        }),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: Some(Box::new(move || waits.send(()).unwrap())),
-    });
-    time.require_park("beat");
-    time.beats(4);
-    starts.recv().expect("no sample of the stall started");
-    // The sample ends only after the stop began to wait for it, so a stop that returns before that event returned while the
-    // sample ran, and one that neither waits nor returns stops at the limit of the runner.
-    let (events, event) = mpsc::channel::<Option<bool>>();
-    let returned = events.clone();
-    let stopped = Arc::clone(&ended);
-    std::thread::spawn(move || {
-        stop();
-        returned.send(Some(stopped.load(Ordering::SeqCst))).unwrap();
-    });
-    std::thread::spawn(move || {
-        if waiting.recv().is_ok() {
-            events.send(None).unwrap();
+    impl Names {
+        fn counted(stored: &[String], name: &str) -> usize {
+            stored.iter().filter(|stored| *stored == name).count()
         }
-    });
-    assert_eq!(
-        event.recv().unwrap(),
-        None,
-        "the stop of the watch returned while the sample of the threads still ran"
-    );
-    assert!(
-        event.try_recv().is_err(),
-        "the stop of the watch returned while the sample of the threads still ran"
-    );
-    release.send(()).unwrap();
-    assert_eq!(
-        event.recv().unwrap(),
-        Some(true),
-        "the stop of the watch returned while the sample of the threads still ran"
-    );
-    assert_eq!(records.names(), ["host.stall", "host.stall.sampled"]);
-    assert_eq!(samples.load(Ordering::SeqCst), 1);
+    }
+
+    type Stop = Box<dyn FnOnce() + Send>;
+
+    /// The watch of a scenario with the real platform and the real event log, and the count of the records that the watch
+    /// stored, which the scenario waits for.
+    struct Run {
+        log: Arc<EventLog>,
+        stop: Option<Stop>,
+        names: Arc<Names>,
+        deadline: Instant,
+    }
+
+    impl Run {
+        /// Starts the event log of the configuration folder with every level stored and the watch of the main thread. A None
+        /// heartbeat is the heartbeat of the platform; `stop_waits` is the StopWaits of the watch.
+        fn start(
+            config: &Path,
+            heartbeat: Option<Heartbeat>,
+            stop_waits: Option<StopWaits>,
+        ) -> Result<Run, String> {
+            let system = platform::current()?;
+            let log = records::start_writer(config);
+            let names = Arc::new(Names {
+                stored: Mutex::new(Vec::new()),
+                changed: Condvar::new(),
+            });
+            let heartbeat = heartbeat.unwrap_or_else(|| {
+                Box::new(move || {
+                    let (now, answered) = system.stall_heartbeat()?;
+                    Ok((Duration::from_nanos(now), Duration::from_nanos(answered)))
+                })
+            });
+            let emitted = Arc::clone(&names);
+            let stop = start_stall_watch(StallWatchOptions {
+                heartbeat,
+                await_awake: Box::new(move || system.stall_await_awake()),
+                schedule: Box::new(move || system.stall_schedule()),
+                sample: Arc::new(move |path| system.sample_threads(path)),
+                folder: config.join("logs"),
+                emit_host: Arc::new(move |level, name, fields| {
+                    emit_host(level, name, fields);
+                    emitted.stored.lock().unwrap().push(name.to_string());
+                    emitted.changed.notify_all();
+                }),
+                stop_waits,
+            });
+            Ok(Run {
+                log,
+                stop: Some(Box::new(stop)),
+                names,
+                deadline: Instant::now() + DEADLINE,
+            })
+        }
+
+        /// The names of the records that the watch stored, in order.
+        fn joined(&self) -> String {
+            self.names.stored.lock().unwrap().join(",")
+        }
+
+        /// Holds the main thread, so that it runs no run loop, until the watch stored `count` records of `name`.
+        fn hold_until(&self, name: &str, count: usize) -> Result<(), String> {
+            let mut stored = self.names.stored.lock().unwrap();
+            while Names::counted(&stored, name) < count {
+                let left = self
+                    .deadline
+                    .checked_duration_since(Instant::now())
+                    .ok_or_else(|| {
+                        format!(
+                            "the watch stored {:?}, want {count} of {name}",
+                            stored.join(",")
+                        )
+                    })?;
+                stored = self.names.changed.wait_timeout(stored, left).unwrap().0;
+            }
+            Ok(())
+        }
+
+        /// Runs the main run loop until the watch stored `count` records of `name`.
+        fn pump_until(&self, name: &str, count: usize) -> Result<(), String> {
+            while Names::counted(&self.names.stored.lock().unwrap(), name) < count {
+                if Instant::now() >= self.deadline {
+                    return Err(format!(
+                        "the watch stored {:?}, want {count} of {name}",
+                        self.joined()
+                    ));
+                }
+                pump(Duration::from_millis(100))?;
+            }
+            Ok(())
+        }
+
+        /// Takes the stop of the watch, for a scenario that stops it on a thread of its own.
+        #[cfg(feature = "diagnostics")]
+        fn take_stop(&mut self) -> Result<Stop, String> {
+            self.stop
+                .take()
+                .ok_or_else(|| "the watch is already stopped".to_string())
+        }
+
+        /// Stops the watch, which waits for its running sample, and ends the event log, which stores what the watch stored.
+        fn finish(mut self) -> Result<(), String> {
+            if let Some(stop) = self.stop.take() {
+                stop();
+            }
+            use_host_event_log(None);
+            self.log.flush()?;
+            self.log.close();
+            Ok(())
+        }
+    }
+
+    /// Runs the main run loop and holds it from a time on: the watch records the stall and its sample, and when the main
+    /// thread runs the run loop again, the end of the stall.
+    fn blocked(config: &Path) -> Result<(), String> {
+        let run = Run::start(config, None, None)?;
+        // The main thread answers each heartbeat while it runs its run loop, and a turn of 600 ms is no stall.
+        pump(Duration::from_millis(600))?;
+        if !run.joined().is_empty() {
+            return Err(format!(
+                "the watch stored {:?} for a main thread that ran its run loop",
+                run.joined()
+            ));
+        }
+        // The thread is held from here: the heartbeat of the watch is late by a second and the sample of that stall ends.
+        run.hold_until("host.stall.sampled", 1)?;
+        // The main thread answers again, which is the end of the stall.
+        run.pump_until("host.stall.resumed", 1)?;
+        run.finish()
+    }
+
+    /// Starts the watch, runs a main run loop that waits for 2 s, which is longer than a stall, and then holds it from its wake.
+    /// The heartbeat of the platform counts the heartbeats that it sent through the counts of the native library.
+    fn waits(config: &Path) -> Result<(), String> {
+        let system = platform::current()?;
+        // The count of the heartbeats that read a wait of the run loop and the count of sent heartbeats at the first of them.
+        let reads = Arc::new(Mutex::new((0u64, 0u64)));
+        let counted = Arc::clone(&reads);
+        let heartbeat: Heartbeat = Box::new(move || {
+            let before = heartbeats_sent();
+            let (now, answered) = system.stall_heartbeat()?;
+            let after = heartbeats_sent();
+            if after == before {
+                // A heartbeat that sent nothing read a wait of the run loop.
+                let mut reads = counted.lock().unwrap();
+                if reads.0 == 0 {
+                    reads.1 = after;
+                }
+                reads.0 += 1;
+            }
+            Ok((Duration::from_nanos(now), Duration::from_nanos(answered)))
+        });
+        let run = Run::start(config, Some(heartbeat), None)?;
+        // The run loop waits for 2 s: the watch reads the wait with its heartbeat, sends nothing to the waiting run loop, and
+        // stores nothing for the 2 s.
+        pump(Duration::from_secs(2))?;
+        let sent = heartbeats_sent();
+        let (read, at_read) = *reads.lock().unwrap();
+        if read == 0 {
+            return Err("no heartbeat of the watch read the wait of the run loop".to_string());
+        }
+        if sent != at_read {
+            return Err(format!(
+                "{} heartbeats were sent to a run loop that waits",
+                sent - at_read
+            ));
+        }
+        // The wake ends the block, and the 2 s of the wait are no lateness.
+        pump(Duration::from_millis(600))?;
+        if !run.joined().is_empty() {
+            return Err(format!(
+                "the watch stored {:?} for a run loop that waited",
+                run.joined()
+            ));
+        }
+        // A run loop that wakes and does not turn is a stall, measured from its wake.
+        run.hold_until("host.stall.sampled", 1)?;
+        run.finish()
+    }
+
+    /// Opens the FIFO of the fault point for writing and closes it, which ends the wait of the sample that the FIFO holds.
+    #[cfg(feature = "diagnostics")]
+    fn release_samples(fifo: &Path) -> Result<(), String> {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(fifo)
+            .map(drop)
+            .map_err(|error| format!("{}: {error}", fifo.display()))
+    }
+
+    /// The FIFO that the parent made and named in the fault point of this child.
+    #[cfg(feature = "diagnostics")]
+    fn held_samples() -> Result<PathBuf, String> {
+        std::env::var_os(FAULT_STALL_SAMPLE)
+            .map(PathBuf::from)
+            .ok_or_else(|| format!("the scenario has no FIFO in {FAULT_STALL_SAMPLE}"))
+    }
+
+    /// Holds the sample of the first stall while the main thread has two stalls with an end each: the watch keeps sending
+    /// heartbeats, so the second stall is found and reports the sample that runs.
+    #[cfg(feature = "diagnostics")]
+    fn sample_keeps_the_watch(config: &Path) -> Result<(), String> {
+        let fifo = held_samples()?;
+        let run = Run::start(config, None, None)?;
+        pump(Duration::from_millis(600))?;
+        // The thread is held until the watch stores the stall, and answers again, which ends it.
+        run.hold_until("host.stall", 1)?;
+        run.pump_until("host.stall.resumed", 1)?;
+        // The sample of the first stall still runs when the second stall is found.
+        run.hold_until("host.stall.sampled", 1)?;
+        run.pump_until("host.stall.resumed", 2)?;
+        release_samples(&fifo)?;
+        // The run loop turns while the sample ends, so the wait for its record starts no later stall.
+        run.pump_until("host.stall.sampled", 2)?;
+        run.finish()
+    }
+
+    /// Holds the sample of a stall while the main thread ends the stall and its run loop waits.
+    #[cfg(feature = "diagnostics")]
+    fn ends_in_a_wait(config: &Path) -> Result<(), String> {
+        let fifo = held_samples()?;
+        let run = Run::start(config, None, None)?;
+        pump(Duration::from_millis(600))?;
+        run.hold_until("host.stall", 1)?;
+        // The main thread returns and its run loop waits: the watch stores the end and parks in that wait, while the sample
+        // goes on apart from it.
+        run.pump_until("host.stall.resumed", 1)?;
+        if run.joined() != "host.stall,host.stall.resumed" {
+            return Err(format!(
+                "the watch stored {:?} before the sample ended",
+                run.joined()
+            ));
+        }
+        release_samples(&fifo)?;
+        // The run loop turns while the sample ends, so the wait for its record starts no later stall.
+        run.pump_until("host.stall.sampled", 1)?;
+        run.finish()
+    }
+
+    /// Stops the watch while the sample of a stall runs: the stop begins to wait for the sample, returns only after the sample
+    /// ended and stored its record, and the watch has run one sample.
+    #[cfg(feature = "diagnostics")]
+    fn stop_waits(config: &Path) -> Result<(), String> {
+        enum Event {
+            Waiting,
+            Returned,
+        }
+        let fifo = held_samples()?;
+        let (events, event) = std::sync::mpsc::channel::<Event>();
+        let waiting = events.clone();
+        let mut run = Run::start(
+            config,
+            None,
+            Some(Box::new(move || {
+                waiting
+                    .send(Event::Waiting)
+                    .expect("the scenario ended before the stop began to wait")
+            })),
+        )?;
+        pump(Duration::from_millis(600))?;
+        // The main thread is held until the watch stores the stall, whose sample lasts until the FIFO is released.
+        run.hold_until("host.stall", 1)?;
+        let stop = run.take_stop()?;
+        std::thread::spawn(move || {
+            stop();
+            events
+                .send(Event::Returned)
+                .expect("the scenario ended before the stop returned");
+        });
+        // The sample ends only after the stop began to wait for it, so a stop that returns before that event returned while
+        // the sample ran, and one that neither waits nor returns ends at the limit of the scenario.
+        let still_ran = "the stop of the watch returned while the sample of the threads still ran";
+        match event.recv_timeout(DEADLINE) {
+            Ok(Event::Waiting) => {}
+            Ok(Event::Returned) => return Err(still_ran.to_string()),
+            Err(_) => {
+                return Err(
+                    "the stop of the watch did not begin to wait for the sample".to_string()
+                );
+            }
+        }
+        if event.try_recv().is_ok() {
+            return Err(still_ran.to_string());
+        }
+        release_samples(&fifo)?;
+        match event.recv_timeout(DEADLINE) {
+            Ok(Event::Returned) => {}
+            Ok(Event::Waiting) | Err(_) => {
+                return Err(
+                    "the stop of the watch did not return after the sample ended".to_string(),
+                );
+            }
+        }
+        if run.joined() != "host.stall,host.stall.sampled" {
+            return Err(format!(
+                "the stop returned with the events {:?}, want the stall and its sample",
+                run.joined()
+            ));
+        }
+        run.finish()
+    }
+
+    /// Runs the scenario of a child process on the main thread.
+    fn run_scenario(name: &str) -> Result<(), String> {
+        let config = std::env::var_os(CONFIG).map(PathBuf::from).ok_or_else(|| {
+            format!("the stall scenario {name:?} has no configuration folder in {CONFIG}")
+        })?;
+        match name {
+            "blocked" => blocked(&config),
+            "waits" => waits(&config),
+            #[cfg(feature = "diagnostics")]
+            "sample-keeps-the-watch" => sample_keeps_the_watch(&config),
+            #[cfg(feature = "diagnostics")]
+            "ends-in-a-wait" => ends_in_a_wait(&config),
+            #[cfg(feature = "diagnostics")]
+            "stop-waits" => stop_waits(&config),
+            _ => Err(format!("unknown stall scenario {name:?}")),
+        }
+    }
+
+    /// A record of the watch in the event log.
+    struct Record {
+        name: String,
+        level: String,
+        fields: Value,
+    }
+
+    impl Record {
+        /// A field of the record, which the event log stores as a number.
+        fn milliseconds(&self, key: &str) -> Result<u64, String> {
+            self.fields[key].as_u64().ok_or_else(|| {
+                format!(
+                    "{} field {key} is {}, want a number",
+                    self.name, self.fields[key]
+                )
+            })
+        }
+
+        /// Requires the late_ms of a stall found by a heartbeat that is one second or more late, at most one beat and the
+        /// scheduling of a loaded system after the threshold. The exact values are the cases of the table test of the step.
+        fn require_late(&self) -> Result<(), String> {
+            let late = self.milliseconds("late_ms")?;
+            if !(1000..2000).contains(&late) {
+                return Err(format!(
+                    "late_ms {late} of a main thread that did not turn, want 1000 up to 2000"
+                ));
+            }
+            Ok(())
+        }
+
+        /// Requires the watch_late_ms of a watch that wakes on time, which is less than a beat.
+        fn require_watch_on_time(&self) -> Result<(), String> {
+            let late = self.milliseconds("watch_late_ms")?;
+            if late >= 250 {
+                return Err(format!(
+                    "watch_late_ms {late}, want a watch that wakes on time"
+                ));
+            }
+            Ok(())
+        }
+
+        /// Requires the record of a sample that ended without an error and wrote its file.
+        fn require_sample(&self) -> Result<(), String> {
+            let path = self.fields["path"].as_str().unwrap_or_default();
+            if !path.contains("stall-host-") {
+                return Err(format!(
+                    "the sample path is {path:?}, want a stall-host file"
+                ));
+            }
+            if let Some(failure) = self.fields.get("error") {
+                return Err(format!("the sample reports {failure}"));
+            }
+            std::fs::metadata(path).map_err(|error| format!("the sample file: {error}"))?;
+            Ok(())
+        }
+    }
+
+    /// Requires the names of the records that the scenario stored.
+    fn require_names(records: &[Record], want: &str, meaning: &str) -> Result<(), String> {
+        let got = records
+            .iter()
+            .map(|record| record.name.as_str())
+            .collect::<Vec<_>>()
+            .join(",");
+        if got != want {
+            return Err(format!("events {got:?}, want {meaning}"));
+        }
+        Ok(())
+    }
+
+    /// Requires the level of each record: the stall and its dump are warnings, which the policy stores through the gate
+    /// exception of passes_every_gate, and the end of the stall is info.
+    fn require_levels(records: &[Record]) -> Result<(), String> {
+        for record in records {
+            let want = if record.name == "host.stall.resumed" {
+                "info"
+            } else {
+                "warn"
+            };
+            if record.level != want {
+                return Err(format!("{} at {}, want {want}", record.name, record.level));
+            }
+        }
+        Ok(())
+    }
+
+    /// Makes the FIFO that only the owner reads and writes, for the fault point that holds a sample.
+    #[cfg(feature = "diagnostics")]
+    fn make_fifo(path: &Path) -> Result<(), String> {
+        use std::os::unix::ffi::OsStrExt;
+        let text = std::ffi::CString::new(path.as_os_str().as_bytes())
+            .map_err(|error| format!("{}: {error}", path.display()))?;
+        if unsafe { libc::mkfifo(text.as_ptr(), 0o600) } != 0 {
+            return Err(format!(
+                "mkfifo {}: {}",
+                path.display(),
+                std::io::Error::last_os_error()
+            ));
+        }
+        Ok(())
+    }
+
+    /// Runs the scenario in a child process of this test binary with the configuration folder `config`, which the caller keeps
+    /// until it has judged the files of the records, and returns the records of the watch in the event log of that folder. `held`
+    /// makes a FIFO in the folder and names it in the fault point of the child, which holds the sample of each stall until the
+    /// scenario closes the FIFO.
+    fn records_of(
+        config: &folder::Folder,
+        scenario: &str,
+        held: bool,
+    ) -> Result<Vec<Record>, String> {
+        let mut command = Command::new(std::env::current_exe().map_err(|error| error.to_string())?);
+        command.env(SCENARIO, scenario).env(CONFIG, config.path());
+        if held {
+            #[cfg(feature = "diagnostics")]
+            {
+                let fifo = config.path().join("sample.fifo");
+                make_fifo(&fifo)?;
+                command.env(FAULT_STALL_SAMPLE, &fifo);
+            }
+            #[cfg(not(feature = "diagnostics"))]
+            return Err(format!(
+                "the scenario {scenario:?} needs the diagnostics feature"
+            ));
+        }
+        let output = command
+            .output()
+            .map_err(|error| format!("start the child {scenario}: {error}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "child {scenario} ended with {:?}, output {:?}, error output {:?}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        let events = records::read_events(&records::event_log_path(config.path()));
+        Ok(events
+            .into_iter()
+            .filter(|event| {
+                event["event"]
+                    .as_str()
+                    .is_some_and(|name| name.starts_with("host.stall"))
+            })
+            .map(|event| Record {
+                name: event["event"].as_str().unwrap_or_default().to_string(),
+                level: event["level"].as_str().unwrap_or_default().to_string(),
+                fields: event["fields"].clone(),
+            })
+            .collect())
+    }
+
+    // contract: host.stall.recorded-without-a-check, host.stall.watch-late-separates-blocked-main, host.stall.carries-priority, host.stall.resumed-carries-cpu
+    fn a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end() -> Result<(), String> {
+        let config = folder::Folder::new();
+        let records = records_of(&config, "blocked", false)?;
+        require_names(
+            &records,
+            "host.stall,host.stall.sampled,host.stall.resumed",
+            "the stall, its sample and its end",
+        )?;
+        records[0].require_late()?;
+        // The watch wakes on every beat while the main thread is blocked, so its own wake is not late by a beat.
+        records[0].require_watch_on_time()?;
+        // The real platform reads the schedule of the process: the stall carries its priority and the end its CPU time.
+        if !records[0].fields["priority"].is_number() {
+            return Err(format!(
+                "the stall carries no priority: {}",
+                records[0].fields
+            ));
+        }
+        records[2].milliseconds("cpu_ms")?;
+        records[1].require_sample()?;
+        let (stalled, late) = (
+            records[2].milliseconds("stalled_ms")?,
+            records[0].milliseconds("late_ms")?,
+        );
+        if stalled < late {
+            return Err(format!(
+                "stalled_ms {stalled} is shorter than late_ms {late} of the same stall"
+            ));
+        }
+        require_levels(&records)
+    }
+
+    // contract: host.stall.waiting-run-loop-takes-no-heartbeat
+    fn a_run_loop_that_waits_takes_no_heartbeat() -> Result<(), String> {
+        let config = folder::Folder::new();
+        let records = records_of(&config, "waits", false)?;
+        require_names(
+            &records,
+            "host.stall,host.stall.sampled",
+            "the stall of the wake and its sample only",
+        )?;
+        records[0].require_late()?;
+        records[0].require_watch_on_time()?;
+        records[1].require_sample()
+    }
+
+    // contract: host.stall.sample-keeps-the-watch-running
+    #[cfg(feature = "diagnostics")]
+    fn a_sample_of_the_threads_does_not_stop_the_watch() -> Result<(), String> {
+        let config = folder::Folder::new();
+        let records = records_of(&config, "sample-keeps-the-watch", true)?;
+        let want = "host.stall,host.stall.resumed,host.stall,host.stall.sampled,host.stall.resumed,host.stall.sampled";
+        require_names(&records, want, want)?;
+        for record in &records {
+            if record.name == "host.stall" {
+                record.require_late()?;
+            }
+        }
+        if records[3].fields["error"] != "a sample of the threads is still running" {
+            return Err(format!("the second sample reports {}", records[3].fields));
+        }
+        records[5].require_sample()?;
+        require_levels(&records)
+    }
+
+    // contract: host.stall.ends-when-the-run-loop-waits
+    #[cfg(feature = "diagnostics")]
+    fn a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends() -> Result<(), String> {
+        let config = folder::Folder::new();
+        let records = records_of(&config, "ends-in-a-wait", true)?;
+        require_names(
+            &records,
+            "host.stall,host.stall.resumed,host.stall.sampled",
+            "the stall, its end and its sample",
+        )?;
+        records[0].require_late()?;
+        let stalled = records[1].milliseconds("stalled_ms")?;
+        if !(1000..3000).contains(&stalled) {
+            return Err(format!("stalled_ms {stalled}, want 1000 up to 3000"));
+        }
+        records[2].require_sample()?;
+        require_levels(&records)
+    }
+
+    // contract: host.stall.stop-waits-for-the-sample
+    #[cfg(feature = "diagnostics")]
+    fn stopping_the_watch_waits_for_the_running_sample() -> Result<(), String> {
+        let config = folder::Folder::new();
+        let records = records_of(&config, "stop-waits", true)?;
+        require_names(
+            &records,
+            "host.stall,host.stall.sampled",
+            "the stall and its sample",
+        )?;
+        records[0].require_late()?;
+        records[1].require_sample()?;
+        require_levels(&records)
+    }
+
+    const TESTS: &[MainTest] = &[
+        (
+            "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end",
+            a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end,
+        ),
+        (
+            "a_run_loop_that_waits_takes_no_heartbeat",
+            a_run_loop_that_waits_takes_no_heartbeat,
+        ),
+        #[cfg(feature = "diagnostics")]
+        (
+            "a_sample_of_the_threads_does_not_stop_the_watch",
+            a_sample_of_the_threads_does_not_stop_the_watch,
+        ),
+        #[cfg(feature = "diagnostics")]
+        (
+            "a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends",
+            a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends,
+        ),
+        #[cfg(feature = "diagnostics")]
+        (
+            "stopping_the_watch_waits_for_the_running_sample",
+            stopping_the_watch_waits_for_the_running_sample,
+        ),
+    ];
+
+    /// Runs the scenario that the environment names, as a child process does, or the tests of this target.
+    pub fn main() {
+        if let Some(name) = std::env::var_os(SCENARIO) {
+            if let Err(error) = run_scenario(&name.to_string_lossy()) {
+                println!("{error}");
+                std::process::exit(2);
+            }
+            std::process::exit(0);
+        }
+        main_thread::run(TESTS);
+    }
 }
 
-/// Runs the watch through one stall of a held main thread and its end with `schedule`, and returns the fields of
-/// `host.stall` and of `host.stall.resumed`.
-fn stall_and_resume(schedule: Schedule) -> (serde_json::Value, serde_json::Value) {
-    let time = SteppedTime::new();
-    let run_loop = FakeRunLoop::new(time.clock());
-    run_loop.wake(false);
-    let records = Records::new();
-    let folder = folder::Folder::new();
-    let stop = start_stall_watch(StallWatchOptions {
-        heartbeat: run_loop.heartbeat(),
-        await_awake: run_loop.await_awake(&time),
-        schedule,
-        sample: Arc::new(|_path| Ok(())),
-        folder: folder.path().to_path_buf(),
-        emit_host: records.emit(),
-        clock: Some(time.clock()),
-        wait: Some(time.wait()),
-        stop_waits: None,
-    });
-    time.require_park("beat");
-    time.beats(2);
-    run_loop.wake(true);
-    time.beats(4);
-    records.wait_for(&["host.stall", "host.stall.sampled"]);
-    run_loop.wake(false);
-    time.beats(1);
-    records.require(&["host.stall", "host.stall.sampled", "host.stall.resumed"]);
-    stop();
-    (records.fields(0), records.fields(2))
-}
-
-/// A stall of a process that the system runs in the background, which used 30 ms of CPU time while it lasted.
-// contract: host.stall.carries-priority, host.stall.resumed-carries-cpu
-#[test]
-fn a_stall_carries_the_priority_and_its_end_the_cpu_time_of_the_stall() {
-    let readings = Arc::new(Mutex::new(vec![100_000_000u64, 130_000_000]));
-    let (stall, resumed) = stall_and_resume(Box::new(move || {
-        let mut readings = readings.lock().unwrap();
-        Ok((4, readings.remove(0)))
-    }));
-    assert_eq!(stall["priority"], 4);
-    assert_eq!(resumed["cpu_ms"], 30);
-}
-
-// contract: host.stall.carries-priority
-#[test]
-fn a_stall_whose_schedule_cannot_be_read_leaves_the_fields_out() {
-    let (stall, resumed) =
-        stall_and_resume(Box::new(|| Err("process schedule: errno 3".to_string())));
-    assert!(stall.get("priority").is_none(), "{stall}");
-    assert!(resumed.get("cpu_ms").is_none(), "{resumed}");
+fn main() {
+    #[cfg(target_os = "macos")]
+    system::main();
 }

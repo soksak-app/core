@@ -1,0 +1,16 @@
+{
+  "name": "round-trip-page-params",
+  "description": "A connection sends several requests and each reply carries the id of its request. A request for the page reaches the page without the window member of its params.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 7, "method": "windows.list"}},
+    {"reply": {"jsonrpc": "2.0", "id": 7, "result": [{"window": "main", "title": "", "project": null, "key": false, "ready": false}]}},
+    {"send": {"jsonrpc": "2.0", "id": 8, "method": "status.get", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.get", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 8, "result": null}}
+  ]
+}

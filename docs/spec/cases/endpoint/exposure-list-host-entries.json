@@ -1,0 +1,15 @@
+{
+  "name": "exposure-list-host-entries",
+  "description": "exposure.list appends the host entries to the list of the page, and the list keeps the members status, commands and element.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "variables": {"list": {"type": "object", "keys": ["status", "commands", "element"], "example": {"status": [], "commands": [], "element": []}}},
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "exposure.list", "params": {"window": "main"}}},
+    {"page": {"call": {"name": "exposure.list", "payload": {}}}},
+    {"page": {"reply": {"result": {"status": [{"name": "core.layout", "registered": true}], "commands": [], "element": []}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": "$list"}}
+  ]
+}

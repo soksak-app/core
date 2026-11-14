@@ -48,7 +48,7 @@ func TestDocumentRegionCountFallsBackWhenRemoved(t *testing.T) {
 // contract: diagnostics.objects.counts-host-objects
 func TestImageRegionCountFallsBackWhenRemoved(t *testing.T) {
 	images := host.NewImages()
-	owner := &host.ImageOwner{SidecarName: "image", SidecarOwner: support.NewFakeOwner("/root")}
+	owner := &host.ImageOwner{SidecarName: "image", SidecarOwner: host.NewSurfaces(nil, nil)}
 	one := host.ImageKey{Surface: "tab-1", Name: "picture"}
 	two := host.ImageKey{Surface: "tab-1", Name: "thumb"}
 	if got := images.Count(); got != 0 {
@@ -84,12 +84,12 @@ func TestSidecarSessionAndPendingReplyCountsFollowTheOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	owner := support.NewFakeOwner(directory)
-	other := support.NewFakeOwner(directory)
+	owner := support.NewSidecarRecorder(t, directory)
+	other := support.NewSidecarRecorder(t, directory)
 	if got := len(sidecars.Sessions(owner)); got != 0 {
 		t.Fatalf("no session counts %d for the owner, want 0", got)
 	}
-	if err := sidecars.SendWithCids(owner, support.EchoSidecar, "s1", json.RawMessage(`{}`), []string{"c1"}); err != nil {
+	if err := owner.SendWithCids(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`), []string{"c1"}); err != nil {
 		t.Fatal(err)
 	}
 	if got := sidecars.Sessions(owner); len(got) != 1 || got[0] != (host.SidecarSession{Sidecar: support.EchoSidecar, Surface: "s1"}) {
@@ -122,9 +122,9 @@ func TestSidecarSessionsListOnlyTheSurfacesThatSent(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	owner := support.NewFakeOwner(directory)
+	owner := support.NewSidecarRecorder(t, directory)
 	for _, surface := range []string{"terminal-b", "terminal-a"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, surface, json.RawMessage(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 	}

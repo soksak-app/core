@@ -148,30 +148,27 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstOwner := &support.HarnessOwner{Root: "/first", Seen: make(chan SidecarMessage, 4)}
-	secondOwner := &support.HarnessOwner{Root: "/second", Seen: make(chan SidecarMessage, 4)}
+	firstOwner := support.NewSidecarRecorder(t, "/first")
+	secondOwner := support.NewSidecarRecorder(t, "/second")
 
-	awaitInitial := func(owner *support.HarnessOwner) {
-		<-owner.Seen
+	awaitInitial := func(owner *support.SidecarRecorder) {
+		owner.Next(t)
 	}
 	// The host connects the cut socket again immediately and sends the connection event. A send after
 	// it receives that event goes to the connection made again, so endpoint reuse and reconnection are verified.
-	awaitConnection := func(owner *support.HarnessOwner) {
-		select {
-		case event := <-owner.Seen:
-			if string(event.Body) != `{"connected":true,"event":"connection"}` {
-				t.Fatalf("event after the connection loss = %s, want the connection event", event.Body)
-			}
+	awaitConnection := func(owner *support.SidecarRecorder) {
+		if event := owner.Next(t); string(event.Body) != `{"connected":true,"event":"connection"}` {
+			t.Fatalf("event after the connection loss = %s, want the connection event", event.Body)
 		}
 	}
 	if sequential {
 		// The second host makes its first connection after the first host was cut and the service received the connection made again.
-		if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := firstOwner.Send(first, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 		awaitInitial(firstOwner)
 		awaitConnection(firstOwner)
-		if err := second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := secondOwner.Send(second, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 		awaitInitial(secondOwner)
@@ -182,11 +179,11 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 		for _, send := range []func() error{
 			func() error {
 				<-start
-				return first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
+				return firstOwner.Send(first, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
 			},
 			func() error {
 				<-start
-				return second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
+				return secondOwner.Send(second, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
 			},
 		} {
 			group.Add(1)
@@ -199,25 +196,22 @@ func runHarnessReconnect(t *testing.T, sequential bool) {
 		}
 		close(start)
 		group.Wait()
-		for _, owner := range []*support.HarnessOwner{firstOwner, secondOwner} {
+		for _, owner := range []*support.SidecarRecorder{firstOwner, secondOwner} {
 			awaitInitial(owner)
 		}
-		for _, owner := range []*support.HarnessOwner{firstOwner, secondOwner} {
+		for _, owner := range []*support.SidecarRecorder{firstOwner, secondOwner} {
 			awaitConnection(owner)
 		}
 	}
-	if err := first.Send(firstOwner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
+	if err := firstOwner.Send(first, "fixture-service", "surface-1", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if err := second.Send(secondOwner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
+	if err := secondOwner.Send(second, "fixture-service", "surface-2", json.RawMessage(`{"operation":"reconnect"}`)); err != nil {
 		t.Fatal(err)
 	}
-	for _, owner := range []*support.HarnessOwner{firstOwner, secondOwner} {
-		select {
-		case event := <-owner.Seen:
-			if string(event.Body) != `{"operation":"reconnect"}` {
-				t.Fatalf("reconnect event = %s", event.Body)
-			}
+	for _, owner := range []*support.SidecarRecorder{firstOwner, secondOwner} {
+		if event := owner.Next(t); string(event.Body) != `{"operation":"reconnect"}` {
+			t.Fatalf("reconnect event = %s", event.Body)
 		}
 	}
 
@@ -301,8 +295,8 @@ func TestPersistentStopClosesOwnerThenRequestsServiceShutdown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/shutdown", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/shutdown")
+	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Stop()
@@ -381,8 +375,8 @@ func TestPersistentStopDoesNotLogItsOwnCloseAsAReadError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/stop", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/stop")
+	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Stop()
@@ -468,8 +462,8 @@ func TestPersistentStopAcceptsTheAnswerToACloseSentBeforeTheStop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/late", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/late")
+	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sidecars.Close("surface")
@@ -568,11 +562,11 @@ func TestPersistentStopAnswersADiscardedImageBeforeServiceShutdown(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/late-image", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/late-image")
+	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	<-owner.Seen
+	owner.Next(t)
 	sidecars.Close("surface")
 	sidecars.Stop()
 	got := written()
@@ -611,8 +605,8 @@ func TestPersistentTransportHarnessAuthFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/auth", Seen: make(chan SidecarMessage, 1)}
-	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	owner := support.NewSidecarRecorder(t, "/auth")
+	err = owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "authentication handshake failed") {
 		t.Fatalf("auth error = %v", err)
 	}
@@ -654,8 +648,8 @@ func TestPersistentTransportRejectsUnsupportedHelloProtocolWithoutReplacingEndpo
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/protocol", Seen: make(chan SidecarMessage, 1)}
-	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	owner := support.NewSidecarRecorder(t, "/protocol")
+	err = owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "protocol mismatch in hello response") {
 		t.Fatalf("protocol mismatch error = %v", err)
 	}
@@ -768,11 +762,11 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/replacement", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replacement")
+	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	event := <-owner.Seen
+	event := owner.Next(t)
 	if event.Surface != "surface" {
 		t.Fatalf("unexpected surface: %s", event.Surface)
 	}
@@ -813,8 +807,8 @@ func TestPersistentTransportReportsLiveButUnreachableEndpointWithoutReplacement(
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/unreachable", Seen: make(chan SidecarMessage, 1)}
-	err = sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+	owner := support.NewSidecarRecorder(t, "/unreachable")
+	err = owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || !strings.Contains(err.Error(), "connect authenticated service") {
 		t.Fatalf("connection error = %v", err)
 	}
@@ -900,8 +894,8 @@ func TestPersistentRetainSendsOnlyLayoutSurfaces(t *testing.T) {
 	if string(empty) != "[]" {
 		t.Fatalf("retained surfaces = %s, want [] when no surface is kept", empty)
 	}
-	owner := &support.HarnessOwner{Root: "/live", Seen: make(chan SidecarMessage, 4)}
-	if err := sidecars.Send(owner, "fixture-service", "sent", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/live")
+	if err := owner.Send(sidecars, "fixture-service", "sent", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	closed, err := sidecars.Retain([]host.RetainedSurface{{Surface: "listed", Plugin: "probe", Root: "/project"}})
@@ -1156,17 +1150,17 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/only")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	first := receiveSidecarMessage(t, owner.Seen)
+	first := owner.Next(t)
 	if first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
 
 	// When the connection is cut, it must be connected again without a send; the connection event is the evidence (V5-106).
-	revived := receiveSidecarMessage(t, owner.Seen)
+	revived := owner.Next(t)
 	if revived.Surface != "surface-1" {
 		t.Fatalf("the connection notice went to %q", revived.Surface)
 	}
@@ -1179,10 +1173,10 @@ func TestPersistentTransportRevivesLostConnectionWithoutSend(t *testing.T) {
 	}
 
 	// The next send passes through the connection made again.
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
-	echoed := receiveSidecarMessage(t, owner.Seen)
+	echoed := owner.Next(t)
 	if echoed.Surface != "surface-1" || string(echoed.Body) != `{"operation":"input"}` {
 		t.Fatalf("the input did not ride the revived connection: %v %s", echoed.Surface, echoed.Body)
 	}
@@ -1236,11 +1230,11 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/only")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	first := receiveSidecarMessage(t, owner.Seen)
+	first := owner.Next(t)
 	if first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
@@ -1252,7 +1246,7 @@ func TestPersistentTransportReportsFailedReviveToOwner(t *testing.T) {
 	<-serverDone
 
 	// When the restart fails, the connection loss and its reason are announced to the surface (V5-106).
-	failure := receiveSidecarMessage(t, owner.Seen)
+	failure := owner.Next(t)
 	if failure.Surface != "surface-1" {
 		t.Fatalf("the failure notice went to %q", failure.Surface)
 	}
@@ -1324,25 +1318,25 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	sender := &support.HarnessOwner{Root: "/sender", Seen: make(chan SidecarMessage, 8)}
-	other := &support.HarnessOwner{Root: "/other", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(sender, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	sender := support.NewSidecarRecorder(t, "/sender")
+	other := support.NewSidecarRecorder(t, "/other")
+	if err := sender.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if first := receiveSidecarMessage(t, sender.Seen); first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
+	if first := sender.Next(t); first.Surface != "surface-1" || string(first.Body) != `{"operation":"open"}` {
 		t.Fatalf("the first message was not the open echo: %v %s", first.Surface, first.Body)
 	}
-	if err := sidecars.Send(other, "fixture-stdio", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	if err := other.Send(sidecars, "fixture-stdio", "surface-2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if first := receiveSidecarMessage(t, other.Seen); first.Sidecar != "fixture-stdio" || first.Surface != "surface-2" {
+	if first := other.Next(t); first.Sidecar != "fixture-stdio" || first.Surface != "surface-2" {
 		t.Fatalf("the first message was not the standard input echo: %v %v %s", first.Sidecar, first.Surface, first.Body)
 	}
 
 	listener.Close()
 	close(closed)
 	<-serverDone
-	if failure := receiveSidecarMessage(t, sender.Seen); failure.Surface != "surface-1" || !isConnectionNotice(failure) {
+	if failure := sender.Next(t); failure.Surface != "surface-1" || !isConnectionNotice(failure) {
 		t.Fatalf("the failed revival was not announced to the surface that sent: %v %s", failure.Surface, failure.Body)
 	}
 
@@ -1382,12 +1376,12 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 			}
 		}
 	}()
-	if err := sidecars.Send(sender, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
+	if err := sender.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"input"}`)); err != nil {
 		t.Fatal(err)
 	}
 	announced := false
 	for range 2 {
-		if message := receiveSidecarMessage(t, sender.Seen); message.Surface == "surface-1" && isConnectionNotice(message) {
+		if message := sender.Next(t); message.Surface == "surface-1" && isConnectionNotice(message) {
 			announced = true
 		}
 	}
@@ -1395,39 +1389,15 @@ func TestPersistentConnectionNoticeReachesOnlyTheSurfacesThatSent(t *testing.T) 
 		t.Fatal("the surface that sent to the service received no connection notice")
 	}
 	for {
-		select {
-		case message := <-other.Seen:
-			if isConnectionNotice(message) {
-				t.Fatalf("a surface that never sent to %s received its connection notice: %v %v %s", "fixture-service", message.Sidecar, message.Surface, message.Body)
-			}
-			continue
-		default:
+		message, ok := other.Pending()
+		if !ok {
+			break
 		}
-		break
+		if isConnectionNotice(message) {
+			t.Fatalf("a surface that never sent to %s received its connection notice: %v %v %s", "fixture-service", message.Sidecar, message.Surface, message.Body)
+		}
 	}
 }
-
-func receiveSidecarMessage(t *testing.T, seen <-chan SidecarMessage) SidecarMessage {
-	t.Helper()
-	message := <-seen
-	return message
-}
-
-// failureOwner is a window that collects sidecar messages and failures separately.
-type failureOwner struct {
-	root     string
-	seen     chan SidecarMessage
-	failures chan host.SidecarFailure
-}
-
-func (o *failureOwner) ProjectRoot() string { return o.root }
-func (o *failureOwner) Emit(name string, data ...any) {
-	if name == "sidecar-failure" {
-		o.failures <- data[0].(host.SidecarFailure)
-	}
-}
-
-func (o *failureOwner) DeliverSidecarMessage(message SidecarMessage) { o.seen <- message }
 
 // serveOneBadLine replies to hello on one connection, receives one request line, and then writes payload. When the host closes the connection, it
 // closes closed. If the host closes before payload is fully written, the write error is the expected result.
@@ -1475,16 +1445,14 @@ func expectConnectionFailure(t *testing.T, payload []byte, reason string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	owner := &failureOwner{root: "/only", seen: make(chan SidecarMessage, 8), failures: make(chan host.SidecarFailure, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/only")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case failure := <-owner.failures:
-		if failure.Sidecar != "fixture-service" || failure.Surface != "surface-1" || !strings.HasPrefix(failure.Reason, reason) {
-			t.Fatalf("failure = %+v, want reason %q", failure, reason)
-		}
-	case message := <-owner.seen:
+	if failure := owner.Failure(t); failure.Sidecar != "fixture-service" || failure.Surface != "surface-1" || !strings.HasPrefix(failure.Reason, reason) {
+		t.Fatalf("failure = %+v, want reason %q", failure, reason)
+	}
+	if message, ok := owner.Pending(); ok {
 		t.Fatalf("the bad line was delivered as a message: %+v", message)
 	}
 	<-closed
@@ -1567,16 +1535,16 @@ func TestPersistentStartDoesNotDelayOtherSidecars(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &support.HarnessOwner{Root: "/start", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"start"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/start")
+	if err := owner.Send(sidecars, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"start"}`)); err != nil {
 		t.Fatalf("fast start: %v", err)
 	}
 	started := make(chan error, 1)
 	go func() {
-		started <- sidecars.Send(owner, "fixture-service", "service-surface", json.RawMessage(`{"operation":"open"}`))
+		started <- owner.Send(sidecars, "fixture-service", "service-surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	<-helloSeen
-	if err := sidecars.Send(owner, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"during"}`)); err != nil {
+	if err := owner.Send(sidecars, "fixture-fast", "fast-surface", json.RawMessage(`{"data":"during"}`)); err != nil {
 		t.Fatalf("fast send during the service start: %v", err)
 	}
 	close(release)
@@ -1628,10 +1596,10 @@ func TestTheStopDoesNotWaitForAStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/stop", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/stop")
 	started := make(chan error, 1)
 	go func() {
-		started <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+		started <- owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	<-helloSeen
 	stopped := make(chan struct{})
@@ -1704,10 +1672,10 @@ func TestAnUnansweredHelloEndsWithItsConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(sidecars.Stop)
-	owner := &support.HarnessOwner{Root: "/hello", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/hello")
 	sent := make(chan error, 1)
 	go func() {
-		sent <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+		sent <- owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	<-read
 	select {
@@ -1733,10 +1701,10 @@ func TestAStopEndsAStartWhoseHelloIsNotAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/hello", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/hello")
 	sent := make(chan error, 1)
 	go func() {
-		sent <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+		sent <- owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	<-read
 	// A stop that waits for the hello does not return, and the check stops at the limit of its runner.
@@ -1763,10 +1731,10 @@ func TestAStopEndsAStartWhoseServicePrintsNoEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/startup", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/startup")
 	sent := make(chan error, 1)
 	go func() {
-		sent <- sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
+		sent <- owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`))
 	}()
 	// The read ends when the service wrote its pid.
 	data, err := os.ReadFile(started)
@@ -1803,7 +1771,7 @@ func TestPersistentServiceWritesItsStandardErrorToItsLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/exit")
 	if err := support.SendOpen(sidecars, owner); err == nil {
 		t.Fatal("the service that exits started")
 	}
@@ -1831,7 +1799,7 @@ func TestPersistentStartFailsWhenTheServiceLogCannotOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/exit")
 	err = support.SendOpen(sidecars, owner)
 	if want := "sidecar fixture-service: service log: create logs directory: "; err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("service log failure = %v, want prefix %q", err, want)
@@ -1850,7 +1818,7 @@ func TestPersistentStartFailsWhenTheServiceExitsBeforeItsEndpoint(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/exit", Seen: make(chan SidecarMessage, 1)}
+	owner := support.NewSidecarRecorder(t, "/exit")
 	err = support.SendOpen(sidecars, owner)
 	if want := "sidecar fixture-service: service exited before endpoint"; err == nil || err.Error() != want {
 		t.Fatalf("exited service = %v, want %q", err, want)
@@ -1912,11 +1880,11 @@ func TestAMessageOfAPersistentServiceReachesItsOwnerWithTheIdentifiersOfItsReque
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &support.HarnessOwner{Root: "/cids", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.SendWithCids(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"input"}`), []string{"view-a.1"}); err != nil {
+	owner := support.NewSidecarRecorder(t, "/cids")
+	if err := owner.SendWithCids(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"input"}`), []string{"view-a.1"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := receiveSidecarMessage(t, owner.Seen).Cids; len(got) != 1 || got[0] != "view-a.1" {
+	if got := owner.Next(t).Cids; len(got) != 1 || got[0] != "view-a.1" {
 		t.Fatalf("the message names %v, want the identifier of its request", got)
 	}
 }
@@ -1952,11 +1920,11 @@ func TestPersistentServiceOfAnotherVersionIsReportedOutdated(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer sidecars.Stop()
-			owner := &support.HarnessOwner{Root: "/outdated", Seen: make(chan SidecarMessage, 1)}
-			if err := sidecars.Send(owner, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
+			owner := support.NewSidecarRecorder(t, "/outdated")
+			if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
 				t.Fatal(err)
 			}
-			receiveSidecarMessage(t, owner.Seen)
+			owner.Next(t)
 			got, _ := json.Marshal(sidecars.Outdated())
 			want, _ := json.Marshal(item.want)
 			if string(got) != string(want) {
@@ -2037,12 +2005,12 @@ func TestPersistentTransportWritesAnErrorLineForALostConnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/only")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen) // the open echo
-	receiveSidecarMessage(t, owner.Seen) // the connection notice of the reconnection
+	owner.Next(t) // the open echo
+	owner.Next(t) // the connection notice of the reconnection
 	sidecars.Stop()
 	listener.Close()
 	count := strings.Count(logged.String(), "error host sidecar fixture-service: connection lost; restarted (end: eof, waiting: 0)\n")
@@ -2262,11 +2230,11 @@ func TestAnOutdatedServiceIsReplaced(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	if got := sidecars.Outdated(); len(got) != 1 || got[0].Installed == nil || *got[0].Installed != "0.0.7" || got[0].Running == nil || *got[0].Running != "0.0.6" {
 		t.Fatalf("outdated before the replacement: %+v", got)
 	}
@@ -2274,7 +2242,7 @@ func TestAnOutdatedServiceIsReplaced(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The surface that sent to the sidecar receives the connection notice of the new service.
-	notice := receiveSidecarMessage(t, owner.Seen)
+	notice := owner.Next(t)
 	var event map[string]any
 	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != true {
 		t.Fatalf("the notice after the replacement is %s (%v)", notice.Body, err)
@@ -2299,11 +2267,11 @@ func TestAServiceThatIsNotOutdatedIsNotReplaced(t *testing.T) {
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
 		t.Fatalf("replace without a running service: %v", err)
 	}
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err == nil || !strings.Contains(err.Error(), "fixture-service") {
 		t.Fatalf("replace of the installed version: %v", err)
 	}
@@ -2318,11 +2286,11 @@ func TestAServiceOfAnUndeclaredSidecarIsEnded(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	if err := sidecars.Declare(nil); err != nil {
 		t.Fatal(err)
 	}
@@ -2333,7 +2301,7 @@ func TestAServiceOfAnUndeclaredSidecarIsEnded(t *testing.T) {
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
 		t.Fatal(err)
 	}
-	notice := receiveSidecarMessage(t, owner.Seen)
+	notice := owner.Next(t)
 	var event map[string]any
 	if err := json.Unmarshal(notice.Body, &event); err != nil || event["event"] != "connection" || event["connected"] != false {
 		t.Fatalf("the notice after the end is %s (%v)", notice.Body, err)
@@ -2363,11 +2331,11 @@ func TestAnOutdatedServiceIsReplacedWhenItsSessionsEnd(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	if _, err := sidecars.Retain([]host.RetainedSurface{}); err != nil {
 		t.Fatal(err)
 	}
@@ -2402,11 +2370,11 @@ func TestAnOutdatedServiceKeepsASurfaceThatALayoutHolds(t *testing.T) {
 	if _, err := sidecars.Retain(layout); err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	sidecars.Close("surface-1")
 	// The hidden section has not sent in this process, so only the layout says that its session is recoverable.
 	layout = layout[1:]
@@ -2449,11 +2417,11 @@ func TestAnOutdatedServiceWaitsForTheFirstLayoutList(t *testing.T) {
 	root := t.TempDir()
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	sidecars.Close("surface-1")
 	// The close decided before it returned, and it records each replacement that it decides.
 	if replacing := sidecars.Replacing(); len(replacing) != 0 {
@@ -2470,11 +2438,11 @@ func TestAReplacedServiceStartsAfterTheEndOfItsProcess(t *testing.T) {
 	service := serveReplaceService(t, root, "0.0.6", "0.0.7")
 	service.endsAfter = 300 * time.Millisecond
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	if err := sidecars.Replace(context.Background(), "fixture-service"); err != nil {
 		t.Fatal(err)
 	}
@@ -2526,8 +2494,8 @@ func TestTheHelloCarriesTheConfigurationDirectoryAsClient(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &support.HarnessOwner{Root: "/client", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/client")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	// The configuration directory is the host-resolved one, with symlinks resolved (docs/spec/performance-trace.md).
@@ -2583,17 +2551,15 @@ func TestAPersistentConnectionHasNoDeadlineAfterItsHello(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecars.Stop()
-	owner := &support.HarnessOwner{Root: "/silence", Seen: make(chan SidecarMessage, 1)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/silence")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case early := <-owner.Seen:
+	if early, ok := owner.Pending(); ok {
 		t.Fatalf("a message %+v arrived while the service was silent", early)
-	default:
 	}
 	close(silence)
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 }
 
 // contract: sidecars-transport.stop.leaves-the-close-of-a-replacement-to-the-replacement
@@ -2604,24 +2570,11 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	service.closeOwner = make(chan struct{}, 4)
 	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
-	// The service answers every send of a surface, and the reader of the host delivers each answer to the owner. The owner takes
-	// them all, as a window does, so the reader reaches the answer to shutdown that the replacement waits for.
-	taken := make(chan struct{})
-	defer close(taken)
-	go func() {
-		for {
-			select {
-			case <-owner.Seen:
-			case <-taken:
-				return
-			}
-		}
-	}()
+	owner.Next(t)
 	replaced := make(chan error, 1)
 	go func() { replaced <- sidecars.Replace(context.Background(), "fixture-service") }()
 	// The replacement has sent its close-owner when the service has read it, and the service holds the answer.
@@ -2630,7 +2583,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	// queue; the service answers each of them after its answer to close-owner. A stop that begins later finds the queue full, as a stop
 	// that the scheduler delays behind the sends does.
 	for {
-		err := sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
+		err := owner.Send(sidecars, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
 		if err == nil {
 			continue
 		}
@@ -2646,7 +2599,7 @@ func TestAStopLeavesTheCloseOfAReplacementToTheReplacement(t *testing.T) {
 	}()
 	// The stop has begun when the host refuses a send because the sidecars are stopped.
 	for {
-		err := sidecars.Send(owner, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
+		err := owner.Send(sidecars, "fixture-service", "surface-2", json.RawMessage(`{"operation":"open"}`))
 		if err != nil && strings.Contains(err.Error(), "sidecars are stopped") {
 			break
 		}
@@ -2691,11 +2644,11 @@ func TestASecondQuitEndsTheConnectionOfAServiceThatTheQuitStopWaitsFor(t *testin
 	service.closeOwner = make(chan struct{}, 4)
 	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	ended := make(chan struct{})
 	if sidecars.QuitStop(false, func() { close(ended) }) {
 		t.Fatal("the quit stop accepted the exit while the close of the owner runs")
@@ -2731,11 +2684,11 @@ func TestDetachClosesTheConnectionOfAPersistentServiceWithoutClosingTheOwner(t *
 	service := serveReplaceService(t, root, "0.0.7", "0.0.7")
 	service.firstEnded = make(chan struct{})
 	sidecars := replaceSidecars(t, root, service)
-	owner := &support.HarnessOwner{Root: "/replace", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/replace")
+	if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	sidecars.Detach()
 	// The connection ends, which is the only thing that the service learns, and the sessions of the service stay.
 	<-service.firstEnded
@@ -2814,12 +2767,12 @@ func TestPersistentConnectionsAreRecordedAsEvents(t *testing.T) {
 	if _, err := host.PerformanceCommand(map[string]any{"action": "on"}); err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, eventsService, "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/only")
+	if err := owner.Send(sidecars, eventsService, "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen) // the echo
-	receiveSidecarMessage(t, owner.Seen) // the notice of the reconnection
+	owner.Next(t) // the echo
+	owner.Next(t) // the notice of the reconnection
 	// The sampler names the service while it is connected and not after the connection ended.
 	sampledService := func() int {
 		host.PerformanceSample()
@@ -2917,11 +2870,11 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := &support.HarnessOwner{Root: "/only", Seen: make(chan SidecarMessage, 8)}
-	if err := sidecars.Send(owner, "fixture-service", "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/only")
+	if err := owner.Send(sidecars, "fixture-service", "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
-	receiveSidecarMessage(t, owner.Seen)
+	owner.Next(t)
 	sidecars.Stop()
 	listener.Close()
 	<-served
@@ -2956,9 +2909,9 @@ func TestPersistentSpawnedServiceFirstAnswerAfterSpawnIsRecorded(t *testing.T) {
 
 // requireConnectionNotice waits for the next sidecar message of owner and checks that it is the connection notice of surface
 // with connected and, for a failed connection, reason.
-func requireConnectionNotice(t *testing.T, owner *failureOwner, surface string, connected bool, reason string) {
+func requireConnectionNotice(t *testing.T, owner *support.SidecarRecorder, surface string, connected bool, reason string) {
 	t.Helper()
-	message := receiveSidecarMessage(t, owner.seen)
+	message := owner.Next(t)
 	var notice map[string]any
 	if err := json.Unmarshal(message.Body, &notice); err != nil {
 		t.Fatalf("the notice of %s is not JSON: %v", message.Surface, err)
@@ -3000,10 +2953,10 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	t.Cleanup(sidecars.Stop)
 	clock := &restartClock{}
 	sidecars.Now = clock.read
-	owner := &failureOwner{root: "/only", seen: make(chan SidecarMessage, 16), failures: make(chan host.SidecarFailure, 16)}
+	owner := support.NewSidecarRecorder(t, "/only")
 	send := func(surface string, offset time.Duration) error {
 		clock.set(offset)
-		return sidecars.Send(owner, "fixture-service", surface, json.RawMessage(`{"operation":"open"}`))
+		return owner.Send(sidecars, "fixture-service", surface, json.RawMessage(`{"operation":"open"}`))
 	}
 	countRuns := func() int {
 		data, err := os.ReadFile(runs)
@@ -3058,7 +3011,7 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 	if err := send("surface-1", 30*time.Second); err != nil {
 		t.Fatalf("send to the live service: %v", err)
 	}
-	receiveSidecarMessage(t, owner.seen) // the echo of the open request
+	owner.Next(t) // the echo of the open request
 	// The first connection ended and the revival reattached the live service: no failure is counted.
 	requireConnectionNotice(t, owner, "surface-1", true, "")
 
@@ -3084,10 +3037,8 @@ func TestPersistentServiceEndStopsTheRestartsBeforeTheSpawn(t *testing.T) {
 		t.Fatalf("send while stopped = %v, want the restart limit refusal", err)
 	}
 	requireConnectionNotice(t, owner, "surface-1", false, "restart limit")
-	select {
-	case failure := <-owner.failures:
+	if failure, ok := owner.PendingFailure(); ok {
 		t.Fatalf("the refused send delivered a sidecar failure: %+v", failure)
-	default:
 	}
 	if got := countRuns(); got != 3 {
 		t.Fatalf("the refused send spawned the service: %d runs", got)
@@ -3184,19 +3135,19 @@ func TestPersistentProtocolViolationsStopTheRestarts(t *testing.T) {
 	t.Cleanup(sidecars.Stop)
 	clock := &restartClock{}
 	sidecars.Now = clock.read
-	owner := &failureOwner{root: "/only", seen: make(chan SidecarMessage, 16), failures: make(chan host.SidecarFailure, 16)}
+	owner := support.NewSidecarRecorder(t, "/only")
 	for _, offset := range []time.Duration{0, 10 * time.Second, 20 * time.Second, 30 * time.Second} {
 		clock.set(offset)
-		if err := sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatalf("send at %v: %v", offset, err)
 		}
-		failure := <-owner.failures
+		failure := owner.Failure(t)
 		if !strings.HasPrefix(failure.Reason, "invalid message: ") {
 			t.Fatalf("failure at %v = %+v", offset, failure)
 		}
 	}
 	clock.set(40 * time.Second)
-	err = sidecars.Send(owner, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
+	err = owner.Send(sidecars, "fixture-service", "surface-1", json.RawMessage(`{"operation":"open"}`))
 	if err == nil || err.Error() != "sidecar fixture-service: restart limit" {
 		t.Fatalf("send at 40s = %v, want the restart limit refusal", err)
 	}

@@ -253,8 +253,7 @@ fn native_puller(pull: Pull, pull_loss: Option<PullLoss>) -> soksak_sok::event_l
         if pulled.is_empty() {
             pulled.resize(NATIVE_PULL_BYTES, 0u8);
         }
-        let (mut refused, mut refused_bytes) = (0u64, 0u64);
-        'passes: for _ in 0..NATIVE_PULL_PASSES {
+        for _ in 0..NATIVE_PULL_PASSES {
             let n = match pull(&mut pulled) {
                 Ok(0) => break,
                 Ok(n) => n,
@@ -263,33 +262,8 @@ fn native_puller(pull: Pull, pull_loss: Option<PullLoss>) -> soksak_sok::event_l
                     break;
                 }
             };
-            let mut offset = 0;
-            while offset < n {
-                match native_event_of(&pulled[offset..n]) {
-                    Ok((length, event)) => {
-                        sink.accept(event);
-                        offset += length;
-                    }
-                    Err((length, error)) => {
-                        // The rest of the buffer cannot be located after a record whose length is wrong.
-                        eprintln!("event writer: a native record was refused: {error}");
-                        refused += 1;
-                        refused_bytes += (n - offset) as u64;
-                        if length == 0 {
-                            continue 'passes;
-                        }
-                        offset += length;
-                    }
-                }
-            }
+            native_records_of(&pulled[..n], sink);
         }
-        // A record that cannot be decoded has no level, so its loss is counted in the channel `Other`.
-        sink.lost(
-            refused,
-            refused_bytes,
-            "a native record was refused",
-            Channel::Other,
-        );
         if let Some(pull_loss) = pull_loss.as_ref() {
             for channel in Channel::ALL {
                 let (events, bytes) = pull_loss(channel);
@@ -297,6 +271,39 @@ fn native_puller(pull: Pull, pull_loss: Option<PullLoss>) -> soksak_sok::event_l
             }
         }
     })
+}
+
+/// Gives the event of each record in `buffer`, which holds the whole records that a drain of the ring gives, to `sink`. A record
+/// that cannot be decoded is reported on the standard error and counted as lost with the reason; it has no level, so its loss is
+/// counted in the channel `Other`. A record whose length is wrong ends the buffer, because the rest cannot be located after it.
+fn native_records_of(buffer: &[u8], sink: &mut dyn PullSink) {
+    let (mut refused, mut refused_bytes) = (0u64, 0u64);
+    let mut offset = 0;
+    while offset < buffer.len() {
+        match native_event_of(&buffer[offset..]) {
+            Ok((length, event)) => {
+                sink.accept(event);
+                offset += length;
+            }
+            Err((length, error)) => {
+                eprintln!("event writer: a native record was refused: {error}");
+                refused += 1;
+                refused_bytes += (buffer.len() - offset) as u64;
+                if length == 0 {
+                    break;
+                }
+                offset += length;
+            }
+        }
+    }
+    if refused > 0 {
+        sink.lost(
+            refused,
+            refused_bytes,
+            "a native record was refused",
+            Channel::Other,
+        );
+    }
 }
 
 /// The size of the buffer of one pull, and the passes of one pull: a flood of native events cannot hold the writer, and the
@@ -423,3 +430,7 @@ fn native_event_of(buffer: &[u8]) -> Result<(usize, RelayedEvent), (usize, Strin
         },
     ))
 }
+
+#[cfg(test)]
+#[path = "event_log_native_test.rs"]
+mod native_test;

@@ -1,0 +1,30 @@
+{
+  "name": "close-reason-recorded",
+  "description": "The host writes the reason of each close of a connection to the application log: a frame over the limit, a body that is not JSON, a JSON value that is not a request, an undeclared method, and the end of the connection by its peer after the page was told that the last watcher ended.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"connection": "a", "send": {"raw_hex": "474554202f20485454502f312e310d0a0d0a"}},
+    {"connection": "a", "close": "host"},
+    {"log": {"line": "info host endpoint: connection closed: frame of 1195725856 bytes exceeds the limit of 16777216"}},
+    {"connection": "b", "send": {"raw_hex": "000000097b6e6f74206a736f6e"}},
+    {"connection": "b", "close": "host"},
+    {"log": {"line": "info host endpoint: connection closed: frame is not a JSON-RPC 2.0 request: {not json"}},
+    {"connection": "c", "send": {"raw_hex": "000000055b312c325d"}},
+    {"connection": "c", "close": "host"},
+    {"log": {"line": "info host endpoint: connection closed: frame is not a JSON-RPC 2.0 request: [1,2]"}},
+    {"connection": "d", "send": {"jsonrpc": "2.0", "id": 1, "method": "page.eval", "params": {"window": "main"}}},
+    {"connection": "d", "close": "host"},
+    {"log": {"line": "info host endpoint: connection closed: method \"page.eval\" is not declared"}},
+    {"connection": "e", "send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"connection": "e", "reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"connection": "e", "close": "client"},
+    {"page": {"call": {"name": "status.unwatch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"log": {"line": "info host endpoint: connection closed: peer closed"}}
+  ]
+}

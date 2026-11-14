@@ -1061,6 +1061,12 @@ func aligned(win Frontend, at Rect) (Rect, float64, error) {
 	if err != nil {
 		return Rect{}, 0, fmt.Errorf("surface alignment: %w", err)
 	}
+	return fittedRect(got, scale)
+}
+
+// fittedRect returns the region that the platform fitted to the device pixels of scale, and that scale. It rejects a scale that no
+// window has, so a surface is never seated on a grid that no display has.
+func fittedRect(got platformRect, scale float64) (Rect, float64, error) {
 	if !(scale > 0) || math.IsInf(scale, 0) {
 		return Rect{}, 0, fmt.Errorf("surface alignment: the window has backing scale %v", scale)
 	}
@@ -1189,7 +1195,8 @@ func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 	}
 	done := make(chan applyResult, 1)
 	var began error
-	began = runSurfaceDispatch(mainThreadStep, win.Name(), &prepared.Ticket, "sync", "sync-layout-ui", func() error {
+	now := currentSurfaceClock()
+	began = runSurfaceDispatch(now, mainThreadStep, win.Name(), &prepared.Ticket, "sync", "sync-layout-ui", func() error {
 		// The close of the window cancelled its layouts on this thread, and its page commits none after the close, so a layout that
 		// began now would stay open and hold the layouts and the frames of every other window.
 		if s.closed {
@@ -1206,9 +1213,9 @@ func (s *Surfaces) syncSurfaces(req SyncRequest) (PreparedSurfaces, error) {
 			s.lastPreparation++
 			prepared.Ticket = s.lastPreparation
 			noteLayoutViewport(prepared.Ticket, req.Viewport)
-			queued, trace := surfaceDispatchClock()
+			queued, trace := surfaceDispatchClock(now)
 			return system.BeginLayout(win.NativeWindow(), prepared.Ticket, func(allowed bool) {
-				observeSurfaceCallback(win.Name(), &prepared.Ticket, "sync", "sync-layout-ready-callback", queued, trace, func() {
+				observeSurfaceCallback(now, win.Name(), &prepared.Ticket, "sync", "sync-layout-ready-callback", queued, trace, func() {
 					if !allowed {
 						done <- applyResult{err: errNoWindow}
 						return
@@ -1403,12 +1410,24 @@ func recordSurfaceDispatchOf(mode surfaceDispatchMode, window, surface string, t
 	}
 }
 
-func surfaceDispatchClock() (uint64, surfaceDispatchMode) {
+// surfaceClock reads the monotonic clock in nanoseconds. Production passes the clock of the host platform; a test passes the
+// instants that it needs.
+type surfaceClock func() (uint64, error)
+
+// currentSurfaceClock returns the monotonic clock of the host platform, or a clock that reports that the platform is unavailable.
+func currentSurfaceClock() surfaceClock {
+	if system == nil {
+		return func() (uint64, error) { return 0, errors.New("the platform is unavailable") }
+	}
+	return system.MonotonicNanos
+}
+
+func surfaceDispatchClock(now surfaceClock) (uint64, surfaceDispatchMode) {
 	return surfaceDispatchClockFrom(
 		PerformanceEnabled(),
 		func() bool { return GateEvent(ClassCall, LevelDebug) },
 		func() bool { return GateEvent(ClassFrame, LevelTrace) },
-		readSurfaceDispatchClock,
+		func() (uint64, bool) { return readSurfaceDispatchClock(now) },
 	)
 }
 
@@ -1429,12 +1448,8 @@ func surfaceDispatchClockFrom(performance bool, callTrace, frameTrace func() boo
 	return value, mode
 }
 
-func readSurfaceDispatchClock() (uint64, bool) {
-	if system == nil {
-		LogError("surface dispatch clock", "the platform is unavailable")
-		return 0, false
-	}
-	value, err := system.MonotonicNanos()
+func readSurfaceDispatchClock(now surfaceClock) (uint64, bool) {
+	value, err := now()
 	if err != nil {
 		LogError("surface dispatch clock", err)
 		return 0, false
@@ -1446,23 +1461,23 @@ func readSurfaceDispatchClock() (uint64, bool) {
 	return value, true
 }
 
-func runSurfaceDispatch(dispatch func(func()), window string, ticket *uint64, operation, stage string, work func() error) error {
-	return runSurfaceDispatchOf(dispatch, window, "", ticket, operation, stage, work)
+func runSurfaceDispatch(now surfaceClock, dispatch func(func()), window string, ticket *uint64, operation, stage string, work func() error) error {
+	return runSurfaceDispatchOf(now, dispatch, window, "", ticket, operation, stage, work)
 }
 
 // runSurfaceDispatchOf runs work through dispatch and records it with surface, which is empty for a dispatch of the window layout.
-func runSurfaceDispatchOf(dispatch func(func()), window, surface string, ticket *uint64, operation, stage string, work func() error) error {
-	queued, mode := surfaceDispatchClock()
+func runSurfaceDispatchOf(now surfaceClock, dispatch func(func()), window, surface string, ticket *uint64, operation, stage string, work func() error) error {
+	queued, mode := surfaceDispatchClock(now)
 	var entered, returned uint64
 	var enteredAvailable, returnedAvailable bool
 	var workErr error
 	dispatch(func() {
 		if mode != surfaceDispatchOff {
-			entered, enteredAvailable = readSurfaceDispatchClock()
+			entered, enteredAvailable = readSurfaceDispatchClock(now)
 		}
 		workErr = work()
 		if mode != surfaceDispatchOff {
-			returned, returnedAvailable = readSurfaceDispatchClock()
+			returned, returnedAvailable = readSurfaceDispatchClock(now)
 		}
 	})
 	if mode != surfaceDispatchOff && enteredAvailable && returnedAvailable {
@@ -1471,15 +1486,15 @@ func runSurfaceDispatchOf(dispatch func(func()), window, surface string, ticket 
 	return workErr
 }
 
-func observeSurfaceCallback(window string, ticket *uint64, operation, stage string, queued uint64, mode surfaceDispatchMode, work func()) {
+func observeSurfaceCallback(now surfaceClock, window string, ticket *uint64, operation, stage string, queued uint64, mode surfaceDispatchMode, work func()) {
 	var entered, returned uint64
 	var enteredAvailable, returnedAvailable bool
 	if mode != surfaceDispatchOff {
-		entered, enteredAvailable = readSurfaceDispatchClock()
+		entered, enteredAvailable = readSurfaceDispatchClock(now)
 	}
 	work()
 	if mode != surfaceDispatchOff {
-		returned, returnedAvailable = readSurfaceDispatchClock()
+		returned, returnedAvailable = readSurfaceDispatchClock(now)
 		if enteredAvailable && returnedAvailable {
 			recordSurfaceDispatch(mode, window, ticket, operation, stage, queued, entered, returned)
 		}
@@ -1489,17 +1504,17 @@ func observeSurfaceCallback(window string, ticket *uint64, operation, stage stri
 // waitSurfaceRasters runs the raster stage of a presentation, the refresh of the rasters of its image regions and the wait until
 // they present, and records it as the stage present-raster-wait: queued_ns before the refresh, entered_ns when the wait starts and
 // returned_ns when it ends, also when the wait fails. A refresh that fails starts no wait and records nothing.
-func waitSurfaceRasters(window string, ticket *uint64, refresh, wait func() error) error {
-	queued, mode := surfaceDispatchClock()
+func waitSurfaceRasters(now surfaceClock, window string, ticket *uint64, refresh, wait func() error) error {
+	queued, mode := surfaceDispatchClock(now)
 	if err := refresh(); err != nil {
 		return err
 	}
 	if mode == surfaceDispatchOff {
 		return wait()
 	}
-	entered, enteredAvailable := readSurfaceDispatchClock()
+	entered, enteredAvailable := readSurfaceDispatchClock(now)
 	err := wait()
-	returned, returnedAvailable := readSurfaceDispatchClock()
+	returned, returnedAvailable := readSurfaceDispatchClock(now)
 	if enteredAvailable && returnedAvailable {
 		recordSurfaceDispatch(mode, window, ticket, "present", "present-raster-wait", queued, entered, returned)
 	}
@@ -1515,11 +1530,12 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 		placed []Placement
 		err    error
 	}
+	now := currentSurfaceClock()
 	done := make(chan result, 1)
 	routine.Go("layout-prepare", func() {
 		completeLayoutPresentation(func() error {
 			var prepareErr error
-			prepareErr = runSurfaceDispatch(mainThreadStep, win.Name(), &req.Ticket, "present", "present-prepare-ui", func() error {
+			prepareErr = runSurfaceDispatch(now, mainThreadStep, win.Name(), &req.Ticket, "present", "present-prepare-ui", func() error {
 				for _, p := range req.Placements {
 					view := s.views[p.ID]
 					if view == nil {
@@ -1534,10 +1550,10 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			domReady := make(chan error, 1)
 			ended := s.layoutEnd()
 			var waiting error
-			waiting = runSurfaceDispatch(mainThreadStep, win.Name(), &req.Ticket, "present", "present-dom-register-ui", func() error {
-				queued, trace := surfaceDispatchClock()
+			waiting = runSurfaceDispatch(now, mainThreadStep, win.Name(), &req.Ticket, "present", "present-dom-register-ui", func() error {
+				queued, trace := surfaceDispatchClock(now)
 				waiting = win.AfterPresentation(func(failure error) {
-					observeSurfaceCallback(win.Name(), &req.Ticket, "present", "present-dom-callback", queued, trace, func() { domReady <- failure })
+					observeSurfaceCallback(now, win.Name(), &req.Ticket, "present", "present-dom-callback", queued, trace, func() { domReady <- failure })
 				})
 				return waiting
 			})
@@ -1556,7 +1572,7 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			// A continuous frame also waits for each visible image region to display a raster of the prepared size.
 			// Without waiting, a surface resize would show the previous raster while the region is enlarged
 			// (docs/spec/surface-composition.md).
-			return waitSurfaceRasters(win.Name(), &req.Ticket, s.refreshImageRasters, func() error {
+			return waitSurfaceRasters(now, win.Name(), &req.Ticket, s.refreshImageRasters, func() error {
 				err := s.images.WaitLayoutRasters(req.Settled)
 				if errors.Is(err, errLayoutWaitEnded) {
 					return nil
@@ -1568,16 +1584,16 @@ func (s *Surfaces) PresentSurfaces(req PresentRequest) ([]Placement, error) {
 			})
 		}, func(waiting error) {
 			// The commit and the cancel run outside the framework event lock.
-			queued, mode := surfaceDispatchClock()
+			queued, mode := surfaceDispatchClock(now)
 			if err := system.EnqueueUI(func() {
 				var entered uint64
 				var enteredAvailable bool
 				if mode != surfaceDispatchOff {
-					entered, enteredAvailable = readSurfaceDispatchClock()
+					entered, enteredAvailable = readSurfaceDispatchClock(now)
 				}
 				defer func() {
 					if mode != surfaceDispatchOff {
-						returned, returnedAvailable := readSurfaceDispatchClock()
+						returned, returnedAvailable := readSurfaceDispatchClock(now)
 						if enteredAvailable && returnedAvailable {
 							recordSurfaceDispatch(mode, win.Name(), &req.Ticket, "present", "present-commit-ui", queued, entered, returned)
 						}

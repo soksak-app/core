@@ -1,4 +1,4 @@
-//! Sidecar channel tests. They use a fake window and sidecars that run the sidecar fixture with control texts.
+//! Sidecar channel tests. They use a recorder of the sidecar messages as the window and sidecars that run the sidecar fixture with control texts.
 
 #[path = "support/child.rs"]
 mod child;
@@ -6,79 +6,23 @@ mod child;
 mod folder;
 
 use std::path::Path;
-use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[path = "support/records.rs"]
 mod records;
+#[path = "support/sidecar_recorder.rs"]
+mod sidecar_recorder;
 
 use serde_json::value::RawValue;
+use sidecar_recorder::{SendAsRecorder, SidecarRecorder, failing_owner, owner};
 use soksak_host::sidecars::{
-    ClosingSurface, Failure, Message, MessageLine, Owner, SidecarDeclaration, Sidecars,
-    read_message_line,
+    ClosingSurface, Failure, Message, MessageLine, SidecarDeclaration, Sidecars, read_message_line,
 };
 
 /// The writer of the records is process-wide, so the tests that attach it run one at a time.
 static SERIAL: Mutex<()> = Mutex::new(());
-
-#[derive(Clone)]
-struct FakeOwner {
-    key: String,
-    root: String,
-    sent: Sender<Message>,
-    // Only a check that asserts a failure has a failure channel.
-    failed: Option<Sender<Failure>>,
-}
-
-impl Owner for FakeOwner {
-    fn key(&self) -> String {
-        self.key.clone()
-    }
-    fn root(&self) -> Result<String, String> {
-        Ok(self.root.clone())
-    }
-
-    fn deliver(&self, message: Message) {
-        let _ = self.sent.send(message);
-    }
-    fn deliver_failure(&self, failure: Failure) {
-        match &self.failed {
-            Some(failed) => failed.send(failure).expect("failure receiver"),
-            // The failure of a check that does not assert failures is left in the check output.
-            None => eprintln!("sidecar failure: {failure:?}"),
-        }
-    }
-}
-
-fn owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>) {
-    let (sent, received) = channel();
-    (
-        FakeOwner {
-            key: key.into(),
-            root: root.into(),
-            sent,
-            failed: None,
-        },
-        received,
-    )
-}
-
-/// A window that also receives failure events.
-fn failing_owner(key: &str, root: &str) -> (FakeOwner, Receiver<Message>, Receiver<Failure>) {
-    let (sent, received) = channel();
-    let (failed, failures) = channel();
-    (
-        FakeOwner {
-            key: key.into(),
-            root: root.into(),
-            sent,
-            failed: Some(failed),
-        },
-        received,
-        failures,
-    )
-}
 
 fn raw(text: &str) -> Box<RawValue> {
     RawValue::from_string(text.into()).unwrap()
@@ -118,7 +62,7 @@ fn declaration_in(name: &str, directory: &Path, data: &str) -> SidecarDeclaratio
     }
 }
 
-fn create(files: &Files, directory: &Path) -> Result<Sidecars<FakeOwner>, String> {
+fn create(files: &Files, directory: &Path) -> Result<Sidecars<SidecarRecorder>, String> {
     Sidecars::new(&declare(files, directory), directory.to_path_buf())
 }
 
@@ -129,13 +73,15 @@ const ECHO: &str = "@fixture/sidecar-echo";
 /// sidecar and the path of its sidecar.json (docs/spec/sidecars.md#declaration-and-startup).
 fn refusal(manifest: &str, config: &Path) -> String {
     let directory = folder::Folder::new();
-    let sidecars = Sidecars::<FakeOwner>::new(
+    let sidecars = Sidecars::<SidecarRecorder>::new(
         &declare(&files(manifest), directory.path()),
         config.to_path_buf(),
     )
     .unwrap();
     let (window, _events) = owner("a", "/projects/a");
-    let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
+    let error = sidecars
+        .send_as(&window, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
     let path = directory.path().join("sidecar.json").display().to_string();
     assert!(
         error.starts_with(&format!("sidecar {ECHO}: {path}: ")),
@@ -147,7 +93,7 @@ fn refusal(manifest: &str, config: &Path) -> String {
 
 /// Declares the sidecar fixture @fixture/sidecar-echo, which prints the received line as it is and leaves it in the
 /// request record file.
-fn echo_sidecars() -> (Sidecars<FakeOwner>, folder::Folder) {
+fn echo_sidecars() -> (Sidecars<SidecarRecorder>, folder::Folder) {
     let directory = folder::Folder::new();
     let record = directory.path().join("requests");
     // The sidecar records the lines that remain on its way out, so it ignores the terminate signal of the stop and ends
@@ -171,10 +117,10 @@ fn messages_reach_the_owning_window_only() {
     let (first, first_events) = owner("a", "/projects/a");
     let (second, second_events) = owner("b", "/projects/b");
     sidecars
-        .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars
-        .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+        .send_as(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let event = first_events.recv().unwrap();
     assert_eq!(
@@ -186,7 +132,9 @@ fn messages_reach_the_owning_window_only() {
         (ECHO, "s1", r#"{"operation":"open"}"#)
     );
     assert_eq!(second_events.recv().unwrap().surface, "s2");
-    let error = sidecars.send(&second, ECHO, "s1", &raw("{}")).unwrap_err();
+    let error = sidecars
+        .send_as(&second, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
     assert!(error.contains("another window"), "{error}");
     sidecars.retain(&first, &|_| false).unwrap();
     sidecars.stop();
@@ -212,12 +160,12 @@ fn a_surface_keeps_the_root_it_was_opened_with() {
     // Even after the same window changed to another project, an already opened surface sends with the first root.
     let (after, _after_events) = owner("a", "/projects/b");
     sidecars
-        .send(&before, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&before, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     // The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
     before_events.recv().unwrap();
     sidecars
-        .send(&after, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .send_as(&after, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     sidecars.retain(&after, &|_| false).unwrap();
     sidecars.stop();
@@ -242,7 +190,7 @@ fn closing_a_surface_keeps_other_sessions() {
     let (window, events) = owner("a", "/projects/a");
     for surface in ["s1", "state:files:p1"] {
         sidecars
-            .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .send_as(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
     // The echo is the event that the sidecar ignores the terminate signal of the stop, so it records every line.
@@ -254,7 +202,7 @@ fn closing_a_surface_keeps_other_sessions() {
     // Even after the project of the window was removed, a session that was not closed sends with the first root.
     let (released, _released_events) = owner("a", "");
     sidecars
-        .send(
+        .send_as(
             &released,
             ECHO,
             "state:files:p1",
@@ -309,10 +257,10 @@ fn close_reaches_only_the_sidecar_that_holds_the_surface() {
     let sidecars = Sidecars::new(&declarations, first.path().to_path_buf()).unwrap();
     let (window, events) = owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     sidecars
-        .send(&window, SECOND, "s2", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, SECOND, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     // The echo of each sidecar is the event that it ignores the terminate signal of the stop, so it records every line.
     let mut echoed: Vec<String> = (0..2).map(|_| events.recv().unwrap().sidecar).collect();
@@ -349,14 +297,14 @@ fn undeclared_and_stopped_sidecars_are_rejected() {
     let (window, _events) = owner("a", "/projects/a");
     assert!(
         sidecars
-            .send(&window, "other", "s1", &raw("{}"))
+            .send_as(&window, "other", "s1", &raw("{}"))
             .unwrap_err()
             .contains("not declared")
     );
     sidecars.stop();
     assert!(
         sidecars
-            .send(&window, ECHO, "s1", &raw("{}"))
+            .send_as(&window, ECHO, "s1", &raw("{}"))
             .unwrap_err()
             .contains("stopped")
     );
@@ -372,7 +320,9 @@ fn a_missing_executable_fails() {
     )
     .unwrap();
     let (window, _events) = owner("a", "/");
-    let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
+    let error = sidecars
+        .send_as(&window, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
     assert!(error.contains(&format!("sidecar {ECHO}")), "{error}");
 }
 
@@ -397,7 +347,7 @@ fn a_sidecar_receives_the_log_directory() {
     // even when it fails.
     let sidecars = Stopping(created);
     let (window, events) = owner("a", "/projects/a");
-    sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap();
+    sidecars.send_as(&window, ECHO, "s1", &raw("{}")).unwrap();
     events.recv().unwrap();
     let config = directory.path().canonicalize().unwrap();
     assert_eq!(
@@ -417,7 +367,9 @@ fn declaring_adds_sidecars_installed_after_the_start() {
     );
     let sidecars = create(&Vec::new(), directory.path()).unwrap();
     let (window, events) = owner("a", "/projects/a");
-    let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
+    let error = sidecars
+        .send_as(&window, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
     assert!(error.contains("is not declared by any plugin"), "{error}");
     sidecars
         .declare(&declare(
@@ -426,7 +378,7 @@ fn declaring_adds_sidecars_installed_after_the_start() {
         ))
         .unwrap();
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let event = events.recv().unwrap();
     assert_eq!(
@@ -471,7 +423,7 @@ fn persistent_transport_requires_a_config_directory() {
     let fixture = files(
         r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
     );
-    let error = Sidecars::<FakeOwner>::new(
+    let error = Sidecars::<SidecarRecorder>::new(
         &declare(&fixture, directory.path()),
         std::path::PathBuf::new(),
     )
@@ -544,24 +496,24 @@ fn an_invalid_declaration_leaves_the_other_sidecars_declared() {
     let (window, events) = owner("a", "/projects/a");
     assert_eq!(
         sidecars
-            .send(&window, EARLIER, "s2", &raw("{}"))
+            .send_as(&window, EARLIER, "s2", &raw("{}"))
             .unwrap_err(),
         refused
     );
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().surface, "s1");
     // A declaration after the start keeps the valid sidecar running and the invalid one undeclared.
     sidecars.declare(&declarations()).unwrap();
     assert_eq!(
         sidecars
-            .send(&window, EARLIER, "s2", &raw("{}"))
+            .send_as(&window, EARLIER, "s2", &raw("{}"))
             .unwrap_err(),
         refused
     );
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"next"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"next"}"#))
         .unwrap();
     assert_eq!(events.recv().unwrap().body.get(), r#"{"operation":"next"}"#);
     sidecars.stop();
@@ -583,7 +535,7 @@ fn persistent_transport_accepts_a_non_canonical_config_directory() {
     let (window, _events) = owner("a", "/projects/test");
     // There is no executable, so the service start fails, and before that the service directory is created under the
     // configuration directory.
-    let error = sidecars.send(&window, ECHO, "s1", &raw("{}"));
+    let error = sidecars.send_as(&window, ECHO, "s1", &raw("{}"));
     assert!(error.unwrap_err().contains("sidecar"));
     assert!(
         config_directory
@@ -601,7 +553,9 @@ fn plugins_without_sidecars_declare_none() {
     let directory = folder::Folder::new();
     let sidecars = create(&Files::new(), directory.path()).unwrap();
     let (window, _events) = owner("a", "/");
-    let error = sidecars.send(&window, ECHO, "s1", &raw("{}")).unwrap_err();
+    let error = sidecars
+        .send_as(&window, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
     assert!(error.contains("is not declared by any plugin"), "{error}");
 }
 
@@ -640,7 +594,7 @@ fn slow_sidecar_does_not_block_other_sends() {
 
     // The first send to the fast sidecar starts that process, so the send of property 1 goes to a running process.
     sidecars
-        .send(
+        .send_as(
             &owner,
             "@fixture/sidecar-fast",
             "s2",
@@ -652,7 +606,7 @@ fn slow_sidecar_does_not_block_other_sends() {
     let large_body = raw(&format!(r#"{{"data":"{}"}}"#, "x".repeat(20 * 1024)));
     let mut last_err = None;
     for i in 0..500 {
-        if let Err(e) = sidecars.send(&owner, "@fixture/sidecar-slow", "s1", &large_body) {
+        if let Err(e) = sidecars.send_as(&owner, "@fixture/sidecar-slow", "s1", &large_body) {
             last_err = Some(e.clone());
             if e.contains("is not keeping up") {
                 break; // the channel was observed to be full
@@ -672,7 +626,7 @@ fn slow_sidecar_does_not_block_other_sends() {
     // sidecar reads nothing until the stop, so a send that waits for its channel does not return, and the check stops at
     // the limit of its runner.
     sidecars
-        .send(
+        .send_as(
             &owner,
             "@fixture/sidecar-fast",
             "s2",
@@ -706,7 +660,7 @@ fn stop_graceful_shutdown() {
 
     // Start the sidecar.
     sidecars
-        .send(
+        .send_as(
             &owner,
             "@fixture/sidecar-graceful",
             "s1",
@@ -763,7 +717,7 @@ fn stop_closes_unread_output_in_child() {
     let sidecars = create(&files, directory.path()).unwrap();
     let (owner, events) = owner("a", "/projects/test");
     sidecars
-        .send(
+        .send_as(
             &owner,
             "@fixture/sidecar-talkative",
             "s1",
@@ -797,7 +751,7 @@ at-eof exit 0
             );
             let (window, events) = owner("a", "/projects/test");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                 .unwrap();
             let event = events.recv().expect("no echo event; the test stalled");
             assert_eq!(event.surface, "s1");
@@ -835,7 +789,7 @@ fn stop_reports_exit_status() {
                     fixture_sidecars(&format!("ignore-term\non any echo\nat-eof {ending}\n"));
                 let (window, events) = owner("a", "/projects/test");
                 sidecars
-                    .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                    .send_as(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                     .unwrap();
                 let event = events.recv().expect("no echo event; the test stalled");
                 assert_eq!(event.surface, "s1");
@@ -867,7 +821,7 @@ fn the_standard_error_of_a_sidecar_is_written_as_records() {
                 fixture_sidecars("stderr first line\nstderr-raw no line feed\non any echo\n");
             let (window, events) = owner("a", "/projects/test");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                 .unwrap();
             let event = events.recv().expect("no echo event; the test stalled");
             assert_eq!(event.surface, "s1");
@@ -923,7 +877,7 @@ on any drop
     soksak_host::performance::command(serde_json::json!({"action": "on"})).unwrap();
     let (window, events) = owner("a", "/projects/test");
     sidecars
-        .send(
+        .send_as(
             &window,
             ECHO,
             "s1",
@@ -1028,7 +982,7 @@ fn close_during_stop_sends_nothing() {
     let (owner, events) = owner("a", "/projects/test");
     for surface in ["s1", "s2"] {
         sidecars
-            .send(
+            .send_as(
                 &owner,
                 "@fixture/sidecar-lingering",
                 surface,
@@ -1071,7 +1025,7 @@ fn a_stop_terminates_a_sidecar_that_ignores_its_input() {
             let _hold = hold_fifo(directory.path(), "hold");
             let (window, _events) = owner("a", "/projects/test");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"test":"data"}"#))
                 .unwrap();
             // A stop that waits for no exit and kills does not return before the exit, and a stop that waits forever
             // stops at the limit of the runner.
@@ -1098,7 +1052,7 @@ fn a_stop_outside_the_quit_returns_before_the_exit() {
     let mut gate = hold_fifo(directory.path(), "gate");
     let (window, _events) = owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let pid = child_pid(&started);
     let _killed = Killed(pid);
@@ -1128,7 +1082,7 @@ fn the_quit_records_the_processes_that_it_waits_for() {
             let started = child_fifo(directory.path(), "started");
             let (window, _events) = owner("a", "/projects/a");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
                 .unwrap();
             // The parent reads the process id from the standard error of this child.
             eprintln!("{STARTED}{}", child_pid(&started));
@@ -1165,7 +1119,7 @@ fn the_quit_stop_exits_after_its_sidecars() {
             let mut gate = hold_fifo(directory.path(), "gate");
             let (window, _events) = owner("a", "/projects/a");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
                 .unwrap();
             let pid = child_pid(&started);
             let _killed = Killed(pid);
@@ -1231,7 +1185,7 @@ fn a_second_quit_kills_the_sidecars_that_the_quit_stop_waits_for() {
             let _gate = hold_fifo(directory.path(), "gate");
             let (window, _events) = owner("a", "/projects/a");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
                 .unwrap();
             let pid = child_pid(&started);
             let _killed = Killed(pid);
@@ -1292,10 +1246,10 @@ fn logged_by_child(test: &str) -> Option<String> {
 const MESSAGE_LIMIT: usize = 64 << 20;
 
 /// Ends the sidecar in drop so that no sidecar process remains even if the check ends or fails.
-struct Stopping(Sidecars<FakeOwner>);
+struct Stopping(Sidecars<SidecarRecorder>);
 
 impl std::ops::Deref for Stopping {
-    type Target = Sidecars<FakeOwner>;
+    type Target = Sidecars<SidecarRecorder>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -1361,7 +1315,7 @@ fn a_message_at_the_limit_is_delivered() {
     let (sidecars, _directory) = fixture_sidecars(&control);
     let (window, events, failures) = failing_owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let event = events.recv().expect("no sidecar event; the test stalled");
     let body = event.body.get();
@@ -1385,7 +1339,7 @@ fn an_oversize_message_terminates_and_notifies() {
     let (sidecars, directory) = fixture_sidecars(&control);
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let failure = failures
         .recv()
@@ -1410,7 +1364,7 @@ fn an_invalid_message_terminates_and_notifies() {
         ));
         let (window, _events, failures) = failing_owner("a", "/projects/a");
         sidecars
-            .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         let failure = failures
             .recv()
@@ -1442,11 +1396,11 @@ exit 3
     let (first, first_events, first_failures) = failing_owner("a", "/projects/a");
     let (second, _second_events, second_failures) = failing_owner("b", "/projects/b");
     sidecars
-        .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     first_events.recv().unwrap();
     sidecars
-        .send(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+        .send_as(&second, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     for (surface, failures) in [("s1", &first_failures), ("s2", &second_failures)] {
         let failure = failures
@@ -1463,7 +1417,7 @@ exit 3
     }
     // A send after a failure starts a new process.
     sidecars
-        .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     // The new process recorded its pid when it answers, before the stop ends it.
     first_events.recv().unwrap();
@@ -1497,7 +1451,7 @@ sleep 600
     let (window, events, failures) = failing_owner("a", "/projects/a");
     for surface in ["s1", "s2"] {
         sidecars
-            .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .send_as(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
     // The surface synchronization closes the removed s2.
@@ -1529,7 +1483,7 @@ sleep 600
 fn closing_sidecars(
     control: &str,
 ) -> (
-    std::sync::Arc<Sidecars<FakeOwner>>,
+    std::sync::Arc<Sidecars<SidecarRecorder>>,
     Receiver<Vec<ClosingSurface>>,
     folder::Folder,
 ) {
@@ -1564,7 +1518,7 @@ fn closed_surface_stays_closing_until_the_sidecar_answers() {
     let (sidecars, snapshots, _directory) = closing_sidecars("on any tee /dev/null\n");
     let (window, _events) = owner("a", "/projects/closing");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
     sidecars.retain(&window, &|_| false).unwrap();
     assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
@@ -1584,7 +1538,7 @@ on any echo
             let (sidecars, snapshots, _directory) = closing_sidecars(control);
             let (window, _events) = owner("a", "/projects/closing");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
                 .unwrap();
             sidecars.retain(&window, &|_| false).unwrap();
             assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
@@ -1626,7 +1580,7 @@ on any drop
             });
             let (window, _events) = owner("a", "/projects/closing");
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
                 .unwrap();
             sidecars.retain(&window, &|_| false).unwrap();
             end.recv().unwrap();
@@ -1681,12 +1635,12 @@ fn declaration_replaces_a_sidecar_whose_folder_changed() {
     let sidecars = create(&files, &first).unwrap();
     let (window, messages, failures) = failing_owner("a", "/projects/replace");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
     assert_eq!(messages.recv().unwrap().body.get(), r#"{"from":"first"}"#);
     sidecars.declare(&declare(&files, &second)).unwrap();
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"data":2}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"data":2}"#))
         .unwrap();
     assert_eq!(
         messages.recv().unwrap().body.get(),
@@ -1714,7 +1668,7 @@ on any echo
         let (window, events) = owner("a", "/projects/closing");
         for _ in 0..2 {
             sidecars
-                .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+                .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
                 .unwrap();
             events.recv().unwrap();
             sidecars.retain(&window, &|_| false).unwrap();
@@ -1723,7 +1677,7 @@ on any echo
         while !snapshots.recv().unwrap().is_empty() {}
         // The echo of a later request follows both answers in the output, so a failure of either answer is logged first.
         sidecars
-            .send(&window, ECHO, "s2", &raw(r#"{"data":2}"#))
+            .send_as(&window, ECHO, "s2", &raw(r#"{"data":2}"#))
             .unwrap();
         events.recv().unwrap();
         sidecars.stop();
@@ -1757,7 +1711,7 @@ on any drop
     );
     let (window, _events, failures) = failing_owner("a", "/projects/closing");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
     let failure = failures.recv().unwrap();
     assert_eq!(failure.reason, "unexpected close answer for s1");
@@ -1771,7 +1725,7 @@ fn ended_sidecar_leaves_no_closing_surface() {
     let (sidecars, snapshots, _directory) = closing_sidecars("on 1 echo\non 2 exit 0\n");
     let (window, _events) = owner("a", "/projects/closing");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"data":1}"#))
         .unwrap();
     sidecars.retain(&window, &|_| false).unwrap();
     assert_eq!(snapshots.recv().unwrap(), closing_of("s1"));
@@ -1804,7 +1758,7 @@ drain /dev/null
         let (window, events, _failures) = failing_owner("a", "/projects/a");
         for surface in ["s1", "s2"] {
             sidecars
-                .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+                .send_as(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
                 .unwrap();
         }
         sidecars
@@ -1864,13 +1818,13 @@ drain /dev/null
         let writer = records::start_writer(Path::new(&config));
         let (first, first_events, failures) = failing_owner("a", "/projects/a");
         sidecars
-            .send(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .send_as(&first, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         failures
             .recv()
             .expect("no sidecar failure; the test stalled");
         sidecars
-            .send(&first, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
+            .send_as(&first, ECHO, "s2", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         first_events.recv().unwrap();
         sidecars.stop();
@@ -1929,7 +1883,7 @@ fn the_sampler_names_a_running_sidecar_until_it_ends() {
         records::wait_for_first_sample(Path::new(&config), &writer);
         let (owner, _events) = owner("a", "/projects/a");
         sidecars
-            .send(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+            .send_as(&owner, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
             .unwrap();
         soksak_host::performance::sample();
         sidecars.stop();
@@ -1981,7 +1935,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
         let writer = records::start_writer(Path::new(&config));
         let (window, _events) = owner("a", "/projects/a");
         sidecars
-            .send_with_cids(
+            .send_with_cids_as(
                 &window,
                 ECHO,
                 "s1",
@@ -1990,7 +1944,7 @@ fn a_request_with_cids_is_recorded_as_an_event() {
             )
             .unwrap();
         sidecars
-            .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+            .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
             .unwrap();
         sidecars.stop();
         writer.flush().unwrap();
@@ -2027,7 +1981,7 @@ fn a_request_carries_the_correlation_identifiers() {
     let (sidecars, directory) = fixture_sidecars("on any tee DIR/requests\n");
     let (window, events) = owner("a", "/projects/a");
     sidecars
-        .send_with_cids(
+        .send_with_cids_as(
             &window,
             ECHO,
             "s1",
@@ -2036,7 +1990,7 @@ fn a_request_carries_the_correlation_identifiers() {
         )
         .unwrap();
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     events.recv().unwrap();
     events.recv().unwrap();
@@ -2088,7 +2042,7 @@ fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request(
     let (window, events) = owner("a", "/projects/a");
     let body = raw(r#"{"operation":"input"}"#);
     sidecars
-        .send_with_cids(
+        .send_with_cids_as(
             &window,
             ECHO,
             "s1",
@@ -2098,10 +2052,10 @@ fn a_message_of_a_sidecar_reaches_its_owner_with_the_identifiers_of_its_request(
         .unwrap();
     assert_eq!(events.recv().unwrap().cids, ["b1.7", "b1.8"]);
     sidecars
-        .send_with_cids(&window, ECHO, "s1", &body, &["b1.9".to_string()])
+        .send_with_cids_as(&window, ECHO, "s1", &body, &["b1.9".to_string()])
         .unwrap();
     assert_eq!(events.recv().unwrap().cids, ["b1.9"]);
-    sidecars.send(&window, ECHO, "s1", &body).unwrap();
+    sidecars.send_as(&window, ECHO, "s1", &body).unwrap();
     assert!(events.recv().unwrap().cids.is_empty());
 }
 
@@ -2115,7 +2069,7 @@ fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
         let (window, events) = owner("a", "/projects/a");
         let body = raw(r#"{"operation":"input"}"#);
         sidecars
-            .send_with_cids(
+            .send_with_cids_as(
                 &window,
                 ECHO,
                 "s1",
@@ -2125,10 +2079,10 @@ fn a_reply_of_a_sidecar_is_recorded_with_the_identifiers_of_its_request() {
             .unwrap();
         events.recv().unwrap();
         sidecars
-            .send_with_cids(&window, ECHO, "s1", &body, &["b1.9".to_string()])
+            .send_with_cids_as(&window, ECHO, "s1", &body, &["b1.9".to_string()])
             .unwrap();
         events.recv().unwrap();
-        sidecars.send(&window, ECHO, "s1", &body).unwrap();
+        sidecars.send_as(&window, ECHO, "s1", &body).unwrap();
         events.recv().unwrap();
         events.recv().unwrap();
         sidecars.stop();
@@ -2182,10 +2136,10 @@ fn the_failure_of_a_sidecar_is_the_failed_reply_of_its_pending_requests() {
         let (window, _events, failures) = failing_owner("a", "/projects/a");
         let body = raw(r#"{"operation":"input"}"#);
         sidecars
-            .send_with_cids(&window, ECHO, "s1", &body, &["b1.7".to_string()])
+            .send_with_cids_as(&window, ECHO, "s1", &body, &["b1.7".to_string()])
             .unwrap();
         sidecars
-            .send_with_cids(&window, ECHO, "s1", &body, &["b1.8".to_string()])
+            .send_with_cids_as(&window, ECHO, "s1", &body, &["b1.8".to_string()])
             .unwrap();
         let failure = failures.recv().unwrap();
         sidecars.stop();
@@ -2224,7 +2178,7 @@ fn an_image_of_a_closed_surface_is_answered_closed() {
     let (window, events, _failures) = failing_owner("a", "/projects/a");
     for surface in ["s1", "s2"] {
         sidecars
-            .send(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+            .send_as(&window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
             .unwrap();
     }
     sidecars
@@ -2329,7 +2283,7 @@ on any drop
     let writer = records::start_writer(events_directory.path());
     let (window, events) = owner("a", "/projects/test");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     events.recv().expect("no event; the test stalled");
     sidecars.stop();
@@ -2377,7 +2331,7 @@ fn sidecar_without_answer_records_start_and_no_first_output() {
     let writer = records::start_writer(events_directory.path());
     let (window, _events) = owner("a", "/projects/test");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"input"}"#))
         .unwrap();
     sidecars.stop();
     writer.flush().unwrap();
@@ -2459,12 +2413,12 @@ fn restart_sidecars(clock: &RestartClock) -> (Stopping, folder::Folder) {
 fn send_at(
     clock: &RestartClock,
     sidecars: &Stopping,
-    window: &FakeOwner,
+    window: &SidecarRecorder,
     surface: &str,
     offset: Duration,
 ) -> Result<(), String> {
     clock.set(offset);
-    sidecars.send(window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
+    sidecars.send_as(window, ECHO, surface, &raw(r#"{"operation":"open"}"#))
 }
 
 /// Waits for the next failure of the window and checks that it is an invalid message of sidecar s1.
@@ -2565,6 +2519,11 @@ fn counts_only_failures_within_the_window() {
     require_restart_limit(
         send_at(&clock, &sidecars, &window, "s1", Duration::from_secs(307)),
         Duration::from_secs(307),
+    );
+    let refused = failures.recv().expect("no refusal failure");
+    assert!(
+        refused.sidecar == ECHO && refused.surface == "s1" && refused.reason == "restart limit",
+        "refused send failure = {refused:?}"
     );
 }
 
@@ -2809,7 +2768,7 @@ exit 3
     let fifo = child_fifo(directory.path(), "child");
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let child = child_pid(&fifo);
     let killed = Killed(child);
@@ -2843,7 +2802,7 @@ exit 3
     let fifo = child_fifo(directory.path(), "child");
     let (window, _events, failures) = failing_owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let child = child_pid(&fifo);
     let killed = Killed(child);
@@ -2871,7 +2830,7 @@ drain /dev/null
     let fifo = child_fifo(directory.path(), "child");
     let (window, _events) = owner("a", "/projects/a");
     sidecars
-        .send(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
+        .send_as(&window, ECHO, "s1", &raw(r#"{"operation":"open"}"#))
         .unwrap();
     let child = child_pid(&fifo);
     let _killed = Killed(child);

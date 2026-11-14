@@ -13,7 +13,7 @@ func mountedSidecarProject(t *testing.T) (*Surfaces, *sidecar, *lifecyclePlatfor
 	t.Helper()
 	start := nullOriginStart()
 	start.Project = &SurfaceProject{ID: "project-a", Root: "/fixture/project-a"}
-	s, fake, _ := newLifecycleSurfacesWithStart(t, &fakeClock{}, start)
+	s, fake, _ := newLifecycleSurfacesWithStart(t, start)
 	owner := sidecarSessionSurfaces(t)
 	s.projects, s.shown, s.titles, s.sidecars = owner.projects, owner.shown, owner.titles, owner.sidecars
 	s.root = "/fixture/project-a"
@@ -90,7 +90,7 @@ func TestRecreatedViewSidecarRootUsesItsNewCommittedMountProject(t *testing.T) {
 	old, _ := s.documents.view("probe-surface")
 	spec := s.viewRecords().specs["probe-surface"]
 	spec.start.Project = &SurfaceProject{ID: "project-b", Root: "/fixture/project-b"}
-	endView(t, s, fake)
+	endView(t, s, fake, viewTestEpoch)
 	current, ok := s.documents.view("probe-surface")
 	if !ok || current.generation == old.generation {
 		t.Fatal("the same logical surface did not receive a new actual mount generation")

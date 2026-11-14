@@ -2,16 +2,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-// A document of a surface asks the host for the log policy at its load (action policy-read); the fake host answers it with the
+// A document of a surface asks the host for the log policy at its load (action policy-read); the host interface below answers it with the
 // default policy and does not record it.
 const policyRead = { classes: { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" } };
 
 test("Wails page regions expose operations but only composition places geometry", async () => {
-  // Records every call that goes through the mocked native interface.
+  // Records every call that goes through the native interface of the page environment.
   const recorded = [];
   const logged = [];
 
-  // Mocks the Wails native interface.
+  // The Wails native interface that the page environment provides.
   globalThis.window = {
     __soksakNative: {
       call(method, args) {
@@ -37,20 +37,9 @@ test("Wails page regions expose operations but only composition places geometry"
     },
   };
 
-  // Mocks a location that has a surface id.
+  // A location that has a surface id.
   globalThis.location = {
     search: "?id=s1",
-  };
-
-  // Mocks URLSearchParams.
-  globalThis.URLSearchParams = class {
-    constructor(search) {
-      this.search = search;
-    }
-    get(key) {
-      if (key === "id") return "s1";
-      return null;
-    }
   };
 
   // Imports the runtime module (an IIFE that captures global values).

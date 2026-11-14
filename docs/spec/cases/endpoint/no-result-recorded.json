@@ -1,0 +1,16 @@
+{
+  "name": "no-result-recorded",
+  "description": "A request that ends without its result, the error 1005, writes the method and the reason to the application log, and the log names no timeout.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.get", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.get", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"error": {"code": 1005, "message": "the document did not receive the input"}}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "error": {"code": 1005, "message": "the document did not receive the input"}}},
+    {"log": {"line": "error host endpoint no result: status.get: the document did not receive the input"}},
+    {"log": {"absent": "endpoint timeout"}}
+  ]
+}

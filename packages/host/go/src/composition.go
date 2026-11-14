@@ -352,7 +352,7 @@ func (s *Surfaces) placeComposition(viewID uint64, request CompositionPlaceReque
 		s.compositionRevisions[request.Surface] = request.Revision
 	}
 	// The frame trace states when the placement reached the host and when the UI thread applied it (docs/spec/events.json).
-	if dispatchErr := runSurfaceDispatchOf(mainThreadStep, s.window.Name(), request.Surface, nil, "composition",
+	if dispatchErr := runSurfaceDispatchOf(currentSurfaceClock(), mainThreadStep, s.window.Name(), request.Surface, nil, "composition",
 		"composition-place-ui", func() error { place(); return nil }); dispatchErr != nil {
 		return dispatchErr
 	}

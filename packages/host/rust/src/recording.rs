@@ -145,6 +145,24 @@ struct State {
     window: Option<isize>,
 }
 
+/// Fault injection points of the recording. A set variable makes its point fail after the device call it names, and the
+/// value is the exact error text. The device call runs first, so the device records the call as the native device does.
+/// docs/operations/examples.md#test-kinds
+const CAPTURE_OPEN_FAULT: &str = "SOKSAK_FAULT_CAPTURE_OPEN";
+const CAPTURE_START_FAULT: &str = "SOKSAK_FAULT_CAPTURE_START";
+const CAPTURE_STOP_FAULT: &str = "SOKSAK_FAULT_CAPTURE_STOP";
+
+/// Returns the error that the fault point named by variable injects, or None when the variable is unset or empty. A value
+/// that is not Unicode is reported as the error.
+fn fault_error(variable: &str) -> Option<String> {
+    match std::env::var(variable) {
+        Ok(text) if text.is_empty() => None,
+        Ok(text) => Some(text),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotUnicode(_)) => Some(format!("{variable} is not valid Unicode")),
+    }
+}
+
 /// Opens target and starts its recording of plan in directory. It returns once still 0 is written; a failure leaves no
 /// native recording.
 fn begin(
@@ -154,7 +172,20 @@ fn begin(
     plan: Plan,
 ) -> Result<(), String> {
     capture.open(target)?;
-    capture.start(directory, plan)
+    if let Some(error) = fault_error(CAPTURE_OPEN_FAULT) {
+        return Err(error);
+    }
+    capture.start(directory, plan)?;
+    fault_error(CAPTURE_START_FAULT).map_or(Ok(()), Err)
+}
+
+/// Stops the native recording and returns the number of frames it wrote. The recording ends also when the stop fails.
+fn stop_capture(capture: &dyn Capture) -> Result<i32, String> {
+    let count = capture.stop()?;
+    match fault_error(CAPTURE_STOP_FAULT) {
+        Some(error) => Err(error),
+        None => Ok(count),
+    }
 }
 
 /// Waits for the start of the recording of a new window, ending a hold that no show took, and returns the failure of
@@ -322,8 +353,9 @@ impl Recording {
                 // A panic can interrupt a start that the native capture has not ended, so a start that reached the
                 // capture is stopped; the stop ends the recording also when it fails.
                 let capture_stopped = if capture_open_attempted {
-                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| capture.stop()))
-                    {
+                    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        stop_capture(capture)
+                    })) {
                         Ok(Ok(_)) => true,
                         Ok(Err(error)) => {
                             cleanup_errors.push(format!("capture stop failed: {error}"));
@@ -381,7 +413,7 @@ impl Recording {
                 retired_stop_error = Some(error);
             }
             if !state.capture_stopped {
-                if let Err(stop_error) = capture.stop() {
+                if let Err(stop_error) = stop_capture(capture) {
                     retired_stop_error = Some(format!("capture stop failed: {stop_error}"));
                 }
                 state.capture_stopped = true;
@@ -436,7 +468,7 @@ impl Recording {
             return Err(error);
         }
         let window = state.window.take();
-        let count = match capture.stop() {
+        let count = match stop_capture(capture) {
             Ok(count) => count,
             Err(stop_error) => {
                 state.directory = None;

@@ -33,8 +33,8 @@ func TestOversizeSidecarMessageTerminatesAndNotifies(t *testing.T) {
 	// takes the bytes that the prefix and the suffix of the message do not.
 	padding := support.MessageLimit + 1 - len(`{"surface":"s1","body":"`) - len(`"}`)
 	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\non any pad s1 "+strconv.Itoa(padding)+"\n")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	failure := owner.Failure(t)
@@ -49,8 +49,8 @@ func TestInvalidSidecarMessageTerminatesAndNotifies(t *testing.T) {
 	for _, line := range []string{`not json`, `{"surface":"s1"}`} {
 		directory := t.TempDir()
 		sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\nskip-line\nwrite "+line+"\nsleep 600\n")
-		owner := support.NewFakeOwner("/projects/a")
-		if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+		owner := support.NewSidecarRecorder(t, "/projects/a")
+		if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 		failure := owner.Failure(t)
@@ -100,9 +100,9 @@ func TestCloseDuringStopSendsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewFakeOwner("/projects/test")
+	owner := support.NewSidecarRecorder(t, "/projects/test")
 	for _, surface := range []string{"s1", "s2"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"test":"data"}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, surface, json.RawMessage(`{"test":"data"}`)); err != nil {
 			t.Fatalf("send %s: %v", surface, err)
 		}
 		if event := owner.Next(t); event.Surface != surface {
@@ -148,9 +148,9 @@ func TestClosedSurfaceMessagesAreDiscardedAndUnknownOnesFail(t *testing.T) {
 		"write "+`{"surface":"s2","body":{"image":{"name":17}}}`+"\n"+
 		"write "+`{"surface":"s1","body":"after"}`+"\n"+
 		"on 1 wrap s1 barrier\non 1 then write "+`{"surface":"ghost","body":"x"}`+"\non any drop\n")
-	owner := support.NewFakeOwner("/projects/a")
+	owner := support.NewSidecarRecorder(t, "/projects/a")
 	for _, surface := range []string{"s1", "s2", "s3"} {
-		if err := sidecars.Send(owner, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
+		if err := owner.Send(sidecars, support.EchoSidecar, surface, json.RawMessage(`{"operation":"open"}`)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -196,8 +196,8 @@ func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	image := `{"surface":"s2","body":{"image":{"format":"bgra8","generation":3,"height":10,"name":"view","raster":4,"scale":1.0,"sequence":5,"token":{"id":7,"kind":"iosurface-global"},"width":10}}}`
 	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "pid")+"\nskip-line\n"+
 		"write "+`{"surface":"s2","body":"ready"}`+"\nskip-line\non any drop\nat-eof write "+image+"\n")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s2", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if ready := owner.Next(t); ready.Surface != "s2" || string(ready.Body) != `"ready"` {
@@ -206,9 +206,7 @@ func TestStopCancelsAnImageEmittedAfterStdioSidecarInputCloses(t *testing.T) {
 	sidecars.Close("s2")
 	sidecars.Stop()
 	requireEnded(t, support.ProcessID(t, directory))
-	owner.Mu.Lock()
-	delivered := append([]host.SidecarMessage(nil), owner.Events[1:]...)
-	owner.Mu.Unlock()
+	delivered := owner.Delivered()[1:]
 	if len(delivered) != 0 {
 		t.Fatalf("messages delivered while stopping after stdin EOF: %+v, want the late image canceled", delivered)
 	}
@@ -292,20 +290,6 @@ func requireGone(t *testing.T, pid int) {
 	}
 }
 
-// nextFailure returns the next failure of owner.
-func nextFailure(t *testing.T, owner *support.FakeOwner) support.SidecarFailure {
-	t.Helper()
-	data, err := json.Marshal(<-owner.Failures)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var failure support.SidecarFailure
-	if err := json.Unmarshal(data, &failure); err != nil {
-		t.Fatal(err)
-	}
-	return failure
-}
-
 // The end of a sidecar is the exit of its process: a process that it started keeps its output open, and the exit still fails the
 // running sidecar and ends its process group (docs/spec/sidecars.md#declaration-and-startup).
 // contract: sidecars.end.is-the-process-exit
@@ -314,14 +298,14 @@ func TestASidecarThatExitsFailsWhileItsChildKeepsTheOutput(t *testing.T) {
 	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\nholder "+filepath.Join(directory, "hold")+" "+filepath.Join(directory, "child")+"\nskip-line\nexit 3\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	child := childPID(t, fifo)
 	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
 	// A host that waits for the end of the output delivers no failure, and the check stops at the limit of its runner.
-	failure := nextFailure(t, owner)
+	failure := owner.Failure(t)
 	if failure.Surface != "s1" || failure.Reason != "output closed: exit status 3" {
 		t.Fatalf("failure = %+v, want output closed: exit status 3", failure)
 	}
@@ -339,13 +323,13 @@ func TestASidecarThatExitsFailsWhileAProcessOutsideItsGroupKeepsTheOutput(t *tes
 	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\ndetached "+filepath.Join(directory, "hold")+" "+filepath.Join(directory, "child")+"\nskip-line\nexit 3\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	child := childPID(t, fifo)
 	t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
-	failure := nextFailure(t, owner)
+	failure := owner.Failure(t)
 	if failure.Surface != "s1" || failure.Reason != "output closed: exit status 3" {
 		t.Fatalf("failure = %+v, want output closed: exit status 3", failure)
 	}
@@ -359,8 +343,8 @@ func TestAStopEndsBySidecarExitWhileItsChildKeepsTheOutput(t *testing.T) {
 	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "pid")+"\nholder "+filepath.Join(directory, "hold")+" "+filepath.Join(directory, "child")+"\non any drop\n")
 	holdFIFO(t, directory, "hold")
 	fifo := childFIFO(t, directory, "child")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	child := childPID(t, fifo)
@@ -379,8 +363,8 @@ func TestAStopOutsideTheQuitReturnsBeforeTheExit(t *testing.T) {
 	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "started")+"\nskip-line\nwait "+filepath.Join(directory, "gate")+"\nexit 3\n")
 	started := childFIFO(t, directory, "started")
 	gate := holdFIFO(t, directory, "gate")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	pid := childPID(t, started)
@@ -405,8 +389,8 @@ func TestTheQuitRecordsTheProcessesThatItWaitsFor(t *testing.T) {
 	directory := t.TempDir()
 	sidecars := support.FixtureSidecars(t, directory, "record-pid "+filepath.Join(directory, "started")+"\non any echo\n")
 	started := childFIFO(t, directory, "started")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	pid := childPID(t, started)
@@ -427,8 +411,8 @@ func TestTheQuitStopExitsAfterItsSidecars(t *testing.T) {
 	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "started")+"\nskip-line\nwait "+filepath.Join(directory, "gate")+"\nexit 0\n")
 	started := childFIFO(t, directory, "started")
 	gate := holdFIFO(t, directory, "gate")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	pid := childPID(t, started)
@@ -474,8 +458,8 @@ func TestASecondQuitKillsTheSidecarsThatTheQuitStopWaitsFor(t *testing.T) {
 	sidecars := support.FixtureSidecars(t, directory, "ignore-term\nrecord-pid "+filepath.Join(directory, "started")+"\nskip-line\nwait "+filepath.Join(directory, "gate")+"\nexit 0\n")
 	started := childFIFO(t, directory, "started")
 	holdFIFO(t, directory, "gate")
-	owner := support.NewFakeOwner("/projects/a")
-	if err := sidecars.Send(owner, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{"operation":"open"}`)); err != nil {
 		t.Fatal(err)
 	}
 	pid := childPID(t, started)

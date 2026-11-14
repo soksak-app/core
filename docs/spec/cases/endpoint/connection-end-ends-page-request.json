@@ -1,0 +1,22 @@
+{
+  "name": "connection-end-ends-page-request",
+  "description": "A request that the page holds has no time limit and ends by its reply while its connection is open; the end of its connection ends it on the host, and the later reply of the page is an observation.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"connection": "a", "send": {"jsonrpc": "2.0", "id": 1, "method": "command.run", "params": {"window": "main", "name": "probe.run", "params": {}}}},
+    {"page": {"call": {"name": "command.run", "payload": {"name": "probe.run", "params": {}}}}},
+    {"page": {"reply": {"result": null, "held": true}}},
+    {"page": {"release": true}},
+    {"connection": "a", "reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"connection": "b", "send": {"jsonrpc": "2.0", "id": 1, "method": "command.run", "params": {"window": "main", "name": "probe.run", "params": {}}}},
+    {"page": {"call": {"name": "command.run", "payload": {"name": "probe.run", "params": {}}}}},
+    {"page": {"reply": {"result": null, "held": true}}},
+    {"connection": "b", "close": "client"},
+    {"log": {"line": "info host endpoint: reply to 1 not sent: peer closed"}},
+    {"page": {"release": true}},
+    {"log": {"line": "info host exposure: exposure reply 2 arrived after its request ended"}}
+  ]
+}

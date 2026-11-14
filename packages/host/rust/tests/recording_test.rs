@@ -1,5 +1,7 @@
-//! Tests of the diagnostic recording state. A fake replaces the recording device. They are compiled only in diagnostic
-//! builds.
+//! Tests of the diagnostic recording state. The recording device records its calls and writes the records of a start, as the
+//! native device does. Failures come from the fault points of the recording (`SOKSAK_FAULT_CAPTURE_OPEN`, `_START`, `_STOP`),
+//! and a blocked folder is a folder whose permissions the real filesystem refuses to remove. They are compiled only in
+//! diagnostic builds.
 #![cfg(feature = "diagnostics")]
 
 #[path = "support/folder.rs"]
@@ -7,8 +9,9 @@ mod folder;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 #[path = "support/records.rs"]
 mod records;
@@ -20,28 +23,43 @@ use soksak_host::recording::{
 };
 use soksak_host::surfaces::LayoutViewport;
 
-/// The records of the host are process-wide, so the tests of this file that attach a writer run one at a time: a test reads
-/// only the errors that its own recording wrote.
+/// The records of the host are process-wide, so the tests of this file run one at a time: a test reads only the errors that
+/// its own recording wrote, and a fault point set by one test is not seen by another.
 static SERIAL: Mutex<()> = Mutex::new(());
 
-/// A recording device that records calls and fails at the specified stage. A failed start and a failed stop end the
-/// native recording, as the native capture does.
+fn serial() -> MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(|poison| poison.into_inner())
+}
+
+/// Sets a fault point of the recording for the lifetime of the guard. The environment is process-wide, so a test that sets
+/// a point holds SERIAL.
+struct Fault(&'static str);
+
+impl Fault {
+    fn set(variable: &'static str, text: &str) -> Fault {
+        // SAFETY: the test holds SERIAL, so no other test of this binary reads or writes the environment while it is set.
+        unsafe { std::env::set_var(variable, text) };
+        Fault(variable)
+    }
+}
+
+impl Drop for Fault {
+    fn drop(&mut self) {
+        // SAFETY: the test that set the point still holds SERIAL.
+        unsafe { std::env::remove_var(self.0) };
+    }
+}
+
+const OPEN_FAULT: &str = "SOKSAK_FAULT_CAPTURE_OPEN";
+const START_FAULT: &str = "SOKSAK_FAULT_CAPTURE_START";
+const STOP_FAULT: &str = "SOKSAK_FAULT_CAPTURE_STOP";
+
+/// A recording device that records its calls and writes the records of a start into its folder before the start answers.
 #[derive(Default)]
 struct Fake {
     calls: RefCell<Vec<String>>,
     plans: RefCell<Vec<Plan>>,
-    fail_open: bool,
-    fail_start: bool,
-    fail_first_still: bool,
-    fail_stop: bool,
     panic_stop_once: Cell<bool>,
-    replace_directory_on_open: Option<std::path::PathBuf>,
-    replace_directory_on_stop: Option<std::path::PathBuf>,
-}
-
-fn replace_directory_with_file(path: &Path) -> Result<(), String> {
-    std::fs::remove_dir_all(path).map_err(|error| error.to_string())?;
-    std::fs::write(path, "blocks directory cleanup").map_err(|error| error.to_string())
 }
 
 impl Capture for Fake {
@@ -50,28 +68,13 @@ impl Capture for Fake {
         self.calls
             .borrow_mut()
             .push(format!("open {}{kind}", target.window));
-        if let Some(path) = &self.replace_directory_on_open {
-            replace_directory_with_file(path)?;
-        }
-        if self.fail_open {
-            Err("open failed".into())
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
     fn start(&self, directory: &Path, plan: Plan) -> Result<(), String> {
         self.calls.borrow_mut().push("start".into());
         self.plans.borrow_mut().push(plan);
-        if self.fail_start {
-            return Err("the first still was not written before the window closed".into());
-        }
-        if self.fail_first_still {
-            // The native start ends its recording when still 0 fails and writes its records into the folder before it
-            // answers.
-            for name in ["stills.jsonl", "display-link.json"] {
-                std::fs::write(directory.join(name), "{}\n").map_err(|error| error.to_string())?;
-            }
-            return Err("window 7 is not on screen".into());
+        for name in ["stills.jsonl", "display-link.json"] {
+            std::fs::write(directory.join(name), "{}\n").map_err(|error| error.to_string())?;
         }
         Ok(())
     }
@@ -80,15 +83,21 @@ impl Capture for Fake {
         if self.panic_stop_once.replace(false) {
             panic!("fixture stop panic");
         }
-        if let Some(path) = &self.replace_directory_on_stop {
-            replace_directory_with_file(path)?;
-        }
-        if self.fail_stop {
-            Err("stop failed".into())
-        } else {
-            Ok(3)
-        }
+        Ok(3)
     }
+}
+
+/// Makes a file in path and removes the permissions of path, so the real filesystem fails the removal of path.
+fn block_directory(path: &Path) -> Result<(), String> {
+    std::fs::write(path.join("blocker"), "prevent removal").map_err(|error| error.to_string())?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000))
+        .map_err(|error| error.to_string())
+}
+
+/// Restores the permissions of path that block_directory removed.
+fn unblock_directory(path: &Path) -> Result<(), String> {
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))
+        .map_err(|error| error.to_string())
 }
 
 const WINDOW: Target = Target {
@@ -107,6 +116,12 @@ fn make(path: &Path) -> Result<(), String> {
     std::fs::create_dir_all(path).map_err(|e| e.to_string())
 }
 
+/// Creates path and blocks its removal, for a failure whose cleanup must fail.
+fn make_blocked(path: &Path) -> Result<(), String> {
+    make(path)?;
+    block_directory(path)
+}
+
 fn calls(fake: &Fake) -> Vec<String> {
     fake.calls.borrow().clone()
 }
@@ -114,6 +129,7 @@ fn calls(fake: &Fake) -> Vec<String> {
 // contract: recording.finish.keeps-folder-and-reports-frames
 #[test]
 fn a_finished_recording_keeps_its_folder_and_reports_frames() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
@@ -136,6 +152,7 @@ fn a_finished_recording_keeps_its_folder_and_reports_frames() {
 // contract: recording.state.poisoned-lock-is-recovered
 #[test]
 fn a_poisoned_recording_state_is_recovered_when_it_ends() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
@@ -166,13 +183,12 @@ fn a_poisoned_recording_state_is_recovered_when_it_ends() {
 // contract: recording.finish.retired-stop-failure-releases-owner
 #[test]
 fn a_retired_stop_failure_preserves_folder_and_releases_owner() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_stop: true,
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let fault = Fault::set(STOP_FAULT, "stop failed");
     recording
         .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
@@ -184,6 +200,7 @@ fn a_retired_stop_failure_preserves_folder_and_releases_owner() {
         None,
         "retired recording owner remained"
     );
+    drop(fault);
     let next = parent.path().join("next-frames");
     recording
         .start(&Fake::default(), WINDOW, &next, PLAN, &make)
@@ -194,13 +211,12 @@ fn a_retired_stop_failure_preserves_folder_and_releases_owner() {
 // contract: recording.start.failed-open-removes-folder
 #[test]
 fn a_failed_open_removes_the_folder() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_open: true,
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let _fault = Fault::set(OPEN_FAULT, "open failed");
     assert_eq!(
         recording
             .start(&fake, WINDOW, &folder, PLAN, &make)
@@ -214,17 +230,15 @@ fn a_failed_open_removes_the_folder() {
 // contract: recording.start.cleanup-failure-retains-folder-owner
 #[test]
 fn a_failed_start_cleanup_retains_retry_ownership() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let next = parent.path().join("next-frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_open: true,
-        replace_directory_on_open: Some(folder.clone()),
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let _fault = Fault::set(OPEN_FAULT, "open failed");
     let error = recording
-        .start(&fake, WINDOW, &folder, PLAN, &make)
+        .start(&fake, WINDOW, &folder, PLAN, &make_blocked)
         .unwrap_err();
     assert!(
         error.contains("capture directory cleanup failed"),
@@ -242,7 +256,7 @@ fn a_failed_start_cleanup_retains_retry_ownership() {
     );
     assert!(!next.exists());
 
-    std::fs::remove_file(&folder).unwrap();
+    unblock_directory(&folder).unwrap();
     recording
         .abort(&fake)
         .expect("abort did not retry folder cleanup");
@@ -253,16 +267,15 @@ fn a_failed_start_cleanup_retains_retry_ownership() {
 // contract: recording.abort.stop-complete-cleanup-retry-skips-stop
 #[test]
 fn a_directory_cleanup_retry_does_not_stop_a_completed_capture_twice() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        replace_directory_on_stop: Some(folder.clone()),
-        ..Fake::default()
-    };
+    let fake = Fake::default();
     recording
         .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
+    block_directory(&folder).unwrap();
 
     let error = recording.abort(&fake).unwrap_err();
     assert!(
@@ -270,10 +283,10 @@ fn a_directory_cleanup_retry_does_not_stop_a_completed_capture_twice() {
         "{error}"
     );
     assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
-    assert!(folder.is_file());
+    assert!(folder.is_dir());
     assert_eq!(calls(&fake), ["open 7", "start", "stop"]);
 
-    std::fs::remove_file(&folder).unwrap();
+    unblock_directory(&folder).unwrap();
     recording
         .abort(&fake)
         .expect("abort did not retry directory cleanup");
@@ -284,6 +297,7 @@ fn a_directory_cleanup_retry_does_not_stop_a_completed_capture_twice() {
 // contract: recording.start.make-failure-preserves-unowned-path
 #[test]
 fn a_make_failure_preserves_a_path_that_recording_did_not_create() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("existing");
     std::fs::create_dir(&folder).unwrap();
@@ -306,13 +320,15 @@ fn a_make_failure_preserves_a_path_that_recording_did_not_create() {
 // contract: recording.start.failed-start-removes-folder
 #[test]
 fn a_failed_start_removes_the_folder() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_start: true,
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let fault = Fault::set(
+        START_FAULT,
+        "the first still was not written before the window closed",
+    );
     assert_eq!(
         recording
             .start(&fake, WINDOW, &folder, PLAN, &make)
@@ -323,6 +339,7 @@ fn a_failed_start_removes_the_folder() {
     assert_eq!(recording.running(), None);
     // The native start ends its recording when still 0 fails, so the recording asks for no stop.
     assert_eq!(calls(&fake), ["open 7", "start"]);
+    drop(fault);
     recording
         .start(
             &Fake::default(),
@@ -337,13 +354,12 @@ fn a_failed_start_removes_the_folder() {
 // contract: recording.start.no-first-still-removes-folder
 #[test]
 fn a_failed_first_still_removes_the_folder() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_first_still: true,
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let fault = Fault::set(START_FAULT, "window 7 is not on screen");
     assert_eq!(
         recording
             .start(&fake, WINDOW, &folder, PLAN, &make)
@@ -354,6 +370,7 @@ fn a_failed_first_still_removes_the_folder() {
     assert_eq!(recording.running(), None);
     // The native start ended its recording with still 0, so the recording asks for no stop.
     assert_eq!(calls(&fake), ["open 7", "start"]);
+    drop(fault);
     recording
         .start(
             &Fake::default(),
@@ -368,6 +385,7 @@ fn a_failed_first_still_removes_the_folder() {
 // contract: recording.start.rejects-while-running, recording.abort.stops-removes-and-allows-next, recording.target.prepared-each-recording
 #[test]
 fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let first = parent.path().join("first");
     let second = parent.path().join("second");
@@ -392,13 +410,12 @@ fn an_aborted_recording_is_stopped_and_removed_and_allows_the_next() {
 // contract: recording.abort.retired-stop-failure-removes-folder
 #[test]
 fn an_abort_removes_retired_folder_and_reports_stop_error() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_stop: true,
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let fault = Fault::set(STOP_FAULT, "stop failed");
     recording
         .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
@@ -407,6 +424,7 @@ fn an_abort_removes_retired_folder_and_reports_stop_error() {
     assert!(error.contains("stop failed"), "{error}");
     assert!(!folder.exists(), "retired folder was kept");
     assert_eq!(recording.running(), None);
+    drop(fault);
     recording
         .start(
             &Fake::default(),
@@ -421,17 +439,16 @@ fn an_abort_removes_retired_folder_and_reports_stop_error() {
 // contract: recording.abort.retired-stop-failure-cleanup-retry-skips-stop
 #[test]
 fn an_abort_retries_retired_folder_cleanup_without_repeating_stop() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let folder = parent.path().join("frames");
     let recording = Recording::new();
-    let fake = Fake {
-        fail_stop: true,
-        replace_directory_on_stop: Some(folder.clone()),
-        ..Fake::default()
-    };
+    let fake = Fake::default();
+    let _fault = Fault::set(STOP_FAULT, "stop failed");
     recording
         .start(&fake, WINDOW, &folder, PLAN, &make)
         .unwrap();
+    block_directory(&folder).unwrap();
 
     let error = recording.abort(&fake).unwrap_err();
     assert!(error.contains("stop failed"), "{error}");
@@ -439,9 +456,9 @@ fn an_abort_retries_retired_folder_cleanup_without_repeating_stop() {
         error.contains("capture directory cleanup failed"),
         "{error}"
     );
-    assert!(folder.is_file());
+    assert!(folder.is_dir());
     assert_eq!(recording.running().as_deref(), Some(folder.as_path()));
-    std::fs::remove_file(&folder).unwrap();
+    unblock_directory(&folder).unwrap();
     recording.abort(&fake).unwrap();
     assert_eq!(recording.running(), None);
     assert_eq!(calls(&fake), ["open 7", "start", "stop"]);
@@ -450,6 +467,7 @@ fn an_abort_retries_retired_folder_cleanup_without_repeating_stop() {
 // contract: recording.target.different-target-reopened
 #[test]
 fn a_different_target_is_prepared_again() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let recording = Recording::new();
     let fake = Fake::default();
@@ -474,6 +492,7 @@ fn a_different_target_is_prepared_again() {
 // contract: recording.finish.reports-the-recorded-window
 #[test]
 fn a_finished_recording_reports_its_window() {
+    let _serial = serial();
     let parent = folder::Folder::new();
     let recording = Recording::new();
     let fake = Fake::default();
@@ -580,12 +599,11 @@ fn a_layout_trace_keeps_the_stages_of_each_transaction() {
     );
 }
 
-/// A recording device that becomes active before its start call panics. A failed stop ends the native recording, as the
-/// native capture does; a panicking stop leaves it active.
+/// A recording device that becomes active before its start call panics. A stop ends the native recording; a panicking stop
+/// leaves it active.
 struct Panicking {
     active: Cell<bool>,
     stops: Cell<usize>,
-    fail_first_stop: bool,
     panic_first_stop: bool,
 }
 
@@ -599,14 +617,8 @@ impl Capture for Panicking {
     }
     fn stop(&self) -> Result<i32, String> {
         self.stops.set(self.stops.get() + 1);
-        if self.stops.get() == 1 {
-            if self.panic_first_stop {
-                panic!("first stop panicked");
-            }
-            if self.fail_first_stop {
-                self.active.set(false);
-                return Err("first stop failed".into());
-            }
+        if self.stops.get() == 1 && self.panic_first_stop {
+            panic!("first stop panicked");
         }
         self.active.set(false);
         Ok(0)
@@ -616,7 +628,7 @@ impl Capture for Panicking {
 // contract: recording.start.panicking-capture-is-cleaned-up
 #[test]
 fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
-    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _serial = serial();
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
@@ -624,7 +636,6 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
     let capture = Panicking {
         active: Cell::new(false),
         stops: Cell::new(0),
-        fail_first_stop: false,
         panic_first_stop: false,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -653,7 +664,7 @@ fn a_panicking_capture_start_stops_partial_capture_before_unwinding() {
 // contract: recording.start.panicking-capture-retired-stop-error-releases-owner
 #[test]
 fn a_panicking_start_releases_retired_capture_after_stop_error() {
-    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _serial = serial();
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
@@ -661,9 +672,9 @@ fn a_panicking_start_releases_retired_capture_after_stop_error() {
     let capture = Panicking {
         active: Cell::new(false),
         stops: Cell::new(0),
-        fail_first_stop: true,
         panic_first_stop: false,
     };
+    let _fault = Fault::set(STOP_FAULT, "first stop failed");
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = recording.start(&capture, WINDOW, &folder, PLAN, &make);
     }));
@@ -691,7 +702,7 @@ fn a_panicking_start_releases_retired_capture_after_stop_error() {
 // contract: recording.start.panic-cleanup-failure-blocks-next-start
 #[test]
 fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
-    let _serial = SERIAL.lock().unwrap_or_else(|poison| poison.into_inner());
+    let _serial = serial();
     let config = folder::Folder::new();
     let writer = records::start_writer(config.path());
     let folder = config.path().join("frames");
@@ -700,7 +711,6 @@ fn a_failed_panic_cleanup_retains_state_until_abort_retries() {
     let capture = Panicking {
         active: Cell::new(false),
         stops: Cell::new(0),
-        fail_first_stop: false,
         panic_first_stop: true,
     };
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

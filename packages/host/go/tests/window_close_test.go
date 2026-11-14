@@ -9,6 +9,7 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // contract: window-close.surfaces.closes-regions-then-surface
@@ -34,7 +35,7 @@ func TestClosingAWindowClosesEachSurfaceAfterItsRegions(t *testing.T) {
 		t.Fatal(err)
 	}
 	view := host.ImageKey{Surface: "tab-1", Name: "view"}
-	if err := images.Reserve(view, &host.ImageOwner{SidecarName: "sidecar", SidecarOwner: newFakeImageOwner("")}); err != nil {
+	if err := images.Reserve(view, &host.ImageOwner{SidecarName: "sidecar", SidecarOwner: support.NewSidecarRecorder(t, "")}); err != nil {
 		t.Fatal(err)
 	}
 	if !images.Set(view, unsafe.Pointer(&image1)) {

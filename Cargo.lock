@@ -3375,6 +3375,7 @@ version = "0.0.40"
 dependencies = [
  "base64 0.22.1",
  "block2",
+ "core-foundation",
  "crc32fast",
  "flate2",
  "hex",

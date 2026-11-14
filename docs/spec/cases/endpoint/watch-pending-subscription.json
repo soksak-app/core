@@ -1,0 +1,28 @@
+{
+  "name": "watch-pending-subscription",
+  "description": "A subscription change that the page has not answered does not block other requests of the connection, and the replies of the changes arrive in their order.",
+  "replay": false,
+  "reason": "The page of the case is a script that the host producers play; a running application has a page of its own that answers differently.",
+  "page": "scripted",
+  "windows": ["main"],
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "status.unwatch", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.unwatch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null, "held": true}}},
+    {"send": {"jsonrpc": "2.0", "id": 3, "method": "status.watch", "params": {"window": "main", "name": "core.layout"}}},
+    {"send": {"jsonrpc": "2.0", "id": 4, "method": "status.get", "params": {"window": "main", "name": "core.layout"}}},
+    {"page": {"call": {"name": "status.get", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"reply": {"jsonrpc": "2.0", "id": 4, "result": null}},
+    {"page": {"release": true}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "result": null}},
+    {"reply": {"jsonrpc": "2.0", "id": 3, "result": null}},
+    {"page": {"call": {"name": "status.watch", "payload": {"name": "core.layout"}}}},
+    {"page": {"reply": {"result": null}}},
+    {"watching": {"window": "main", "name": "core.layout", "value": true}}
+  ]
+}

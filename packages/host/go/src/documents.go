@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -485,8 +486,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	}
 	if err == nil {
 		err = system.SetViewEnded(handle, func() {
-			LogError("view channel", surfaceID+": the view process ended")
-			s.viewFailed(surfaceID, handle, generation)
+			s.viewProcessEnded(surfaceID, handle, generation, time.Now())
 		})
 	}
 	if err == nil {
@@ -1701,7 +1701,7 @@ func (s *Surfaces) viewReceived(surface string, handle unsafe.Pointer, plugin st
 	var overflow viewOverflow
 	if errors.As(err, &overflow) {
 		// The view has lost messages, so it is closed and created again (docs/spec/plugin-processes.md, rule 4).
-		s.viewFailed(surface, handle, generation)
+		s.viewFailed(surface, handle, generation, time.Now())
 	}
 }
 
@@ -1745,9 +1745,16 @@ func (s *Surfaces) recordRetiredViewMessage(surface, plugin, value string) {
 	}
 }
 
-// viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view. It runs on the UI
-// thread.
-func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation uint64) {
+// viewProcessEnded handles the report of the platform that the WebContent process of the view handle of surface ended, at the instant
+// now of the report. It runs on the UI thread.
+func (s *Surfaces) viewProcessEnded(surface string, handle unsafe.Pointer, generation uint64, now time.Time) {
+	LogError("view channel", surface+": the view process ended")
+	s.viewFailed(surface, handle, generation, now)
+}
+
+// viewFailed handles the end of the WebContent process of the view handle of surface, or a queue overflow of that view, which the
+// failure counts at the instant now. It runs on the UI thread.
+func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation uint64, now time.Time) {
 	key := DocumentKey{Surface: surface, Name: viewRegionName}
 	current, err := s.documents.Get(key)
 	channel, ok := s.documents.view(surface)
@@ -1784,7 +1791,7 @@ func (s *Surfaces) viewFailed(surface string, handle unsafe.Pointer, generation 
 	s.emitToSurface(surface, "view-process-ended", map[string]any{"surface": surface, "plugin": channel.plugin, "generation": generation})
 	lifecycle := s.viewRecords()
 	spec := lifecycle.specs[surface]
-	if !lifecycle.fail(surface) {
+	if !lifecycle.fail(surface, now) {
 		reason := viewStopReason()
 		LogError("view channel", fmt.Errorf("%s: %s", surface, reason))
 		if spec == nil {

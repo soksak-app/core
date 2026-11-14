@@ -660,13 +660,28 @@ func (c *Sidecars) sendFromPageGuarded(ctx context.Context, owner SidecarOwner, 
 
 // send is the send of SendWithCids.
 func (c *Sidecars) send(owner SidecarOwner, name, surface string, body json.RawMessage, cids []string) error {
-	c.mu.Lock()
-	root, known := c.roots[surface]
-	c.mu.Unlock()
+	root, known := c.sessionRoot(surface)
 	if !known {
 		root = owner.ProjectRoot()
 	}
 	return c.sendAtRoot(owner, name, surface, root, body, cids)
+}
+
+// SendAtRoot is SendWithCids for a caller that states the project root of a surface that has no session yet: the session of the
+// surface keeps the root that it started with, and root starts the session of a surface that has none.
+func (c *Sidecars) SendAtRoot(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {
+	if session, known := c.sessionRoot(surface); known {
+		root = session
+	}
+	return c.sendAtRoot(owner, name, surface, root, body, cids)
+}
+
+// sessionRoot returns the project root of the session of surface, and whether the surface has one.
+func (c *Sidecars) sessionRoot(surface string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	root, known := c.roots[surface]
+	return root, known
 }
 
 func (c *Sidecars) sendAtRoot(owner SidecarOwner, name, surface, root string, body json.RawMessage, cids []string) error {

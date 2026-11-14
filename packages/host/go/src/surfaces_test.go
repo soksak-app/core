@@ -135,10 +135,7 @@ func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
 	isolateTraceRecords(t)
 	wasOn := performanceOn.Swap(true)
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
-	oldSystem := system
-	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 120, 140, 200, 220, 240, 300, 320, 340, 360, 380}}
-	system = clock
-	t.Cleanup(func() { system = oldSystem })
+	clock := &instantTable{times: []uint64{100, 120, 140, 200, 220, 240, 300, 320, 340, 360, 380}}
 	ticket := uint64(41)
 	var phases []string
 	dispatch := func(task func()) {
@@ -146,19 +143,19 @@ func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
 		task()
 		phases = append(phases, "returned")
 	}
-	if err := runSurfaceDispatch(dispatch, "main", &ticket, "present", "present-prepare-ui", func() error {
+	if err := runSurfaceDispatch(clock.now, dispatch, "main", &ticket, "present", "present-prepare-ui", func() error {
 		phases = append(phases, "prepare")
 		return nil
 	}); err != nil {
 		t.Fatalf("run ticketed dispatch: %v", err)
 	}
-	if err := runSurfaceDispatch(dispatch, "main", nil, "sync", "sync-layout-ui", func() error {
+	if err := runSurfaceDispatch(clock.now, dispatch, "main", nil, "sync", "sync-layout-ui", func() error {
 		phases = append(phases, "sync")
 		return nil
 	}); err != nil {
 		t.Fatalf("run unassigned-ticket dispatch: %v", err)
 	}
-	observeSurfaceCallback("main", &ticket, "present", "present-dom-callback", 280, surfaceDispatchPerformance, func() {
+	observeSurfaceCallback(clock.now, "main", &ticket, "present", "present-dom-callback", 280, surfaceDispatchPerformance, func() {
 		phases = append(phases, "callback")
 	})
 	if want := []string{"entered", "prepare", "returned", "entered", "sync", "returned", "callback"}; !reflect.DeepEqual(phases, want) {
@@ -197,7 +194,7 @@ func TestSurfaceDispatchRecordKeepsTicketAndClockBoundaries(t *testing.T) {
 		t.Fatalf("performance trace emitted a duplicate frame event: %#v", frame)
 	}
 	performanceOn.Store(false)
-	if err := runSurfaceDispatch(dispatch, "main", nil, "sync", "sync-layout-ui", func() error { return nil }); err != nil {
+	if err := runSurfaceDispatch(clock.now, dispatch, "main", nil, "sync", "sync-layout-ui", func() error { return nil }); err != nil {
 		t.Fatalf("run frame-fallback dispatch: %v", err)
 	}
 	if clock.reads != 11 || len(bufferedTraces(t, "host.trace.surface.dispatch")) != 3 || len(bufferedTraces(t, "host.frame.surface.dispatch")) != 1 {
@@ -243,11 +240,8 @@ func TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff(t *testi
 	isolateTraceRecords(t)
 	wasOn := performanceOn.Swap(false)
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
-	oldSystem := system
-	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{400, 420, 440}}
-	system = clock
-	t.Cleanup(func() { system = oldSystem })
-	if err := runSurfaceDispatch(func(task func()) { task() }, "main", nil, "present", "present-prepare-ui", func() error {
+	clock := &instantTable{times: []uint64{400, 420, 440}}
+	if err := runSurfaceDispatch(clock.now, func(task func()) { task() }, "main", nil, "present", "present-prepare-ui", func() error {
 		return nil
 	}); err != nil {
 		t.Fatalf("run frame-traced dispatch: %v", err)
@@ -268,18 +262,19 @@ func TestSurfaceDispatchRecordsFrameBoundariesWhenPerformanceTraceIsOff(t *testi
 	}
 }
 
-type surfaceDispatchClockPlatform struct {
-	platform.Platform
+// instantTable is a monotonic clock whose reads return the instants of its table in order. It counts the reads, so a test checks how
+// often the code under test read the clock.
+type instantTable struct {
 	times []uint64
 	reads int
 }
 
-func (p *surfaceDispatchClockPlatform) MonotonicNanos() (uint64, error) {
-	p.reads++
-	if p.reads > len(p.times) {
-		return 0, fmt.Errorf("unexpected monotonic clock read %d", p.reads)
+func (c *instantTable) now() (uint64, error) {
+	c.reads++
+	if c.reads > len(c.times) {
+		return 0, fmt.Errorf("unexpected monotonic clock read %d", c.reads)
 	}
-	return p.times[p.reads-1], nil
+	return c.times[c.reads-1], nil
 }
 
 // contract: input.pointer.reads-the-press-target-before-delivery
@@ -794,11 +789,9 @@ func TestViewChannelReportsQueueFullAndForeignFrameWithTheirReasons(t *testing.T
 
 // contract: view.restart.limit
 func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *testing.T) {
-	clock := &fakeClock{}
-	s, fake, native := newLifecycleSurfaces(t, clock)
+	s, fake, native := newLifecycleSurfaces(t)
 	for _, offset := range []time.Duration{0, 60 * time.Second, 120 * time.Second, 180 * time.Second} {
-		clock.set(offset)
-		endView(t, s, fake)
+		endView(t, s, fake, viewTestEpoch.Add(offset))
 	}
 	if len(fake.created) != 4 || len(fake.closed) != 4 {
 		t.Fatalf("created %d views and closed %d, want the first view and three restarts, each failure closing its view", len(fake.created), len(fake.closed))
@@ -811,7 +804,6 @@ func TestViewProcessEndsRestartTheViewUntilTheFourthFailureWithinFiveMinutes(t *
 	// The reopened surface resolves its folder again; the test replaces the installed-plugin lookup with the same folder.
 	reopened := s.viewRecords().track("probe-surface", native, "probe", "ui/page.html", true)
 	reopened.directory, reopened.folder = "/config/document-data", "/plugins/probe"
-	clock.set(240 * time.Second)
 	if err := s.syncView("probe-surface", native, "probe", "ui/page.html", true, nullOriginStart()); err != nil {
 		t.Fatalf("sync after the tab is reopened: %v", err)
 	}
@@ -1184,10 +1176,9 @@ func TestViewCallInvalidRequestsAreErrorsNotForwarded(t *testing.T) {
 
 // contract: view.source-generation
 func TestStaleViewCommandsAreCancelledAfterTheViewRestarts(t *testing.T) {
-	clock := &fakeClock{}
-	s, fake, _ := newLifecycleSurfaces(t, clock)
+	s, fake, _ := newLifecycleSurfaces(t)
 	oldGeneration := viewGeneration(s, "probe-surface")
-	endView(t, s, fake)
+	endView(t, s, fake, viewTestEpoch)
 	newGeneration := viewGeneration(s, "probe-surface")
 	if newGeneration <= oldGeneration {
 		t.Fatalf("replacement generation %d, want newer than %d", newGeneration, oldGeneration)
@@ -1453,12 +1444,19 @@ type stepFramework struct{ frameworkRecord }
 
 func (stepFramework) Step(task func()) { task() }
 
+// realMonotonicNanos reads the monotonic clock of the registered platform.
+func realMonotonicNanos() (uint64, error) {
+	real, err := platform.Current()
+	if err != nil {
+		return 0, err
+	}
+	return real.MonotonicNanos()
+}
+
 // layoutPlatform is the platform of a layout test: it runs each task at once and records the commits and the cancels.
 type layoutPlatform struct {
 	platform.Platform
 	commits, cancels chan uint64
-	// clock counts the reads of the monotonic clock, so each read is later than the previous one.
-	clock atomic.Uint64
 	// noticed is set by a test before it calls the presentation notice, and early records a commit that ran before it.
 	noticed, early atomic.Bool
 	// running counts the tasks that run, so a test ends after the work of its tasks that follows the result they hand on.
@@ -1472,7 +1470,8 @@ func (p *layoutPlatform) EnqueueUI(task func()) error {
 	return nil
 }
 
-func (p *layoutPlatform) MonotonicNanos() (uint64, error) { return p.clock.Add(1), nil }
+// MonotonicNanos reads the monotonic clock of the real platform, so the instants of the dispatch records are real instants.
+func (*layoutPlatform) MonotonicNanos() (uint64, error) { return realMonotonicNanos() }
 
 func (p *layoutPlatform) CommitLayout(_ platform.Window, ticket uint64) bool {
 	if !p.noticed.Load() {
@@ -1602,13 +1601,10 @@ func TestTheRasterWaitOfAPresentationRecordsItsRefreshAndItsWait(t *testing.T) {
 	isolateTraceRecords(t)
 	wasOn := performanceOn.Swap(false)
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
-	oldSystem := system
-	clock := &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 130, 1130, 2000, 2010, 2020, 3000}}
-	system = clock
-	t.Cleanup(func() { system = oldSystem })
+	clock := &instantTable{times: []uint64{100, 130, 1130, 2000, 2010, 2020, 3000}}
 	ticket := uint64(12)
 	var steps []string
-	if err := waitSurfaceRasters("main", &ticket, func() error {
+	if err := waitSurfaceRasters(clock.now, "main", &ticket, func() error {
 		steps = append(steps, "refresh")
 		return nil
 	}, func() error {
@@ -1618,11 +1614,11 @@ func TestTheRasterWaitOfAPresentationRecordsItsRefreshAndItsWait(t *testing.T) {
 		t.Fatalf("the raster stage failed: %v", err)
 	}
 	waitFailure := errors.New("the current image raster did not present")
-	if err := waitSurfaceRasters("main", &ticket, func() error { return nil }, func() error { return waitFailure }); err != waitFailure {
+	if err := waitSurfaceRasters(clock.now, "main", &ticket, func() error { return nil }, func() error { return waitFailure }); err != waitFailure {
 		t.Fatalf("the failed wait answered %v, want %v", err, waitFailure)
 	}
 	refreshFailure := errors.New("the raster refresh failed")
-	if err := waitSurfaceRasters("main", &ticket, func() error { return refreshFailure }, func() error {
+	if err := waitSurfaceRasters(clock.now, "main", &ticket, func() error { return refreshFailure }, func() error {
 		steps = append(steps, "wait after a failed refresh")
 		return nil
 	}); err != refreshFailure {
@@ -1651,10 +1647,8 @@ func TestSurfaceDispatchOfACompositionNamesItsSurface(t *testing.T) {
 	isolateTraceRecords(t)
 	wasOn := performanceOn.Swap(false)
 	t.Cleanup(func() { performanceOn.Store(wasOn) })
-	oldSystem := system
-	system = &surfaceDispatchClockPlatform{Platform: oldSystem, times: []uint64{100, 120, 140}}
-	t.Cleanup(func() { system = oldSystem })
-	if err := runSurfaceDispatchOf(func(task func()) { task() }, "main", "tab-1", nil, "composition", "composition-place-ui", func() error {
+	clock := &instantTable{times: []uint64{100, 120, 140}}
+	if err := runSurfaceDispatchOf(clock.now, func(task func()) { task() }, "main", "tab-1", nil, "composition", "composition-place-ui", func() error {
 		return nil
 	}); err != nil {
 		t.Fatalf("run composition dispatch: %v", err)
@@ -1668,32 +1662,15 @@ func TestSurfaceDispatchOfACompositionNamesItsSurface(t *testing.T) {
 	}
 }
 
-// scalePlatform fits a rectangle inward to the device pixels of its backing scale, as AppKit fits it, and answers that scale.
-type scalePlatform struct {
-	platform.Platform
-	scale float64
-}
-
-func (p *scalePlatform) AlignRect(_ platform.Window, at platform.Rect) (platform.Rect, float64, error) {
-	if p.scale <= 0 {
-		return at, p.scale, nil
-	}
-	left, top := math.Ceil(at.X*p.scale)/p.scale, math.Ceil(at.Y*p.scale)/p.scale
-	right, bottom := math.Floor((at.X+at.W)*p.scale)/p.scale, math.Floor((at.Y+at.H)*p.scale)/p.scale
-	return platform.Rect{X: left, Y: top, W: right - left, H: bottom - top}, p.scale, nil
-}
-
 // A visible surface lies on the device pixels of the backing scale that the host fitted it to, and the window can change display
 // before the page reads the answer, so the placement names that scale; a hidden surface is fitted to no grid and names none
 // (docs/spec/native-surfaces.md).
 // contract: surface-layout.placement-names-its-scale
 func TestAnAlignedSurfaceNamesTheBackingScaleItWasFittedTo(t *testing.T) {
-	saved := system
-	system = &scalePlatform{scale: 3}
-	t.Cleanup(func() { system = saved })
-	at, scale, err := aligned(&openFrontend{}, Rect{X: 203, Y: 636.66, W: 1360, H: 413.33})
-	if err != nil || scale != 3 {
-		t.Fatalf("the surface was fitted at scale %v (%v), want 3", scale, err)
+	fitted := platformRect{X: 203, Y: 636 + 2.0/3, W: 1360, H: 413}
+	at, scale, err := fittedRect(fitted, 3)
+	if err != nil || scale != 3 || at != Rect(fitted) {
+		t.Fatalf("the surface fitted at %v and scale %v (%v), want %v at scale 3", at, scale, err, fitted)
 	}
 	visible, err := json.Marshal(seatedPlacement("probe", at, true, scale))
 	if err != nil || !strings.Contains(string(visible), `"scale":3`) {
@@ -1726,11 +1703,11 @@ func TestTheTraceOfAPlacementNamesTheScaleOfAVisibleView(t *testing.T) {
 // on a grid that no display has.
 // contract: surface-layout.placement-names-its-scale
 func TestASurfaceAlignedInAWindowWithoutABackingScaleFails(t *testing.T) {
-	saved := system
-	system = &scalePlatform{scale: 0}
-	t.Cleanup(func() { system = saved })
-	if _, _, err := aligned(&openFrontend{}, Rect{X: 1, Y: 2, W: 3, H: 4}); err == nil || !strings.Contains(err.Error(), "backing scale 0") {
-		t.Fatalf("the alignment in a window without a backing scale ended with %v", err)
+	fitted := platformRect{X: 1, Y: 2, W: 3, H: 4}
+	for _, scale := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		if _, _, err := fittedRect(fitted, scale); err == nil || !strings.Contains(err.Error(), "backing scale") {
+			t.Fatalf("the region fitted at scale %v ended with %v, want a failure naming the backing scale", scale, err)
+		}
 	}
 }
 
@@ -1760,7 +1737,8 @@ func (p *layoutOrderPlatform) EnqueueUI(task func()) error {
 	return nil
 }
 
-func (*layoutOrderPlatform) MonotonicNanos() (uint64, error) { return 1, nil }
+// MonotonicNanos reads the monotonic clock of the real platform.
+func (*layoutOrderPlatform) MonotonicNanos() (uint64, error) { return realMonotonicNanos() }
 
 func (*layoutOrderPlatform) MainWebview(platform.Window) (unsafe.Pointer, error) {
 	return unsafe.Pointer(new(byte)), nil
