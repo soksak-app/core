@@ -1,5 +1,5 @@
 // The runtime for workbench tests. It has no native host unless a test selects the page-wire case that answers the calls of the page.
-import { hostWindows } from "../../host-windows.js";
+import { hostWindows } from "@soksak/workbench/host-windows.js";
 import { openPageWire } from "./page-wire.js";
 
 export let host = null;

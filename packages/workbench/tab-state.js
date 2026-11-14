@@ -112,7 +112,10 @@ export async function openTabStates({ store, failed, unloadOf }) {
             perform(core.failed(action.tab, error));
           }
         });
-      } else if (action.type === "event") emitEvent(action.level, action.event, action.fields);
+      } else if (action.type === "event") {
+        // events: workbench.tab.state.orphan, workbench.tab.state.stored
+        emitEvent(action.level, action.event, action.fields);
+      }
       else if (action.type === "failed") failed(action.error);
       else throw new Error(`tab state action ${action.type} is not declared`);
     }

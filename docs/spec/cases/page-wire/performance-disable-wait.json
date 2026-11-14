@@ -1,7 +1,8 @@
 {
   "name": "performance-disable-wait",
   "description": "The trace is switched off while its accepted events are still in flight: the held batch of the accepted event is released first, and then the switch goes off.",
-  "replay": true,
+  "replay": false,
+  "reason": "The case calls performance, which the producer does not run.",
   "variables": {
     "page-identity": {
       "type": "string",

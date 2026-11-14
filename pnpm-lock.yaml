@@ -187,11 +187,17 @@ importers:
         version: link:../soksak
     devDependencies:
       '@soksak/runtime':
-        specifier: link:test/runtime
+        specifier: workspace:*
         version: link:test/runtime
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1
+
+  packages/workbench/test/runtime:
+    dependencies:
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../..
 
 packages:
 

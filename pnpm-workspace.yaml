@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - packages/host/*
+  - packages/workbench/test/runtime
   - apps/*
   - e2e
   - native/darwin/process-identity

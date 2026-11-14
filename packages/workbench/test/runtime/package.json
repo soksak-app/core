@@ -4,5 +4,11 @@
   "private": true,
   "description": "Runtime module for workbench tests: no native host and no store.",
   "type": "module",
-  "exports": "./index.js"
+  "exports": "./index.js",
+  "specFiles": [
+    "docs/spec/cases/page-wire/"
+  ],
+  "dependencies": {
+    "@soksak/workbench": "workspace:*"
+  }
 }

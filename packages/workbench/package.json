@@ -143,7 +143,7 @@
     "soksak": "workspace:*"
   },
   "devDependencies": {
-    "@soksak/runtime": "link:test/runtime",
+    "@soksak/runtime": "workspace:*",
     "jsdom": "^30.0.1"
   }
 }

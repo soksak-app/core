@@ -120,6 +120,7 @@ export function createTabSessions({ store, interaction, tabs, failed }) {
   function perform(actions) {
     for (const action of actions) {
       if (action.type !== "event") throw new Error(`tab session action ${action.type} is not declared`);
+      // events: workbench.tab.session.dropped, workbench.tab.session.orphan, workbench.tab.session.read, workbench.tab.session.stored
       emitEvent(action.level, action.event, action.fields);
     }
   }

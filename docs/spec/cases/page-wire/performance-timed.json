@@ -1,7 +1,8 @@
 {
   "name": "performance-timed",
   "description": "A timed operation records its duration in microseconds with its outcome, and the batch of the two commands leaves when the trace is switched off.",
-  "replay": true,
+  "replay": false,
+  "reason": "The case calls performance, which the producer does not run.",
   "variables": {
     "page-identity": {
       "type": "string",

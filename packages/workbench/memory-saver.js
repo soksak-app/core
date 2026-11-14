@@ -523,6 +523,7 @@ export function createMemorySaver({
     switch (action.type) {
       case "changed": return changed();
       case "state": return stateChanged(action.tab, action.state);
+      // events: workbench.tab.keep.changed, workbench.tab.restore.failed, workbench.tab.restored, workbench.tab.unload.failed, workbench.tab.unload.skipped, workbench.tab.unloaded
       case "event": return emitEvent(action.level, action.event, action.fields);
       case "failed": return failed(action.text);
       case "restore": return restore(action.tab);

@@ -1,7 +1,8 @@
 {
   "name": "performance-switch-start",
   "description": "The page reports the stored trace switch to the host at its start, and the stored switch is off: the host call performance answers null.",
-  "replay": true,
+  "replay": false,
+  "reason": "The case calls performance, which the producer does not run.",
   "variables": {},
   "steps": [
     {

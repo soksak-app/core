@@ -87,6 +87,46 @@
     "authorization": {
       "type": "string",
       "example": "notDetermined"
+    },
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789
     }
   },
   "steps": [
@@ -132,8 +172,8 @@
     {
       "reply": {
         "result": {
-          "ts_us": 1791000000000456,
-          "mono_ns": 5000000789
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
         }
       }
     },
@@ -148,8 +188,8 @@
     {
       "reply": {
         "result": {
-          "ts_us": 1791000000000456,
-          "mono_ns": 5000000789
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
         }
       }
     },
@@ -164,8 +204,8 @@
     {
       "reply": {
         "result": {
-          "ts_us": 1791000000000456,
-          "mono_ns": 5000000789
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
         }
       }
     },
@@ -180,8 +220,8 @@
     {
       "reply": {
         "result": {
-          "ts_us": 1791000000000456,
-          "mono_ns": 5000000789
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
         }
       }
     },
@@ -196,8 +236,8 @@
     {
       "reply": {
         "result": {
-          "ts_us": 1791000000000456,
-          "mono_ns": 5000000789
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
         }
       }
     },
