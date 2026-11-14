@@ -623,39 +623,56 @@ async function main(argv) {
   }
 }
 
+/**
+ * Builds each Rust run and runs its tests that `selected` accepts before the next run builds. The runs build in one target folder of
+ * cargo, where a build places each binary of a package at one path, such as the `sok` that the tests of soksak-sok run through
+ * `CARGO_BIN_EXE_sok`; the build of the next feature set replaces that binary, so a test that ran after it would run the binary of
+ * another run. Returns the discovery of each run and the results of the tests that ran.
+ */
+export async function runRustRuns({ runs, cwd, env, write, concurrency, timeoutMs, selected }) {
+  const found = [];
+  const results = new Map();
+  for (const run of runs) {
+    const discovered = await discoverRust({ ...run, cwd, env, write, timeoutMs });
+    found.push(discovered);
+    const tests = discovered.tests.filter(selected);
+    if (tests.length === 0) continue;
+    write(`RUN  ${tests.length} tests of ${run.id} with ${concurrency} at once, each limited to ${timeoutMs / 1000}s`);
+    for (const [name, result] of (await runTests({ tests, concurrency, write })).results) results.set(name, result);
+  }
+  return { found, results };
+}
+
 /** Builds and runs the selected tests in `buildDir` and audits the contract cases. */
 async function runContract(values, cases, buildDir, write, concurrency) {
-  // Go builds run together; the Rust builds share one cargo lock, so they follow one another. Both languages build at once.
-  // A scoped run builds only the runs whose id contains the text of --run.
+  // Go builds run together; the Rust builds share one cargo lock, so they follow one another, each with its tests (runRustRuns).
+  // Both languages build at once. A scoped run builds only the runs whose id contains the text of --run.
   if (values.run === '') throw new Error('--run needs a text that the id of a run contains');
   // default: without --run every run builds, because every id contains the empty text.
   const runText = values.run ?? '';
+  // default: without --only every test runs.
+  const only = values.only ?? null;
+  if (only === '') throw new Error('--only needs a text that the name of a test contains');
+  const selected = (item) => only === null || item.name.includes(only);
   const selectedHosts = values.host === undefined ? HOSTS : [values.host];
   const discoverRuns = (name) => (selectedHosts.includes(name)
     ? Promise.all(GO_RUNS[name]({ ldflags: values['go-ldflags'], cgoLdflags: values['cgo-ldflags'] }).filter((run) => run.id.includes(runText)).map((run) => discoverGo({ ...run, cwd: ROOT, buildDir, write, concurrency, timeoutMs: TEST_TIMEOUT_MS })))
     : Promise.resolve([]));
-  const rustDiscovery = (async () => {
-    const found = [];
-    if (selectedHosts.includes('tauriv2')) {
-      for (const run of RUST_RUNS.filter((entry) => entry.id.includes(runText))) found.push(await discoverRust({ ...run, cwd: ROOT, write, timeoutMs: TEST_TIMEOUT_MS }));
-    }
-    return found;
-  })();
-  const [wailsFound, mygoFound, rustFound] = await Promise.all([discoverRuns('wailsv3'), discoverRuns('mygo'), rustDiscovery]);
-  const found = { wailsv3: wailsFound, mygo: mygoFound, tauriv2: rustFound };
-  // default: without --only every test runs.
-  const only = values.only ?? null;
-  if (only === '') throw new Error('--only needs a text that the name of a test contains');
-  const items = [...wailsFound, ...mygoFound, ...rustFound].flatMap((entry) => entry.tests).filter((item) => only === null || item.name.includes(only));
-  if (only !== null) {
-    // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.
-    if (items.length === 0) throw new Error(`no test name contains ${JSON.stringify(only)}`);
-    write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s (scoped by ${JSON.stringify(only)}; no contract audit)`);
-    const scoped = await runTests({ tests: items, concurrency, write });
-    return [...scoped.results.values()].every((result) => result.status === 'pass') ? 0 : 1;
+  const rustRuns = selectedHosts.includes('tauriv2')
+    ? runRustRuns({ runs: RUST_RUNS.filter((entry) => entry.id.includes(runText)), cwd: ROOT, write, concurrency, timeoutMs: TEST_TIMEOUT_MS, selected })
+    : Promise.resolve({ found: [], results: new Map() });
+  const [wailsFound, mygoFound, rust] = await Promise.all([discoverRuns('wailsv3'), discoverRuns('mygo'), rustRuns]);
+  const found = { wailsv3: wailsFound, mygo: mygoFound, tauriv2: rust.found };
+  const goItems = [...wailsFound, ...mygoFound].flatMap((entry) => entry.tests).filter(selected);
+  // A scoped run shows the tests it ran; the contract audit needs every test, so it belongs to the full run.
+  if (only !== null && goItems.length + rust.results.size === 0) throw new Error(`no test name contains ${JSON.stringify(only)}`);
+  const results = new Map(rust.results);
+  if (goItems.length > 0) {
+    const scope = only === null ? '' : ` (scoped by ${JSON.stringify(only)}; no contract audit)`;
+    write(`RUN  ${goItems.length} Go tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s${scope}`);
+    for (const [name, result] of (await runTests({ tests: goItems, concurrency, write })).results) results.set(name, result);
   }
-  write(`RUN  ${items.length} tests with ${concurrency} at once, each limited to ${TEST_TIMEOUT_MS / 1000}s`);
-  const { results } = await runTests({ tests: items, concurrency, write });
+  if (only !== null) return [...results.values()].every((result) => result.status === 'pass') ? 0 : 1;
   const hosts = [];
   for (const name of selectedHosts) {
     const own = found[name].flatMap((entry) => entry.tests);

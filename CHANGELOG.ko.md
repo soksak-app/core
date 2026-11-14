@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- `sok` 명령의 test는 두 언어 모두 자기 run의 build tag나 feature로 된 `sok`을 실행한다 (F848).
 - Page와 mygo workbench의 window snapshot case는 workbench case이고, 그 test는 status 읽기의 `error`와 `exposure.list`의 entry를 assert한다 (F847).
 - Host는 process를 시작하기 전에 환경의 `SOKSAK_CONFIG_DIR`와 `SOKSAK_SURFACE`를 지우고, sidecar마다 자기 configuration directory를 `SOKSAK_CONFIG_DIR`로, `SOKSAK_SURFACE` 없이 시작한다 (F846).
 - Machine의 agent가 `sok`으로 application을 배우고 다룬다. `sok skill install`은 탐색을 가르치는 고정 skill을 쓰고, `sok mcp`는 호출마다 실행 중인 application의 exposure를 읽는 tool 열한 개를 제공하며, `sok mcp install`은 `claude` command로 그것을 등록하고, `sok setup check|install`은 이 부분을 보고하고 설치하며, 설정 창이 그것을 보여 준다. `core.layout.open`, `core.layout.select`, `core.layout.close`는 하나의 멱등 규칙으로 tab을 열고, 고르고, 닫으며, window snapshot은 window와 그 layout을 담는다(F831).

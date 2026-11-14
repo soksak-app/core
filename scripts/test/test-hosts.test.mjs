@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { cargoCommand } from '@soksak/window-check/cargo.mjs';
-import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, harnessLessTestFiles, parseDeclarations, selectRustDeclarations, uncoveredCases, e2eDeclarationErrors } from '../test-hosts.mjs';
+import { auditDeclarations, auditHostContract, parseContractCases, GO_RUNS, RUST_RUNS, groupResults, goTestSourceFilesForRun, harnessLessTestFiles, parseDeclarations, runRustRuns, selectRustDeclarations, uncoveredCases, e2eDeclarationErrors } from '../test-hosts.mjs';
 
 const SPEC = `# Hosts
 
@@ -202,6 +202,23 @@ test('every Rust run of the host tauriv2 builds each test target of its package,
     }
   }
   assert.deepEqual(missing, []);
+});
+
+// The fixture package has a binary that prints the features of its build and a test that compares them with its own; the two runs
+// build in one target folder, where the build of the second run replaces the binary of the first.
+test('the tests of each Rust run run before the next Rust run builds, so a binary of the package has the features of its run', { timeout: 240000 }, async (t) => {
+  const target = mkdtempSync(join(tmpdir(), 'host-contract-rust-'));
+  t.after(() => rmSync(target, { recursive: true, force: true }));
+  const lines = [];
+  const { found, results } = await runRustRuns({
+    runs: [{ id: 'plain', packageName: 'featurebinary' }, { id: 'other', packageName: 'featurebinary', features: 'other' }],
+    cwd: fileURLToPath(new URL('./fixtures/host-contract-rust/', import.meta.url)), env: { CARGO_TARGET_DIR: target },
+    write: (line) => lines.push(line), concurrency: 1, timeoutMs: 20000, selected: () => true,
+  });
+  assert.deepEqual(found.map((run) => run.failures), [[], []], lines.join('\n'));
+  const items = found.flatMap((run) => run.tests);
+  assert.deepEqual(items.map((item) => [item.run, item.testName, results.get(item.name)?.status]),
+    [['plain', 'the_binary_has_the_features_of_the_test', 'pass'], ['other', 'the_binary_has_the_features_of_the_test', 'pass']], lines.join('\n'));
 });
 
 test('the audit of the host mygo counts a case of the scope all that only a test of the Go language host library declares', { timeout: 1000 }, () => {

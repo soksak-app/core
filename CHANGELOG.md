@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- A test of a `sok` command runs the `sok` of the build tags or features of its run in both languages (F848).
 - The window snapshot cases of the page and the mygo workbench are workbench cases whose tests assert the `error` of a status read and the entries of `exposure.list` (F847).
 - A host removes `SOKSAK_CONFIG_DIR` and `SOKSAK_SURFACE` of its environment before it starts a process, and starts each sidecar with its configuration directory as `SOKSAK_CONFIG_DIR` and without `SOKSAK_SURFACE` (F846).
 - An agent on the machine learns and reaches the application through `sok`: `sok skill install` writes a static skill that teaches discovery, `sok mcp` serves eleven tools that read the exposure of the running application on each call, `sok mcp install` registers it through the `claude` command, `sok setup check|install` reports and installs these parts, and the settings window shows them; `core.layout.open`, `core.layout.select` and `core.layout.close` open, select and close tabs by one idempotent rule, and the window snapshot holds the window and its layout (F831).

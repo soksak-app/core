@@ -16,14 +16,19 @@ import (
 	"testing"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
+	"github.com/soksak-app/core/packages/sok/go/tests/support"
 )
 
-// builtSok builds the sok executable of this package into a folder of the test. The build cache of go makes each later build
-// quick.
+// builtSok builds the sok executable of this package into a folder of the test with the build tags of the test. The build cache
+// of go makes each later build quick.
 func builtSok(t *testing.T) string {
 	t.Helper()
 	program := filepath.Join(t.TempDir(), "sok")
-	output, err := exec.Command("go", "build", "-o", program, "github.com/soksak-app/core/packages/sok/go/src/cmd/sok").CombinedOutput()
+	build, err := support.SokBuild("go", program)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := build.CombinedOutput()
 	if err != nil {
 		t.Fatalf("go build: %v\n%s", err, output)
 	}
@@ -187,7 +192,12 @@ func TestSetupInstallLeavesThePathEntryWithoutATerminal(t *testing.T) {
 	if code != 1 || len(list) != 3 || list[0].Part != "path" || list[0].State != "missing" || list[1].State != "ok" || list[2].State != "ok" {
 		t.Fatalf("code %d stdout %s stderr %q", code, stdout, stderr)
 	}
-	if stderr != "sok: setup parts are not current: path "+list[0].File+"\n" || !strings.HasPrefix(list[0].File, "/etc/paths.d/") {
+	// The entry is named by the identifier of the build, so the sok of the test is the build of the tested package.
+	entry := "/etc/paths.d/" + sok.Identity()
+	if list[0].File != entry {
+		t.Fatalf("path entry %q, want %q", list[0].File, entry)
+	}
+	if stderr != "sok: setup parts are not current: path "+entry+"\n" {
 		t.Fatalf("stderr %q", stderr)
 	}
 	if commands := h.commands(t); strings.Contains(commands, "sudo") || !strings.Contains(commands, "claude mcp add --scope user soksak -- "+running+" mcp") {

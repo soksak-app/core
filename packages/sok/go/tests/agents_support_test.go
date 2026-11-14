@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/soksak-app/core/packages/sok/go/tests/support"
 )
 
 // The agent variables of a soksak window (docs/spec/cli.md#the-window-of-an-agent). TestMain removes them, so a test run inside a
@@ -47,7 +49,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// builtSok returns the sok executable of this package, built once for the test process.
+// builtSok returns the sok executable of this package, built once for the test process with the build tags of the test.
 func builtSok(t *testing.T) string {
 	t.Helper()
 	builtSokOnce.Do(func() {
@@ -59,7 +61,11 @@ func builtSok(t *testing.T) string {
 		if builtSokErr != nil {
 			return
 		}
-		build := exec.Command(goTool, "build", "-o", filepath.Join(builtSokDir, "sok"), "github.com/soksak-app/core/packages/sok/go/src/cmd/sok")
+		build, err := support.SokBuild(goTool, filepath.Join(builtSokDir, "sok"))
+		if err != nil {
+			builtSokErr = err
+			return
+		}
 		build.Env = startEnvironment
 		output, err := build.CombinedOutput()
 		if err != nil {
