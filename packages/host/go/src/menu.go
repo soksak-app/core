@@ -20,7 +20,9 @@ var menuTable = []struct{ id, ko, en string }{
 }
 
 // The contract table of the menu items. (menu, id, source, ko, en, key). An item whose source is "system" keeps
-// the framework title, and an item whose source is "title" uses the title of the table.
+// the framework title and shortcut, and its key is the shortcut that the framework provides; an item whose source is
+// "title" uses the title of the table. undo and redo are system items because AppKit sets the title of an item with the
+// undo: or redo: action from the undo manager each time it validates the menu.
 var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"app", "about", "title", "정보", "About", ""},
 	{"app", "settings", "title", "설정…", "Settings…", "cmd+,"},
@@ -31,8 +33,8 @@ var itemTable = []struct{ menu, id, source, ko, en, key string }{
 	{"app", "quit", "title", "종료", "Quit", "cmd+q"},
 	{"file", "close-window", "title", "윈도우 닫기", "Close Window", "cmd+w"},
 	{"file", "close-all", "system", "", "", ""},
-	{"edit", "undo", "title", "실행 취소", "Undo", "cmd+z"},
-	{"edit", "redo", "title", "다시 실행", "Redo", "shift+cmd+z"},
+	{"edit", "undo", "system", "", "", "cmd+z"},
+	{"edit", "redo", "system", "", "", "shift+cmd+z"},
 	{"edit", "cut", "title", "잘라내기", "Cut", "cmd+x"},
 	{"edit", "copy", "title", "복사", "Copy", "cmd+c"},
 	{"edit", "paste", "title", "붙여넣기", "Paste", "cmd+v"},
@@ -204,7 +206,7 @@ func tableItems(menu, language string) ([]MenuItem, error) {
 			items = append(items, MenuItem{Title: title, Key: row.key, Run: func() { runMenuCommand(command) }})
 		case row.source == "title":
 			// The other items change the title of a role item to the title of the table. The role keeps the behavior, so
-			// close-window closes the window and undo, redo, cut, copy, paste and select-all perform the edit actions.
+			// close-window closes the window and cut, copy, paste and select-all perform the edit actions.
 			items = append(items, MenuItem{Role: row.id, Title: title, Key: row.key})
 		case row.source == "system":
 			items = append(items, MenuItem{Role: row.id})

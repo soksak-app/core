@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Undo and redo keep the menu titles that the system sets, and the menu check names the host of each difference (F837).
 - A plugin change of a window check ends when the new workbench has read the plugin state (F836).
 - The endpoint contract check tracks the still folders that its replayed cases create (F834).
 - The recording check compares the refusals of the hosts in the error form of the window check session (F833).

@@ -39,7 +39,7 @@ The scope column is `all`, `<host>[, <host>] only: <reason>` for behavior that e
 
 ## Application menu
 
-Both hosts build the application menu from one table, so a menu item present on one host and absent on the other is a defect. The `title` items take their titles from the selected language; `system` items keep the framework-provided title (the bundle declares the table's languages as localizations, so system-managed titles follow the same language). Keys use the `host.menu` report format. The supported languages are the table's language columns — `ko` and `en` today, extended by adding a column together with the workbench language declaration. The language is the 일반 setting `language`: `auto` follows the system language's primary tag matched against the supported set, and an unsupported system language falls back to the default language `en`; the page pushes the effective language to the host (`set_menu_language`) before first use and on every change, and before that push the host builds the menu from the system language with the same matching and fallback.
+Both hosts build the application menu from one table, so a menu item present on one host and absent on the other is a defect. The `title` items take their titles from the selected language; `system` items keep the framework-provided title and shortcut (the bundle declares the table's languages as localizations, so system-managed titles follow the same language); a key in a `system` row is the shortcut that the framework provides, and the window check compares it, while it checks only the presence of the title. Undo and redo are `system` items because AppKit sets the title of an item with the `undo:` or `redo:` action from the undo manager each time it validates the menu. Keys use the `host.menu` report format. The supported languages are the table's language columns — `ko` and `en` today, extended by adding a column together with the workbench language declaration. The language is the 일반 setting `language`: `auto` follows the system language's primary tag matched against the supported set, and an unsupported system language falls back to the default language `en`; the page pushes the effective language to the host (`set_menu_language`) before first use and on every change, and before that push the host builds the menu from the system language with the same matching and fallback.
 
 Menus:
 
@@ -65,8 +65,8 @@ Items:
 | app | quit | title | 종료 | Quit | cmd+q |
 | file | close-window | title | 윈도우 닫기 | Close Window | cmd+w |
 | file | close-all | system | | | |
-| edit | undo | title | 실행 취소 | Undo | cmd+z |
-| edit | redo | title | 다시 실행 | Redo | shift+cmd+z |
+| edit | undo | system | | | cmd+z |
+| edit | redo | system | | | shift+cmd+z |
 | edit | cut | title | 잘라내기 | Cut | cmd+x |
 | edit | copy | title | 복사 | Copy | cmd+c |
 | edit | paste | title | 붙여넣기 | Paste | cmd+v |

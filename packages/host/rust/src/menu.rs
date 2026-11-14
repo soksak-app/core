@@ -49,7 +49,9 @@ pub const MENUS: &[(&str, &str, &str)] = &[
 ];
 
 /// The contract table of the menu items. (menu, id, source, ko, en, key). An item whose source is "system" keeps the
-/// framework title, and an item whose source is "title" uses the title of the table. Each row must be one line so that
+/// framework title and shortcut, and its key is the shortcut that the framework provides; an item whose source is
+/// "title" uses the title of the table. undo and redo are system items because AppKit sets the title of an item with
+/// the undo: or redo: action from the undo manager each time it validates the menu. Each row must be one line so that
 /// scripts/check-hosts-same.mjs can read the rows, so this table is excluded from alignment.
 #[rustfmt::skip]
 pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
@@ -62,8 +64,8 @@ pub const ITEMS: &[(&str, &str, &str, &str, &str, &str)] = &[
     ("app", "quit", "title", "종료", "Quit", "cmd+q"),
     ("file", "close-window", "title", "윈도우 닫기", "Close Window", "cmd+w"),
     ("file", "close-all", "system", "", "", ""),
-    ("edit", "undo", "title", "실행 취소", "Undo", "cmd+z"),
-    ("edit", "redo", "title", "다시 실행", "Redo", "shift+cmd+z"),
+    ("edit", "undo", "system", "", "", "cmd+z"),
+    ("edit", "redo", "system", "", "", "shift+cmd+z"),
     ("edit", "cut", "title", "잘라내기", "Cut", "cmd+x"),
     ("edit", "copy", "title", "복사", "Copy", "cmd+c"),
     ("edit", "paste", "title", "붙여넣기", "Paste", "cmd+v"),
@@ -254,7 +256,8 @@ fn file_submenu(language: &str) -> Result<Menu, String> {
     })
 }
 
-/// Builds the edit menu. The item titles come from the table and the framework provides the shortcuts.
+/// Builds the edit menu. The titles of cut, copy, paste and select-all come from the table, undo and redo keep the
+/// titles of the framework, and the framework provides the shortcuts.
 fn edit_submenu(language: &str) -> Result<Menu, String> {
     let item = |id: &'static str| -> Result<MenuItem, String> {
         Ok(titled(id, item_title("edit", id, language)?))
@@ -263,8 +266,8 @@ fn edit_submenu(language: &str) -> Result<Menu, String> {
         id: "edit",
         title: Some(menu_title("edit", language)?),
         items: vec![
-            item("undo")?,
-            item("redo")?,
+            system("undo"),
+            system("redo"),
             MenuItem::Separator,
             item("cut")?,
             item("copy")?,

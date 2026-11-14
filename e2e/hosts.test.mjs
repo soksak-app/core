@@ -274,18 +274,18 @@ if (requiresAll(process.env)) test("every host serves the declared application m
   const column = columns.indexOf(languages[0]) + 1;
 
   // The observed menus follow the order and the titles of the declared top-level menus. The title of the app menu is the normalized application name.
-  const served = Object.values(observed).map((value) => value.menus);
-  for (const menus of served) {
-    assert.equal(menus.length, contract.menus.length, `menu count differs: ${JSON.stringify(menus.map((m) => m.title))}`);
+  const served = Object.entries(observed).map(([host, value]) => [host, value.menus]);
+  for (const [host, menus] of served) {
+    assert.equal(menus.length, contract.menus.length, `${host} menu count differs: ${JSON.stringify(menus.map((m) => m.title))}`);
     contract.menus.forEach((row, index) => {
       const expected = row[column];
       assert.equal(menus[index].title, row[0] === "app" ? "APP" : expected,
-        `menu ${row[0]} title differs: ${JSON.stringify(menus[index])}`);
+        `${host} menu ${row[0]} title differs: ${JSON.stringify(menus[index])}`);
     });
   }
 
   // The first items of each menu equal the declared table. A title item must equal the title and the key, and a system item
-  // needs to equal only the position and the existence (the framework sets the title by language). The items after the table are
+  // needs to equal only the position, the existence and a declared key (the framework sets the title by language). The items after the table are
   // added by the system, so the check confirms only equality between the hosts.
   const declared = Object.fromEntries(contract.menus.map(([id]) => [id, []]));
   // The about, hide and quit titles of the app menu start with the application name (the observation normalization replaces the application name with APP,
@@ -297,16 +297,18 @@ if (requiresAll(process.env)) test("every host serves the declared application m
       title: row[0] === "app" && appPrefixed.has(row[1]) ? `APP ${row[column + 2]}` : row[column + 2],
     });
   }
-  for (const menus of served) {
+  for (const [host, menus] of served) {
     contract.menus.forEach(([id], index) => {
       declared[id].forEach((item, offset) => {
         const actual = menus[index].items[offset];
-        assert.ok(actual, `menu ${id} item ${item.id} is missing: ${JSON.stringify(menus[index])}`);
+        assert.ok(actual, `${host} menu ${id} item ${item.id} is missing: ${JSON.stringify(menus[index])}`);
         if (item.source === "title") {
           assert.deepEqual(actual, { title: item.title, key: item.key },
-            `menu ${id} item ${item.id} differs from the table: ${JSON.stringify(actual)}`);
+            `${host} menu ${id} item ${item.id} differs from the table: ${JSON.stringify(actual)}`);
         } else {
-          assert.ok(actual.title.length > 0, `menu ${id} system item ${item.id} is empty`);
+          // The framework sets the title of a system item, and a key that the table declares is the shortcut of the framework.
+          assert.ok(actual.title.length > 0, `${host} menu ${id} system item ${item.id} is empty`);
+          if (item.key) assert.equal(actual.key, item.key, `${host} menu ${id} system item ${item.id} has another key: ${JSON.stringify(actual)}`);
         }
       });
     });

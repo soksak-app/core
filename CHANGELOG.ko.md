@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Undo와 redo가 system이 정하는 menu 제목을 유지하고, menu check는 각 차이의 host를 밝힌다 (F837).
 - Window check의 plugin change는 새 workbench가 plugin 상태를 읽었을 때 끝난다 (F836).
 - Endpoint contract check가 replay한 case가 만든 still folder를 추적한다 (F834).
 - 녹화 check가 host의 거부를 window check session의 error 형식으로 비교한다 (F833).
