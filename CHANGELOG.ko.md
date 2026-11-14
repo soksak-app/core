@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- release 절차가 candidate acceptance 의 activation tier 를 마지막에 단독으로 실행한다 (F817).
 - Windows build 검사가 host source 를 시험 없이 compile 하고, version 검사가 test fixture 를 건너뛰며, SDK testing module 이 case 폴더를 소비자에게서 받고, window-source 감사가 endpoint 의 Unix socket 을 받아들이며, view drag 수치가 기록된 tool 출력을 판정하며, contract 감사가 test harness 없는 Rust target 의 module 을 읽는다 (F816).
 - 두 host 가 실패한 녹화 stop 을 `capture stop failed: <e>` 로, 실패한 folder 지우기를 `capture directory cleanup failed: <e>` 로 알리고, 남은 folder 의 소유자를 유지한다 (F812).
 - Rust host 가 다른 plugin 의 page log event 를 Go host 와 같은 문구로 거부한다 (F813).
