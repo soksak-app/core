@@ -120,3 +120,16 @@ test('setup-native validates the runner toolchain without installing packages', 
   assert.doesNotMatch(JSON.stringify(steps), /brew install|apt(-get)? install|curl .*install|actions\/setup-[^@]+@v/i,
     'setup-native must use tools provided by the pinned runner');
 });
+
+test('every CI job that runs the core package tests installs Rust before them', { timeout: 1000 }, () => {
+  // The e2e setup tests run cargo metadata. A job without the toolchain lets the rustup proxy install it inside two tests at once,
+  // and the two installations fail on the same folders.
+  const jobs = Object.entries(YAML.parse(read('.github/workflows/ci.yml')).jobs);
+  const running = jobs.filter(([, job]) => (job.steps ?? []).some((step) => /scripts\/node-tests\.mjs/.test(step.run ?? '')));
+  assert.ok(running.length > 0, 'no CI job runs scripts/node-tests.mjs');
+  for (const [name, job] of running) {
+    const tests = job.steps.findIndex((step) => /scripts\/node-tests\.mjs/.test(step.run ?? ''));
+    const rust = job.steps.findIndex((step) => step.uses === './core/.github/actions/setup-rust');
+    assert.ok(rust >= 0 && rust < tests, `the CI job ${name} runs the core package tests without installing Rust first`);
+  }
+});

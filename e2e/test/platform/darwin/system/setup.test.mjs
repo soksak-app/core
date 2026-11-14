@@ -11,8 +11,13 @@ import { cargoCommand } from "@soksak/window-check/cargo.mjs";
 
 const ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 const SETUP = JSON.stringify(new URL("../../../../setup.mjs", import.meta.url).href);
-/** The build output folder of the repository that the cargo of the toolchain reports. */
-const reported = () => JSON.parse(spawnSync(cargoCommand(), ["metadata", "--format-version", "1", "--no-deps"], { cwd: ROOT, encoding: "utf8" }).stdout).target_directory;
+/** The build output folder of the repository that the cargo of the toolchain reports; a failed cargo is an error with its output. */
+const reported = () => {
+  const result = spawnSync(cargoCommand(), ["metadata", "--format-version", "1", "--no-deps"], { cwd: ROOT, encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`cargo metadata exited with ${result.status}: ${result.stderr.trim()}`);
+  return JSON.parse(result.stdout).target_directory;
+};
 
 test("common setup declares binaries without building anything", { timeout: 60000 }, () => {
   // The setup runs the cargo of the toolchain only for its metadata: the target folder gains no entry that a build writes.
