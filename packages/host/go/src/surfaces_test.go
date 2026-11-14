@@ -815,14 +815,19 @@ func TestViewReplyRetainsOpenCallWhenGenerationRetiresBeforePost(t *testing.T) {
 		t.Fatalf("view call: %v", err)
 	}
 	generation := viewGeneration(p.s, "probe-surface")
-	// The view retires: its calls end as the process end ends them, and a view of the next generation replaces it in the registry. The
-	// document of the retired view stays open to the end of the test, which closes the surface.
+	// The view retires: its calls end as the process end ends them, the end of the view closes its document, and a view of the next
+	// generation replaces it in the registry.
 	var callsAtProcessEnd []openViewCall
 	var replied error
 	p.main(func() {
 		callsAtProcessEnd = p.openCalls()
-		if _, err := p.s.documents.Remove(DocumentKey{Surface: "probe-surface", Name: viewRegionName}); err != nil {
+		handle, err := p.s.documents.Get(DocumentKey{Surface: "probe-surface", Name: viewRegionName})
+		if err != nil {
 			t.Errorf("retire old view: %v", err)
+			return
+		}
+		if _, ok := p.s.endView("probe-surface", handle, generation, time.Now(), viewClosers{document: system.CloseDocument, image: system.CloseImage}); !ok {
+			t.Error("retire old view: the end of the current view was refused")
 			return
 		}
 		p.s.documents.registerView("probe-surface", "probe", generation+1, unsafe.Pointer(new(int)))

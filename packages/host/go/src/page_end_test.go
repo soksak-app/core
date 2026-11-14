@@ -8,6 +8,7 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/soksak-app/core/packages/host/go/src/platform"
 	support "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
@@ -80,6 +81,17 @@ func newPageEndWindow(t *testing.T, screen bool) (*Host, *Surfaces, *pageEndWind
 	t.Helper()
 	useCurrentPlatformForViews(t)
 	native := support.TitledWindow(t, runOnMainThread, 400, 300)
+	// A work that the end of the page queues for the UI thread (mainPageEnded) calls the platform with the window, so the window closes
+	// and the platform of the test ends only after it ran. The main queue serves its works in order, so a work queued at the teardown
+	// runs after each work of the test.
+	t.Cleanup(func() {
+		served := make(chan struct{})
+		if err := system.EnqueueUI(func() { close(served) }); err != nil {
+			t.Errorf("queue the end of the UI works of the test: %v", err)
+			return
+		}
+		<-served
+	})
 	window := &pageEndWindow{settlingWindow: settlingWindow{pagelessWindow: pagelessWindow{native: native}},
 		listeners: map[WindowEvent][]func(){}, sent: make(chan string, 64)}
 	if screen {
@@ -158,6 +170,77 @@ func TestTheEndOfThePageAnswersTheCloseQuestionThatItLeft(t *testing.T) {
 	window.end()
 	if window.closeCount() != 1 {
 		t.Fatalf("a second end closed the window again: %d closes", window.closeCount())
+	}
+}
+
+// heldUI is the platform of the operating system whose UI queue serves the works that the host queues while holding is set only when a
+// later work is queued, which is the latest turn in which a queue that serves its works in order can serve them. It counts the works
+// that were queued and the works that ran.
+type heldUI struct {
+	platform.Platform
+	mu      sync.Mutex
+	holding bool
+	held    []func()
+	queued  int
+	ran     int
+}
+
+func (p *heldUI) EnqueueUI(work func()) error {
+	counted := func() {
+		work()
+		p.mu.Lock()
+		p.ran++
+		p.mu.Unlock()
+	}
+	p.mu.Lock()
+	p.queued++
+	if p.holding {
+		p.held = append(p.held, counted)
+		p.mu.Unlock()
+		return nil
+	}
+	works := append(p.held, counted)
+	p.held = nil
+	p.mu.Unlock()
+	for _, work := range works {
+		if err := p.Platform.EnqueueUI(work); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// release ends the hold, so the next queued work brings the held works to the UI queue before it.
+func (p *heldUI) release() {
+	p.mu.Lock()
+	p.holding = false
+	p.mu.Unlock()
+}
+
+// end returns the number of the queued works, of the works that ran and of the works that the queue still holds, and drops the held
+// works, which name a window and a platform that the test ended.
+func (p *heldUI) end() (queued, ran, held int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	queued, ran, held = p.queued, p.ran, len(p.held)
+	p.held = nil
+	return queued, ran, held
+}
+
+// The fixture of a page end closes its window and gives back the platform only after the UI works that the host queued ran, because a
+// work of the end of the page (mainPageEnded) calls the platform with the window. The UI queue of the test serves the works of the test
+// body no earlier than the teardown of the fixture.
+func TestThePageEndFixtureRunsTheUIWorksOfTheHostBeforeItEnds(t *testing.T) {
+	queue := &heldUI{holding: true}
+	t.Run("page end", func(t *testing.T) {
+		_, _, window := pageEndFixture(t)
+		queue.Platform = system
+		system = queue
+		window.end()
+		queue.release()
+	})
+	if queued, ran, held := queue.end(); held != 0 || ran != queued {
+		t.Fatalf("the fixture ended with %d of %d UI works of the host not run, %d of them held by the queue", queued-ran, queued, held)
 	}
 }
 
