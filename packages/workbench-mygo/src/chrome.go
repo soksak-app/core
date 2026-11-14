@@ -17,10 +17,8 @@ import (
 // drawChrome draws the chrome bar of the window, a band of the card color with its edge under it: the logo, the tabs of the projects and the
 // switches. The library screen has no layout, so its bar leaves out the project list and the balance.
 func (s *Shell) drawChrome(c *ui.Context, width float32) {
-	bar := c.TitleBar()
-	s.controlsWidth = bar.Left
 	browsing := s.browsing || s.opened() == nil
-	ui.Row(s.binder.Name(c, "core.chrome.bar", "")).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+bar.Left).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
+	ui.Row(s.binder.Name(c, "core.chrome.bar", "")).Size(width, s.chromeHeight()).Padding(0, s.metrics.spacePad, 0, s.metrics.spacePad+s.controlsWidth).AlignItems(ui.Center).Gap(s.metrics.chromeGap).
 		Background(s.palette.Card).BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.Edge).DragWindow().
 		ObserveInput(s.placeInput(FrameScope())).Role(ui.RoleGroup).Label("core.chrome.bar").Children(func() {
 		s.drawBrand(c)
@@ -34,6 +32,17 @@ func (s *Shell) drawChrome(c *ui.Context, width float32) {
 		})
 		ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(s.frameLength(s.metrics.chromeActsGap)).Children(func() { s.drawChromeActs(c, browsing) })
 	})
+}
+
+// keepControls takes the area of the window buttons that the host answered with windowControls or with the chrome of a
+// preparation, and keeps its end x + w as the width that the first row leaves to the buttons, as applyControls of
+// packages/workbench/index.html sets --controls-w. An answer without buttons (w 0) sets nothing, so the row keeps the width of
+// the last answer with buttons, and 0 before any.
+func (s *Shell) keepControls(at layout.Rect) {
+	s.surfaces.controls = &at
+	if at.W > 0 {
+		s.controlsWidth = float32(at.X + at.W)
+	}
 }
 
 // drawBrand draws the logo of the workbench. It does not receive presses, so a press on it drags the window.

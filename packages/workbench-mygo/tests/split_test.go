@@ -927,6 +927,55 @@ func TestTheChromeBarHoldsTheLogoAndTheSwitchesOfThePage(t *testing.T) {
 	}
 }
 
+// The chrome bar keeps the window button area that windowControls answers, as applyControls of packages/workbench/index.html: the logo
+// starts at the end of the buttons (x + w) after the padding space-3, and not at the title bar inset of the library. The fixture
+// answers the buttons at x 7 with width 52.
+func TestTheChromeBarKeepsTheWindowButtonAreaOfTheAnswer(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("space-3")
+	f := projectWithPlugins(t)
+	if got, want := f.box("core.brand", "").X, float32(pad)+7+52; got != want {
+		t.Fatalf("the logo starts at x %v, want %v", got, want)
+	}
+	if got := status[struct {
+		ControlsWidth float64 `json:"controlsWidth"`
+	}](t, f, "core.chrome").ControlsWidth; got != 7+52 {
+		t.Fatalf("core.chrome reports controlsWidth %v, want %v", got, 7+52)
+	}
+}
+
+// An answer without window buttons (w 0) sets nothing, as applyControls of packages/workbench/index.html returns for it: the chrome
+// bar keeps the button area of the last answer with buttons. The placements answer the buttons at x 12 with width 52 and then
+// without width.
+func TestTheChromeBarKeepsTheButtonAreaOfTheLastAnswerWithButtons(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("space-3")
+	f, stored := placingShell(t)
+	resized(f, 1100)
+	inset := func() float64 {
+		return status[struct {
+			ControlsWidth float64 `json:"controlsWidth"`
+		}](t, f, "core.chrome").ControlsWidth
+	}
+	if got := inset(); got != 12+52 {
+		t.Fatalf("core.chrome reports controlsWidth %v after the answer with buttons, want %v", got, 12+52)
+	}
+	stored.controls = map[string]any{"x": 0, "y": 0, "w": 0, "h": 0}
+	resized(f, 1000)
+	if got := inset(); got != 12+52 {
+		t.Fatalf("core.chrome reports controlsWidth %v after the answer without buttons, want %v", got, 12+52)
+	}
+	if got, want := f.box("core.brand", "").X, float32(pad)+12+52; got != want {
+		t.Fatalf("the logo starts at x %v after the answer without buttons, want %v", got, want)
+	}
+}
+
 // The number of a new tab counts the tabs of its layout and the name of a new space counts the spaces of its project, so neither moves the other.
 func TestTabsAndSpacesCountApart(t *testing.T) {
 	f, first, made := splitShell(t)

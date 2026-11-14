@@ -252,6 +252,6 @@ func (s *Shell) followChrome(chrome json.RawMessage) error {
 	if err := json.Unmarshal(chrome, &read); err != nil {
 		return err
 	}
-	s.surfaces.controls = &read.Controls
+	s.keepControls(read.Controls)
 	return nil
 }

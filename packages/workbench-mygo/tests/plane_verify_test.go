@@ -28,6 +28,8 @@ type placingHost struct {
 	// with the boxes where the frame that it presented put the views, and the elements of that frame place them
 	// (docs/spec/hosts.md#native-views).
 	answered, presented json.RawMessage
+	// controls, when it is set, is the area of the window buttons that a placement answers in place of x 12 with width 52.
+	controls map[string]any
 }
 
 func placingShell(t *testing.T) (*shellFixture, *placingHost) {
@@ -56,8 +58,11 @@ func placingShell(t *testing.T) (*shellFixture, *placingHost) {
 				}
 				placements = append(placements, placement)
 			}
-			return map[string]any{"ticket": 1, "placements": placements,
-				"chrome": map[string]any{"controls": map[string]any{"x": 12, "y": 12, "w": 52, "h": 16}, "row": 40}}, nil
+			controls := map[string]any{"x": 12, "y": 12, "w": 52, "h": 16}
+			if stored.controls != nil {
+				controls = stored.controls
+			}
+			return map[string]any{"ticket": 1, "placements": placements, "chrome": map[string]any{"controls": controls, "row": 40}}, nil
 		},
 		"presentSurfaces": func(_ context.Context, argument json.RawMessage) (any, error) {
 			if stored.unanswered != nil {

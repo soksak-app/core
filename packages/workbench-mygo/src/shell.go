@@ -362,7 +362,7 @@ type Shell struct {
 	workBanner float32
 	// planeBox is the rectangle of the plane in the window in the last drawing, on the device pixel grid (alignPlane).
 	planeBox layout.Rect
-	// controlsWidth is the width that the window keeps for its own buttons.
+	// controlsWidth is the width that the first row leaves to the window buttons, kept by keepControls.
 	controlsWidth float32
 	held          *heldDivider
 	drag          *boundaryDrag
@@ -713,7 +713,8 @@ func (s *Shell) adopt(value any, chrome windowChrome) error {
 	if err := s.beginSettings(snapshot.Common); err != nil {
 		return err
 	}
-	s.surfaces.titlebar, s.surfaces.controls = chrome.Row, &chrome.Controls
+	s.surfaces.titlebar = chrome.Row
+	s.keepControls(chrome.Controls)
 	return nil
 }
 
