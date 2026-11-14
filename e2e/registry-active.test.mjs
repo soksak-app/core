@@ -11,7 +11,7 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { buildFixtureRegistry, fixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
+import { fixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
 import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 
 /** The fixture plugin that the registry later lists in a newer version. */
@@ -36,7 +36,7 @@ for (const app of Object.values(APPS)) {
     // the plugin in its installed version and the next one.
     const { index } = readIndex(before.registry);
     const later = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal,
-      build: (sok, out, options) => buildFixtureRegistry(sok, out, { ...options, versions: { [PLUGIN]: [{ version: installed }, { version: newer }] } }) });
+      versions: { [PLUGIN]: [{ version: installed }, { version: newer }] } });
     s.cleanup(() => rmSync(later, { recursive: true, force: true }));
     const folder = realpathSync(mkdtempSync(join(tmpdir(), "soksak-plugin-active-")));
     const projectRoot = join(folder, "project");

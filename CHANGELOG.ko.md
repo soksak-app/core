@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- `fixtureRegistry`가 check의 version과 range를 받고, 받지 않는 option을 거부한다 (F832).
 - 두 host가 양의 부호 있는 32-bit 수가 아닌 process group id를 signal 전에 거부한다 (F830-3).
 - 두 host의 process group 오류가 system 오류를 `errno <n>`로 적는다 (F830-2).
 - Go host가 Rust host처럼 종료된 sidecar의 process group을 leader reap 전에 끝내고, 끝난 뒤에는 group signal을 보내지 않는다 (F830-1).

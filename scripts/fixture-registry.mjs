@@ -337,13 +337,16 @@ const removeFolder = (folder) => rmSync(folder, { recursive: true, force: true }
 /**
  * Resolves with a new registry folder that holds the fixture registry: every plugin of e2e/fixtures packed, the pack fixtures and the
  * index that the `sok registry build` of the executable `sok` writes. buildFixtureRegistry writes it from the fixtures under `root`
- * under `signal`, each of its commands within the step limit. A failed build removes the folder; when the removal also fails, the
- * build rejects with an AggregateError of both. The caller removes the folder.
+ * under `signal`, each of its commands within the step limit, and lists the fixture plugins that `versions` names in its versions
+ * (buildFixtureRegistry). An option other than these is refused with its name before the folder is created. A failed build removes
+ * the folder; when the removal also fails, the build rejects with an AggregateError of both. The caller removes the folder.
  */
-export async function fixtureRegistry({ sok, signal, root }) {
+export async function fixtureRegistry({ sok, signal, root, versions, ...unknown }) {
+  const refused = Object.keys(unknown);
+  if (refused.length > 0) throw new Error(`fixtureRegistry takes no option ${refused.join(", ")}`);
   const folder = mkdtempSync(join(tmpdir(), "soksak-fixture-registry-"));
   try {
-    await buildFixtureRegistry(sok, folder, { root, signal });
+    await buildFixtureRegistry(sok, folder, { root, signal, versions });
   } catch (error) {
     let cleanupError = null;
     try {

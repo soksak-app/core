@@ -12,7 +12,7 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 
 import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
-import { buildFixtureRegistry, fixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
+import { fixtureRegistry, nextPatch, readIndex } from "../scripts/fixture-registry.mjs";
 import { fresh, restoreRegistry, useRegistry } from "./fixture.mjs";
 import { releaseKey } from "../scripts/platform/platform.js";
 
@@ -79,8 +79,7 @@ for (const app of Object.values(APPS)) {
     const versions = Object.fromEntries(before.plugins.filter((row) => row.id !== PLUGIN && row.installed !== null && row.installed !== undefined)
       .map((row) => [row.id, [{ version: row.installed.version, engines: ">=0.0.1" }]]));
     versions[PLUGIN] = [{ version: installed, engines: `>=0.0.1 <${NEWER}` }, { version: newer, engines: `>=${NEWER}` }];
-    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal,
-      build: (sok, out, options) => buildFixtureRegistry(sok, out, { ...options, versions }) });
+    const folder = await fixtureRegistry({ sok: join(dirname(app.binary), "sok"), signal: t.signal, versions });
     s.cleanup(() => rmSync(folder, { recursive: true, force: true }));
     const { index } = readIndex(pathToFileURL(join(folder, "index.json")).href);
     for (const row of before.plugins) {

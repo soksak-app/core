@@ -335,6 +335,24 @@ test("a registry build lists a fixture plugin in the versions that a check names
   await assert.rejects(buildFixtureRegistry(sok, out, { root: fixtures, versions: { probe: [] } }), /versions of probe list no version/);
 });
 
+test("a fixture registry lists a fixture plugin in the versions and ranges that a check names", { timeout: 60000 }, async (t) => {
+  const { fixtures } = copiedFixtures(t, ["probeplain"]);
+  const folder = await fixtureRegistry({ sok: requireSok(), root: fixtures, signal: new AbortController().signal,
+    versions: { probeplain: [{ version: "0.0.40", engines: "*" }, { version: "0.0.41", engines: ">=0.0.1" }] } });
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const entry = JSON.parse(readFileSync(join(folder, "index.json"), "utf8")).plugins.find((plugin) => plugin.id === "probeplain");
+  assert.deepEqual(entry.versions.map((item) => [item.version, item.engines.soksak]), [["0.0.40", "*"], ["0.0.41", ">=0.0.1"]],
+    "the registry index does not list the versions and ranges that the check named");
+});
+
+test("a fixture registry refuses an option that it does not take and names the option", { timeout: 20000 }, async (t) => {
+  const empty = mkdtempSync(join(tmpdir(), "fixture-registry-empty-"));
+  t.after(() => rmSync(empty, { recursive: true, force: true }));
+  const before = registryFolders();
+  await assert.rejects(fixtureRegistry({ sok: requireSok(), root: empty, build: () => {} }), /fixtureRegistry takes no option build/);
+  assert.deepEqual(registryFolders(), before, "the refused call left a folder");
+});
+
 test("serveRegistry answers its documents and the files inside the registry folder and nothing else", { timeout: 20000 }, async (t) => {
   const { root, folder } = registryToServe(t);
   // A self-signed certificate of the loopback address, made by the real openssl as `make create-test-certificates` makes its certificates.
