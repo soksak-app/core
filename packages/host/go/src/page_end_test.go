@@ -230,6 +230,7 @@ func (p *heldUI) end() (queued, ran, held int) {
 // The fixture of a page end closes its window and gives back the platform only after the UI works that the host queued ran, because a
 // work of the end of the page (mainPageEnded) calls the platform with the window. The UI queue of the test serves the works of the test
 // body no earlier than the teardown of the fixture.
+// contract: verification.native-test-facade.page-end-fixture-runs-queued-ui-works
 func TestThePageEndFixtureRunsTheUIWorksOfTheHostBeforeItEnds(t *testing.T) {
 	queue := &heldUI{holding: true}
 	t.Run("page end", func(t *testing.T) {

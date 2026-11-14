@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The page end fixture test of the Go hosts declares its verification case of the native test support (F825-1).
 - Each test list of the host test discovery is a runner step with its start, its result, its elapsed time and the per-test limit, and a list that fails or reaches its limit fails discovery with the patterns, binary or executable named (F829).
 - The Rust host cancels the layouts of a closing window in its close hook, and the work that the destruction of the window queues no longer names the window (F827-1).
 - The Go host cancels the layouts of a closing window in the step of the close instead of a later queued work that named the window by an address that a later window could reuse (F827).
