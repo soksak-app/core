@@ -926,6 +926,7 @@ fn invalid_json_closes_connection() {
 | `workspace.settings.common-only-keys-are-the-declared-list` | 호스트가 거부하는 공통 전용 키는 그 language host library가 embed한 `workbench.json` 사본의 목록이며, 그 목록의 순서를 따른다. | all |
 | `workspace.settings.refuses-project-file-at-its-project` | 현재 `format`이 없는 프로젝트 설정 파일은 스냅샷에서 그 프로젝트에 `settingsError` `<path>: settings.json: format must be 1`을 주고 `settings`는 주지 않으며, 다른 프로젝트는 `settingsError` 없이 설정을 유지한다. | all |
 | `workspace.snapshot.reports-refused-stored-files` | 다른 형태의 `projects.json`이 있을 때 snapshot은 프로젝트 없이 빈 공통 설정과 `<file>: projects.json: format must be 1`의 `projectsError`를 돌려준다. 다른 형태의 `settings.json`이 있을 때는 빈 공통 설정과 `<file>: settings.json: format must be 1`의 `settingsError`를 돌려준다. 그 뒤 `add`나 공통 `settings` 쓰기는 그 오류로 실패하고 file은 바뀌지 않는다. | all |
+| `page.wire.replays-recorded-cases` | `replay`가 true인 각 page-wire case는 실제 host에서 실행된다. case의 각 호출은 그 이름의 host command에 닿고 case가 기록한 답을 준다([page-wire case](cases/page-wire/README.ko.md)). | wailsv3, mygo only: Rust host는 아직 page-wire case를 실행하지 않는다(F807) |
 | `exposure.host-buttons.notifies-mask-change` | `host.buttons`는 버튼 source가 마지막으로 보고한 마스크를 담은 `{mask}`이고, 그와 다른 마스크의 보고는 새 값으로 감시자에게 한 번 알리며, 같은 마스크의 보고는 알리지 않는다. | all |
 | `exposure.status-change.refuses-host-name` | workbench가 `host.`로 시작하는 이름에 보낸 상태 변경은 `the page cannot change host status <name>`으로 거부되고, 다른 이름의 변경은 받아들여진다. | all |
 | `images.calls.name-the-call` | 인자 해석 뒤 image 영역 호출의 실패는 호출 이름 `imageAttach`, `imageFocus`, `imageCaret`, `imageText`, `imageDetach`를 붙인 `<call>: <reason>`이다. | all |

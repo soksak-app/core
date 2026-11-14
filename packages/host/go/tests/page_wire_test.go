@@ -94,6 +94,7 @@ type pageWireReply struct {
 }
 
 // TestPageWire runs each page-wire case of the folder with replay true, one subtest per case.
+// contract: page.wire.replays-recorded-cases
 func TestPageWire(t *testing.T) {
 	entries, err := os.ReadDir(pageWireDirectory)
 	if err != nil {
