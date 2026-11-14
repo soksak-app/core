@@ -125,10 +125,13 @@ export const fresh = (s, options = {}) => start.fresh(s, { ...options, startPlug
  * Waits until the page of the window has reloaded after a plugin operation that changed installed.json
  * (docs/spec/installation.md#applying-a-change). `offsets` are the positions of the event files before the operation: the new
  * document writes `workbench.start`, and `host.windows`, which the host answers while the page reloads, then reports the page ready.
+ * A workbench reports its window ready before it reads the plugin state, and until that read `core.plugins` answers `core: null`
+ * with no plugins, so the wait ends when `core.plugins` reports the read state and a caller reads the state after the change.
  */
 export async function pluginChangeApplied(s, offsets, action) {
   await untilEventLine(s.app.configDir, offsets, (line) => line.includes("workbench.start"), { ...start.reading(s.app, ["workbench.start"]), ended: s.client.ended });
   await s.windows(1, `the page was not ready again after ${action}`);
+  await s.until("core.plugins", (plugins) => plugins.core !== null, `the workbench did not read the plugin state after ${action}`);
 }
 
 /**

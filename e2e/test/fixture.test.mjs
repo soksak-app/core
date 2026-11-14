@@ -7,8 +7,9 @@ import test from "node:test";
 import { connect } from "@soksak/client";
 import { startCasePlayer } from "@soksak/client/testing";
 import { Session } from "@soksak/window-check/app.mjs";
+import { currentEventOffsets } from "@soksak/window-check/event-log.mjs";
 
-import { cardSidebar, paintProbeDocument, placeholderTabs, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsClosed, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
+import { cardSidebar, paintProbeDocument, placeholderTabs, pluginChangeApplied, pluginChangeStarted, probeListSections, probeSidebarSets, replacePlaceholders, restoreRegistry, settingsClosed, settingsShown, START_ENTRIES, START_PLUGIN, startTab, useRegistry } from "../fixture.mjs";
 
 /** A disposable configuration folder of an application; `log` is true for a check that reads its event log. */
 function configFolder(t, log = false) {
@@ -226,10 +227,27 @@ test("a plugin change waits for the new start in the event log, reads the workbe
   assert.deepEqual(sent, [[["status.get", "core.window.workbench"]]], "the change ran after the workbench was read and before the page was waited for");
   assert.deepEqual(changed.server.requests.filter(({ method }) => method !== "status.unwatch").map(({ method, params }) => [method, params.name]), [
     ["status.get", "core.window.workbench"], ["status.watch", "host.windows"], ["status.get", "host.windows"],
-    ["status.get", "core.window.workbench"], ["status.watch", "core.window.workbench"], ["status.get", "core.window.workbench"]]);
+    ["status.watch", "core.plugins"], ["status.get", "core.plugins"], ["status.get", "core.window.workbench"], ["status.watch", "core.window.workbench"], ["status.get", "core.window.workbench"]]);
 
   // A change that does not start the workbench again fails with its action.
   const same = await play(t, "plugin-change-same", configDir);
   await assert.rejects(pluginChangeStarted(same.s, async () => { write("workbench.start", { url: "app://same" }); }, "enabling probe"),
     /enabling probe did not start the workbench again/);
+});
+
+test("a plugin change is applied only after the new workbench has read the plugin state that core.plugins reports", async (t) => {
+  const configDir = configFolder(t, true);
+  const log = join(configDir, "logs", "host-1-10.jsonl");
+  appendFileSync(log, `${JSON.stringify({ ts_us: 1791000000000001, seq: 1, level: "info", layer: "workbench", event: "log.open", fields: { schema: 3 } })}\n`);
+  const offsets = currentEventOffsets(configDir);
+  appendFileSync(log,
+    `${JSON.stringify({ ts_us: 1791000000000002, seq: 2, level: "info", layer: "workbench", event: "workbench.start", fields: { url: "app://new" } })}\n`);
+  const read = await play(t, "plugin-change-read", configDir);
+  await pluginChangeApplied(read.s, offsets, "disabling probe");
+  // core.plugins answers `core: null` with no plugins until the new workbench has read the plugin state, and then notifies the read state.
+  assert.deepEqual(read.server.requests.filter(({ method }) => method !== "status.unwatch").map(({ method, params }) => [method, params.name]), [
+    ["status.watch", "host.windows"], ["status.get", "host.windows"], ["status.watch", "core.plugins"], ["status.get", "core.plugins"]],
+    "pluginChangeApplied returned before core.plugins reported the plugin state that the new workbench read");
+  assert.deepEqual((await read.s.get("core.plugins")).plugins, [{ id: "probe", enabled: false }]);
+  await read.server.played;
 });
