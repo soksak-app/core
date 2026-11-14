@@ -100,7 +100,12 @@ fn list_during_close(
     windows: &[(tauri::Window, Arc<WindowData>)],
 ) -> Value {
     let first = list(app, windows, true);
-    let closing = windows[1].1.closing.load(Ordering::SeqCst);
+    // The close that the list asked for is a message of the event loop, which the main thread handles after the list step. The
+    // closing state is read in a main-thread step that the event loop receives after that message, so the close was handled
+    // before the read.
+    let records = windows[1].1.clone();
+    let closing = on_main(app, move || records.closing.load(Ordering::SeqCst))
+        .expect("read the closing state on the main thread");
     let second = list(app, windows, false);
     json!({"first": result_json(first), "closing": closing, "second": result_json(second)})
 }

@@ -127,6 +127,7 @@ mod hold {
         result
     }
 
+    // contract: diagnostics.capture-start.new-window-answers-once-held
     fn a_failed_hold_removes_the_folder() -> Result<(), String> {
         let system = platform::current()?;
         let parent = folder::Folder::new();
@@ -146,6 +147,7 @@ mod hold {
         Ok(())
     }
 
+    // contract: diagnostics.capture-start.new-window-hold-ends
     fn the_stop_ends_a_wait_for_a_window_that_no_show_took() -> Result<(), String> {
         let system = platform::current()?;
         let parent = folder::Folder::new();

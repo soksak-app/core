@@ -154,6 +154,7 @@ func removeViewStore() bool {
 // every store under the folder, the folder itself and a store nested in it, as the store of the document regions in a configuration
 // folder of the view store is, so that the folder is removed and no WebKit process writes it again: a document of another store that
 // starts the processes of WebKit again afterward does not bring the removed folder back.
+// contract: verification.native-test-facade.view-stores-end-before-removal
 func TestTheEndOfTheViewStoresLetsTheirFolderBeRemoved(t *testing.T) {
 	useCurrentPlatformForViews(t)
 	native := support.WindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")

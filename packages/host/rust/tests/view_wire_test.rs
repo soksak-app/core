@@ -152,7 +152,7 @@ fn run_case(name: &str, file: &Path) -> Result<(), String> {
 /// Runs each view-wire case of the folder with replay true, one after the other: the records of the host are process-wide.
 // contract: view.wire.replays-recorded-cases
 #[test]
-fn every_case_with_replay_true_gives_its_recorded_reply() {
+fn every_view_wire_case_with_replay_true_gives_its_recorded_reply() {
     let mut names: Vec<(String, PathBuf)> = fs::read_dir(CASES)
         .unwrap_or_else(|error| panic!("{CASES}: {error}"))
         .map(|entry| entry.unwrap().path())

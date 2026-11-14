@@ -440,6 +440,14 @@ test('the static audit fails a marker that names an undefined case, a case outsi
   assert.ok(emptyErrors.some((error) => error.includes('declares no contract case')), emptyErrors.join('\n'));
 });
 
+test('the static audit reports a Rust leaf name that two listed tests of one crate share in one run, without running tests', () => {
+  const cases = parseContractCases(SPEC);
+  const tauri = parseDeclarations('// contract: area.shared\n#[test]\nfn shared() {}\n', 'rust', 'tauri_test.rs');
+  const item = (target) => ({ name: `tauriv2-tests ${target}::shared`, run: 'tauriv2-tests', owner: 'packages/host/rust', target, testName: 'shared' });
+  const { errors } = auditDeclarations(cases, [{ ...staticHost('tauriv2', 'rust', tauri), items: [item('a_test'), item('b_test')] }]);
+  assert.deepEqual(errors, ['tauriv2: duplicate leaf shared in packages/host/rust of run tauriv2-tests: a_test::shared, b_test::shared']);
+});
+
 test('the static audit reports each case of a host scope that no test declares', () => {
   const cases = parseContractCases(SPEC);
   const wails = parseDeclarations(GO, 'go', `${GO_OWNER}/wails_test.go`);

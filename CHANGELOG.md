@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The tauriv2 host contract check passes again: each endpoint case has one Rust owner, the wire tests have distinct names, the hold tests declare their cases, the dialog watch case covers every host, the static check reports duplicate leaves, and the window race fixture reads the closing state after the close on the main thread (#F824).
 - The layout probe test of a resize waits for the animation frame at which the composition places its regions, and its wire case declares that placement (#F822).
 - The core-node CI job installs the Rust toolchain before the core package tests, whose e2e setup tests run cargo metadata, and the darwin setup test reports a failed cargo with its output (#F823).
 - The Go host tests end each WebKit data store under their shared folder through the native store end before they remove the folder, so the network process no longer writes into a folder that is being removed (#F821).

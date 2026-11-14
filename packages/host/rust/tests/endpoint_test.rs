@@ -286,80 +286,12 @@ fn request(connection: &mut Connection, id: u64, method: &str, params: Value) ->
     receive(connection).expect("the endpoint closed the connection")
 }
 
-// The cases of the transport and of the checks of the request, which the endpoint answers without a page.
-
-// contract: endpoint.transport.http-request-line-closes
-#[test]
-fn framing_http_request_line() {
-    endpoint_case::play(
-        "framing_http_request_line",
-        "framing-http-request-line",
-        &[],
-    );
-}
-
-// contract: endpoint.transport.invalid-json-closes
-#[test]
-fn framing_invalid_json() {
-    endpoint_case::play("framing_invalid_json", "framing-invalid-json", &[]);
-}
-
-// contract: endpoint.transport.length-over-limit-closes
-#[test]
-fn framing_length_over_limit() {
-    endpoint_case::play(
-        "framing_length_over_limit",
-        "framing-length-over-limit",
-        &[],
-    );
-}
-
-// contract: endpoint.transport.non-jsonrpc-object-closes
-#[test]
-fn framing_not_object() {
-    endpoint_case::play("framing_not_object", "framing-not-object", &[]);
-}
-
-// contract: endpoint.transport.non-jsonrpc-object-closes
-#[test]
-fn framing_version_not_2() {
-    endpoint_case::play("framing_version_not_2", "framing-version-not-2", &[]);
-}
-
-// contract: endpoint.transport.undeclared-method-closes
-#[test]
-fn undeclared_method() {
-    endpoint_case::play("undeclared_method", "undeclared-method", &[]);
-}
-
-// contract: endpoint.names.owner-form-required, endpoint.rpc.target-params-are-checked-in-order
-#[test]
-fn error_invalid_params() {
-    endpoint_case::play("error_invalid_params", "error-invalid-params", &[]);
-}
-
-// contract: endpoint.rpc.unknown-window-1003
-#[test]
-fn error_window_missing() {
-    endpoint_case::play("error_window_missing", "error-window-missing", &[]);
-}
-
-// contract: endpoint.rpc.unknown-window-1003, endpoint.rpc.target-params-are-checked-in-order
-#[test]
-fn command_window_missing() {
-    endpoint_case::play("command_window_missing", "command-window-missing", &[]);
-}
-
-// The cases with a scripted page.
+// The cases with a scripted page. The cases that the endpoint answers without a page are played by endpoint_cases_test.rs.
 
 // contract: endpoint.transport.close-reason-is-recorded
 #[test]
 fn scripted_close_reason_recorded() {
-    endpoint_case::play(
-        "scripted_close_reason_recorded",
-        "close-reason-recorded",
-        &[],
-    );
+    endpoint_case::play("scripted_close_reason_recorded", "close-reason-recorded");
 }
 
 // contract: exposure.command.ends-by-reply-or-peer-end, exposure.relay.connection-end-ends-its-requests
@@ -368,14 +300,13 @@ fn scripted_connection_end_ends_page_request() {
     endpoint_case::play(
         "scripted_connection_end_ends_page_request",
         "connection-end-ends-page-request",
-        &[],
     );
 }
 
 // contract: endpoint.rpc.element-rect-role
 #[test]
 fn scripted_element_rect_role() {
-    endpoint_case::play("scripted_element_rect_role", "element-rect-role", &[]);
+    endpoint_case::play("scripted_element_rect_role", "element-rect-role");
 }
 
 // contract: exposure.list.host-owner-without-page
@@ -384,40 +315,31 @@ fn scripted_exposure_list_host_entries() {
     endpoint_case::play(
         "scripted_exposure_list_host_entries",
         "exposure-list-host-entries",
-        &[],
     );
 }
 
 // contract: endpoint.no-result.is-recorded
 #[test]
 fn scripted_no_result_recorded() {
-    endpoint_case::play("scripted_no_result_recorded", "no-result-recorded", &[]);
+    endpoint_case::play("scripted_no_result_recorded", "no-result-recorded");
 }
 
 // contract: endpoint.close.reply-after-peer-close
 #[test]
 fn scripted_reply_after_peer_close() {
-    endpoint_case::play(
-        "scripted_reply_after_peer_close",
-        "reply-after-peer-close",
-        &[],
-    );
+    endpoint_case::play("scripted_reply_after_peer_close", "reply-after-peer-close");
 }
 
 // contract: endpoint.rpc.round-trip-by-id, endpoint.rpc.page-params-omit-window
 #[test]
 fn scripted_round_trip_page_params() {
-    endpoint_case::play(
-        "scripted_round_trip_page_params",
-        "round-trip-page-params",
-        &[],
-    );
+    endpoint_case::play("scripted_round_trip_page_params", "round-trip-page-params");
 }
 
 // contract: endpoint.rpc.target-params-are-checked-in-order
 #[test]
 fn scripted_target_params_order() {
-    endpoint_case::play("scripted_target_params_order", "target-params-order", &[]);
+    endpoint_case::play("scripted_target_params_order", "target-params-order");
 }
 
 // contract: endpoint.transport.undeclared-method-closes
@@ -426,24 +348,19 @@ fn scripted_undeclared_methods_removed() {
     endpoint_case::play(
         "scripted_undeclared_methods_removed",
         "undeclared-methods-removed",
-        &[],
     );
 }
 
 // contract: endpoint.watch.unwatch-enters-the-queue-only-after-a-watch
 #[test]
 fn scripted_unwatch_without_watch() {
-    endpoint_case::play(
-        "scripted_unwatch_without_watch",
-        "unwatch-without-watch",
-        &[],
-    );
+    endpoint_case::play("scripted_unwatch_without_watch", "unwatch-without-watch");
 }
 
 // contract: endpoint.watch.subscription-arrival-order
 #[test]
 fn scripted_watch_arrival_order() {
-    endpoint_case::play("scripted_watch_arrival_order", "watch-arrival-order", &[]);
+    endpoint_case::play("scripted_watch_arrival_order", "watch-arrival-order");
 }
 
 // contract: endpoint.watch.other-requests-not-blocked-by-pending-subscription
@@ -452,20 +369,19 @@ fn scripted_watch_pending_subscription() {
     endpoint_case::play(
         "scripted_watch_pending_subscription",
         "watch-pending-subscription",
-        &[],
     );
 }
 
 // contract: endpoint.watch.notifies-watching-connection, endpoint.watch.non-watching-connection-not-notified, endpoint.watch.unwatch-is-per-connection, endpoint.watch.page-watch-deduplicated, endpoint.watch.no-page-unwatch-while-watched, endpoint.watch.last-watcher-close-unwatches-page, endpoint.watch.registry-reflects-watches
 #[test]
 fn scripted_watch_per_connection() {
-    endpoint_case::play("scripted_watch_per_connection", "watch-per-connection", &[]);
+    endpoint_case::play("scripted_watch_per_connection", "watch-per-connection");
 }
 
 // contract: endpoint.rpc.missing-window-param-invalid
 #[test]
 fn scripted_window_param_missing() {
-    endpoint_case::play("scripted_window_param_missing", "window-param-missing", &[]);
+    endpoint_case::play("scripted_window_param_missing", "window-param-missing");
 }
 
 // contract: exposure.list.host-owner-without-page
@@ -474,7 +390,6 @@ fn scripted_exposure_list_host_owner() {
     endpoint_case::play(
         "scripted_exposure_list_host_owner",
         "exposure-list-host-owner",
-        &[],
     );
 }
 
@@ -484,36 +399,31 @@ fn scripted_exposure_list_not_object() {
     endpoint_case::play(
         "scripted_exposure_list_not_object",
         "exposure-list-not-object",
-        &[],
     );
 }
 
 // contract: endpoint.input.dialog-answer
 #[test]
 fn scripted_input_delivered() {
-    endpoint_case::play("scripted_input_delivered", "input-delivered", &[]);
+    endpoint_case::play("scripted_input_delivered", "input-delivered");
 }
 
 // contract: endpoint.names.unknown-host-name-1001, endpoint.errors.unknown-name-text, endpoint.names.missing-name-invalid, endpoint.names.owner-form-required, endpoint.names.valid-name-examples, endpoint.input.pointer-invalid-phase
 #[test]
 fn scripted_name_errors() {
-    endpoint_case::play("scripted_name_errors", "name-errors", &[]);
+    endpoint_case::play("scripted_name_errors", "name-errors");
 }
 
 // contract: endpoint.dialog.watch-reaches-the-host
 #[test]
 fn scripted_watch_host_dialog() {
-    endpoint_case::play("scripted_watch_host_dialog", "watch-host-dialog", &[]);
+    endpoint_case::play("scripted_watch_host_dialog", "watch-host-dialog");
 }
 
 // contract: endpoint.watch.empty-surface-invalid, endpoint.watch.surface-and-plain-forwarded-separately
 #[test]
 fn scripted_watch_surface_separate() {
-    endpoint_case::play(
-        "scripted_watch_surface_separate",
-        "watch-surface-separate",
-        &[],
-    );
+    endpoint_case::play("scripted_watch_surface_separate", "watch-surface-separate");
 }
 
 /// The scripted cases that this file plays.

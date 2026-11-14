@@ -570,23 +570,17 @@ pub fn read_cases() -> Result<Vec<Case>, String> {
     Ok(cases)
 }
 
-/// Plays the case of the name on the endpoint and fails the test on each problem that the replay finds. A scripted case has the
-/// windows of its own, and another case has `windows`. A case with a `log` step needs the application log of its own process, so
-/// it runs in a child process that runs the test `test` alone.
-pub fn play(test: &str, name: &str, windows: &[&str]) {
+/// Plays the scripted case of the name on the endpoint with the windows of the case and fails the test on each problem that the
+/// replay finds. A case with a `log` step needs the application log of its own process, so it runs in a child process that runs
+/// the test `test` alone. The cases that the endpoint answers without a page are played by endpoint_cases_test.rs.
+pub fn play(test: &str, name: &str) {
     let case = read_case(&case_directory().join(format!("{name}.json")))
         .unwrap_or_else(|error| panic!("{error}"));
-    if !case.scripted {
-        assert!(
-            case.replay,
-            "{name} is played by this runner but its case has replay false"
-        );
-    }
-    let windows: Vec<String> = if case.scripted {
-        case.windows.clone()
-    } else {
-        windows.iter().map(|window| window.to_string()).collect()
-    };
+    assert!(
+        case.scripted,
+        "{name} is played by this runner but its case has no scripted page"
+    );
+    let windows = case.windows.clone();
     if let Some(config) = std::env::var_os(CHILD) {
         run(&case, &windows, Path::new(&config), true);
         return;

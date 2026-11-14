@@ -211,14 +211,16 @@ function declaresOfTheOtherGoHost(name, test, contract) {
 
 /**
  * Compares the declarations of each host with the contract cases, without run results: parse errors, tests without a case,
- * undefined cases, and cases outside the host scope. Returns the errors and, per host, the set of cases its tests declare.
- * hosts: [{ name, language, tests, errors }].
+ * undefined cases, cases outside the host scope, and Rust leaf names that several listed tests of one crate share in one run.
+ * Returns the errors and, per host, the set of cases its tests declare.
+ * hosts: [{ name, language, tests, errors, items }] — items are the listed tests of a Rust host.
  */
 export function auditDeclarations(cases, hosts) {
   const errors = [];
   const declared = new Map(hosts.map((host) => [host.name, new Set()]));
   for (const host of hosts) {
     errors.push(...host.errors.map((error) => `${host.name}: ${error}`));
+    if (host.language === 'rust') errors.push(...duplicateLeaves(host.items ?? []).map((error) => `${host.name}: ${error}`));
     for (const test of host.tests) {
       const where = `${host.name}: ${test.file}:${test.line} ${test.name}`;
       if (test.cases.length === 0) {
@@ -278,7 +280,6 @@ export function auditHostContract(cases, hosts, { selectedHosts = HOSTS } = {}) 
   const covered = new Map(hosts.map((host) => [host.name, new Set()]));
   for (const host of hosts) {
     if (host.runs.every((owners) => [...owners.values()].every((named) => named.size === 0))) errors.push(`${host.name}: the test run reported zero tests`);
-    if (host.language === 'rust') errors.push(...duplicateLeaves(host.items ?? []).map((error) => `${host.name}: ${error}`));
     for (const test of host.tests) {
       if (test.cases.length === 0) continue;
       const where = `${host.name}: ${test.file}:${test.line} ${test.name}`;
@@ -568,7 +569,7 @@ function parseHostSources(name, rustItems = []) {
 
 /** The static check builds and lists selected Rust tests but does not execute test bodies. */
 function checkDeclarations(cases, rustItems, rustFailures = []) {
-  const hosts = HOSTS.map((name) => ({ name, ...parseHostSources(name, name === 'tauriv2' ? rustItems : []) }));
+  const hosts = HOSTS.map((name) => ({ name, ...parseHostSources(name, name === 'tauriv2' ? rustItems : []), items: name === 'tauriv2' ? rustItems : [] }));
   hosts.find((host) => host.name === 'tauriv2').errors.push(...rustFailures);
   const { errors, declared } = auditDeclarations(cases, hosts);
   errors.push(...uncoveredCases(cases, declared));
