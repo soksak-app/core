@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Rust host 가 다른 plugin 의 page log event 를 Go host 와 같은 문구로 거부한다 (F813).
 - workbench 시험 파일 38 개가 더 page-wire 사례 위에서 page 의 실제 host, plane, compositor, projects, settings, page log, surface module 을 실행하고, 사례는 page 의 listener 등록을 등록을 거부하거나 붙잡을 수 있는 listen step 으로 기록하며, library 시험은 page 처럼 호환되지 않는 plugin 을 정렬한다 (F795-10).
 - 시작 origin 이 없는 저장된 view tab 이 거부되고 application log 에 쓰이며 tab 에 보인다. 저장된 layout 검사가 plugin unit 의 composition kind 를 읽는다 (F808).
 - workbench 의 시험 runtime 이 workbench 의존성을 선언하고 page-wire 사례를 spec file 로 둔 workspace package 이고, tab session, tab state, memory saver 의 emit 지점이 내보내는 event 를 밝히며, page-wire 사례가 host 의 clock 응답을 host 변수로 두고 producer 가 performance 와 닫힌 host 의 사례를 재생하지 않는 이유를 밝힌다 (F795-10).

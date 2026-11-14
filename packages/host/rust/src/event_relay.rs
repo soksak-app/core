@@ -418,7 +418,7 @@ pub fn view_log_command(
                     }
                 } else {
                     return Err(format!(
-                        "events[{index}]: event {event:?} is not allowed for plugin {plugin:?}"
+                        "events[{index}]: event {event:?} is not a record of plugin {plugin:?} or an allowed page record"
                     ));
                 }
             }

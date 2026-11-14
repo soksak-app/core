@@ -463,7 +463,7 @@ fn a_view_batch_rejects_an_event_with_another_plugin_prefix() {
     )
     .unwrap_err();
     assert!(
-        error.contains("event \"plugin.other.saved\" is not allowed for plugin \"probe\""),
+        error.contains("event \"plugin.other.saved\" is not a record of plugin \"probe\" or an allowed page record"),
         "{error}"
     );
     let path = log.path().to_path_buf();
