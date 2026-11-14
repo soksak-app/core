@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- supervisor나 bounded command가 끝내는 command는 SIGTERM을 받는다. harness는 leader의 exit event를 기다리고, 승격을 보고하는 timer가 유예 뒤 SIGKILL을 보내며, leader가 남긴 member는 SIGKILL을 받고, group 종료의 단계 대기는 command supervisor에 남는다 (#F820-1).
 - ci.yml의 toolchain 단계 주석이 core package의 setup test를 적으므로, 어떤 workflow도 end-to-end check 폴더를 적지 않는다 (#F823-1).
 - tauriv2 host contract check가 다시 통과한다: 각 endpoint case는 Rust owner가 하나이고, wire test의 이름이 서로 다르며, hold test가 자기 case를 선언하고, dialog watch case는 모든 host를 덮고, 정적 check가 중복 leaf를 보고하며, window race fixture는 main thread의 close 뒤에 closing 상태를 읽는다 (#F824).
 - resize의 layout probe test는 composition이 영역을 배치하는 animation frame을 기다리고, 그 wire case가 그 배치를 선언한다 (#F822).

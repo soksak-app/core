@@ -15,14 +15,15 @@ export function runBounded(command, args, { timeout, cwd, stdout = "inherit", st
     const child = spawn(command, args, { cwd, env, stdio: ["ignore", stdout, stderr], detached: true });
     let reason = "exit", error = null, kill = null, ending = null, ended = null;
     const record = (failure) => { error = `${failure.code}: ${failure.message}`; };
-    // The group gets SIGTERM at the first stop and again when the command exits, for the processes it left, and SIGKILL when it still
-    // runs after the grace of terminateGroup. A member that ended but is not yet reaped stays in the group, and macOS refuses the
-    // signal to a group that holds only such members; signalGroup judges that group from the process table as ended, so the end of
-    // the command does not depend on when its members are reaped.
+    // The group gets SIGTERM at the first stop, and SIGKILL when it still runs after the grace of terminateGroup or when the command
+    // exits, for the processes it left. A member that ended but is not yet reaped stays in the group, and macOS refuses the signal to a
+    // group that holds only such members; signalGroup judges that group from the process table as ended, so the end of the command does
+    // not depend on when its members are reaped.
+    const exited = new Promise((resolve) => child.once("exit", resolve));
     const end = () => {
       if (!child.pid || ending) return;
       try {
-        ending = terminateGroup(child.pid, (killed) => { kill = killed; });
+        ending = terminateGroup(child.pid, { exited, report: (killed) => { kill ??= killed; } });
         ended = ending.ended.catch(record);
       } catch (failure) { record(failure); }
     };
@@ -52,7 +53,7 @@ export function runBounded(command, args, { timeout, cwd, stdout = "inherit", st
     signal?.addEventListener("abort", cancel, { once: true });
     child.once("error", (failure) => { reason = "spawn-error"; error = `${failure.code}: ${failure.message}`; });
     child.once("exit", end);
-    // The result returns after the end of the group; a signal during that wait still sends SIGKILL at once.
+    // The result returns after the last signal of terminateGroup at the exit of the command.
     child.once("close", async (code, exitSignal) => {
       clearTimeout(deadline);
       clearInterval(orphaned);

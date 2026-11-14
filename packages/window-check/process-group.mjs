@@ -115,36 +115,53 @@ export function killGroup(pgid, send = sendToGroup, members = groupMembers) {
 export const TERMINATION_GRACE_MS = 5000;
 
 /**
- * Ends the group pgid of a command by the rule of a stop: SIGTERM to the group, so each member can remove its partial output, release
- * its locks and end its children, and then a wait until the group runs nothing. A group that still runs TERMINATION_GRACE_MS after
- * the SIGTERM gets SIGKILL with the reason `grace`; `kill(reason)` sends SIGKILL at once, for an event such as a second cancellation,
- * and does nothing after the end of the group.
- * Each SIGKILL calls `onKill({ reason, running })` with the members that still ran, so the escalation is reported. The SIGTERM is sent
- * before the function returns, and a refusal of it throws. `ended` resolves with the record of the SIGKILL, or with null when SIGTERM
- * ended the group, and rejects with a refused SIGKILL. No event reports the end of a process that is not a child of this process, so
- * the wait reads the group at each 10 ms step.
+ * Ends the group pgid of a command whose leader is a child of the caller, by the rule of a stop: SIGTERM to the group, so each member
+ * can remove its partial output, release its locks and end its children. `exited` is the promise of the exit event of the leader, the
+ * event of the stop. A group that still runs TERMINATION_GRACE_MS after the SIGTERM gets SIGKILL, reported as `grace`; `kill(reason)`
+ * sends SIGKILL at once, for an event such as a second cancellation. At the exit of the leader the grace ends and the members that still
+ * run get SIGKILL, reported as `leader-exit`, because the program that started them ended without them. Each SIGKILL calls
+ * `report({ reason, running })` with the members that still ran. The SIGTERM is sent before the function returns, and a refusal of it
+ * throws. `ended` resolves after the exit of the leader and that last signal, and rejects with a refused SIGKILL. The wait until the
+ * members that are not children of the caller are gone belongs to the caller, because no event reports their end.
  */
-export function terminateGroup(pgid, onKill = () => {}) {
-  let killed = null;
-  let groupEnded = false;
-  const kill = (reason) => {
-    if (killed || groupEnded) return killed;
+export function terminateGroup(pgid, { exited, report }) {
+  let killed = false;
+  let leaderExited = false;
+  const killRunning = (reason) => {
+    if (!groupRuns(pgid)) return null;
     const running = runningMembers(pgid);
+    if (running.length === 0) return null;
     killGroup(pgid);
-    killed = { reason, running };
-    onKill(killed);
-    return killed;
+    return { reason, running };
   };
-  if (!groupRuns(pgid)) return { ended: Promise.resolve(null), kill: () => null };
+  const kill = (reason) => {
+    if (killed || leaderExited) return;
+    const record = killRunning(reason);
+    killed = true;
+    if (record) report(record);
+  };
+  if (!groupRuns(pgid)) return { ended: exited.then(() => {}), kill: () => {} };
   signalGroup(pgid, "SIGTERM");
-  const killAt = performance.now() + TERMINATION_GRACE_MS;
-  const ended = (async () => {
-    while (groupRuns(pgid)) {
-      if (!killed && performance.now() >= killAt) kill("grace");
-      await new Promise((resolve) => setTimeout(resolve, 10));
+  let refuse;
+  const grace = setTimeout(() => {
+    if (killed) return;
+    try {
+      const record = killRunning("grace");
+      killed = true;
+      if (record) report(record);
+    } catch (error) {
+      refuse(error);
     }
-    groupEnded = true;
-    return killed;
-  })();
+  }, TERMINATION_GRACE_MS);
+  const ended = new Promise((resolve, reject) => {
+    refuse = reject;
+    exited.then(() => {
+      clearTimeout(grace);
+      leaderExited = true;
+      const record = killRunning("leader-exit");
+      if (record) report(record);
+      resolve();
+    }).catch(reject);
+  });
   return { ended, kill };
 }

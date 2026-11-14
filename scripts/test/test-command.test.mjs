@@ -233,8 +233,8 @@ test('cleans a descendant that inherits supervisor stdio before close', { timeou
 });
 
 // The command ends when the descendant reports readiness, so its timeout only bounds process startup under load and is not the behavior under test.
-// The cleanup sends SIGTERM to the members that the leader left, and SIGKILL to the descendant that still runs after the grace.
-test('ends a descendant that ignores SIGTERM with SIGKILL after the grace and names it', { timeout: testHangMs }, async (t) => {
+// The program that started the descendant ended without it, so the cleanup at the exit of the leader sends it SIGKILL and names it.
+test('ends a descendant that the leader leaves with SIGKILL at the exit of the leader and names it', { timeout: testHangMs }, async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'test-command-resistant-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'pid');
@@ -253,8 +253,7 @@ test('ends a descendant that ignores SIGTERM with SIGKILL after the grace and na
   const result = await runCommand({ id: 'resistant-descendant', command, args, timeoutMs: hangMs, onEvent: () => {} });
   assert.equal(result.status, 'pass', JSON.stringify(result));
   descendantPid = Number(await readFile(pidFile, 'utf8'));
-  assert.equal(existsSync(markerFile), true, 'the descendant received no SIGTERM before its end');
-  assert.equal(result.kill?.reason, 'grace', JSON.stringify(result));
+  assert.equal(result.kill?.reason, 'leader-exit', JSON.stringify(result));
   assert.deepEqual(result.kill.running.map((member) => member.pid), [descendantPid]);
   assertEnded(descendantPid);
 });
@@ -356,7 +355,8 @@ test('forwards a CLI SIGTERM as a cancellation and a second one as SIGKILL witho
     await rm(directory, { recursive: true, force: true });
   });
   // The pid file is created by writing a temporary file and renaming it. The reader never reads an empty file in the middle of the write.
-  const commandSource = `const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,[${JSON.stringify(DESCENDANT)},${JSON.stringify(markerFile)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
+  // The leader and the descendant both ignore SIGTERM, so only the second SIGTERM to the command or the grace ends them.
+  const commandSource = `process.on('SIGTERM',()=>{}); const {spawn}=require('node:child_process'); const {renameSync,writeFileSync}=require('node:fs'); const child=spawn(process.execPath,[${JSON.stringify(DESCENDANT)},${JSON.stringify(markerFile)}],{stdio:['ignore','ignore','ignore','ipc']}); child.on('message',message=>{if(message==='ready'){writeFileSync(${JSON.stringify(pidFile + '.tmp')},String(child.pid)); renameSync(${JSON.stringify(pidFile + '.tmp')},${JSON.stringify(pidFile)});}}); setInterval(()=>{},1000);`;
   // The pid file is read once the watch of the folder is active and again at each change, so its rename is seen at any load.
   // The wait ends by the pid file or by the exit of the command that writes it.
   const cliEnded = new AbortController();
@@ -370,7 +370,7 @@ test('forwards a CLI SIGTERM as a cancellation and a second one as SIGKILL witho
   assert.ok(Number.isInteger(descendantPid) && descendantPid > 0, `pid file holds ${descendantPid}`);
   const closed = new Promise((resolve) => cli.once('close', (code, signal) => resolve({ code, signal })));
   cli.kill('SIGTERM');
-  // The descendant writes its marker at the SIGTERM of the group and stays; the second SIGTERM to the command then sends SIGKILL,
+  // The descendant writes its marker at the SIGTERM of the group and stays, as the leader does; the second SIGTERM to the command then sends SIGKILL,
   // and the reason of the kill tells whether the second SIGTERM or the grace sent it.
   const termEnded = new AbortController();
   closed.then(() => termEnded.abort(new Error(`the command ended before ${markerFile} was written`)));

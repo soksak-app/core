@@ -38,10 +38,19 @@ export function combineFailures(processError, cleanupError) {
 }
 
 /**
- * Runs a command in a process group of its own. At its limit or at the abort of `signal` the group gets SIGTERM, and SIGKILL only when
- * it still runs after the grace of terminateGroup; the abort of `kill`, a second cancellation, sends SIGKILL at once. The members that
- * the leader leaves when it exits are ended by the same rule. Each SIGKILL is a `kill` event and the `kill` field of the result, with
- * its reason (`grace` or `second-cancellation`) and the members that still ran.
+ * Waits until the group pid of a supervised command runs nothing, after terminateGroup ended it at the exit of its leader. No event reports
+ * the end of a process that is not a child of this process, so the wait reads the group at each 10 ms step until the system has ended
+ * every member; the wait has no limit of its own, because SIGKILL, which no process can catch or ignore, has reached each member.
+ */
+async function untilGroupEnds(pid) {
+  while (groupRuns(pid)) await new Promise((resolve) => setTimeout(resolve, 10));
+}
+
+/**
+ * Runs a command in a process group of its own. At its limit or at the abort of `signal` the group gets SIGTERM, and SIGKILL when it
+ * still runs after the grace of terminateGroup; the abort of `kill`, a second cancellation, sends SIGKILL at once. The members that
+ * run when the leader exits get SIGKILL. Each SIGKILL is a `kill` event, and the first is the `kill` field of the result, with its
+ * reason (`grace`, `second-cancellation` or `leader-exit`) and the members that still ran.
  */
 export function runCommand(options) {
   validate(options);
@@ -77,30 +86,36 @@ export function runCommand(options) {
     let exited = false;
     let requestedStatus;
     let ending;
+    let cleanupPromise;
+    let leaderExit;
     let killed = null;
     let exitCode;
     let exitSignal;
     const stdoutChunks = [];
     const stderrChunks = [];
 
-    // One ending per command: the SIGTERM of a limit or a cancellation and the end of the members that the leader leaves share its grace.
+    // One ending per command: the SIGTERM of a limit or a cancellation, or at the exit of the leader the end of the members it left.
     // A refused SIGKILL at the grace while the leader runs is a refused group signal; after the exit of the leader the cleanup reports it.
     const beginEnding = () => {
       if (ending) return ending;
-      ending = terminateGroup(child.pid, (record) => {
-        killed = record;
+      ending = terminateGroup(child.pid, { exited: leaderExit, report: (record) => {
+        killed ??= record;
         send('kill', record);
-      });
+      } });
       ending.ended.catch((error) => { if (!exited) reportSignalError(error); });
       return ending;
     };
     const beginCleanup = () => {
       if (!child?.pid) return Promise.resolve();
-      try {
-        return beginEnding().ended;
-      } catch (error) {
-        return Promise.reject(error);
+      if (!cleanupPromise) {
+        try {
+          const { ended } = beginEnding();
+          cleanupPromise = ended.then(() => untilGroupEnds(child.pid));
+        } catch (error) {
+          cleanupPromise = Promise.reject(error);
+        }
       }
+      return cleanupPromise;
     };
     const finish = async (finishedExitCode, finishedSignal, processError, skipCleanup = false) => {
       if (finishing) return;
@@ -195,6 +210,8 @@ export function runCommand(options) {
     child.stdout.on('data', (chunk) => { stdoutChunks.push(chunk); process.stdout.write(chunk); });
     child.stderr.on('data', (chunk) => { stderrChunks.push(chunk); process.stderr.write(chunk); });
     child.once('error', (error) => finish(null, null, error));
+    // The exit event of the leader is the event of the stop that terminateGroup waits for; its listener runs before the handler below.
+    leaderExit = new Promise((resolve) => child.once('exit', resolve));
     child.once('exit', (leaderExitCode, leaderSignal) => {
       exitCode = leaderExitCode;
       exitSignal = leaderSignal;
