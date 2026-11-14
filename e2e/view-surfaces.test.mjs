@@ -338,11 +338,11 @@ for (const app of Object.values(APPS)) {
       throw error;
     }
     assert.equal(notice(await s.get("core.grid"), hidden), null, "the system notification policy fell back to a tab notice");
-    const posted = (await s.get("core.notifications")).posted.length;
     await s.run("layoutprobe.notify", { text: "TAB-NOTICE", policy: "tab" }, hidden);
     await s.until("core.grid", (grid) => notice(grid, hidden) === "TAB-NOTICE",
       "the view out of view did not show a tab notice");
-    assert.equal((await s.get("core.notifications")).posted.length, posted, "the tab policy posted a system notification");
+    // The tab notice replaces the system notice of the tab, which removes its notification (docs/spec/plugins.md#tab-reports).
+    assert.ok(!(await s.get("core.notifications")).posted.includes(hidden), "the tab policy kept the system notification of the tab posted");
     await s.run("core.card.focus", { card: cardOf(await s.get("core.grid"), hidden).id });
     await s.until("core.grid", (grid) => notice(grid, hidden) === null,
       "the tab notice stayed after the tab came into view");

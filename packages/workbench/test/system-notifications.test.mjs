@@ -84,3 +84,26 @@ test("posted lists the tabs whose notification the center accepted until the not
   notifications.setState({ authorization: "authorized", error: null });
   assert.deepEqual(notifications.state().posted, ["tab-a"], "a permission change keeps the posted tabs");
 });
+
+test("an accepted system notice that a later tab notice of the tab replaces is removed and no longer posted", async () => {
+  const { reportNotice, tabNotices } = await import("../tab-reports.js");
+  const calls = [];
+  const notifications = createSystemNotifications({
+    post: async (request) => { calls.push(["post", request]); },
+    remove: async (request) => { calls.push(["remove", request]); },
+    notices: tabNotices,
+    tabName: (tab) => `name of ${tab}`,
+    select: async () => {},
+  });
+  reportNotice("tab-replaced", "SYSTEM-NOTICE", "system");
+  notifications.sync();
+  notifications.posted({ surface: "tab-replaced" });
+  assert.deepEqual(notifications.state().posted, ["tab-replaced"]);
+  reportNotice("tab-replaced", "TAB-NOTICE", "tab");
+  notifications.sync();
+  assert.deepEqual(calls, [
+    ["post", { surface: "tab-replaced", title: "name of tab-replaced", body: "SYSTEM-NOTICE" }],
+    ["remove", { surface: "tab-replaced" }],
+  ]);
+  assert.deepEqual(notifications.state().posted, [], "the notification that the tab notice replaced is still posted");
+});
