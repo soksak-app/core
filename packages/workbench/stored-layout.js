@@ -5,7 +5,7 @@ import { reportError, restoreOrigin } from "./tab-reports.js";
 import { windowSidebar } from "./window-sidebars.js";
 
 // A plugin whose declared surface is a view (docs/spec/native-surfaces.md#view-surfaces). A plugin that is not loaded is not a view.
-const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.surface?.composition?.kind === "view";
+const viewPlugin = (id) => pluginUnits().find(unit => unit.id === id)?.composition === "view";
 
 /**
  * Restores the origin of each tab of a stored layout, before any tab is created (docs/spec/projects.md#tab-origin). A refused view tab shows

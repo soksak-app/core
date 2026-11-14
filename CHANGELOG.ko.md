@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 시작 origin 이 없는 저장된 view tab 이 거부되고 application log 에 쓰이며 tab 에 보인다. 저장된 layout 검사가 plugin unit 의 composition kind 를 읽는다 (F808).
 - workbench 의 시험 runtime 이 workbench 의존성을 선언하고 page-wire 사례를 spec file 로 둔 workspace package 이고, tab session, tab state, memory saver 의 emit 지점이 내보내는 event 를 밝히며, page-wire 사례가 host 의 clock 응답을 host 변수로 두고 producer 가 performance 와 닫힌 host 의 사례를 재생하지 않는 이유를 밝힌다 (F795-10).
 - Go host 가 scripted-page endpoint 사례를 재생하고 endpoint 입력은 params 의 함수다. 두 host 의 stall watch 가 table 이 시험하는 loop step 으로 각 beat 를 정하고 SOKSAK_FAULT_STALL_SAMPLE 과 함께 실제 run loop 를 실행한다. native event ring 시험이 native library 의 producer 함수로 저장한다. view lifecycle 과 surface dispatch 가 시각을 data 로 받는다. sidecar 시험이 창의 message 와 failure 를 기록한다 (F795-8, F795-9).
 - native capture 시험이 timebase, 창 image, 압축의 선언된 fault point 와 함께 실제 clock, Mach timebase, display link, 창 image 로 실행되고, still 의 단계 시각은 그 시각을 data 로 받는 함수가 정하며, process identity 시험은 시험 build 의 fault point 와 함께 실제 LaunchServices 에 등록한다 (F795-6).
