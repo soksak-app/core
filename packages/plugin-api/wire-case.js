@@ -1,6 +1,6 @@
-// The reader of a wire case that the test readers of the page wire (packages/workbench/test/runtime/page-wire.js) and of the view wire
-// (packages/plugin-api/testing.js) share: the check of the form of a case, the matching of the calls of a consumer with the steps of the
-// case, the variables, the held replies and the end of the case (docs/spec/cases/page-wire/README.md, docs/spec/cases/view-wire/README.md).
+// The reader of a wire case that the page-wire reader of the workbench tests and the openView function of the SDK testing module share:
+// the check of the form of a case, the matching of the calls of a consumer with the steps of the case, the variables, the held replies
+// and the end of the case (docs/spec/cases/page-wire/README.md, docs/spec/cases/view-wire/README.md).
 // The module needs no DOM: the page-wire reader runs without jsdom.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -51,6 +51,7 @@ function checkCase(kase, name, file, shape) {
   shape.header(kase, fail);
   if (typeof kase.replay !== "boolean") fail("replay must be true or false");
   if (kase.replay === false && (typeof kase.reason !== "string" || kase.reason === "")) fail("a case with replay false must give its reason");
+  // default: a case without variables uses no variable.
   const variables = kase.variables ?? {};
   if (!isObject(variables)) fail("variables must be an object");
   for (const [variable, spec] of Object.entries(variables)) {
@@ -60,6 +61,7 @@ function checkCase(kase, name, file, shape) {
     if ("source" in spec && !SOURCES.includes(spec.source)) fail(`variable ${variable} source must be host or page`);
     if (!hasType(spec.example, typesOf(spec))) fail(`variable ${variable} example is not of its type`);
   }
+  // default: a variable whose source the case does not state is a value of the host (docs/spec/cases/page-wire/README.md).
   const source = (variable) => variables[variable]?.source ?? "host";
   if (!Array.isArray(kase.steps)) fail("steps must be an array");
   const kindsText = `${shape.kinds.slice(0, -1).join(", ")} and ${shape.kinds.at(-1)}`;
@@ -124,6 +126,7 @@ export function readCase(directory, name, shape) {
  */
 export function createWire(name, kase, shape) {
   const { steps } = kase;
+  // default: a case without variables uses no variable.
   const variables = kase.variables ?? {};
   const { subject, identity, params } = shape;
   const failures = [];

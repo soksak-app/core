@@ -17,6 +17,6 @@ test('the Windows build check compiles the Go host source in the default and dia
 test('check-host-files runs the Windows build check',{timeout:30000},()=>{
  const result=spawnSync('make',['-n','check-host-files'],{cwd:root,encoding:'utf8',timeout:20000});
  assert.equal(result.status,0,result.stdout+result.stderr);
- assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go vet \.\/src\/\.\.\./);
- assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go vet -tags diagnostics \.\/src\/\.\.\./);
+ assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go build \.\/src\/\.\.\./);
+ assert.match(result.stdout,/GOOS=windows GOARCH=arm64 go build -tags diagnostics \.\/src\/\.\.\./);
 });

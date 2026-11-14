@@ -7,7 +7,9 @@
 // or to record an observation through report (the record never settles the wait). The timer rule does not apply to
 // the tests of the harness: they run on mocked time, and their timers simulate the input of a request.
 // A timeout may reject through local helper calls and their attached Promise completion callbacks.
-// Checks every .mjs file under e2e and the window check harness (packages/window-check) (node_modules excluded).
+// Checks every .mjs file under e2e and the window check harness (packages/window-check) (node_modules excluded), except the
+// fixture programs of the harness (packages/window-check/fixtures): they are the inputs of the harness tests, and the behavior
+// that a harness test needs of them (a process that ignores SIGTERM, a probe whose cleanup fails on purpose) is not a window check.
 //
 //   node scripts/check-app-tests.mjs
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -23,12 +25,16 @@ const TYPESCRIPT_API_PATH = createRequire(join(ROOT, "packages", "soksak", "pack
   .resolve("typescript/unstable/sync");
 const TYPESCRIPT_API = await import(pathToFileURL(TYPESCRIPT_API_PATH).href);
 const E2E_ROOT = join(ROOT, "e2e");
+const HARNESS_FIXTURES = join(ROOT, "packages", "window-check", "fixtures");
 
 const RULES = [
   { what: "eval", pattern: /\beval(Async)?\b/ },
   { what: "Function constructor", pattern: /\bnew\s+Function\s*\(/ },
   { what: "native probe", pattern: /\bnativeProbe\b|["'`]native ["'`]\s*\+/ },
-  { what: "TCP control port", pattern: /\b4973[1-3]\b|node:net/ },
+  // A window check reaches the application through the Unix socket that <config-dir>/endpoint.json names, which node:net connects
+  // to by its path; a control connection by TCP names one of the control ports 49731 to 49733 or connects to a port. A web server
+  // that a check listens with on a loopback port serves pages and is no control path.
+  { what: "TCP control port", pattern: /\b4973[1-3]\b|\b(connect|createConnection)\s*\(\s*(\d|\{\s*port\b)/ },
   { what: "a repeating timer", pattern: /\bsetInterval\s*\(/ },
   // A skipped test ends as a pass of its file, so a check whose precondition fails reports nothing.
   { what: "a skipped test; assert its precondition", pattern: /\bt\.skip\s*\(/, skippedTest: true },
@@ -449,8 +455,13 @@ export function auditE2ESource(text, file) {
   return errors;
 }
 
+/** The sources that the window-source audit reads: the window checks and the harness, without the harness fixture programs. */
+export function auditedSources() {
+  return DIRS.flatMap((dir) => [...sources(dir)]).filter((path) => !path.startsWith(HARNESS_FIXTURES + sep));
+}
+
 const errors = [];
-for (const path of DIRS.flatMap((dir) => [...sources(dir)])) {
+for (const path of auditedSources()) {
   errors.push(...auditE2ESource(readFileSync(path, "utf8"), relative(ROOT, path)));
 }
 errors.push(...auditUnboundNames());

@@ -53,19 +53,19 @@ func Functions() abi.NativeFunctions {
 			return (*byte)(unsafe.Pointer(C.sp_host_test_window_create_titled(C.double(a0), C.double(a1), (*unsafe.Pointer)(unsafe.Pointer(a2)))))
 		},
 		SpHostTestWindowClose: func(a0 unsafe.Pointer) *byte { return (*byte)(unsafe.Pointer(C.sp_host_test_window_close(a0))) },
-		SpHostTestWindowMainWebview: func(a0 unsafe.Pointer, a1 *byte, a2 *unsafe.Pointer) *byte {
-			return (*byte)(unsafe.Pointer(C.sp_host_test_window_main_webview(a0, (*C.char)(unsafe.Pointer(a1)), (*unsafe.Pointer)(unsafe.Pointer(a2)))))
+		SpHostTestWindowMainWebview: func(a0 uintptr, a1 *byte, a2 *unsafe.Pointer) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_main_webview(C.uintptr_t(a0), (*C.char)(unsafe.Pointer(a1)), (*unsafe.Pointer)(unsafe.Pointer(a2)))))
 		},
 		SpHostTestWebviewLoaded:           func(a0 unsafe.Pointer) *byte { return (*byte)(unsafe.Pointer(C.sp_host_test_webview_loaded(a0))) },
 		SpHostTestViewPresentationRelease: func() *byte { return (*byte)(unsafe.Pointer(C.sp_host_test_view_presentation_release())) },
-		SpHostTestWindowImageRegions: func(a0 unsafe.Pointer, a1 *uint64) *byte {
-			return (*byte)(unsafe.Pointer(C.sp_host_test_window_image_regions(a0, (*C.uint64_t)(unsafe.Pointer(a1)))))
+		SpHostTestWindowImageRegions: func(a0 uintptr, a1 *uint64) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_image_regions(C.uintptr_t(a0), (*C.uint64_t)(unsafe.Pointer(a1)))))
 		},
-		SpHostTestWindowKeysWait: func(a0 unsafe.Pointer, a1 *bool, a2 *bool, a3 *bool) *byte {
-			return (*byte)(unsafe.Pointer(C.sp_host_test_window_keys_wait(a0, (*C.bool)(unsafe.Pointer(a1)), (*C.bool)(unsafe.Pointer(a2)), (*C.bool)(unsafe.Pointer(a3)))))
+		SpHostTestWindowKeysWait: func(a0 uintptr, a1 *bool, a2 *bool, a3 *bool) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_keys_wait(C.uintptr_t(a0), (*C.bool)(unsafe.Pointer(a1)), (*C.bool)(unsafe.Pointer(a2)), (*C.bool)(unsafe.Pointer(a3)))))
 		},
-		SpHostTestWindowOpenKeyWait: func(a0 unsafe.Pointer, a1 bool) *byte {
-			return (*byte)(unsafe.Pointer(C.sp_host_test_window_open_key_wait(a0, C.bool(a1))))
+		SpHostTestWindowOpenKeyWait: func(a0 uintptr, a1 bool) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_window_open_key_wait(C.uintptr_t(a0), C.bool(a1))))
 		},
 		SpHostTestRegionPresentLease: func(a0 unsafe.Pointer, a1 uint64, a2 uint64, a3 int32) *byte {
 			return (*byte)(unsafe.Pointer(C.sp_host_test_region_present_lease(a0, C.uint64_t(a1), C.uint64_t(a2), C.int(a3))))

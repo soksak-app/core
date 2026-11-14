@@ -8,9 +8,10 @@
 // elements of the window through the accessibility API before the drags; SOKSAK_GC_LOOP=1 turns `diagnostics.gc.loop` on before the
 // third drag and off after it, on a window whose host.window reports pageProcess null. This module holds the order of the steps and the
 // figures; the benchmark gives the steps of a running application.
-import { readFootprint } from "../../../scripts/footprints.mjs";
+import { footprintOfResult } from "../../../scripts/footprints.mjs";
 import { joinedFailure } from "../../fixture.mjs";
 import { readCpuSeconds } from "../../../scripts/measure-app-usage.mjs";
+import { execute } from "../../../scripts/measure-tools.mjs";
 import { FRAME_RECORDS } from "../../../scripts/measure-trace.mjs";
 import { gestureB3Values } from "./gesture-records.mjs";
 import { VIEW_DRAG_PLAN } from "./floor-page.mjs";
@@ -99,21 +100,31 @@ export async function runViewDrag({ options, pageProcess, steps }) {
 }
 
 /**
- * The processes of the application for the figures of the first drag, each { role, pid, cpuSeconds, peakBytes }. `rows()` resolves to
- * the rows of the application and its window (windowApplicationRows of scripts/measure-app-usage.mjs), whose errors fail the reading;
- * the CPU seconds of every process are read once with readCpuSeconds and then the peak footprint of each row with readFootprint, both
- * through `run`, the executor of scripts/measure-app-usage.mjs.
+ * The processes of the application for the figures of the first drag, each { role, pid, cpuSeconds, peakBytes }, from the rows of
+ * the application and its window `read` ({ rows, errors } of windowApplicationRows of scripts/measure-app-usage.mjs), whose errors
+ * fail the reading, the CPU seconds of every process `cpu` (cpuSecondsOf of the output of ps -axo pid=,time=) and `footprintOf(pid)`,
+ * the result of `footprint -p PID -f bytes` of a row. A row without CPU time is an error, and its footprint is not read.
  */
-export async function dragProcesses({ rows, run }) {
-  const read = await rows();
+export function dragProcessesOf({ read, cpu, footprintOf }) {
   if (read.errors.length > 0) throw new Error(`the processes of the application cannot be read: ${read.errors.join("; ")}`);
-  const cpu = await readCpuSeconds(run);
-  const processes = [];
-  for (const { role, pid } of read.rows) {
+  return read.rows.map(({ role, pid }) => {
     if (!cpu.has(pid)) throw new Error(`${role} (pid ${pid}) has no CPU time in ps -axo pid=,time=`);
-    processes.push({ role, pid, cpuSeconds: cpu.get(pid), peakBytes: (await readFootprint(pid, run)).peakBytes });
+    return { role, pid, cpuSeconds: cpu.get(pid), peakBytes: footprintOfResult(pid, footprintOf(pid)).peakBytes };
+  });
+}
+
+/**
+ * Reads the processes of the application for the figures of the first drag with the real tools: `rows()` resolves to the rows of the
+ * application and its window, the CPU seconds of every process are read once with ps and then the footprint of each row with footprint.
+ */
+export async function dragProcesses({ rows }) {
+  const read = await rows();
+  const cpu = read.errors.length > 0 ? new Map() : await readCpuSeconds();
+  const footprints = new Map();
+  for (const { pid } of read.errors.length > 0 ? [] : read.rows) {
+    if (cpu.has(pid)) footprints.set(pid, await execute("footprint", ["-p", String(pid), "-f", "bytes"]));
   }
-  return processes;
+  return dragProcessesOf({ read, cpu, footprintOf: (pid) => footprints.get(pid) });
 }
 
 const kilobytes = (bytes) => Math.round(bytes / 1024);

@@ -9,6 +9,8 @@ import { validateManifest } from "@soksak/plugin-api";
 import { requireSectionDeclarations } from "../benchmark/cases/section-view.mjs";
 import { attach, declaredText } from "../fixtures/plain-view/probe/ui/section-diagnostics.js";
 
+const CASES = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
+
 const FOLDER = new URL("../fixtures/plain-view/probe/", import.meta.url);
 const read = (name) => readFileSync(new URL(name, FOLDER), "utf8");
 const manifest = JSON.parse(read("plugin.json"));
@@ -31,6 +33,7 @@ test("the plain view probe declares one section whose diagnostic declaration mee
  */
 async function attached(wire) {
   const view = await openView(wire, {
+    cases: CASES,
     declarations: diagnostics.exposes,
     html: '<!doctype html><body><p id="content">Plain section</p></body>',
     layout: { width: 240, height: 400, rect: () => ({ left: 0, top: 0, right: 240, bottom: 400, width: 240, height: 400 }) },

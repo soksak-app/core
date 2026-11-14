@@ -3,7 +3,8 @@ import test from "node:test";
 
 import { VIEW_DRAG_PLAN } from "../benchmark/cases/floor-page.mjs";
 import { B3_MEASUREMENTS } from "../benchmark/measurements.mjs";
-import { dragProcesses, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
+import { cpuSecondsOf } from "../../scripts/measure-app-usage.mjs";
+import { dragProcessesOf, firstDragFigures, NATIVE_DRAG_PLAN, runViewDrag, viewDragB3Values, viewDragOptions } from "../benchmark/cases/view-drag.mjs";
 
 test("a structurally invalid captured drag prevents the third drag and metric publication", { timeout: 5000 }, async () => {
   const calls = [];
@@ -140,22 +141,24 @@ test("the B3 values of the view drag are the first-drag figures in the state 0 a
       new Error("the view drag measures in the states 0 and frame-records of B3_MEASUREMENTS, not 0"));
   });
 
-test("the processes of the drag are the rows of the application with the CPU time of each and its peak footprint", { timeout: 5000 }, async () => {
-  const commands = [];
-  const run = async (command, args) => {
-    commands.push(`${command} ${args.join(" ")}`);
-    if (command === "ps") return { status: 0, stdout: "  7 0:01.50\n  9 1:00.25\n 11 0:00.10\n", stderr: "" };
-    const pid = Number(args[1]);
+test("the processes of the drag are the rows of the application with the CPU time of each and its peak footprint", { timeout: 5000 }, () => {
+  // The recorded outputs of ps -axo pid=,time= and of footprint -p PID -f bytes for the processes 7 and 9.
+  const cpu = cpuSecondsOf({ status: 0, stdout: "  7 0:01.50\n  9 1:00.25\n 11 0:00.10\n", stderr: "" });
+  const read = [];
+  const footprintOf = (pid) => {
+    read.push(pid);
     return { status: 0, stdout: `    phys_footprint: ${pid * 1000} B\n    phys_footprint_peak: ${pid * 2048} B\n`, stderr: "" };
   };
-  const rows = async () => ({ rows: [{ role: "host", pid: 7, attribution: "config-dir argument" }, { role: "sidecar rasterprobe", pid: 9 }], errors: [] });
-  assert.deepEqual(await dragProcesses({ rows, run }), [
+  const rows = { rows: [{ role: "host", pid: 7, attribution: "config-dir argument" }, { role: "sidecar rasterprobe", pid: 9 }], errors: [] };
+  assert.deepEqual(dragProcessesOf({ read: rows, cpu, footprintOf }), [
     { role: "host", pid: 7, cpuSeconds: 1.5, peakBytes: 7 * 2048 },
     { role: "sidecar rasterprobe", pid: 9, cpuSeconds: 60.25, peakBytes: 9 * 2048 },
   ]);
-  assert.deepEqual(commands, ["ps -axo pid=,time=", "footprint -p 7 -f bytes", "footprint -p 9 -f bytes"]);
-  await assert.rejects(dragProcesses({ rows: async () => ({ rows: [], errors: ["w1: the page process 4 has ended"] }), run }),
+  assert.deepEqual(read, [7, 9]);
+  assert.throws(() => dragProcessesOf({ read: { rows: [], errors: ["w1: the page process 4 has ended"] }, cpu, footprintOf }),
     new Error("the processes of the application cannot be read: w1: the page process 4 has ended"));
-  await assert.rejects(dragProcesses({ rows: async () => ({ rows: [{ role: "webkit gpu", pid: 12 }], errors: [] }), run }),
+  assert.throws(() => dragProcessesOf({ read: { rows: [{ role: "webkit gpu", pid: 12 }], errors: [] }, cpu, footprintOf }),
     new Error("webkit gpu (pid 12) has no CPU time in ps -axo pid=,time="));
+  assert.throws(() => dragProcessesOf({ read: { rows: [{ role: "host", pid: 7 }], errors: [] }, cpu, footprintOf: () => ({ status: 1, stdout: "", stderr: "no process" }) }),
+    new Error("footprint -p 7 exited with 1: no process"));
 });

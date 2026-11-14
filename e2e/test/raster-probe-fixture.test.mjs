@@ -18,6 +18,8 @@ import { catalogOf, auditLogDirectories } from "../../scripts/check-events.mjs";
 import { INPUT_LOG_LIMIT, REGION, SIDECAR, startRasterProbe } from "../fixtures/raster-probe/probe/ui/raster-probe.js";
 import { presentRasterTab, RASTER_ENTRIES, rasterReady, reopenedSession } from "../raster-probe.mjs";
 
+const CASES = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
+
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROBE = join(ROOT, "e2e/fixtures/raster-probe/probe");
 const SERVICE = join(ROOT, "e2e/fixtures/sidecars/rasterprobe");
@@ -112,6 +114,7 @@ const MANIFEST = read(join(PROBE, "plugin.json"));
  */
 async function openProbe(wire, { attaching = null, textSizeAtOnce = false } = {}) {
   const view = await openView(wire, {
+    cases: CASES,
     start: START, declarations: MANIFEST.exposes,
     html: `<!doctype html><body><div id="${REGION}"></div></body>`,
     layout: { width: 640, height: 400, scale: 2, rect: () => ({ left: 0, top: 24, right: 400, bottom: 324, width: 400, height: 300 }) },

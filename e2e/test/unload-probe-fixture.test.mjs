@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { openView, turn } from "@soksak/plugin-api/testing";
 import { startUnloadProbe } from "../fixtures/memory-saver/unload-probe/ui/unload-probe.js";
 
+const CASES = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
+
 const manifestPath = fileURLToPath(new URL("../fixtures/memory-saver/unload-probe/plugin.json", import.meta.url));
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
@@ -14,7 +16,7 @@ const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 // case of its wire (docs/spec/cases/view-wire/unload-probe-fixture-location.json) records no section channel.
 test("the unload probe serves its declared status through its exposure and follows the region state", { timeout: 5000 }, async () => {
   const declared = manifest.exposes.status.map((status) => status.name);
-  const view = await openView("unload-probe-fixture-location", { declarations: manifest.exposes,
+  const view = await openView("unload-probe-fixture-location", { cases: CASES, declarations: manifest.exposes,
     html: '<!doctype html><body><div id="document"></div></body>',
     layout: { width: 640, height: 400, rect: () => ({ left: 0, top: 0, right: 640, bottom: 400, width: 640, height: 400 }) },
     start: { surface: "tab-3", params: null, origin: { directory: null }, project: null, section: null } });

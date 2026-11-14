@@ -1,21 +1,18 @@
 // A view document for the tests of the views of plugins and fixture probes. The module needs jsdom, which the importer provides.
-// It is a jsdom window on soksak://<plugin>/ with the injected start script of the host (packages/plugin-api/view-start.js), the view bridge of core (createViewBridge) and the exposure of core (createExpose),
+// It is a jsdom window on soksak://<plugin>/ with the injected start script of the host (view-start.js of this package), the view bridge of core (createViewBridge) and the exposure of core (createExpose),
 // the modules that a view page of a plugin builds in its app.js. The peer of the wire is the host side of the sok-view handler, which a
 // view-wire case records (docs/spec/cases/view-wire/README.md): each call of the view is answered with the reply of the next step of
-// the case, and the notices and requests of the host reach the view in the order of the case. jsdom has no layout engine, so the sizes
-// of the view and of its elements are data of `layout`.
+// the case, and the notices and requests of the host reach the view in the order of the case. The consumer names the folder of its
+// view-wire cases with the option `cases`, a URL. jsdom has no layout engine, so the sizes of the view and of its elements are data of `layout`.
 import { readFileSync } from "node:fs";
-import { isDeepStrictEqual } from "node:util";
+import { inspect, isDeepStrictEqual } from "node:util";
 import { runInContext } from "node:vm";
 import { JSDOM } from "jsdom";
 import { createExpose } from "./index.js";
 import { createViewBridge } from "./view.js";
 import { createWire, readCase } from "./wire-case.js";
 
-// The directory of the view-wire cases. This module lives in packages/plugin-api, two levels below the repository root.
-const CASE_DIRECTORY = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
-
-// The error code of a failed call, as the workbench and the log handler of the host reply (packages/workbench/surface-modules.js).
+// The error code of a failed call, as the workbench and the log handler of the host reply (the surface modules of the workbench).
 const FAILURE_CODE = -32000;
 const VARIABLE = /^\$[a-z][a-z0-9-]*$/;
 const STEP_KINDS = ["call", "reply", "notice", "request"];
@@ -59,7 +56,8 @@ const SHAPE = {
 };
 
 /**
- * Opens the view of the case `name` with the start values `start` (window.sokSurface). The host side of the wire is the case: each call
+ * Opens the view of the case `name` with the start values `start` (window.sokSurface). `cases` is the URL of the folder of the view-wire
+ * cases, which the consumer names. The host side of the wire is the case: each call
  * of the view is answered with the reply of the next step of the case, in the order of the steps. The calls of the command runtime.log
  * form one stream, because the page writes them at instants that no other call determines, and every other call forms the other stream,
  * as for the page-wire cases. A call that deviates from its stream is answered with an error and kept as a failure; close() throws the
@@ -72,8 +70,9 @@ const SHAPE = {
  * notice of the host (event and data are what the test expects it to carry), release() settles the oldest held reply, and close ends the view
  * as a page ends: pagehide, then the window is removed after the writer chain of the page ended, then the check that the case was played.
  */
-export async function openView(name, { start, declarations = {}, layout = {}, html = "<!doctype html><body></body>" }) {
-  const kase = readCase(CASE_DIRECTORY, name, SHAPE);
+export async function openView(name, { cases, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>" }) {
+  if (!(cases instanceof URL)) throw new TypeError(`openView requires the case folder \`cases\` as a URL, found ${inspect(cases)}`);
+  const kase = readCase(cases, name, SHAPE);
   const { plugin, steps } = kase;
   const wire = createWire(name, kase, SHAPE);
   const dom = new JSDOM(html, { url: `soksak://${plugin}/`, runScripts: "outside-only", pretendToBeVisual: true });
@@ -85,6 +84,7 @@ export async function openView(name, { start, declarations = {}, layout = {}, ht
   window.sokTheme = { scheme: "dark", tokens: {} };
   runInContext(START, dom.getInternalVMContext());
   // The start values of a view hold the core declarations before the declarations of its plugin.
+  // default: a view that declares nothing of a kind has only the core declarations of that kind.
   const merged = Object.fromEntries(["status", "commands", "element"].map((kind) => [kind, [...CORE_DECLARATIONS[kind], ...(declarations[kind] ?? [])]]));
   window.sokSurface = { ...start, declarations: merged, levels: {} };
   // jsdom lays nothing out: the size of the view and the rectangle of each element are the data of the layout.
@@ -105,9 +105,11 @@ export async function openView(name, { start, declarations = {}, layout = {}, ht
     disconnect() { this.disconnected = true; }
     notify(entries) { this.callback(entries, this); }
   };
+  // default: a layout without a scale is a display of one device pixel per CSS pixel.
   Object.defineProperty(window, "devicePixelRatio", { value: layout.scale ?? 1, configurable: true });
   // The scroll extent of the document root: the content that the layout names, or the size of the view.
   for (const [property, size, view] of [["scrollWidth", "width", "innerWidth"], ["scrollHeight", "height", "innerHeight"]]) {
+    // default: a layout that names no content size has content of the size of the view, as a document that does not scroll.
     Object.defineProperty(window.document.documentElement, property, { get: () => layout.content?.[size] ?? window[view], configurable: true });
   }
   if (layout.rect !== undefined) window.Element.prototype.getBoundingClientRect = function rect() { return layout.rect(this); };
@@ -118,6 +120,7 @@ export async function openView(name, { start, declarations = {}, layout = {}, ht
   const answer = (id, outcome) => {
     if (outcome.error) return host({ id, error: { code: FAILURE_CODE, message: outcome.error.message } });
     const { reply } = outcome;
+    // default: a step of the case without a result records the reply null, which the host sends as the result.
     return host({ id, ...("error" in reply ? { error: { code: FAILURE_CODE, message: reply.error } } : { result: wire.substitute(reply.result) ?? null }) });
   };
   const reply = async (id, outcome, command) => {
@@ -172,6 +175,7 @@ export async function openView(name, { start, declarations = {}, layout = {}, ht
   };
   const sameAs = (what, expected, requested) => {
     // The test names its data as JavaScript values; the wire carries them as JSON, so an undefined member is absent.
+    // default: a request without params is compared as null, as the wire carries it.
     if (!isDeepStrictEqual(expected ?? null, JSON.parse(JSON.stringify(requested ?? null)))) throw wire.fail(`${what}: the case records ${JSON.stringify(expected)}, the test asked for ${JSON.stringify(requested)}`);
   };
   // A request of the host to the view: a command of the view (the answer is {sok, reply, result|error}) and an exposure request

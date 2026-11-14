@@ -285,26 +285,27 @@ check-platform-files:
 
 # Compiles the sources of the two native hosts for the Windows target in the default build and the diagnostic build. The file layout checks of check-platform-files and check-host-files
 # do not check the Windows implementation (platform/windows/) or the operating system API use of shared code, so this check
-# verifies them by compilation. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled.
+# verifies them by compilation. Host tests run only on macOS (docs/spec/host-contract.md), so they are not compiled: go build
+# compiles the packages without their test files, which go vet would compile.
 WINDOWS_GOARCH      = arm64
 check-windows-build:
-	@echo "START: Go host library go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
-	@cd packages/host/go && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
+	@echo "START: Go host library go build GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/go && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go build ./src/...
 	@echo "PASS: Go host library for windows/$(WINDOWS_GOARCH)"
-	@echo "START: Go host library go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
-	@cd packages/host/go && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
+	@echo "START: Go host library go build -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/go && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go build -tags diagnostics ./src/...
 	@echo "PASS: Go diagnostics host library for windows/$(WINDOWS_GOARCH)"
-	@echo "START: Wails framework adapter go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
-	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
+	@echo "START: Wails framework adapter go build GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go build ./src/...
 	@echo "PASS: Wails framework adapter for windows/$(WINDOWS_GOARCH)"
-	@echo "START: Wails framework adapter go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
-	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
+	@echo "START: Wails framework adapter go build -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/wailsv3 && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go build -tags diagnostics ./src/...
 	@echo "PASS: Wails diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
-	@echo "START: mygo framework adapter go vet GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
-	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet ./src/...
+	@echo "START: mygo framework adapter go build GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go build ./src/...
 	@echo "PASS: mygo framework adapter for windows/$(WINDOWS_GOARCH)"
-	@echo "START: mygo framework adapter go vet -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
-	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go vet -tags diagnostics ./src/...
+	@echo "START: mygo framework adapter go build -tags diagnostics GOOS=windows GOARCH=$(WINDOWS_GOARCH)"
+	@cd packages/host/mygo && GOOS=windows GOARCH=$(WINDOWS_GOARCH) go build -tags diagnostics ./src/...
 	@echo "PASS: mygo diagnostics framework adapter for windows/$(WINDOWS_GOARCH)"
 
 # Compiles the sources of the Rust host library for the Windows target in the default build and the diagnostic build, as

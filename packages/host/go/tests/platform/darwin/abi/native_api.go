@@ -51,12 +51,12 @@ type NativeFunctions struct {
 	SpHostTestWindowCreate             func(float64, float64, *unsafe.Pointer) *byte
 	SpHostTestWindowCreateTitled       func(float64, float64, *unsafe.Pointer) *byte
 	SpHostTestWindowClose              func(unsafe.Pointer) *byte
-	SpHostTestWindowMainWebview        func(unsafe.Pointer, *byte, *unsafe.Pointer) *byte
+	SpHostTestWindowMainWebview        func(uintptr, *byte, *unsafe.Pointer) *byte
 	SpHostTestWebviewLoaded            func(unsafe.Pointer) *byte
 	SpHostTestViewPresentationRelease  func() *byte
-	SpHostTestWindowImageRegions       func(unsafe.Pointer, *uint64) *byte
-	SpHostTestWindowKeysWait           func(unsafe.Pointer, *bool, *bool, *bool) *byte
-	SpHostTestWindowOpenKeyWait        func(unsafe.Pointer, bool) *byte
+	SpHostTestWindowImageRegions       func(uintptr, *uint64) *byte
+	SpHostTestWindowKeysWait           func(uintptr, *bool, *bool, *bool) *byte
+	SpHostTestWindowOpenKeyWait        func(uintptr, bool) *byte
 	SpHostTestRegionPresentLease       func(unsafe.Pointer, uint64, uint64, int32) *byte
 	SpHostTestSpawnHandledCrash        func(*byte, *byte, *byte, int32, *int32, *uintptr) *byte
 	SpHostTestWaitHandledCrash         func(uintptr, *int32, *int32) *byte

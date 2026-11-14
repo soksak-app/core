@@ -18,7 +18,7 @@ import { commitCadence, displayPeriod, dragTrips, stepCommitDelays } from "@soks
 import { fresh, joinedFailure } from "./fixture.mjs";
 import { openFloorPage, prepareFloorDrag, VIEW_DRAG_PLAN, writeDragLayouts } from "./benchmark/cases/floor-page.mjs";
 import { dragProcesses, NATIVE_DRAG_PLAN } from "./benchmark/cases/view-drag.mjs";
-import { execute, windowApplicationRows } from "../scripts/measure-app-usage.mjs";
+import { windowApplicationRows } from "../scripts/measure-app-usage.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: project-tab add control keeps its rectangle through the native and captured second drags`,
@@ -40,7 +40,7 @@ for (const app of Object.values(APPS)) {
         order: ["fresh", "prepareFloorDrag", "default policy", "process snapshot before", "native first drag", "process snapshot after", "captured second drag"],
         capture: null, events: [] };
       let failure;
-      const processes = () => dragProcesses({ run: execute, rows: async () => windowApplicationRows({
+      const processes = () => dragProcesses({ rows: async () => windowApplicationRows({
         configDir: app.configDir, statuses: [{ ...(await s.get("host.window")), window: s.window }] }) });
       try {
         evidence.processesBefore = await processes();

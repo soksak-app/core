@@ -527,14 +527,21 @@ const RUST_CRATES = ['packages/host/rust', 'packages/host/tauriv2', 'packages/so
 
 /**
  * The source files of the test targets that the manifests of the Rust crates declare with `harness = false`, as paths from the
- * root of the repository.
+ * root of the repository, and the modules that such a target names with a `#[path]` attribute: the runner of the target calls the
+ * test functions of those modules, so their functions with a contract declaration are tests of the target. Rust resolves the path
+ * of a module of the crate root from the folder of that root.
  */
 export function harnessLessTestFiles(root = ROOT, crates = RUST_CRATES) {
   const files = new Set();
   for (const crate of crates) {
     const manifest = parseToml(readFileSync(join(root, crate, 'Cargo.toml'), 'utf8'));
     for (const target of manifest.test ?? []) {
-      if (target.harness === false) files.add(posix.join(crate, target.path ?? `tests/${target.name}.rs`));
+      if (target.harness !== false) continue;
+      const file = posix.join(crate, target.path ?? `tests/${target.name}.rs`);
+      files.add(file);
+      for (const [, path] of readFileSync(join(root, file), 'utf8').matchAll(/^\s*#\[path\s*=\s*"([^"]+)"\]/gm)) {
+        files.add(posix.join(posix.dirname(file), path));
+      }
     }
   }
   return files;

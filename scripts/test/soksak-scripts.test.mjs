@@ -11,7 +11,7 @@ import {
   readdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import test from "node:test";
 import { BREAKS } from "../../packages/soksak/scripts/breaks.mjs";
@@ -19,7 +19,7 @@ import { find as findReleaseMarkers } from "../check-release.mjs";
 import { FRAMEWORK_TABLE, LANGUAGE_TABLE, auditHostPairs, findUnimplementedMarkers, findUndecodedCommandArguments } from "../check-host-files.mjs";
 import { auditPlatformSource } from "../check-platform-files.mjs";
 import { GATE_SOURCES } from "../check-boundaries.mjs";
-import { auditUnboundNames, auditE2ESource } from "../check-app-tests.mjs";
+import { auditUnboundNames, auditE2ESource, auditedSources } from "../check-app-tests.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const packageRoot = join(root, "packages/soksak");
@@ -475,6 +475,25 @@ test("window-source audit rejects forbidden control paths", { timeout: TREE_AUDI
   const result = await run(node, [join(root, "scripts/check-app-tests.mjs")]);
   assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /Window check sources use only the endpoint/);
+});
+
+// A harness fixture program is an input of a harness test and is not audited, while a window check or harness source with the same
+// code is audited (the fixture program keeps its code: the exclusion is the scope of the audit, not the rules).
+test("window-source audit reads harness sources but not the harness fixture programs", { timeout: 1000 }, () => {
+  const files = auditedSources().map((path) => relative(root, path));
+  assert.ok(files.includes("packages/window-check/app.mjs"), files.join("\n"));
+  assert.deepEqual(files.filter((file) => file.startsWith("packages/window-check/fixtures/")), []);
+  const code = "setInterval(() => {}, 2 ** 30);";
+  assert.deepEqual(auditE2ESource(code, "packages/window-check/app.mjs"), ["packages/window-check/app.mjs:1: uses a repeating timer"]);
+});
+
+// The endpoint of an application is a Unix socket that node:net connects to by its path; a TCP address is a port.
+test("window-source audit accepts a connection to the endpoint path and rejects a TCP address", { timeout: 1000 }, () => {
+  const file = "e2e/probe.test.mjs";
+  assert.deepEqual(auditE2ESource('import { connect } from "node:net";\nconnect(endpoint.path);', file), []);
+  assert.deepEqual(auditE2ESource('import { connect } from "node:net";\nconnect({ port: 49731 });', file),
+    [`${file}:2: uses TCP control port`]);
+  assert.deepEqual(auditE2ESource("connect(8080, host);", file), [`${file}:1: uses TCP control port`]);
 });
 
 test("window check source audit rejects unresolved identifiers", { timeout: 5000 }, () => {

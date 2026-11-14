@@ -7,6 +7,8 @@ import { JSDOM } from "jsdom";
 import { openView } from "@soksak/plugin-api/testing";
 import { savesKey, startCloseProbe } from "../fixtures/save-close/probe/ui/close-probe.js";
 
+const CASES = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
+
 const manifestPath = fileURLToPath(new URL("../fixtures/save-close/probe/plugin.json", import.meta.url));
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
@@ -15,7 +17,7 @@ const localStorageOf = () => new JSDOM("", { url: "https://probeclose.example/" 
 
 /** Starts the probe of `surface` on `storage` in a view whose wire is the case `wire`; returns the view, which records its calls and serves its exposure. */
 async function started(wire, storage, surface) {
-  const view = await openView(wire, { declarations: manifest.exposes,
+  const view = await openView(wire, { cases: CASES, declarations: manifest.exposes,
     start: { surface, params: null, origin: { directory: null }, project: null, section: null } });
   await startCloseProbe({ bridge: view.bridge, expose: view.expose, storage, surface });
   return view;

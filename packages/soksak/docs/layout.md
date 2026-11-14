@@ -541,6 +541,14 @@ The DOM binding observes display-resolution changes and redraws on the new
 device-pixel grid even when the host's CSS size is unchanged. `destroy()` removes
 this observation.
 
+The view observes the size of its host from an animation frame, which runs
+before the observation round of that frame, and `observation` states where that
+stands: `refused`, `pending`, `observing`, `unavailable` or `stopped`.
+`hostResized(width, height)` is the reaction to one observation of the host
+size: it resizes the grid and returns whether the grid took the size; a
+destroyed view and a host of zero width or height leave the grid as it is and
+return `false`.
+
 `bleed` is how far past the plane a rule may run to reach the frame around it.
 A host that holds the plane inside a frame — a padding on the element outside
 it — draws its border that far from where a rule ends, so the rule stops short of

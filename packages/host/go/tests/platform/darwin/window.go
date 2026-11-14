@@ -71,7 +71,7 @@ func mainPage(t testing.TB, onMain func(func()), window platform.Window, fixture
 	name := append([]byte(fixture), 0)
 	var view unsafe.Pointer
 	var failure *byte
-	onMain(func() { failure = functions.SpHostTestWindowMainWebview(unsafe.Pointer(window), &name[0], &view) })
+	onMain(func() { failure = functions.SpHostTestWindowMainWebview(uintptr(window), &name[0], &view) })
 	if err := testlibrary.Error(failure); err != nil {
 		t.Fatalf("the main web view of the native test window was not created: %v", err)
 	}
@@ -106,7 +106,7 @@ func ImageRegions(t testing.TB, onMain func(func()), window platform.Window) uin
 	var count uint64
 	var failure *byte
 	onMain(func() {
-		failure = requireNativeFunctions().SpHostTestWindowImageRegions(unsafe.Pointer(window), &count)
+		failure = requireNativeFunctions().SpHostTestWindowImageRegions(uintptr(window), &count)
 	})
 	if err := testlibrary.Error(failure); err != nil {
 		t.Fatalf("the image regions of the window were not read: %v", err)
@@ -120,7 +120,7 @@ func KeysWait(t testing.TB, onMain func(func()), window platform.Window) (waitin
 	t.Helper()
 	var failure *byte
 	onMain(func() {
-		failure = requireNativeFunctions().SpHostTestWindowKeysWait(unsafe.Pointer(window), &waiting, &decision, &modal)
+		failure = requireNativeFunctions().SpHostTestWindowKeysWait(uintptr(window), &waiting, &decision, &modal)
 	})
 	if err := testlibrary.Error(failure); err != nil {
 		t.Fatalf("the key wait of the window was not read: %v", err)
@@ -148,7 +148,7 @@ func OpenKeyWait(t testing.TB, onMain func(func()), window platform.Window, deci
 	t.Helper()
 	var failure *byte
 	onMain(func() {
-		failure = requireNativeFunctions().SpHostTestWindowOpenKeyWait(unsafe.Pointer(window), decision)
+		failure = requireNativeFunctions().SpHostTestWindowOpenKeyWait(uintptr(window), decision)
 	})
 	if err := testlibrary.Error(failure); err != nil {
 		t.Fatalf("the key wait of the window was not opened: %v", err)

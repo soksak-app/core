@@ -71,7 +71,7 @@ lane("event source check", "declaration", ["scripts/event-sources.json"], ["scri
 lane("performance goals", "declaration", ["docs/spec/performance-goals.json"], ["scripts/test/performance-goals.test.mjs"], { testLanguage: "js-ts" }),
 lane("three-host benchmark judge", "js-ts", ["scripts/b3-judge.mjs"], ["scripts/test/b3-judge.test.mjs"]),
 lane("three-host benchmark", "js-ts", ["scripts/benchmark-b3.mjs"], ["scripts/test/benchmark-b3.test.mjs", "scripts/test/fixtures/b3/application.mjs", "scripts/test/fixtures/b3/sok.mjs"]),
-lane("process identity build", "build", ["native/darwin/process-identity/Makefile"], ["scripts/test/process-identity-build.test.mjs"], { testLanguage: "js-ts" }),
+lane("process identity build", "build", ["native/darwin/process-identity/Makefile"], ["scripts/test/process-identity-build.test.mjs", "scripts/test/platform/darwin/system/process-identity-build.test.mjs"], { testLanguage: "js-ts" }),
 lane("package bin audit", "js-ts", ["scripts/check-package-bins.mjs"], ["scripts/test/package-bins.test.mjs"]),
 lane("failure table", "js-ts", ["scripts/check-failure-table.mjs"], ["scripts/test/check-failure-table.test.mjs"]),
 lane("private API inventory", "js-ts", ["scripts/check-private-apis.mjs"], ["scripts/test/check-private-apis.test.mjs"]),
@@ -1812,7 +1812,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/platform/darwin/system/stall_watch_fault_test.go", id: "TestStoppingTheWatchWaitsForTheRunningSample" },
-      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "stopping_the_watch_waits_for_the_running_sample" },
+      { file: "packages/host/rust/tests/support/platform/darwin/stall_watch.rs", id: "stopping_the_watch_waits_for_the_running_sample" },
     ],
     expected: "The stop of the stall watch returns after the running sample ended and stored its host.stall.sampled, the watch records no stall and starts no sample after the stop, and each host stops the watch before the flush of its event log, so no sample process outlives the host.",
     levels: ["unit"],
@@ -4119,8 +4119,8 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/host/go/tests/platform/darwin/system/stall_watch_test.go", id: "TestARunLoopThatWaitsTakesNoHeartbeat" },
       { file: "packages/host/go/tests/platform/darwin/system/stall_watch_fault_test.go", id: "TestAStallThatEndsInAWaitIsResumedAndItsSampleEnds" },
-      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_run_loop_that_waits_takes_no_heartbeat" },
-      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends" },
+      { file: "packages/host/rust/tests/support/platform/darwin/stall_watch.rs", id: "a_run_loop_that_waits_takes_no_heartbeat" },
+      { file: "packages/host/rust/tests/support/platform/darwin/stall_watch.rs", id: "a_stall_that_ends_in_a_wait_is_resumed_and_its_sample_ends" },
     ],
     expected: "Both hosts send no heartbeat while the main run loop waits and block the watch without a timer, and they keep recording a stall while it handles an event.",
     levels: ["unit"],
@@ -4602,8 +4602,8 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/document_binary_test.m", id: "a put over the page limit of 64 MiB is refused and stores nothing" },
       { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGReadAnswersFromTheValueOfTheClipboard" },
       { file: "packages/host/go/src/view_binary_test.go", id: "TestViewPNGPersistTakesTheIdAndSavesItsBytes" },
-      { file: "packages/host/rust/tests/view_binary_test.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
-      { file: "packages/host/rust/tests/view_binary_test.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
+      { file: "packages/host/rust/tests/support/platform/darwin/view_binary.rs", id: "a_view_png_read_puts_the_clipboard_png_into_the_view_store" },
+      { file: "packages/host/rust/tests/support/platform/darwin/view_binary.rs", id: "a_view_png_persist_takes_the_id_and_saves_its_bytes" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG refuses params without a binary id, and base64 data, and persists nothing" },
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "a png read downloads the bytes of the binary id that the reply names" },
       { file: "packages/plugin-api/test/view-clipboard.test.mjs", id: "persistPNG uploads the bytes as image/png and sends the binary id of the upload" },
@@ -6383,7 +6383,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/rust/src/stall_watch_test.rs", id: "the_step_decides_each_beat_from_its_readings" },
-      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
+      { file: "packages/host/rust/tests/support/platform/darwin/stall_watch.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
       { file: "packages/host/go/src/stall_watch_test.go", id: "TestStallStepDecidesEachBeatFromItsReadings" },
     ],
     expected: "Both hosts record host.stall with watch_late_ms, the lateness of the watch's own wake, so that a stall of an unscheduled process has a watch lateness of at least half its lateness and a blocked main thread has none.",
@@ -9274,7 +9274,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/platform/darwin/system/stall_watch_test.go", id: "TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd" },
-      { file: "packages/host/rust/tests/stall_watch_test.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
+      { file: "packages/host/rust/tests/support/platform/darwin/stall_watch.rs", id: "a_blocked_main_thread_is_recorded_with_its_stacks_and_its_end" },
     ],
     expected: "A stall of the main thread of either host of 1 s or more is recorded with the stacks of the threads and its end, without a window check.",
     levels: ["unit"],
@@ -15291,7 +15291,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F510 records execution of existing suites and introduces no product capability.
 // F673 makes stall_watch_test wait for the states of the run loop instead of fixed run times; it changes no runtime capability.
 // F676 makes surface_keyboard_test judge the given keys when the event queue is empty instead of after a fixed interval; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

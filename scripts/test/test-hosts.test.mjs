@@ -574,11 +574,29 @@ test('the test targets without the test harness are read from the manifests of t
   try {
     mkdirSync(join(root, 'crate'));
     writeFileSync(join(root, 'crate', 'Cargo.toml'), '[package]\nname = "crate"\n\n[[test]]\nname = "with_harness_test"\n\n[[test]]\nname = "main_thread_test"\nharness = false\n\n[[test]]\nname = "placed"\npath = "checks/placed.rs"\nharness = false\n');
+    mkdirSync(join(root, 'crate', 'tests'));
+    mkdirSync(join(root, 'crate', 'checks'));
+    writeFileSync(join(root, 'crate', 'tests', 'main_thread_test.rs'), 'fn main() {}\n');
+    writeFileSync(join(root, 'crate', 'checks', 'placed.rs'), 'fn main() {}\n');
     assert.deepEqual([...harnessLessTestFiles(root, ['crate'])], ['crate/tests/main_thread_test.rs', 'crate/checks/placed.rs']);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
   assert.ok(harnessLessTestFiles().has('packages/host/rust/tests/page_start_main_thread_test.rs'));
+});
+
+test('the modules that a target without the test harness names by path are sources of that target', () => {
+  const root = mkdtempSync(join(tmpdir(), 'harness-less-'));
+  try {
+    mkdirSync(join(root, 'crate', 'tests', 'support', 'platform', 'darwin'), { recursive: true });
+    writeFileSync(join(root, 'crate', 'Cargo.toml'), '[package]\nname = "crate"\n\n[[test]]\nname = "view_test"\nharness = false\n');
+    writeFileSync(join(root, 'crate', 'tests', 'view_test.rs'), '#[path = "support/main_thread.rs"]\nmod main_thread;\n\n#[path = "support/platform/darwin/view.rs"]\nmod system;\n\nfn main() {\n    system::main();\n}\n');
+    assert.deepEqual([...harnessLessTestFiles(root, ['crate'])],
+      ['crate/tests/view_test.rs', 'crate/tests/support/main_thread.rs', 'crate/tests/support/platform/darwin/view.rs']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  assert.ok(harnessLessTestFiles().has('packages/host/rust/tests/support/platform/darwin/view_binary.rs'));
 });
 
 test('a case with the scope e2e only needs its window check file to declare it', { timeout: 1000 }, () => {

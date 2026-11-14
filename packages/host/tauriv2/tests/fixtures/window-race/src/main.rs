@@ -168,8 +168,8 @@ fn main() {
         // The launch leaves the activation to the system, as the host does (docs/spec/hosts.md#launch-activation).
         .activate_ignoring_other_apps(soksak_host_tauriv2::launch_activates_ignoring_other_apps())
         .setup(move |app| {
-            // An accessory application has no Dock icon and never becomes the active application by itself.
-            #[cfg(target_os = "macos")]
+            // An accessory application has no Dock icon and never becomes the active application by itself. The host tests run
+            // only on macOS (docs/spec/host-contract.md), so the fixture uses the macOS activation policy without a selector.
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             let handle = app.handle().clone();
             let windows = vec![hidden_window(&handle, "main"), hidden_window(&handle, "w2")];

@@ -49,11 +49,11 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     // The count of the image region views.
     uint64_t count = 99;
-    check(sp_host_test_window_image_regions(window, &count) == NULL && count == 0, @"a window without an image region holds none");
+    check(sp_host_test_window_image_regions((uintptr_t)window, &count) == NULL && count == 0, @"a window without an image region holds none");
     void *lease = sp_region_create(surface, "lease", ignoreEvent, NULL);
     sp_region_lease(lease, released, NULL);
-    check(sp_host_test_window_image_regions(window, &count) == NULL && count == 1, @"a window holds the image region that it created");
-    check(sp_host_test_window_image_regions(NULL, &count) != NULL && sp_host_test_window_image_regions(window, NULL) != NULL,
+    check(sp_host_test_window_image_regions((uintptr_t)window, &count) == NULL && count == 1, @"a window holds the image region that it created");
+    check(sp_host_test_window_image_regions((uintptr_t)0, &count) != NULL && sp_host_test_window_image_regions((uintptr_t)window, NULL) != NULL,
         @"the count refuses a missing window and a missing address");
 
     // The present of a lease frame.
@@ -67,37 +67,37 @@ int main(int argc, char **argv) { @autoreleasepool {
 
     // The key wait.
     bool waiting = true, decision = true, modal = true;
-    check(sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && !waiting && !decision && !modal,
+    check(sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && !waiting && !decision && !modal,
         @"a window without a key wait reports none");
     surfaceLayoutKeysWaitForModal(window);
-    check(sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && waiting && !decision && modal,
+    check(sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && waiting && !decision && modal,
         @"the wait for a modal is a key wait that does not wait for the decision");
     surfaceLayoutKeysModalEnded(window);
-    check(sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && !waiting && !modal,
+    check(sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && !waiting && !modal,
         @"the end of the wait for the modal ends the key wait");
     // A press outside the surfaces is a press on the workbench.
     webviewSetFrame(surface, 0, 0, 300, 400);
     surfaceLayoutPointerPassing(window, true, 450, 200);
     surfaceLayoutPointerPassing(window, false, 450, 200);
-    check(sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && waiting && decision && !modal,
+    check(sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && waiting && decision && !modal,
         @"the release of a press on the workbench opens the wait for the decision");
     surfaceLayoutKeysDecided(window);
-    check(sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && !waiting && !decision,
+    check(sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && !waiting && !decision,
         @"the decided call ends the wait for the decision");
-    check(sp_host_test_window_open_key_wait(window, true) == NULL
-        && sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && waiting && decision && !modal,
+    check(sp_host_test_window_open_key_wait((uintptr_t)window, true) == NULL
+        && sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && waiting && decision && !modal,
         @"the opener of the test opens the wait for the decision as a press and release does");
     surfaceLayoutKeysDecided(window);
-    check(sp_host_test_window_open_key_wait(window, false) == NULL
-        && sp_host_test_window_keys_wait(window, &waiting, &decision, &modal) == NULL && waiting && !decision && !modal,
+    check(sp_host_test_window_open_key_wait((uintptr_t)window, false) == NULL
+        && sp_host_test_window_keys_wait((uintptr_t)window, &waiting, &decision, &modal) == NULL && waiting && !decision && !modal,
         @"the opener of the test opens a wait that does not wait for the decision");
     surfaceLayoutKeysDecided(window);
-    check(sp_host_test_window_open_key_wait(NULL, true) != NULL, @"the opener refuses a missing window");
-    check(sp_host_test_window_keys_wait(NULL, &waiting, &decision, &modal) != NULL && sp_host_test_window_keys_wait(window, NULL, &decision, &modal) != NULL,
+    check(sp_host_test_window_open_key_wait((uintptr_t)0, true) != NULL, @"the opener refuses a missing window");
+    check(sp_host_test_window_keys_wait((uintptr_t)0, &waiting, &decision, &modal) != NULL && sp_host_test_window_keys_wait((uintptr_t)window, NULL, &decision, &modal) != NULL,
         @"the key wait read refuses a missing window and a missing address");
 
     sp_region_close(lease);
     check([releases isEqual:@[@"5/1/1", @"5/1/2"]], [NSString stringWithFormat:@"the close releases the identity that the test presented: %@", releases]);
-    check(sp_host_test_window_image_regions(window, &count) == NULL && count == 0, @"the closed region leaves the window");
+    check(sp_host_test_window_image_regions((uintptr_t)window, &count) == NULL && count == 0, @"the closed region leaves the window");
     return failures ? 1 : 0;
 }}

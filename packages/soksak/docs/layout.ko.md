@@ -508,6 +508,12 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 DOM 바인딩은 화면 해상도 변경을 관찰하고 호스트 CSS 크기가 같아도 새 장치 픽셀
 격자로 다시 그린다. `destroy()`는 이 관찰을 제거한다.
 
+뷰는 호스트의 크기를 animation frame 에서 관찰하기 시작한다. animation frame 은 그 frame 의
+observation round 보다 먼저 실행된다. `observation` 이 그 상태를 `refused`, `pending`,
+`observing`, `unavailable`, `stopped` 중 하나로 알린다. `hostResized(width, height)` 는
+호스트 크기 관찰 한 번에 대한 반응이다. 격자의 크기를 바꾸고 격자가 그 크기를 받았는지
+돌려준다. 소멸된 뷰와 너비나 높이가 0 인 호스트는 격자를 그대로 두고 `false` 를 돌려준다.
+
 `bleed` 는 rule 이 자기를 둘러싼 프레임에 닿기 위해 판 밖으로 얼마나 나갈 수 있는지다.
 판을 프레임 안에 두는 호스트는 — 판 바깥 요소의 패딩으로 — 자기 테두리를 rule 이
 끝나는 곳에서 그만큼 떨어뜨려 그리므로, rule 은 그 테두리에 못 미쳐 멈춘다. 그 거리를

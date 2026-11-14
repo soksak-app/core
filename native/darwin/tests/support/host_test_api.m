@@ -472,8 +472,8 @@ static const char *windowCreate(double width, double height, void **window, NSWi
                                                     styleMask:style
                                                       backing:NSBackingStoreBuffered
                                                         defer:deferred];
-    if (!created) return "host test window could not be created";
     created.releasedWhenClosed = NO;
+    if (!created) return "host test window could not be created";
     created.contentView = [[[NSView alloc] initWithFrame:NSMakeRect(0, 0, width, height)] autorelease];
     *window = (void *)created;
     return NULL;
@@ -535,7 +535,9 @@ static const char mainLoadKey;
 - (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error { [self end:error]; }
 @end
 
-const char *sp_host_test_window_main_webview(void *window, const char *fixture, void **webview) {
+const char *sp_host_test_window_main_webview(uintptr_t windowHandle, const char *fixture, void **webview) {
+    // The window is the handle that the production native API takes (uintptr_t), as the hosts pass it.
+    void *window = (void *)windowHandle;
     if (!webview) return "host test main web view result address is missing";
     *webview = NULL;
     if (!pthread_main_np()) return "host test main web view creation requires the main thread";
@@ -603,7 +605,9 @@ static void countRegions(NSView *view, Class region, uint64_t *count) {
     for (NSView *child in view.subviews) countRegions(child, region, count);
 }
 
-const char *sp_host_test_window_image_regions(void *window, uint64_t *count) {
+const char *sp_host_test_window_image_regions(uintptr_t windowHandle, uint64_t *count) {
+    // The window is the handle that the production native API takes (uintptr_t), as the hosts pass it.
+    void *window = (void *)windowHandle;
     if (!count) return "host test image region count address is missing";
     *count = 0;
     if (!pthread_main_np()) return "host test read of the production library requires the main thread";
@@ -616,7 +620,9 @@ const char *sp_host_test_window_image_regions(void *window, uint64_t *count) {
     return NULL;
 }
 
-const char *sp_host_test_window_keys_wait(void *window, bool *waiting, bool *decision, bool *modal) {
+const char *sp_host_test_window_keys_wait(uintptr_t windowHandle, bool *waiting, bool *decision, bool *modal) {
+    // The window is the handle that the production native API takes (uintptr_t), as the hosts pass it.
+    void *window = (void *)windowHandle;
     if (!waiting || !decision || !modal) return "host test key wait result address is missing";
     *waiting = *decision = *modal = false;
     const char *refused = requireProduction((const void *)surfaceLayoutKeysWaitState, "surfaceLayoutKeysWaitState");
@@ -626,7 +632,9 @@ const char *sp_host_test_window_keys_wait(void *window, bool *waiting, bool *dec
     return NULL;
 }
 
-const char *sp_host_test_window_open_key_wait(void *window, bool decision) {
+const char *sp_host_test_window_open_key_wait(uintptr_t windowHandle, bool decision) {
+    // The window is the handle that the production native API takes (uintptr_t), as the hosts pass it.
+    void *window = (void *)windowHandle;
     const char *refused = requireProduction((const void *)surfaceLayoutKeysWaitOpen, "surfaceLayoutKeysWaitOpen");
     if (refused) return refused;
     if (!window) return "host test window is missing";

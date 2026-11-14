@@ -550,7 +550,7 @@ test("runtime.links.open opens the link of its params", { timeout: 5000 }, async
 test("the tab reports of a view reach the handlers of its surface and reply null", { timeout: 5000 }, async () => {
   const h = await mountView("tab-reports");
   const from = wire.calls.length;
-  // tab.title "문서", tab.footer "1 of 3", tab.directory "/tmp", tab.modified true, tab.error "저장하지 못했습니다"
+  // tab.title, tab.footer "1 of 3", tab.directory "/tmp", tab.modified true and tab.error, with the Korean title and error of the case
   for (let id = 1; id <= 5; id += 1) assert.equal((await h.call()).result, null);
   assert.deepEqual([reports.tabLabel(h.id), reports.tabFooter(h.id), reports.tabModified(h.id), reports.tabError(h.id)],
     ["문서", "1 of 3", true, "저장하지 못했습니다"]);
@@ -561,7 +561,7 @@ test("the tab reports of a view reach the handlers of its surface and reply null
 
 test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the params", { timeout: 5000 }, async () => {
   const h = await mountView("tab-notify-keep");
-  // tab.notify {text: "끝났습니다", policy: "system"}
+  // tab.notify {text, policy: "system"} with the Korean text of the case
   assert.equal((await h.call()).result, null);
   // tab.keep {reason: "busy", on: true}
   assert.equal((await h.call()).result, null);
@@ -573,7 +573,7 @@ test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the p
 
 test("tab.notify and tab.keep refuse params that are not the recorded objects and run nothing", { timeout: 5000 }, async () => {
   const h = await mountView("tab-notify-keep-refused");
-  // tab.notify "끝났습니다"
+  // tab.notify with the text of the case as a string instead of an object
   assert.match((await h.call()).error.message, /requires an object/);
   // tab.keep null
   assert.match((await h.call()).error.message, /requires an object/);

@@ -1,6 +1,6 @@
-//go:build darwin && cgo && diagnostics
+//go:build cgo && diagnostics
 
-package support
+package darwin
 
 /*
 #cgo pkg-config: soksak-darwin

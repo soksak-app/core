@@ -35,7 +35,7 @@ static void *loadedOffMain(void *webview) { return (void *)sp_host_test_webview_
 static void *mainPageOffMain(void *unused) {
     (void)unused;
     void *window = (void *)1, *webview = (void *)1;
-    const char *created = sp_host_test_window_main_webview(window, "main-page.html", &webview);
+    const char *created = sp_host_test_window_main_webview((uintptr_t)window, "main-page.html", &webview);
     const char *waited = sp_host_test_webview_loaded(NULL);
     return (void *)(uintptr_t)(created != NULL && webview == NULL && waited != NULL);
 }
@@ -137,19 +137,19 @@ int main(void) {
             "the window has a content view of the requested size");
         CHECK(!window.visible && !window.releasedWhenClosed, "the window is not on screen and is not released when closed");
         void *refusedView = (void *)1;
-        CHECK(sp_host_test_window_main_webview(handle, "main-page.html", NULL) != NULL
-            && sp_host_test_window_main_webview(NULL, "main-page.html", &refusedView) != NULL && refusedView == NULL
-            && sp_host_test_window_main_webview(handle, NULL, &refusedView) != NULL
-            && sp_host_test_window_main_webview(handle, "", &refusedView) != NULL
-            && sp_host_test_window_main_webview(handle, "folder/main-page.html", &refusedView) != NULL
-            && sp_host_test_window_main_webview(handle, "..", &refusedView) != NULL && refusedView == NULL,
+        CHECK(sp_host_test_window_main_webview((uintptr_t)handle, "main-page.html", NULL) != NULL
+            && sp_host_test_window_main_webview((uintptr_t)0, "main-page.html", &refusedView) != NULL && refusedView == NULL
+            && sp_host_test_window_main_webview((uintptr_t)handle, NULL, &refusedView) != NULL
+            && sp_host_test_window_main_webview((uintptr_t)handle, "", &refusedView) != NULL
+            && sp_host_test_window_main_webview((uintptr_t)handle, "folder/main-page.html", &refusedView) != NULL
+            && sp_host_test_window_main_webview((uintptr_t)handle, "..", &refusedView) != NULL && refusedView == NULL,
             "the main web view refuses a missing address, window and fixture name and a name that is not a file name");
         pthread_t page;
         void *pageRefused = NULL;
         CHECK(pthread_create(&page, NULL, mainPageOffMain, NULL) == 0 && pthread_join(page, &pageRefused) == 0 && pageRefused != NULL,
             "the main web view creation and the wait refuse an invalid call off the main thread and a missing view");
         void *main = NULL;
-        CHECK(sp_host_test_window_main_webview(handle, "main-page.html", &main) == NULL && main != NULL,
+        CHECK(sp_host_test_window_main_webview((uintptr_t)handle, "main-page.html", &main) == NULL && main != NULL,
             "the main web view of the window starts to load the fixture page on the main thread");
         CHECK(sp_host_test_webview_loaded(main) != NULL, "the wait for the main page refuses the main thread");
         if (main) {
@@ -162,7 +162,7 @@ int main(void) {
             sp_run_until("the main page of the test window loaded", ^BOOL { return waited; });
             WKWebView *view = (WKWebView *)main;
             void *absent = NULL;
-            CHECK(sp_host_test_window_main_webview(handle, "absent-page.html", &absent) == NULL && absent != NULL,
+            CHECK(sp_host_test_window_main_webview((uintptr_t)handle, "absent-page.html", &absent) == NULL && absent != NULL,
                 "the main web view starts to load a fixture page that does not exist");
             __block const char *absentLoaded = NULL;
             __block BOOL absentWaited = NO;

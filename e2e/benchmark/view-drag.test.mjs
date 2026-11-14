@@ -14,7 +14,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { APPS, drag, open } from "@soksak/window-check/app.mjs";
-import { execute, untilFramesQuiet, windowApplicationRows } from "../../scripts/measure-app-usage.mjs";
+import { untilFramesQuiet, windowApplicationRows } from "../../scripts/measure-app-usage.mjs";
 import { applyTrace, FRAME_RECORDS } from "../../scripts/measure-trace.mjs";
 import { fresh } from "../fixture.mjs";
 import { readWindowElements } from "@soksak/window-check/accessibility.mjs";
@@ -40,7 +40,7 @@ for (const app of Object.values(APPS)) {
             const conditions = await b3Conditions(s, B3_SETTINGS["view-drag"][state]);
             if (run.state === state) run.conditions = conditions;
           },
-          readProcesses: () => dragProcesses({ run: execute, rows: async () => windowApplicationRows({
+          readProcesses: () => dragProcesses({ rows: async () => windowApplicationRows({
             configDir: app.configDir, statuses: [{ ...(await s.get("host.window")), window: s.window }] }) }),
           nativeDrag: () => drag(s, NATIVE_DRAG_PLAN),
           firstDragRead: async (figures) => {

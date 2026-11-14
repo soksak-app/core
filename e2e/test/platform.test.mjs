@@ -11,20 +11,11 @@ import { debugBinaries, PlatformOperationNotImplemented } from "../platform/plat
 
 const E2E = fileURLToPath(new URL("../", import.meta.url));
 
-// The selected platform is the platform that runs the test: a platform with the operation answers its artifact paths, and a platform
-// without it rejects with the named error when the operation is called, not when the selector is imported.
-test("the window-check selector answers the debug executables of the platform that runs it, or names the operation that the platform does not implement", async () => {
+// The debug executables of the macOS applications are checked by test/platform/darwin/system/debug-binaries.test.mjs.
+test("the window-check selector exports its operations and the named error", () => {
   assert.deepEqual(Object.keys(selector).sort(), ["PlatformOperationNotImplemented", "debugBinaries", "listProcesses", "openApplication"]);
-  if (process.platform === "darwin") {
-    assert.deepEqual(await debugBinaries("/work/target"), {
-      SOKSAK_BINARY_WAILSV3: "/work/target/debug/sok-wailsv3.app/Contents/MacOS/sok-wailsv3",
-      SOKSAK_BINARY_TAURIV2: "/work/target/debug/sok-tauriv2.app/Contents/MacOS/sok-tauriv2",
-      SOKSAK_BINARY_MYGO: "/work/target/debug/sok-mygo.app/Contents/MacOS/sok-mygo",
-    });
-    return;
-  }
-  await assert.rejects(() => debugBinaries("/work/target"), PlatformOperationNotImplemented);
-  await assert.rejects(() => debugBinaries("/work/target"), { message: `applicationArtifact is not implemented on ${process.platform}` });
+  assert.equal(typeof debugBinaries, "function");
+  assert.equal(typeof PlatformOperationNotImplemented, "function");
 });
 
 /** The .mjs files of the window checks, without the unit tests of the checks and their fixtures. */

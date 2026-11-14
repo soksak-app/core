@@ -75,7 +75,7 @@ const char *sp_host_test_window_close(void *window);
 // the folder, and a load that cannot start. The platform registers the web view as the main web view of the window (SetMainWebview).
 // sp_host_test_webview_loaded waits on a thread that is not the main thread, so that the main thread delivers the navigation, until
 // the page loaded, and returns NULL or the error message of the load; it can be called again and returns the same result.
-const char *sp_host_test_window_main_webview(void *window, const char *fixture, void **webview);
+const char *sp_host_test_window_main_webview(uintptr_t window, const char *fixture, void **webview);
 const char *sp_host_test_webview_loaded(void *webview);
 
 // Releases the presentation waits that the fault point SOKSAK_FAULT_VIEW_PRESENTATION=hold of the production library holds
@@ -88,13 +88,13 @@ const char *sp_host_test_view_presentation_release(void);
 // or address with an error message, and refuses when the production library is not linked into the process. Each returns NULL or an
 // error message.
 // The number of image region views (native/darwin/src/image_region.m) that the window holds below its content view.
-const char *sp_host_test_window_image_regions(void *window, uint64_t *count);
+const char *sp_host_test_window_image_regions(uintptr_t window, uint64_t *count);
 // The key wait of the window (native/darwin/src/surface_layout.m): waiting is whether the keys of the window wait, decision whether they
 // wait for the decision of the workbench, and modal whether they wait for a modal web view.
-const char *sp_host_test_window_keys_wait(void *window, bool *waiting, bool *decision, bool *modal);
+const char *sp_host_test_window_keys_wait(uintptr_t window, bool *waiting, bool *decision, bool *modal);
 // Opens the key wait of the window as the release of a press on the workbench does (the opener of native/darwin/src/surface_layout.m),
 // with the wait for the decision set when decision is true.
-const char *sp_host_test_window_open_key_wait(void *window, bool decision);
+const char *sp_host_test_window_open_key_wait(uintptr_t window, bool decision);
 // Presents a fresh IOSurface of the native raster size of the region, which is in the lease presentation mode and placed in a laid-out
 // surface, with the identity generation, raster and sequence, so that the region holds the surface and its close, or a later frame,
 // runs the release callback of the lease with that identity. The test owns no reference of the surface after the call.

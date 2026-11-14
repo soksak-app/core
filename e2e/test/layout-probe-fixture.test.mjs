@@ -17,6 +17,8 @@ import { openDocumentProbe, storageKey } from "../fixtures/layout-probe/layoutpr
 import { startSecondProbe, TEXT_SIZE } from "../fixtures/layout-probe/layoutprobe2/ui/second-probe.js";
 import { openView, turn } from "@soksak/plugin-api/testing";
 
+const CASES = new URL("../../docs/spec/cases/view-wire/", import.meta.url);
+
 const folder = (plugin) => fileURLToPath(new URL(`../fixtures/layout-probe/${plugin}/`, import.meta.url));
 const read = (plugin, file) => JSON.parse(readFileSync(`${folder(plugin)}${file}`, "utf8"));
 const probe = read("layoutprobe", "plugin.json");
@@ -36,6 +38,7 @@ const inset = (element) => {
 /** Opens the page of a probe view with the start values `start`; the wire is the case `wire`, and `options` are the size and content of the view. */
 function open(wire, plugin, file, start, { width = 640, height = 400, content } = {}) {
   return openView(wire, {
+    cases: CASES,
     start, declarations: (plugin === "layoutprobe" ? probe : second).exposes,
     html: page(plugin, file).replace("<body>", `<body style="background: ${START_COLOR}">`),
     layout: { width, height, scale: 2, content, rect: (element) => (element.id === "text"

@@ -2,10 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { auditVersions, cargoPackageVersion, RELEASE, workspaceManifests } from "../check-versions.mjs";
+import { auditVersions, cargoPackageVersion, declaresWorkspaceVersion, RELEASE, workspaceManifests } from "../check-versions.mjs";
 
 test("every declared workspace version is the release candidate", { timeout: 10000 }, () => {
   assert.deepEqual(auditVersions(workspaceManifests()), []);
+});
+
+test("a manifest in a fixtures folder is the input of a test and declares no workspace version", { timeout: 1000 }, () => {
+  assert.equal(declaresWorkspaceVersion("scripts/test/fixtures/repeat-rust/Cargo.toml"), false);
+  assert.equal(declaresWorkspaceVersion("packages/sok/go/tests/fixtures/bundle/Contents/Info.plist"), false);
+  assert.equal(declaresWorkspaceVersion("packages/host/rust/Cargo.toml"), true);
+  assert.equal(declaresWorkspaceVersion("apps/wailsv3/Info.plist"), true);
+  assert.equal(declaresWorkspaceVersion("packages/host/rust/src/host.rs"), false);
 });
 
 test("workspace Cargo.lock package versions match the release candidate", { timeout: 1000 }, () => {

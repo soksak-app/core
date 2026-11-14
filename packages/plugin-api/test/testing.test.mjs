@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { openView, turn } from "../testing.js";
 
+const CASES = new URL("../../../docs/spec/cases/view-wire/", import.meta.url);
 const START = { surface: "tab-1", params: null, origin: { directory: null }, project: null, section: null };
 const DECLARATIONS = {
   status: [{ name: "probe.count", description: "The count.", schema: { type: "object" } }],
@@ -12,7 +13,7 @@ const DECLARATIONS = {
 };
 
 test("a command of the view is run by a request of the host and its reply is the result", { timeout: 5000 }, async () => {
-  const view = await openView("testing-command-request", { start: START, declarations: DECLARATIONS });
+  const view = await openView("testing-command-request", { cases: CASES, start: START, declarations: DECLARATIONS });
   await view.bridge.commands.register("probe.add", async ({ by }) => {
     if (typeof by !== "number") throw new TypeError("probe.add requires a number");
     return null;
@@ -24,7 +25,7 @@ test("a command of the view is run by a request of the host and its reply is the
 });
 
 test("a status of the exposure is read and watched through the exposure request that the host forwards", { timeout: 5000 }, async () => {
-  const view = await openView("testing-status-watch", { start: START, declarations: DECLARATIONS });
+  const view = await openView("testing-status-watch", { cases: CASES, start: START, declarations: DECLARATIONS });
   let value = { count: 1 };
   const listeners = new Set();
   await view.expose.status("probe.count", () => value, (listener) => { listeners.add(listener); return () => listeners.delete(listener); });
@@ -39,13 +40,13 @@ test("a status of the exposure is read and watched through the exposure request 
 });
 
 test("a call of the view that the host refuses fails with the message of the refusal", { timeout: 5000 }, async () => {
-  const view = await openView("testing-refused-call", { start: START });
+  const view = await openView("testing-refused-call", { cases: CASES, start: START });
   await assert.rejects(view.bridge.calls.request("runtime.clipboard.read", "image"), /runtime.clipboard.read image is not served/);
   await view.close();
 });
 
 test("the events of the writer of the page are taken from its batches", { timeout: 5000 }, async () => {
-  const view = await openView("testing-writer-batches", { start: START });
+  const view = await openView("testing-writer-batches", { cases: CASES, start: START });
   view.bridge.runtime.log.info("started", { n: 1 });
   const event = await view.logged("plugin.probe.started");
   assert.deepEqual(event.fields, { n: 1 });
@@ -53,12 +54,19 @@ test("the events of the writer of the page are taken from its batches", { timeou
 });
 
 test("a call that the case does not record is refused and close names it", { timeout: 5000 }, async () => {
-  const view = await openView("testing-refused-call", { start: START });
+  const view = await openView("testing-refused-call", { cases: CASES, start: START });
   await assert.rejects(view.bridge.calls.request("tab.title", "x"), /testing-refused-call: step 0: call.command: the case expects "runtime.clipboard.read", the view sent "tab.title"/);
   await assert.rejects(view.close(), /testing-refused-call: step 0: call.command/);
 });
 
 test("a case that is not played to its end fails at close", { timeout: 5000 }, async () => {
-  const view = await openView("testing-command-request", { start: START, declarations: DECLARATIONS });
+  const view = await openView("testing-command-request", { cases: CASES, start: START, declarations: DECLARATIONS });
   await assert.rejects(view.close(), /testing-command-request: \d+ steps of the case were not played/);
+});
+
+test("openView without the folder of its cases rejects with a TypeError that names the option", { timeout: 5000 }, async () => {
+  await assert.rejects(openView("testing-command-request", { start: START }), {
+    name: "TypeError",
+    message: "openView requires the case folder `cases` as a URL, found undefined",
+  });
 });

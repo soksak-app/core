@@ -89,6 +89,7 @@ export function memorySaverCore({ declaration }) {
     if (!input.enabled) reasons.add("off");
     if (entry.hiddenAt === null) reasons.add("shown");
     else if (!underPressure && entry.shownAt !== null && input.at - entry.shownAt < delayMs()) reasons.add("recent");
+    // default: a tab that no view keeps has no keep reason.
     for (const reason of input.keeps.get(entry.id) ?? []) reasons.add(reason);
     if (input.kept.has(entry.id)) reasons.add("kept");
     if (region) for (const reason of entry.region) reasons.add(reason);

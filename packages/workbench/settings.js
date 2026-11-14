@@ -348,6 +348,7 @@ export function beginSettings(snapshot, id) {
   checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(nextCommon), applied(nextOverrides)));
   projectId = id;
+  // default: without a shown project no project root resolves a setting.
   projectRoot = project?.root ?? null;
   common = nextCommon;
   overrides = nextOverrides;
@@ -375,6 +376,7 @@ async function refresh(read = () => store.snapshot()) {
   if (project) validateValues(nextOverrides, projectSettingsFile(project));
   checkCommonOnly(nextOverrides);
   checkValues(effectiveSettings(defaults, applied(snapshot.common), applied(nextOverrides)));
+  // default: without a shown project no project root resolves a setting.
   projectRoot = project?.root ?? null;
   if (JSON.stringify(common) !== JSON.stringify(snapshot.common) || JSON.stringify(overrides) !== JSON.stringify(nextOverrides)) {
     common = snapshot.common;

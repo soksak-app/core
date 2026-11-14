@@ -3,7 +3,7 @@
 // The pull of the native ring against the real ring of the process (docs/spec/logging.md#writers): the scheduling of the writer
 // that pulls the ring and the loss of a ring that overflows. The ring and its loss counts belong to the process, so each test runs
 // in a child process of this test binary that no other test used. The records come from the real producer function of the native
-// library (support.EmitNativeEvent). The decoder, the refused records and the stored form of the decoded events
+// library (sampler.EmitNativeEvent). The decoder, the refused records and the stored form of the decoded events
 // are data tests of packages/host/go/src/event_native_test.go.
 package system_test
 
@@ -19,6 +19,7 @@ import (
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/tests/support"
+	sampler "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
 )
 
 // nativeRingChild marks the child process of a test of the native ring.
@@ -179,7 +180,7 @@ func ringOptions(t *testing.T, system platform.Platform, interval time.Duration)
 // emitRecord stores a record of the class call in the real ring.
 func emitRecord(t *testing.T, level uint8, name, fields string) {
 	t.Helper()
-	if err := support.EmitNativeEvent(nativeClassCall, level, name, fields); err != nil {
+	if err := sampler.EmitNativeEvent(nativeClassCall, level, name, fields); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -275,7 +276,7 @@ func TestTheLossOfAFullRingIsCountedAsDroppedByChannel(t *testing.T) {
 	const name = "native.test.fill"
 	const limit = 256
 	stored, refusedOther, refusedDebug := 0, 0, 0
-	for support.EmitNativeEvent(nativeClassCall, nativeLevelInfo, name, fields) == nil {
+	for sampler.EmitNativeEvent(nativeClassCall, nativeLevelInfo, name, fields) == nil {
 		if stored++; stored > limit {
 			t.Fatalf("the ring held %d records without a writer", stored)
 		}
@@ -283,13 +284,13 @@ func TestTheLossOfAFullRingIsCountedAsDroppedByChannel(t *testing.T) {
 	refusedOther++
 	// The records that follow have the size of the refused one, so a full ring refuses each, in the channel of its level.
 	for range 2 {
-		if err := support.EmitNativeEvent(nativeClassCall, nativeLevelInfo, name, fields); err == nil {
+		if err := sampler.EmitNativeEvent(nativeClassCall, nativeLevelInfo, name, fields); err == nil {
 			t.Fatal("a record was stored in the full ring")
 		}
 		refusedOther++
 	}
 	for range 2 {
-		if err := support.EmitNativeEvent(nativeClassCall, nativeLevelDebug, name, fields); err == nil {
+		if err := sampler.EmitNativeEvent(nativeClassCall, nativeLevelDebug, name, fields); err == nil {
 			t.Fatal("a record of the channel debug was stored in the full ring")
 		}
 		refusedDebug++

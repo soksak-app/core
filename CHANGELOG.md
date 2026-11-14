@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The Windows build check compiles the host sources without their tests, the version check skips test fixtures, the SDK testing module takes its case folder from the consumer, the window-source audit accepts the Unix socket of the endpoint, the view drag figures judge recorded tool output, and the contract audit reads the modules of a Rust target without the test harness (F816).
 - Both hosts report a failed recording stop as `capture stop failed: <e>` and a failed folder removal as `capture directory cleanup failed: <e>`, and keep the owner of a folder that stays (F812).
 - The Rust host refuses a page log event of another plugin with the text of the Go host (F813).
 - The error of a wait for a held window names only its own failure and no failure of an earlier wait (F814).

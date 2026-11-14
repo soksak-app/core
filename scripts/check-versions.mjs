@@ -95,12 +95,22 @@ export function auditVersions(files, release = RELEASE) {
   return errors;
 }
 
+const OTHER_MANIFESTS = ["Cargo.toml", "version.go", "host.go", "Info.plist", "Makefile"];
+
+/**
+ * Whether a tracked path declares a version of the workspace. A manifest in a fixtures folder is the input of a test, such as a
+ * bundle without a version or a package of another version, and declares no version of the workspace, as check-boundaries
+ * treats it as the payload of the package whose tests hold the folder.
+ */
+export function declaresWorkspaceVersion(path) {
+  return (JSON_MANIFESTS.has(basename(path)) || OTHER_MANIFESTS.includes(basename(path))) && !/(^|\/)fixtures\//.test(path);
+}
+
 export function workspaceManifests(root = ROOT) {
-  const others = ["Cargo.toml", "version.go", "host.go", "Info.plist", "Makefile"];
-  const names = [...JSON_MANIFESTS, ...others].map((name) => `*${name}`);
+  const names = [...JSON_MANIFESTS, ...OTHER_MANIFESTS].map((name) => `*${name}`);
   return execFileSync("git", ["ls-files", "--", ...names], { cwd: root, encoding: "utf8" })
     .split("\n")
-    .filter((path) => path && (JSON_MANIFESTS.has(basename(path)) || others.includes(basename(path))))
+    .filter((path) => path && declaresWorkspaceVersion(path))
     .map((path) => ({ path, text: readFileSync(join(root, path), "utf8") }));
 }
 

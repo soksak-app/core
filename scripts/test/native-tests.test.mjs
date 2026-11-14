@@ -101,6 +101,8 @@ test("the activation target builds and runs its cases through the native test ru
     "webview_input_test,--monitor",
     "image_region_ime_test",
     "input_virtual_ime_test",
+    // The input source restoration runs its selection and activation on the system, which takes the front from the person.
+    "ime_source_restore_system_test",
   ]);
   assert.deepEqual(lines.filter((line) => /^\s*@?[^ ]*\/[^ ]+_test(?:\s|$)/.test(line)), [], output);
 });
