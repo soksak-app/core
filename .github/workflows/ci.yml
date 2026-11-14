@@ -267,6 +267,11 @@ jobs:
           CARGO_NET_OFFLINE: 'true'
           CARGO_INCREMENTAL: '0'
         run: make -C core check-docs check-commands check-boundaries check-platform-files check-host-files check-exposure check-tests check-hosts-same check-events
+      # The owner tests of scripts/test run the sok executable of the declared build, which the tests name when it is missing.
+      - name: Build the sok executable
+        env:
+          CARGO_INCREMENTAL: '0'
+        run: make -C core build-sok
       - name: Cross-toolchain script tests
         env:
           npm_config_offline: 'true'
@@ -310,6 +315,9 @@ jobs:
       # projects that exclude Linux, whose prepare builds native code against Apple frameworks.
       - name: Fetch locked Node dependencies
         run: node core/scripts/install-platform.mjs linux
+      # The owner tests of scripts/test run the sok executable of the declared build, which the tests name when it is missing.
+      - name: Build the sok executable
+        run: make -C core build-sok
       - name: Headless owner tests
         env:
           npm_config_offline: 'true'

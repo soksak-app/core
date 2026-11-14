@@ -22,6 +22,18 @@ const char *sp_host_test_install_stall_functions(uintptr_t counts, uintptr_t set
 void sp_host_test_read_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered);
 void sp_host_test_set_send_in_next_wait(bool send);
 
+// The functions of the production library that the window reads and the event producer of this library call, borrowed for the life
+// of the process and installed once: the key wait state and its opener (native/darwin/src/surface_layout.m), the native raster and the
+// presentation of an image region (native/darwin/src/image_region.m) and the producer of the native event ring
+// (native/darwin/src/event_ring.h). The host passes their addresses, because a host that loads the production library and this library
+// as separate dynamic libraries keeps the symbols of each library local to it. A missing address and a second installation return a
+// static error without changing the installed state.
+const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state, uintptr_t keys_wait_open, uintptr_t region_raster,
+    uintptr_t region_present, uintptr_t event);
+// Stores the event name with the class, the level and the fields (JSON text) in the native event ring of the production library
+// through its producer function, as a native producer does. Returns NULL, or the error when the producer refused the event.
+const char *sp_host_test_emit_event(uint8_t event_class, uint8_t level, const char *name, const char *fields);
+
 // Capture must run on the native main thread. Sampling reads that thread entirely in native code.
 // Each successful start after capture requires one stop/join. Phase is -1 to pause or [0, SAMPLER_PHASES);
 // phase query indices are [0, SAMPLER_PHASES). The caller owns the lifecycle and serializes its transitions.

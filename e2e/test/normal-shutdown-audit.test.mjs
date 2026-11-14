@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -10,9 +10,10 @@ import { startCasePlayer } from "@soksak/client/testing";
 
 import { runNormalShutdown, runSokProcessWait } from "../normal-shutdown-runner.mjs";
 
-// The bundled sok executable of the tests is a real program in the folder of the host binary: the echo of the system, which prints its
-// arguments and so answers no JSON, and the fixture program of the CLI, which answers once the process of the PID is gone.
+// The bundled sok executable of the tests is a real program in the folder of the host binary: the fixture program of the CLI, which
+// answers once the process of the PID is gone, and the fixture program that writes its arguments as text, which answers no JSON.
 const SOK_FIXTURE = fileURLToPath(new URL("../fixtures/programs/sok-process-wait.mjs", import.meta.url));
+const SOK_TEXT_FIXTURE = fileURLToPath(new URL("../fixtures/programs/sok-text-output.mjs", import.meta.url));
 
 /** A configuration folder whose host folder holds the bundled sok executable `install(path)` puts in place. */
 function bundledSok(install) {
@@ -164,7 +165,7 @@ test("service process wait takes no limit", async () => {
 });
 
 test("service process wait rejects malformed CLI output", { timeout: 10000 }, async () => {
-  const { configDir, binary } = bundledSok((sok) => symlinkSync("/bin/echo", sok));
+  const { configDir, binary } = bundledSok((sok) => copyFileSync(SOK_TEXT_FIXTURE, sok));
   try {
     await assert.rejects(runSokProcessWait({ binary, configDir, pid: 321 }), /returned invalid JSON for service PID 321/);
   } finally {

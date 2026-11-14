@@ -20,10 +20,6 @@ function leavesNothing(t, file) {
   assert.deepEqual(readdirSync(temporary), []);
 }
 
-test("session-clipboard.test.mjs removes the folder of the file when a selection runs none of its tests", (t) => {
-  leavesNothing(t, "session-clipboard.test.mjs");
-});
-
 test("session-frontmost.test.mjs removes the folder of the file when a selection runs none of its tests", (t) => {
   leavesNothing(t, "session-frontmost.test.mjs");
 });

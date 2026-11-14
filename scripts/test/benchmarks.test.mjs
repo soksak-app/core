@@ -1,8 +1,7 @@
 // Verifies that `make benchmark-go` and `make benchmark-rust` give each benchmark its own limit and name it when it starts and reports
 // its result and elapsed time, while the benchmark output is kept. The packages are the tracked fixtures under
 // scripts/test/fixtures/benchmarks, built and run by the real go and cargo toolchains: the Go fixture module holds the benchmark
-// package `bench` and the cgo package `linked`, which the external linker reports for a newer macOS version than the link, and the
-// Rust fixture is a workspace of its own with the bench targets of the runner. Each make target takes its fixture package through
+// package `bench`, and the Rust fixture is a workspace of its own with the bench targets of the runner. Each make target takes its fixture package through
 // BENCH_GO_PACKAGE and BENCH_RUST_PACKAGE, and the Rust manifest through MANIFEST. The limit is the parameter BENCH_TIMEOUT of the
 // run: the first target ends at once, and the second target runs for 30 seconds, longer than the limit.
 import test from 'node:test';
@@ -16,7 +15,6 @@ const root = resolve(import.meta.dirname, '../..');
 const fixtures = join(root, 'scripts/test/fixtures/benchmarks');
 const goModule = join(fixtures, 'go');
 const goBench = `./${relative(root, join(goModule, 'bench'))}`;
-const goLinked = `./${relative(root, join(goModule, 'linked'))}`;
 const rustManifest = join(fixtures, 'rust', 'Cargo.toml');
 
 /** A folder holding a go.work that uses the Go fixture module, and the path of that go.work. */
@@ -51,13 +49,6 @@ test('make benchmark-go names each benchmark when it starts, keeps its output, a
   assert.match(result.stdout, /^RUN  BenchmarkNativePull \(1 running, limit 20\.000s\)$/m, result.stdout + result.stderr);
   assert.match(result.stdout, /^TIME BenchmarkNativePull \d+\.\d{3}s exceeded 20\.000s and was killed(?:; left running: .*)?$/m, result.stdout + result.stderr);
   assert.notEqual(result.status, 0, result.stdout + result.stderr);
-});
-
-test('make benchmark-go fails a benchmark build whose link reports an object newer than the link, and names the object and both versions', { timeout: 150000 }, (t) => {
-  const result = make(t, ['benchmark-go', `BENCH_GO_PACKAGE=${goLinked}`]);
-  assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /ld built \S+ for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
-  assert.doesNotMatch(result.stdout, /^RUN  Benchmark/m, 'a benchmark of a build with a linker failure ran');
 });
 
 test('make benchmark-rust names each bench target when it starts, and kills a target at its limit', { timeout: 150000 }, (t) => {

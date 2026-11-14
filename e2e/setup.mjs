@@ -8,7 +8,8 @@ export { debugBinaries };
 
 /** Build output folder that cargo decides for the current folder. If it is not found, the run fails with that reason. */
 export function targetDirectory() {
-  const result = spawnSync(cargoCommand(), ["metadata", "--format-version", "1", "--no-deps"], { encoding: "utf8" });
+  // The error text is embedded in the error of this function, so cargo writes it without the terminal colors of CARGO_TERM_COLOR.
+  const result = spawnSync(cargoCommand(), ["--color", "never", "metadata", "--format-version", "1", "--no-deps"], { encoding: "utf8" });
   if (result.error) throw new Error(`cargo metadata: ${result.error.message}`);
   if (result.status !== 0) throw new Error(`cargo metadata exited with ${result.status}: ${String(result.stderr).trim()}`);
   const directory = JSON.parse(result.stdout).target_directory;

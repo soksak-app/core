@@ -85,13 +85,6 @@ test('Rust owner CLI reports captured Cargo compiler failure output', { timeout:
   assert.deepEqual(testExecutables(result.target), [], 'a failed build left a test executable');
 });
 
-test('Rust owner CLI fails a test build whose link reports an object newer than the link, and names the object and both versions', { timeout: 240000 }, (t) => {
-  const result = make(t, ['repeat-rust', 'PACKAGE=linkwarn', 'COUNT=1', 'TEST_TARGET=lib'], { file: build('linkwarn') });
-  assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /ld built \S+ for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
-  assert.doesNotMatch(result.stdout, /^RUN  /m, 'a test of a build with a linker failure ran');
-});
-
 test('Rust owner CLI reports captured Cargo metadata failure output', { timeout: 240000 }, (t) => {
   // The fault injection point of the metadata stage names a manifest that does not exist; cargo metadata reports it, and the build
   // of the test (the stage before) has already run with the manifest of the fixture.

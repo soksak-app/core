@@ -59,7 +59,8 @@ test("ps lists the cpu seconds of this process, and footprint reads its footprin
   assert.ok(cpu.get(process.pid) > 0, "the process of the test has used cpu time");
   const { bytes, peakBytes } = await readFootprint(process.pid);
   assert.ok(bytes > 0 && peakBytes >= bytes, `footprint ${bytes} B, peak ${peakBytes} B`);
-  await assert.rejects(readFootprint(2_000_000_000), /^Error: footprint -p 2000000000 exited with 66: footprint: Unable to find pid/);
+  // The error names the command and its exit status and carries the output of footprint, whose wording differs between macOS versions.
+  await assert.rejects(readFootprint(2_000_000_000), /^Error: footprint -p 2000000000 exited with 66: footprint: \S/);
 });
 
 test("launchctl lists the launchd domain of a process without a WebKit service, and refuses the domain of pid 0 with the folder in the error", async () => {

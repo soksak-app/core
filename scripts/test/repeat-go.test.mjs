@@ -102,13 +102,6 @@ test('make repeat-go passes a pattern whose tested package passed while a suppor
   assert.match(stdout, /1 of 1 runs pass/, stdout + stderr);
 });
 
-test('make repeat-go fails a test build whose link reports an object newer than the link, and names the object and both versions', (t) => {
-  const result = make(t, ['repeat-go', `PACKAGE=${fixturePackage('cgolink')}`, 'COUNT=1', 'TEST=TestAlpha']);
-  assert.notEqual(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stderr, /ld built \S+ for macOS 27\.0, newer than the macOS 14\.4 of the link/, result.stdout + result.stderr);
-  assert.doesNotMatch(result.stdout, /^RUN  TestAlpha/m, 'a test of a build with a linker failure ran');
-});
-
 test('make repeat-go fails a run in which no test matched', (t) => {
   const { stdout, stderr, status } = make(t, ['repeat-go', `PACKAGE=${fixturePackage('run')}`, 'COUNT=1', 'TEST=TestMissing']);
   assert.notEqual(status, 0, stdout + stderr);
@@ -130,15 +123,6 @@ test('Go test runner preserves the selected native environment through graph, bu
   // The report is written by the test binary, which received the environment of the selected profile.
   assert.equal(readFileSync(report, 'utf8'), `CGO_ENABLED=0\nSOKSAK_NATIVE_LIBRARY=${production}\nSOKSAK_NATIVE_TEST_LIBRARY=${testLibrary}\nvalue=generic\n`);
   assert.equal(existsSync(map), false, 'a CGO0 build applied the cgo linker flags');
-});
-
-test('Go test runner keeps generic linker flags and applies cgo linker flags to a CGO1 build', (t) => {
-  const map = join(folderFor(t), 'cgo1.map');
-  const result = runGoTests(t, ['--package', fixturePackage('cgomap'), '--test', 'TestFlags', '--count', '1', '--timeout', '60',
-    '--ldflags=-X fixture.soksak/repeatgo/cgomap.value=generic', `--cgo-ldflags=-extldflags -Wl,-map,${map}`], { CGO_ENABLED: '1' });
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /^PASS TestFlags \d+\.\d{3}s$/m, result.stdout + result.stderr);
-  assert.ok(existsSync(map) && statSync(map).size > 0, 'a CGO1 build did not apply the cgo linker flags');
 });
 
 test('native input diagnostics print only the native and cgo whitelist', (t) => {

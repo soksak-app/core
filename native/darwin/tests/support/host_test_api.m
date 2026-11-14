@@ -580,23 +580,50 @@ const char *sp_host_test_window_close(void *window) {
 }
 
 // The fault point SOKSAK_FAULT_VIEW_PRESENTATION=hold of the production library holds the callback of each presentation wait of a
-// web view until this notification (native/darwin/src/webview.m). Posting it releases the callbacks that are held and no later one.
+// web view until the release notification of its process (native/darwin/src/webview.m). Posting the release name of this process
+// releases the callbacks of this process that are held and no later one.
 const char *sp_host_test_view_presentation_release(void) {
-    if (notify_post(SP_VIEW_PRESENTATION_FAULT_RELEASE) != NOTIFY_STATUS_OK) return "host test release of the held presentations could not be posted";
+    char name[64];
+    sp_view_presentation_fault_release_name(getpid(), name, sizeof name);
+    if (notify_post(name) != NOTIFY_STATUS_OK) return "host test release of the held presentations could not be posted";
     return NULL;
 }
 
-// The functions of the production library that the reads below call. They are weak so that this library links without it.
-extern bool surfaceLayoutKeysWaitState(void *owner, bool *decision, bool *modal) __attribute__((weak_import));
-extern void surfaceLayoutKeysWaitOpen(void *owner, bool decision) __attribute__((weak_import));
-extern bool sp_region_raster(void *region, double *out) __attribute__((weak_import));
-extern bool sp_region_present(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height,
-    double scale, uint64_t generation, uint64_t raster, int sequence) __attribute__((weak_import));
+// The functions of the production library that the reads below call, installed by sp_host_test_install_production_functions.
+static bool (*productionKeysWaitState)(void *owner, bool *decision, bool *modal);
+static void (*productionKeysWaitOpen)(void *owner, bool decision);
+static bool (*productionRegionRaster)(void *region, double *out);
+static bool (*productionRegionPresent)(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height,
+    double scale, uint64_t generation, uint64_t raster, int sequence);
+static bool (*productionEvent)(uint8_t eventClass, uint8_t level, const char *name, const char *fields_json);
+static bool productionFunctionsInstalled;
 
-static const char *requireProduction(const void *function, const char *name) {
-    (void)name;
+const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state, uintptr_t keys_wait_open, uintptr_t region_raster,
+    uintptr_t region_present, uintptr_t event) {
+    if (productionFunctionsInstalled) return "host test production functions are already installed";
+    if (!keys_wait_state || !keys_wait_open || !region_raster || !region_present || !event) return "host test production function is missing";
+    productionKeysWaitState = (bool (*)(void *, bool *, bool *))keys_wait_state;
+    productionKeysWaitOpen = (void (*)(void *, bool))keys_wait_open;
+    productionRegionRaster = (bool (*)(void *, double *))region_raster;
+    productionRegionPresent = (bool (*)(void *, unsigned int, const unsigned char *, double, double, double, uint64_t, uint64_t, int))region_present;
+    productionEvent = (bool (*)(uint8_t, uint8_t, const char *, const char *))event;
+    productionFunctionsInstalled = true;
+    return NULL;
+}
+
+static char eventRefusal[160];
+
+const char *sp_host_test_emit_event(uint8_t event_class, uint8_t level, const char *name, const char *fields) {
+    if (!productionFunctionsInstalled) return "host test production functions are not installed";
+    if (!name || !fields) return "host test event name or fields are missing";
+    if (productionEvent(event_class, level, name, fields)) return NULL;
+    snprintf(eventRefusal, sizeof eventRefusal, "the native library refused the event %s (class %u, level %u)", name, event_class, level);
+    return eventRefusal;
+}
+
+static const char *requireProduction(void) {
     if (!pthread_main_np()) return "host test read of the production library requires the main thread";
-    if (!function) return "host test read of the production library requires the production library in the process";
+    if (!productionFunctionsInstalled) return "host test production functions are not installed";
     return NULL;
 }
 
@@ -625,37 +652,36 @@ const char *sp_host_test_window_keys_wait(uintptr_t windowHandle, bool *waiting,
     void *window = (void *)windowHandle;
     if (!waiting || !decision || !modal) return "host test key wait result address is missing";
     *waiting = *decision = *modal = false;
-    const char *refused = requireProduction((const void *)surfaceLayoutKeysWaitState, "surfaceLayoutKeysWaitState");
+    const char *refused = requireProduction();
     if (refused) return refused;
     if (!window) return "host test window is missing";
-    *waiting = surfaceLayoutKeysWaitState(window, decision, modal);
+    *waiting = productionKeysWaitState(window, decision, modal);
     return NULL;
 }
 
 const char *sp_host_test_window_open_key_wait(uintptr_t windowHandle, bool decision) {
     // The window is the handle that the production native API takes (uintptr_t), as the hosts pass it.
     void *window = (void *)windowHandle;
-    const char *refused = requireProduction((const void *)surfaceLayoutKeysWaitOpen, "surfaceLayoutKeysWaitOpen");
+    const char *refused = requireProduction();
     if (refused) return refused;
     if (!window) return "host test window is missing";
-    surfaceLayoutKeysWaitOpen(window, decision);
+    productionKeysWaitOpen(window, decision);
     return NULL;
 }
 
 static char presentRefusal[160];
 
 const char *sp_host_test_region_present_lease(void *region, uint64_t generation, uint64_t raster, int sequence) {
-    const char *refused = requireProduction((const void *)sp_region_present, "sp_region_present");
+    const char *refused = requireProduction();
     if (refused) return refused;
-    if (!sp_region_raster) return "host test read of the production library requires the production library in the process";
     if (!region) return "host test region is missing";
     double native[3] = {0};
-    if (!sp_region_raster(region, native)) return "host test region has no native raster: it is not placed in a laid-out surface";
+    if (!productionRegionRaster(region, native)) return "host test region has no native raster: it is not placed in a laid-out surface";
     unsigned char nonce[16];
     arc4random_buf(nonce, sizeof nonce);
     void *frame = sp_host_test_frame_create((int)native[0], (int)native[1], nonce);
     if (!frame) return "host test frame could not be created";
-    bool accepted = sp_region_present(region, sp_host_test_frame_id(frame), nonce, native[0], native[1], native[2], generation, raster, sequence);
+    bool accepted = productionRegionPresent(region, sp_host_test_frame_id(frame), nonce, native[0], native[1], native[2], generation, raster, sequence);
     sp_host_test_frame_release(frame);
     if (accepted) return NULL;
     snprintf(presentRefusal, sizeof presentRefusal, "host test region refused the frame of generation %llu, raster %llu, sequence %d",

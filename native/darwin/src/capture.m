@@ -54,7 +54,7 @@ static uint64_t captureTicks(void) { return mach_absolute_time(); }
 //     notification; hold-third holds the third request until the release notification and then takes the real image;
 //     hold-third-none holds the third request until the release notification and then gives no image.
 //   SOKSAK_FAULT_CAPTURE_ENCODE: hold-after-first holds the compressions after the first until the release notification.
-// The release notification is the Darwin notification SP_CAPTURE_FAULT_RELEASE: it ends the waits that began before it, and a wait that
+// The release notification is the Darwin notification of the release name of this process (capture.h): it ends the waits that began before it, and a wait that
 // begins after it in the same recording does not hold. The requests are counted from the start of the recording.
 static const char *captureFault(const char *name) {
     const char *value = getenv(name);
@@ -76,7 +76,9 @@ static NSCondition *captureFaultState(void) {
     dispatch_once(&once, ^{
         condition = [[NSCondition alloc] init];
         int token = 0;
-        uint32_t status = notify_register_dispatch(SP_CAPTURE_FAULT_RELEASE, &token,
+        char name[64];
+        sp_capture_fault_release_name(getpid(), name, sizeof name);
+        uint32_t status = notify_register_dispatch(name, &token,
             dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(int unused) {
             (void)unused;
             [condition lock];

@@ -297,7 +297,7 @@ bool nativeWindowJoinView(uintptr_t window, uint64_t ticket, void *view, uintptr
 }
 // The fault point SOKSAK_FAULT_VIEW_PRESENTATION=hold of the presentation waits of web views (docs/operations/examples.md#test-kinds): the
 // callback of a wait is delivered only after the real presentation update and a release that came after the wait began. The release
-// is the Darwin notification SP_VIEW_PRESENTATION_FAULT_RELEASE, so a first paint that the system does not delay on demand arrives when
+// is the Darwin notification of the release name of this process (view_presentation_fault.h), so a first paint that the system does not delay on demand arrives when
 // the check releases it, and a release that comes before the update is not lost. The counts and the held callbacks are read and
 // changed on the main thread only.
 static NSMutableArray<void (^)(void)> *heldPresentations;
@@ -314,7 +314,9 @@ static bool presentationHeld(void) {
     dispatch_once(&once, ^{
         heldPresentations = [[NSMutableArray alloc] init];
         int token = 0;
-        uint32_t status = notify_register_dispatch(SP_VIEW_PRESENTATION_FAULT_RELEASE, &token, dispatch_get_main_queue(), ^(int unused) {
+        char name[64];
+        sp_view_presentation_fault_release_name(getpid(), name, sizeof name);
+        uint32_t status = notify_register_dispatch(name, &token, dispatch_get_main_queue(), ^(int unused) {
             (void)unused;
             presentationReleases++;
             NSArray<void (^)(void)> *released = [[heldPresentations copy] autorelease];

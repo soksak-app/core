@@ -1,6 +1,7 @@
 // A stall sample that a request starts after STALL_AFTER belongs to its session: the session finish waits for it and
 // reports its result or its failure, so no sample process outlives the check (F292-47). The host is the tracked program
-// fixtures/stall-host.mjs, a running process that sample records and that answers the requests of the check by rule.
+// fixtures/stall-host.mjs, a running process that /usr/bin/sample records and that answers the requests of the check by rule.
+// The samples and the launchd services of macOS are read by the live tools, so these tests run only on macOS.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -13,10 +14,10 @@ import { connect } from "@soksak/client";
 
 delete process.env.SOKSAK_RUN_ID;
 delete process.env.SOKSAK_RUN_FOLDER;
-import { sessionEventBoot, sessionEventStart } from "../event-log.mjs";
-const { finishSession, Session } = await import("../app.mjs");
+import { sessionEventBoot, sessionEventStart } from "../../../../event-log.mjs";
+const { finishSession, Session } = await import("../../../../app.mjs");
 
-const host = fileURLToPath(new URL("../fixtures/stall-host.mjs", import.meta.url));
+const host = fileURLToPath(new URL("../../../../fixtures/stall-host.mjs", import.meta.url));
 
 /** The ordinary configuration folder of a host: its logs folder holds the log that the host opened and the sample reports. */
 function folder(t) {

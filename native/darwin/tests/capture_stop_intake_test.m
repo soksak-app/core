@@ -90,7 +90,9 @@ static void recordWithHeldStill(NSWindow *window, NSString *directory, BOOL fail
     int callsAtClose = 0;
     @synchronized (recording) { callsAtClose = (int)recording.nextIndex; }
     uint64_t releasedTicks = mach_absolute_time();
-    check(notify_post(SP_CAPTURE_FAULT_RELEASE) == NOTIFY_STATUS_OK, [NSString stringWithFormat:@"%@: the release notification is posted", label]);
+    char releaseName[64];
+    sp_capture_fault_release_name(getpid(), releaseName, sizeof releaseName);
+    check(notify_post(releaseName) == NOTIFY_STATUS_OK, [NSString stringWithFormat:@"%@: the release notification is posted", label]);
     sp_run_until("the stop returns", ^BOOL { return stopped; });
     NSString *stopError = [NSString stringWithUTF8String:sp_capture_error()];
     if (fails) {

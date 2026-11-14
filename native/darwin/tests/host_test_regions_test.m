@@ -4,6 +4,7 @@
 // application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import "event_ring.h"
 #import "image_region.h"
 #import "surface_layout.h"
 #import "webview_geometry.h"
@@ -42,6 +43,15 @@ int main(int argc, char **argv) { @autoreleasepool {
     [window.contentView addSubview:main];
     WKWebView *view = [[[WKWebView alloc] initWithFrame:NSZeroRect] autorelease];
     [window orderBack:nil];
+    bool waitingBefore = false, decisionBefore = false, modalBefore = false;
+    check(sp_host_test_window_keys_wait((uintptr_t)window, &waitingBefore, &decisionBefore, &modalBefore) != NULL,
+        @"a read before the production functions are installed is refused");
+    check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, 0) != NULL, @"a missing production function is refused");
+    check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event) == NULL, @"the production functions install");
+    check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event) != NULL, @"a second installation is refused");
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL && SPPlaceSurfaceView(surface, view), @"the main webview creates the surface and the view web view is placed in it");
     webviewSetFrame(surface, 0, 0, 500, 400);

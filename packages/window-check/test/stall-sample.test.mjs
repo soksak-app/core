@@ -3,8 +3,6 @@
 // this file are functions of data: the instants of a request, the outcome of a sample, and the texts of the tools that the stall
 // record reads. The live tools (/usr/bin/sample, lsof, launchctl) are exercised by test/platform/darwin/system/stall-sample.test.mjs.
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,8 +15,6 @@ import { announceStall, flockedFile, flockFields, flockHolder, launchdServicesOf
   sampleCommand, stallDeadline, stallDue, waitsInFlock, webContentProcesses } from "../stall-sample.mjs";
 
 const { Session, stallLine } = await import("../app.mjs");
-
-const stallHost = fileURLToPath(new URL("../fixtures/stall-host.mjs", import.meta.url));
 
 // The texts of the tools that the stall record reads, each recorded from the tool on processes of the fixture programs of this
 // package (the folder of a recording is named /tmp/record): `lsof -n -P -F pcftn`, the lock probe of stall-sample.mjs,
@@ -153,26 +149,6 @@ test("the planned length of a request is the length of its drag or the wait of i
   assert.equal(plannedLength("diagnostics.capture.stop", {}, 5000), 0);
   assert.equal(plannedLength("diagnostics.drag", { ms: 48 }), 0);
   assert.equal(plannedLength("status.get", { name: "core.verify" }, 5000), 0);
-});
-
-test("a session request of a drag names the planned length of the drag in its stall line", { timeout: 60000 }, async (t) => {
-  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-plan-"));
-  t.after(() => rmSync(configDir, { recursive: true }));
-  // The host is a running process of the fixture program, which does not answer diagnostics.drag.
-  const host = spawn(process.execPath, [stallHost, configDir], { stdio: ["ignore", "pipe", "inherit"] });
-  t.after(() => host.kill("SIGKILL"));
-  await once(host.stdout, "data");
-  const client = await connect({ configDir });
-  t.after(() => client.close());
-  // The stall delay is a declared option of the session, so the stall line is reported without waiting for STALL_AFTER.
-  const s = new Session({ name: "mygo", configDir }, client, { stallAfter: 0 });
-  const started = once(s.stalls, "started");
-  void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 }).catch(() => {});
-  assert.deepEqual(await started, ["mygo diagnostics.drag"]);
-  assert.equal(s.stallSamples.size, 1);
-  const [{ line }] = await Promise.all(s.stallSamples);
-  assert.match(line, /^mygo diagnostics\.drag still pending 0 ms after its planned 1440 ms; /);
-  assert.throws(() => new Session({ name: "mygo", configDir }, client, { stallAfter: -1 }), /^Error: Session needs a stall delay of 0 or more ms$/);
 });
 
 test("a drag being measured is not sampled before 3 s after the end of its planned length", () => {

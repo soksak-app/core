@@ -8,12 +8,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { connect } from "@soksak/client";
 import { flockWait, pageProcesses, pageRecord, plannedLength, sampleProcess, sampleStall, samplerState } from "../../../../stall-sample.mjs";
 
-const { whilePending } = await import("../../../../app.mjs");
+const { Session, whilePending } = await import("../../../../app.mjs");
 
 // The programs of the two processes that flock a file: the holder holds the lock, and the waiter waits for it.
 const fixture = (name) => fileURLToPath(new URL(`../../../../fixtures/${name}`, import.meta.url));
+const stallHost = fixture("stall-host.mjs");
 // The samples that /usr/bin/sample recorded of a process that waits in no flock, of one that waits in flock, and the header of a
 // sample without its sections.
 const IDLE_SAMPLE = fixture("stall-tools/sample-idle.txt");
@@ -216,4 +218,24 @@ test("lsof and the lock probe of macOS name the file and the holder of a real fl
   assert.equal(record, `${join(directory, `stall-${host.pid}-9-page-${waiter.pid}.txt`)}; flock.file=${file}; flock.holder=${holder.pid} perl`);
   assert.deepEqual(await flockWait(waiter.pid, join(directory, `stall-${host.pid}-9-page-${waiter.pid}.txt`)),
     { file, holder: { pid: holder.pid, command: "perl" } });
+});
+
+test("a session request of a drag names the planned length of the drag in its stall line", { timeout: 60000 }, async (t) => {
+  const configDir = mkdtempSync(join(tmpdir(), "soksak-stall-plan-"));
+  t.after(() => rmSync(configDir, { recursive: true }));
+  // The host is a running process of the fixture program, which does not answer diagnostics.drag.
+  const host = spawn(process.execPath, [stallHost, configDir], { stdio: ["ignore", "pipe", "inherit"] });
+  t.after(() => host.kill("SIGKILL"));
+  await once(host.stdout, "data");
+  const client = await connect({ configDir });
+  t.after(() => client.close());
+  // The stall delay is a declared option of the session, so the stall line is reported without waiting for STALL_AFTER.
+  const s = new Session({ name: "mygo", configDir }, client, { stallAfter: 0 });
+  const started = once(s.stalls, "started");
+  void s.request("diagnostics.drag", { axis: "x", line: 2, dx: -250, dy: 0, ms: 48, times: 15 }).catch(() => {});
+  assert.deepEqual(await started, ["mygo diagnostics.drag"]);
+  assert.equal(s.stallSamples.size, 1);
+  const [{ line }] = await Promise.all(s.stallSamples);
+  assert.match(line, /^mygo diagnostics\.drag still pending 0 ms after its planned 1440 ms; /);
+  assert.throws(() => new Session({ name: "mygo", configDir }, client, { stallAfter: -1 }), /^Error: Session needs a stall delay of 0 or more ms$/);
 });

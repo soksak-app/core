@@ -92,6 +92,18 @@ func InstallTestSupport() error {
 		if supportError = testlibrary.Error(functions.SpHostTestInstallStallFunctions(counts, setter)); supportError != nil {
 			return
 		}
+		// The production library and this library are loaded with local symbols, so the window reads and the event producer of
+		// the test library take the production functions from the handle of the production library.
+		var production [5]uintptr
+		for index, name := range []string{"surfaceLayoutKeysWaitState", "surfaceLayoutKeysWaitOpen", "sp_region_raster", "sp_region_present", "sp_event"} {
+			if production[index], supportError = testlibrary.Symbol(productionHandle, name); supportError != nil {
+				return
+			}
+		}
+		if supportError = testlibrary.Error(functions.SpHostTestInstallProductionFunctions(
+			production[0], production[1], production[2], production[3], production[4])); supportError != nil {
+			return
+		}
 		if supportError = support.InstallNativeFunctions(functions); supportError != nil {
 			return
 		}

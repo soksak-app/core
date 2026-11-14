@@ -25,41 +25,43 @@ const SP_HOST_TEST_RUN_LOOP_AFTER_WAITING = 64
 const SP_HOST_TEST_RUN_LOOP_EXIT = 128
 
 type NativeFunctions struct {
-	SpHostTestInstallStallFunctions    func(uintptr, uintptr) *byte
-	SpHostTestReadStallCounts          func(*uint64, *uint64, *uint64)
-	SpHostTestSetSendInNextWait        func(bool)
-	SpHostTestSamplerCaptureMain       func() int32
-	SpHostTestSamplerStart             func() int32
-	SpHostTestSamplerStop              func() int32
-	SpHostTestSamplerSetPhase          func(int32)
-	SpHostTestSamplerPhaseSamples      func(int32) uint64
-	SpHostTestSamplerPhaseOutside      func(int32) uint64
-	SpHostTestSamplerPhaseFirstOutside func(int32) uintptr
-	SpHostTestSamplerFailureCount      func() uint64
-	SpHostTestSamplerFailureLast       func() int32
-	SpHostTestSamplerStackLow          func() uintptr
-	SpHostTestSamplerStackHigh         func() uintptr
-	SpHostTestRecorderStart            func()
-	SpHostTestRecorderStop             func() uint64
-	SpHostTestRecorderDropped          func() uint64
-	SpHostTestRecorderEntryAt          func(uint64, *uint64, *int32, *int32, *int32, *int64, *uint64, *uint64) int32
-	SpHostTestDirectRunnerAddress      func() uintptr
-	SpHostTestFrameCreate              func(int32, int32, *uint8) unsafe.Pointer
-	SpHostTestFrameId                  func(unsafe.Pointer) uint32
-	SpHostTestFrameInUse               func(unsafe.Pointer) bool
-	SpHostTestFrameRelease             func(unsafe.Pointer)
-	SpHostTestWindowCreate             func(float64, float64, *unsafe.Pointer) *byte
-	SpHostTestWindowCreateTitled       func(float64, float64, *unsafe.Pointer) *byte
-	SpHostTestWindowClose              func(unsafe.Pointer) *byte
-	SpHostTestWindowMainWebview        func(uintptr, *byte, *unsafe.Pointer) *byte
-	SpHostTestWebviewLoaded            func(unsafe.Pointer) *byte
-	SpHostTestViewPresentationRelease  func() *byte
-	SpHostTestWindowImageRegions       func(uintptr, *uint64) *byte
-	SpHostTestWindowKeysWait           func(uintptr, *bool, *bool, *bool) *byte
-	SpHostTestWindowOpenKeyWait        func(uintptr, bool) *byte
-	SpHostTestRegionPresentLease       func(unsafe.Pointer, uint64, uint64, int32) *byte
-	SpHostTestSpawnHandledCrash        func(*byte, *byte, *byte, int32, *int32, *uintptr) *byte
-	SpHostTestWaitHandledCrash         func(uintptr, *int32, *int32) *byte
+	SpHostTestInstallStallFunctions      func(uintptr, uintptr) *byte
+	SpHostTestReadStallCounts            func(*uint64, *uint64, *uint64)
+	SpHostTestSetSendInNextWait          func(bool)
+	SpHostTestInstallProductionFunctions func(uintptr, uintptr, uintptr, uintptr, uintptr) *byte
+	SpHostTestEmitEvent                  func(uint8, uint8, *byte, *byte) *byte
+	SpHostTestSamplerCaptureMain         func() int32
+	SpHostTestSamplerStart               func() int32
+	SpHostTestSamplerStop                func() int32
+	SpHostTestSamplerSetPhase            func(int32)
+	SpHostTestSamplerPhaseSamples        func(int32) uint64
+	SpHostTestSamplerPhaseOutside        func(int32) uint64
+	SpHostTestSamplerPhaseFirstOutside   func(int32) uintptr
+	SpHostTestSamplerFailureCount        func() uint64
+	SpHostTestSamplerFailureLast         func() int32
+	SpHostTestSamplerStackLow            func() uintptr
+	SpHostTestSamplerStackHigh           func() uintptr
+	SpHostTestRecorderStart              func()
+	SpHostTestRecorderStop               func() uint64
+	SpHostTestRecorderDropped            func() uint64
+	SpHostTestRecorderEntryAt            func(uint64, *uint64, *int32, *int32, *int32, *int64, *uint64, *uint64) int32
+	SpHostTestDirectRunnerAddress        func() uintptr
+	SpHostTestFrameCreate                func(int32, int32, *uint8) unsafe.Pointer
+	SpHostTestFrameId                    func(unsafe.Pointer) uint32
+	SpHostTestFrameInUse                 func(unsafe.Pointer) bool
+	SpHostTestFrameRelease               func(unsafe.Pointer)
+	SpHostTestWindowCreate               func(float64, float64, *unsafe.Pointer) *byte
+	SpHostTestWindowCreateTitled         func(float64, float64, *unsafe.Pointer) *byte
+	SpHostTestWindowClose                func(unsafe.Pointer) *byte
+	SpHostTestWindowMainWebview          func(uintptr, *byte, *unsafe.Pointer) *byte
+	SpHostTestWebviewLoaded              func(unsafe.Pointer) *byte
+	SpHostTestViewPresentationRelease    func() *byte
+	SpHostTestWindowImageRegions         func(uintptr, *uint64) *byte
+	SpHostTestWindowKeysWait             func(uintptr, *bool, *bool, *bool) *byte
+	SpHostTestWindowOpenKeyWait          func(uintptr, bool) *byte
+	SpHostTestRegionPresentLease         func(unsafe.Pointer, uint64, uint64, int32) *byte
+	SpHostTestSpawnHandledCrash          func(*byte, *byte, *byte, int32, *int32, *uintptr) *byte
+	SpHostTestWaitHandledCrash           func(uintptr, *int32, *int32) *byte
 }
 
 func (functions NativeFunctions) Validate() error {
@@ -71,6 +73,12 @@ func (functions NativeFunctions) Validate() error {
 	}
 	if functions.SpHostTestSetSendInNextWait == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_set_send_in_next_wait")
+	}
+	if functions.SpHostTestInstallProductionFunctions == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_install_production_functions")
+	}
+	if functions.SpHostTestEmitEvent == nil {
+		return fmt.Errorf("native API function is missing: sp_host_test_emit_event")
 	}
 	if functions.SpHostTestSamplerCaptureMain == nil {
 		return fmt.Errorf("native API function is missing: sp_host_test_sampler_capture_main")

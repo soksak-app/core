@@ -8,6 +8,8 @@
 // a frame of another marker.
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <sys/types.h>
 // The error of every call that has one is a required output pointer. Success sets NULL and failure sets a UTF-8 string that
 // the caller releases with free(). A request during an active recording is rejected and does not change the recording state
 // or error.
@@ -90,8 +92,11 @@ typedef struct {
 SPDisplayLinkDecision sp_capture_display_link_decision(SPDisplayLinkSample sample);
 
 // The Darwin notification that ends the held requests of the capture fault points (SOKSAK_FAULT_CAPTURE_IMAGE and
-// SOKSAK_FAULT_CAPTURE_ENCODE, capture.m).
-#define SP_CAPTURE_FAULT_RELEASE "app.soksak.capture.fault.release"
+// SOKSAK_FAULT_CAPTURE_ENCODE, capture.m). Darwin notifications reach every process, so the name carries the id of the process whose
+// requests it ends: a test process that runs beside another one ends only its own held requests. 64 bytes hold every name.
+static inline void sp_capture_fault_release_name(pid_t pid, char *name, size_t size) {
+    snprintf(name, size, "app.soksak.capture.fault.release.%d", (int)pid);
+}
 
 // Injects a capture failure on the calling thread for lifecycle cleanup tests.
 void sp_capture_test_report_error(const char *message);

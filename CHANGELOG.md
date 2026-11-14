@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The test library takes the production functions from the host, the fault releases name their process, and the tests that need macOS tools run only on macOS (F818).
 - The release procedure runs the activation tier of candidate acceptance last and alone (F817).
 - The Windows build check compiles the host sources without their tests, the version check skips test fixtures, the SDK testing module takes its case folder from the consumer, the window-source audit accepts the Unix socket of the endpoint, the view drag figures judge recorded tool output, and the contract audit reads the modules of a Rust target without the test harness (F816).
 - Both hosts report a failed recording stop as `capture stop failed: <e>` and a failed folder removal as `capture directory cleanup failed: <e>`, and keep the owner of a folder that stays (F812).

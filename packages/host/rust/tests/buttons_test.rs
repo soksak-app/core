@@ -92,15 +92,8 @@ fn next_mask(connection: &mut Connection) -> Value {
 #[test]
 fn buttons_notify_each_mask_change() {
     let config = folder::Folder::new();
-    // The page receives the watch of host.buttons, which it answers with null.
-    let page = CasePage::new(
-        &["main"],
-        vec![exchange(
-            "status.watch",
-            json!({"name": "host.buttons"}),
-            Value::Null,
-        )],
-    );
+    // The host answers the watch of host.buttons itself, so the page receives no call.
+    let page = CasePage::new(&["main"], vec![]);
     let owner = Arc::new(ButtonsOwner {
         page: page.clone(),
         buttons: OnceLock::new(),

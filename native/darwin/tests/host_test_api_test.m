@@ -8,6 +8,7 @@
 #include <notify.h>
 #include <pthread.h>
 #include "../src/view_presentation_fault.h"
+#include <spawn.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -206,11 +207,30 @@ int main(void) {
         CHECK(sp_host_test_window_close(titled) == NULL, "closing the titled window on the main thread succeeds");
     }
     __block BOOL released = NO;
+    char name[64];
+    sp_view_presentation_fault_release_name(getpid(), name, sizeof name);
     int token = 0;
-    CHECK(notify_register_dispatch(SP_VIEW_PRESENTATION_FAULT_RELEASE, &token, dispatch_get_main_queue(), ^(int unused) { (void)unused; released = YES; })
+    CHECK(notify_register_dispatch(name, &token, dispatch_get_main_queue(), ^(int unused) { (void)unused; released = YES; })
         == NOTIFY_STATUS_OK, "the release notification of the held presentations is registered");
     CHECK(sp_host_test_view_presentation_release() == NULL, "the release of the held presentations is posted");
     sp_run_until("the release notification of the held presentations arrived", ^BOOL { return released; });
     notify_cancel(token);
+    // A release reaches only the process that it names: notifyutil(1), another process, sets the state of the release name of the
+    // parent of this process, as a test process that runs beside this one uses its own name, and the release name of this process
+    // keeps its state. notify_set_state and notify_get_state are synchronous requests to notifyd.
+    int check = 0;
+    CHECK(notify_register_check(name, &check) == NOTIFY_STATUS_OK && notify_set_state(check, 0) == NOTIFY_STATUS_OK,
+        "the release name of this process is observed");
+    char other[64];
+    sp_view_presentation_fault_release_name(getppid(), other, sizeof other);
+    char *posterArguments[] = {"notifyutil", "-s", other, "7", NULL};
+    pid_t poster = 0;
+    int posterStatus = 0;
+    CHECK(posix_spawn(&poster, "/usr/bin/notifyutil", NULL, NULL, posterArguments, NULL) == 0
+        && waitpid(poster, &posterStatus, 0) == poster && WIFEXITED(posterStatus) && WEXITSTATUS(posterStatus) == 0,
+        "another process sets the release name of another process");
+    uint64_t state = 1;
+    CHECK(notify_get_state(check, &state) == NOTIFY_STATUS_OK && state == 0, "the release name of another process is not the name of this process");
+    notify_cancel(check);
     return failures ? 1 : 0;
 }

@@ -62,7 +62,9 @@ static CGImageRef solidImage(size_t width, size_t height) {
 
 // Ends the held requests of the fault points of the capture.
 static void releaseHeldRequests(void) {
-    check(notify_post(SP_CAPTURE_FAULT_RELEASE) == NOTIFY_STATUS_OK, @"the release notification of the capture faults is posted");
+    char releaseName[64];
+    sp_capture_fault_release_name(getpid(), releaseName, sizeof releaseName);
+    check(notify_post(releaseName) == NOTIFY_STATUS_OK, @"the release notification of the capture faults is posted");
 }
 
 static NSWindow *makeWindow(void) {

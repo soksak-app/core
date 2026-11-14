@@ -18,8 +18,8 @@ import (
 
 	host "github.com/soksak-app/core/packages/host/go/src"
 	"github.com/soksak-app/core/packages/host/go/src/platform"
-	"github.com/soksak-app/core/packages/host/go/tests/support"
 	sampler "github.com/soksak-app/core/packages/host/go/tests/platform/darwin"
+	"github.com/soksak-app/core/packages/host/go/tests/support"
 )
 
 // nativeRingChild marks the child process of a test of the native ring.

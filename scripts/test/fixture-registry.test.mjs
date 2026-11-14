@@ -192,16 +192,20 @@ function slowPackFixture(t) {
 
 /**
  * Resolves with the process id of the held pack when the prepack program of the slow fixture has written its file `held`. Call it
- * before the build starts: the watch of the plugin folder exists before the file does.
+ * before the build starts: the watch of the plugin folder exists before the file does. The watch ends with the test, so a test that
+ * fails before the file appears does not keep the test process alive.
  */
-function packHeld(plugin) {
-  return new Promise((resolve) => {
-    const watcher = watch(plugin, (_, name) => {
+function packHeld(t, plugin) {
+  let watcher;
+  const held = new Promise((resolve) => {
+    watcher = watch(plugin, (_, name) => {
       if (name !== "held") return;
       watcher.close();
       resolve(Number(readFileSync(join(plugin, "held"), "utf8")));
     });
   });
+  t.after(() => watcher.close());
+  return held;
 }
 
 /** Whether a process with the id exists. */
@@ -227,7 +231,7 @@ test("a pack that exceeds the step limit fails the fixture registry build with t
 test("an aborted signal stops the fixture registry build in its running step", { timeout: 20000 }, async (t) => {
   const fixture = slowPackFixture(t);
   const controller = new AbortController();
-  const held = packHeld(fixture.plugin);
+  const held = packHeld(t, fixture.plugin);
   const started = performance.now();
   const build = buildFixtureRegistry(requireSok(), fixture.out, { root: fixture.root, signal: controller.signal });
   const pid = await held;
@@ -244,7 +248,7 @@ test("the fixture registry bounds each step at 30000 ms", { timeout: 1000 }, () 
 
 test("the command line ends its build when the process receives SIGTERM and removes its signal handlers", { timeout: 20000 }, async (t) => {
   const fixture = slowPackFixture(t);
-  const held = packHeld(fixture.plugin);
+  const held = packHeld(t, fixture.plugin);
   const child = spawn(process.execPath, [MODULE, "--sok", requireSok(), "--out", fixture.out, "--root", fixture.root], { stdio: ["ignore", "ignore", "pipe"] });
   let stderr = "";
   child.stderr.on("data", (chunk) => { stderr += chunk; });
@@ -387,6 +391,7 @@ test("a fixture registry is a new folder that the fixture registry build writes 
 });
 
 test("a failed fixture registry build whose folder cannot be removed rejects with both failures", { timeout: 20000 }, async (t) => {
+  const sok = requireSok();
   // The folder of the registry is in a folder that the test makes read-only while the pack is held, so the build is cancelled and the
   // removal of its folder, an entry of the read-only folder, fails with the permission error of the file system.
   const parent = mkdtempSync(join(tmpdir(), "fixture-registry-readonly-"));
@@ -395,12 +400,18 @@ test("a failed fixture registry build whose folder cannot be removed rejects wit
     rmSync(parent, { recursive: true, force: true });
   });
   const fixture = slowPackFixture(t);
-  const held = packHeld(fixture.plugin);
+  const held = packHeld(t, fixture.plugin);
   const controller = new AbortController();
   const previous = process.env.TMPDIR;
   process.env.TMPDIR = parent;
-  const registry = fixtureRegistry({ sok: requireSok(), root: fixture.root, signal: controller.signal });
-  process.env.TMPDIR = previous;
+  let registry;
+  try {
+    registry = fixtureRegistry({ sok, root: fixture.root, signal: controller.signal });
+  } finally {
+    // An unset TMPDIR is restored as unset: assigning undefined would set the variable to the text "undefined".
+    if (previous === undefined) delete process.env.TMPDIR;
+    else process.env.TMPDIR = previous;
+  }
   await held;
   chmodSync(parent, 0o555);
   controller.abort();

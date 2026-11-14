@@ -42,6 +42,26 @@ func Functions(library uintptr) (abi.NativeFunctions, error) {
 		purego.RegisterFunc(&functions.SpHostTestSetSendInNextWait, address)
 	}
 	{
+		address, err := purego.Dlsym(library, "sp_host_test_install_production_functions")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_install_production_functions: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_install_production_functions: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestInstallProductionFunctions, address)
+	}
+	{
+		address, err := purego.Dlsym(library, "sp_host_test_emit_event")
+		if err != nil {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_emit_event: %w", err)
+		}
+		if address == 0 {
+			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_emit_event: symbol has a null address")
+		}
+		purego.RegisterFunc(&functions.SpHostTestEmitEvent, address)
+	}
+	{
 		address, err := purego.Dlsym(library, "sp_host_test_sampler_capture_main")
 		if err != nil {
 			return abi.NativeFunctions{}, fmt.Errorf("native API sp_host_test_sampler_capture_main: %w", err)
