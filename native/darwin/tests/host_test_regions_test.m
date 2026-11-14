@@ -1,9 +1,14 @@
 // Checks the reads of the production library that the host test API declares (tests/support/host_test_api.h): the number of image
-// region views of a window, the key wait of a window and the present of a frame into a lease region. It links the production library
+// region views of a window, the key wait of a window, the present of a frame into a lease region and the end of a data store. It links the production library
 // and the host test API into one process, as a Go host test does. It opens a window behind the other windows and does not activate the
 // application.
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#include <removefile.h>
+#include <stdatomic.h>
+#include <stdlib.h>
+#include <unistd.h>
+#import "document_view.h"
 #import "event_ring.h"
 #import "image_region.h"
 #import "surface_layout.h"
@@ -22,6 +27,23 @@ static void check(BOOL condition, NSString *message) {
 static void ignoreEvent(void *context, const char *json) { (void)context; (void)json; }
 
 static NSMutableArray<NSString *> *releases;
+
+// Ends the data store of directory through the host test API on a thread that is not the main thread, as a Go host test does from
+// its goroutine, and runs the main run loop, which runs the end, until the call returned. Returns NULL or a copy of the error that
+// the caller releases with free.
+static char *endStore(const char *directory) {
+    __block char *failure = NULL;
+    __block atomic_bool returned = false;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        const char *refusal = sp_host_test_document_store_close(directory);
+        failure = refusal ? strdup(refusal) : NULL;
+        atomic_store(&returned, true);
+        // The block on the main queue is the source whose handling ends the run of the loop below after the return.
+        dispatch_async(dispatch_get_main_queue(), ^{});
+    });
+    while (!atomic_load(&returned)) CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1e10, true);
+    return failure;
+}
 
 static void released(void *context, uint64_t generation, uint64_t raster, int sequence) {
     (void)context;
@@ -47,11 +69,11 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(sp_host_test_window_keys_wait((uintptr_t)window, &waitingBefore, &decisionBefore, &modalBefore) != NULL,
         @"a read before the production functions are installed is refused");
     check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
-        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, 0) != NULL, @"a missing production function is refused");
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, 0) != NULL, @"a missing production function is refused");
     check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
-        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event) == NULL, @"the production functions install");
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, (uintptr_t)sp_document_store_close) == NULL, @"the production functions install");
     check(sp_host_test_install_production_functions((uintptr_t)surfaceLayoutKeysWaitState, (uintptr_t)surfaceLayoutKeysWaitOpen,
-        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event) != NULL, @"a second installation is refused");
+        (uintptr_t)sp_region_raster, (uintptr_t)sp_region_present, (uintptr_t)sp_event, (uintptr_t)sp_document_store_close) != NULL, @"a second installation is refused");
     void *surface = sp_surface_create(sp_window_set_main_webview(main.window, main));
     check(surface != NULL && SPPlaceSurfaceView(surface, view), @"the main webview creates the surface and the view web view is placed in it");
     webviewSetFrame(surface, 0, 0, 500, 400);
@@ -105,6 +127,32 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(sp_host_test_window_open_key_wait((uintptr_t)0, true) != NULL, @"the opener refuses a missing window");
     check(sp_host_test_window_keys_wait((uintptr_t)0, &waiting, &decision, &modal) != NULL && sp_host_test_window_keys_wait((uintptr_t)window, NULL, &decision, &modal) != NULL,
         @"the key wait read refuses a missing window and a missing address");
+
+    // The end of a data store.
+    check(sp_host_test_document_store_close("/tmp") != NULL, @"the end of a data store refuses the main thread, which runs the end");
+    NSString *template = [NSTemporaryDirectory() stringByAppendingPathComponent:@"soksak-host-test-store-XXXXXX"];
+    char *store = strdup(template.fileSystemRepresentation);
+    check(mkdtemp(store) != NULL, @"the folder of the data store is created");
+    char *failure = NULL;
+    // The store ends when the last reference to it goes, so the references that the document autoreleases go with this pool.
+    @autoreleasepool {
+        void *document = sp_document_create(surface, store, NULL, NULL, NULL, NULL, ignoreEvent, NULL);
+        check(document != NULL, @"a document of the data store is created");
+        failure = endStore(store);
+        check(failure != NULL && strstr(failure, "a document of the directory is open") != NULL,
+            [NSString stringWithFormat:@"the end of a data store with an open document reports the refusal: %s", failure ?: "none"]);
+        free(failure);
+        sp_document_close(document);
+    }
+    failure = endStore(store);
+    check(failure == NULL, [NSString stringWithFormat:@"the data store of the closed document ends: %s", failure ?: "none"]);
+    free(failure);
+    check(removefile(store, NULL, REMOVEFILE_RECURSIVE) == 0 && access(store, F_OK) != 0, @"the folder of the ended data store is removed");
+    failure = endStore("relative");
+    check(failure != NULL && strstr(failure, "not an absolute path") != NULL,
+        [NSString stringWithFormat:@"the end of a data store reports the refusal of a relative directory: %s", failure ?: "none"]);
+    free(failure);
+    free(store);
 
     sp_region_close(lease);
     check([releases isEqual:@[@"5/1/1", @"5/1/2"]], [NSString stringWithFormat:@"the close releases the identity that the test presented: %@", releases]);

@@ -2,9 +2,12 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -79,10 +82,11 @@ func (p *viewProbe) waitCall(t *testing.T, command string) map[string]any {
 	return params
 }
 
-// viewStore is the folder of the persistent data store of the views of the tests, which every view of the run shares. WebKit writes to a data
-// store from its network process after the documents of the store closed, and no operation of the platform ends a store, so a test
-// cannot remove the folder of its own view when it ends. The folder is created by the first view and removed when the run ended, by
-// removeViewStore.
+// viewStore is the folder of the persistent data store of the views of the tests, which every view of the run shares, and of the data
+// stores that the tests create in it, such as the store of the document regions of a configuration folder. WebKit writes to a data store
+// from its network process after the documents of the store closed, until the store ends; the end of a store stops the network and GPU
+// processes of WebKit, which the documents of the other stores start again, so the stores end once, when the run of the tests ended, in
+// removeViewStore, after every test closed its documents in its cleanup. The folder is created by the first view.
 var viewStore struct {
 	sync.Once
 	directory string
@@ -98,17 +102,142 @@ func viewStoreDirectory(t *testing.T) string {
 	return viewStore.directory
 }
 
-// removeViewStore removes the folder of the data store of the views when the run of the tests ended and reports a failure on the standard
-// error. It returns whether the folder is gone.
+// endViewStores ends the data store of folder and of each directory under it, so that no WebKit process writes into the folder
+// afterward, and returns when every store ended, with the refusal of each store that did not end. A directory without a store ends at
+// once, so the directories are not told apart. The stores end together, because a store that stays open while another ends starts the
+// network process of WebKit again. It runs on a goroutine of a test, never on the main thread, which runs the ends.
+func endViewStores(folder string) error {
+	var directories []string
+	walked := filepath.WalkDir(folder, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			directories = append(directories, path)
+		}
+		return nil
+	})
+	if walked != nil {
+		return fmt.Errorf("the directories of the data stores of %s were not listed: %w", folder, walked)
+	}
+	refusals := make(chan error, len(directories))
+	for _, directory := range directories {
+		go func() { refusals <- support.EndDocumentStore(directory) }()
+	}
+	var failures []error
+	for range directories {
+		if err := <-refusals; err != nil {
+			failures = append(failures, err)
+		}
+	}
+	return errors.Join(failures...)
+}
+
+// removeViewStore ends the data stores of the views and removes their folder when the run of the tests ended, and reports a failure on
+// the standard error. It returns whether the stores ended and the folder is gone.
 func removeViewStore() bool {
 	if viewStore.directory == "" {
 		return true
+	}
+	if err := endViewStores(viewStore.directory); err != nil {
+		fmt.Fprintf(os.Stderr, "the data stores of the views did not end: %v\n", err)
+		return false
 	}
 	if err := os.RemoveAll(viewStore.directory); err != nil {
 		fmt.Fprintf(os.Stderr, "the data store folder of the views was not removed: %v\n", err)
 		return false
 	}
 	return true
+}
+
+// The end of the data stores of a folder of views reports a document of a store that is still open, and once the documents closed it ends
+// every store under the folder, the folder itself and a store nested in it, as the store of the document regions in a configuration
+// folder of the view store is, so that the folder is removed and no WebKit process writes it again: a document of another store that
+// starts the processes of WebKit again afterward does not bring the removed folder back.
+func TestTheEndOfTheViewStoresLetsTheirFolderBeRemoved(t *testing.T) {
+	useCurrentPlatformForViews(t)
+	native := support.WindowWithMainPage(t, runOnMainThread, 400, 300, "main-page.html")
+	var host unsafe.Pointer
+	var err error
+	runOnMainThread(func() { host, err = system.CreateSurface(native) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { runOnMainThread(func() { system.CloseSurface(host) }) })
+	plugin, err := filepath.Abs(filepath.Join("testdata", "view-plugin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder, err := os.MkdirTemp("", "soksak-view-store-end-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(folder, "config", documentData)
+	other, err := os.MkdirTemp("", "soksak-view-store-other-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := endViewStores(other); err != nil {
+			t.Errorf("the data stores of %s did not end: %v", other, err)
+		}
+		if err := os.RemoveAll(other); err != nil {
+			t.Errorf("the folder of the other data store was not removed: %v", err)
+		}
+	})
+	create := func(directory string) unsafe.Pointer {
+		t.Helper()
+		var document unsafe.Pointer
+		runOnMainThread(func() {
+			document, err = system.CreateDocument(host, platform.DocumentOptions{Directory: directory, Folder: plugin, Plugin: "probe",
+				Label: ProcessLabel("probe", "")}, func(string) {})
+		})
+		if err != nil {
+			t.Fatalf("the document of the data store %s was not created: %v", directory, err)
+		}
+		return document
+	}
+	documents := []unsafe.Pointer{create(folder), create(nested)}
+	closeDocuments := sync.OnceFunc(func() {
+		runOnMainThread(func() {
+			for _, document := range documents {
+				system.CloseDocument(document)
+			}
+		})
+	})
+	// A test that fails before the end leaves no open document and no folder.
+	t.Cleanup(func() {
+		closeDocuments()
+		if _, err := os.Lstat(folder); errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if err := endViewStores(folder); err != nil {
+			t.Errorf("the data stores of %s did not end: %v", folder, err)
+		}
+		if err := os.RemoveAll(folder); err != nil {
+			t.Errorf("the folder of the data stores was not removed: %v", err)
+		}
+	})
+	if err := endViewStores(folder); err == nil || !strings.Contains(err.Error(), "a document of the directory is open") {
+		t.Fatalf("the end of the data stores of open documents reports %v, want the refusal of the open document", err)
+	}
+	closeDocuments()
+	if err := endViewStores(folder); err != nil {
+		t.Fatalf("the data stores of the closed documents did not end: %v", err)
+	}
+	if err := os.RemoveAll(folder); err != nil {
+		t.Fatalf("the folder of the ended data stores was not removed: %v", err)
+	}
+	// The document of another store starts the network process of WebKit again, which would open the databases of a store that did
+	// not end in its folder.
+	again := create(other)
+	runOnMainThread(func() { system.CloseDocument(again) })
+	if err := endViewStores(other); err != nil {
+		t.Fatalf("the data store of the other document did not end: %v", err)
+	}
+	if _, err := os.Lstat(folder); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the removed folder of the ended data stores came back: %v", err)
+	}
 }
 
 // realViewProbe attaches the view that the test describes to a real surface of a real window and returns it. The channel script is the

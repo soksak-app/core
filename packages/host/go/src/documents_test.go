@@ -27,8 +27,8 @@ func queueOnMainThread(task func()) <-chan struct{} {
 func documentAttachSurfaces(t *testing.T) *viewProbe {
 	t.Helper()
 	p := newViewProbe(t, Theme{})
-	// The data store of the document regions is in the folder of the view store, which the run of the tests removes: WebKit writes to a data
-	// store after its documents closed.
+	// The data store of the document regions is in the folder of the view store, whose stores the run of the tests ends before it removes
+	// the folder: WebKit writes to a data store after its documents closed, until the store ends.
 	config, err := os.MkdirTemp(viewStoreDirectory(t), "config-")
 	if err != nil {
 		t.Fatal(err)

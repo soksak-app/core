@@ -22,11 +22,14 @@ func Functions() abi.NativeFunctions {
 			C.sp_host_test_read_stall_counts((*C.uint64_t)(unsafe.Pointer(a0)), (*C.uint64_t)(unsafe.Pointer(a1)), (*C.uint64_t)(unsafe.Pointer(a2)))
 		},
 		SpHostTestSetSendInNextWait: func(a0 bool) { C.sp_host_test_set_send_in_next_wait(C.bool(a0)) },
-		SpHostTestInstallProductionFunctions: func(a0 uintptr, a1 uintptr, a2 uintptr, a3 uintptr, a4 uintptr) *byte {
-			return (*byte)(unsafe.Pointer(C.sp_host_test_install_production_functions(C.uintptr_t(a0), C.uintptr_t(a1), C.uintptr_t(a2), C.uintptr_t(a3), C.uintptr_t(a4))))
+		SpHostTestInstallProductionFunctions: func(a0 uintptr, a1 uintptr, a2 uintptr, a3 uintptr, a4 uintptr, a5 uintptr) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_install_production_functions(C.uintptr_t(a0), C.uintptr_t(a1), C.uintptr_t(a2), C.uintptr_t(a3), C.uintptr_t(a4), C.uintptr_t(a5))))
 		},
 		SpHostTestEmitEvent: func(a0 uint8, a1 uint8, a2 *byte, a3 *byte) *byte {
 			return (*byte)(unsafe.Pointer(C.sp_host_test_emit_event(C.uint8_t(a0), C.uint8_t(a1), (*C.char)(unsafe.Pointer(a2)), (*C.char)(unsafe.Pointer(a3)))))
+		},
+		SpHostTestDocumentStoreClose: func(a0 *byte) *byte {
+			return (*byte)(unsafe.Pointer(C.sp_host_test_document_store_close((*C.char)(unsafe.Pointer(a0)))))
 		},
 		SpHostTestSamplerCaptureMain:       func() int32 { return int32(C.sp_host_test_sampler_capture_main()) },
 		SpHostTestSamplerStart:             func() int32 { return int32(C.sp_host_test_sampler_start()) },

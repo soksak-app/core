@@ -596,19 +596,54 @@ static bool (*productionRegionRaster)(void *region, double *out);
 static bool (*productionRegionPresent)(void *region, unsigned int token_id, const unsigned char *nonce, double width, double height,
     double scale, uint64_t generation, uint64_t raster, int sequence);
 static bool (*productionEvent)(uint8_t eventClass, uint8_t level, const char *name, const char *fields_json);
+static void (*productionStoreClose)(const char *directory, void (*closed)(void *context, const char *error), void *context);
 static bool productionFunctionsInstalled;
 
 const char *sp_host_test_install_production_functions(uintptr_t keys_wait_state, uintptr_t keys_wait_open, uintptr_t region_raster,
-    uintptr_t region_present, uintptr_t event) {
+    uintptr_t region_present, uintptr_t event, uintptr_t store_close) {
     if (productionFunctionsInstalled) return "host test production functions are already installed";
-    if (!keys_wait_state || !keys_wait_open || !region_raster || !region_present || !event) return "host test production function is missing";
+    if (!keys_wait_state || !keys_wait_open || !region_raster || !region_present || !event || !store_close) {
+        return "host test production function is missing";
+    }
     productionKeysWaitState = (bool (*)(void *, bool *, bool *))keys_wait_state;
     productionKeysWaitOpen = (void (*)(void *, bool))keys_wait_open;
     productionRegionRaster = (bool (*)(void *, double *))region_raster;
     productionRegionPresent = (bool (*)(void *, unsigned int, const unsigned char *, double, double, double, uint64_t, uint64_t, int))region_present;
     productionEvent = (bool (*)(uint8_t, uint8_t, const char *, const char *))event;
+    productionStoreClose = (void (*)(const char *, void (*)(void *, const char *), void *))store_close;
     productionFunctionsInstalled = true;
     return NULL;
+}
+
+// The end of one data store that sp_host_test_document_store_close waits for: the semaphore is signalled when the store ended, and
+// failure holds a copy of the error of the end.
+typedef struct {
+    dispatch_semaphore_t ended;
+    char *failure;
+} StoreEnd;
+
+static void storeEnded(void *context, const char *error) {
+    StoreEnd *end = context;
+    if (error) end->failure = strdup(error);
+    dispatch_semaphore_signal(end->ended);
+}
+
+static char storeRefusal[512];
+
+const char *sp_host_test_document_store_close(const char *directory) {
+    if (pthread_main_np()) return "host test data store end requires a thread that is not the main thread";
+    if (!productionFunctionsInstalled) return "host test production functions are not installed";
+    if (!directory) return "host test data store directory is missing";
+    StoreEnd end = { dispatch_semaphore_create(0), NULL };
+    StoreEnd *pointer = &end;
+    // The production function copies the directory before it returns, and the wait keeps the text alive until then.
+    dispatch_async(dispatch_get_main_queue(), ^{ productionStoreClose(directory, storeEnded, pointer); });
+    dispatch_semaphore_wait(end.ended, DISPATCH_TIME_FOREVER);
+    dispatch_release(end.ended);
+    if (!end.failure) return NULL;
+    snprintf(storeRefusal, sizeof storeRefusal, "the data store of %s did not end: %s", directory, end.failure);
+    free(end.failure);
+    return storeRefusal;
 }
 
 static char eventRefusal[160];

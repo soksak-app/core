@@ -4,6 +4,7 @@
 // These getters resolve the actual production object's functions without copying its state: the stall functions and the functions
 // that sp_host_test_install_production_functions takes.
 #include <stdint.h>
+#include "document_view.h"
 #include "event_ring.h"
 #include "image_region.h"
 #include "stall_watch.h"
@@ -33,4 +34,7 @@ static inline uintptr_t sp_host_test_production_region_present_address(void) {
 }
 static inline uintptr_t sp_host_test_production_event_address(void) {
     return (uintptr_t)sp_event;
+}
+static inline uintptr_t sp_host_test_production_store_close_address(void) {
+    return (uintptr_t)sp_document_store_close;
 }

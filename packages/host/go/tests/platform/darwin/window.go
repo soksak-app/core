@@ -154,3 +154,17 @@ func OpenKeyWait(t testing.TB, onMain func(func()), window platform.Window, deci
 		t.Fatalf("the key wait of the window was not opened: %v", err)
 	}
 }
+
+// EndDocumentStore ends the persistent data store of the documents of directory through the native library and returns when the store
+// ended, so no WebKit process writes into the directory afterward and its folder can be removed. Every document of the directory must be
+// closed first. The end runs on the main thread, which the test runs, so EndDocumentStore runs on a goroutine of the test and never on the
+// main thread. It returns the refusal of the end: an open document of the directory, a directory that is not an absolute path, a store
+// that is already ending, or a WebKit process that did not end.
+func EndDocumentStore(directory string) error {
+	functions, err := installedNativeFunctions()
+	if err != nil {
+		return err
+	}
+	path := append([]byte(directory), 0)
+	return testlibrary.Error(functions.SpHostTestDocumentStoreClose(&path[0]))
+}

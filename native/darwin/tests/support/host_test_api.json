@@ -5,6 +5,7 @@
     "sp_host_test_set_send_in_next_wait",
     "sp_host_test_install_production_functions",
     "sp_host_test_emit_event",
+    "sp_host_test_document_store_close",
     "sp_host_test_sampler_capture_main",
     "sp_host_test_sampler_start",
     "sp_host_test_sampler_stop",
