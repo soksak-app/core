@@ -123,7 +123,9 @@ export function resolveGoNativeInputs({ patterns, tags = '', cwd = process.cwd()
   for (const [name, define] of STATIC_INPUTS) {
     if (!pkgConfig.has(name)) continue;
     const path = artifact(pc(name, 'static_library'), `${name} static_library`);
-    const digest = createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 16);
+    // Go hashes neither the pkg-config output nor the content of a static library into the build id of a cgo package, and the
+    // package keeps the -L path it was built with, so the define names both the path and the content.
+    const digest = createHash('sha256').update(path).update('\0').update(readFileSync(path)).digest('hex').slice(0, 16);
     const previous = (selected.CGO_CFLAGS ?? '').replace(new RegExp(`(?:^|\\s)-D${define}=\\S+`, 'g'), '').trim();
     selected.CGO_CFLAGS = [previous, `-D${define}=${digest}`].filter(Boolean).join(' ');
   }

@@ -6,7 +6,7 @@
 // that the external linker writes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -152,4 +152,37 @@ test('native input diagnostics print only the native and cgo whitelist', (t) => 
   assert.equal(diagnostic.cgoEnabled, false);
   const allowed = new Set(['CGO_ENABLED', 'CGO_CFLAGS', 'CGO_CPPFLAGS', 'CGO_CXXFLAGS', 'CGO_LDFLAGS', 'SOKSAK_NATIVE_LIBRARY', 'SOKSAK_NATIVE_TEST_LIBRARY', 'SOKSAK_NATIVE_CALLBACK_ABI_LIBRARY', 'SOKSAK_NATIVE_CALLBACK_WORKER_LIBRARY']);
   assert.ok(Object.keys(diagnostic.env).every((key) => allowed.has(key)), result.stdout);
+});
+
+/** Builds the static library of the pkg-config package soksak-darwin in `directory` from the tracked C fixture with `value` as its result, as the native Makefile does. */
+function writeStaticLibrary(directory, value) {
+  mkdirSync(directory, { recursive: true });
+  const compiled = spawnSync('cc', ['-c', `-DFIXTURE_VALUE=${value}`, join(fixture, 'library/value.c'), '-o', join(directory, 'value.o')], { encoding: 'utf8' });
+  assert.equal(compiled.status, 0, compiled.stderr);
+  rmSync(join(directory, 'libfixture.a'), { force: true });
+  const archived = spawnSync('ar', ['rcs', join(directory, 'libfixture.a'), join(directory, 'value.o')], { encoding: 'utf8' });
+  assert.equal(archived.status, 0, archived.stderr);
+  writeFileSync(join(directory, 'soksak-darwin.pc'), [
+    `static_library=${join(directory, 'libfixture.a')}`, 'Name: soksak-darwin', 'Description: fixture', 'Version: 1',
+    `Libs: -L${directory} -lfixture`, ''].join('\n'));
+}
+
+test('Go test runner links the static library that pkg-config names now, also when another location held the same content earlier', (t) => {
+  // Go does not hash the output of pkg-config into the build id of a cgo package, so a package built against the library of the
+  // first location keeps that -L path. The two libraries have the same content when the first run starts; the first location
+  // changes afterwards, and the second run selects the second location.
+  const base = folderFor(t);
+  const first = join(base, 'first');
+  const second = join(base, 'second');
+  writeStaticLibrary(first, 1);
+  writeStaticLibrary(second, 1);
+  const cache = join(base, 'gocache');
+  const run = (location, want) => runGoTests(t, ['--package', fixturePackage('staticlink'), '--count', '1', '--timeout', '60'],
+    { CGO_ENABLED: '1', GOCACHE: cache, PKG_CONFIG_PATH: location, FIXTURE_STATIC_WANT: String(want) });
+  const earlier = run(first, 1);
+  assert.equal(earlier.status, 0, earlier.stdout + earlier.stderr);
+  writeStaticLibrary(first, 3);
+  const later = run(second, 1);
+  assert.equal(later.status, 0, later.stdout + later.stderr);
+  assert.match(later.stdout, /^PASS TestLinked \d+\.\d{3}s$/m, later.stdout + later.stderr);
 });

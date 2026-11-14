@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Go test runner 가 다른 위치가 같은 내용을 가졌던 뒤에도 실행 시점에 pkg-config 가 가리키는 native library 를 link 한다 (F810).
 - Rust host 가 다른 plugin 의 page log event 를 Go host 와 같은 문구로 거부한다 (F813).
 - workbench 시험 파일 38 개가 더 page-wire 사례 위에서 page 의 실제 host, plane, compositor, projects, settings, page log, surface module 을 실행하고, 사례는 page 의 listener 등록을 등록을 거부하거나 붙잡을 수 있는 listen step 으로 기록하며, library 시험은 page 처럼 호환되지 않는 plugin 을 정렬한다 (F795-10).
 - 시작 origin 이 없는 저장된 view tab 이 거부되고 application log 에 쓰이며 tab 에 보인다. 저장된 layout 검사가 plugin unit 의 composition kind 를 읽는다 (F808).
