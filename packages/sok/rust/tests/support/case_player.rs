@@ -592,6 +592,9 @@ pub struct CasePlayer {
     config_dir: PathBuf,
     socket_dir: Folder,
     address: PathBuf,
+    /// The listener stays open while the player lives, so the connection that wakes the accept loop at the close always connects, also
+    /// when the loop already returned after a connection that it accepted once the player was closing.
+    _listener: UnixListener,
     accept: Option<JoinHandle<()>>,
 }
 
@@ -712,13 +715,20 @@ fn open_case_with(
         }),
     });
     let accepting = Arc::clone(&shared);
-    let accept = std::thread::spawn(move || accept_loop(accepting, listener));
+    let accepted = listener.try_clone().map_err(|error| {
+        format!(
+            "{name}: cannot keep the listener on {}: {error}",
+            address.display()
+        )
+    })?;
+    let accept = std::thread::spawn(move || accept_loop(accepting, accepted));
     Ok(CasePlayer {
         shared,
         config_folder,
         config_dir,
         socket_dir,
         address,
+        _listener: listener,
         accept: Some(accept),
     })
 }
