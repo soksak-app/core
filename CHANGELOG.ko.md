@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Push의 release run은 그 run의 모든 check와 build가 성공하면 release file을 게시하며, 게시는 로컬 acceptance 보고서를 읽지 않는다 (F863).
 - 실패한 quit step은 시작했고 아직 실행 중인 application을 끝내며, B3 fixture application은 endpoint를 rename으로 쓴다 (F862).
 - Host test runner의 Rust fixture binary는 `sok-probe`이고, process group test는 timer 없이 program을 실행 상태로 둔다 (F861).
 - Network process가 answer 전에 끝난 document store의 end는 error 없이 끝나고 network process를 시작하지 않는다 (F860).

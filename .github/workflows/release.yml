@@ -1,16 +1,11 @@
 name: release
 # build-machine: skip smoke reason=the end-to-end checks need a display and run only locally through make (docs/operations/examples.md#test-kinds)
 
-# A push builds immutable candidate files. Publication reuses those files after authenticated local acceptance of that attempt.
+# A push runs the checks and builds the release files of a new version; the same run publishes those files when every check and
+# every build succeeded.
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    inputs:
-      acceptance:
-        description: Compact candidate acceptance report JSON
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -22,13 +17,11 @@ concurrency:
 
 jobs:
   checks:
-    if: github.event_name == 'push'
     uses: ./.github/workflows/ci.yml
 
   # The gate and the bundle builds run beside the checks, so a release run takes the time of its longest job; publication requires
-  # the accepted candidate of a run in which the checks and every build succeeded.
+  # a run in which the checks and every build succeeded.
   gate:
-    if: github.event_name == 'push'
     runs-on: ubuntu-26.04-arm
     outputs:
       release: ${{ steps.gate.outputs.release }}
@@ -207,54 +200,39 @@ jobs:
         if: always()
         run: git diff --exit-code -- Cargo.lock pnpm-lock.yaml go.work.sum ':(glob)**/go.mod' ':(glob)**/go.sum'
 
+  # Publication waits for every check and every build of the run and publishes the files of that run, so no file is built again.
   publish:
+    needs: [checks, gate, release-wailsv3, release-tauriv2, release-mygo]
+    if: needs.gate.outputs.release == 'true'
     runs-on: ubuntu-26.04-arm
-    if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
-      actions: read
     steps:
-      # The acceptance policy compares the candidate with the newest version tag that it contains, so the checkout holds the history and the tags.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/setup-node
         with:
           root: .
-      - name: Install locked acceptance dependencies
+      - name: Install locked release file check dependencies
         run: pnpm install --frozen-lockfile --filter soksak-workspace
       - name: Install release inspection tools
         run: |
           sudo apt-get update
           sudo apt-get install --yes unzip
-      - name: Read the submitted acceptance report
-        env:
-          ACCEPTANCE_REPORT: ${{ inputs.acceptance }}
-        run: node -e 'require("node:fs").writeFileSync(process.env.RUNNER_TEMP + "/acceptance.json", process.env.ACCEPTANCE_REPORT)'
-      - name: Require the exact successful candidate attempt
-        id: candidate
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/candidate-acceptance.mjs prepare "$RUNNER_TEMP/acceptance.json"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          artifact-ids: ${{ steps.candidate.outputs.artifact_ids }}
-          run-id: ${{ steps.candidate.outputs.run_id }}
-          github-token: ${{ github.token }}
+          pattern: release-*
           merge-multiple: true
           path: ${{ runner.temp }}/release-files
-      - name: Require acceptance of the exact publication files
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/candidate-acceptance.mjs verify "$RUNNER_TEMP/acceptance.json" "$RUNNER_TEMP/release-files"
+      - name: Require the exact release files
+        run: node scripts/candidate-acceptance.mjs files "$RUNNER_TEMP/release-files"
       # The release page resolves relative links against the tag; notes are outside the published release files.
       - name: Write the release notes
         env:
-          VERSION: ${{ steps.candidate.outputs.version }}
+          VERSION: ${{ needs.gate.outputs.version }}
         run: node scripts/release-notes.mjs docs/operations/install.md "$GITHUB_REPOSITORY" "v$VERSION" > "$RUNNER_TEMP/release-notes.md"
       - name: Require the commit to be the head of main and the tag to be absent
         env:
-          VERSION: ${{ steps.candidate.outputs.version }}
+          VERSION: ${{ needs.gate.outputs.version }}
         run: |
           test "$GITHUB_REF" = refs/heads/main || { echo "publication requires main" >&2; exit 1; }
           head="$(git ls-remote origin refs/heads/main | cut -f1)"
@@ -263,7 +241,7 @@ jobs:
           test -z "$tags" || { echo "the tag v$VERSION exists" >&2; exit 1; }
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
-          tag_name: v${{ steps.candidate.outputs.version }}
-          target_commitish: ${{ steps.candidate.outputs.sha }}
+          tag_name: v${{ needs.gate.outputs.version }}
+          target_commitish: ${{ github.sha }}
           files: ${{ runner.temp }}/release-files/*
           body_path: ${{ runner.temp }}/release-notes.md

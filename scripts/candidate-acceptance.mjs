@@ -196,24 +196,13 @@ export async function prepareCandidate(report, { root, env = process.env, reques
   return candidate;
 }
 
+/** `files RELEASE_FILES`: the release job requires the downloaded files of its run to be exactly the release files of the checkout. */
 async function main(argv) {
-  const [command, reportPath, directory] = argv;
-  if (!['prepare', 'verify'].includes(command) || !reportPath || (command === 'verify' && !directory)) throw new Error('usage: candidate-acceptance.mjs prepare REPORT | verify REPORT RELEASE_FILES');
-  const text = await readFile(reportPath, 'utf8');
-  const report = decodeAcceptanceReport(text);
+  const [command, directory, ...rest] = argv;
+  if (command !== 'files' || !directory || rest.length) throw new Error('usage: candidate-acceptance.mjs files RELEASE_FILES');
   const root = resolve(fileURLToPath(new URL('../', import.meta.url)));
-  const candidate = await prepareCandidate(report, { root });
-  if (command === 'prepare') {
-    if (!process.env.GITHUB_OUTPUT) throw new Error('candidate preparation needs GITHUB_OUTPUT');
-    await appendFile(process.env.GITHUB_OUTPUT, `artifact_ids=${candidate.artifacts.map((a) => a.id).join(',')}\nrun_id=${candidate.runId}\nversion=${candidate.version}\nsha=${candidate.sha}\n`);
-    return;
-  }
-  const { sourceIdentity } = await import('./acceptance-run.mjs');
-  const source = await sourceIdentity(root);
-  const files = await candidateFiles(root, resolve(directory));
-  const required = await candidatePolicy(root);
-  refuse(validateCandidateReport(report, { candidate, ...files, source, required }));
-  process.stdout.write('Candidate acceptance matches the exact publication files and required outcomes.\n');
+  await candidateFiles(root, resolve(directory));
+  process.stdout.write('The release files are exactly the release files of the checkout.\n');
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main(process.argv.slice(2)).catch((error) => {
