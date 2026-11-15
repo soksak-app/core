@@ -143,7 +143,7 @@ const FIXTURES = {
     statuses: { "tab-z probe.lines": null },
   }),
   "view-calls-status-watch-core": () => ({ ...base(), statuses: { "core.grid": null, "probe.count": null } }),
-  "view-events-data": () => base(),
+  "view-events-data": () => ({ ...base(), data: { ...base().data, marks: { schema: { type: "integer" }, default: 0 } } }),
   "view-events-left-out": () => base(),
   "view-events-log-levels": () => ({ ...base(), logLevels: LEVELS }),
   "view-events-ordered-delivery": (releases) => {

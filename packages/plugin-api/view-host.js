@@ -2,7 +2,7 @@
 // release that it pins: answerViewCall of this package receives the options that createTestHost builds, from in-memory parts that the
 // fixtures define, and the host events of the view reach the view through the subscriptions of createViewSubscriptions.
 // The module is not a page module: the page imports no part of it (PAGE_IMPORTS of index.js).
-import { checkProjectData, declarationKey, declarationMap, EXPOSE_KINDS, resolveContributions, sameJson } from "./index.js";
+import { checkProjectData, declarationKey, declarationMap, EXPOSE_KINDS, modulePath, resolveContributions, sameJson } from "./index.js";
 import { coreExposure } from "./exposure-check.js";
 import { checkViewFocus, pluginNativeGate } from "./view-answer.js";
 import { createViewSubscriptions } from "./view-events.js";
@@ -51,7 +51,9 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     shortcuts         the rows of the shortcut table of the window
  *     state             {read(), write(value)}, present only when the plugin declares surface.unload
  *     menu              {declared, frame}: whether the plugin declares the surface menu, and the applied frame {x, y} at the start, or null
- *     faults            {route: message}: the route rejects with the message
+ *     faults            {route: message}: the route rejects with the message; `command.runtime.log` refuses each batch of the page log with its message
+ *     onDataRead        fn(key, reads, write(value)): runs after each read of a project data key by the view, with the read count of the key;
+ *                       write stores a value of the key as another view does, so a replace of the view that follows the read sees it
  *     viewEvent         fn(event, data): the reply of each push of the view, which the host answers; without it the reply is null
  *
  * A route is the name of a host call, of a command or of a fixture: native.<name>, sidecar.<name>, command.<name>, clipboard.<op>,
@@ -59,7 +61,11 @@ const KINDS = Object.values(EXPOSE_KINDS);
  * with the error `view host: <route> has no fixture` and the failure is recorded in observed.failures. A route with a declared
  * fault rejects with the fault message. Every route work is tracked, so settled waits for it.
  *
- * Returns {options, observed, push, sidecarMessage, settled, change, close}. sidecarMessage(name, id, {body, cids}) returns the host message
+ * Returns {options, observed, push, sidecarMessage, settled, change, logBatch, contributedModules, close}. logBatch() resolves with null, or
+ * rejects with the fault of command.runtime.log; the view host of testing.js calls it for each batch of the page log. contributedModules()
+ * returns a Map from each module URL that the host answers (soksak://core/modules/<package>/<module>) to the URL of the file that
+ * the installed plugin names for it, which the view host of testing.js maps for the imports of the page. Each installed plugin names its
+ * modules in `modules` as {<module of the manifest>: <file or data URL>}. sidecarMessage(name, id, {body, cids}) returns the host message
  * for a sidecar message of a routed session: {event: "sidecar.message", data: {id, cids, body}}, the message that the host posts to the view.
  *
  *     options   the options of answerViewCall (view-answer.js of this package)
@@ -67,7 +73,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *               data: each stored value {key, value}; sidecar: each send {sidecar, id, body, cids}; commands: each run {name, params,
  *               cids, surface}; document: the host calls of the view in order, native calls as {name, payload} and pushes as
  *               {name: "viewEvent", payload: {event, data}}; errors: each report line; links: each opened URL; failures: the missing
- *               fixtures; events: each event record {level, event, fields}; contributions: each refused item {plugin, point, index, reason}
+ *               fixtures; events: each event record {level, event, fields}; contributions: each refused item {plugin, point, index, reason};
+ *               timers: each timer or animation frame that the page window started, {kind, delay} (delay null for an animation frame)
  *     push      push(event, data) delivers a host event to the subscriptions of the view: a native event of the plugin gate, or the
  *               event sidecar-failure with {sidecar, surface, reason} to the failure listeners of its surface; it throws when no
  *               subscription holds the event, as a page-wire notice without a listener is a failure
@@ -77,7 +84,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     change    the changes of the window that a test makes, each one set as the window sets it: the value that the view reads is
  *               replaced, and the listeners that createViewSubscriptions registered for it are called, so the subscriptions push the
  *               events that follow. settings(values), textSize(value), logLevels(levels), status(name, value, surface), run(active),
- *               data(key, value), leftOut(value) and frame(value), which sets the applied frame of the surface of the view
+ *               data(key, value), which writes the project data as another view does (checked, observed in data), leftOut(value) and
+ *               frame(value), which sets the applied frame of the surface of the view
  */
 export function createTestHost(fixtures) {
   if (typeof fixtures?.plugin !== "string" || fixtures.plugin === "") throw new TypeError("createTestHost requires the plugin id of the view");
@@ -90,7 +98,7 @@ export function createTestHost(fixtures) {
   const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name));
   const observed = {
     tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], keep: [] },
-    data: [], sidecar: [], commands: [], document: [], errors: [], links: [], failures: [], events: [], contributions: [],
+    data: [], sidecar: [], commands: [], document: [], errors: [], links: [], failures: [], events: [], contributions: [], timers: [],
   };
   const works = new Set();
   const track = (promise) => {
@@ -143,27 +151,39 @@ export function createTestHost(fixtures) {
   const declaredData = fixtures.data ?? {};
   const stores = new Map();
   const dataListeners = new Set();
+  // The number of reads of each key by the view, which fixtures.onDataRead receives.
+  const dataReads = new Map();
   const storeOf = (project) => {
     if (!stores.has(project.id)) stores.set(project.id, new Map());
     return stores.get(project.id);
   };
+  // A write of the project data, as any view makes it: the value is checked against its declaration, stored, recorded in observed.data,
+  // and each listener of the data is called with the key.
+  const writeData = (project, key, value) => {
+    const checked = checkProjectData(plugin, declaredData, key, value);
+    storeOf(project).set(key, checked);
+    observed.data.push({ key, value: checked });
+    for (const listener of [...dataListeners]) listener(key);
+  };
   const dataOf = (project, owner) => {
     if (owner !== plugin) throw new Error(`data of ${owner} is not served to ${plugin}`);
-    const store = storeOf(project);
-    const get = (key) => (store.has(key) ? store.get(key) : declaredData[key]?.default);
-    const write = (key, value) => {
-      const checked = checkProjectData(plugin, declaredData, key, value);
-      store.set(key, checked);
-      observed.data.push({ key, value: checked });
-      for (const listener of [...dataListeners]) listener(key);
-    };
+    const current = (key) => (storeOf(project).has(key) ? storeOf(project).get(key) : declaredData[key]?.default);
+    const write = (key, value) => writeData(project, key, value);
     return {
       declares: (key) => Object.hasOwn(declaredData, key),
-      get,
+      // A read answers the stored value, then fixtures.onDataRead runs with the read count of the key and a writer of another view, so a
+      // write made there lands between this read and the replace that follows it.
+      get: (key) => {
+        const value = current(key);
+        const reads = (dataReads.get(key) ?? 0) + 1;
+        dataReads.set(key, reads);
+        fixtures.onDataRead?.(key, reads, (next) => write(key, next));
+        return value;
+      },
       set: async (key, value) => write(key, value),
       // replace stores the value and answers true only when the stored value (or the default) equals base, as JSON values.
       replace: (key, base, value) => {
-        if (!sameJson(get(key), base)) return false;
+        if (!sameJson(current(key), base)) return false;
         write(key, value);
         return true;
       },
@@ -188,6 +208,12 @@ export function createTestHost(fixtures) {
   const statusListeners = new Map();
   const installed = fixtures.contributions ?? [];
   const resolved = resolveContributions(installed);
+  // The module URLs that the host answers for the contributions of the installed plugins, each mapped to the module URL that the fixture
+  // names. An installed plugin names its modules as {<module of its manifest>: <file or data URL>}; the host answers each one as
+  // soksak://core/<modulePath of the package>, the form that the page imports.
+  const contributedModules = () => new Map(installed.flatMap((entry) => Object.entries(entry.modules ?? {}).map(
+    ([module, target]) => [`soksak://core/${modulePath(entry.package, module)}`, target],
+  )));
   const connected = (point) => {
     const provider = installed.find((entry) => entry.id === plugin);
     if (!provider?.manifest.extends?.[point]) throw new Error(`extension point ${point} is not declared by ${plugin}`);
@@ -385,8 +411,7 @@ export function createTestHost(fixtures) {
     },
     data(key, value) {
       if (!fixtures.project) throw new TypeError("change.data requires the start project of the view");
-      storeOf(fixtures.project).set(key, value);
-      for (const listener of [...dataListeners]) listener(key);
+      writeData(fixtures.project, key, value);
     },
     leftOut(value) {
       if (typeof value !== "boolean") throw new TypeError("change.leftOut requires true or false");
@@ -406,5 +431,10 @@ export function createTestHost(fixtures) {
     return { event: "sidecar.message", data: { id, ...(cids === undefined ? {} : { cids }), body } };
   };
 
-  return { options, observed, push, sidecarMessage, settled, change, close: () => subscriptions.close() };
+  // The writer of the page: a batch of the page log is refused with the fault of command.runtime.log, and accepted otherwise.
+  const logBatch = () => (Object.hasOwn(faults, "command.runtime.log")
+    ? Promise.reject(new Error(faults["command.runtime.log"]))
+    : Promise.resolve(null));
+
+  return { options, observed, push, sidecarMessage, settled, change, logBatch, contributedModules, close: () => subscriptions.close() };
 }

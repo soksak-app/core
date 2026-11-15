@@ -5,8 +5,12 @@
 // the case, and the notices and requests of the host reach the view in the order of the case. The consumer names the folder of its
 // view-wire cases with the option `cases`, a URL. jsdom has no layout engine, so the sizes of the view and of its elements are data of `layout`.
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { registerHooks } from "node:module";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { inspect, isDeepStrictEqual } from "node:util";
-import { runInContext } from "node:vm";
+import { runInContext, runInNewContext } from "node:vm";
 import { JSDOM } from "jsdom";
 import { createExpose } from "./index.js";
 import { answerViewCall } from "./view-answer.js";
@@ -35,6 +39,175 @@ const CORE_DECLARATIONS = {
 const START = readFileSync(new URL("./view-start.js", import.meta.url), "utf8");
 // The loads of page modules in this process: each load gets a URL that no earlier load has, so Node imports the module anew.
 let pageLoads = 0;
+
+// The URL of the test process. An open view binds the global names of its window, so the test reads its own URL through this name.
+const NodeURL = URL;
+// The names that every JavaScript realm defines (the globals of a fresh context and the members of its Object.prototype). A view window
+// does not bind them, so the test process keeps its own.
+const REALM_NAMES = new Set(runInNewContext("[globalThis, Object.prototype]").flatMap((object) => Object.getOwnPropertyNames(object)));
+// The views that are open, the last opened last, each with its window and the timers that the page starts (null in case mode). The global
+// names answer from the last window, so each view reads its own window; the timers are recorded in the last view.
+const openViews = [];
+// The descriptors that the global names had before the first open view bound them; null while no view is open.
+let savedGlobals = null;
+// The names that the test process defines and that a page reads from its window: fetch, which the view serves its files through. jsdom calls
+// none of them, so the window answers them without a call back into the binding.
+const SHADOWED = ["fetch"];
+// The timers that a page starts as bare names. jsdom calls these names too, so the recording wrapper calls the original timer of the process
+// and never the binding.
+const TIMERS = ["setTimeout", "setInterval"];
+// The calls of the window that are running now and start timers of the window itself: jsdom starts an interval for its first animation
+// frame, which the page did not start, so the timers that such a call starts are not recorded.
+let internalCalls = 0;
+
+/** The names of the window of a view and of its prototype chain, except the names of every realm. */
+const windowNames = (window) => {
+  const names = new Set();
+  for (let object = window; Object.getPrototypeOf(object) !== null; object = Object.getPrototypeOf(object)) {
+    for (const name of Object.getOwnPropertyNames(object)) names.add(name);
+  }
+  return [...names].filter((name) => !REALM_NAMES.has(name));
+};
+
+/**
+ * Binds the names of the window that the test process does not define as globals, as the global object of a browser page is its window: a
+ * page module that names `document` or `addEventListener` reads the member of the window. A function without a prototype is bound to the
+ * window, so a call with no receiver works as in a page; a constructor is the constructor of the window, so `instanceof` matches the window.
+ * A name that the test process defines keeps the test process value, because jsdom calls it (Event, URL, timers), except the SHADOWED names.
+ * The first open view makes the binding; later views only push their window and timers.
+ */
+const bindGlobals = (window, timers) => {
+  if (openViews.length === 0) {
+    savedGlobals = new Map();
+    const names = windowNames(window).filter((name) => !(name in globalThis) || (SHADOWED.includes(name) && window[name] !== undefined));
+    for (const name of names) {
+      savedGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+      Object.defineProperty(globalThis, name, {
+        configurable: true,
+        get() {
+          const current = openViews.at(-1).window;
+          const value = current[name];
+          return typeof value === "function" && !("prototype" in value) ? value.bind(current) : value;
+        },
+        set(value) { openViews.at(-1).window[name] = value; },
+      });
+    }
+    for (const name of TIMERS) {
+      savedGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+      const original = globalThis[name];
+      Object.defineProperty(globalThis, name, {
+        configurable: true,
+        writable: true,
+        value: function started(...args) {
+          if (internalCalls === 0) openViews.at(-1).timers?.push({ kind: name, delay: args[1] ?? 0 });
+          return original.apply(this, args);
+        },
+      });
+    }
+  }
+  openViews.push({ window, timers });
+};
+
+/** Ends the binding of a window. The last open view keeps the names; when no view is open, the saved descriptors are put back. */
+const releaseGlobals = (window) => {
+  const index = openViews.findIndex((view) => view.window === window);
+  if (index === -1) throw new Error("the window of the view is not open");
+  openViews.splice(index, 1);
+  if (openViews.length > 0) return;
+  for (const [name, descriptor] of savedGlobals) {
+    if (descriptor === undefined) delete globalThis[name];
+    else Object.defineProperty(globalThis, name, descriptor);
+  }
+  savedGlobals = null;
+};
+
+/** Records each animation frame that the page window starts in `timers`, as {kind, delay: null}, and starts it as the window does. */
+const observeFrames = (window, timers) => {
+  const original = window.requestAnimationFrame;
+  window.requestAnimationFrame = function started(...args) {
+    timers.push({ kind: "requestAnimationFrame", delay: null });
+    internalCalls += 1;
+    try {
+      return original.apply(this, args);
+    } finally {
+      internalCalls -= 1;
+    }
+  };
+};
+
+/**
+ * Serves the files of the plugin directory `root` to window.fetch as the application serves them: an address soksak://<plugin>/<path> and a
+ * file address name a path of the directory, which answers with the bytes of the file and status 200. An address outside the directory and a
+ * missing file answer status 404. Another error of the file system rejects the fetch, because it is no answer of the app.
+ */
+const serveFiles = (window, plugin, root) => {
+  const folder = resolve(fileURLToPath(root));
+  window.fetch = async (input) => {
+    const url = new NodeURL(String(input), window.location.href);
+    let file = null;
+    if (url.protocol === "soksak:" && url.host === plugin) file = join(folder, decodeURIComponent(url.pathname));
+    else if (url.protocol === "file:") file = fileURLToPath(url);
+    const inside = file !== null && isInside(folder, file);
+    if (!inside) return new Response(null, { status: 404 });
+    try {
+      return new Response(await readFile(file), { status: 200 });
+    } catch (error) {
+      if (error.code === "ENOENT") return new Response(null, { status: 404 });
+      throw error;
+    }
+  };
+};
+
+// Whether the file lies inside the folder: the path relative to the folder names no parent folder and is not absolute.
+const isInside = (folder, file) => {
+  const path = relative(folder, file);
+  return path !== "" && path.split(sep)[0] !== ".." && !isAbsolute(path);
+};
+
+/**
+ * jsdom has no document.adoptedStyleSheets, which the WebKit of the application has. The document keeps the list of constructed style sheets
+ * that the page assigns, and refuses a value that is not an array of CSSStyleSheet. jsdom has no cascade, so the rules of the sheets do not
+ * apply to the elements of the view; the list is the observable state.
+ */
+const adoptStyleSheets = (document, CSSStyleSheet) => {
+  let sheets = [];
+  Object.defineProperty(document, "adoptedStyleSheets", {
+    configurable: true,
+    get: () => sheets,
+    set(value) {
+      if (!Array.isArray(value) || !value.every((sheet) => sheet instanceof CSSStyleSheet)) {
+        throw new TypeError("adoptedStyleSheets takes an array of CSSStyleSheet");
+      }
+      sheets = [...value];
+    },
+  });
+};
+
+// The module URLs that the open host-mode views answer for their contributions, each mapped to the URL of its file. The page imports the
+// answered URL, which Node cannot load (its loader supports the file and data schemes only), so the resolve hook maps it to the file.
+const contributedModules = new Map();
+let contributionHooks = false;
+
+/** Maps the module URLs of the answered contributions to the files that the view names (the hook is registered by the first view that has one). */
+const registerContributed = (modules) => {
+  if (modules.size === 0) return;
+  if (!contributionHooks) {
+    contributionHooks = true;
+    registerHooks({
+      resolve(specifier, context, nextResolve) {
+        const target = contributedModules.get(specifier);
+        if (target === undefined) return nextResolve(specifier, context);
+        return { url: target, shortCircuit: true };
+      },
+    });
+  }
+  for (const [url, target] of modules) contributedModules.set(url, target);
+};
+
+/** Removes the module URLs that a view registered when it closes. */
+const unregisterContributed = (modules) => {
+  for (const url of modules.keys()) contributedModules.delete(url);
+};
 
 /** One turn of the event loop: runs every microtask that the call layer of the view queued before it. */
 export const turn = () => new Promise((resolve) => setImmediate(resolve));
@@ -80,19 +253,34 @@ const SHAPE = {
  * and it builds the bridge of the view itself, as the application does; view.request(command, params) runs a command of that page through
  * an exposure request, and view.sidecarMessage(sidecar, id, {body, cids}) delivers a sidecar message to the page's sidecar listener.
  *
- * Returns {window, bridge, expose, sent, calls, reports, run, observers, events, registered, logged, status, command, exposed, changes,
- * deliverNotice, release, observed, push, load, request, sidecarMessage, settled, close}. bridge and expose are read at the first access,
- * and in case mode they exist from the open. sent holds every message of the view in order, calls the {command, params}
- * of the calls (with cids when the call carries them). The members that play case steps (run, exposed, status, command, deliverNotice
+ * Host-mode options beyond the fixtures: `start` null opens the view without window.sokSurface, so a page that reads it refuses to load;
+ * `root` is the file URL of the plugin directory, whose files window.fetch serves to the page (a path outside it or a missing file answers
+ * status 404); each module that the contributions fixture names is imported by the page through the URL that the host answers.
+ * While a host-mode view is open its window names are the global names of the test process, except the names that the process defines
+ * (jsdom calls them), so a page reads `document`, `addEventListener`, `Element`, `requestAnimationFrame` and the other window names as in
+ * a browser; a second view opened while one is open has its window as the global `window`, and closing it leaves the window of the first.
+ * The Node names that a page reads from the process (Event, URL, setTimeout) stay the process values. The timers that the page starts
+ * are recorded in view.observed.timers (kind, delay) and still run.
+ *
+ * Returns {window, bridge, expose, sent, calls, reports, run, observers, events, change, registered, logged, status, command, exposed,
+ * changes, deliverNotice, release, observed, push, load, request, sidecarMessage, settled, close}. bridge and expose are read at the first
+ * access, and in case mode they exist from the open. sent holds every message of the view in order. calls holds each command call of the
+ * view in the order it was made, as {command, params} (with cids when the call carries them); a test reads the order from it, and no
+ * call is reordered. change (host mode, null in case mode) holds the changes of the window (settings, textSize, logLevels, status, run,
+ * data, leftOut, frame), each delivered to the page as the host delivers it: the view events that the changes push reach the page before
+ * the returned promise settles. The members that play case steps (run, exposed, status, command, deliverNotice
  * and release) throw in host mode, which has no case. observed is the observed record of the test host in host mode, and null in case
  * mode. In host mode, push(event, data) delivers a host event through the subscriptions of the view, and each viewEvent that the
  * subscription forwards reaches the page as the host message {event, data}; settled() resolves when the calls of the page have
  * replied and the route work of the test host has ended. close ends the view as a page ends: pagehide, then the window is removed
  * after the writer chain of the page ended, then the check that the case was played (case mode) or the failures (host mode).
  */
-export async function openView(name, { cases, host: fixtures, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>" }) {
+export async function openView(name, { cases, host: fixtures, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>", root }) {
   if (cases !== undefined && fixtures !== undefined) throw new TypeError("openView takes either the case folder `cases` or the host fixtures `host`, not both");
   if (fixtures === undefined && !(cases instanceof URL)) throw new TypeError(`openView requires the case folder \`cases\` as a URL or the host fixtures \`host\`, found ${inspect(cases)}`);
+  // start is the start values of the view, or null for a view without window.sokSurface (a page that reads it refuses to load).
+  if (start === undefined) throw new TypeError("openView requires the start values of the view, or null for a view without window.sokSurface");
+  if (root !== undefined && !(root instanceof NodeURL && root.protocol === "file:")) throw new TypeError(`openView root must be the file URL of the plugin directory, found ${inspect(root)}`);
   // In host mode name is the plugin id of the view, so the fixtures do not name it a second time.
   if (fixtures !== undefined && "plugin" in fixtures) throw new TypeError("openView host fixtures take no plugin: the plugin of the view is the name");
   const testHost = fixtures === undefined ? null : createTestHost({ ...fixtures, plugin: name });
@@ -103,7 +291,6 @@ export async function openView(name, { cases, host: fixtures, start, declaration
   const { window } = dom;
   const sent = [];
   const calls = [];
-  Object.defineProperty(globalThis, "window", { value: window, configurable: true, writable: true });
   // The sok-view handler of the window is the host side of the page: in host mode each message of the page, the ready message of the
   // start script included, is answered by the test host. In case mode the case answers the calls of the bridge, and the handler is idle.
   window.webkit = { messageHandlers: { "sok-view": { postMessage: (message) => { if (testHost !== null) deliverFromView(message); } } } };
@@ -111,7 +298,11 @@ export async function openView(name, { cases, host: fixtures, start, declaration
   // The start values of a view hold the core declarations before the declarations of its plugin.
   // default: a view that declares nothing of a kind has only the core declarations of that kind.
   const merged = Object.fromEntries(["status", "commands", "element"].map((kind) => [kind, [...CORE_DECLARATIONS[kind], ...(declarations[kind] ?? [])]]));
-  window.sokSurface = { ...start, declarations: merged, levels: {} };
+  if (start !== null) window.sokSurface = { ...start, declarations: merged, levels: {} };
+  // The style sheets, the files of the plugin and the timers of the page: each is set before the page module runs.
+  adoptStyleSheets(window.document, window.CSSStyleSheet);
+  if (root !== undefined) serveFiles(window, plugin, root);
+  if (testHost !== null) observeFrames(window, testHost.observed.timers);
   // jsdom lays nothing out: the size of the view and the rectangle of each element are the data of the layout.
   if (layout.width !== undefined) Object.defineProperty(window, "innerWidth", { value: layout.width, configurable: true, writable: true });
   if (layout.height !== undefined) Object.defineProperty(window, "innerHeight", { value: layout.height, configurable: true, writable: true });
@@ -164,19 +355,34 @@ export async function openView(name, { cases, host: fixtures, start, declaration
   const logCall = async ({ params }) => {
     if (params?.action === "batch") {
       if (!Array.isArray(params.events)) throw new TypeError("runtime.log batch requires the array events");
+      // The host refuses a batch with the fault of the test host, and then stores none of its events.
+      await testHost.logBatch(params.events);
       events.push(...params.events);
       return null;
     }
     if (params?.action === "clock") return { ts_us: Math.round(Date.now() * 1000), mono_ns: Math.round(Number(process.hrtime.bigint())) };
     throw new TypeError(`runtime.log action ${JSON.stringify(params?.action)} is not served in host mode`);
   };
+  // The view events that the host pushed and that have not reached the page yet, by their index in the observed document of the test host.
+  let forwarded = 0;
+  // Delivers to the page each view event that the subscriptions pushed since the last delivery, in order: as the host pushes an event, the
+  // page receives it, whether a host change, a host event or a call of the page caused it.
+  const forwardPushed = () => {
+    if (testHost === null) return;
+    const entries = testHost.observed.document;
+    const end = entries.length;
+    for (const { name, payload } of entries.slice(forwarded, end)) {
+      if (name === "viewEvent") host({ event: payload.event, data: payload.data });
+    }
+    forwarded = end;
+  };
   // The reply of the host to a call of the page: the result of the handler, or the error code of a failed call, as the workbench replies.
   const answerFromHost = (message) => {
     const request = structuredClone(message);
     const work = (request.command === LOG_COMMAND ? logCall(request) : answerViewCall(request, testHost.options))
       .then(
-        (result) => host({ id: request.id, result: result ?? null }),
-        (error) => host({ id: request.id, error: { code: FAILURE_CODE, message: error?.message ?? String(error) } }),
+        (result) => { forwardPushed(); host({ id: request.id, result: result ?? null }); },
+        (error) => { forwardPushed(); host({ id: request.id, error: { code: FAILURE_CODE, message: error?.message ?? String(error) } }); },
       )
       .finally(() => pendingCalls.delete(work));
     pendingCalls.add(work);
@@ -219,6 +425,10 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     if (message.command === LOG_COMMAND && message.params?.action === "batch" && !outcome.error) events.push(...message.params.events);
     reply(message.id, outcome, message.command);
   };
+  // The page module reads the globals of its window, so the globals are bound before the start script runs and before any page module loads.
+  const modules = testHost === null ? new Map() : testHost.contributedModules();
+  registerContributed(modules);
+  bindGlobals(window, testHost === null ? null : testHost.observed.timers);
   // The start script posts the ready message as soon as it runs, so it runs after deliverFromView, which the handler of the window calls.
   runInContext(START, dom.getInternalVMContext());
   const reports = [];
@@ -292,9 +502,24 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     if ("error" in answered) throw new Error(answered.error.message);
     return answered.result;
   };
+  // A host change of the test host, or a host event, delivered as the host delivers it: the view events that the subscriptions push are
+  // handed to the page in order, after the subscriptions forwarded them.
+  const deliverPushed = async (what, act) => {
+    const hosted = hostOnly(what);
+    act(hosted);
+    // The subscription forwards the event on a later microtask; the turn lets that forward reach the test host before the wait.
+    await turn();
+    await hosted.settled();
+    forwardPushed();
+  };
+  // The changes of the window of a host-mode view: each name of the test host change, delivered to the page.
+  const change = testHost === null ? null : Object.fromEntries(Object.keys(testHost.change).map((step) => [
+    step,
+    (...args) => deliverPushed(`change.${step}`, (hosted) => hosted.change[step](...args)),
+  ]));
   let requestIds = 0;
   return {
-    window, sent, calls, reports, run, observers, events,
+    window, sent, calls, reports, run, observers, events, change,
     /** The bridge of the view: the bridge of the test, which a case-mode view has from its open and a host-mode view creates here. */
     get bridge() { return bridgeOf(); },
     /** The exposure of the test (createExpose over the bridge). It is created with the bridge. */
@@ -306,11 +531,11 @@ export async function openView(name, { cases, host: fixtures, start, declaration
      */
     async load(url) {
       hostOnly("load");
-      if (!(url instanceof URL)) throw new TypeError(`view.load requires the URL of the page module, found ${inspect(url)}`);
+      if (!(url instanceof NodeURL)) throw new TypeError(`view.load requires the URL of the page module, found ${inspect(url)}`);
       if (pageLoaded) throw new Error(`view ${plugin} already has a page loaded: a view loads one page module`);
       if (bridgeValue !== null) throw new Error(`view ${plugin} already has a bridge: view.bridge was read, so a page module cannot load into the same view`);
       pageLoaded = true;
-      const target = new URL(url);
+      const target = new NodeURL(url);
       target.searchParams.set("view", String(++pageLoads));
       return import(target.href);
     },
@@ -363,17 +588,7 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     /** The observed record of the test host in host mode, or null in case mode (view-host.js, observed). */
     observed: testHost === null ? null : testHost.observed,
     /** Delivers the host event `event` with `data` to the view (host mode): the subscriptions of the view forward it as a viewEvent. */
-    push: async (event, data) => {
-      const hosted = hostOnly("push");
-      const first = hosted.observed.document.length;
-      hosted.push(event, data);
-      // The subscription forwards the event on a later microtask; the turn lets that forward reach the test host before the wait.
-      await turn();
-      await hosted.settled();
-      for (const { name, payload } of hosted.observed.document.slice(first)) {
-        if (name === "viewEvent") host({ event: payload.event, data: payload.data });
-      }
-    },
+    push: (event, data) => deliverPushed("push", (hosted) => hosted.push(event, data)),
     /** Resolves when the calls of the page have replied and the route work of the test host has ended (host mode). */
     settled: async () => {
       const hosted = hostOnly("settled");
@@ -388,7 +603,8 @@ export async function openView(name, { cases, host: fixtures, start, declaration
       await turn();
       // The view ends its subscriptions with its page (createTestHost close, as the page ends them in its surface close).
       if (testHost !== null) await testHost.close();
-      delete globalThis.window;
+      releaseGlobals(window);
+      unregisterContributed(modules);
       window.close();
       if (wire !== null) wire.finish();
       if (testHost !== null && testHost.observed.failures.length > 0) throw new Error(testHost.observed.failures.join("\n"));
