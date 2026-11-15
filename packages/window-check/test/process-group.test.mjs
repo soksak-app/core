@@ -5,10 +5,12 @@ import test from "node:test";
 
 import { groupMembers, killGroup, runningMembers, terminateGroup } from "../process-group.mjs";
 
-// The member ignores SIGTERM and prints its pid after it installed the handler, so the pid is read only when SIGTERM cannot end it.
-const MEMBER_SOURCE = "process.on('SIGTERM', () => {}); console.log(process.pid); setInterval(() => {}, 1000);";
-// The leader ignores SIGTERM and starts the member, which inherits the group of the leader and the stdout of the leader.
-const LEADER_SOURCE = `process.on('SIGTERM', () => {}); require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(MEMBER_SOURCE)}], { stdio: ['ignore', 'inherit', 'ignore'] }); setInterval(() => {}, 1000);`;
+// The member ignores SIGTERM and prints its pid after it installed the handler, so the pid is read only when SIGTERM cannot end it. It
+// runs while it reads its input, which the leader holds open.
+const MEMBER_SOURCE = "process.on('SIGTERM', () => {}); console.log(process.pid); process.stdin.resume();";
+// The leader ignores SIGTERM and starts the member, which inherits the group of the leader and the stdout of the leader. The leader runs
+// while its member runs, because it holds the input pipe of the member.
+const LEADER_SOURCE = `process.on('SIGTERM', () => {}); require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(MEMBER_SOURCE)}], { stdio: ['pipe', 'inherit', 'ignore'] });`;
 
 test("does not count a member that is exiting as running", () => {
   // ps(1) marks a process that is trying to exit with the flag E in its state. The measured state of F292-58 was ?NE, which the zombie check

@@ -7,10 +7,10 @@ publish = false
 # The fixture is a workspace of its own, so the root workspace of the repository does not take it.
 [workspace]
 
-# A run with the feature builds the binary probe with it, which then names it.
+# A run with the feature builds the binary sok-probe with it, which then names it.
 [features]
 other = []
 
 [[bin]]
-name = "probe"
+name = "sok-probe"
 path = "src/main.rs"

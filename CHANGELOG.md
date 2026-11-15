@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The Rust fixture binary of the host test runner is `sok-probe`, and the process group test keeps its programs running without a timer (F861).
 - The end of a document store whose network process ended before it answered ends without an error and starts no network process (F860).
 - `terminateGroup` neither signals nor reports again a member that its SIGKILL already reached (F859).
 - The window facts test keeps the prohibited activation policy, so it activates nothing (F858).
