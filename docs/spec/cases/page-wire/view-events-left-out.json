@@ -4,10 +4,10 @@
   "replay": false,
   "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
   "steps": [
-    {"listen":{"event":"probe.event"}},
-    {"notice":{"event":"probe.event","payload":{"surface":"spc-aaaaaa/left/probe.tree","n":1}}},
-    {"notice":{"event":"probe.event","payload":{"surface":"spc-aaaaaa/left/probe.tree","n":2}}},
-    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"probe.event","data":{"surface":"spc-aaaaaa/left/probe.tree","n":2},"surface":"spc-aaaaaa/left/probe.tree"}}},
+    {"listen":{"event":"exposure-request"}},
+    {"notice":{"event":"exposure-request","payload":{"surface":"spc-aaaaaa/left/probe.tree","n":1}}},
+    {"notice":{"event":"exposure-request","payload":{"surface":"spc-aaaaaa/left/probe.tree","n":2}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"exposure-request","data":{"surface":"spc-aaaaaa/left/probe.tree","n":2},"surface":"spc-aaaaaa/left/probe.tree"}}},
     {"reply":{"result":true}}
   ]
 }

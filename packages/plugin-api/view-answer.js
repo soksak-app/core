@@ -519,6 +519,18 @@ function objectOf(command, params) {
 }
 
 /**
+ * The value of the view call tab.focus (docs/spec/native-surfaces.md#view-surfaces, view calls): {name, index} of the focused exposed
+ * element of the view, or null when it has none. Any other value is refused, and the refusal names the value.
+ */
+export function checkViewFocus(value) {
+  if (value !== null && (typeof value !== "object" || typeof value.name !== "string" || value.name === ""
+      || !Number.isSafeInteger(value.index) || value.index < 0 || Object.keys(value).length !== 2)) {
+    throw new TypeError(`view call tab.focus requires {name, index} or null, not ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
  * The state of a surface whose view stopped its restarts (docs/spec/native-surfaces.md#view-surfaces): the card shows the reason of
  * the view-stopped event as the error of the surface. An event without a reason is refused.
  */

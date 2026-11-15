@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F867-4-1, F867-4-2: focus 값 검사가 workbench와 test host가 함께 쓰는 `@soksak/plugin-api/view-answer.js`의 `checkViewFocus`로 옮겨지고, view event case가 plugin page gate가 허용하는 event `exposure-request`와 `image-event`를 구독하며, test host가 그 gate를 거쳐 77개 case를 replay한다.
 - F867-5: `@soksak/plugin-api/testing`의 `openView`가 `cases` 대신 host fixture `host`를 받으면 view page의 모든 호출을 `createTestHost`의 option으로 `answerViewCall`을 거쳐 답한다. `observed`, `push`, `settled`가 더해지고, `close`는 fixture가 없던 route를 던진다.
 - F867-4: `@soksak/plugin-api/view-host.js`의 `createTestHost`가 in-memory 부분과 fixture로 `answerViewCall`의 option을 만들고, fixture 없는 route를 거부하고, 선언된 fault point를 적용하고, 관찰을 기록한다. 그 test가 page-wire view call과 view event case 67개를 replay한다.
 - F867-3: `answerViewCall`과 plugin page의 call·event 목록이 workbench에서 `@soksak/plugin-api/view-answer.js`로 옮겨지고, `tab.focus` 호출은 workbench가 자기 view focus로 채우는 tab handler `focus`를 실행한다.

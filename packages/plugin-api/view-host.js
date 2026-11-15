@@ -4,7 +4,7 @@
 // The module is not a page module: the page imports no part of it (PAGE_IMPORTS of index.js).
 import { checkProjectData, declarationKey, declarationMap, EXPOSE_KINDS, resolveContributions, sameJson } from "./index.js";
 import { coreExposure } from "./exposure-check.js";
-import { pluginNativeGate } from "./view-answer.js";
+import { checkViewFocus, pluginNativeGate } from "./view-answer.js";
 import { createViewSubscriptions } from "./view-events.js";
 
 const subscribeTo = (listeners, listener) => {
@@ -42,6 +42,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     state             {read(), write(value)}, present only when the plugin declares surface.unload
  *     menu              {declared, frame}: whether the plugin declares the surface menu, and the applied frame {x, y} or null
  *     faults            {route: message}: the route rejects with the message
+ *     viewEvent         fn(event, data): the reply of each push of the view, which the host answers; without it the reply is null
  *
  * A route is the name of a host call, of a command or of a fixture: native.<name>, sidecar.<name>, command.<name>, clipboard.<op>,
  * composition.<path>, state.read and state.write, and viewEvent for the pushes of the view. A route whose fixture is missing rejects
@@ -194,7 +195,7 @@ export function createTestHost(fixtures) {
     run,
     push: (event, data) => {
       observed.document.push({ name: "viewEvent", payload: { event, data } });
-      return route("viewEvent", () => null, []);
+      return route("viewEvent", fixtures.viewEvent ?? (() => null), [event, data]);
     },
     report: (text) => observed.errors.push(text),
     cancel: () => {},
@@ -210,7 +211,7 @@ export function createTestHost(fixtures) {
     error: (text) => { observed.tab.error = text; },
     notify: (text, policy) => { observed.tab.notify.push({ text, policy }); },
     keep: (reason, on) => { observed.tab.keep.push({ reason, on }); },
-    focus: (value) => { observed.tab.focus = value; },
+    focus: (value) => { observed.tab.focus = checkViewFocus(value); },
   };
   if (fixtures.state !== undefined) {
     tab.state = {

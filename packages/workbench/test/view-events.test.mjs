@@ -78,7 +78,7 @@ const runOf = { active: () => runActive(), onStart: (fn) => onRunStart(fn), onEn
 
 test("a later view event waits for the earlier event delivery", async () => {
   const { subs } = open("ordered-delivery");
-  await subs.native("input");
+  await subs.native("image-event");
   wire.deliverNotice();
   wire.deliverNotice();
   await drained();
@@ -89,18 +89,18 @@ test("a later view event waits for the earlier event delivery", async () => {
   assert.deepEqual(started(), [1, 2]);
   assert.deepEqual(pushed().map(({ data }) => data.id), [1, 2]);
   await subs.close();
-  assert.deepEqual(wire.unsubscribed, ["input"]);
+  assert.deepEqual(wire.unsubscribed, ["image-event"]);
   wire.finish();
 });
 
 test("a native subscription is registered once and pushes each event of its name with its data", async () => {
   const { subs } = open("native-once");
-  const first = subs.native("probe.changed");
+  const first = subs.native("exposure-request");
   await first;
-  assert.equal(await subs.native("probe.changed"), null);
+  assert.equal(await subs.native("exposure-request"), null);
   wire.deliverNotice();
   await subs.idle();
-  assert.deepEqual(pushed(), [{ event: "probe.changed", data: { surface: "probe-surface", count: 1 } }]);
+  assert.deepEqual(pushed(), [{ event: "exposure-request", data: { surface: "probe-surface", count: 1 } }]);
   await subs.close();
   wire.finish();
 });
@@ -154,16 +154,16 @@ test("an event for a view whose surface is left out is canceled without a push, 
   // A section surface whose section left the drawing exists until the commit releases it (docs/spec/plugins.md#sections).
   hideSectionSurface(SECTION);
   const { subs, canceled } = open("left-out", () => ({ leftOut: () => surfaceLeftOut(SECTION) }), SECTION);
-  await subs.native("probe.event");
+  await subs.native("exposure-request");
   wire.deliverNotice();
   await subs.idle();
   assert.deepEqual(pushed(), [], "a left-out view received an event");
-  assert.deepEqual(canceled, ["probe.event"]);
+  assert.deepEqual(canceled, ["exposure-request"]);
   showSectionSurface(SECTION);
   try {
     wire.deliverNotice();
     await subs.idle();
-    assert.deepEqual(pushed(), [{ event: "probe.event", data: { surface: SECTION, n: 2 } }]);
+    assert.deepEqual(pushed(), [{ event: "exposure-request", data: { surface: SECTION, n: 2 } }]);
   } finally {
     hideSectionSurface(SECTION);
   }
@@ -173,10 +173,10 @@ test("an event for a view whose surface is left out is canceled without a push, 
 
 test("a push that the host refuses is reported with its text", async () => {
   const { subs, failures } = open("push-refused");
-  await subs.native("probe.changed");
+  await subs.native("exposure-request");
   wire.deliverNotice();
   await subs.idle();
-  assert.deepEqual(failures, ["view event probe.changed: probe-surface has no ready document"]);
+  assert.deepEqual(failures, ["view event exposure-request: probe-surface has no ready document"]);
   await subs.close();
   wire.finish();
 });
@@ -227,9 +227,9 @@ test("a data subscription is registered once and pushes the key of each change o
 
 test("closing the surface ends every subscription, and an event after it is pushed to nothing", async () => {
   const { subs } = open("close");
-  await subs.native("probe.changed");
+  await subs.native("exposure-request");
   await subs.close();
-  assert.deepEqual(wire.unsubscribed, ["probe.changed"], "the close removed the listener, so the host delivers no event to the subscription");
+  assert.deepEqual(wire.unsubscribed, ["exposure-request"], "the close removed the listener, so the host delivers no event to the subscription");
   await subs.idle();
   assert.deepEqual(pushed(), []);
   wire.finish();

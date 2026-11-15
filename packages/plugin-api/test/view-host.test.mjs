@@ -13,32 +13,22 @@ const CASES = new URL("../../../docs/spec/cases/page-wire/", import.meta.url);
 
 // The cases that do not replay, each with its reason. A case replays when its replies and pushes depend on the plugin and on the fixtures.
 const EXCLUDED = {
-  "view-calls-import": "The case records the start of the workbench page: the module imports and the clock of the first log flush.",
-  "view-calls-changed": "The status value reaches the observers of the exposure registry of the window, and the case expects the watch of the view to follow the registry; createTestHost has no source that changes a status.",
-  "view-calls-data-on": "The case serves two views, one with the project and one without it, and createTestHost serves one view.",
-  "view-calls-log-levels-on": "The stored log levels change through the log gate of the page, which createTestHost does not change.",
-  "view-calls-settings": "The case changes the settings and the theme of the window (setTheme, setMenuLanguage), which createTestHost does not drive.",
-  "view-calls-text-size": "The text scale changes through the window, which createTestHost does not drive.",
-  "view-calls-status-watch-core": "The core status core.grid changes through its module in the core, which createTestHost does not drive.",
-  "view-calls-status-unwatch-closed-surface": "The surface tab-z closes in the window between the watch and the unwatch, and createTestHost has no surface close.",
-  "view-calls-surface-menu": "The case serves two views (probe and probe-bare), and createTestHost serves one view.",
-  "view-calls-tab-focus": "The check of the focused element {name, index} is the focus rule of the workbench (view-focus.js), which this package does not hold; createTestHost records the value without that check.",
-  "view-events-close": "The case listens to probe.changed, which the plugin gate refuses (PLUGIN_NATIVE_EVENTS of view-answer.js), so the registration that the case records is refused by the gate of the page.",
-  "view-events-data": "The case pushes the key marks, which the workbench changes outside any view call; createTestHost changes project data only through a view call.",
-  "view-events-left-out": "The case listens to probe.event, which the plugin gate refuses (see view-events-close), and it depends on the placement that leaves out the section surface.",
-  "view-events-log-levels": "The stored log levels change through the log gate of the page, which createTestHost does not change.",
-  "view-events-native-once": "The case listens to probe.changed, which the plugin gate refuses (see view-events-close).",
-  "view-events-ordered-delivery": "The case holds the reply of a push, which createTestHost does not hold, and listens to input, which the plugin gate refuses.",
-  "view-events-push-refused": "The case listens to probe.changed, which the plugin gate refuses (see view-events-close).",
-  "view-events-registrar-function": "The case tests a registrar that the page supplies to createViewSubscriptions; createTestHost supplies its own registrars.",
-  "view-events-registrar-throws": "The case tests a registrar that the page supplies to createViewSubscriptions; createTestHost supplies its own registrars.",
-  "view-events-run-start": "The run start belongs to the run state of the workbench, which createTestHost has no driver for.",
-  "view-events-settings": "The settings change through the workbench, which createTestHost does not drive.",
-  "view-events-status-core": "The status values change through the registry of the window, which createTestHost does not drive.",
-  "view-events-status-refused": "The case records no step; the refusal that it names is a registrar of the workbench registry, which createTestHost does not supply.",
-  "view-events-status-run": "The status values held during a run belong to the run state of the workbench, which createTestHost has no driver for.",
-  "view-events-status-surface": "The status values of the section and tab surfaces come from the registry of the window, which createTestHost does not drive.",
-  "view-events-text-size": "The text scale changes through the window, which createTestHost does not drive.",
+  "view-calls-import": "The case has no view call and no view event: its steps are the page log calls of the clock and the batch, which the workbench page sends and answerViewCall does not produce.",
+  "view-calls-data-on": "The case serves two views, one with the project and one without it (probe-surface and probe-surface-none), and createTestHost serves one view.",
+  "view-calls-log-levels-on": "The push of the stored log levels follows a change of the log gate of the page, which the case records as no notice or call; createTestHost changes no log level.",
+  "view-calls-settings": "The push of the changed settings follows the setTheme call of the window, which the case records as no notice; createTestHost changes no setting.",
+  "view-calls-text-size": "The push of the new text scale follows a change of the text scale in the window, which the case records as no notice; createTestHost changes no text scale.",
+  "view-calls-status-watch-core": "The push of the core.grid value a follows a change of the core status in the window, which the case records as no notice; createTestHost changes no status after the watch.",
+  "view-calls-surface-menu": "The case serves two views (probe with surface.menu and an applied frame, probe-bare without it), and createTestHost serves one view.",
+  "view-events-data": "The push follows a change of the project data outside any view call, which the case records as no notice; createTestHost changes project data only through a view call.",
+  "view-events-left-out": "The section surface is left out between the two notices, and the case records no step for the drawing that leaves it out; createTestHost's leftOut is always false.",
+  "view-events-log-levels": "The push follows a change of the stored log levels in the page, which the case records as no notice; createTestHost changes no log level.",
+  "view-events-run-start": "The push follows the start of a run of the workbench, which the case records as no notice; the run state of createTestHost is always idle.",
+  "view-events-settings": "The push follows a settings change through the theme of the window, which the case records as no notice; createTestHost changes no setting.",
+  "view-events-status-core": "The pushes carry values of core statuses that change in the window, and the case records no notice or call that causes them; createTestHost changes no status.",
+  "view-events-status-run": "The pushes follow the start of a run and the values held during it, which the case records as no notice; the run state of createTestHost is always idle.",
+  "view-events-status-surface": "The watches of the section and tab surfaces are made by the page and no view call of the case starts them, and the values come from the registry of the window; createTestHost has no status change source.",
+  "view-events-text-size": "The push of the new text scale follows a change in the window, which the case records as no notice; createTestHost changes no text scale.",
 };
 
 const START_PROJECT = { id: "p1", root: "/projects/p1" };
@@ -154,6 +144,32 @@ const FIXTURES = {
   "view-calls-subscription-calls": () => base(),
   "view-calls-tab-state-read": () => ({ ...base(), state: { read: () => ({ count: 2 }), write: () => {} } }),
   "view-calls-tab-state-write": () => ({ ...base(), state: { read: () => null, write: () => {} } }),
+  "view-calls-status-unwatch-closed-surface": () => ({
+    ...base(),
+    surfaces: [{ surface: "tab-a", plugin: "probe" }, { surface: "spc-aaaaaa/left/files.tree", plugin: "probe" }, { surface: "tab-z", plugin: "probe" }],
+    statuses: { "tab-z probe.lines": null },
+  }),
+  "view-events-ordered-delivery": (releases) => {
+    // The reply of the first push is held until the replay releases it. The second push must start after that reply, and a push that
+    // starts earlier is refused with its own error, which the check of the case reports.
+    let first = true;
+    let released = false;
+    return {
+      ...base(),
+      viewEvent: () => {
+        if (first) {
+          first = false;
+          return new Promise((resolve) => releases.push(() => { released = true; resolve(true); }));
+        }
+        if (!released) throw new Error("the second push started before the reply of the first push");
+        return null;
+      },
+    };
+  },
+  "view-events-push-refused": () => ({
+    ...base(),
+    viewEvent: () => { throw new Error("probe-surface has no ready document"); },
+  }),
   "view-events-sidecar-route": () => base(),
   "view-events-document-stream": () => base(),
 };
@@ -176,6 +192,10 @@ const CHECKS = {
   "view-calls-contributions-fail": (observed) => assert.deepEqual(observed.contributions, [
     { plugin: "two", point: "probe.language", index: 1, reason: "extend is not a function" },
   ]),
+  // The second push is not refused: it starts after the held reply of the first push.
+  "view-events-ordered-delivery": (observed) => assert.deepEqual(observed.errors, []),
+  // The refused push is reported with the event name and the refusal text, and the report is the only record of it.
+  "view-events-push-refused": (observed) => assert.deepEqual(observed.errors, ["view event exposure-request: probe-surface has no ready document"]),
   // The second send has no sidecar name and is refused before the send, so the only send is the first one.
   "view-calls-sidecar-send": (observed) => assert.deepEqual(observed.sidecar, [
     { sidecar: "fixture-sidecar", id: "probe-surface", body: { n: 1 }, cids: ["c1"] },

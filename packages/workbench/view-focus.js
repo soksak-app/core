@@ -2,6 +2,8 @@
 // (docs/spec/exposure.md#keyboard-focus). A view reports its value with the view call tab.focus, and the host sends the first
 // responder as the window event window-responder.
 
+import { checkViewFocus } from "@soksak/plugin-api/view-answer";
+
 const viewFocus = new Map();
 const listeners = new Set();
 // default: before the host sends the first responder, and in a runtime without a host, the workbench holds the focus.
@@ -17,13 +19,9 @@ export function onFocusSourceChange(listener) {
   return () => listeners.delete(listener);
 }
 
-/** Records the value of the view call tab.focus of surface: `{name, index}` or null. Any other value is refused. */
+/** Records the value of the view call tab.focus of surface: `{name, index}` or null. The value is checked by checkViewFocus, which refuses any other value. */
 export function setViewFocus(surface, value) {
-  if (value !== null && (typeof value !== "object" || typeof value.name !== "string" || value.name === ""
-      || !Number.isSafeInteger(value.index) || value.index < 0 || Object.keys(value).length !== 2)) {
-    throw new TypeError(`view call tab.focus requires {name, index} or null, not ${JSON.stringify(value)}`);
-  }
-  viewFocus.set(surface, value);
+  viewFocus.set(surface, checkViewFocus(value));
   changed();
 }
 
