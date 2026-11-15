@@ -72,20 +72,31 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	}
 }
 
-// contract: menu.application.view-has-full-screen-and-text-size
+// frameworkItem is the item that Wails builds for role when the host gives it no title and no shortcut: a system item of the
+// contract table keeps this title and this shortcut (docs/spec/host-contract.md#application-menu).
+func frameworkItem(role application.Role) *application.MenuItem {
+	menu := application.NewMenu()
+	menu.AddRole(role)
+	return menu.FindByRole(role)
+}
+
+// contract: menu.application.view-has-full-screen-and-text-size, menu.application.edit-undo-and-redo-are-framework-items
 func TestApplicationMenuLanguages(t *testing.T) {
 	application.New(application.Options{Name: "soksak-menu-test"})
-	// The titles and the item order of the file, edit and view submenus of each language equal the contract table.
+	// The titles and the item order of the file, edit and view submenus of each language equal the contract table. Undo and redo
+	// are system items, so in both languages they have the title and the shortcut that the framework gives their role; AppKit
+	// sets the title of an item with the undo: or redo: action from the undo manager when it validates the menu.
+	undo, redo := frameworkItem(application.Undo), frameworkItem(application.Redo)
 	want := []struct {
 		language string
 		menu     string
 		items    []string
 	}{
 		{"ko", "파일", []string{"윈도우 닫기"}},
-		{"ko", "편집", []string{"실행 취소", "다시 실행", "잘라내기", "복사", "붙여넣기", "모두 선택"}},
+		{"ko", "편집", []string{undo.Label(), redo.Label(), "잘라내기", "복사", "붙여넣기", "모두 선택"}},
 		{"ko", "보기", []string{"글자 크게", "글자 작게", "글자 기본 크기", "Fullscreen"}},
 		{"en", "File", []string{"Close Window"}},
-		{"en", "Edit", []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select All"}},
+		{"en", "Edit", []string{undo.Label(), redo.Label(), "Cut", "Copy", "Paste", "Select All"}},
 		{"en", "View", []string{"Bigger Text", "Smaller Text", "Default Text Size", "Fullscreen"}},
 	}
 	menus := map[string]*application.Menu{}
@@ -103,6 +114,14 @@ func TestApplicationMenuLanguages(t *testing.T) {
 		}
 		if got := labels(submenu); !slices.Equal(got, expected.items) {
 			t.Fatalf("%s %s items = %v, want %v", expected.language, expected.menu, got, expected.items)
+		}
+		if expected.menu != "편집" && expected.menu != "Edit" {
+			continue
+		}
+		for role, framework := range map[application.Role]*application.MenuItem{application.Undo: undo, application.Redo: redo} {
+			if item := submenu.FindByRole(role); item == nil || item.GetAccelerator() != framework.GetAccelerator() {
+				t.Fatalf("%s %s has no item of role %v with the shortcut %q of the framework", expected.language, expected.menu, role, framework.GetAccelerator())
+			}
 		}
 	}
 	// A language that is not in the contract table does not build a menu.

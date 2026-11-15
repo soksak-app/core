@@ -4,6 +4,7 @@
 
 use soksak_host::menu::{MenuItem, build};
 
+// contract: menu.application.edit-undo-and-redo-are-framework-items
 #[test]
 fn undo_and_redo_keep_the_framework_title() {
     for language in ["ko", "en"] {

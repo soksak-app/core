@@ -9,6 +9,7 @@ import (
 // TestUndoAndRedoKeepTheFrameworkTitle checks that the undo and redo items of the application menu are system items of the
 // contract table: AppKit sets the title of an item with the undo: or redo: action from the undo manager when it validates the
 // menu, so the host gives them no title and no shortcut and the framework role provides both (docs/spec/host-contract.md#application-menu).
+// contract: menu.application.edit-undo-and-redo-are-framework-items
 func TestUndoAndRedoKeepTheFrameworkTitle(t *testing.T) {
 	for _, language := range []string{"ko", "en"} {
 		menus, err := host.ApplicationMenuFor(language)

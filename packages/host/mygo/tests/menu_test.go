@@ -54,25 +54,39 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	}
 }
 
-// contract: menu.application.view-has-full-screen-and-text-size
+// contract: menu.application.view-has-full-screen-and-text-size, menu.application.edit-undo-and-redo-are-framework-items
 func TestApplicationMenuLanguages(t *testing.T) {
+	// Undo and redo are system items of the contract table, so in both languages they have the title and the shortcut that the
+	// framework gives their role (docs/spec/host-contract.md#application-menu): mygo fills an item of a role without a label or
+	// a shortcut with those of the role, and AppKit sets the title of an item with the undo: or redo: action from the undo
+	// manager when it validates the menu.
+	framework := mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleUndo}, {Role: mygo.RoleRedo}}).Items()
+	undo, redo := framework[0], framework[1]
 	want := []struct {
 		language string
 		menu     string
 		items    []string
 	}{
 		{"ko", "파일", []string{"윈도우 닫기"}},
-		{"ko", "편집", []string{"실행 취소", "다시 실행", "잘라내기", "복사", "붙여넣기", "모두 선택"}},
+		{"ko", "편집", []string{undo.Label, redo.Label, "잘라내기", "복사", "붙여넣기", "모두 선택"}},
 		{"en", "File", []string{"Close Window"}},
-		{"en", "Edit", []string{"Undo", "Redo", "Cut", "Copy", "Paste", "Select All"}},
+		{"en", "Edit", []string{undo.Label, redo.Label, "Cut", "Copy", "Paste", "Select All"}},
 	}
 	for _, expected := range want {
 		menu, err := adapter.ApplicationMenuFor(expected.language)
 		if err != nil {
 			t.Fatalf("%s: %v", expected.language, err)
 		}
-		if got := labels(submenuOf(menu, expected.menu)); !slices.Equal(got, expected.items) {
+		items := submenuOf(menu, expected.menu)
+		if got := labels(items); !slices.Equal(got, expected.items) {
 			t.Fatalf("%s %s items = %v, want %v", expected.language, expected.menu, got, expected.items)
+		}
+		if expected.menu != "편집" && expected.menu != "Edit" {
+			continue
+		}
+		if items[0].Role != mygo.RoleUndo || items[0].Accelerator != undo.Accelerator || items[1].Role != mygo.RoleRedo || items[1].Accelerator != redo.Accelerator {
+			t.Fatalf("%s %s starts with the roles %q and %q and the shortcuts %q and %q instead of undo and redo with %q and %q of the framework",
+				expected.language, expected.menu, items[0].Role, items[1].Role, items[0].Accelerator, items[1].Accelerator, undo.Accelerator, redo.Accelerator)
 		}
 	}
 	if _, err := adapter.ApplicationMenuFor("fr"); err == nil {

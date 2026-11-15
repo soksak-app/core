@@ -65,7 +65,7 @@ fn view_menu_has_full_screen_and_text_size() {
     assert!(accelerator("meta+w").is_err());
 }
 
-// contract: menu.application.view-has-full-screen-and-text-size
+// contract: menu.application.view-has-full-screen-and-text-size, menu.application.edit-undo-and-redo-are-framework-items
 #[test]
 fn table_titles_serve_both_languages() {
     // The title of the app menu is the application name, so the table leaves it empty.
@@ -81,16 +81,24 @@ fn table_titles_serve_both_languages() {
     // title are compared.
     assert_eq!(titled_item_titles("file", "ko"), ["윈도우 닫기"]);
     assert_eq!(titled_item_titles("file", "en"), ["Close Window"]);
+    // Undo and redo are system items: the table gives them no title, so the framework provides their title and their
+    // shortcut, because AppKit sets the title of an item with the undo: or redo: action from the undo manager when it
+    // validates the menu (docs/spec/host-contract.md#application-menu).
+    for id in ["undo", "redo"] {
+        assert!(
+            menu::ITEMS
+                .iter()
+                .any(|(row, item, source, ko, en, _)| *row == "edit"
+                    && *item == id
+                    && *source == "system"
+                    && ko.is_empty()
+                    && en.is_empty()),
+            "{id} is not a system item without a title in the edit menu"
+        );
+    }
     assert_eq!(
         titled_item_titles("edit", "ko"),
-        [
-            "실행 취소",
-            "다시 실행",
-            "잘라내기",
-            "복사",
-            "붙여넣기",
-            "모두 선택"
-        ]
+        ["잘라내기", "복사", "붙여넣기", "모두 선택"]
     );
     assert_eq!(
         titled_item_titles("view", "ko"),
@@ -98,7 +106,7 @@ fn table_titles_serve_both_languages() {
     );
     assert_eq!(
         titled_item_titles("edit", "en"),
-        ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]
+        ["Cut", "Copy", "Paste", "Select All"]
     );
     assert_eq!(
         titled_item_titles("view", "en"),
