@@ -51,7 +51,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *     shortcuts         the rows of the shortcut table of the window
  *     state             {read(), write(value)}, present only when the plugin declares surface.unload
  *     menu              {declared, frame}: whether the plugin declares the surface menu, and the applied frame {x, y} at the start, or null
- *     faults            {route: message}: the route rejects with the message; `command.runtime.log` refuses each batch of the page log with its message
+ *     faults            {route: message}: the route rejects with the message; `command.runtime.log` refuses each batch of the page log with its message, and `command.runtime.data.get` refuses each read of the project data
  *     onDataRead        fn(key, reads, write(value)): runs after each read of a project data key by the view, with the read count of the key;
  *                       write stores a value of the key as another view does, so a replace of the view that follows the read sees it
  *     viewEvent         fn(event, data): the reply of each push of the view, which the host answers; without it the reply is null
@@ -174,6 +174,7 @@ export function createTestHost(fixtures) {
       // A read answers the stored value, then fixtures.onDataRead runs with the read count of the key and a writer of another view, so a
       // write made there lands between this read and the replace that follows it.
       get: (key) => {
+        if (Object.hasOwn(faults, "command.runtime.data.get")) throw new Error(faults["command.runtime.data.get"]);
         const value = current(key);
         const reads = (dataReads.get(key) ?? 0) + 1;
         dataReads.set(key, reads);

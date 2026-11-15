@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-9: The view test host refuses a read of the project data with the declared fault `command.runtime.data.get`.
 - F867-8: The view test host runs plugin pages as the app does: window globals per view, changes after open, served plugin files, observed timers, refused log batches, contributed modules and held replies.
 - F867-7: The view test host runs the real page module of a plugin: `load(url)` imports it into the view, which builds its own bridge through the handler `sok-view`; `sidecarMessage` delivers a sidecar message through the route of the view, and `request` runs a command of the page.
 - F868: The contract copies are removed: `checkPluginRepository` reads no `contract-copies.json`, and a plugin repository tests with the SDK release that it pins and its view test host ([plugin tests](docs/spec/plugins.md#plugin-tests)), so a change of the contract cases of core changes no plugin.

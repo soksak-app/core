@@ -391,3 +391,14 @@ test("a fixture that returns a promise holds the reply to the view until the tes
     await view.close();
   }
 });
+
+test("a declared fault of runtime.data.get refuses the read of the page with its message", { timeout: 5000 }, async () => {
+  const view = await openView("probe", { start: START, host: fixtures({ faults: { "command.runtime.data.get": "the stored data is unreadable" } }) });
+  try {
+    const page = await view.load(PAGE_DATA);
+    await page.ready;
+    await assert.rejects(page.bump(), /the stored data is unreadable/);
+  } finally {
+    await view.close();
+  }
+});
