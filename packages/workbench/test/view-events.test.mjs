@@ -17,7 +17,7 @@ globalThis.matchMedia = dom.window.matchMedia;
 
 const imports = selectPageWire("view-events-none");
 const { surfaceContextRuntime } = await import("../host.js");
-const { createViewSubscriptions } = await import("../view-events.js");
+const { createViewSubscriptions } = await import("@soksak/plugin-api/view-events");
 const { createRegistry } = await import("../exposure.js");
 const { onRunEnd, onRunStart, runActive, setRunActive } = await import("../run-state.js");
 const { notifyTextSize, onTextSize, setSurfaceTextSize, surfaceTextSize } = await import("../text-size.js");
@@ -121,6 +121,16 @@ test("a log levels subscription pushes each change of the stored levels once and
   await subs.close();
   logGate.set(levels("error"));
   assert.deepEqual(pushed().length, 1, "the close ends the subscription");
+  wire.finish();
+});
+
+test("a document stream message of a region is pushed to the view with its data", async () => {
+  const { subs } = open("document-stream");
+  await subs.native("document-stream");
+  wire.deliverNotice();
+  await subs.idle();
+  assert.deepEqual(pushed(), [{ event: "document-stream", data: { surface: "probe-surface", document: "doc", handle: 3, message: { n: 1 } } }]);
+  await subs.close();
   wire.finish();
 });
 

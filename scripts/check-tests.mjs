@@ -8736,7 +8736,7 @@ const FEATURE_LINKS = [
     id: "F251",
     implementation: [
       { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
-      { file: "packages/workbench/view-events.js", symbol: "statusWatch" },
+      { file: "packages/plugin-api/view-events.js", symbol: "statusWatch" },
       { file: "packages/plugin-api/view.js", symbol: "watchStatus" },
     ],
     tests: [

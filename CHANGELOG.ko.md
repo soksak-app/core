@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F867-2: view call의 응답 코드를 SDK에 게시할 수 있도록 `command-route.js`, `view-commands.js`, `view-events.js`가 `@soksak/workbench`에서 `@soksak/plugin-api`로 옮겨지고, workbench는 import map으로 import한다.
 - 로컬 candidate acceptance를 제거한다. 게시는 acceptance 보고서를 읽지 않고 자기 run의 release file만 checkout과 대조하므로, acceptance 수집, candidate context, candidate policy와 보고서, window check runner의 candidate mode, `--artifacts` mode, `make test-app-candidate`를 삭제한다 (F864).
 - core version은 설치하는 plugin을 검사하지 않고 registry에 들어가며, plugin은 새 core와의 호환을 스스로 맞춘다 (F866).
 - Rust host의 view binary test probe는 folder를 지우기 전에 document의 data store를 끝낸다 (F865).

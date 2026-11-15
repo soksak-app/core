@@ -5,8 +5,8 @@ import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
 import { shownSectionSurfaces } from "./section-surfaces.js";
 import { onDataChange, viewDataOf } from "./plugin-data.js";
 import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
-import { createViewSubscriptions } from "./view-events.js";
-import { createViewCommands } from "./view-commands.js";
+import { createViewSubscriptions } from "@soksak/plugin-api/view-events";
+import { createViewCommands } from "@soksak/plugin-api/view-commands";
 import { onSourceOriginEnded, onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
 import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
@@ -465,7 +465,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       // The declared sidecar is read at each subscription, because a view without a declared sidecar subscribes to none.
       onFailure: (id, listener) => page.sidecar().onFailure(id, listener),
     },
-    // The surface runtime returns the off function at once; the view subscriptions take a promise of it (view-events.js).
+    // The surface runtime returns the off function at once; the view subscriptions take a promise of it (@soksak/plugin-api view-events.js).
     textSize: (listener) => Promise.resolve(context.runtime.textSize.on(listener)),
     settings: (listener) => Promise.resolve(context.runtime.settings.on(listener)),
     // The changes of the project data of the plugin for the start project of the view (docs/spec/plugins.md#project-data).

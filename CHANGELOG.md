@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-2: `command-route.js`, `view-commands.js` and `view-events.js` move from `@soksak/workbench` to `@soksak/plugin-api`, so that the answer code of view calls can be published in the SDK; the workbench imports them through its import map.
 - The local candidate acceptance is removed, because publication reads no acceptance report and checks only the release files of its run: the acceptance collection, the candidate context, the candidate policy and report, the candidate mode of the window-check runner, the `--artifacts` mode and `make test-app-candidate` are deleted (F864).
 - A core version enters the registry without a check of the plugins that it installs; a plugin keeps its own compatibility with a new core (F866).
 - The view binary test probe of the Rust host ends the data store of its document before it removes its folder (F865).

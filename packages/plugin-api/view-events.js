@@ -29,7 +29,7 @@ const statusData = (name, surface, value) => (surface === undefined ? { name, va
  *                 which it calls at the end of the watch
  *     run         {active(), onStart(fn), onEnd(fn)}: whether a run continues, and fn for each start and end of a run; both
  *                 return their off functions. Each start is pushed as the event run-start, which the page answers with one
- *                 frame request (packages/plugin-api/view.js). A watch
+ *                 frame request (view.js of this package). A watch
  *                 that has delivered a value holds the values of a run and delivers the newest at its end, because every layout of a run
  *                 changes the core statuses and a view has its own geometry from its placement. A replaced value is recorded through cancel.
  *     push        push(event, data): posts {event, data} to the view through viewEvent; rejects when the host refuses it

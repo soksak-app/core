@@ -1,7 +1,7 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
 import { causeCids, shellQuotePath, surfaceDocumentEntry } from "@soksak/plugin-api";
-import { runCommandCall } from "./command-route.js";
+import { runCommandCall } from "@soksak/plugin-api/command-route";
 import { setViewFocus } from "./view-focus.js";
 
 /** A binary id of the binary store of a view: 32 lowercase hexadecimal characters (docs/spec/plugin-processes.md#binary-path). */
@@ -40,17 +40,17 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
  *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
  *                 subscribe.native(name), subscribe.sidecarMessage(id, sidecar), subscribe.sidecarFailure(id), subscribe.textSize(),
- *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js); each resolves when it is
+ *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (@soksak/plugin-api view-events.js); each resolves when it is
  *                   registered
  *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window (surface-modules.js)
  *                 menu: {declared(), frame()} of the surface: whether its plugin declares surface.menu for it, and its applied frame
  *                   {x, y} in the window or null
  *                 data.of(project, plugin): the project data of the plugin for the project, as viewDataOf of plugin-data.js has it
  *                 subscribe.statusWatch(name, surface), subscribe.statusUnwatch(name, surface): follow the value of a status of the view on
- *                   the surface, or on the workbench when surface is undefined, and end it (view-events.js); the names are checked by
+ *                   the surface, or on the workbench when surface is undefined, and end it (@soksak/plugin-api view-events.js); the names are checked by
  *                   statusNameOf, the surface by holdsSurface, and the declaration is checked by the page subscription
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
- *                   another plugin or an undeclared name is refused (view-commands.js)
+ *                   another plugin or an undeclared name is refused (@soksak/plugin-api view-commands.js)
  *                 exposure.registered({kind, name}): applies the status or element registration of the view through the exposure registry
  *                   and relays it to the host (surface-modules.js)
  *               composition: the page operations of the surface view (surface-modules.js)

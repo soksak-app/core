@@ -1,0 +1,12 @@
+{
+  "name": "view-events-document-stream",
+  "description": "The host sends a document stream message of a region of the view, and the page pushes it to the view as the event document-stream with its data.",
+  "replay": false,
+  "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "steps": [
+    {"listen":{"event":"document-stream"}},
+    {"notice":{"event":"document-stream","payload":{"surface":"probe-surface","document":"doc","handle":3,"message":{"n":1}}}},
+    {"call":{"name":"viewEvent","payload":{"generation":1,"event":"document-stream","data":{"surface":"probe-surface","document":"doc","handle":3,"message":{"n":1}},"surface":"probe-surface"}}},
+    {"reply":{"result":true}}
+  ]
+}

@@ -16,7 +16,10 @@
     "./bounded-json.js": "./bounded-json.js",
     "./diagnostic-view-frames": "./diagnostic-view-frames.js",
     "./testing": "./testing.js",
-    "./wire-case": "./wire-case.js"
+    "./wire-case": "./wire-case.js",
+    "./command-route": "./command-route.js",
+    "./view-commands": "./view-commands.js",
+    "./view-events": "./view-events.js"
   },
   "files": [
     "index.js",
@@ -48,6 +51,9 @@
     "core-exposure.json",
     "testing.js",
     "wire-case.js",
+    "command-route.js",
+    "view-commands.js",
+    "view-events.js",
     "contract/"
   ],
   "scripts": {

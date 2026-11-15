@@ -4,7 +4,7 @@
 // use the same rules as the calls of a plugin process (docs/spec/plugin-processes.md, rule 3): a command has no time limit, and
 // its reply, the close of its surface or the end of the view ends it.
 
-import { causeCids, createCalls } from "@soksak/plugin-api";
+import { causeCids, createCalls } from "./calls.js";
 
 /** The code of a command that failed: EXPOSURE_ERRORS.failed of plugin-api. */
 const FAILED_COMMAND = -32000;

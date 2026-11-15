@@ -768,7 +768,7 @@ func (s *Shell) runViewCall(call viewCallEvent, view *viewState, answer viewAnsw
 }
 
 // runCommandCall runs the command that names a call: a core command, or a command that the view registered. Any other name is
-// refused as runCommandCall of packages/workbench/command-route.js refuses it.
+// refused as runCommandCall of packages/plugin-api/command-route.js refuses it.
 func (s *Shell) runCommandCall(call viewCallEvent, answer viewAnswer) error {
 	owner, _, dotted := strings.Cut(call.Command, ".")
 	switch {
