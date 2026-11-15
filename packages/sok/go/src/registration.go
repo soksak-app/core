@@ -184,7 +184,7 @@ func (s Setup) runClaude(claude, subcommand string, args ...string) error {
 	err := command.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
-		line, _, _ := strings.Cut(stderr.String(), "\n")
+		line, _, _ := strings.Cut(stderr.String(), "\n") // silent: a standard error without a line feed is its own first line.
 		return fmt.Errorf("claude mcp %s failed with status %d: %s", subcommand, exit.ExitCode(), line)
 	}
 	if err != nil {

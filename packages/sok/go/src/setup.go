@@ -66,7 +66,7 @@ func (e AgentEnvironment) claudeConfigDir() string {
 func (e AgentEnvironment) applied(env []string) []string {
 	out := []string{}
 	for _, entry := range env {
-		name, _, _ := strings.Cut(entry, "=")
+		name, _, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
 		if name != "HOME" && name != "PATH" && name != "CLAUDE_CONFIG_DIR" {
 			out = append(out, entry)
 		}
@@ -218,7 +218,7 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 	changed := map[string]bool{}
 	var failures []string
 	if pending["path"] && terminal {
-		file, _ := s.pathEntry()
+		file, _ := s.pathEntry() // silent: the second result is the content of the entry, which the root sok of the step writes.
 		err := s.installPathEntry()
 		recordPathStep(file, err)
 		if err != nil {
@@ -241,7 +241,10 @@ func (s Setup) Install(kinds []string, terminal bool) (SetupParts, error) {
 		if err != nil {
 			failures = append(failures, err.Error())
 		} else if result.State == "registered" {
-			file, _ := s.claudeConfigFile()
+			file, err := s.claudeConfigFile()
+			if err != nil {
+				return SetupParts{}, err
+			}
 			changed[file] = true
 		}
 	}
@@ -277,7 +280,7 @@ func (s Setup) installPathEntry() error {
 	err = command.Run()
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
-		line, _, _ := strings.Cut(stderr.String(), "\n")
+		line, _, _ := strings.Cut(stderr.String(), "\n") // silent: a standard error without a line feed is its own first line.
 		return fmt.Errorf("sudo %s path install failed with status %d: %s", StepOf(s.Sok), exit.ExitCode(), line)
 	}
 	if err != nil {

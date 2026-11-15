@@ -56,6 +56,7 @@ export function neighbourToward(cards, card, side) {
     bottom: (other) => other.r0 === card.r1 && other.c0 === card.c0 && other.c1 === card.c1,
   }[side];
   if (!near) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  // default: a card without a neighbour toward the side has none, which the caller reads as null.
   return cards.find((other) => other.id !== card.id && near(other)) ?? null;
 }
 

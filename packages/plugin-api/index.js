@@ -1625,7 +1625,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       }
     }
     return {
-      index, role, text: firstScalars((element.textContent ?? "").replace(/\s+/g, " "), 120), rect: { x, y, width, height }, visible: shown,
+      index, role, text: firstScalars(element.textContent.replace(/\s+/g, " "), 120), rect: { x, y, width, height }, visible: shown,
       ...(withInert ? { inert: inert(element) } : {}),
       command: element.getAttribute("data-command"), params,
     };

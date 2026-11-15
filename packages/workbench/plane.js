@@ -2116,9 +2116,8 @@ const contentCards = () => grid.cards.filter((card) => !isPlace(card.id));
 /** The space other than the shown one of the project of this window whose stored layout holds what found(cards) finds, or null. */
 function inactiveSpaceOf(found) {
   const project = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
-  // default: a window that shows no space has no other space.
-  const space = project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards)) ?? null;
-  return space?.id ?? null;
+  // default: a window that shows no space has no other space, and a project without such a space has none.
+  return project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards))?.id ?? null;
 }
 
 /**

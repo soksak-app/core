@@ -280,6 +280,7 @@ func (s *Setups) readEnvironment() (_ sok.AgentEnvironment, failure error) {
 		if stderrErr != nil {
 			return fail("%s; read the standard error: %s", reason, osReason(stderrErr))
 		}
+		// silent: a standard error without a line feed is its own first line.
 		if line, _, _ := strings.Cut(strings.TrimSpace(stderr.String()), "\n"); line != "" {
 			reason += ": " + line
 		}

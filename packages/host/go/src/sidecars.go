@@ -2139,7 +2139,7 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, stop <-chan struct{}) 
 func (c *Sidecars) environment() []string {
 	environment := []string{}
 	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=")
+		name, _, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
 		if name != sok.ConfigDirVariable && name != sok.SurfaceVariable {
 			environment = append(environment, entry)
 		}

@@ -240,9 +240,10 @@ export function createRegistry({ call = null, report = null } = {}) {
 
   async function dispatch(method, params, origin) {
     // default: a request without parameters omits params.
-    if (methods.has(method)) return methods.get(method)(params ?? {});
+    const given = params ?? {};
+    if (methods.has(method)) return methods.get(method)(given);
     if (method === "exposure.list") return list();
-    if (method === "exposure.snapshot") return snapshot(params ?? {}, origin);
+    if (method === "exposure.snapshot") return snapshot(given, origin);
     const name = params?.name;
     const kind = METHOD_KINDS[method];
     const found = kind && typeof name === "string" ? declared.get(declarationKey(kind, name)) : undefined;

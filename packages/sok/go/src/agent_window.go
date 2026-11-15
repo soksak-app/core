@@ -273,7 +273,10 @@ func filterExposure(read exposure, kind, query string) ([]byte, error) {
 			out.WriteByte(',')
 		}
 		first = false
-		key, _ := json.Marshal(name)
+		key, err := json.Marshal(name)
+		if err != nil {
+			return nil, err
+		}
 		out.Write(key)
 		out.WriteByte(':')
 		if listed == "" {
@@ -504,8 +507,18 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 		}
 	}
 	page := map[string]any{"rows": []any{}, "total": len(rows), "next": nil}
+	var err error
 	if after == "" {
-		page["window"], page["layout"], page["plugins"], page["agent"] = compacted(parts.Window), compacted(parts.Layout), compacted(parts.Plugins), agent
+		if page["window"], err = compacted(parts.Window); err != nil {
+			return nil, err
+		}
+		if page["layout"], err = compacted(parts.Layout); err != nil {
+			return nil, err
+		}
+		if page["plugins"], err = compacted(parts.Plugins); err != nil {
+			return nil, err
+		}
+		page["agent"] = agent
 	}
 	base, err := encodeJSON(page)
 	if err != nil {
@@ -524,11 +537,15 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 		if len(kept) > 0 {
 			grown++
 		}
-		if grown+nextGrowth(rows, n) > describePageBytes {
+		growth, err := nextGrowth(rows, n)
+		if err != nil {
+			return nil, err
+		}
+		if grown+growth > describePageBytes {
 			if len(kept) > 0 {
 				break
 			}
-			if text, err = row.cutToFit(describePageBytes - size - nextGrowth(rows, n)); err != nil {
+			if text, err = row.cutToFit(describePageBytes - size - growth); err != nil {
 				return nil, err
 			}
 			grown = size + len(text)
@@ -544,22 +561,21 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 }
 
 // compacted is the compact text of a value of the snapshot, which encodeJSON writes as it is.
-func compacted(raw json.RawMessage) json.RawMessage {
-	out, err := compactRaw(raw)
-	if err != nil {
-		return raw
-	}
-	return out
+func compacted(raw json.RawMessage) (json.RawMessage, error) {
+	return compactRaw(raw)
 }
 
 // nextGrowth is the number of bytes by which `next` grows when the page ends with row n: the key of that row instead of null when
 // rows follow it.
-func nextGrowth(rows []*describeRow, n int) int {
+func nextGrowth(rows []*describeRow, n int) (int, error) {
 	if n+1 >= len(rows) {
-		return 0
+		return 0, nil
 	}
-	key, _ := encodeJSON(rows[n].key)
-	return len(key) - len("null")
+	key, err := encodeJSON(rows[n].key)
+	if err != nil {
+		return 0, err
+	}
+	return len(key) - len("null"), nil
 }
 
 // entryRow is the row of one entry of a group.
@@ -577,9 +593,12 @@ func entryRow(group string, owner snapshotGroup, kind string, raw json.RawMessag
 	}
 	key := group + " " + kind + " " + name
 	row := &describeRow{key: key, kind: kind, fields: map[string]any{}}
+	var err error
 	if full {
 		for member, value := range entry {
-			row.fields[member] = compacted(value)
+			if row.fields[member], err = compacted(value); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		row.fields["name"] = name
@@ -587,7 +606,9 @@ func entryRow(group string, owner snapshotGroup, kind string, raw json.RawMessag
 	}
 	row.fields["key"], row.fields["group"], row.fields["kind"] = key, group, kind
 	if owner.Owner == "surface" {
-		row.fields["plugin"] = compacted(owner.Plugin)
+		if row.fields["plugin"], err = compacted(owner.Plugin); err != nil {
+			return nil, err
+		}
 	}
 	switch kind {
 	case "status":
@@ -601,7 +622,9 @@ func entryRow(group string, owner snapshotGroup, kind string, raw json.RawMessag
 				row.setValueText(describeValueChars)
 			}
 		} else if failure, ok := entry["error"]; ok {
-			row.fields["error"] = compacted(failure)
+			if row.fields["error"], err = compacted(failure); err != nil {
+				return nil, err
+			}
 		}
 	case "command":
 		if !full {
@@ -800,7 +823,11 @@ func briefItem(item json.RawMessage) (json.RawMessage, error) {
 	brief := map[string]any{}
 	for _, member := range []string{"index", "role", "text", "visible", "inert", "command"} {
 		if value, ok := fields[member]; ok {
-			brief[member] = compacted(value)
+			compact, err := compacted(value)
+			if err != nil {
+				return nil, err
+			}
+			brief[member] = compact
 		}
 	}
 	return encodeJSON(brief)

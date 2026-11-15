@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Go `sok`은 key encoding, endpoint 답의 압축, agent configuration file의 error를 반환하고, 나머지 기본값은 그 이유를 적는다 (F850).
 - Agent group의 주석은 그 group을 영어로 부르고 `docs/spec/settings.md#agents`를 가리킨다 (F849).
 - `sok` 명령의 test는 두 언어 모두 자기 run의 build tag나 feature로 된 `sok`을 실행한다 (F848).
 - Page와 mygo workbench의 window snapshot case는 workbench case이고, 그 test는 status 읽기의 `error`와 `exposure.list`의 entry를 assert한다 (F847).
