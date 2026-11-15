@@ -42,7 +42,7 @@ struct Writer {
     policy: bool,
 }
 
-/// One call step, one reply step, one notice step or one listen step.
+/// One call step, one reply step, one notice step, one listen step, one change step or one close step.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Step {
@@ -50,6 +50,8 @@ struct Step {
     reply: Option<Reply>,
     notice: Option<Value>,
     listen: Option<Value>,
+    change: Option<Value>,
+    close: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -146,6 +148,11 @@ fn run_case(name: &str, file: &Path) -> Result<(), String> {
         if step.listen.is_some() {
             return Err(format!(
                 "step {index} is the registration of a listener, which this producer has no page to make; the case needs replay false and the reason"
+            ));
+        }
+        if step.change.is_some() || step.close.is_some() {
+            return Err(format!(
+                "step {index} is a change or the close of a window, which this producer has no window for; the case needs replay false and the reason"
             ));
         }
     }

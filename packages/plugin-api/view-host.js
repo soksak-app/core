@@ -91,10 +91,13 @@ export function createTestHost(fixtures) {
   if (typeof fixtures?.plugin !== "string" || fixtures.plugin === "") throw new TypeError("createTestHost requires the plugin id of the view");
   if (typeof fixtures.surface !== "string" || fixtures.surface === "") throw new TypeError("createTestHost requires the surface id of the view");
   const { plugin, surface } = fixtures;
+  // default: a fixture without faults declares no fault, so every route answers with its fixture.
   const faults = fixtures.faults ?? {};
+  // default: a fixture without declarations means the plugin declares no exposure entry.
   const pluginDeclared = declarationMap(fixtures.declarations ?? {});
   const core = coreExposure();
   const coreDeclared = declarationMap({ status: core.status.map((name) => ({ name })), commands: core.commands.map((name) => ({ name })) });
+  // default: a name is declared when the plugin or core declares it.
   const declares = (kind, name) => pluginDeclared.has(declarationKey(kind, name)) || coreDeclared.has(declarationKey(kind, name));
   const observed = {
     tab: { title: null, footer: null, directory: null, modified: null, error: null, focus: null, notify: [], keep: [] },
@@ -148,6 +151,7 @@ export function createTestHost(fixtures) {
   const gate = pluginNativeGate(native);
 
   // The stored project data of each project, and the listeners of its changes.
+  // default: a fixture without data declares no project data key.
   const declaredData = fixtures.data ?? {};
   const stores = new Map();
   const dataListeners = new Set();
@@ -176,8 +180,10 @@ export function createTestHost(fixtures) {
       get: (key) => {
         if (Object.hasOwn(faults, "command.runtime.data.get")) throw new Error(faults["command.runtime.data.get"]);
         const value = current(key);
+        // default: a key not read before has read count zero.
         const reads = (dataReads.get(key) ?? 0) + 1;
         dataReads.set(key, reads);
+        // default: onDataRead is an optional fixture; without it no other view writes between a read and its replace.
         fixtures.onDataRead?.(key, reads, (next) => write(key, next));
         return value;
       },
@@ -193,11 +199,15 @@ export function createTestHost(fixtures) {
 
   // The values that the view reads from the window, and the listeners of their changes. The change methods set a value and call the
   // listeners that the subscriptions registered, as the window does when its state changes.
+  // default: a fixture without settings has no setting value.
   let settingValues = fixtures.settings ?? {};
+  // default: the text size of a window without a change is 1, as the host starts it.
   let textSizeValue = fixtures.textSize ?? 1;
+  // default: a fixture without log levels sets no level.
   let logLevelValues = fixtures.logLevels ?? {};
   let runActive = fixtures.run === true;
   let leftOutNow = false;
+  // default: a fixture without a menu frame has no applied frame, as the host before its first frame.
   let appliedFrame = fixtures.menu?.frame ?? null;
   const settingListeners = new Set();
   const textSizeListeners = new Set();
@@ -205,13 +215,16 @@ export function createTestHost(fixtures) {
   const runStartListeners = new Set();
   const runEndListeners = new Set();
   // The value of each status by its key, and the listeners of each key.
+  // default: a fixture without statuses has no status value at the start.
   const statusValues = new Map(Object.entries(fixtures.statuses ?? {}));
   const statusListeners = new Map();
+  // default: a fixture without contributions installs no contribution.
   const installed = fixtures.contributions ?? [];
   const resolved = resolveContributions(installed);
   // The module URLs that the host answers for the contributions of the installed plugins, each mapped to the module URL that the fixture
   // names. An installed plugin names its modules as {<module of its manifest>: <file or data URL>}; the host answers each one as
   // soksak://core/<modulePath of the package>, the form that the page imports.
+  // default: a contribution without modules contributes no module.
   const contributedModules = () => new Map(installed.flatMap((entry) => Object.entries(entry.modules ?? {}).map(
     ([module, target]) => [`soksak://core/${modulePath(entry.package, module)}`, target],
   )));
@@ -257,6 +270,7 @@ export function createTestHost(fixtures) {
     run,
     push: (event, data) => {
       observed.document.push({ name: "viewEvent", payload: { event, data } });
+      // default: without a viewEvent fixture the host answers each push of the view with null, as the host whose window has no reply.
       return route("viewEvent", fixtures.viewEvent ?? (() => null), [event, data]);
     },
     report: (text) => observed.errors.push(text),
@@ -301,6 +315,7 @@ export function createTestHost(fixtures) {
     pending: new Map(),
     tab,
     contributions: connected,
+    // default: a fixture without shortcuts declares no shortcut.
     shortcuts: fixtures.shortcuts ?? [],
     emitEvent: (level, event, fields) => { observed.events.push({ level, event, fields }); },
     runCore: (name, params, cids) => {
@@ -309,12 +324,15 @@ export function createTestHost(fixtures) {
     },
     runOwned: (name, params, owner, cids, chosen, caller) => {
       if (owner !== plugin || !pluginDeclared.has(declarationKey("command", name))) throw new Error(`command ${name} is not declared by ${owner}`);
+      // default: a command run without a chosen surface runs for the caller surface, as the host relays it.
       observed.commands.push({ name, params, cids, surface: chosen ?? caller });
       return route(`command.${name}`, at("commands", name), [params, cids]);
     },
+    // default: a fixture without a project opens the view without a project, as the host for a window without a project.
     startProject: () => fixtures.project ?? null,
     runtime: {
       native: gate,
+      // default: a fixture without surfaces holds no surface of another plugin.
       holdsSurface: (owner, name) => (fixtures.surfaces ?? []).some((entry) => entry.plugin === owner && entry.surface === name),
       menu: { declared: () => fixtures.menu?.declared === true, frame: () => appliedFrame },
       data: { of: dataOf },
@@ -331,6 +349,7 @@ export function createTestHost(fixtures) {
       subscribe: {
         native: (name) => subscriptions.native(name),
         sidecarMessage: (id, name) => {
+          // default: a fixture without sidecars declares no sidecar, so each sidecar route is refused.
           if (!(fixtures.sidecars ?? []).includes(name)) throw new Error(`view call runtime.sidecar.on: ${plugin} declares no sidecar ${name}`);
           return subscriptions.sidecarMessage(id, name);
         },
@@ -402,6 +421,7 @@ export function createTestHost(fixtures) {
     status(name, value, surface) {
       const key = statusKeyOf(name, surface);
       statusValues.set(key, value);
+      // default: a status without a listener has no listener to call.
       for (const listener of [...(statusListeners.get(key) ?? [])]) listener(value);
     },
     run(active) {

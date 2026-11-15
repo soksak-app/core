@@ -99,6 +99,7 @@ const bindGlobals = (window, timers) => {
         configurable: true,
         writable: true,
         value: function started(...args) {
+          // default: a timer started without a delay runs after a delay of 0, as the window runs it.
           if (internalCalls === 0) openViews.at(-1).timers?.push({ kind: name, delay: args[1] ?? 0 });
           return original.apply(this, args);
         },
@@ -381,7 +382,9 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     const request = structuredClone(message);
     const work = (request.command === LOG_COMMAND ? logCall(request) : answerViewCall(request, testHost.options))
       .then(
+        // default: a call that answers undefined replies null, as the wire carries no undefined.
         (result) => { forwardPushed(); host({ id: request.id, result: result ?? null }); },
+        // default: a thrown value that is not an Error replies with its text, as the host relays it.
         (error) => { forwardPushed(); host({ id: request.id, error: { code: FAILURE_CODE, message: error?.message ?? String(error) } }); },
       )
       .finally(() => pendingCalls.delete(work));

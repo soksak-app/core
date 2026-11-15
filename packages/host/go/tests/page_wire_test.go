@@ -66,12 +66,14 @@ func (spec pageWireVariableSpec) types() []string {
 	return nil
 }
 
-// pageWireStep is one call step, one reply step, one notice step or one listen step.
+// pageWireStep is one call step, one reply step, one notice step, one listen step, one change step or one close step.
 type pageWireStep struct {
 	Call   *pageWireCall   `json:"call"`
 	Reply  *pageWireReply  `json:"reply"`
 	Notice *pageWireNotice `json:"notice"`
 	Listen *pageWireListen `json:"listen"`
+	Change json.RawMessage `json:"change"`
+	Close  json.RawMessage `json:"close"`
 }
 
 // pageWireListen is the registration of a listener that the page makes for an event of the host. Error is the text that the registration
@@ -158,6 +160,9 @@ func runPageWireCase(t *testing.T, name, file string) {
 		}
 		if step.Listen != nil {
 			t.Fatalf("%s: step %d is the registration of a listener, which this producer has no page to make; the case needs replay false and the reason", file, i)
+		}
+		if step.Change != nil || step.Close != nil {
+			t.Fatalf("%s: step %d is a change or the close of a window, which this producer has no window for; the case needs replay false and the reason", file, i)
 		}
 	}
 	if len(kase.Steps)%2 != 0 {
