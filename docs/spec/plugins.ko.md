@@ -335,6 +335,8 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 
 `@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽고 replay할 수 있도록 `contract/` directory의 모든 파일을 게시한다. plugin 저장소는 replay하는 파일을 [contract 사본](#contract-사본)으로 둔다.
 
+`@soksak/plugin-api` package는 view 테스트 host도 게시한다. host fixture `host`를 받은 `@soksak/plugin-api/testing`의 `openView`는 view 페이지의 각 call을 `@soksak/plugin-api/view-answer`의 `answerViewCall`로, `@soksak/plugin-api/view-host`의 `createTestHost` 옵션과 함께 응답한다. fixture가 없는 route는 실패한다. host는 `view host: <route> has no fixture`를 기록하고, 테스트가 view를 닫을 때 그것을 던진다. `testing.js`는 `jsdom`을 import하며, `jsdom`은 `@soksak/plugin-api`의 선택적 peer dependency다. consumer가 이를 설치하며, 없으면 import가 `jsdom`을 이름으로 밝히는 `ERR_MODULE_NOT_FOUND`로 실패한다.
+
 디버그 스테이징 대상 `copy-frontend-wailsv3`, `copy-frontend-tauriv2`는 `--diagnostics`를 더한다. 릴리스 빌드에는 페이지 진단 코드가 없고, 릴리스 빌드는 plugin release가 담은 [진단 선언](#진단-선언)을 읽지 않는다. `make check-release`는 스테이징된 릴리스 프런트엔드에 `/transcript.js`나 페이지 진단 모듈이 있으면 실패한다.
 
 `index.html`이나 `overlay.html`이 staged frontend에 없는 script, style, module import에 닿으면 staging은 실패하고 각 참조를 이름으로 밝힌다. 두 종류의 참조는 이 검사 밖이다. host가 요청마다 만드는 `STAGED.served`의 문서와, staging이 통째로 복사하고 그 module이 framework나 host가 제공하는 것을 import하는 runtime 디렉터리 안 module의 import다.

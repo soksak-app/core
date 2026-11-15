@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-6: A test packs `@soksak/plugin-api` and checks that every module reachable from each export, including the view test host, is in the release file; the plugin specification states the view test host.
 - F867-4-3: Page-wire cases record host state changes and the close of a view with the steps `change` and `close`; `createTestHost` has declared state changes and `close` that run the subscription code of the SDK, so the test host replays every view call and view event case. The page log case is `log-import`, replayed by its own workbench test.
 - F867-4-4: The workbench view event test subscribes through `pluginNativeGate`, as the plugin page does, and the ordered delivery case carries `image-event` data in its form `{surface, name, event}`.
 - F867-4-1, F867-4-2: The focus value check moves to `checkViewFocus` of `@soksak/plugin-api/view-answer.js`, which the workbench and the test host share; the view event cases listen to the events that the plugin page gate allows, `exposure-request` and `image-event`, and the test host replays 77 cases through that gate.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F867-6: test가 `@soksak/plugin-api`를 pack하고 view test host를 포함해 각 export에서 닿는 모든 module이 release file에 있는지 확인하며, plugin spec이 view test host를 적는다.
 - F867-4-3: page-wire case가 host 상태 변화와 view의 close를 step `change`와 `close`로 기록하고, `createTestHost`가 SDK의 구독 코드를 실행하는 선언된 상태 변화와 `close`를 가져, test host가 모든 view call과 view event case를 replay한다. page log case는 자기 workbench test가 replay하는 `log-import`다.
 - F867-4-4: workbench view event test가 plugin page처럼 `pluginNativeGate`를 거쳐 구독하고, ordered delivery case가 `image-event` data를 그 형태 `{surface, name, event}`로 싣는다.
 - F867-4-1, F867-4-2: focus 값 검사가 workbench와 test host가 함께 쓰는 `@soksak/plugin-api/view-answer.js`의 `checkViewFocus`로 옮겨지고, view event case가 plugin page gate가 허용하는 event `exposure-request`와 `image-event`를 구독하며, test host가 그 gate를 거쳐 77개 case를 replay한다.
