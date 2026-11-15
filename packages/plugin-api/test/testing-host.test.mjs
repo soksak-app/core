@@ -412,3 +412,14 @@ test("the window of a view has the address of its page in the plugin, as the app
     await view.close();
   }
 });
+
+test("a record that a view writes through runtime.log carries the surface of the view", { timeout: 5000 }, async () => {
+  const view = await openView("probe", { start: START, host: fixtures() });
+  try {
+    view.bridge.runtime.log.info("saved", { n: 1 });
+    const record = await view.logged("plugin.probe.saved");
+    assert.deepEqual(record.fields, { n: 1, surface: "probe-surface" });
+  } finally {
+    await view.close();
+  }
+});

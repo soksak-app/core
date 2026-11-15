@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F869: view가 `runtime.log`로 쓰는 기록이 view의 surface를 가진다.
 - F867-11: view test host의 view window가 plugin 안 page의 주소(`page`)를 가진다.
 - F867-10: host page-wire producer가 page-wire case의 change와 close step을 읽고, overlay.html이 SDK의 새 module을 연결하며, view test host의 각 default가 이유를 적는다.
 - F867-9: view test host가 선언된 fault `command.runtime.data.get`으로 project data 읽기를 거부한다.

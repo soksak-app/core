@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F869: A record that a view writes through `runtime.log` carries the surface of the view.
 - F867-11: The window of a view in the view test host has the address of its page in the plugin (`page`).
 - F867-10: The host page-wire producers read the change and close steps of the page-wire cases, overlay.html maps the new modules of the SDK, and each default of the view test host states its reason.
 - F867-9: The view test host refuses a read of the project data with the declared fault `command.runtime.data.get`.

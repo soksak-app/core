@@ -227,7 +227,10 @@ export function createViewBridge({ handler, report }) {
     // events: forwarded
     batcher.emit(level, event, fields, cids);
   };
-  const { log } = createPluginRuntime({ pluginId: plugin, hooks: {
+  // The records of a view belong to its surface, which the start values name; a document without window.sokSurface is no surface view,
+  // so its records have no surface.
+  const surfaceId = window.sokSurface === undefined ? null : window.sokSurface.surface;
+  const { log } = createPluginRuntime({ pluginId: plugin, surfaceId, hooks: {
     log: (level, event, fields, cids) => writeLog(level, event, fields, cids),
   } });
   // The binary path of the view (docs/spec/plugin-processes.md#binary-path): an upload stores bytes in the binary store of the view
