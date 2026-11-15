@@ -26,6 +26,7 @@ const { compareProjectData, onDataChange } = await import("../plugin-data.js");
 const { logGate } = await import("../log-gate.js");
 const { hideSectionSurface, showSectionSurface } = await import("../section-surfaces.js");
 const { surfaceLeftOut } = await import("../surface-modules.js");
+const { pluginNativeGate } = await import("@soksak/plugin-api/view-answer");
 imports.finish();
 
 const GENERATION = 1;
@@ -48,10 +49,12 @@ function open(slug, more = () => ({}), surfaceId = SURFACE) {
   wire = selectPageWire(`view-events-${slug}`);
   const surface = { surfaceId, pluginId: "probe", sidecars: ["fixture-sidecar"] };
   const runtime = surfaceContextRuntime(surface, declarations);
+  // The plugin-facing handle of the view, as surface-modules.js makes it: the gate refuses the events that a view may not subscribe.
+  const gate = pluginNativeGate(runtime.native);
   const failures = [];
   const canceled = [];
   const subscriptions = createViewSubscriptions({
-    native: (name, listener) => runtime.native.on(name, listener),
+    native: (name, listener) => gate.on(name, listener),
     sidecar: {
       // The host posts each message of the session to the view; the route names the source generation of the view document.
       route: (id, name) => {
@@ -82,12 +85,12 @@ test("a later view event waits for the earlier event delivery", async () => {
   wire.deliverNotice();
   wire.deliverNotice();
   await drained();
-  const started = () => wire.calls.filter(({ name }) => name === "viewEvent").map(({ payload }) => payload.data.id);
-  assert.deepEqual(started(), [1], "the second delivery must remain queued while the first is pending");
+  const started = () => wire.calls.filter(({ name }) => name === "viewEvent").map(({ payload }) => payload.data.event);
+  assert.deepEqual(started(), ["press"], "the second delivery must remain queued while the first is pending");
   wire.release();
   await subs.idle();
-  assert.deepEqual(started(), [1, 2]);
-  assert.deepEqual(pushed().map(({ data }) => data.id), [1, 2]);
+  assert.deepEqual(started(), ["press", "release"]);
+  assert.deepEqual(pushed().map(({ data }) => data.event), ["press", "release"]);
   await subs.close();
   assert.deepEqual(wire.unsubscribed, ["image-event"]);
   wire.finish();
