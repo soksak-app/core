@@ -2,7 +2,8 @@
 //! endpoint plays the case of its name with the case player (support/case_player.rs). The player writes endpoint.json, answers only the
 //! frames that the case contains and reports every difference when the test ends.
 
-use std::io::Read;
+use std::io::{Read, Write};
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -14,7 +15,7 @@ mod folder;
 #[path = "support/case_player.rs"]
 mod case_player;
 
-use case_player::{play_case, play_case_with_text};
+use case_player::{play_case, play_case_with_held_frames, play_case_with_text};
 use folder::Folder;
 
 /// The paths.d location that the path entry check changes.
@@ -831,4 +832,28 @@ fn an_interrupt_ends_a_watch_that_waits_in_a_write() {
             })
         });
     assert!(stored, "no sok.command with status 0 in {}", logs.display());
+}
+
+// contract: verification.case-player.plays-the-frames-before-the-client-close
+#[test]
+fn case_player_plays_the_frames_that_the_client_wrote_before_it_closed_the_connection() {
+    let player = play_case_with_held_frames("closed-by-client-pending");
+    let endpoint: Value = serde_json::from_str(
+        &std::fs::read_to_string(PathBuf::from(player.dir()).join("endpoint.json"))
+            .expect("endpoint.json"),
+    )
+    .expect("endpoint.json is JSON");
+    let mut stream = UnixStream::connect(endpoint["address"].as_str().expect("the address"))
+        .expect("a connection to the player");
+    let body = br#"{"jsonrpc":"2.0","id":1,"method":"windows.list"}"#;
+    let length = u32::try_from(body.len()).expect("the length of the frame");
+    stream
+        .write_all(&length.to_be_bytes())
+        .expect("the frame length");
+    stream.write_all(body).expect("the frame body");
+    // The client writes its frame and closes the connection before the player has played the frame.
+    drop(stream);
+    player.wait_for_held_frame();
+    // Dropping the player closes it, and the close reports every step that was not played.
+    drop(player);
 }

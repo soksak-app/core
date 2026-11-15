@@ -382,6 +382,8 @@ type caseSettings struct {
 	texts map[string]string
 	// raws are the raw JSON texts that the test gives variables (withRawJSON).
 	raws map[string]string
+	// holdFrames is the fault point of withHeldFrames.
+	holdFrames bool
 }
 
 // withText gives the variable of the name the text that the host would choose. A test uses it for a value that depends on the
@@ -400,6 +402,15 @@ func withRawJSON(name, text string) caseOption {
 			settings.raws = map[string]string{}
 		}
 		settings.raws[name] = text
+	}
+}
+
+// withHeldFrames is a fault point of the tests of the player: the player holds each frame of the client that it read until close
+// has decided whether it waits for the client, so close decides while the frame is not played yet. held of the player is closed
+// when the player holds its first frame.
+func withHeldFrames() caseOption {
+	return func(settings *caseSettings) {
+		settings.holdFrames = true
 	}
 }
 
@@ -428,6 +439,12 @@ type casePlayer struct {
 	done []chan struct{}
 	// arrived is closed and replaced when the client sends a frame, so a test waits for a frame without polling.
 	arrived chan struct{}
+	// held and decided belong to the fault point withHeldFrames and are nil without it: held is closed when the player holds
+	// its first frame, and decided is closed when close has decided whether it waits for the client.
+	held       chan struct{}
+	holdOnce   sync.Once
+	decided    chan struct{}
+	decideOnce sync.Once
 }
 
 // playCase starts the case of the name and returns its player. The test runs its check when it ends: the test fails with every frame of
@@ -514,6 +531,10 @@ func startCasePlayer(configDir, directory, name string, settings caseSettings) (
 		raws:      settings.raws,
 		open:      map[net.Conn]bool{},
 	}
+	if settings.holdFrames {
+		p.held = make(chan struct{})
+		p.decided = make(chan struct{})
+	}
 	go p.accept()
 	return p, nil
 }
@@ -573,6 +594,7 @@ func (p *casePlayer) serve(conn net.Conn, prior []chan struct{}, done chan struc
 			p.connectionEnded()
 			return
 		}
+		p.hold()
 		var message any
 		if err := json.Unmarshal(body, &message); err != nil {
 			p.fail(fmt.Sprintf("the client sent an invalid frame: %v", err))
@@ -605,6 +627,23 @@ func readCaseFrame(conn net.Conn) ([]byte, error) {
 		return nil, err
 	}
 	return body, nil
+}
+
+// hold waits, under the fault point withHeldFrames, until close has decided whether it waits for the client.
+func (p *casePlayer) hold() {
+	if p.held == nil {
+		return
+	}
+	p.holdOnce.Do(func() { close(p.held) })
+	<-p.decided
+}
+
+// decide ends the hold of the fault point withHeldFrames once close has decided whether it waits for the client.
+func (p *casePlayer) decide() {
+	if p.decided == nil {
+		return
+	}
+	p.decideOnce.Do(func() { close(p.decided) })
 }
 
 // deliver writes the frames to conn in order.
@@ -751,14 +790,22 @@ func (p *casePlayer) failLocked(message string) {
 	p.failures = append(p.failures, fmt.Sprintf("%s: %s", p.name, message))
 }
 
-// close ends the player. When the next step is a close step of the client, close waits for that close first. It removes the socket and
-// returns every failure of the case, and a step that was not played.
+// close ends the player. When a step that remains is a close step of the client, close waits for that close first: the client may
+// write frames and close the connection before the player has read them, and the connection delivers those frames before its
+// end, so the player plays them before it judges the steps. It removes the socket and returns every failure of the case, and a
+// step that was not played.
 func (p *casePlayer) close() error {
 	p.mu.Lock()
-	waitForClient := p.cursor < len(p.steps) && p.steps[p.cursor].kind == "close" && p.steps[p.cursor].closer == "client"
+	waitForClient := false
+	for _, step := range p.steps[p.cursor:] {
+		if step.kind == "close" && step.closer == "client" {
+			waitForClient = true
+		}
+	}
 	done := append([]chan struct{}(nil), p.done...)
 	p.mu.Unlock()
 	if waitForClient {
+		p.decide()
 		for _, ended := range done {
 			select {
 			case <-ended:
@@ -778,6 +825,7 @@ func (p *casePlayer) close() error {
 	for _, conn := range open {
 		conn.Close()
 	}
+	p.decide()
 	for _, ended := range done {
 		select {
 		case <-ended:

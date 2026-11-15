@@ -441,6 +441,16 @@ struct Shared {
     state: Mutex<State>,
     /// Signalled when the client sends a frame, so a test waits for a frame without polling.
     arrived: Condvar,
+    /// The fault point of play_case_with_held_frames, None without it: held is set when the player holds its first frame, and
+    /// decided when close has decided whether it waits for the client.
+    hold: Option<Hold>,
+}
+
+/// The fault point of play_case_with_held_frames: the player holds each frame of the client that it read until close has decided
+/// whether it waits for the client, so close decides while the frame is not played yet.
+struct Hold {
+    held: Ended,
+    decided: Ended,
 }
 
 impl Shared {
@@ -599,7 +609,14 @@ pub fn play_case_with_text(name: &str, variable: &str, text: &str) -> CasePlayer
 /// Plays the case of the name. The variable takes a raw JSON text that the host frame holds as it is; a test uses it for a value that
 /// a case file cannot hold, such as a string with a lone surrogate escape, which names no character of a decoded value.
 pub fn play_case_with_raw(name: &str, variable: &str, raw: &str) -> CasePlayer {
-    open_case_with(name, None, &[], &[(variable, raw)]).unwrap_or_else(|error| panic!("{error}"))
+    open_case_with(name, None, &[], &[(variable, raw)], false)
+        .unwrap_or_else(|error| panic!("{error}"))
+}
+
+/// Plays the case of the name with the fault point of the tests of the player: the player holds each frame of the client that it
+/// read until close has decided whether it waits for the client. wait_for_held_frame waits until the player holds its first frame.
+pub fn play_case_with_held_frames(name: &str) -> CasePlayer {
+    open_case_with(name, None, &[], &[], true).unwrap_or_else(|error| panic!("{error}"))
 }
 
 /// Plays the case of the name in the configuration directory that the test gives, where it writes endpoint.json; a test uses it
@@ -620,15 +637,16 @@ fn open_case_in(
     chosen: Option<&Path>,
     texts: &[(&str, &str)],
 ) -> Result<CasePlayer, String> {
-    open_case_with(name, chosen, texts, &[])
+    open_case_with(name, chosen, texts, &[], false)
 }
 
-/// open_case_in with the raw JSON texts of play_case_with_raw.
+/// open_case_in with the raw JSON texts of play_case_with_raw and the fault point of play_case_with_held_frames.
 fn open_case_with(
     name: &str,
     chosen: Option<&Path>,
     texts: &[(&str, &str)],
     raws: &[(&str, &str)],
+    hold: bool,
 ) -> Result<CasePlayer, String> {
     let directory = case_directory()?;
     let case = load_case(&directory, name)?;
@@ -688,6 +706,10 @@ fn open_case_with(
         raws: given_raws,
         state: Mutex::new(State::default()),
         arrived: Condvar::new(),
+        hold: hold.then(|| Hold {
+            held: Arc::new((Mutex::new(false), Condvar::new())),
+            decided: Arc::new((Mutex::new(false), Condvar::new())),
+        }),
     });
     let accepting = Arc::clone(&shared);
     let accept = std::thread::spawn(move || accept_loop(accepting, listener));
@@ -778,10 +800,15 @@ struct Finished(Ended);
 
 impl Drop for Finished {
     fn drop(&mut self) {
-        let (lock, signal) = &*self.0;
-        *lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
-        signal.notify_all();
+        finish(&self.0);
     }
+}
+
+/// Marks a connection, or a signal of the fault point of play_case_with_held_frames, as ended.
+fn finish(ended: &Ended) {
+    let (lock, signal) = &**ended;
+    *lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+    signal.notify_all();
 }
 
 /// Waits until the connection has ended, for at most limit, and reports whether it ended.
@@ -849,6 +876,13 @@ fn play(shared: &Shared, stream: &mut UnixStream, prior: &[Ended]) {
                 return;
             }
         };
+        if let Some(hold) = &shared.hold {
+            finish(&hold.held);
+            if !wait_for_ended(&hold.decided, CASE_LIMIT) {
+                shared.fail("the player did not decide whether it waits for the client");
+                return;
+            }
+        }
         let message: Value = match serde_json::from_slice(&body) {
             Ok(message) => message,
             Err(error) => {
@@ -1016,22 +1050,49 @@ impl CasePlayer {
         self.shared.lock().connections
     }
 
-    /// Ends the player. When the next step is a close step of the client, it waits for that close first. It closes the listener and the
-    /// connections that are open, and it records a step that was not played.
+    /// Waits until the player holds the first frame of the client under the fault point of play_case_with_held_frames, for at most
+    /// the bound of a case.
+    pub fn wait_for_held_frame(&self) {
+        let hold = self
+            .shared
+            .hold
+            .as_ref()
+            .expect("the player holds frames only with play_case_with_held_frames");
+        assert!(
+            wait_for_ended(&hold.held, CASE_LIMIT),
+            "{}: the player read no frame of the client within {CASE_LIMIT:?}",
+            self.shared.name
+        );
+    }
+
+    /// Ends the fault point of play_case_with_held_frames once close has decided whether it waits for the client.
+    fn decide(&self) {
+        if let Some(hold) = &self.shared.hold {
+            finish(&hold.decided);
+        }
+    }
+
+    /// Ends the player. When a step that remains is a close step of the client, it waits for that close first: the client may write
+    /// frames and close the connection before the player has read them, and the connection delivers those frames before its end, so
+    /// the player plays them before it judges the steps. It closes the listener and the connections that are open, and it records a
+    /// step that was not played.
     fn close(&mut self) {
         let shared = Arc::clone(&self.shared);
         let (waiting, ended) = {
             let state = shared.lock();
-            let waiting = matches!(
-                shared.steps.get(state.cursor),
-                Some(Step::Close {
-                    by_client: true,
-                    ..
-                })
-            );
+            let waiting = shared.steps[state.cursor..].iter().any(|step| {
+                matches!(
+                    step,
+                    Step::Close {
+                        by_client: true,
+                        ..
+                    }
+                )
+            });
             (waiting, state.done.clone())
         };
         if waiting {
+            self.decide();
             for connection in &ended {
                 if !wait_for_ended(connection, CASE_LIMIT) {
                     shared.fail("the client did not close its connection");
@@ -1063,6 +1124,7 @@ impl CasePlayer {
             }
             Err(error) => shared.fail(format!("cannot wake the accept loop: {error}")),
         }
+        self.decide();
         for connection in &ended {
             if !wait_for_ended(connection, CASE_LIMIT) {
                 shared.fail("a connection did not end after the player closed it");

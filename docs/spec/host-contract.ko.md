@@ -505,6 +505,7 @@ fn invalid_json_closes_connection() {
 | `flush.buffer.written-in-the-order-of-sending` | 호스트는 사이드카의 줄을 받아들인 순서로 쓴다: 대기열이 가득 찬 동안 버퍼에 넣은 응답이나 닫기 알림은 그 뒤에 대기열이 받아들이는 모든 줄보다 먼저 사이드카에 도착한다. | all |
 | `verification.flush-fixture.receives-before-cleanup` | Tauri drain scenario는 cleanup callback보다 먼저 receive callback을 호출한다. 이 test-only case는 child process나 sidecar queue를 검증하지 않는다. | tauriv2 only: 이 fixture는 Tauri sidecar test harness에 속한다 |
 | `verification.trace-switch.requires-the-test-switch` | test switch를 쥐지 않고 performance trace를 전환하는 test는 첫 호출에서 실패한다. 이 test-only case는 전환 자체를 검증하지 않는다. | tauriv2 only: 이 guard는 Rust host의 lib test에 속한다 |
+| `verification.case-player.plays-the-frames-before-the-client-close` | `sok` test의 case player는 남은 step 중 하나가 client의 close이면, client가 write와 같은 turn에 닫아도 client가 connection을 닫기 전에 쓴 frame을 재생한다. 이 test-only case는 host를 검증하지 않는다. | all |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | all |
 | `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | all |

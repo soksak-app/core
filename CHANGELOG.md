@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The normal shutdown cases hold the request order of the current client, and the case players of the client and of both `sok` implementations play the frames that the client wrote before its close (F853).
 - The mygo system tests give the host a new HOME and a bundle `sok` that answers the setup of the login shell environment (F854).
 - The endpoint replay test runs without the run variables of the test runner, so its session sends no test mark that the replayed case does not hold (F852).
 - The undo and redo items of the Edit menu are framework items in the contract and in the menu tests of every host (F851).

@@ -240,9 +240,11 @@ export async function startCasePlayer(name, { pid = process.pid, values = {} } =
       });
     },
     async close() {
-      // The close of the client reaches the player after the client has settled its own requests, so a case that ends
-      // with the close of the client waits for that close instead of closing the connection itself.
-      if (steps[cursor]?.close === "client") {
+      // The close of the client reaches the player after the client has settled its own requests, so a case whose remaining
+      // steps hold the close of the client waits for that close instead of closing the connection itself. The client may write
+      // frames and close the connection in one turn, before the player has read them; the connection delivers those frames
+      // before its close, so the player plays them before it judges the steps.
+      if (steps.slice(cursor).some((step) => step.close === "client")) {
         await Promise.all([...connections].map((socket) => new Promise((resolve) => socket.once("close", resolve))));
       }
       for (const socket of connections) socket.destroy();

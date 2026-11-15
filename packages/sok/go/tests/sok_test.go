@@ -6,16 +6,19 @@ package tests
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/soksak-app/core/packages/sok/go/src"
 	_ "github.com/soksak-app/core/packages/sok/go/src/platform/darwin"
@@ -388,5 +391,37 @@ func TestAnInterruptEndsAWatchThatWaitsInAWrite(t *testing.T) {
 	}
 	if code != 0 || stderr.String() != "" {
 		t.Fatalf("exit status %d stderr %q, want 0 and no error after SIGINT", code, stderr.String())
+	}
+}
+
+// contract: verification.case-player.plays-the-frames-before-the-client-close
+func TestCasePlayerPlaysTheFramesThatTheClientWroteBeforeItClosedTheConnection(t *testing.T) {
+	p, err := startCasePlayer(t.TempDir(), caseDirectory(t), "closed-by-client-pending", caseSettings{texts: map[string]string{}, holdFrames: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := net.Dial("unix", p.listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "windows.list"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame := binary.BigEndian.AppendUint32(nil, uint32(len(body)))
+	if _, err := conn.Write(append(frame, body...)); err != nil {
+		t.Fatal(err)
+	}
+	// The client writes its frame and closes the connection before the player has played the frame.
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-p.held:
+	case <-time.After(casePlayerLimit):
+		t.Fatal("the player read no frame of the client")
+	}
+	if err := p.close(); err != nil {
+		t.Fatal(err)
 	}
 }

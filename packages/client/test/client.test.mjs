@@ -202,6 +202,21 @@ test("close rejects pending requests", async (t) => {
   assert.match((await client.ended).message, /connection closed/);
 });
 
+test("the player plays the frames that the client wrote before it closed the connection in the same turn", async () => {
+  const server = await startCasePlayer("watch-until-close");
+  const client = await connect({ configDir: server.configDir });
+  // The status.get reaches the player, so the player holds the connection when the client writes its next frame.
+  const received = server.nextRequest("status.get");
+  const watching = assert.rejects(client.watch("main", "core.screen", () => false), /connection closed/);
+  await received;
+  // The client writes windows.list and closes the connection in one turn, before the player has read the frame.
+  const pending = assert.rejects(client.request("windows.list"), /connection closed/);
+  client.close();
+  await server.close();
+  await pending;
+  await watching;
+});
+
 test("an undeclared method closes the connection and rejects the request", async (t) => {
   const server = await play(t, "undeclared-method");
   const client = await connect({ configDir: server.configDir });

@@ -8,9 +8,9 @@
     {"reply":{"jsonrpc":"2.0","id":1,"result":null}},
     {"send":{"jsonrpc":"2.0","id":2,"method":"status.get","params":{"window":"main","name":"host.windows"}}},
     {"reply":{"jsonrpc":"2.0","id":2,"result":[{"window":"main","ready":true}]}},
-    {"send":{"jsonrpc":"2.0","id":3,"method":"diagnostics.fixture","params":{"window":"main","settings":{}}}},
+    {"send":{"jsonrpc":"2.0","id":3,"method":"status.unwatch","params":{"window":"main","name":"host.windows"}}},
     {"reply":{"jsonrpc":"2.0","id":3,"result":null}},
-    {"send":{"jsonrpc":"2.0","id":4,"method":"status.unwatch","params":{"window":"main","name":"host.windows"}}},
+    {"send":{"jsonrpc":"2.0","id":4,"method":"diagnostics.fixture","params":{"window":"main","settings":{}}}},
     {"reply":{"jsonrpc":"2.0","id":4,"result":null}},
     {"send":{"jsonrpc":"2.0","id":5,"method":"status.get","params":{"window":"main","name":"core.grid"}}},
     {"reply":{"jsonrpc":"2.0","id":5,"result":{"cards":[{"id":"c1","focused":true,"active":null}]}}},
@@ -20,12 +20,14 @@
     {"reply":{"jsonrpc":"2.0","id":7,"result":null}},
     {"send":{"jsonrpc":"2.0","id":8,"method":"status.get","params":{"window":"main","name":"core.surfaces"}}},
     {"reply":{"jsonrpc":"2.0","id":8,"result":[{"surface":"tab-raster","plugin":"rasterprobe","visible":true}]}},
-    {"send":{"jsonrpc":"2.0","id":9,"method":"status.watch","params":{"window":"main","name":"rasterprobe.session","surface":"tab-raster"}}},
+    {"send":{"jsonrpc":"2.0","id":9,"method":"status.unwatch","params":{"window":"main","name":"core.surfaces"}}},
     {"reply":{"jsonrpc":"2.0","id":9,"result":null}},
-    {"send":{"jsonrpc":"2.0","id":10,"method":"status.unwatch","params":{"window":"main","name":"core.surfaces"}}},
+    {"send":{"jsonrpc":"2.0","id":10,"method":"status.watch","params":{"window":"main","name":"rasterprobe.session","surface":"tab-raster"}}},
     {"reply":{"jsonrpc":"2.0","id":10,"result":null}},
     {"send":{"jsonrpc":"2.0","id":11,"method":"status.get","params":{"window":"main","name":"rasterprobe.session","surface":"tab-raster"}}},
     {"reply":{"jsonrpc":"2.0","id":11,"result":{"session":"session-raster","connected":true}}},
+    {"send":{"jsonrpc":"2.0","id":12,"method":"status.unwatch","params":{"window":"main","name":"rasterprobe.session","surface":"tab-raster"}}},
+    {"reply":{"jsonrpc":"2.0","id":12,"result":null}},
     {"close":"client"}
   ]
 }
