@@ -1,13 +1,13 @@
 // Checks the region events that the plugin-facing native handle subscribes to (docs/spec/native-surfaces.md#view-surfaces, regions).
 import assert from "node:assert/strict";
 import test from "node:test";
-import * as viewCalls from "../view-calls.js";
+import * as viewCalls from "@soksak/plugin-api/view-answer";
 
 const REGION_EVENTS = ["document-stream", "document-state", "document-message", "image-event"];
 const VIEW_INTERNAL_EVENTS = ["view-call", "view-reply", "view-stopped", "view-responsiveness", "view-presentation-abandoned"];
 
 test("the region events are exactly the four region events of the workbench", { timeout: 5000 }, () => {
-  assert.ok(viewCalls.REGION_EVENTS instanceof Set, "view-calls.js exports REGION_EVENTS as a Set");
+  assert.ok(viewCalls.REGION_EVENTS instanceof Set, "view-answer.js exports REGION_EVENTS as a Set");
   assert.deepEqual([...viewCalls.REGION_EVENTS].sort(), [...REGION_EVENTS].sort());
 });
 
@@ -24,7 +24,7 @@ test("a view subscribes to exposure-request and is answered through the gate", {
 });
 
 test("the plugin-facing native handle subscribes only to the region events and exposure-request", { timeout: 5000 }, async () => {
-  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-calls.js exports pluginNativeGate");
+  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-answer.js exports pluginNativeGate");
   assert.deepEqual([...viewCalls.PLUGIN_NATIVE_EVENTS].sort(), [...REGION_EVENTS, "exposure-request"].sort());
   const subscribed = [];
   const gate = viewCalls.pluginNativeGate({ call: async () => null, on: (name) => { subscribed.push(name); return () => {}; } });

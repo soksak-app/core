@@ -26,7 +26,6 @@
     "section-surfaces.js",
     "sidebar-sections.js",
     "source-origins.js",
-    "view-calls.js",
     "view-focus.js",
     "keyboard.js",
     "page-identity.js",

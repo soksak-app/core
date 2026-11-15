@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F867-3: `answerViewCall`과 plugin page의 call·event 목록이 workbench에서 `@soksak/plugin-api/view-answer.js`로 옮겨지고, `tab.focus` 호출은 workbench가 자기 view focus로 채우는 tab handler `focus`를 실행한다.
 - F867-1: page-wire case가 view의 `tab.focus`, `tab.keep` 끄기, `core.file.place`, document stream event의 응답을 기록해, 응답 코드가 SDK로 옮겨지기 전에 plugin이 쓰는 모든 view call route에 case가 있다.
 - F867-2: view call의 응답 코드를 SDK에 게시할 수 있도록 `command-route.js`, `view-commands.js`, `view-events.js`가 `@soksak/workbench`에서 `@soksak/plugin-api`로 옮겨지고, workbench는 import map으로 import한다.
 - 로컬 candidate acceptance를 제거한다. 게시는 acceptance 보고서를 읽지 않고 자기 run의 release file만 checkout과 대조하므로, acceptance 수집, candidate context, candidate policy와 보고서, window check runner의 candidate mode, `--artifacts` mode, `make test-app-candidate`를 삭제한다 (F864).

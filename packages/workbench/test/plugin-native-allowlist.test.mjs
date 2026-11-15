@@ -2,11 +2,11 @@
 // outside PLUGIN_HOST_CALLS is refused and never reaches the host.
 import assert from "node:assert/strict";
 import test from "node:test";
-import * as viewCalls from "../view-calls.js";
+import * as viewCalls from "@soksak/plugin-api/view-answer";
 
 test("the plugin-facing native handle refuses every host command outside its allowlist", { timeout: 5000 }, async () => {
-  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-calls.js exports pluginNativeGate");
-  assert.ok(viewCalls.PLUGIN_HOST_CALLS instanceof Set, "view-calls.js exports PLUGIN_HOST_CALLS as a Set");
+  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-answer.js exports pluginNativeGate");
+  assert.ok(viewCalls.PLUGIN_HOST_CALLS instanceof Set, "view-answer.js exports PLUGIN_HOST_CALLS as a Set");
   const sent = [];
   const gate = viewCalls.pluginNativeGate({ call: async (name) => { sent.push(name); return null; }, on: () => () => {} });
   await assert.rejects(gate.call("linkOpen", { url: "https://example.test" }), /not served/);

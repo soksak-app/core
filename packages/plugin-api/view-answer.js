@@ -1,8 +1,9 @@
 // The call route of a view (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request and each cancel of a view as
 // the view-call event of the main page; answerViewCall answers it with the handlers that a DOM surface context uses.
-import { causeCids, shellQuotePath, surfaceDocumentEntry } from "@soksak/plugin-api";
-import { runCommandCall } from "@soksak/plugin-api/command-route";
-import { setViewFocus } from "./view-focus.js";
+import { causeCids } from "./calls.js";
+import { runCommandCall } from "./command-route.js";
+import { shellQuotePath } from "./clipboard.js";
+import { surfaceDocumentEntry } from "./surface-document.js";
 
 /** A binary id of the binary store of a view: 32 lowercase hexadecimal characters (docs/spec/plugin-processes.md#binary-path). */
 const BINARY_ID = /^[0-9a-f]{32}$/;
@@ -19,13 +20,14 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *               runCore(name, params): runs a core command, as runtime.command does
  *               runOwned(name, params, owner, cids, surface, caller): runs a command that the plugin registered, as the exposure owner
  *                 check does; surface names the surface that runs it, or undefined to choose it, and caller is the surface of the view
- *               shortcuts: the rows of the shortcut table (packages/workbench/shortcuts.json)
+ *               shortcuts: the rows of the shortcut table of the workbench
  *               startProject(): the project {id, root} of the start values of the view, or null when they carry none
  *               emitEvent(level, event, fields): the event writer of the page, which stores the shortcut records of the view
  *               contributions(point): the connected items of the point, as contributions of the surface context returns them
  *               tab: the tab handlers of the surface context, as context.tab has: the reports title(text), footer(text),
- *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), and state with
- *                 {read, write} only when the plugin declares surface.unload
+ *                 directory(path), notify(text, policy), modified(value), error(text), keep(reason, on), focus(value), and state with
+ *                 {read, write} only when the plugin declares surface.unload. focus(value) receives the value of the view call
+ *                 tab.focus, {name, index} or null, and records it for the surface; the caller validates it and its errors reject the call.
  *               runtime: the handlers of the runtime entries of the DOM surface context
  *                 native.call(name, payload): the host call of the surface, as runtime.native.call
  *                 sidecar.send(id, body, cids, name): the send to the declared sidecar name, as runtime.sidecar(name).send
@@ -40,25 +42,25 @@ const BINARY_ID = /^[0-9a-f]{32}$/;
  *                 textSize: {read(), on(listener)} of the surface, as runtime.textSize of the surface context has
  *                 settings: {read(), on(listener)} of the plugin, as runtime.settings of the surface context has
  *                 subscribe.native(name), subscribe.sidecarMessage(id, sidecar), subscribe.sidecarFailure(id), subscribe.textSize(),
- *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (@soksak/plugin-api view-events.js); each resolves when it is
+ *                   subscribe.settings(), subscribe.logLevels(): register the page subscriptions of the view (view-events.js of this package); each resolves when it is
  *                   registered
- *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window (surface-modules.js)
+ *                 holdsSurface(plugin, surface): whether the surface is a surface of the plugin in the window
  *                 menu: {declared(), frame()} of the surface: whether its plugin declares surface.menu for it, and its applied frame
  *                   {x, y} in the window or null
- *                 data.of(project, plugin): the project data of the plugin for the project, as viewDataOf of plugin-data.js has it
+ *                 data.of(project, plugin): the project data of the plugin for the project, which the data calls read and write
  *                 subscribe.statusWatch(name, surface), subscribe.statusUnwatch(name, surface): follow the value of a status of the view on
- *                   the surface, or on the workbench when surface is undefined, and end it (@soksak/plugin-api view-events.js); the names are checked by
+ *                   the surface, or on the workbench when surface is undefined, and end it (view-events.js of this package); the names are checked by
  *                   statusNameOf, the surface by holdsSurface, and the declaration is checked by the page subscription
  *                 command.register(name): declares the command of the view on the page through the exposure registry, so a command of
- *                   another plugin or an undeclared name is refused (@soksak/plugin-api view-commands.js)
+ *                   another plugin or an undeclared name is refused (view-commands.js of this package)
  *                 exposure.registered({kind, name}): applies the status or element registration of the view through the exposure registry
- *                   and relays it to the host (surface-modules.js)
- *               composition: the page operations of the surface view (surface-modules.js)
+ *                   and relays it to the host
+ *               composition: the page operations of the surface view
  *                 declaration(): the declared {kind, regions, overlays} of the surface
  *                 place(regions, overlays): places one complete snapshot with the composition revision of the document
  *                 report(text): reports a failure of the composition through the report host call of the surface
  *                 document: {attach, load, zoom, go, post, subscribe, unsubscribe, detach} of the surface; attach goes through the
- *                   region record of the memory saver (document-regions.js)
+ *                   region record of the memory saver
  *                 image: {attach, focus, caret, text, detach} of the surface
  */
 export async function answerViewCall(event, options) {
@@ -322,7 +324,7 @@ async function run(command, params, { plugin, surface, tab, shortcuts, emitEvent
       tab.title(params);
       return null;
     case "tab.focus":
-      setViewFocus(surface, params);
+      tab.focus(params);
       return null;
     case "tab.footer":
       tab.footer(params);

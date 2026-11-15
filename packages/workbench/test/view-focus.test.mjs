@@ -4,11 +4,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { answerViewCall } from "../view-calls.js";
+import { answerViewCall } from "@soksak/plugin-api/view-answer";
 import { focusState } from "../focus-state.js";
+import { setViewFocus } from "../view-focus.js";
 
+// The tab handler of a view records its focus value, as the surface modules pass it to the answer of each view call.
 const call = (surface, params) => answerViewCall({ id: 1, command: "tab.focus", params },
-  { plugin: "fixture-view", surface, pending: new Map(), tab: null });
+  { plugin: "fixture-view", surface, pending: new Map(), tab: { focus: (value) => setViewFocus(surface, value) } });
 
 test("core.focus follows the first responder to the element that a view reports", { timeout: 5000 }, async () => {
   const { document } = new JSDOM('<main><button data-expose="core.chrome.projects"></button></main>').window;

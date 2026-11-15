@@ -677,7 +677,7 @@ test("a host or sok test of every platform declares only cases of the contract t
     { path: "packages/sok/rust/tests/platform/linux/d.rs", text: "#![cfg(target_os = \"linux\")]\n// contract: host.case, cli.linux\n#[test]\nfn d() {}\n" },
     { path: "packages/host/rust/src/e.rs", text: "// contract: area.shared\n#[test]\nfn e() {}\n" },
     { path: "packages/host/go/src/host.go", text: "// contract: not.a.test\n" },
-    { path: "packages/workbench/view-calls.js", text: "// contract: prose of a source\n" },
+    { path: "packages/plugin-api/view-answer.js", text: "// contract: prose of a source\n" },
   ]), [
     "packages/host/go/src/b_test.go:1: contract case host.missing is not in docs/spec/host-contract.md",
     "packages/sok/go/tests/platform/windows/c_test.go:3: contract case cli.held is not in docs/spec/host-contract.md",

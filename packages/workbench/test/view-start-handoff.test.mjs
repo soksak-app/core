@@ -193,7 +193,7 @@ test("core.file.open parameters reach the host placement request", { timeout: 50
     assert.deepEqual(dormant.params, { path: "stored.txt" }, "a dormant tab descriptor lost stored params");
     const dormantPlacement = surfacePlacementsForHost([{ id: dormant.surfaceId, surface: dormant }], null, () => "the drawn record")[0];
     assert.deepEqual(dormantPlacement.start.params, { path: "stored.txt" });
-    // The view calls of the view answer for the project that its last placement named (view-calls.js).
+    // The view calls of the view answer for the project that its last placement named (view-answer.js of @soksak/plugin-api).
     assert.equal(viewStartProjectOf("tab-dormant"), null, "a placement with no project names none for the view");
     surfacePlacementsForHost([{ id: dormant.surfaceId, surface: dormant }], { id: "p-dormant", root: "/work/p-dormant" }, () => "the drawn record");
     assert.deepEqual(viewStartProjectOf("tab-dormant"), { id: "p-dormant", root: "/work/p-dormant" });

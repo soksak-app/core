@@ -4,7 +4,7 @@ import { surfaceErrorText } from "./surface-status.js";
 import { isSectionSurface, markViewSurface, registry } from "./exposure.js";
 import { shownSectionSurfaces } from "./section-surfaces.js";
 import { onDataChange, viewDataOf } from "./plugin-data.js";
-import { answerViewCall, pluginNativeGate, viewStopState } from "./view-calls.js";
+import { answerViewCall, pluginNativeGate, viewStopState } from "@soksak/plugin-api/view-answer";
 import { createViewSubscriptions } from "@soksak/plugin-api/view-events";
 import { createViewCommands } from "@soksak/plugin-api/view-commands";
 import { onSourceOriginEnded, onSourceOriginRegistered, sourceOrigin } from "./source-origins.js";
@@ -24,7 +24,7 @@ import { logGate } from "./log-gate.js";
 import { emitEvent } from "./page-log.js";
 import shortcutTable from "./shortcuts.json" with { type: "json" };
 import { documentRegions } from "./document-regions.js";
-import { forgetViewFocus } from "./view-focus.js";
+import { forgetViewFocus, setViewFocus } from "./view-focus.js";
 import { trace, traceEnabled } from "./performance.js";
 import { onRunEnd, onRunStart, runActive } from "./run-state.js";
 const mounted = new Map();
@@ -442,7 +442,7 @@ function collectNativeListeners(registrations) {
 function answerViewCalls(surface, scoped, page, context, closing, registrations) {
   // context.tab holds the tab state only when the plugin declares surface.unload, so a view call reads the same handlers.
   const { tab } = context;
-  // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-calls.js).
+  // The plugin-facing native handle of the view: its region calls and view bridge calls are refused here (view-answer.js of @soksak/plugin-api).
   const gate = pluginNativeGate(scoped.native);
   // The pending calls of this view, by id. A cancel ends the pending call that it names.
   let pending = new Map();
@@ -473,7 +473,7 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
       if (plugin === surface.pluginId && project === viewStartProjectOf(surface.surfaceId)?.id) listener(key);
     })),
     // The value of a status of the view: the registry follows the status and reports each value to the listener. A status that the
-    // exposure declares names no status of the view, so the declaration is checked before the observation (view-calls.js).
+    // exposure declares names no status of the view, so the declaration is checked before the observation (view-answer.js of @soksak/plugin-api).
     status: (name, watched, listener) => registry.observe(name, watched, (value) => listener(value), { exact: watched !== undefined }),
     // The stored level of each class, read again at each change of the policy of the page gate.
     logLevels: {
@@ -535,7 +535,8 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     plugin: surface.pluginId,
     surface: surface.surfaceId,
     pending,
-    tab,
+    // The focus of the view is recorded for its surface (view-focus.js), which validates the value of the call tab.focus.
+    tab: { ...tab, focus: (value) => setViewFocus(surface.surfaceId, value) },
     contributions: context.contributions,
     shortcuts: shortcutTable.shortcuts,
     emitEvent,
@@ -544,16 +545,16 @@ function answerViewCalls(surface, scoped, page, context, closing, registrations)
     startProject: () => viewStartProjectOf(surface.surfaceId),
     runtime: {
       native: gate,
-      // Whether a surface is a surface of the plugin in the window, which a status watch with surface checks (view-calls.js).
+      // Whether a surface is a surface of the plugin in the window, which a status watch with surface checks (view-answer.js of @soksak/plugin-api).
       holdsSurface: (plugin, watched) => registry.holdsSurface(plugin, watched),
-      // The surface menu of a right click in the view (view-calls.js): a section declares no menu, and the frame moves the point into the window.
+      // The surface menu of a right click in the view (view-answer.js of @soksak/plugin-api): a section declares no menu, and the frame moves the point into the window.
       menu: {
         declared: () => !isSectionSurface(surface.surfaceId) && plugin(surface.pluginId).menu !== null,
         frame: () => registry.surfaceFrame(surface.surfaceId),
       },
-      // The project data of the plugin for a project, which the data calls of the view read and write (view-calls.js).
+      // The project data of the plugin for a project, which the data calls of the view read and write (view-answer.js of @soksak/plugin-api).
       data: { of: viewDataOf },
-      // The clipboard of the view (view-calls.js): text and file URLs as the surface context reads them, and a PNG through the binary
+      // The clipboard of the view (view-answer.js of @soksak/plugin-api): text and file URLs as the surface context reads them, and a PNG through the binary
       // store of the view.
       clipboard: {
         read: scoped.clipboard.read,

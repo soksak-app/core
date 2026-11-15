@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { host, selectPageWire } from "@soksak/runtime";
-import { viewStopState } from "../view-calls.js";
+import { viewStopState } from "@soksak/plugin-api/view-answer";
 import { pageIdentity } from "../page-identity.js";
 import { drained } from "./support/drained.mjs";
 

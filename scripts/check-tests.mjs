@@ -4595,7 +4595,7 @@ const FEATURE_LINKS = [
       { file: "native/darwin/src/document_view.m", symbol: "char *sp_document_binary_put(void *handle, const void *bytes, size_t length, const char *type, char id[33]) {" },
       { file: "packages/host/go/src/clipboard.go", symbol: "func (s *Surfaces) readViewPNG(surface string) (ClipboardViewReadResponse, error) {" },
       { file: "packages/host/rust/src/clipboard.rs", symbol: "pub fn put_view_png(" },
-      { file: "packages/workbench/view-calls.js", symbol: "const persisted = await runtime.clipboard.persistPNG(fields.binary);" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "const persisted = await runtime.clipboard.persistPNG(fields.binary);" },
       { file: "packages/plugin-api/view.js", symbol: "const uploadBinary = async (bytes, type) => {" },
     ],
     tests: [
@@ -8715,7 +8715,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F227",
-    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "tab.state.read" }],
+    implementation: [{ file: "packages/plugin-api/view-answer.js", symbol: "tab.state.read" }],
     tests: [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a forwarded tab.state.read returns the tab state of its surface" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "tab.state.write stores the params as the tab state of its surface" },
@@ -8735,7 +8735,7 @@ const FEATURE_LINKS = [
   {
     id: "F251",
     implementation: [
-      { file: "packages/workbench/view-calls.js", symbol: "statusNameOf" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "statusNameOf" },
       { file: "packages/plugin-api/view-events.js", symbol: "statusWatch" },
       { file: "packages/plugin-api/view.js", symbol: "watchStatus" },
     ],
@@ -8754,7 +8754,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F241",
-    implementation: [{ file: "packages/workbench/view-calls.js", symbol: "case \"runtime.clipboard.persistPNG\"" }],
+    implementation: [{ file: "packages/plugin-api/view-answer.js", symbol: "case \"runtime.clipboard.persistPNG\"" }],
     tests: [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.read png returns the binary id of the PNG in the view store, or null when the clipboard holds none" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.clipboard.persistPNG persists the PNG of a binary id of the view store and returns the shell path" },
@@ -11151,7 +11151,7 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "packages/plugin-api/operation.js", symbol: "export function createOperationCids" },
       { file: "packages/plugin-api/view.js", symbol: "beginOperation" },
-      { file: "packages/workbench/view-calls.js", symbol: "export async function answerViewCall" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "export async function answerViewCall" },
       { file: "packages/workbench/exposure.js", symbol: "const commandRequest" },
       { file: "packages/host/go/src/documents.go", symbol: "func ViewCallEvent" },
       { file: "packages/host/rust/src/documents.rs", symbol: "fn cause_cids_of" },
@@ -12062,7 +12062,7 @@ const FEATURE_LINKS = [
       { file: "packages/plugin-api/index.js", symbol: "export function createExpose(port, load)" },
       { file: "packages/plugin-api/view.js", symbol: "changed: (name, value, version) =>" },
       { file: "packages/workbench/exposure.js", symbol: "function deliver({ surface, name, value, version })" },
-      { file: "packages/workbench/view-calls.js", symbol: "if (fields.name === \"changed\")" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "if (fields.name === \"changed\")" },
     ],
     tests: [
       { file: "packages/workbench/test/exposure.test.mjs", id: "a watched surface status receives the values that the surface sends, and no forward waits for a change" },
@@ -12300,7 +12300,7 @@ const FEATURE_LINKS = [
     id: "F370",
     implementation: [
       { file: "packages/plugin-api/view.js", symbol: "view.addEventListener(\"contextmenu\", openMenu);" },
-      { file: "packages/workbench/view-calls.js", symbol: "case \"surface.menu\": {" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "case \"surface.menu\": {" },
     ],
     tests: [
       { file: "packages/plugin-api/test/view-document.test.mjs", id: "the bridge cancels the default menu of a right click in the view and sends surface.menu with its point" },
@@ -12325,7 +12325,7 @@ const FEATURE_LINKS = [
     id: "F362",
     implementation: [
       { file: "packages/workbench/exposure.js", symbol: "runOwned(name, params, owner, cids, surface, caller)" },
-      { file: "packages/workbench/view-calls.js", symbol: "runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface, options.surface)" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "runOwned: (name, value, owner, surface) => options.runOwned(name, value, owner, carried, surface, options.surface)" },
     ],
     tests: [
       { file: "packages/workbench/test/exposure.test.mjs", id: "runOwned without surface runs a command on the calling section surface when it registered it" },
@@ -12400,7 +12400,7 @@ const FEATURE_LINKS = [
   {
     id: "F344",
     implementation: [
-      { file: "packages/workbench/view-calls.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface)" },
+      { file: "packages/plugin-api/view-answer.js", symbol: "function statusWatchOf(command, params, plugin, holdsSurface)" },
     ],
     tests: [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "a status unwatch of a surface that the window no longer holds ends the view's own watch" },

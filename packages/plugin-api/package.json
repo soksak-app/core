@@ -19,7 +19,8 @@
     "./wire-case": "./wire-case.js",
     "./command-route": "./command-route.js",
     "./view-commands": "./view-commands.js",
-    "./view-events": "./view-events.js"
+    "./view-events": "./view-events.js",
+    "./view-answer": "./view-answer.js"
   },
   "files": [
     "index.js",
@@ -54,6 +55,7 @@
     "command-route.js",
     "view-commands.js",
     "view-events.js",
+    "view-answer.js",
     "contract/"
   ],
   "scripts": {

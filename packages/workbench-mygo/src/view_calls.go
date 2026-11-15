@@ -16,7 +16,7 @@ import (
 )
 
 // The calls of the views of a window (docs/spec/native-surfaces.md#view-surfaces). The host forwards each call request of a view
-// as the event view-call, which packages/workbench/view-calls.js answers on the main page. A window of the native workbench has no
+// as the event view-call, which packages/plugin-api/view-answer.js answers on the main page. A window of the native workbench has no
 // main page, so this file answers it with the same refusals, and every reply goes through the host call viewReply.
 
 // viewCallFailed is the code of a failed view call.
@@ -110,10 +110,10 @@ type tabNotice struct {
 // viewAnswer receives the result of a view call.
 type viewAnswer func(result any, err error)
 
-// viewEvents are the native events that a view subscribes to (PLUGIN_NATIVE_EVENTS of view-calls.js).
+// viewEvents are the native events that a view subscribes to (PLUGIN_NATIVE_EVENTS of view-answer.js).
 var viewEvents = map[string]bool{"document-stream": true, "document-state": true, "document-message": true, "image-event": true, "exposure-request": true}
 
-// regionCalls are the host calls of the composition and the regions (REGION_HOST_CALLS of view-calls.js).
+// regionCalls are the host calls of the composition and the regions (REGION_HOST_CALLS of view-answer.js).
 var regionCalls = map[string]bool{"compositionDeclare": true, "compositionPlace": true, "documentAttach": true, "documentLoad": true,
 	"documentZoom": true, "documentGo": true, "documentDetach": true, "documentSubscribe": true, "documentUnsubscribe": true,
 	"documentPost": true, "documentQuery": true, "documentInteractionState": true, "imageAttach": true, "imageFocus": true,

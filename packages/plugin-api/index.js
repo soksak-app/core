@@ -60,6 +60,7 @@ export const PAGE_IMPORTS = Object.freeze({
   "@soksak/plugin-api/command-route": `/${modulePath("@soksak/plugin-api", "command-route.js")}`,
   "@soksak/plugin-api/view-commands": `/${modulePath("@soksak/plugin-api", "view-commands.js")}`,
   "@soksak/plugin-api/view-events": `/${modulePath("@soksak/plugin-api", "view-events.js")}`,
+  "@soksak/plugin-api/view-answer": `/${modulePath("@soksak/plugin-api", "view-answer.js")}`,
   "@soksak/runtime": `/${RUNTIME}/index.js`,
   "@soksak/shared/": "/shared/",
   "@soksak/workbench/": "/",

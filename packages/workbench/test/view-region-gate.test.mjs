@@ -5,15 +5,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { host, selectPageWire } from "@soksak/runtime";
-import { answerViewCall } from "../view-calls.js";
-import * as viewCalls from "../view-calls.js";
+import { answerViewCall } from "@soksak/plugin-api/view-answer";
+import * as viewCalls from "@soksak/plugin-api/view-answer";
 
 // The literal region names that the workbench passes to a host call. A name missing from the region allowlist is a region call
 // that the view could reach through its native handle.
 test("the region calls of the workbench host routes are the names of the region allowlist", { timeout: 5000 }, () => {
   const source = readFileSync(new URL("../surface-modules.js", import.meta.url), "utf8")
     + readFileSync(new URL("../host.js", import.meta.url), "utf8");
-  assert.ok(viewCalls.REGION_HOST_CALLS instanceof Set, "view-calls.js exports REGION_HOST_CALLS as a Set");
+  assert.ok(viewCalls.REGION_HOST_CALLS instanceof Set, "view-answer.js exports REGION_HOST_CALLS as a Set");
   const literals = new Set();
   for (const match of source.matchAll(/\b(?:invoke|composed|hostClose|bridge\.call|scoped\.native\.call)\(\s*"((?:document|image|composition)[A-Za-z]*)"/g)) {
     literals.add(match[1]);
@@ -23,8 +23,8 @@ test("the region calls of the workbench host routes are the names of the region 
 });
 
 test("the plugin-facing native handle refuses every region call and view bridge call", { timeout: 5000 }, async () => {
-  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-calls.js exports pluginNativeGate");
-  assert.ok(viewCalls.VIEW_BRIDGE_CALLS instanceof Set, "view-calls.js exports VIEW_BRIDGE_CALLS as a Set");
+  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-answer.js exports pluginNativeGate");
+  assert.ok(viewCalls.VIEW_BRIDGE_CALLS instanceof Set, "view-answer.js exports VIEW_BRIDGE_CALLS as a Set");
   const wire = selectPageWire("view-region-gate-native-handle");
   const gate = viewCalls.pluginNativeGate(host);
   for (const name of [...viewCalls.REGION_HOST_CALLS, ...viewCalls.VIEW_BRIDGE_CALLS]) {
@@ -35,7 +35,7 @@ test("the plugin-facing native handle refuses every region call and view bridge 
 });
 
 test("a view run refuses each region name and each view bridge name through its native call", { timeout: 5000 }, async () => {
-  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-calls.js exports pluginNativeGate");
+  assert.equal(typeof viewCalls.pluginNativeGate, "function", "view-answer.js exports pluginNativeGate");
   const wire = selectPageWire("view-region-gate-view-run");
   const options = {
     plugin: "probe",

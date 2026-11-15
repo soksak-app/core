@@ -10,7 +10,7 @@ const REASON = "the view failed 4 times within 300 seconds and is created again 
 test("the stop of a view shows its reason on the card and the reopened card clears it", async () => {
   // The case selects the host of the page before the modules that read it are imported, because the page reads the host when it is imported.
   const wire = selectPageWire("view-stopped-display-error");
-  const { viewStopState } = await import("../view-calls.js");
+  const { viewStopState } = await import("@soksak/plugin-api/view-answer");
   const dom = new JSDOM(`<section data-card-id="card-1"><div data-native-surface-id="probe-surface"></div><footer class="status"></footer></section>`);
   globalThis.document = dom.window.document;
   const { setSurfaceStatus } = await import("../surface-status.js?display");
