@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- `go.work.sum`은 CI job의 module download가 쓰는 sum을 담는다 (F855).
 - Normal shutdown case는 지금 client의 요청 순서를 담고, client와 두 `sok` 구현의 case player는 client가 close 전에 쓴 frame을 재생한다 (F853).
 - mygo system test는 host에 새 HOME과, login shell 환경 setup에 답하는 bundle `sok`을 준다 (F854).
 - Endpoint replay test는 test runner의 run 변수 없이 실행되므로, 그 session은 재생하는 case에 없는 test mark를 보내지 않는다 (F852).
