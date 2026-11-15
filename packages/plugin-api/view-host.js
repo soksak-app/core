@@ -59,7 +59,8 @@ const KINDS = Object.values(EXPOSE_KINDS);
  * with the error `view host: <route> has no fixture` and the failure is recorded in observed.failures. A route with a declared
  * fault rejects with the fault message. Every route work is tracked, so settled waits for it.
  *
- * Returns {options, observed, push, settled, change, close}.
+ * Returns {options, observed, push, sidecarMessage, settled, change, close}. sidecarMessage(name, id, {body, cids}) returns the host message
+ * for a sidecar message of a routed session: {event: "sidecar.message", data: {id, cids, body}}, the message that the host posts to the view.
  *
  *     options   the options of answerViewCall (view-answer.js of this package)
  *     observed  tab: the last title, footer, directory, modified, error and focus, and the lists notify and keep
@@ -202,9 +203,15 @@ export function createTestHost(fixtures) {
 
   // The run state of the window: whether a run continues, and the listeners of each start and end of a run.
   const run = { active: () => runActive, onStart: (fn) => addListener(runStartListeners, fn), onEnd: (fn) => addListener(runEndListeners, fn) };
+  // The sessions whose messages the host routes to the view, by the key of the sidecar name and the session id.
+  const sidecarRoutes = new Set();
   const sidecar = {
-    // The message route of a session is a registration of the host; no message is delivered through the subscriptions.
-    route: () => Promise.resolve(() => {}),
+    // The route of a session is the registration that the view makes for its sidecar messages; its off function removes the route.
+    route: (id, name) => {
+      const key = JSON.stringify([name, id]);
+      sidecarRoutes.add(key);
+      return Promise.resolve(() => { sidecarRoutes.delete(key); });
+    },
     onFailure: (id, listener) => subscribeTo(listenersOf(failureListeners, id), listener),
   };
   const subscriptions = createViewSubscriptions({
@@ -390,5 +397,14 @@ export function createTestHost(fixtures) {
     },
   };
 
-  return { options, observed, push, settled, change, close: () => subscriptions.close() };
+  // The message that the host posts to the view for a sidecar message of the session id: the view event sidecar.message with {id, cids, body},
+  // which the subscription of the page receives. A session without a route is refused, because the host posts only to a routed view.
+  const sidecarMessage = (name, id, { body, cids }) => {
+    if (!sidecarRoutes.has(JSON.stringify([name, id]))) {
+      throw new Error(`view host: no route for sidecar ${name} session ${id}: the view has no subscription for it`);
+    }
+    return { event: "sidecar.message", data: { id, ...(cids === undefined ? {} : { cids }), body } };
+  };
+
+  return { options, observed, push, sidecarMessage, settled, change, close: () => subscriptions.close() };
 }

@@ -33,6 +33,8 @@ const CORE_DECLARATIONS = {
   element: [],
 };
 const START = readFileSync(new URL("./view-start.js", import.meta.url), "utf8");
+// The loads of page modules in this process: each load gets a URL that no earlier load has, so Node imports the module anew.
+let pageLoads = 0;
 
 /** One turn of the event loop: runs every microtask that the call layer of the view queued before it. */
 export const turn = () => new Promise((resolve) => setImmediate(resolve));
@@ -74,8 +76,13 @@ const SHAPE = {
  * (window.sokSurface.declarations). `layout` is {width, height, scale, content, rect(element)} in CSS pixels: the size of the view,
  * its backing scale, the size of the content that its root scrolls (default the size of the view) and the rectangle of an element.
  *
+ * In host mode the window has no bridge of the test until view.bridge is read. The page module of the plugin is loaded with view.load(url),
+ * and it builds the bridge of the view itself, as the application does; view.request(command, params) runs a command of that page through
+ * an exposure request, and view.sidecarMessage(sidecar, id, {body, cids}) delivers a sidecar message to the page's sidecar listener.
+ *
  * Returns {window, bridge, expose, sent, calls, reports, run, observers, events, registered, logged, status, command, exposed, changes,
- * deliverNotice, release, observed, push, settled, close}. sent holds every message of the view in order, calls the {command, params}
+ * deliverNotice, release, observed, push, load, request, sidecarMessage, settled, close}. bridge and expose are read at the first access,
+ * and in case mode they exist from the open. sent holds every message of the view in order, calls the {command, params}
  * of the calls (with cids when the call carries them). The members that play case steps (run, exposed, status, command, deliverNotice
  * and release) throw in host mode, which has no case. observed is the observed record of the test host in host mode, and null in case
  * mode. In host mode, push(event, data) delivers a host event through the subscriptions of the view, and each viewEvent that the
@@ -97,9 +104,10 @@ export async function openView(name, { cases, host: fixtures, start, declaration
   const sent = [];
   const calls = [];
   Object.defineProperty(globalThis, "window", { value: window, configurable: true, writable: true });
-  window.webkit = { messageHandlers: { "sok-view": { postMessage: () => {} } } };
+  // The sok-view handler of the window is the host side of the page: in host mode each message of the page, the ready message of the
+  // start script included, is answered by the test host. In case mode the case answers the calls of the bridge, and the handler is idle.
+  window.webkit = { messageHandlers: { "sok-view": { postMessage: (message) => { if (testHost !== null) deliverFromView(message); } } } };
   window.sokTheme = { scheme: "dark", tokens: {} };
-  runInContext(START, dom.getInternalVMContext());
   // The start values of a view hold the core declarations before the declarations of its plugin.
   // default: a view that declares nothing of a kind has only the core declarations of that kind.
   const merged = Object.fromEntries(["status", "commands", "element"].map((kind) => [kind, [...CORE_DECLARATIONS[kind], ...(declarations[kind] ?? [])]]));
@@ -194,32 +202,51 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     waiters.add(check);
     check();
   });
+  // Each message that the page posts through the sok-view handler, by the bridge or by the start script: it is recorded, and a call is
+  // answered by the test host (host mode) or by the case (case mode).
+  const deliverFromView = (message) => {
+    sent.push(structuredClone(message));
+    for (const waiter of [...waiters]) waiter();
+    if (message.command === undefined) return;
+    const recorded = { command: message.command, params: structuredClone(message.params) };
+    if (message.cids !== undefined) recorded.cids = structuredClone(message.cids);
+    calls.push(recorded);
+    if (testHost !== null) {
+      answerFromHost(message);
+      return;
+    }
+    const outcome = wire.match(wire.onTheWire(message));
+    if (message.command === LOG_COMMAND && message.params?.action === "batch" && !outcome.error) events.push(...message.params.events);
+    reply(message.id, outcome, message.command);
+  };
+  // The start script posts the ready message as soon as it runs, so it runs after deliverFromView, which the handler of the window calls.
+  runInContext(START, dom.getInternalVMContext());
   const reports = [];
-  const bridge = createViewBridge({
-    handler: {
-      postMessage: (message) => {
-        sent.push(structuredClone(message));
-        for (const waiter of [...waiters]) waiter();
-        if (message.command === undefined) return;
-        const recorded = { command: message.command, params: structuredClone(message.params) };
-        if (message.cids !== undefined) recorded.cids = structuredClone(message.cids);
-        calls.push(recorded);
-        if (testHost !== null) {
-          answerFromHost(message);
-          return;
-        }
-        const outcome = wire.match(wire.onTheWire(message));
-        if (message.command === LOG_COMMAND && message.params?.action === "batch" && !outcome.error) events.push(...message.params.events);
-        reply(message.id, outcome, message.command);
-      },
-    },
-    report: (event) => reports.push(event),
-  });
-  const expose = createExpose({
-    register: bridge.exposure.register, reply: bridge.exposure.reply, changed: bridge.exposure.changed,
-    report: (text) => bridge.runtime.error(`${plugin} exposure`, text),
-    onRequest: (listener) => bridge.runtime.native.on("exposure-request", listener),
-  }, () => window.sokSurface.declarations);
+  // The bridge of the view is created at the first read of view.bridge, or at the open of a case, so a page module that the test loads
+  // builds the one bridge of the view. The page module builds its bridge on the window like the application does: a second bridge on
+  // the same window is refused by the start script (view channel already has a message listener).
+  let bridgeValue = null;
+  let exposeValue = null;
+  let pageLoaded = false;
+  const bridgeOf = () => {
+    if (pageLoaded) throw new Error(`view ${plugin} has a page loaded: its page module holds the view bridge, so view.bridge is not available`);
+    if (bridgeValue === null) {
+      bridgeValue = createViewBridge({ handler: { postMessage: deliverFromView }, report: (event) => reports.push(event) });
+    }
+    return bridgeValue;
+  };
+  const exposeOf = () => {
+    if (exposeValue === null) {
+      const bridge = bridgeOf();
+      exposeValue = createExpose({
+        register: bridge.exposure.register, reply: bridge.exposure.reply, changed: bridge.exposure.changed,
+        report: (text) => bridge.runtime.error(`${plugin} exposure`, text),
+        onRequest: (listener) => bridge.runtime.native.on("exposure-request", listener),
+      }, () => window.sokSurface.declarations);
+    }
+    return exposeValue;
+  };
+  if (testHost === null) bridgeOf();
   // The next step of the case that the host plays, which must be of `kind`; the cursor moves past it.
   const nextHostStep = (kind, what) => {
     const cases = caseWire(what);
@@ -244,19 +271,68 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     if ("error" in answered) throw new Error(answered.error.message);
     return answered.result;
   };
+  // The reply of the page to the exposure request id: the payload of its exposureReply call, which rejects with the error of the page.
+  const exposureAnswer = async (id) => {
+    const found = await sentWhere((message) => message.command === "runtime.native.call" && message.params.name === "exposureReply" && message.params.payload.id === id);
+    const { error, result } = found.params.payload;
+    if (error !== undefined) throw new Error(error.message);
+    return result;
+  };
   const exposed = async (method, params) => {
     const notice = nextHostStep("notice", `exposed ${method}`);
     if (notice.event !== "exposure-request" || notice.data.method !== method) throw wire.fail(`exposed ${method}: the case has ${JSON.stringify(notice)}`);
     sameAs(`exposed ${method}`, notice.data.params, params);
     const { id } = notice.data;
     host({ event: notice.event, data: wire.substitute(notice.data) });
-    const found = await sentWhere((message) => message.command === "runtime.native.call" && message.params.name === "exposureReply" && message.params.payload.id === id);
-    const { error, result } = found.params.payload;
-    if (error !== undefined) throw new Error(error.message);
-    return result;
+    return exposureAnswer(id);
   };
+  // The reply of the page to the command request id (host mode): {sok: 1, reply: id, result} or {sok: 1, reply: id, error}.
+  const commandAnswer = async (id) => {
+    const answered = await sentWhere((message) => message.reply === id);
+    if ("error" in answered) throw new Error(answered.error.message);
+    return answered.result;
+  };
+  let requestIds = 0;
   return {
-    window, bridge, expose, sent, calls, reports, run, observers, events,
+    window, sent, calls, reports, run, observers, events,
+    /** The bridge of the view: the bridge of the test, which a case-mode view has from its open and a host-mode view creates here. */
+    get bridge() { return bridgeOf(); },
+    /** The exposure of the test (createExpose over the bridge). It is created with the bridge. */
+    get expose() { return exposeOf(); },
+    /**
+     * Imports the page module at the URL into the window of the view (host mode). The module builds its bridge on the window, so the test
+     * has no bridge of its own afterwards. Each load imports the module anew, so a test does not share the state of an earlier load.
+     * Resolves with the module namespace. A view loads one page module.
+     */
+    async load(url) {
+      hostOnly("load");
+      if (!(url instanceof URL)) throw new TypeError(`view.load requires the URL of the page module, found ${inspect(url)}`);
+      if (pageLoaded) throw new Error(`view ${plugin} already has a page loaded: a view loads one page module`);
+      if (bridgeValue !== null) throw new Error(`view ${plugin} already has a bridge: view.bridge was read, so a page module cannot load into the same view`);
+      pageLoaded = true;
+      const target = new URL(url);
+      target.searchParams.set("view", String(++pageLoads));
+      return import(target.href);
+    },
+    /**
+     * Runs the command `command` of the page as the host runs a command of a view (host mode): a command request with a fresh id, which the
+     * page answers. Resolves with the result of the command, or rejects with its error. The commands of a page are registered with
+     * runtime.command.register, so the host reaches them by a command request, not by an exposure request (native-surfaces.md, view commands).
+     */
+    request(command, params) {
+      hostOnly("request");
+      const id = ++requestIds;
+      host({ id, command, params: structuredClone(params) });
+      return commandAnswer(id);
+    },
+    /**
+     * Delivers a sidecar message of the session `id` to the view (host mode), as the host posts it to a routed view: the page receives it on
+     * its sidecar listener, with the cids of the message when it has any. A session without a route, which the page did not subscribe to, is refused.
+     */
+    sidecarMessage(name, id, message) {
+      const posted = hostOnly("sidecarMessage").sidecarMessage(name, id, message);
+      host(structuredClone(posted));
+    },
     /** The names of the exposure entries of `kind` that the plugin of the view registered, in order; the core entries are left out. */
     registered: (kind) => calls
       .filter(({ command, params }) => command === "runtime.native.call" && params.name === "registered" && params.payload.kind === kind)

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-7: The view test host runs the real page module of a plugin: `load(url)` imports it into the view, which builds its own bridge through the handler `sok-view`; `sidecarMessage` delivers a sidecar message through the route of the view, and `request` runs a command of the page.
 - F868: The contract copies are removed: `checkPluginRepository` reads no `contract-copies.json`, and a plugin repository tests with the SDK release that it pins and its view test host ([plugin tests](docs/spec/plugins.md#plugin-tests)), so a change of the contract cases of core changes no plugin.
 - F867-6: A test packs `@soksak/plugin-api` and checks that every module reachable from each export, including the view test host, is in the release file; the plugin specification states the view test host.
 - F867-4-3: Page-wire cases record host state changes and the close of a view with the steps `change` and `close`; `createTestHost` has declared state changes and `close` that run the subscription code of the SDK, so the test host replays every view call and view event case. The page log case is `log-import`, replayed by its own workbench test.

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F867-7: view test host가 plugin의 실제 page module을 실행한다. `load(url)`이 그것을 view에 import하고 page는 handler `sok-view`로 자기 bridge를 만든다. `sidecarMessage`는 view의 route로 sidecar message를 전달하고, `request`는 page의 command를 실행한다.
 - F868: contract 사본이 제거된다. `checkPluginRepository`는 `contract-copies.json`을 읽지 않고, plugin 저장소는 자기가 pin한 SDK release와 그 view test host로 test하므로([plugin test](docs/spec/plugins.ko.md#plugin-test)) core의 contract case가 바뀌어도 plugin은 바뀌지 않는다.
 - F867-6: test가 `@soksak/plugin-api`를 pack하고 view test host를 포함해 각 export에서 닿는 모든 module이 release file에 있는지 확인하며, plugin spec이 view test host를 적는다.
 - F867-4-3: page-wire case가 host 상태 변화와 view의 close를 step `change`와 `close`로 기록하고, `createTestHost`가 SDK의 구독 코드를 실행하는 선언된 상태 변화와 `close`를 가져, test host가 모든 view call과 view event case를 replay한다. page log case는 자기 workbench test가 replay하는 `log-import`다.
