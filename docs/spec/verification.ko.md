@@ -37,7 +37,7 @@ Feature-link audit 자체 검사는 실제 audit module을 실행한다. 변경 
 | `execution-inputs` | command 결과를 원래 input에 연결하고 변경을 거부하며 재시도를 보존한다. |
 | `modified-close` | save가 대기하거나 실패하면 수정한 tab을 유지하고 깨끗한 상태로 재시도한 뒤 닫기를 허용한다. |
 | `layout-transitions` | 거부 이후 복구를 포함해 공개 연산의 승인과 거부 전이를 검사한다. |
-| `candidate-publication` | 불변 candidate의 불완전하거나 일치하지 않는 acceptance를 거부한다. |
+| `candidate-publication` | checkout의 파일과 일치하지 않는 release 파일 집합을 거부한다. |
 <!-- requirement-scope:end -->
 
 범위에 포함된 feature는 고유한 requirement key 하나를 선언한다. 기존 소유 test 참조에 assertion이 검사하는 차원인 `normal`, `failure`, `race`, `recovery`를 선언한다. 정상과 실패에는 반드시 test가 필요하다. 경합이나 복구에 test가 없으면 해당 계약에 근거한 구체적인 비적용 이유가 필요하며, test가 없다는 이유로 비동기 상태 전이를 제외할 수 없다. 한 test가 여러 차원을 다루려면 assertion이 각각을 실제로 검사해야 한다. 복구는 거부된 상태가 의도한 다음 연산으로 진행하거나 실패 cleanup이 요구대로 완료되는 것이다. 새 fixture가 따로 통과한 것으로 상태 복구를 입증하지 않는다. 차원 누락, 알 수 없거나 반복된 key·차원, 중복 시나리오 참조, 잘못된 기존 구현·test 참조는 `make check-tests`를 실패시킨다.
@@ -77,7 +77,7 @@ Host-equivalence job은 비교에 필요한 모든 언어와 toolchain을 설치
 
 의존성을 받은 뒤 build와 check stage는 offline으로 실행한다. CI는 저장소가 선언한 Node와 pnpm 버전을 설치하고, local build의 build environment 검사는 major version만 비교한다. 또한 Go는 module/workspace 선언, Rust는 정확하게 선언된 toolchain을 따른다. Frozen pnpm lock, Cargo.lock과 Go module sum을 계속 검사한다. Offline 검사는 누락된 의존성을 받거나 lock을 갱신하지 않으며 빠진 input을 밝히고 실패한다.
 
-Release host별 job은 자체 bundle을 build하고 audit하며 release file를 만든다. Release는 registry를 읽지 않는다. [registry 검사](registry.ko.md#검사)가 `core.json`이 나열하는 core version마다 설치가 그것에 고르는 plugin version을 검사하므로, release의 어떤 job도 registry를 검사하지 않는다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. 게시는 인증된 후보 acceptance gate를 통해 audit한 정확한 host release 파일을 받는다. 보고서는 후보 run·attempt·불변 artifact ID·게시할 모든 파일의 hash(후보 host마다의 bundle과 package 다섯 개)·전체 bundle 및 실행 파일 식별값·clean 소스와 test 및 의존성 식별값·고정 registry와 검증된 설치 component 내용을 필수 로컬 결과에 연결한다. Acceptance는 후보가 추가하거나 바꾼 것을 증명한다. 후보 전체의 unit test와 structure check는 CI가 증명하고, 어떤 변경도 닿지 않은 check는 이전 결과를 반복한다. 필수 check는 application·activation script와 선언된 모든 전용 benchmark의 window check 파일, 그리고 그 tier의 native end-to-end 항목 중 후보가 포함한 가장 최근 version tag와 후보 사이에서 파일이 다른 것이다(native 항목은 source `native/darwin/tests/<name>.m`로 판정한다). 그런 파일이 없는 script는 요구하지 않는다. Native 항목은 바뀌었는데 window check가 바뀌지 않은 tier는 거부한다. 그 native test는 window check가 시작하는 run 안에서 실행되기 때문이다. 필수 script마다 모든 후보 host(mygo, Tauri, Wails)에서 한 번 실행하며 전체 application audit, 준비와 정리가 필요하다. Input은 검사 전후와 정리 후 비교한다. 관찰한 host 재실행은 독립 검증한 PID를 바꿀 수 있지만 파일 내용을 바꾸면 안 된다. 필수 증거의 실패·취소·건너뜀·누락·오래되거나 맞지 않는 식별값은 게시를 막는다. Gate unit test는 후보 application acceptance를 입증하지 않는다.
+Release host별 job은 자체 bundle을 build하고 audit하며 release file를 만든다. Release는 registry를 읽지 않는다. [registry 검사](registry.ko.md#검사)는 `core.json`이 나열하는 core version을 그 plugin을 검사하지 않고 나열하므로, release의 어떤 job도 registry를 검사하지 않는다. 최종 판정은 독립 equivalence를 포함한 모든 필수 job의 성공을 요구한다. 게시는 후보 release의 push에서, 모든 필수 job이 성공한 뒤 실행된다. 게시는 같은 run의 release file이 checkout의 release file과 정확히 같은지 검사하며, `scripts/candidate-acceptance.mjs files`로 각 후보 host의 bundle과 실행 파일 식별값을 release file에서 계산한다. CI가 후보를 증명한다. 후보 전체의 unit test와 structure check는 같은 attempt의 필수 job에서 실행된다. Window check와 native end-to-end test는 make로 로컬에서 실행하며 게시의 조건이 아니다.
 
 명시적으로 선택한 registry index에는 고정한 SHA-256을 지정할 수 있다. Digest를 지정하면 정확히 소문자 hexadecimal 64자리여야 하고 비어 있지 않은 명시적 index URL이 필요하며 JSON parsing 전에 받은 bytes와 비교한다. 불일치는 acceptance 실패다. 기본 public-index 검사와 digest 없는 명시적 index는 기존 동작을 유지한다.
 

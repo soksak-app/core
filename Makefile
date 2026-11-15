@@ -378,7 +378,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-candidate test-app-capture-input-close test-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -477,9 +477,7 @@ build-sok: check-cargo
 # every fixture sidecar of e2e/fixtures/sidecars for the current platform, and then creates index.json in target/fixture-registry with
 # one pack fixtures of every fixture plugin. It reads no plugin or sidecar repository and no registry index. Each fixture sidecar is
 # built first with its own build script, because its release holds the executable that its sidecar.json declares.
-# build-fixture-registry-from-sok builds the fixture sidecars and the registry with the sok that FIXTURE_SOK names and builds no sok:
-# a candidate or prebuilt run of scripts/test-app.mjs builds it from its checkout into its configuration root with the sok of a
-# bundle under test.
+# build-fixture-registry-from-sok builds the fixture sidecars and the registry with the sok that FIXTURE_SOK names and builds no sok.
 FIXTURE_REGISTRY = target/fixture-registry
 FIXTURE_SOK = target/debug/sok
 FIXTURE_SIDECARS = $(patsubst %/sidecar.json,%,$(wildcard e2e/fixtures/sidecars/*/sidecar.json))
@@ -662,11 +660,6 @@ test-app: check-docs check-app-tests check-exposure $(E2E_BUILD)
 # Focused native application checks; preparation, auditing and cleanup use the ordinary window runner.
 test-app-capture-input-close: check-docs check-app-tests check-exposure $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:capture-input-close
-
-# Acceptance consumes the downloaded candidate bundles and frozen component context without rebuilding them.
-test-app-candidate:
-	@test -n "$(CONTEXT)" && test -n "$(SCRIPT)" || { echo "make test-app-candidate CONTEXT=<context.json> SCRIPT=<declared script>" >&2; exit 2; }
-	@node scripts/test-app.mjs --candidate "$(CONTEXT)" --script "$(SCRIPT)"
 
 test-app-activation: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:activation --native test-app-activation

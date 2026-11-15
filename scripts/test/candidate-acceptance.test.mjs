@@ -1,90 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { chmod, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gzipSync } from 'node:zlib';
-import { hashValue } from '../candidate-identity.mjs';
-import { hashFile, hashTree } from '../candidate-identity.mjs';
-import { candidateAssetNames, candidateFiles, candidatePolicy, prepareCandidate, validateCandidateReport, validateCandidateRun } from '../candidate-acceptance.mjs';
-import { candidateNativeTests, candidateScripts } from '../candidate-policy.mjs';
-import { decodeAcceptanceReport, encodeAcceptanceReport } from '../candidate-report.mjs';
-import { discoverNodeTests } from '../node-tests.mjs';
-import { candidatePlanNames } from '../test-app.mjs';
-import { finishAcceptanceRun, writeAcceptanceReport } from '../acceptance-run.mjs';
+import { hashTree } from '../candidate-identity.mjs';
+import { candidateAssetNames, candidateFiles } from '../candidate-acceptance.mjs';
 
 const BUNDLES = fileURLToPath(new URL('./fixtures/candidate-bundles/', import.meta.url));
-const sha = 'a'.repeat(40);
-const digest = 'b'.repeat(64);
-function fixture() {
-  const candidate = { repository: 'example/core', workflow: '.github/workflows/release.yml', runId: 12, runAttempt: 2, sha, version: '0.0.39', artifacts: [{ id: 30, name: 'release-wailsv3' }, { id: 31, name: 'release-tauriv2' }, { id: 32, name: 'release-mygo' }] };
-  const assets = ['wails.zip', 'tauri.zip', 'mygo.zip', 'api.tgz', 'native.tgz'].map((name) => ({ name, sha256: digest }));
-  const components = [{ kind: 'plugin', id: 'layoutprobe', version: '0.0.1', treeSha256: digest }];
-  const bundles = ['mygo', 'tauriv2', 'wailsv3'].map((app) => ({ app, bundleSha256: digest, executableSha256: digest }));
-  const source = { head: sha, dirty: false, sourceSha256: digest, testsSha256: digest, dependenciesSha256: digest };
-  const identity = { ...source, installedDependenciesSha256: digest, hosts: bundles.map((bundle) => ({ ...bundle, pid: 1, componentsSha256: hashValue(components) })) };
-  const required = [{ script: 'test-app', since: 'v0.0.38', tests: ['e2e/required.test.mjs'], native: ['native_test'], steps: ['window checks', 'native end-to-end tests', 'remaining processes'] }];
-  const runs = ['one'].map((initializationId) => ({ id: initializationId, initializationId, script: 'test-app', errors: [],
-    selection: { since: 'v0.0.38', tests: ['e2e/required.test.mjs'], native: ['native_test'], apps: ['mygo', 'tauriv2', 'wailsv3'] },
-    before: structuredClone(identity), after: structuredClone(identity), afterCleanup: { ...source, installedDependenciesSha256: digest, hosts: identity.hosts.map(({ pid, ...host }) => host) },
-    tests: [{ name: 'e2e/required.test.mjs', status: 'pass' }], audit: { status: 'pass', findings: [], apps: ['mygo', 'tauriv2', 'wailsv3'] },
-    plan: { status: 'pass', steps: required[0].steps.map((name) => ({ name, status: 'pass' })) }, native: { tests: [{ name: 'native_test', status: 'pass' }] } }));
-  return { report: { schema: 1, candidate, assets, runs }, expected: structuredClone({ candidate, assets, bundles, source, required }) };
-}
-
-test('candidate acceptance requires complete matching evidence from one run of the changed checks', { timeout: 10000 }, () => {
-  const { report, expected } = fixture();
-  assert.deepEqual(validateCandidateReport(report, expected), []);
-  report.runs[0].before.hosts[0].pid = 2;
-  report.runs[0].after.hosts[0].pid = 3;
-  assert.deepEqual(validateCandidateReport(report, expected), [], 'a verified relaunch may change only the PID');
-  assert.ok(Buffer.byteLength(JSON.stringify(report)) < 60000);
-});
-
-for (const [name, change, error] of [
-  ['candidate acceptance refuses missing evidence', (r) => { r.runs[0].tests = []; }, /test files/],
-  ['candidate acceptance refuses missing collection evidence', (r) => { delete r.runs[0].errors; }, /collection/],
-  ['candidate acceptance refuses stale source evidence', (r) => { r.runs[0].before.head = 'c'.repeat(40); }, /source/],
-  ['candidate acceptance refuses mismatched candidate evidence', (r) => { r.candidate.runAttempt++; }, /candidate/],
-  ['candidate acceptance refuses mismatched bytes evidence', (r) => { r.assets[0].sha256 = 'c'.repeat(64); }, /release files/],
-  ['candidate acceptance refuses changed bundle evidence', (r) => { r.runs[0].after.hosts[0].bundleSha256 = 'c'.repeat(64); }, /bundle/],
-  ['candidate acceptance refuses changed installed fixture evidence', (r) => { r.runs[0].after.hosts[0].componentsSha256 = 'c'.repeat(64); }, /installed fixture identity/],
-  ['candidate acceptance refuses installed fixtures that differ between hosts', (r) => {
-    for (const phase of ['before', 'after', 'afterCleanup']) r.runs[0][phase].hosts[1].componentsSha256 = 'c'.repeat(64);
-  }, /installed fixture identity/],
-  ['candidate acceptance refuses a report that names a registry', (r) => { r.registry = { sha256: digest, pack: 'starter', components: [] }; }, /names no registry/],
-  ['candidate acceptance refuses changed installed dependency evidence', (r) => { r.runs[0].after.installedDependenciesSha256 = 'c'.repeat(64); }, /dependencies/],
-  ['candidate acceptance refuses skipped evidence', (r) => { r.runs[0].tests[0].status = 'skip'; }, /pass/],
-  ['candidate acceptance refuses failed evidence', (r) => { r.runs[0].tests[0].status = 'fail'; }, /pass/],
-  ['candidate acceptance refuses global log error evidence', (r) => { r.runs[0].audit.findings.push('outside a case'); }, /audit/],
-  ['candidate acceptance refuses native omission evidence', (r) => { r.runs[0].native = null; }, /native/],
-  ['candidate acceptance refuses cleanup failure evidence', (r) => { r.runs[0].plan.steps.at(-1).status = 'fail'; }, /plan/],
-  ['candidate acceptance refuses partial selection evidence', (r) => { r.runs[0].selection.tests = []; }, /selection/],
-  ['candidate acceptance refuses a selection of another release', (r) => { r.runs[0].selection.since = 'v0.0.37'; }, /selection/],
-  ['candidate acceptance refuses missing selection evidence', (r) => { delete r.runs[0].selection.native; }, /selection/],
-  ['candidate acceptance refuses evidence without every host', (r) => { r.runs[0].audit.apps.pop(); }, /every candidate host/],
-  ['candidate acceptance refuses a repeated run of a script', (r) => { r.runs.push({ ...structuredClone(r.runs[0]), id: 'two', initializationId: 'two' }); }, /exactly one run/],
-]) test(name, { timeout: 10000 }, () => {
-  const { report, expected } = fixture();
-  change(report);
-  assert.match(validateCandidateReport(report, expected).join('\n'), error);
-});
-
-test('candidate publication validates the completed attempt and immutable artifact ownership', { timeout: 10000 }, () => {
-  const { report } = fixture();
-  const run = { id: 12, run_attempt: 2, head_sha: sha, status: 'completed', conclusion: 'success', event: 'push', head_branch: 'main', path: '.github/workflows/release.yml', repository: { full_name: 'example/core' }, head_repository: { full_name: 'example/core' }, run_started_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:10:00Z' };
-  const jobs = ['checks / required', 'gate', 'release-wailsv3', 'release-tauriv2', 'release-mygo'].map((name) => ({ name, conclusion: 'success', status: 'completed' }));
-  const artifacts = report.candidate.artifacts.map((a) => ({ ...a, expired: false, created_at: '2026-01-01T00:05:00Z', workflow_run: { id: 12, head_sha: sha } }));
-  const expected = { repository: 'example/core', sha, requiredJobs: jobs.map((j) => j.name), run, jobs, artifacts };
-  assert.deepEqual(validateCandidateRun(report.candidate, expected), []);
-  artifacts[0].created_at = '2025-01-01T00:00:00Z';
-  assert.match(validateCandidateRun(report.candidate, expected).join('\n'), /attempt/);
-  artifacts[0].created_at = '2026-01-01T00:05:00Z';
-  jobs[0].conclusion = 'skipped';
-  assert.match(validateCandidateRun(report.candidate, expected).join('\n'), /job/);
-});
 
 async function rootFixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'soksak-acceptance-files-'));
@@ -97,7 +21,8 @@ async function rootFixture(t) {
   return root;
 }
 
-test('candidate publication hashes the exact downloaded files and complete bundle contents', { timeout: 10000 }, async (t) => {
+// The release files of a run: the zip of each candidate host bundle and the release file of each package, with the tree hash of each bundle.
+async function releaseFiles(t) {
   const root = await rootFixture(t);
   const files = join(root, 'files');
   await mkdir(files);
@@ -114,149 +39,21 @@ test('candidate publication hashes the exact downloaded files and complete bundl
   for (const name of names.filter((name) => name.endsWith('.tgz'))) await writeFile(join(files, name), 'packed release bytes');
   assert.deepEqual(names.filter((name) => name.endsWith('.tgz')), ['soksak-client-0.0.39.tgz', 'soksak-log-contract-0.0.39.tgz',
     'soksak-native-process-identity-darwin-0.0.39.tgz', 'soksak-plugin-api-0.0.39.tgz', 'soksak-window-check-0.0.39.tgz']);
+  return { root, files, expected };
+}
+
+test('candidate publication hashes the exact downloaded files and complete bundle contents', { timeout: 10000 }, async (t) => {
+  const { root, files, expected } = await releaseFiles(t);
   const observed = await candidateFiles(root, files);
   assert.equal(observed.assets.length, 8);
   assert.deepEqual(observed.bundles.map((b) => [b.app, b.bundleSha256]), [...expected]);
+});
+
+test('candidate publication refuses a release file set with an extra or a missing file', { timeout: 10000 }, async (t) => {
+  const { root, files } = await releaseFiles(t);
   await writeFile(join(files, 'unaccepted.txt'), 'extra');
   await assert.rejects(() => candidateFiles(root, files), /must be exactly/);
-});
-
-test('candidate preparation reads every page of the selected attempt and refuses a stale source', { timeout: 10000 }, async (t) => {
-  const root = await rootFixture(t);
-  await mkdir(join(root, '.github/workflows'), { recursive: true });
-  await writeFile(join(root, '.github/workflows/ci.yml'), 'jobs:\n  required:\n    runs-on: example\n');
-  const { report } = fixture();
-  const start = '2026-01-01T00:00:00Z';
-  const end = '2026-01-01T00:10:00Z';
-  const run = { id: 12, run_attempt: 2, head_sha: sha, status: 'completed', conclusion: 'success', event: 'push', head_branch: 'main', path: report.candidate.workflow, repository: { full_name: 'example/core' }, head_repository: { full_name: 'example/core' }, run_started_at: start, updated_at: end };
-  const calls = [];
-  const request = async (url) => {
-    calls.push(url);
-    let value;
-    if (url.includes('/jobs?')) value = { jobs: url.endsWith('page=1') ? Array.from({ length: 100 }, (_, index) => ({ name: `unrelated ${index}` })) :
-      ['checks / required', 'gate', 'release-mygo', 'release-tauriv2', 'release-wailsv3'].map((name) => ({ name, status: 'completed', conclusion: 'success' })) };
-    else if (url.includes('/artifacts?')) value = { artifacts: report.candidate.artifacts.map((a) => ({ ...a, expired: false, created_at: end, workflow_run: { id: 12, head_sha: sha } })) };
-    else value = run;
-    return { ok: true, json: async () => value };
-  };
-  const env = { GITHUB_REPOSITORY: 'example/core', GITHUB_SHA: sha, GITHUB_TOKEN: 'fixture-token' };
-  assert.deepEqual(await prepareCandidate(report, { root, env, request }), report.candidate);
-  assert.ok(calls.some((call) => call.endsWith('/attempts/2/jobs?per_page=100&page=2')));
-  await assert.rejects(() => prepareCandidate(report, { root, env: { ...env, GITHUB_SHA: 'c'.repeat(40) }, request }), /stale|successful/);
-});
-
-test('candidate policy reuses declared application scripts and native mode arguments', { timeout: 10000 }, () => {
-  const root = fileURLToPath(new URL('../../', import.meta.url));
-  assert.ok(candidateScripts(root).includes('benchmark:view-drag'));
-  assert.ok(candidateNativeTests(root, 'test-app').includes('capture_resize_test'));
-  assert.ok(candidateNativeTests(root, 'test-app:activation').includes('webview_input_test --monitor'));
-  assert.ok(candidateNativeTests(root, 'test-app:activation').includes('input_virtual_ime_test'));
-  assert.deepEqual(candidateNativeTests(root, 'benchmark:view-drag'), []);
-});
-
-// A repository with one release tag and a candidate commit that changes one window check, one native test and nothing of the
-// activation tier or the benchmark: acceptance requires only the changed check files of the scripts that hold them.
-async function releaseFixture(t) {
-  const root = await mkdtemp(join(tmpdir(), 'soksak-acceptance-policy-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const files = {
-    'package.json': JSON.stringify({ name: 'root', private: true }),
-    'e2e/package.json': JSON.stringify({ name: 'e2e', scripts: {
-      'test-app': "node ./run.mjs --test './*.test.mjs'",
-      'test-app:activation': "node ./run.mjs --test 'activation/*.test.mjs'",
-      'benchmark:drag': 'node ./run.mjs --test benchmark/drag.test.mjs',
-    } }),
-    'e2e/changed.test.mjs': 'one\n', 'e2e/same.test.mjs': 'one\n', 'e2e/activation/ime.test.mjs': 'one\n', 'e2e/benchmark/drag.test.mjs': 'one\n',
-    'native/darwin/Makefile': 'NATIVE_E2E_TESTS = changed_test \\\n  same_test\n\ntest-app: x\n\t@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) $(NATIVE_E2E_TESTS)\n\n'
-      + 'test-app-activation: y\n\t@node $(NATIVE_TEST_RUNNER) $(abspath $(BUILD)) ime_test,--monitor\n',
-    'native/darwin/tests/changed_test.m': 'one\n', 'native/darwin/tests/same_test.m': 'one\n', 'native/darwin/tests/ime_test.m': 'one\n',
-  };
-  for (const [path, text] of Object.entries(files)) {
-    await mkdir(join(root, path, '..'), { recursive: true });
-    await writeFile(join(root, path), text);
-  }
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=test', '-c', 'user.email=test@example.invalid', ...args], { cwd: root, stdio: 'pipe' });
-  git('init', '-q');
-  git('add', '.');
-  git('commit', '-q', '-m', 'release');
-  git('tag', 'v0.0.1');
-  await writeFile(join(root, 'e2e/changed.test.mjs'), 'two\n');
-  await writeFile(join(root, 'e2e/added.test.mjs'), 'two\n');
-  await writeFile(join(root, 'native/darwin/tests/changed_test.m'), 'two\n');
-  git('add', '.');
-  git('commit', '-q', '-m', 'candidate');
-  return root;
-}
-
-test('candidate policy requires once the checks that the candidate adds or changes since the previous release', { timeout: 30000 }, async (t) => {
-  const root = await releaseFixture(t);
-  const required = await candidatePolicy(root);
-  assert.deepEqual(required.map(({ script, since, tests, native }) => ({ script, since, tests, native })), [
-    { script: 'test-app', since: 'v0.0.1', tests: ['e2e/added.test.mjs', 'e2e/changed.test.mjs'], native: ['changed_test'] },
-  ]);
-  assert.ok(required[0].steps.includes('native end-to-end tests'));
-});
-
-// The largest policy is the one of a candidate that changes every check of every declared script.
-test('a candidate policy that changes every current check fits the authenticated report input', { timeout: 10000 }, async (t) => {
-  const root = fileURLToPath(new URL('../../', import.meta.url));
-  const { report, expected } = fixture();
-  const required = await Promise.all(candidateScripts(root).map(async (script) => {
-    const native = candidateNativeTests(root, script);
-    const tests = discoverNodeTests({ root, packages: ['e2e'], script }).tests.map(({ name }) => name).sort();
-    return { script, since: 'v0.0.38', tests, native, steps: await candidatePlanNames(script, { native: native.length > 0 }) };
-  }));
-  const template = report.runs[0];
-  report.runs = required.map((policy, index) => ({ ...structuredClone(template),
-    id: `candidate-00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-    initializationId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
-    script: policy.script,
-    selection: { since: policy.since, tests: policy.tests, native: policy.native, apps: ['mygo', 'tauriv2', 'wailsv3'] },
-    tests: policy.tests.map((name) => ({ name, status: 'pass' })),
-    native: policy.native.length ? { tests: policy.native.map((name) => ({ name, status: 'pass' })) } : null,
-    plan: { status: 'pass', steps: policy.steps.map((name) => ({ name, status: 'pass' })) },
-  }));
-  assert.deepEqual(validateCandidateReport(report, { ...expected, required }), []);
-  const encoded = encodeAcceptanceReport(report);
-  assert.deepEqual(decodeAcceptanceReport(encoded), report);
-  assert.ok(Buffer.byteLength(encoded) <= 60000);
-  t.diagnostic(`complete policy report: ${Buffer.byteLength(JSON.stringify(report))} decoded bytes, ${Buffer.byteLength(encoded)} transport bytes`);
-});
-
-test('candidate report transport rejects unsupported, corrupted and oversized input', { timeout: 10000 }, () => {
-  assert.throws(() => decodeAcceptanceReport(JSON.stringify(fixture().report)), /transport/);
-  assert.throws(() => decodeAcceptanceReport(JSON.stringify({ schema: 1, encoding: 'gzip-base64', payload: '****' })), /transport/);
-  assert.throws(() => decodeAcceptanceReport(' '.repeat(60001)), /60000/);
-  assert.throws(() => encodeAcceptanceReport({ value: 'x'.repeat(1024 * 1024) }), /1048576/);
-  const expanded = JSON.stringify({ schema: 1, encoding: 'gzip-base64', payload: gzipSync('x'.repeat(1024 * 1024 + 1)).toString('base64') });
-  assert.throws(() => decodeAcceptanceReport(expanded), /larger|length|size|Buffer/i);
-});
-
-test('collected manifests round trip through the publication gate without a second result model', { timeout: 10000 }, async (t) => {
-  const root = await rootFixture(t);
-  const { report, expected } = fixture();
-  const context = { schema: 1, candidate: report.candidate, assets: [] };
-  for (const asset of report.assets) {
-    const path = join(root, asset.name);
-    await writeFile(path, `candidate ${asset.name}`);
-    asset.sha256 = await hashFile(path);
-    context.assets.push({ ...asset, path });
-  }
-  expected.assets = structuredClone(report.assets);
-  const folders = [];
-  for (const run of report.runs) {
-    const folder = join(root, run.id);
-    folders.push(folder);
-    await mkdir(join(folder, 'native'), { recursive: true });
-    await writeFile(join(folder, 'manifest.json'), JSON.stringify({ schema: 1, run: run.id, script: run.script, finished_us: 2, selection: run.selection, tests: run.tests }));
-    await writeFile(join(folder, 'judgment.json'), JSON.stringify({ schema: 1, run: run.id, audit: { status: 'pass', findings: [] },
-      tests: ['mygo', 'tauriv2', 'wailsv3'].map((app) => ({ name: 'required', app, result: 'pass' })) }));
-    await writeFile(join(folder, 'native/manifest.json'), JSON.stringify({ schema: 1, run: 'native', finished_us: 2, tests: run.native.tests }));
-    const result = await finishAcceptanceRun({ runFolder: folder, context, ...run });
-    assert.deepEqual(result.errors, []);
-  }
-  const output = join(root, 'transport.json');
-  await writeAcceptanceReport(context, folders, output);
-  const transported = decodeAcceptanceReport(await readFile(output, 'utf8'));
-  assert.deepEqual(validateCandidateReport(transported, expected), []);
+  await rm(join(files, 'unaccepted.txt'));
+  await rm(join(files, 'soksak-plugin-api-0.0.39.tgz'));
+  await assert.rejects(() => candidateFiles(root, files), /must be exactly/);
 });

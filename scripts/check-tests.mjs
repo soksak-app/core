@@ -82,10 +82,8 @@ lane("test evidence", "js-ts", ["scripts/test-evidence.mjs", "scripts/platform/p
   "scripts/platform/darwin/end-to-end.mjs", "scripts/platform/windows/windows.mjs"], ["scripts/test/test-evidence.test.mjs", "scripts/test/platform.test.mjs", "scripts/test/platform/darwin/process-evidence.test.mjs",
   "scripts/test/platform/darwin/end-to-end.test.mjs", "scripts/test/fixtures/test-evidence/**/*"]),
 lane("candidate identity", "js-ts", ["scripts/candidate-identity.mjs"], ["scripts/test/candidate-identity.test.mjs"]),
-lane("candidate acceptance gate", "js-ts", ["scripts/candidate-policy.mjs", "scripts/candidate-report.mjs", "scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
+lane("candidate acceptance gate", "js-ts", ["scripts/candidate-acceptance.mjs"], ["scripts/test/candidate-acceptance.test.mjs"]),
 lane("release packages", "js-ts", ["scripts/pack-release-packages.mjs"], ["scripts/test/pack-release-packages.test.mjs"]),
-lane("candidate acceptance collection", "js-ts", ["scripts/acceptance-run.mjs"], ["scripts/test/acceptance-run.test.mjs"]),
-lane("candidate context", "js-ts", ["scripts/candidate-context.mjs"], ["scripts/test/candidate-context.test.mjs"]),
   lane("workspace version audit", "js-ts", ["scripts/check-versions.mjs"], ["scripts/test/versions.test.mjs", "scripts/test/entry-guards.test.mjs"]),
   lane("fallback and discarded error audit", "js-ts", ["scripts/check-fallbacks.mjs"], ["scripts/test/fallbacks.test.mjs"]),
   lane("native window ownership audit", "js-ts", ["scripts/check-native-windows.mjs"], ["scripts/test/native-windows.test.mjs"]),
@@ -2141,35 +2139,19 @@ const FEATURE_LINKS = [
   },
   {
     id: "F657",
-    requirement: { key: "candidate-publication", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The gate synchronously validates the completed report; input drift between its recorded snapshots is a failure case.", recovery: "Report validation retains no mutable candidate state; a new report is independently validated without repairing a failed report." } },
+    requirement: { key: "candidate-publication", platforms: PORTABLE_REQUIREMENT_PLATFORMS, inapplicable: { race: "The gate hashes each downloaded file once; a file that changes after its hash is read is outside the check.", recovery: "The gate retains no state; a failed gate is run again on the release files of a new run." } },
     implementation: [
       { file: "scripts/candidate-identity.mjs", symbol: "export async function hashTree" },
-      { file: "scripts/candidate-policy.mjs", symbol: "export function candidateScripts" },
-      { file: "scripts/candidate-report.mjs", symbol: "export function encodeAcceptanceReport" },
-      { file: "scripts/acceptance-run.mjs", symbol: "export async function finishAcceptanceRun" },
-      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateReport" },
-      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
+      { file: "scripts/candidate-acceptance.mjs", symbol: "export async function candidateFiles" },
       { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs files" },
     ],
     tests: [
       { file: "scripts/test/candidate-identity.test.mjs", id: "candidate tree identity binds every file, executable mode and symlink target without extraction timestamps" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance requires complete matching evidence from one run of the changed checks", covers: ["normal"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses missing evidence", covers: ["failure"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses stale source evidence", covers: ["failure"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses changed installed dependency evidence", covers: ["failure"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses mismatched candidate evidence", covers: ["failure"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses skipped evidence", covers: ["failure"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate acceptance refuses failed evidence", covers: ["failure"] },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate policy reuses declared application scripts and native mode arguments" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "a candidate policy that changes every current check fits the authenticated report input" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate report transport rejects unsupported, corrupted and oversized input" },
-      { file: "scripts/test/acceptance-run.test.mjs", id: "collected inputs bind exactly the enabled installed fixtures of the checkout" },
-      { file: "scripts/test/acceptance-run.test.mjs", id: "candidate acceptance keeps real manifest results and rejects failed audits, stale identities and failed cleanup" },
-      { file: "scripts/test/acceptance-run.test.mjs", id: "candidate report exports only complete matching acceptance without local paths" },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication hashes the exact downloaded files and complete bundle contents", covers: ["normal"] },
+      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication refuses a release file set with an extra or a missing file", covers: ["failure"] },
       { file: "scripts/test/workflows.test.mjs", id: "a push builds the release files and its run publishes exactly those files" },
     ],
-    expected: "Publication binds recorded local acceptance, complete application and performance policy, source, bundle and component identities to the exact successful candidate attempt and files; missing, stale, mismatched, skipped or failed required evidence is refused.",
+    expected: "Publication checks that the release files of its run are exactly the release files of the checkout and that each bundle they hold is the bundle of its candidate host; CI proves the candidate.",
     levels: ["unit"],
   },
   {
@@ -5940,7 +5922,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
       { file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" },
     ],
-    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both candidate host jobs, all required CI jobs and recorded candidate acceptance; the CLI without a host selection continues to audit both bundles.",
+    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both candidate host jobs and all required CI jobs; the CLI without a host selection continues to audit both bundles.",
     levels: ["unit"],
   },
   {
@@ -5959,7 +5941,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/native-pkgconfig.test.mjs", id: "release host checks audit only their own optimized bundle" },
       { file: "scripts/test/workflows.test.mjs", id: "release builds audited candidate packages and publication consumes their immutable identities" },
     ],
-    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both candidate host jobs, all required CI jobs and recorded candidate acceptance; the CLI without a host selection continues to audit both bundles.",
+    expected: "Each release host builds and audits only its selected bundle before packaging. Publication requires both candidate host jobs and all required CI jobs; the CLI without a host selection continues to audit both bundles.",
     levels: ["unit"],
   },
   {
@@ -9416,7 +9398,7 @@ const FEATURE_LINKS = [
     id: "F756",
     implementation: [
       { file: "scripts/node-tests.mjs", symbol: "const { tests: all, before } = discoverNodeTests(" },
-      { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' }," },
+      { file: "scripts/test-app.mjs", symbol: "args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, only: { type: 'string', multiple: true }," },
       { file: "packages/window-check/app.mjs", symbol: "async function dragOnce(s, plan, capture) {" }
     ],
     tests: [
@@ -11816,8 +11798,6 @@ const FEATURE_LINKS = [
   {
     id: "F276",
     implementation: [
-      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
-      { file: "scripts/candidate-acceptance.mjs", symbol: "for (const name of requiredJobs)" },
       { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs files" },
     ],
     tests: [{ file: "scripts/test/workflows.test.mjs", id: "a push builds the release files and its run publishes exactly those files" }],
@@ -11827,15 +11807,12 @@ const FEATURE_LINKS = [
   {
     id: "F298-2",
     implementation: [
-      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
-      { file: "scripts/candidate-acceptance.mjs", symbol: "for (const name of requiredJobs)" },
       { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs files" },
     ],
     tests: [
       { file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
     ],
-    expected: "No workflow runs an end-to-end check. Publication requires a successful candidate attempt with the checks, gate and every host build, and consumes its separately recorded local acceptance.",
+    expected: "No workflow runs an end-to-end check. Publication checks the release files of its run against the checkout; CI proves the candidate.",
     levels: ["unit"],
   },
   {
@@ -13316,13 +13293,10 @@ const FEATURE_LINKS = [
   {
     id: "F298",
     implementation: [
-      { file: "scripts/candidate-acceptance.mjs", symbol: "export function validateCandidateRun" },
-      { file: "scripts/candidate-acceptance.mjs", symbol: "for (const name of requiredJobs)" },
       { file: ".github/workflows/release.yml", symbol: "candidate-acceptance.mjs files" },
     ],
     tests: [
       { file: "scripts/test/test-kinds.test.mjs", id: "no workflow runs a target or script of the end-to-end checks" },
-      { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication validates the completed attempt and immutable artifact ownership" },
     ],
     expected: "CI and release jobs run only unit tests and structure checks of their repository.",
     levels: ["unit"],
@@ -15364,7 +15338,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F510 records execution of existing suites and introduces no product capability.
 // F673 makes stall_watch_test wait for the states of the run loop instead of fixed run times; it changes no runtime capability.
 // F676 makes surface_keyboard_test judge the given keys when the event queue is empty instead of after a fixed interval; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F866", "F865", "F863", "F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

@@ -33,12 +33,7 @@ export async function runNativeTests({ dir, list, timeoutMs = TEST_TIMEOUT_MS, w
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [dir, ...list] = process.argv.slice(2);
   const only = process.env.NATIVE_TEST_ONLY ?? '';
-  // A candidate run names the exact entries that it requires, separated by spaces, in the form of the list (scripts/test-app.mjs).
-  const names = process.env.SOKSAK_NATIVE_TEST_ENTRIES?.split(' ').filter(Boolean);
-  if (names?.length === 0) throw new Error('SOKSAK_NATIVE_TEST_ENTRIES names no entry');
-  const unknown = names?.filter((name) => !list.includes(name)) ?? [];
-  if (unknown.length) throw new Error(`SOKSAK_NATIVE_TEST_ENTRIES names entries that the target does not run: ${unknown.join(', ')}`);
-  const chosen = names ? list.filter((entry) => names.includes(entry)) : list.filter((entry) => entry.includes(only));
+  const chosen = list.filter((entry) => entry.includes(only));
   const outputFolder = process.env.SOKSAK_NATIVE_TEST_RUN_FOLDER;
   const run = outputFolder ? { id: basename(resolve(outputFolder)), folder: resolve(outputFolder) } : undefined;
   runNativeTests({ dir, list: chosen, write: (line) => process.stdout.write(`${line}\n`), run, env: process.env }).then((code) => { process.exitCode = code; }, (error) => {

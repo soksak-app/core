@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- 로컬 candidate acceptance를 제거한다. 게시는 acceptance 보고서를 읽지 않고 자기 run의 release file만 checkout과 대조하므로, acceptance 수집, candidate context, candidate policy와 보고서, window check runner의 candidate mode, `--artifacts` mode, `make test-app-candidate`를 삭제한다 (F864).
 - core version은 설치하는 plugin을 검사하지 않고 registry에 들어가며, plugin은 새 core와의 호환을 스스로 맞춘다 (F866).
 - Rust host의 view binary test probe는 folder를 지우기 전에 document의 data store를 끝낸다 (F865).
 - Push의 release run은 그 run의 모든 check와 build가 성공하면 release file을 게시하며, 게시는 로컬 acceptance 보고서를 읽지 않는다 (F863).

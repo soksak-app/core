@@ -3,9 +3,8 @@
 // The e2e targets of the Makefile build the three debug applications, and then run this script with the window-check script of their
 // tier (`verify`, `test-app:activation`) and the native end-to-end target of that tier. Each run
 // makes a new configuration root under target/e2e, prepares the registry certificates in it and installs every plugin of the fixture
-// registry of the core fixtures (`make build-fixture-registry`, target/fixture-registry; a candidate or prebuilt run builds it from its
-// checkout into the root with `make build-fixture-registry-from-sok` and the `sok` of an application artifact under test) into the
-// configuration of each application with the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
+// registry of the core fixtures (`make build-fixture-registry`, target/fixture-registry) into the configuration of each application with
+// the `sok` of that application, starts the applications with that root, runs the window checks and the native end-to-end target, quits the
 // applications through the quit item of the application menu and the last one through the quit key, and fails when an application
 // ends with another status than 0 or when a process of the root or of an application artifact remains. The application artifacts,
 // the quit, the lock release wait, the native end-to-end tests, the process list and the crash reports are platform operations
@@ -13,18 +12,15 @@
 // run removes its root; a failed run keeps it with the logs of the applications, so a second run starts from the same state as the
 // first. Each step prints `running`, then `passed` or `failed` with its elapsed time, or `skipped` with the failed step that skipped it.
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { connect } from '@soksak/client';
 import { untilFolderState } from '@soksak/window-check/folder-wait.mjs';
 import { applicationArtifact, applicationExecutables, crashReports, listProcesses, quitApplication as requestQuit, runNativeTests,
   waitForLockRelease } from './platform/platform.js';
-import { collectAcceptanceInputs, collectOrdinaryInputs, finishAcceptanceRun, prepareCandidate, prepareOrdinaryArtifacts } from './acceptance-run.mjs';
-import { CANDIDATE_HOSTS, CANDIDATE_PLATFORM, candidateScripts } from './candidate-policy.mjs';
 import { fixturePluginIds } from './fixture-registry.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -35,22 +31,6 @@ const START_LIMIT_MS = 60_000;
 const QUIT_LIMIT_MS = 60_000;
 
 const configDir = (configRoot, app) => join(configRoot, `soksak-check-${app}`);
-const nativeTarget = (script) => script === 'test-app' ? 'test-app' : script === 'test-app:activation' ? 'test-app-activation' : undefined;
-
-/** Ordinary artifact runs use the candidate context's existing schema and installer validation, without claiming candidate acceptance. */
-export function validateOrdinaryArtifacts(input, configRoot) {
-  if (input?.schema !== 1 || !Array.isArray(input.hosts)
-    || JSON.stringify(input.hosts.map(({ app }) => app).sort()) !== JSON.stringify([...APPS].sort())) {
-    throw new Error('ordinary artifacts must use schema 1 and name every host exactly once');
-  }
-  for (const host of input.hosts) {
-    if (typeof host.bundle !== 'string' || !isAbsolute(host.bundle)) throw new Error(`ordinary ${host.app} bundle must be absolute`);
-  }
-  if (configRoot !== undefined && (!isAbsolute(configRoot) || existsSync(configRoot))) {
-    throw new Error('ordinary --config-root must be an absolute new directory; existing data is never overwritten');
-  }
-  return input;
-}
 
 /** A new empty configuration root of one run, `<root>/target/e2e/<time>-<random>`. */
 export function newConfigRoot(root) {
@@ -90,36 +70,25 @@ export function parseDefaults(entries) {
  * (docs/spec/hosts.md#application-arguments), so the value holds for that process alone, and the window checks read the entries as
  * the JSON object SOKSAK_DEFAULTS.
  */
-export async function e2ePlan({ root, configRoot, script, native, nativeEntries = [], candidate, artifacts, only, runFolder, platform,
-  fixtures = fixturePluginIds(), defaults = [] }) {
+export async function e2ePlan({ root, configRoot, script, native, only, platform, fixtures = fixturePluginIds(), defaults = [] }) {
   // `only` is one file selector or the list of a repeated --only, which scripts/node-tests.mjs widens to the files that hold any of them.
   const onlies = only === undefined ? [] : [only].flat();
-  if (candidate && (artifacts !== undefined || onlies.length || defaults.length)) throw new Error('candidate acceptance rejects ordinary selection, artifact or defaults overrides');
   const defaultsPairs = parseDefaults(defaults);
-  if (artifacts) validateOrdinaryArtifacts(artifacts);
-  if (artifacts && !isAbsolute(configRoot)) throw new Error('ordinary configuration root must be absolute');
-  const inputs = candidate ?? artifacts;
   const env = { SOKSAK_CONFIG_ROOT: configRoot };
   const ca = join(configRoot, 'soksak-check-registry-tls', 'ca.pem');
-  // The declared application artifact of each application: the host entry of the context, or the debug build output of the checkout.
+  // The application artifact of each application: the debug build output of the checkout.
   const located = new Map();
   const executables = new Map();
   for (const app of APPS) {
-    const artifact = inputs ? artifactOf(inputs, app) : await applicationArtifact(join(root, 'target', 'debug'), app, { platform });
+    const artifact = await applicationArtifact(join(root, 'target', 'debug'), app, { platform });
     located.set(app, artifact);
     executables.set(app, await applicationExecutables(artifact, app, { platform }));
   }
   const appBinary = (app) => executables.get(app).application;
-  // The debug run installs the fixture registry that `make build-fixture-registry` of E2E_BUILD wrote. A candidate or prebuilt run
-  // builds the fixture registry of this checkout, its sidecar fixtures first, into the configuration root with the sok of the first
-  // application artifact, so it installs the fixtures of the candidate checkout with the installers of the candidate artifacts and reads no other
-  // registry.
-  const registryFolder = inputs ? join(configRoot, 'fixture-registry') : join(root, 'target', 'fixture-registry');
-  const registry = join(registryFolder, 'index.json');
+  // The run installs the fixture registry that `make build-fixture-registry` of E2E_BUILD wrote.
+  const registry = join(root, 'target', 'fixture-registry', 'index.json');
   return [
     { name: 'registry certificates', phase: 'prepare', kind: 'run', argv: ['make', 'create-test-certificates'], env },
-    ...(inputs ? [{ name: 'fixture registry', phase: 'prepare', kind: 'run', env,
-      argv: ['make', 'build-fixture-registry-from-sok', `FIXTURE_SOK=${executables.get(APPS[0]).sok}`, `FIXTURE_REGISTRY=${registryFolder}`] }] : []),
     ...APPS.flatMap((app) => {
       const { sok } = executables.get(app);
       const config = ['--config-dir', configDir(configRoot, app)];
@@ -135,7 +104,6 @@ export async function e2ePlan({ root, configRoot, script, native, nativeEntries 
       argv: [appBinary(app), '--config-dir', configDir(configRoot, app), '--registry-ca', ca,
         ...Object.entries(defaultsPairs).flatMap(([name, value]) => [`-${name}`, value])],
     })),
-    ...(inputs ? [{ name: 'acceptance before', phase: 'prepare', kind: 'capture', capture: 'before' }] : []),
     {
       name: 'window checks', phase: 'check', kind: 'run',
       argv: ['node', 'scripts/node-tests.mjs', '--script', script, '--concurrency', '1', '--timeout', '600', ...onlies.flatMap((value) => ['--only', value])],
@@ -143,14 +111,10 @@ export async function e2ePlan({ root, configRoot, script, native, nativeEntries 
         ...env,
         ...Object.fromEntries(APPS.map((app) => [`SOKSAK_BINARY_${app.toUpperCase()}`, appBinary(app)])),
         SOKSAK_CANDIDATE_REGISTRY: pathToFileURL(registry).href,
-        ...(candidate ? { SOKSAK_CANDIDATE_RUN_FOLDER: runFolder } : {}),
         ...(defaults.length ? { SOKSAK_DEFAULTS: JSON.stringify(defaultsPairs) } : {}),
       },
     },
-    ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'native', target: native, platform,
-      env: { ...env, ...(candidate ? { SOKSAK_NATIVE_TEST_RUN_FOLDER: join(runFolder, 'native'),
-        SOKSAK_NATIVE_TEST_ENTRIES: nativeEntries.map((entry) => entry.replaceAll(' ', ',')).join(' ') } : {}) } }]),
-    ...(inputs ? [{ name: 'acceptance after', phase: 'cleanup', kind: 'capture', capture: 'after' }] : []),
+    ...(native === undefined ? [] : [{ name: 'native end-to-end tests', phase: 'check', kind: 'native', target: native, platform, env }]),
     // A person quits through the quit item of the application menu or through the quit key: each application ends by the item and the
     // last one by the key, and the run, the parent of each process, checks that it exits with status 0.
     ...APPS.map((app, index) => ({
@@ -159,20 +123,6 @@ export async function e2ePlan({ root, configRoot, script, native, nativeEntries 
     })),
     { name: 'remaining processes', phase: 'cleanup', kind: 'remaining', paths: [configRoot, ...APPS.map((app) => located.get(app))], platform },
   ];
-}
-
-/** The path of the application artifact of `app` that the host entry of a candidate or ordinary artifact context names. */
-const artifactOf = (inputs, app) => inputs.hosts.find((host) => host.app === app).bundle;
-
-/**
- * The required terminal steps use placeholder locations so the publication gate needs no workstation path, and the platform of the
- * candidate artifacts, so the gate gives the same steps on every platform that it runs on.
- */
-export async function candidatePlanNames(script, { native }) {
-  const candidate = { hosts: CANDIDATE_HOSTS.map((app) => ({ app, bundle: `/candidate/${app}` })) };
-  const plan = await e2ePlan({ root: '/source', configRoot: '/configuration', runFolder: '/run', script,
-    native: native ? nativeTarget(script) : undefined, nativeEntries: [], candidate, platform: CANDIDATE_PLATFORM.platform });
-  return [...plan.map(({ name }) => name), 'acceptance after cleanup', 'reference cleanup', 'configuration cleanup'];
 }
 
 /**
@@ -357,7 +307,7 @@ async function runNative(item, interrupted) {
  * `lockRelease` and `processes` are the lock release wait and the process list of the platform; a test passes its own readers.
  * `quitLimitMs` is the limit of each quit step (QUIT_LIMIT_MS by default); a test passes a shorter limit.
  */
-export async function runPlan(steps, { write, children = new Map(), interrupted, capture, outcome = () => {}, connectClient = connect,
+export async function runPlan(steps, { write, children = new Map(), interrupted, outcome = () => {}, connectClient = connect,
   lockRelease = waitForLockRelease, processes = listProcesses, quitLimitMs = QUIT_LIMIT_MS }) {
   const failures = [];
   const since = Date.now();
@@ -387,7 +337,6 @@ export async function runPlan(steps, { write, children = new Map(), interrupted,
       else if (item.kind === 'quit') await quitApplication(item, children, since, write, connectClient, lockRelease, quitLimitMs);
       else if (item.kind === 'native') await runNative(item, item.phase === 'cleanup' ? undefined : interrupted);
       else if (item.kind === 'remaining') await checkRemaining(item, processes);
-      else if (item.kind === 'capture') await capture(item.capture);
       else throw new Error(`unknown step kind ${JSON.stringify(item.kind)}`);
       if (interrupted?.aborted && item.phase !== 'cleanup') throw interruptedBy(interrupted);
       write(`passed ${item.name} ${((performance.now() - from) / 1000).toFixed(1)}s`);
@@ -421,56 +370,12 @@ export function finishRoot(configRoot, failures, write) {
   write(`kept ${configRoot}: ${failures.length} step${failures.length === 1 ? '' : 's'} failed`);
 }
 
-/** Completes the recorded candidate plan and attaches its actual outcomes to the retained window manifest. */
-export async function finishCandidate({ root, context, configRoot, runFolder, script, initializationId, inputs, steps, failures, dispose, write },
-  { capture = collectAcceptanceInputs, cleanup = finishRoot } = {}) {
-  try {
-    inputs.afterCleanup = await capture(root, context, configRoot, { live: false });
-    steps.push({ name: 'acceptance after cleanup', status: 'pass' });
-  } catch (error) {
-    failures.push(`acceptance after cleanup: ${error.message}`);
-    steps.push({ name: 'acceptance after cleanup', status: 'fail' });
-  }
-  try {
-    await dispose();
-    steps.push({ name: 'reference cleanup', status: 'pass' });
-  } catch (error) {
-    failures.push(`reference cleanup: ${error.message}`);
-    steps.push({ name: 'reference cleanup', status: 'fail' });
-  }
-  const plan = { status: failures.length ? 'fail' : 'pass', steps };
-  const acceptance = await finishAcceptanceRun({ runFolder, context, script, initializationId,
-    ...inputs, plan, errors: failures, finalize: async (findings) => {
-      for (const error of findings) if (!failures.includes(error)) failures.push(error);
-      try {
-        cleanup(configRoot, failures, write);
-        steps.push({ name: 'configuration cleanup', status: 'pass' });
-      } catch (error) {
-        const message = `configuration cleanup: ${error.message}`;
-        failures.push(message);
-        findings.push(message);
-        steps.push({ name: 'configuration cleanup', status: 'fail' });
-      }
-      plan.status = failures.length ? 'fail' : 'pass';
-    } });
-  for (const error of acceptance.errors) if (!failures.includes(error)) failures.push(error);
-  write(`acceptance ${runFolder}/manifest.json`);
-}
-
 async function main(argv) {
   const { values } = parseArgs({
-    args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, candidate: { type: 'string' },
-      artifacts: { type: 'string' }, 'config-root': { type: 'string' }, only: { type: 'string', multiple: true }, defaults: { type: 'string', multiple: true } },
+    args: argv, strict: true, options: { script: { type: 'string' }, native: { type: 'string' }, only: { type: 'string', multiple: true },
+      defaults: { type: 'string', multiple: true } },
   });
   if (values.script === undefined) throw new Error('--script names the window-check script of the run');
-  if (values.candidate && (values.artifacts !== undefined || values.only !== undefined || values['config-root'] !== undefined
-    || values.defaults !== undefined)) {
-    throw new Error('candidate acceptance rejects ordinary selection, artifacts, configuration and defaults overrides');
-  }
-  if (values['config-root'] !== undefined && values.artifacts === undefined) throw new Error('--config-root requires explicit --artifacts');
-  const ordinary = values.artifacts === undefined ? undefined
-    : validateOrdinaryArtifacts(JSON.parse(readFileSync(values.artifacts, 'utf8')), values['config-root']);
-  if (ordinary && (process.env.SOKSAK_APP || process.env.NATIVE_TEST_ONLY)) throw new Error('ordinary artifact acceptance requires every declared host; host/native environment selection is not allowed');
   const write = (line) => process.stdout.write(`${line}\n`);
   // Reference installation and later check commands share cancellation and clean up their own children.
   const interrupt = new AbortController();
@@ -480,63 +385,11 @@ async function main(argv) {
       interrupt.abort(signal);
     });
   }
-  let prepared;
-  let nativeEntries = [];
-  if (values.candidate) {
-    if (!candidateScripts(ROOT).includes(values.script)) throw new Error(`candidate acceptance does not declare script ${values.script}`);
-    if (process.env.SOKSAK_APP || process.env.NATIVE_TEST_ONLY) throw new Error('candidate acceptance requires every candidate host and the changed native tests');
-    if (values.native !== undefined && values.native !== nativeTarget(values.script)) throw new Error('candidate acceptance native target differs from the declared tier');
-    // The run holds the checks of the script that the candidate changes since the previous release (candidatePolicy).
-    const { candidatePolicy } = await import('./candidate-acceptance.mjs');
-    const policy = (await candidatePolicy(ROOT)).find((entry) => entry.script === values.script);
-    if (!policy) throw new Error(`candidate acceptance requires no run of ${values.script}: none of its checks changed since the previous release`);
-    nativeEntries = policy.native;
-    values.native = nativeEntries.length ? nativeTarget(values.script) : undefined;
-    prepared = await prepareCandidate(JSON.parse(readFileSync(values.candidate, 'utf8')));
-  } else if (ordinary) {
-    // A focused ordinary run reuses the context validation and deliberately does not produce candidate acceptance.
-    prepared = await prepareOrdinaryArtifacts(ordinary);
-  }
-  let configRoot;
-  try {
-    configRoot = values['config-root'];
-    if (configRoot === undefined) configRoot = newConfigRoot(ROOT);
-    else mkdirSync(configRoot); // Exclusive fresh root; a concurrent creator fails rather than overwrites.
-  }
-  catch (error) {
-    if (prepared) {
-      try { await prepared.dispose(); }
-      catch (cleanup) { throw new AggregateError([error, cleanup], 'candidate configuration creation and reference cleanup failed'); }
-    }
-    throw error;
-  }
-  const initializationId = randomUUID();
-  const runFolder = values.candidate ? join(ROOT, 'target', 'test-runs', `candidate-${initializationId}`) : undefined;
+  const configRoot = newConfigRoot(ROOT);
   write(`run ${configRoot}`);
-  const inputs = {}, steps = [];
-  const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, nativeEntries,
-    candidate: values.candidate ? prepared?.context : undefined,
-    artifacts: ordinary ? prepared.context : undefined, only: values.only, defaults: values.defaults ?? [], runFolder }),
-  { write, interrupted: interrupt.signal, outcome: (value) => steps.push(value),
-    capture: async (phase) => {
-      inputs[phase] = await (values.candidate ? collectAcceptanceInputs : collectOrdinaryInputs)(ROOT, prepared.context, configRoot);
-      if (ordinary) {
-        write(`ordinary artifact ${phase} ${JSON.stringify(inputs[phase])}`);
-        if (phase === 'after' && inputs.before) {
-          const stable = ({ hosts, ...source }) => ({ ...source, hosts: hosts.map(({ pid, ...identity }) => identity) });
-          if (JSON.stringify(stable(inputs.before)) !== JSON.stringify(stable(inputs.after))) throw new Error('ordinary artifact identities changed during the run');
-        }
-      }
-    } });
-  if (values.candidate) await finishCandidate({ root: ROOT, context: prepared.context, configRoot, runFolder, script: values.script,
-    initializationId, inputs, steps, failures, dispose: prepared.dispose, write });
-  else {
-    if (prepared) {
-      try { await prepared.dispose(); }
-      catch (error) { failures.push(`reference cleanup: ${error.message}`); }
-    }
-    finishRoot(configRoot, failures, write);
-  }
+  const failures = await runPlan(await e2ePlan({ root: ROOT, configRoot, script: values.script, native: values.native, only: values.only,
+    defaults: values.defaults ?? [] }), { write, interrupted: interrupt.signal });
+  finishRoot(configRoot, failures, write);
   for (const failure of failures) write(`failure ${failure}`);
   return failures.length === 0 ? 0 : 1;
 }

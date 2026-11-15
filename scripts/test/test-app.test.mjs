@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { startCasePlayer } from "@soksak/client/testing";
-import { e2ePlan, finishCandidate, finishRoot, newConfigRoot, remainingProcesses, runPlan, validateOrdinaryArtifacts, quitApplication } from "../test-app.mjs";
+import { e2ePlan, finishRoot, newConfigRoot, remainingProcesses, runPlan, quitApplication } from "../test-app.mjs";
 import { applicationArtifact, applicationExecutables } from "../platform/platform.js";
 import { fixturePluginIds } from "../fixture-registry.mjs";
 
@@ -18,51 +18,6 @@ const node = (code) => [process.execPath, "-e", code];
 // events service the watch of the folder can become active after that limit, and the read at the limit then ends the step.
 const START_TEST_LIMIT_MS = 70000;
 const step = (name, phase, code) => ({ name, phase, kind: "run", argv: node(code), env: {} });
-
-test("ordinary focused acceptance owns explicit prebuilt artifacts and unchanged quit paths", async () => {
-  const artifacts = {
-    schema: 1,
-    hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })),
-  };
-  const plan = await e2ePlan({ root: "/source", configRoot: "/configuration/fresh", script: "test-app", artifacts, only: "window-end.test.mjs",
-    platform: "darwin", fixtures: ["probe"] });
-  assert.deepEqual(plan.find((item) => item.name === "fixture registry"), { name: "fixture registry", phase: "prepare", kind: "run",
-    env: { SOKSAK_CONFIG_ROOT: "/configuration/fresh" }, argv: ["make", "build-fixture-registry-from-sok", "FIXTURE_SOK=/prebuilt/wailsv3.app/Contents/MacOS/sok",
-      "FIXTURE_REGISTRY=/configuration/fresh/fixture-registry"] });
-  for (const host of artifacts.hosts) {
-    assert.equal(plan.find((item) => item.name === `start ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok-${host.app}`);
-    assert.deepEqual(plan.find((item) => item.name === `registry ${host.app}`).argv,
-      [`${host.bundle}/Contents/MacOS/sok`, "registry", "use", "/configuration/fresh/fixture-registry/index.json", "--config-dir", `/configuration/fresh/soksak-check-${host.app}`]);
-    assert.equal(plan.find((item) => item.name === `install probe ${host.app}`).argv[0], `${host.bundle}/Contents/MacOS/sok`);
-  }
-  const checks = plan.find((item) => item.name === "window checks");
-  assert.deepEqual(checks.argv.slice(-2), ["--only", "window-end.test.mjs"]);
-  assert.equal(checks.env.SOKSAK_CANDIDATE_RUN_FOLDER, undefined, "ordinary focus must not claim full candidate acceptance");
-  assert.deepEqual(plan.filter((item) => item.kind === "quit").map(({ app, by }) => [app, by]), [["wailsv3", "menu"], ["tauriv2", "menu"], ["mygo", "key"]]);
-  assert.deepEqual(plan.find((item) => item.kind === "remaining").paths, ["/configuration/fresh", "/prebuilt/wailsv3.app", "/prebuilt/tauriv2.app", "/prebuilt/mygo.app"]);
-  assert.ok(!plan.some((item) => item.argv?.includes("install-plugins")), "explicit artifacts cannot use default debug installer");
-});
-
-test("candidate plans reject ordinary file selection and artifact overrides", async () => {
-  const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
-  for (const extra of [{ only: "window-end.test.mjs" }, { artifacts: candidate }, { defaults: ["AppleShowScrollBars=Always"] }]) {
-    await assert.rejects(() => e2ePlan({ root: "/source", configRoot: "/configuration", script: "test-app", candidate, ...extra }), /candidate.*(selection|artifacts|override)/);
-  }
-});
-
-test("ordinary artifact input rejects relative paths, incomplete hosts and existing configuration data", (t) => {
-  const input = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}.app` })) };
-  assert.equal(validateOrdinaryArtifacts(input), input);
-  const change = (fn) => { const value = structuredClone(input); fn(value); return value; };
-  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts[0].bundle = "relative.app"; })), /bundle must be absolute/);
-  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts.pop(); })), /every host exactly once/);
-  assert.throws(() => validateOrdinaryArtifacts(change((v) => { v.hosts[0].app = v.hosts[1].app; })), /every host exactly once/);
-  assert.throws(() => validateOrdinaryArtifacts(input, "relative-config"), /absolute new directory/);
-  const existing = workspace(t);
-  writeFileSync(join(existing, "retained.txt"), "existing user state");
-  assert.throws(() => validateOrdinaryArtifacts(input, existing), /existing data is never overwritten/);
-  assert.equal(readFileSync(join(existing, "retained.txt"), "utf8"), "existing user state");
-});
 
 test("--defaults gives each started application the argument-domain pair and the window checks the same entries", async () => {
   const root = "/work";
@@ -107,12 +62,11 @@ test("a repeated --only reaches the window checks as one --only for each selecto
   assert.equal(none.find((item) => item.name === "window checks").argv.includes("--only"), false);
 });
 
-test("candidate CLI rejects all ordinary options before reading context or starting applications", () => {
-  for (const args of [["--only", "window-end.test.mjs"], ["--artifacts", "/must-not-read.json"], ["--config-root", "/must-not-create"],
-    ["--defaults", "AppleShowScrollBars=Always"]]) {
-    const result = spawnSync(process.execPath, [fileURLToPath(new URL("../test-app.mjs", import.meta.url)), "--script", "test-app", "--candidate", "/must-not-read.json", ...args], { encoding: "utf8" });
+test("the removed candidate and prebuilt options are unknown to the run, so no file is read and no application starts", () => {
+  for (const args of [["--candidate", "/must-not-read.json"], ["--artifacts", "/must-not-read.json"], ["--config-root", "/must-not-create"]]) {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL("../test-app.mjs", import.meta.url)), "--script", "test-app", ...args], { encoding: "utf8" });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /candidate acceptance rejects ordinary/);
+    assert.match(result.stderr, /Unknown option/, args[0]);
   }
 });
 
@@ -128,15 +82,11 @@ test("a window run waits for no idle time of the person: the runner and the make
   }
 });
 
-test("candidate acceptance has a make entrypoint that requires explicit context and script without rebuilding", { timeout: 10000 }, () => {
+test("the candidate make entrypoint is removed from the Makefile", { timeout: 10000 }, () => {
   const cwd = fileURLToPath(new URL('../../', import.meta.url));
-  const missing = spawnSync('make', ['--no-print-directory', 'test-app-candidate'], { cwd, encoding: 'utf8' });
-  assert.notEqual(missing.status, 0);
-  assert.match(missing.stderr, /CONTEXT=.*SCRIPT=/);
-  const planned = spawnSync('make', ['--no-print-directory', '-n', 'test-app-candidate', 'CONTEXT=/candidate/context.json', 'SCRIPT=test-app'], { cwd, encoding: 'utf8' });
-  assert.equal(planned.status, 0, planned.stderr);
-  assert.match(planned.stdout, /node scripts\/test-app.mjs --candidate "\/candidate\/context.json" --script "test-app"/);
-  assert.doesNotMatch(planned.stdout, /pnpm|cargo|go build|build-registry|clang/);
+  const removed = spawnSync('make', ['--no-print-directory', '-n', 'test-app-candidate'], { cwd, encoding: 'utf8' });
+  assert.notEqual(removed.status, 0);
+  assert.match(removed.stderr, /No rule to make target/);
 });
 
 function workspace(t) {
@@ -149,28 +99,6 @@ function recorder() {
   const lines = [];
   return { lines, write: (line) => lines.push(line) };
 }
-
-test("a final configuration cleanup failure cannot leave passing candidate evidence", { timeout: 5000 }, async (t) => {
-  const root = workspace(t), runFolder = join(root, "run");
-  mkdirSync(runFolder);
-  const selection = { only: null, exclude: [], changed: false, namePattern: null, apps: ["tauriv2", "wailsv3"] };
-  writeFileSync(join(runFolder, "manifest.json"), JSON.stringify({ schema: 1, run: "fixture", finished_us: 1,
-    script: "benchmark:fixture", selection, tests: [{ name: "fixture.test.mjs", status: "pass" }] }));
-  writeFileSync(join(runFolder, "judgment.json"), JSON.stringify({ run: "fixture", audit: { status: "pass", findings: [] },
-    tests: selection.apps.map((app) => ({ app, result: "pass" })) }));
-  const inputs = { head: "fixture", dirty: false, hosts: [] }, failures = [];
-  const context = { candidate: { artifacts: [] }, assets: [] };
-  await finishCandidate({ root, context, configRoot: join(root, "config"), runFolder, script: "benchmark:fixture",
-    initializationId: "initial", inputs: { before: inputs, after: inputs }, steps: [{ name: "checks", status: "pass" }],
-    failures, dispose: async () => {}, write: () => {} },
-  { capture: async () => inputs, cleanup: () => { throw new Error("configuration removal denied"); } }).catch((error) => {
-    assert.match(error.message, /configuration removal denied/);
-  });
-  const { acceptance } = JSON.parse(readFileSync(join(runFolder, "manifest.json"), "utf8"));
-  assert.ok(acceptance.run.errors.some((error) => /configuration removal denied/.test(error)));
-  assert.equal(acceptance.run.plan.status, "fail");
-  assert.deepEqual(acceptance.run.plan.steps.at(-1), { name: "configuration cleanup", status: "fail" });
-});
 
 test("each run gets a new empty configuration root under target/e2e", { timeout: 5000 }, (t) => {
   const root = workspace(t);
@@ -252,12 +180,6 @@ test("test-app resolves the executables of each platform from its declared appli
     await assert.rejects(() => e2ePlan({ root, configRoot, script: "test-app", platform }),
       { name: "PlatformOperationNotImplemented", message: `applicationArtifact is not implemented on ${platform}` }, platform);
   }
-  // Prebuilt artifacts name their artifacts, and the executables inside them still come from the platform declaration.
-  const artifacts = { schema: 1, hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/prebuilt/${app}` })) };
-  for (const platform of ["linux", "win32"]) {
-    await assert.rejects(() => e2ePlan({ root, configRoot: "/configuration/fresh", script: "test-app", artifacts, platform }),
-      { name: "PlatformOperationNotImplemented", message: `applicationExecutables is not implemented on ${platform}` }, platform);
-  }
 });
 
 test("the test-app plan carries platform operations as neutral steps, with no quit key, menu key or program of a platform", { timeout: 5000 }, async () => {
@@ -312,48 +234,15 @@ test("a failed preparation skips the checks, runs the cleanup and names the fail
   assert.ok(lines.some((line) => /^passed end /.test(line)), lines.join("\n"));
 });
 
-test("a candidate plan builds the fixture registry of its checkout with its bundled installers and reads no context registry", { timeout: 5000 }, async () => {
-  const candidate = { hosts: ["mygo", "tauriv2", "wailsv3"].map((app) => ({ app, bundle: `/candidate/${app}.app` })) };
-  const plan = await e2ePlan({ root: "/work", configRoot: "/work/target/e2e/run", script: "test-app",
-    native: "test-app", candidate, runFolder: "/work/target/test-runs/candidate", platform: "darwin", fixtures: ["fixture"] });
-  assert.equal(plan.some((step) => step.argv?.includes("install-plugins")), false);
-  assert.deepEqual(plan.find((step) => step.name === "fixture registry").argv, ["make", "build-fixture-registry-from-sok",
-    "FIXTURE_SOK=/candidate/wailsv3.app/Contents/MacOS/sok", "FIXTURE_REGISTRY=/work/target/e2e/run/fixture-registry"]);
-  assert.deepEqual(plan.find((step) => step.name === "registry wailsv3").argv,
-    ["/candidate/wailsv3.app/Contents/MacOS/sok", "registry", "use", "/work/target/e2e/run/fixture-registry/index.json", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
-  assert.deepEqual(plan.find((step) => step.name === "install fixture wailsv3").argv,
-    ["/candidate/wailsv3.app/Contents/MacOS/sok", "plugin", "install", "fixture", "--config-dir", "/work/target/e2e/run/soksak-check-wailsv3"]);
-  assert.equal(plan.find((step) => step.name === "start wailsv3").argv[0], "/candidate/wailsv3.app/Contents/MacOS/sok-wailsv3");
-  const check = plan.find((step) => step.name === "window checks");
-  assert.equal(check.env.SOKSAK_CANDIDATE_RUN_FOLDER, "/work/target/test-runs/candidate");
-  assert.equal(check.env.SOKSAK_CANDIDATE_REGISTRY, "file:///work/target/e2e/run/fixture-registry/index.json");
-  for (const app of candidate.hosts.map((host) => host.app)) {
-    assert.equal(check.env[`SOKSAK_BINARY_${app.toUpperCase()}`], `/candidate/${app}.app/Contents/MacOS/sok-${app}`);
-  }
-  assert.equal(plan.find((step) => step.name === "native end-to-end tests").env.SOKSAK_NATIVE_TEST_RUN_FOLDER,
-    "/work/target/test-runs/candidate/native");
-  const names = plan.map((step) => step.name);
-  for (const app of candidate.hosts.map((host) => host.app)) {
-    assert.ok(names.indexOf(`start ${app}`) >= 0, app);
-    assert.ok(names.indexOf("acceptance before") > names.indexOf(`start ${app}`), app);
-    assert.ok(names.indexOf("acceptance after") < names.indexOf(`quit ${app}`), app);
-  }
-  assert.ok(names.indexOf("acceptance before") < names.indexOf("window checks"));
-  assert.ok(names.indexOf("acceptance after") > names.indexOf("native end-to-end tests"));
-});
-
-test("a plan records failed and skipped steps and still captures final inputs before cleanup", { timeout: 10000 }, async () => {
-  const outcomes = [], captures = [];
+test("a plan records failed and skipped steps and runs the cleanup after a failed check", { timeout: 10000 }, async () => {
+  const outcomes = [];
   const failures = await runPlan([
-    { name: "acceptance before", phase: "prepare", kind: "capture", capture: "before" },
     step("window checks", "check", "process.exit(1)"),
-    { name: "acceptance after", phase: "cleanup", kind: "capture", capture: "after" },
     step("close", "cleanup", ""),
-  ], { write() {}, capture: async (phase) => captures.push(phase), outcome: (value) => outcomes.push(value) });
-  assert.deepEqual(captures, ["before", "after"]);
+  ], { write() {}, outcome: (value) => outcomes.push(value) });
   assert.deepEqual(failures, ["window checks: exited with code 1"]);
   assert.deepEqual(outcomes.map(({ name, status }) => [name, status]),
-    [["acceptance before", "pass"], ["window checks", "fail"], ["acceptance after", "pass"], ["close", "pass"]]);
+    [["window checks", "fail"], ["close", "pass"]]);
   const skipped = [];
   await runPlan([step("prepare", "prepare", "process.exit(1)"), step("check", "check", ""), step("cleanup", "cleanup", "")],
     { write() {}, outcome: (value) => skipped.push(value) });
@@ -647,7 +536,7 @@ test("each end-to-end target of the Makefile names prerequisites, a window-check
   }
 });
 
-test("the fixture registry of a prebuilt run builds the sidecar fixtures and the registry with the sok of the bundle and builds no sok", { timeout: 10000 }, () => {
+test("the fixture registry target builds the sidecar fixtures and the registry with the sok that FIXTURE_SOK names and builds no sok",{ timeout: 10000 }, () => {
   const planned = spawnSync("make", ["--no-print-directory", "-n", "build-fixture-registry-from-sok", "FIXTURE_SOK=/candidate/sok", "FIXTURE_REGISTRY=/run/fixture-registry"],
     { encoding: "utf8" });
   assert.equal(planned.status, 0, planned.stderr);

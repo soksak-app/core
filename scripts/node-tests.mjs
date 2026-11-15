@@ -5,15 +5,14 @@
 // `--concurrency 1` because they share the applications, and `--timeout <seconds>`, at most 600, which is the limit of each test that declares none). A file has no limit of its own. The words of the script keep the spaces of their quoted parts and lose their quotes, as the shell of a package script reads them. The files are those that `node --test` runs for the paths: a directory holds every JavaScript file under it, and a path that names no file is an error. `--changed <range>` selects only the packages that hold a file which `git diff --name-only <range>` lists or declare it in `specFiles` of their package.json.
 import { parseArgs } from 'node:util';
 import { execFileSync } from 'node:child_process';
-import { existsSync, globSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, globSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { cpus } from 'node:os';
-import { basename, join, relative, resolve } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseShell, stringifyCommand } from '@yarnpkg/parsers';
 import { auditRunWithCatalog } from './audit-run.mjs';
 import { MAX_TEST_TIMEOUT_MS, runTests } from './test-runner.mjs';
 import { NODE_TEST_REPORTERS } from './node-test-evidence.mjs';
-import { CANDIDATE_HOSTS, candidateScripts, changedChecks, previousRelease } from './candidate-policy.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -274,22 +273,6 @@ export function auditAfterRun(scriptName, run, write, audit = auditRunWithCatalo
   return findings.length === 0 ? 0 : 1;
 }
 
-/**
- * A candidate run is the window checks of the script that the candidate adds or changes since the previous release and its changed
- * native end-to-end entries (changedChecks of scripts/candidate-policy.mjs), on every candidate host, without an inherited selection.
- */
-export function candidateSelection(values, tests, { root = ROOT, script, env = process.env } = {}) {
-  if (onlyList(values.only ?? '').length || values.exclude?.length || values['exclude-folder']?.length || values.changed !== undefined || env.SOKSAK_APP || env.NATIVE_TEST_ONLY
-    || /--test-(?:name-pattern|skip-pattern|only|shard)\b/.test(env.NODE_OPTIONS ?? '')
-    || tests.some(({ args }) => args.some((arg) => /^--test-(?:name-pattern|skip-pattern|only|shard)(?:=|$)/.test(arg)))) {
-    throw new Error('candidate acceptance selects the changed checks of the declared script on every candidate host without another test selection');
-  }
-  const since = previousRelease(root);
-  const changed = changedChecks(root, script, { since, tests: tests.map(({ name }) => name) });
-  if (!changed.tests.length) throw new Error(`candidate acceptance of ${script} has no window check that changed since ${since}`);
-  return { since, tests: changed.tests, native: changed.native, apps: [...CANDIDATE_HOSTS] };
-}
-
 async function main(argv) {
   const { values } = parseArgs({
     args: argv, strict: true,
@@ -317,11 +300,7 @@ async function main(argv) {
   const changed = values.changed === undefined ? undefined
     : execFileSync('git', ['diff', '--name-only', values.changed], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
   const { tests: all, before } = discoverNodeTests({ root: ROOT, packages: workspacePackages(ROOT), script: scriptName, changed, testTimeoutMs: limitMs });
-  const candidateFolder = process.env.SOKSAK_CANDIDATE_RUN_FOLDER;
-  if (candidateFolder && !candidateScripts(ROOT).includes(scriptName)) throw new Error(`candidate acceptance does not declare script ${scriptName}`);
-  const selection = candidateFolder ? candidateSelection(values, all, { script: scriptName }) : null;
-  const plan = selection ? { tests: all.filter(({ name }) => selection.tests.includes(name)) }
-    : planNodeRun(all, { range: values.changed, only, exclude: values.exclude, excludeFolder: values['exclude-folder'] });
+  const plan = planNodeRun(all, { range: values.changed, only, exclude: values.exclude, excludeFolder: values['exclude-folder'] });
   if (plan.skip !== undefined) {
     write(plan.skip);
     return 0;
@@ -334,16 +313,10 @@ async function main(argv) {
     if ([...built.results.values()].some((result) => result.status !== 'pass')) return 1;
   }
   const concurrency = count('concurrency');
-  const run = candidateFolder ? { id: basename(resolve(candidateFolder)), folder: resolve(candidateFolder) } : newRun(ROOT);
-  if (candidateFolder && existsSync(join(run.folder, 'manifest.json'))) throw new Error('candidate acceptance cannot reuse an existing run manifest');
+  const run = newRun(ROOT);
   write(`RUN  ${tests.length} test files with ${concurrency} at once, each test limited to ${limitMs / 1000}s and no limit for a file; run ${run.id} keeps its output and manifest in ${run.folder}`);
   // A run passes when every file passed and a file ran a test (runTests).
   const { passed } = await runTests({ tests, concurrency, write, run });
-  if (candidateFolder) {
-    const path = join(run.folder, 'manifest.json');
-    const manifest = JSON.parse(readFileSync(path, 'utf8'));
-    writeFileSync(path, `${JSON.stringify({ ...manifest, script: scriptName, selection }, null, 2)}\n`);
-  }
   // The logs are audited also when a test failed, because a failed run is classified by its logs.
   const audited = auditAfterRun(scriptName, run, write);
   return passed && audited === 0 ? 0 : 1;

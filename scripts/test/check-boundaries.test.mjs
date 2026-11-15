@@ -102,18 +102,18 @@ test("the plugin names are read in the checks and harness modules of e2e and scr
 });
 
 test("the gate of a core release names no registry index URL, no plugin repository and no registry but the fixture registry", { timeout: 1000 }, () => {
-  assert.deepEqual(GATE_SOURCES, ["Makefile", "scripts/acceptance-run.mjs", "scripts/candidate-acceptance.mjs", "scripts/candidate-context.mjs", "scripts/test-app.mjs"]);
+  assert.deepEqual(GATE_SOURCES, ["Makefile", "scripts/candidate-acceptance.mjs", "scripts/test-app.mjs"]);
   const sources = {
     "Makefile": "FIXTURE_REGISTRY = target/fixture-registry\nINDEX = https://example.test/registry/index.json\n",
     "scripts/test-app.mjs": "const registry = join(root, 'target', 'fixture-registry');\nconst plugins = '../plugins/probe';\nconst old = 'target/registry/index.json';\n",
-    "scripts/acceptance-run.mjs": "const sidecar = \"../sidecars/probe\";\nconst publicIndex = `target/registry-public/index.json`;\n",
+    "scripts/candidate-acceptance.mjs": "const sidecar = \"../sidecars/probe\";\nconst publicIndex = `target/registry-public/index.json`;\n",
   };
   assert.deepEqual(checkGateSources(Object.keys(sources), (file) => sources[file]), [
     "Makefile:2: the gate of a core release names a registry index URL",
     "scripts/test-app.mjs:2: the gate of a core release names a plugin repository path",
     "scripts/test-app.mjs:3: the gate of a core release names a registry other than the fixture registry",
-    "scripts/acceptance-run.mjs:1: the gate of a core release names a plugin repository path",
-    "scripts/acceptance-run.mjs:2: the gate of a core release names a registry other than the fixture registry",
+    "scripts/candidate-acceptance.mjs:1: the gate of a core release names a plugin repository path",
+    "scripts/candidate-acceptance.mjs:2: the gate of a core release names a registry other than the fixture registry",
   ]);
 });
 

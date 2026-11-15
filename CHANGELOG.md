@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The local candidate acceptance is removed, because publication reads no acceptance report and checks only the release files of its run: the acceptance collection, the candidate context, the candidate policy and report, the candidate mode of the window-check runner, the `--artifacts` mode and `make test-app-candidate` are deleted (F864).
 - A core version enters the registry without a check of the plugins that it installs; a plugin keeps its own compatibility with a new core (F866).
 - The view binary test probe of the Rust host ends the data store of its document before it removes its folder (F865).
 - The release run of a push publishes its release files once every check and every build of the run succeeded; publication reads no local acceptance report (F863).
