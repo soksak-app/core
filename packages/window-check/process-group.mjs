@@ -79,14 +79,14 @@ export function signalGroup(pgid, signal, send = sendToGroup, members = groupMem
  * Whether a member of the group pgid still runs. The probe is signal 0, and its refusal is judged by the rule of signalGroup: a group
  * that no longer exists or that holds only ended members runs nothing.
  */
-export function groupRuns(pgid, send = sendToGroup) {
+export function groupRuns(pgid, send = sendToGroup, members = groupMembers) {
   try {
     send(pgid, 0);
     return true;
   } catch (error) {
     if (error.code === "ESRCH") return false;
     if (error.code !== "EPERM") throw error;
-    return runningMembers(pgid).length > 0;
+    return runningMembers(pgid, members(pgid)).length > 0;
   }
 }
 
@@ -119,19 +119,25 @@ export const TERMINATION_GRACE_MS = 5000;
  * can remove its partial output, release its locks and end its children. `exited` is the promise of the exit event of the leader, the
  * event of the stop. A group that still runs TERMINATION_GRACE_MS after the SIGTERM gets SIGKILL, reported as `grace`; `kill(reason)`
  * sends SIGKILL at once, for an event such as a second cancellation. At the exit of the leader the grace ends and the members that still
- * run get SIGKILL, reported as `leader-exit`, because the program that started them ended without them. Each SIGKILL calls
- * `report({ reason, running })` with the members that still ran. The SIGTERM is sent before the function returns, and a refusal of it
- * throws. `ended` resolves after the exit of the leader and that last signal, and rejects with a refused SIGKILL. The wait until the
- * members that are not children of the caller are gone belongs to the caller, because no event reports their end.
+ * run and have not received a SIGKILL from this function get one, reported as `leader-exit`, because the program that started them ended
+ * without them. A member that received a SIGKILL cannot ignore it, so it is not reported again, and no SIGKILL is sent when no other
+ * member runs. Each SIGKILL is sent to the group, which also reaches a member that already received one, and calls
+ * `report({ reason, running })` with the members that still ran and had not received a SIGKILL. The SIGTERM is sent before the function
+ * returns, and a refusal of it throws. `ended` resolves after the exit of the leader and that last signal, and rejects with a refused
+ * SIGKILL. `send` and `members` are the group signal and the process-table read of the module; a test passes its own to inject a fault.
+ * The wait until the members that are not children of the caller are gone belongs to the caller, because no event reports their end.
  */
-export function terminateGroup(pgid, { exited, report }) {
+export function terminateGroup(pgid, { exited, report }, send = sendToGroup, members = groupMembers) {
   let killed = false;
   let leaderExited = false;
+  // The pids that received a SIGKILL of this group. A later sweep neither signals nor reports a pid of this set.
+  const signaled = new Set();
   const killRunning = (reason) => {
-    if (!groupRuns(pgid)) return null;
-    const running = runningMembers(pgid);
+    if (!groupRuns(pgid, send, members)) return null;
+    const running = runningMembers(pgid, members(pgid)).filter((member) => !signaled.has(member.pid));
     if (running.length === 0) return null;
-    killGroup(pgid);
+    killGroup(pgid, send, members);
+    for (const member of running) signaled.add(member.pid);
     return { reason, running };
   };
   const kill = (reason) => {
@@ -140,8 +146,8 @@ export function terminateGroup(pgid, { exited, report }) {
     killed = true;
     if (record) report(record);
   };
-  if (!groupRuns(pgid)) return { ended: exited.then(() => {}), kill: () => {} };
-  signalGroup(pgid, "SIGTERM");
+  if (!groupRuns(pgid, send, members)) return { ended: exited.then(() => {}), kill: () => {} };
+  signalGroup(pgid, "SIGTERM", send, members);
   let refuse;
   const grace = setTimeout(() => {
     if (killed) return;

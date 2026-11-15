@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- `terminateGroup`은 자기 SIGKILL이 이미 닿은 member에 다시 signal을 보내거나 다시 보고하지 않는다 (F859).
 - Window facts test는 prohibited activation policy를 유지하므로 아무것도 활성화하지 않는다 (F858).
 - `installCoreExposure`는 entry를 등록하기 전에 memory saver 없는 page를 거부한다 (F857).
 - Snapshot page test는 실제 memory saver를 설치하고, 기록된 settings case는 agent group의 `setupState` 호출을 담는다 (F856).

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- `terminateGroup` neither signals nor reports again a member that its SIGKILL already reached (F859).
 - The window facts test keeps the prohibited activation policy, so it activates nothing (F858).
 - `installCoreExposure` refuses a page without its memory saver before it registers any entry (F857).
 - The snapshot page test installs the real memory saver, and the recorded settings case holds the `setupState` call of the agent group (F856).
