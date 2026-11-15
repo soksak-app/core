@@ -259,12 +259,25 @@ async function startApplication(item, children) {
 
 /**
  * Quits an application by its item and waits for its exit and its lock release. `limitMs` is the limit of the quit step; runPlan
- * passes QUIT_LIMIT_MS, and a test passes its own limit so that the expiry is observed without a fake clock.
+ * passes QUIT_LIMIT_MS, and a test passes its own limit so that the expiry is observed without a fake clock. A quit that fails while
+ * the started process still runs ends that process with SIGKILL and waits for its exit, because a process that a check started ends
+ * when the check ends; the step still fails, and its failure names that end.
  */
 export async function quitApplication(item, children, since, write, connectClient = connect, lockRelease = waitForLockRelease,
   limitMs = QUIT_LIMIT_MS) {
   if (typeof limitMs !== 'number' || !Number.isFinite(limitMs) || limitMs <= 0) throw new Error(`quitApplication needs a limit of more than 0 ms, not ${limitMs}`);
   const child = children.get(item.app);
+  try {
+    await quitNormally(item, child, since, write, connectClient, lockRelease, limitMs);
+  } catch (error) {
+    if (child.exitCode !== null || child.signalCode !== null) throw error;
+    child.kill('SIGKILL');
+    await exited(child);
+    throw new Error(`${error.message}; the application still ran and was ended with SIGKILL`);
+  }
+}
+
+async function quitNormally(item, child, since, write, connectClient, lockRelease, limitMs) {
   let client;
   let expired = false;
   const bound = limit(limitMs, `the normal quit did not complete in ${limitMs / 1000}s`);
@@ -305,7 +318,7 @@ export async function quitApplication(item, children, since, write, connectClien
     bound.clear();
   }
   // Retain the existing lock-holder proof, including a replacement process
-  // after relaunch. A timeout above is a failed Quit, never a forced shutdown.
+  // after relaunch. A timeout above is a failed Quit; the end of a process that still runs belongs to quitApplication.
   await lockReleased(item.configDir, action, item.platform, lockRelease, limitMs);
 }
 

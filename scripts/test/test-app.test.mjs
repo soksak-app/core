@@ -274,13 +274,14 @@ test("the test-app plan carries platform operations as neutral steps, with no qu
 });
 
 test("a quit step quits through the platform operation of its platform and fails with the named error on a platform without it", { timeout: 10000 }, async (t) => {
-  const app = await quittingApplication(t);
   const player = await startCasePlayer("no-request");
   t.after(() => player.close());
+  // The failed quit ends the application that still runs, so each platform quits an application of its own.
   for (const platform of ["linux", "win32"]) {
+    const app = await quittingApplication(t);
     const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform, by: "key", app: "app", configDir: player.configDir }],
       { write: () => {}, children: new Map([["app", app]]) });
-    assert.deepEqual(failures, [`quit app: quitApplication is not implemented on ${platform}`]);
+    assert.deepEqual(failures, [`quit app: quitApplication is not implemented on ${platform}; the application still ran and was ended with SIGKILL`]);
   }
   assert.deepEqual(player.requests, [], "a platform without the quit operation sends no request");
 });
@@ -391,6 +392,24 @@ test("a start step ends when endpoint.json is written before the watch of the fo
   assert.deepEqual(await runPlan([started], { write: () => {}, children }), []);
 });
 
+test("a quit step that fails while its application runs ends that application and names the end in its failure", { timeout: START_TEST_LIMIT_MS }, async (t) => {
+  // The application listens on a socket of its folder, so it runs until a signal ends it, and its endpoint.json holds a part of
+  // its JSON, as a file that is read while it is written does; the quit cannot reach the application through it.
+  const configDir = workspace(t);
+  writeFileSync(join(configDir, "endpoint.json"), "{");
+  const children = new Map();
+  t.after(() => children.get("app")?.kill("SIGKILL"));
+  const listens = `require("net").createServer().listen(${JSON.stringify(join(configDir, "app.sock"))})`;
+  const started = { name: "start app", phase: "prepare", kind: "start", app: "app", argv: node(listens), configDir, output: join(configDir, "app.out") };
+  assert.deepEqual(await runPlan([started], { write: () => {}, children }), []);
+  const quit = { name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir };
+  const failures = await runPlan([quit], { write: () => {}, children });
+  const file = join(configDir, "endpoint.json");
+  assert.equal(failures.length, 1, JSON.stringify(failures));
+  assert.match(failures[0], new RegExp(`^quit app: ${file.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} is not valid JSON: .+; the application still ran and was ended with SIGKILL$`));
+  assert.equal(children.get("app").signalCode, "SIGKILL", "the application of the failed quit still runs");
+});
+
 /** The application menu that host.menu reports, with the Quit item in the application submenu. */
 const MENUS = { language: "en", menus: [
   { title: "soksak", items: [{ title: "About soksak", key: "" }, { title: "Quit soksak", key: "cmd+q" }] },
@@ -499,7 +518,7 @@ test("a quit step fails when the application menu has no item with the key equiv
   t.after(() => player.close());
   const failures = await runPlan([{ name: "quit app", phase: "cleanup", kind: "quit", platform: "darwin", by: "menu", app: "app", configDir: player.configDir }],
     { write: () => {}, children: new Map([["app", app]]) });
-  assert.deepEqual(failures, ["quit app: the application menu has no item with the key equivalent cmd+q"]);
+  assert.deepEqual(failures, ["quit app: the application menu has no item with the key equivalent cmd+q; the application still ran and was ended with SIGKILL"]);
 });
 
 test("a quit step ends when the process that holds the configuration lock exits, also when that process is not the started one", { timeout: 10000 }, async (t) => {

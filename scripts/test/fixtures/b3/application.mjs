@@ -4,7 +4,7 @@
 // played with status 0. At the first failure of the case it writes the failure on stderr and exits with status 1. The window that the case reports has the refresh
 // rate and the backing scale that B3_FIXTURE_REFRESH_RATE and B3_FIXTURE_BACKING_SCALE name. B3_FIXTURE_EXIT=1 makes it exit with
 // status 3 before it writes the endpoint.
-import { copyFileSync } from "node:fs";
+import { copyFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { startCasePlayer } from "@soksak/client/testing";
@@ -14,7 +14,10 @@ if (process.env.B3_FIXTURE_EXIT === "1") process.exit(3);
 const player = await startCasePlayer(process.env.B3_FIXTURE_CASE ?? "b3-run", {
   values: { scale: Number(process.env.B3_FIXTURE_BACKING_SCALE), "refresh-rate": Number(process.env.B3_FIXTURE_REFRESH_RATE) },
 });
-copyFileSync(join(player.configDir, "endpoint.json"), join(values["config-dir"], "endpoint.json"));
+// The endpoint is written beside its name and renamed to it, as a host writes it, so a client that sees the name reads the whole file.
+const written = join(values["config-dir"], `.endpoint-${process.pid}.json`);
+copyFileSync(join(player.configDir, "endpoint.json"), written);
+renameSync(written, join(values["config-dir"], "endpoint.json"));
 // A frame of the client that differs from the case ends the application at once, so no fixture process waits for a step that will not come.
 player.events.once("failure", (failure) => {
   process.stderr.write(`${failure}\n`);
