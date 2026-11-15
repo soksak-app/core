@@ -3,10 +3,12 @@
 package support
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -330,13 +332,57 @@ func Open(t *testing.T, name string) (*adapter.Framework, *SceneWorkbench, *adap
 	return framework, workbench, window
 }
 
-// Bundled returns the executable of a bundle that holds this test binary, because the notification center of a run requires a bundle.
-func Bundled(t *testing.T) string {
+// The setup of a host that a test starts (docs/spec/cli.md#agents-in-the-application): after the start of its first window the
+// host runs `<sok> setup environment` of its bundle through the login shell of the person and brings the agent skill current in
+// that environment. A test gives the host a HOME of its own, so the login shell reads no start file of the person and the setup
+// writes no file of the person, and puts beside the executable of the host a sok that answers as the setup contract states: one
+// JSON line of HOME, PATH and CLAUDE_CONFIG_DIR with that HOME, which holds no agent folder, so the host logs no error.
+
+// installSetupSok links the sidecar fixture program of the repository (docs/spec/cases/sidecars/fixture.sh) as the sok of folder and
+// writes its control file, which answers `sok setup environment` with home. A sok or a control file already in folder is an error.
+func installSetupSok(folder, home string) error {
+	// The program is found from this file: support, tests, mygo, host, packages and the repository root.
+	_, here, _, ok := runtime.Caller(0)
+	if !ok {
+		return errors.New("the source file of the support package is unknown")
+	}
+	program := filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "..", "docs", "spec", "cases", "sidecars", "fixture.sh")
+	if _, err := os.Stat(program); err != nil {
+		return err
+	}
+	environment, err := json.Marshal(map[string]any{"HOME": home, "PATH": "/usr/bin:/bin", "CLAUDE_CONFIG_DIR": nil})
+	if err != nil {
+		return err
+	}
+	for _, name := range []string{"sok", "control"} {
+		_, err := os.Lstat(filepath.Join(folder, name))
+		if err == nil {
+			return fmt.Errorf("%s holds %s already", folder, name)
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	link := filepath.Join(folder, "sok")
+	if err := os.Symlink(program, link); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(folder, "control"), []byte("write "+string(environment)+"\nexit 0\n"), 0o644); err != nil {
+		return errors.Join(err, os.Remove(link))
+	}
+	return nil
+}
+
+// Bundled returns the executable of a bundle that holds this test binary, because the notification center of a run requires a bundle,
+// and the HOME entry of the environment of the child application. The bundle holds the sok of the setup, which answers with that
+// HOME, a folder of the test without an agent folder.
+func Bundled(t *testing.T) (executable, home string) {
 	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
+	folder := t.TempDir()
 	contents := filepath.Join(t.TempDir(), "soksak-test.app", "Contents")
 	if err := os.MkdirAll(filepath.Join(contents, "MacOS"), 0o755); err != nil {
 		t.Fatal(err)
@@ -355,7 +401,10 @@ func Bundled(t *testing.T) string {
 	if err := os.Link(executable, inside); err != nil {
 		t.Fatal(err)
 	}
-	return inside
+	if err := installSetupSok(filepath.Dir(inside), folder); err != nil {
+		t.Fatal(err)
+	}
+	return inside, "HOME=" + folder
 }
 
 // Logged returns the standard error and the crash output that the application wrote to its log folder. A fatal error of the Go
@@ -389,6 +438,41 @@ func ChildTemporary(t *testing.T) string {
 		}
 	})
 	return "TMPDIR=" + folder
+}
+
+// HostSetup gives a host that a test starts in its own process what Bundled gives a child application: it sets HOME of the
+// process to a new folder and puts the sok of the setup beside the executable of the process, which is the folder of the bundle
+// of that host. The returned end removes the sok and its control file, sets HOME back and removes the folder; the process calls it
+// after the host ended.
+func HostSetup() (end func() error, err error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	if executable, err = filepath.EvalSymlinks(executable); err != nil {
+		return nil, err
+	}
+	folder, err := os.MkdirTemp("", "soksak-home")
+	if err != nil {
+		return nil, err
+	}
+	bundle := filepath.Dir(executable)
+	if err := installSetupSok(bundle, folder); err != nil {
+		return nil, errors.Join(err, os.RemoveAll(folder))
+	}
+	previous, set := os.LookupEnv("HOME")
+	if err := os.Setenv("HOME", folder); err != nil {
+		return nil, errors.Join(err, os.Remove(filepath.Join(bundle, "sok")), os.Remove(filepath.Join(bundle, "control")), os.RemoveAll(folder))
+	}
+	return func() error {
+		var restored error
+		if set {
+			restored = os.Setenv("HOME", previous)
+		} else {
+			restored = os.Unsetenv("HOME")
+		}
+		return errors.Join(restored, os.Remove(filepath.Join(bundle, "sok")), os.Remove(filepath.Join(bundle, "control")), os.RemoveAll(folder))
+	}, nil
 }
 
 // HostTemporary gives a host that a test starts in its own process the short temporary folder that ChildTemporary gives a child

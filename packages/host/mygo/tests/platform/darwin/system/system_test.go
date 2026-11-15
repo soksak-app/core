@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -196,14 +195,16 @@ type running struct {
 // runStep starts the application in its bundle with the workbench of step.
 func runStep(t *testing.T, step string) *running {
 	t.Helper()
-	return startStep(t, step, t.TempDir(), support.Bundled(t))
+	executable, home := support.Bundled(t)
+	return startStep(t, step, t.TempDir(), executable, home)
 }
 
-// startStep starts executable with the workbench of step, the configuration directory config and the environment of env.
-func startStep(t *testing.T, step, config, executable string, env ...string) *running {
+// startStep starts executable, the executable of a bundle of support.Bundled, with the workbench of step, the configuration
+// directory config, the HOME entry home that Bundled returned with the bundle and the environment of env.
+func startStep(t *testing.T, step, config, executable, home string, env ...string) *running {
 	t.Helper()
 	child := exec.Command(executable)
-	child.Env = append(append(os.Environ(), systemHelper+"="+config, systemStep+"="+step, support.ChildTemporary(t)), env...)
+	child.Env = append(append(os.Environ(), systemHelper+"="+config, systemStep+"="+step, support.ChildTemporary(t), home), env...)
 	child.Stderr = os.Stderr
 	output, err := child.StdoutPipe()
 	if err != nil {
@@ -473,27 +474,6 @@ func stagedUpdate(t *testing.T, config string) string {
 	return bundle
 }
 
-// installFixture links the sidecar fixture program of the repository as the executable executable of directory, and writes the
-// control text control to the file control of directory, which the program reads beside its link. It fails the test on any error.
-func installFixture(t *testing.T, directory, executable, control string) {
-	t.Helper()
-	// The program is found from this file: system, darwin, platform, tests, mygo, host, packages and the repository root.
-	_, here, _, _ := runtime.Caller(0)
-	program, err := filepath.Abs(filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "..", "..", "..", "docs", "spec", "cases", "sidecars", "fixture.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(program); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(program, filepath.Join(directory, executable)); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(directory, "control"), []byte(control), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // contract: mygo.system.update-replaces-the-bundle
 func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *testing.T) {
 	// The host holds the configuration directory and the bundle with their symbolic links resolved.
@@ -501,24 +481,23 @@ func TestAnUpdateQuitsTheApplicationAndStartsTheCommandThatReplacesItsBundle(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	executable, err := filepath.EvalSymlinks(support.Bundled(t))
+	bundled, home := support.Bundled(t)
+	executable, err := filepath.EvalSymlinks(bundled)
 	if err != nil {
 		t.Fatal(err)
 	}
 	bundle := stagedUpdate(t, config)
-	// The sok of the bundle writes the arguments of the command that replaces the bundle.
+	// The sok of the bundle answers the setup of the start (support.Bundled). The update runs a copy of that sok in the updates
+	// folder of the configuration directory, so the copy of the fixture program reads its control file there, and that copy
+	// writes the arguments of the command that replaces the bundle.
 	arguments := filepath.Join(t.TempDir(), "arguments")
-	control := "record-argv " + arguments + "\nexit 0\n"
-	installFixture(t, filepath.Dir(executable), "sok", control)
-	// The update runs a copy of sok in the updates folder of the configuration directory, so the copy of the fixture program
-	// reads its control file there.
 	if err := os.MkdirAll(filepath.Join(config, "updates"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(config, "updates", "control"), []byte(control), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(config, "updates", "control"), []byte("record-argv "+arguments+"\nexit 0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	run := startStep(t, "update", config, executable, updateBundle+"="+bundle)
+	run := startStep(t, "update", config, executable, home, updateBundle+"="+bundle)
 	run.expect(t, "candidate 99.0.0")
 	log := run.finished(t)
 	if !strings.Contains(log, `"cause":"update"`) {

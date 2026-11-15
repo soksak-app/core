@@ -134,6 +134,21 @@ func startViewSession() (*viewSession, error) {
 			fmt.Fprintln(os.Stderr, "the temporary folder of the host remains:", err)
 		}
 	}
+	// The host of the session reads the environment of the login shell after the start of its first window, so the process has a
+	// HOME of its own and the sok of the setup beside its executable (support.HostSetup).
+	endSetup, err := support.HostSetup()
+	if err != nil {
+		return nil, err
+	}
+	cleanup = func() {
+		os.RemoveAll(config)
+		if err := endTemporary(); err != nil {
+			fmt.Fprintln(os.Stderr, "the temporary folder of the host remains:", err)
+		}
+		if err := endSetup(); err != nil {
+			fmt.Fprintln(os.Stderr, "the setup of the host remains:", err)
+		}
+	}
 	folder := filepath.Join(config, "plugins", "probe", "0.2.0")
 	files := map[string]string{
 		filepath.Join(config, "plugins", "installed.json"): `{"format": 3, "plugins": {"probe": {"version": "0.2.0", "path": "plugins/probe/0.2.0",

@@ -191,8 +191,9 @@ func TestQuitEndsTheApplicationThroughItsQuitListeners(t *testing.T) {
 // contract: application.framework.names-the-application
 func TestARunPublishesTheEndpointWritesItsLogAndQuitsOnASignal(t *testing.T) {
 	config := t.TempDir()
-	child := exec.Command(support.Bundled(t))
-	child.Env = append(os.Environ(), applicationHelper+"="+config, support.ChildTemporary(t))
+	executable, home := support.Bundled(t)
+	child := exec.Command(executable)
+	child.Env = append(os.Environ(), applicationHelper+"="+config, support.ChildTemporary(t), home)
 	var output bytes.Buffer
 	child.Stdout, child.Stderr = &output, &output
 	if err := child.Start(); err != nil {
