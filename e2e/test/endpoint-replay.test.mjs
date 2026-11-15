@@ -12,6 +12,11 @@ import { readCase, startCasePlayer } from "@soksak/client/testing";
 import { finishSession, recordingFolders, Session } from "@soksak/window-check/app.mjs";
 import { replay } from "../endpoint-replay.mjs";
 
+// The check of this file runs without a test runner that keeps a run, so no test is marked in the event log (markTest of the
+// session): the player answers only the requests of its case.
+delete process.env.SOKSAK_RUN_ID;
+delete process.env.SOKSAK_RUN_FOLDER;
+
 const OPEN = JSON.stringify({ ts_us: 1791000000000000, seq: 1, level: "info", layer: "host", event: "log.open", fields: { schema: 3 } });
 
 test("a replayed still case leaves no untracked still folder", { timeout: 10000 }, async (t) => {

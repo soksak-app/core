@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The endpoint replay test runs without the run variables of the test runner, so its session sends no test mark that the replayed case does not hold (F852).
 - The undo and redo items of the Edit menu are framework items in the contract and in the menu tests of every host (F851).
 - The Go `sok` returns the errors of encoding a key, of compacting an endpoint answer and of the agent configuration file, and the remaining defaults state their reason (F850).
 - The comments of the agent group name it in English and refer to `docs/spec/settings.md#agents` (F849).

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Endpoint replay test는 test runner의 run 변수 없이 실행되므로, 그 session은 재생하는 case에 없는 test mark를 보내지 않는다 (F852).
 - Edit menu의 undo와 redo 항목은 계약과 모든 host의 menu test에서 framework 항목이다 (F851).
 - Go `sok`은 key encoding, endpoint 답의 압축, agent configuration file의 error를 반환하고, 나머지 기본값은 그 이유를 적는다 (F850).
 - Agent group의 주석은 그 group을 영어로 부르고 `docs/spec/settings.md#agents`를 가리킨다 (F849).
