@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The view binary test probe of the Rust host ends the data store of its document before it removes its folder (F865).
 - The release run of a push publishes its release files once every check and every build of the run succeeded; publication reads no local acceptance report (F863).
 - A failed quit step ends the application that it started and that still runs, and the B3 fixture application writes its endpoint by a rename (F862).
 - The Rust fixture binary of the host test runner is `sok-probe`, and the process group test keeps its programs running without a timer (F861).

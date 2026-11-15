@@ -25,6 +25,49 @@ unsafe extern "C" {
         webview: *mut *mut c_void,
     ) -> *const std::ffi::c_char;
     fn sp_host_test_webview_loaded(webview: *mut c_void) -> *const std::ffi::c_char;
+    fn sp_document_store_close(
+        directory: *const std::ffi::c_char,
+        closed: extern "C" fn(*mut c_void, *const std::ffi::c_char),
+        context: *mut c_void,
+    );
+}
+
+/// The end of the data store that `end_store` waits for: `None` until the store ended, then its error, if any.
+type StoreEnd = std::cell::RefCell<Option<Result<(), String>>>;
+
+extern "C" fn store_ended(context: *mut c_void, error: *const std::ffi::c_char) {
+    let end = unsafe { &*(context as *const StoreEnd) };
+    *end.borrow_mut() = Some(if error.is_null() {
+        Ok(())
+    } else {
+        Err(unsafe { CStr::from_ptr(error) }
+            .to_string_lossy()
+            .into_owned())
+    });
+    CFRunLoop::get_main().stop();
+}
+
+/// Ends the data store of `directory` on the main thread and runs the run loop until the store ended
+/// (docs/spec/native-surfaces.md#document-regions): the network process of WebKit writes its caches into the directory after
+/// its document closed, so the folder is removed only after the store ended.
+fn end_store(directory: &str) -> Result<(), String> {
+    let directory = CString::new(directory).map_err(|error| error.to_string())?;
+    let end: StoreEnd = std::cell::RefCell::new(None);
+    unsafe {
+        sp_document_store_close(
+            directory.as_ptr(),
+            store_ended,
+            &end as *const StoreEnd as *mut c_void,
+        )
+    };
+    while end.borrow().is_none() {
+        CFRunLoop::run_in_mode(
+            unsafe { kCFRunLoopDefaultMode },
+            std::time::Duration::from_secs(10),
+            false,
+        );
+    }
+    end.into_inner().expect("the store ended")
 }
 
 /// A 1x1 RGBA PNG: its signature and IHDR, which the persist checks, and the bytes that follow.
@@ -61,6 +104,10 @@ impl Probe {
     /// Creates the window on the main thread, waits for the load of its main page on a thread of its own while the main thread runs
     /// its run loop, which delivers the navigation, and creates the surface and the view.
     fn new() -> Result<Probe, String> {
+        objc2::rc::autoreleasepool(|_| Probe::create())
+    }
+
+    fn create() -> Result<Probe, String> {
         let platform = platform::current()?;
         let mut window: *mut c_void = std::ptr::null_mut();
         native_error(unsafe { sp_host_test_window_create(500.0, 400.0, &mut window) })?;
@@ -118,6 +165,10 @@ impl Probe {
     }
 
     fn put(&self, bytes: &[u8]) -> Result<String, String> {
+        objc2::rc::autoreleasepool(|_| self.put_pooled(bytes))
+    }
+
+    fn put_pooled(&self, bytes: &[u8]) -> Result<String, String> {
         put_view_binary_of(
             &self.documents,
             "probe-surface",
@@ -128,12 +179,20 @@ impl Probe {
     }
 
     fn take(&self, surface: &str, id: &str) -> Result<Vec<u8>, String> {
+        objc2::rc::autoreleasepool(|_| self.take_pooled(surface, id))
+    }
+
+    fn take_pooled(&self, surface: &str, id: &str) -> Result<Vec<u8>, String> {
         take_view_binary_of(&self.documents, surface, id, |handle, id| {
             self.platform.take_document_binary(handle, id)
         })
     }
 
     fn read(&self, value: ClipboardValue) -> Result<ViewReadResponse, String> {
+        objc2::rc::autoreleasepool(|_| self.read_pooled(value))
+    }
+
+    fn read_pooled(&self, value: ClipboardValue) -> Result<ViewReadResponse, String> {
         put_view_png(
             &self.documents,
             "probe-surface",
@@ -145,15 +204,33 @@ impl Probe {
 
 impl Drop for Probe {
     fn drop(&mut self) {
-        let _ = &self.folder;
-        if let Err(error) = self.platform.close_document(self.view) {
-            eprintln!("close the view: {error}");
+        let mut failures = Vec::new();
+        // The data store of a document ends only after the last reference to it goes away, so the objects that the closes
+        // autorelease are released before the end; every call of the probe runs in a pool of its own for the same reason.
+        objc2::rc::autoreleasepool(|_| {
+            if let Err(error) = self.platform.close_document(self.view) {
+                failures.push(format!("close the view: {error}"));
+            }
+            if let Err(error) = self.platform.close_surface(self.surface) {
+                failures.push(format!("close the surface: {error}"));
+            }
+            if let Err(error) = native_error(unsafe { sp_host_test_window_close(self.window) }) {
+                failures.push(format!("close the window: {error}"));
+            }
+        });
+        // The store ends before the folder is removed, which happens when the folder field drops after this function.
+        if let Err(error) = end_store(self.folder.text()) {
+            failures.push(format!("end the data store: {error}"));
         }
-        if let Err(error) = self.platform.close_surface(self.surface) {
-            eprintln!("close the surface: {error}");
+        if failures.is_empty() {
+            return;
         }
-        if let Err(error) = native_error(unsafe { sp_host_test_window_close(self.window) }) {
-            eprintln!("close the window: {error}");
+        let message = failures.join("; ");
+        // A panic during the unwinding of a failed assertion aborts the process, so that case reports on stderr.
+        if std::thread::panicking() {
+            eprintln!("{message}");
+        } else {
+            panic!("{message}");
         }
     }
 }
