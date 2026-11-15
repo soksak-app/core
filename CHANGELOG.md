@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The snapshot page test installs the real memory saver, and the recorded settings case holds the `setupState` call of the agent group (F856).
 - `go.work.sum` holds the sums that the module downloads of the CI jobs write (F855).
 - The normal shutdown cases hold the request order of the current client, and the case players of the client and of both `sok` implementations play the frames that the client wrote before its close (F853).
 - The mygo system tests give the host a new HOME and a bundle `sok` that answers the setup of the login shell environment (F854).

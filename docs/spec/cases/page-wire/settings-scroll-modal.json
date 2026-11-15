@@ -1,6 +1,6 @@
 {
   "name": "settings-scroll-modal",
-  "description": "The page opens the settings dialog in the native modal, and the host reports the scroll position of its content as the answer of the modal: the page keeps each reported number, negative values included, and refuses each value that is not a number.",
+  "description": "The page opens the settings dialog, whose agent group reads the setup parts (the host answers that no part applies), in the native modal, and the host reports the scroll position of its content as the answer of the modal: the page keeps each reported number, negative values included, and refuses each value that is not a number.",
   "replay": false,
   "reason": "overlayShow opens a native modal view in the window, and the answers of the modal (overlay-pick) reach the page only from a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {
@@ -16,6 +16,8 @@
     }
   },
   "steps": [
+    { "call": { "name": "setupState" } },
+    { "reply": { "result": { "parts": [] } } },
     {
       "call": {
         "name": "overlayShow",
