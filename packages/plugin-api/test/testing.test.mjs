@@ -67,6 +67,6 @@ test("a case that is not played to its end fails at close", { timeout: 5000 }, a
 test("openView without the folder of its cases rejects with a TypeError that names the option", { timeout: 5000 }, async () => {
   await assert.rejects(openView("testing-command-request", { start: START }), {
     name: "TypeError",
-    message: "openView requires the case folder `cases` as a URL, found undefined",
+    message: "openView requires the case folder `cases` as a URL or the host fixtures `host`, found undefined",
   });
 });

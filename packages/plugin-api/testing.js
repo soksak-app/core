@@ -9,7 +9,9 @@ import { inspect, isDeepStrictEqual } from "node:util";
 import { runInContext } from "node:vm";
 import { JSDOM } from "jsdom";
 import { createExpose } from "./index.js";
+import { answerViewCall } from "./view-answer.js";
 import { createViewBridge } from "./view.js";
+import { createTestHost } from "./view-host.js";
 import { createWire, readCase } from "./wire-case.js";
 
 // The error code of a failed call, as the workbench and the log handler of the host reply (the surface modules of the workbench).
@@ -56,25 +58,40 @@ const SHAPE = {
 };
 
 /**
- * Opens the view of the case `name` with the start values `start` (window.sokSurface). `cases` is the URL of the folder of the view-wire
- * cases, which the consumer names. The host side of the wire is the case: each call
- * of the view is answered with the reply of the next step of the case, in the order of the steps. The calls of the command runtime.log
- * form one stream, because the page writes them at instants that no other call determines, and every other call forms the other stream,
- * as for the page-wire cases. A call that deviates from its stream is answered with an error and kept as a failure; close() throws the
- * failures and the steps of the case that were not played. `declarations` are the exposure declarations of the plugin
+ * Opens a view page of a plugin with the start values `start` (window.sokSurface). The view answers its calls in one of two modes.
+ *
+ *     cases  the URL of the folder of the view-wire cases, with `name` the case of the view. The host side of the wire is the case: each
+ *            call of the view is answered with the reply of the next step of the case, in the order of the steps. The calls of the
+ *            command runtime.log form one stream, because the page writes them at instants that no other call determines, and every other
+ *            call forms the other stream, as for the page-wire cases. A call that deviates from its stream is answered with an error and
+ *            kept as a failure; close() throws the failures and the steps of the case that were not played.
+ *     host   the fixtures of createTestHost (view-host.js). Each call of the view is answered by answerViewCall with the options of the
+ *            test host, as the workbench answers a view call; the name is not read. The calls of runtime.log are answered here, because
+ *            answerViewCall has no handler for them: a batch is stored in events, and the clock is read from the clocks of the test process.
+ *            close() throws the routes that had no fixture (observed.failures).
+ *
+ * Passing both or neither of `cases` and `host` throws a TypeError. `declarations` are the exposure declarations of the plugin
  * (window.sokSurface.declarations). `layout` is {width, height, scale, content, rect(element)} in CSS pixels: the size of the view,
  * its backing scale, the size of the content that its root scrolls (default the size of the view) and the rectangle of an element.
  *
- * Returns {window, bridge, expose, sent, calls, host, close}. sent holds every message of the view in order, calls the
- * {command, params} of the calls (with cids when the call carries them), deliverNotice(event, data) plays the next step, which must be a
- * notice of the host (event and data are what the test expects it to carry), release() settles the oldest held reply, and close ends the view
- * as a page ends: pagehide, then the window is removed after the writer chain of the page ended, then the check that the case was played.
+ * Returns {window, bridge, expose, sent, calls, reports, run, observers, events, registered, logged, status, command, exposed, changes,
+ * deliverNotice, release, observed, push, settled, close}. sent holds every message of the view in order, calls the {command, params}
+ * of the calls (with cids when the call carries them). The members that play case steps (run, exposed, status, command, deliverNotice
+ * and release) throw in host mode, which has no case. observed is the observed record of the test host in host mode, and null in case
+ * mode. In host mode, push(event, data) delivers a host event through the subscriptions of the view, and each viewEvent that the
+ * subscription forwards reaches the page as the host message {event, data}; settled() resolves when the calls of the page have
+ * replied and the route work of the test host has ended. close ends the view as a page ends: pagehide, then the window is removed
+ * after the writer chain of the page ended, then the check that the case was played (case mode) or the failures (host mode).
  */
-export async function openView(name, { cases, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>" }) {
-  if (!(cases instanceof URL)) throw new TypeError(`openView requires the case folder \`cases\` as a URL, found ${inspect(cases)}`);
-  const kase = readCase(cases, name, SHAPE);
-  const { plugin, steps } = kase;
-  const wire = createWire(name, kase, SHAPE);
+export async function openView(name, { cases, host: fixtures, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>" }) {
+  if (cases !== undefined && fixtures !== undefined) throw new TypeError("openView takes either the case folder `cases` or the host fixtures `host`, not both");
+  if (fixtures === undefined && !(cases instanceof URL)) throw new TypeError(`openView requires the case folder \`cases\` as a URL or the host fixtures \`host\`, found ${inspect(cases)}`);
+  // In host mode name is the plugin id of the view, so the fixtures do not name it a second time.
+  if (fixtures !== undefined && "plugin" in fixtures) throw new TypeError("openView host fixtures take no plugin: the plugin of the view is the name");
+  const testHost = fixtures === undefined ? null : createTestHost({ ...fixtures, plugin: name });
+  const kase = testHost === null ? readCase(cases, name, SHAPE) : null;
+  const plugin = testHost === null ? kase.plugin : name;
+  const wire = kase === null ? null : createWire(name, kase, SHAPE);
   const dom = new JSDOM(html, { url: `soksak://${plugin}/`, runScripts: "outside-only", pretendToBeVisual: true });
   const { window } = dom;
   const sent = [];
@@ -132,6 +149,39 @@ export async function openView(name, { cases, start, declarations = {}, layout =
     }
     answer(id, outcome);
   };
+  // The calls of the page that are answered in host mode, until their reply reached the page.
+  const pendingCalls = new Set();
+  // The writer calls of the page in host mode: a batch is stored in events, and the clock is read from the clocks of the test process,
+  // which the page takes as the clock of the host before its first batch leaves.
+  const logCall = async ({ params }) => {
+    if (params?.action === "batch") {
+      if (!Array.isArray(params.events)) throw new TypeError("runtime.log batch requires the array events");
+      events.push(...params.events);
+      return null;
+    }
+    if (params?.action === "clock") return { ts_us: Math.round(Date.now() * 1000), mono_ns: Math.round(Number(process.hrtime.bigint())) };
+    throw new TypeError(`runtime.log action ${JSON.stringify(params?.action)} is not served in host mode`);
+  };
+  // The reply of the host to a call of the page: the result of the handler, or the error code of a failed call, as the workbench replies.
+  const answerFromHost = (message) => {
+    const request = structuredClone(message);
+    const work = (request.command === LOG_COMMAND ? logCall(request) : answerViewCall(request, testHost.options))
+      .then(
+        (result) => host({ id: request.id, result: result ?? null }),
+        (error) => host({ id: request.id, error: { code: FAILURE_CODE, message: error?.message ?? String(error) } }),
+      )
+      .finally(() => pendingCalls.delete(work));
+    pendingCalls.add(work);
+  };
+  // The page has no case step in host mode, so a member that plays one names the case that it needs.
+  const caseWire = (what) => {
+    if (wire === null) throw new Error(`openView host mode has no case steps: ${what} needs the case folder \`cases\``);
+    return wire;
+  };
+  const hostOnly = (what) => {
+    if (testHost === null) throw new Error(`openView case mode has no host fixtures: ${what} needs the host fixtures \`host\``);
+    return testHost;
+  };
   // The waiters that a recorded message of the view ends: each runs after every message and removes itself when it is satisfied.
   const waiters = new Set();
   const sentWhere = (predicate) => new Promise((resolve) => {
@@ -154,6 +204,10 @@ export async function openView(name, { cases, start, declarations = {}, layout =
         const recorded = { command: message.command, params: structuredClone(message.params) };
         if (message.cids !== undefined) recorded.cids = structuredClone(message.cids);
         calls.push(recorded);
+        if (testHost !== null) {
+          answerFromHost(message);
+          return;
+        }
         const outcome = wire.match(wire.onTheWire(message));
         if (message.command === LOG_COMMAND && message.params?.action === "batch" && !outcome.error) events.push(...message.params.events);
         reply(message.id, outcome, message.command);
@@ -168,9 +222,10 @@ export async function openView(name, { cases, start, declarations = {}, layout =
   }, () => window.sokSurface.declarations);
   // The next step of the case that the host plays, which must be of `kind`; the cursor moves past it.
   const nextHostStep = (kind, what) => {
-    const step = wire.peek();
-    if (!step || !(kind in step)) throw wire.fail(`${what} found ${step ? JSON.stringify(step) : "no further step"} at step ${wire.cursor}`);
-    wire.advance();
+    const cases = caseWire(what);
+    const step = cases.peek();
+    if (!step || !(kind in step)) throw cases.fail(`${what} found ${step ? JSON.stringify(step) : "no further step"} at step ${cases.cursor}`);
+    cases.advance();
     return step[kind];
   };
   const sameAs = (what, expected, requested) => {
@@ -228,13 +283,37 @@ export async function openView(name, { cases, start, declarations = {}, layout =
       host({ event: notice.event, ...("data" in notice ? { data: wire.substitute(notice.data) } : {}) });
     },
     /** Settles the oldest held reply, or the held reply that the key names (the index of its call step or the name of its command). */
-    release: wire.release,
+    release: (...args) => caseWire("release").release(...args),
+    /** The observed record of the test host in host mode, or null in case mode (view-host.js, observed). */
+    observed: testHost === null ? null : testHost.observed,
+    /** Delivers the host event `event` with `data` to the view (host mode): the subscriptions of the view forward it as a viewEvent. */
+    push: async (event, data) => {
+      const hosted = hostOnly("push");
+      const first = hosted.observed.document.length;
+      hosted.push(event, data);
+      // The subscription forwards the event on a later microtask; the turn lets that forward reach the test host before the wait.
+      await turn();
+      await hosted.settled();
+      for (const { name, payload } of hosted.observed.document.slice(first)) {
+        if (name === "viewEvent") host({ event: payload.event, data: payload.data });
+      }
+    },
+    /** Resolves when the calls of the page have replied and the route work of the test host has ended (host mode). */
+    settled: async () => {
+      const hosted = hostOnly("settled");
+      do {
+        await Promise.allSettled([...pendingCalls]);
+        await hosted.settled();
+        await turn();
+      } while (pendingCalls.size > 0);
+    },
     async close() {
       window.dispatchEvent(new window.Event("pagehide"));
       await turn();
       delete globalThis.window;
       window.close();
-      wire.finish();
+      if (wire !== null) wire.finish();
+      if (testHost !== null && testHost.observed.failures.length > 0) throw new Error(testHost.observed.failures.join("\n"));
     },
   };
 }

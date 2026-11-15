@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-5: `openView` of `@soksak/plugin-api/testing` takes the host fixtures `host` instead of `cases` and then answers every call of the view page through `answerViewCall` with the options of `createTestHost`; it adds `observed`, `push` and `settled`, and `close` throws the routes that had no fixture.
 - F867-4: `@soksak/plugin-api/view-host.js` `createTestHost` builds the options of `answerViewCall` from in-memory parts and fixtures, rejects a route without a fixture, applies declared fault points and records observations; its test replays 67 page-wire view call and view event cases.
 - F867-3: `answerViewCall` and the call and event lists of plugin pages move from the workbench to `@soksak/plugin-api/view-answer.js`; the `tab.focus` call runs the tab handler `focus`, which the workbench fills with its view focus.
 - F867-1: Page-wire cases record the answers of `tab.focus`, `tab.keep` off, `core.file.place` and a document stream event of a view, so that every view call route that plugins use has a case before the answer code moves into the SDK.
