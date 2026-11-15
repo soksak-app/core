@@ -358,7 +358,7 @@ function declaredCommandNames(manifest) {
 }
 
 /** Whether two JSON values are equal: objects have the same members in any order, and lists have equal items in order. */
-function sameJson(a, b) {
+export function sameJson(a, b) {
   if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((item, index) => sameJson(item, b[index]));
   if (isObject(a)) {
     const keys = Object.keys(a);

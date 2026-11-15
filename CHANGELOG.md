@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-4: `@soksak/plugin-api/view-host.js` `createTestHost` builds the options of `answerViewCall` from in-memory parts and fixtures, rejects a route without a fixture, applies declared fault points and records observations; its test replays 67 page-wire view call and view event cases.
 - F867-3: `answerViewCall` and the call and event lists of plugin pages move from the workbench to `@soksak/plugin-api/view-answer.js`; the `tab.focus` call runs the tab handler `focus`, which the workbench fills with its view focus.
 - F867-1: Page-wire cases record the answers of `tab.focus`, `tab.keep` off, `core.file.place` and a document stream event of a view, so that every view call route that plugins use has a case before the answer code moves into the SDK.
 - F867-2: `command-route.js`, `view-commands.js` and `view-events.js` move from `@soksak/workbench` to `@soksak/plugin-api`, so that the answer code of view calls can be published in the SDK; the workbench imports them through its import map.
