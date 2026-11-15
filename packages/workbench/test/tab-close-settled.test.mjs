@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const pluginId = "fixture-tab-close";
 
@@ -56,6 +57,7 @@ test("core.tab.close answers after the tab close and its draw", { timeout: 5000 
     // The order of the command: the tab is removed before the drawing wait starts, and the command answers after the drawing wait.
     const events = [];
     await installCoreExposure({
+      memorySaver: await pageMemorySaver(),
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => { events.push(`settled, tabs ${tabs().join(",")}, layout ${held === null ? "not scheduled" : "scheduled"}`); },
     });

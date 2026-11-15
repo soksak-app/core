@@ -9,6 +9,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { host, selectPageWire } from "@soksak/runtime";
 import { drained } from "./support/drained.mjs";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const pluginId = "fixture-space-close";
 const wire = selectPageWire("space-close-asks-session");
@@ -97,6 +98,7 @@ test("core.space.close asks about modified tabs before it removes the active spa
   try {
     await projects.activate(PROJECT.id);
     await installCoreExposure({
+      memorySaver: await pageMemorySaver(),
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => {},
     });

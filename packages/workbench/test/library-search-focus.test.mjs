@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const wire = selectPageWire("library-search-focus");
 
@@ -69,7 +70,7 @@ test("the declared cmd+k command targets the shown library page and rejects a hi
     workarea: document.getElementById("workarea"), bind, run, redraw: () => {}, keyboardOwed, changed: coreChanged });
   try {
     // chrome reads the measures of the window bar and drawn waits for the layout queue of the page layout of index.html; no command of this test reads them.
-    await installCoreExposure({ library, renames, chrome: () => null, drawn: async () => {} });
+    await installCoreExposure({ memorySaver: await pageMemorySaver(), library, renames, chrome: () => null, drawn: async () => {} });
 
     await registry.run("core.library.search.focus", {});
     assert.equal(document.activeElement.dataset.expose, "core.library.search");

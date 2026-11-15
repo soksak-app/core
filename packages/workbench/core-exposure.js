@@ -319,6 +319,11 @@ function need(project, id) {
  * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
  */
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
+  // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
+  // before any entry is registered.
+  if (typeof memorySaver !== "object" || memorySaver === null) {
+    throw new TypeError("installCoreExposure requires memorySaver, the memory saver of the page (memory-saver.js)");
+  }
   memory = memorySaver;
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
   status("core.window.workbench", () => ({

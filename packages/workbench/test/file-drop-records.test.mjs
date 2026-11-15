@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 test("a failed file drop is reported with its reason and every drop is logged", { timeout: 5000 }, async () => {
   // The case selects the host of the page before the host module is imported, because the page reads the host when it is imported.
@@ -32,6 +33,7 @@ test("a failed file drop is reported with its reason and every drop is logged", 
   const { installCoreExposure } = await import("../core-exposure.js");
   try {
     await installCoreExposure({
+      memorySaver: await pageMemorySaver(),
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
       drawn: async () => {},
     });

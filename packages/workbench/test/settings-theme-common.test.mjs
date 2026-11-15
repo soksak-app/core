@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const THEME_KEYS = ["font", "gap", "mode", "radius", "size", "theme"];
 
@@ -31,7 +32,10 @@ test("core.settings.theme without a scope writes the common scope while a projec
   const { installCoreExposure } = await import("../core-exposure.js");
   const status = async () => (await registry.handle({ method: "status.get", params: { name: "core.settings" } })).result;
   try {
-    await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {} });
+    await installCoreExposure({
+      memorySaver: await pageMemorySaver(),
+      library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+    });
     beginSettings(structuredClone(memory), "prj-a");
     await registry.run("core.settings.theme", { name: "midnight", mode: "dark" });
     const after = await status();

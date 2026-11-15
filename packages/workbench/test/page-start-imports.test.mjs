@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { importSpecifiers } from "@soksak/plugin-api";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const workbench = new URL("../", import.meta.url);
 const read = (name) => readFileSync(new URL(name, workbench), "utf8");
@@ -54,6 +55,7 @@ async function start(t) {
   registry.declare("core", JSON.parse(read("exposure.json")).exposes);
   const { installCoreExposure } = await import("../core-exposure.js");
   await installCoreExposure({
+    memorySaver: await pageMemorySaver(),
     library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   });
   return registry;

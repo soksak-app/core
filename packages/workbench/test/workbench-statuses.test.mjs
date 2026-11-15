@@ -7,6 +7,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EXPOSURE_ERRORS } from "@soksak/plugin-api";
 import { selectPageWire } from "@soksak/runtime";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 test("core.window.workbench, core.workbench.error and core.workbench.audit describe the workbench and the page names are refused", { timeout: 5000 }, async () => {
   // The case selects the host of the page before the modules below are imported, because the page reads the host when it is imported.
@@ -32,6 +33,7 @@ test("core.window.workbench, core.workbench.error and core.workbench.audit descr
   const get = (name) => registry.handle({ method: "status.get", params: { name } });
   try {
     await installCoreExposure({
+      memorySaver: await pageMemorySaver(),
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
 

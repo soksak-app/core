@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- `installCoreExposure`는 entry를 등록하기 전에 memory saver 없는 page를 거부한다 (F857).
 - Snapshot page test는 실제 memory saver를 설치하고, 기록된 settings case는 agent group의 `setupState` 호출을 담는다 (F856).
 - `go.work.sum`은 CI job의 module download가 쓰는 sum을 담는다 (F855).
 - Normal shutdown case는 지금 client의 요청 순서를 담고, client와 두 `sok` 구현의 case player는 client가 close 전에 쓴 frame을 재생한다 (F853).

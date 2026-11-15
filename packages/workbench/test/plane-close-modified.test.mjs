@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { selectPageWire } from "@soksak/runtime";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const behaviorName = "modified tabs require a clean save before tab or window closure";
 const pluginId = "fixture-close-modified";
@@ -68,6 +69,7 @@ test(behaviorName, { timeout: 5000 }, async (t) => {
   const { flushEvents } = await import("../page-log.js");
   // The registry of the page connects to the host, so it forwards the command of a surface to the surface.
   await installCoreExposure({
+    memorySaver: await pageMemorySaver(),
     library: { state: () => null }, renames: { state: () => null }, chrome: () => null,
     drawn: async () => {},
   });
@@ -268,6 +270,8 @@ test("close boundary owner assertions detect missing guards and blocked save rec
   cpSync(source, copy, { recursive: true, filter: (path) => path !== join(source, "node_modules") && path !== join(source, "test") });
   mkdirSync(join(copy, "test"));
   cpSync(fileURLToPath(import.meta.url), join(copy, "test", "plane-close-modified.test.mjs"));
+  // The test imports the shared test support of the folder, so the copy holds it too.
+  cpSync(join(source, "test", "support"), join(copy, "test", "support"), { recursive: true });
   symlinkSync(join(source, "node_modules"), join(copy, "node_modules"), "dir");
   const planePath = join(copy, "plane.js");
   const original = readFileSync(planePath, "utf8");

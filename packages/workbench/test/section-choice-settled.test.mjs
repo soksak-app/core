@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 test("folding, selecting and sizing a section lay out the plane again", { timeout: 5000 }, async () => {
   const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
@@ -74,6 +75,7 @@ test("folding, selecting and sizing a section lay out the plane again", { timeou
     layouts.length = 0;
     const { installCoreExposure } = await import("../core-exposure.js");
     await installCoreExposure({
+      memorySaver: await pageMemorySaver(),
       library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
     });
     await registry.run("core.sidebar.section.fold", { sidebar: "fixture-list", section: "fixture.marks" });

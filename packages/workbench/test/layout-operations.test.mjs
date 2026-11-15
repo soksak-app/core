@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
@@ -48,37 +49,12 @@ assert.deepEqual(installEnvironment({
 ] }), [], "the fixture environment refused a plugin");
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
-const { begin, tabStateStore } = await import("../projects.js");
+const { begin } = await import("../projects.js");
 const reports = await import("../tab-reports.js");
 const plane = await import("../plane.js");
 const { coreChanged, installCoreExposure } = await import("../core-exposure.js");
-const { createMemorySaver, unloadDeclaration } = await import("../memory-saver.js");
-const { value } = await import("../settings.js");
-// The memory saver of the page reads the settings and the tab reports of the page, as in index.html. No case of this file unloads or
-// restores a tab, so each step of an unload or of a restore reports its call as an error.
-const noStep = (step) => () => {
-  throw new Error(`the layout operations run no memory saver step ${step}`);
-};
-const memorySaver = createMemorySaver({
-  enabled: () => value("memorySaver"),
-  delay: () => value("memorySaverDelay"),
-  declaration: unloadDeclaration,
-  keeps: reports.tabKeeps,
-  kept: (tab) => tabStateStore()?.entry(tab)?.kept === true,
-  setKept: noStep("setKept"),
-  regions: noStep("regions"),
-  interaction: noStep("interaction"),
-  restore: noStep("restore"),
-  commit: noStep("commit"),
-  showLabel: noStep("showLabel"),
-  changed: () => coreChanged(),
-  failed: (text) => {
-    throw new Error(`memory saver: ${text}`);
-  },
-  stateChanged: reports.reportTabState,
-});
 await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
-  memorySaver });
+  memorySaver: await pageMemorySaver() });
 // The window of the page has the name that its start document carries (docs/spec/native-host.md#page-start).
 plane.nameWindow(WINDOW);
 

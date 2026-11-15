@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { pageMemorySaver } from "./support/memory-saver.mjs";
 
 const INVALID_PARAMS = -32602;
 
@@ -47,6 +48,7 @@ async function start(t) {
   registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
   const { installCoreExposure } = await import("../core-exposure.js");
   await installCoreExposure({
+    memorySaver: await pageMemorySaver(),
     library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   });
   return { memory, registry, settings, change: (key, value) => registry.run("core.settings.change", { key, value, scope: "common" }) };
