@@ -1,5 +1,5 @@
-// The setup parts of the agents of this machine: the 에이전트 group of the settings window, the core.setup status and the
-// core.setup.check and core.setup.install commands (docs/spec/settings.md#에이전트). The host reads and installs the parts with the
+// The setup parts of the agents of this machine: the agent group of the settings window, the core.setup status and the
+// core.setup.check and core.setup.install commands (docs/spec/settings.md#agents). The host reads and installs the parts with the
 // setup library of its command line in the environment of the login shell of the person (docs/spec/cli.md#agents-in-the-application).
 // The parts are read when the group is shown, and while it is shown when the window becomes the key window and after setup-changed,
 // and by core.setup.check; no timer reads them, because the configuration file of the agent is rewritten by every agent session.
@@ -94,7 +94,7 @@ export function createSetupParts({ host, changed, failed }) {
   }
 
   /**
-   * Records whether the 에이전트 group is shown. Showing it reads the parts; while it is shown, window-active and setup-changed read
+   * Records whether the agent group is shown. Showing it reads the parts; while it is shown, window-active and setup-changed read
    * them again.
    */
   function show(now) {

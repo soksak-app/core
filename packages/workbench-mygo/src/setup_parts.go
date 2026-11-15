@@ -6,8 +6,8 @@ import (
 	"slices"
 )
 
-// The setup parts of the agents of the machine, the 에이전트 group of the settings window, the `core.setup` status and the
-// `core.setup.check` and `core.setup.install` commands, as packages/workbench/setup-parts.js has them (docs/spec/settings.md#에이전트).
+// The setup parts of the agents of the machine, the agent group of the settings window, the `core.setup` status and the
+// `core.setup.check` and `core.setup.install` commands, as packages/workbench/setup-parts.js has them (docs/spec/settings.md#agents).
 // The parts are read when the group is shown, and while it is shown when the window becomes the key window and after
 // setup-changed, and by core.setup.check; no timer reads them, because the configuration file of the agent is rewritten by every
 // agent session.
@@ -122,7 +122,7 @@ func (p *SetupOperations) Install(kinds []string, answer func(*SetupParts, error
 	})
 }
 
-// Show records whether the 에이전트 group is shown; showing it reads the parts.
+// Show records whether the agent group is shown; showing it reads the parts.
 func (p *SetupOperations) Show(shown bool) {
 	appears := shown && !p.shown
 	p.shown = shown
@@ -213,9 +213,9 @@ var (
 	setupStates = map[string]string{"ok": "설치됨", "absent": "설치 안 됨", "differs": "다름"}
 )
 
-// buildSetup adds the 에이전트 group: one row per part with its name, file and state, the install step of a missing path entry,
-// 설치 while a skill or mcp part is not ok, and 다시 확인. The error text of a part that cannot be read goes through the error
-// display path.
+// buildSetup adds the agent group: one row per part with its name, file and state, the install step of a missing path entry,
+// the install button while a skill or mcp part is not ok, and the check button. The error text of a part that cannot be read
+// goes through the error display path.
 func (s *Shell) buildSetup(b *settingsBuilder) {
 	parts := s.setupOperations.Parts()
 	rows := make([]settingsRow, 0, len(parts)+2)
@@ -250,7 +250,7 @@ func (s *Shell) buildSetup(b *settingsBuilder) {
 	b.group("에이전트", "에이전트가 이 애플리케이션을 배우고 다루게 하는 항목. 명령 경로는 관리자 권한이 필요하므로 터미널에서 보이는 명령으로 설치한다.", rows...)
 }
 
-// setupRow is the content of a row of the 에이전트 group.
+// setupRow is the content of a row of the agent group.
 type setupRow struct {
 	name, state, file, step string
 	failed                  bool

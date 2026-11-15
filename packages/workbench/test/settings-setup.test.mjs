@@ -1,4 +1,4 @@
-// The 에이전트 group of the settings window and the core.setup entries (docs/spec/settings.md#에이전트). The host calls of the setup
+// The agent group of the settings window and the core.setup entries (docs/spec/settings.md#agents). The host calls of the setup
 // parts are answered by the page-wire case setup-parts-settings; the settings window itself is drawn by this document without a host.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { selectPageWire } from "@soksak/runtime";
 /** Settles the reads and the draws that a command or the showing started. */
 const settled = () => new Promise((resolve) => setImmediate(resolve));
 
-test("the 에이전트 group reads the parts when it is shown, draws one row per part, and 설치 and 다시 확인 run the setup commands", { timeout: 10000 }, async () => {
+test("the agent group reads the parts when it is shown, draws one row per part, and the install and check buttons run the setup commands", { timeout: 10000 }, async () => {
   const dom = new JSDOM("<body><div id=plane></div></body>", { url: "http://localhost/" });
   globalThis.document = dom.window.document;
   globalThis.window = dom.window;

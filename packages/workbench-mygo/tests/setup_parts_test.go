@@ -123,8 +123,8 @@ func (h *setupHost) count() int {
 	return h.reads
 }
 
-// The 에이전트 group reads the parts when it is shown, draws one row per part, and 설치 and 다시 확인 run the setup commands
-// (docs/spec/settings.md#에이전트).
+// The agent group reads the parts when it is shown, draws one row per part, and the install and check buttons run the setup
+// commands (docs/spec/settings.md#agents).
 func TestTheAgentGroupShowsAndInstallsTheSetupParts(t *testing.T) {
 	host := &setupHost{states: []setupAnswer{{parts: setupMissing}, {parts: setupInstalled}, {parts: setupInstalled}}, installs: []setupAnswer{{parts: setupInstalled}}}
 	f := setupShell(t, host)

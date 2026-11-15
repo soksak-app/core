@@ -331,13 +331,14 @@ function drawGeneral() {
   if (scope === "common") body.append(setupGroup());
 }
 
-/** The names of the setup parts (docs/spec/settings.md#에이전트). */
+/** The names of the setup parts (docs/spec/settings.md#agents). */
 const SETUP_NAMES = { path: "명령 경로", skill: "스킬", mcp: "MCP 등록" };
 const SETUP_STATES = { ok: "설치됨", absent: "설치 안 됨", differs: "다름" };
 
 /**
- * The 에이전트 group: one row per setup part with its name, file and state, the install step of a missing path entry, 설치 while a
- * skill or mcp part is not ok, and 다시 확인. The error text of a part that cannot be read goes through the error display path.
+ * The agent group: one row per setup part with its name, file and state, the install step of a missing path entry, the install
+ * button while a skill or mcp part is not ok, and the check button. The error text of a part that cannot be read goes through the
+ * error display path.
  */
 function setupGroup() {
   const parts = setupParts.parts();
@@ -835,7 +836,7 @@ export function drawSettings() {
     body.append(folder);
   }
   SECTIONS.find(([id]) => id === here)[2]();
-  // Showing the 에이전트 group reads the setup parts (docs/spec/settings.md#에이전트).
+  // Showing the agent group reads the setup parts (docs/spec/settings.md#agents).
   setupParts.show(here === "general" && scope === "common");
   overlay.update(card);
   // When the content changes, the size of the card changes too. If the position is not notified again, the view

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Agent group의 주석은 그 group을 영어로 부르고 `docs/spec/settings.md#agents`를 가리킨다 (F849).
 - `sok` 명령의 test는 두 언어 모두 자기 run의 build tag나 feature로 된 `sok`을 실행한다 (F848).
 - Page와 mygo workbench의 window snapshot case는 workbench case이고, 그 test는 status 읽기의 `error`와 `exposure.list`의 entry를 assert한다 (F847).
 - Host는 process를 시작하기 전에 환경의 `SOKSAK_CONFIG_DIR`와 `SOKSAK_SURFACE`를 지우고, sidecar마다 자기 configuration directory를 `SOKSAK_CONFIG_DIR`로, `SOKSAK_SURFACE` 없이 시작한다 (F846).

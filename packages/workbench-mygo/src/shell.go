@@ -410,7 +410,7 @@ type Shell struct {
 
 	pluginOperations *PluginOperations
 	appUpdates       *AppUpdates
-	// setupOperations are the setup parts of the agents of the machine (docs/spec/settings.md#에이전트).
+	// setupOperations are the setup parts of the agents of the machine (docs/spec/settings.md#agents).
 	setupOperations *SetupOperations
 	starter         pluginStarter
 

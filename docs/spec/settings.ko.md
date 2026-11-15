@@ -55,7 +55,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 
 ### 에이전트
 
-그룹 에이전트는 컴퓨터의 agent가 애플리케이션을 배우고 그것에 닿게 하는 setup part를 보여 준다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 그룹은 전역 범위에서만 보인다. 그룹은 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 애플리케이션의 `sok`이 `sok setup check`로 보고하는 것을 보고한다. 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` event 뒤, `core.setup.check`를 실행할 때 읽으며, timer는 다시 읽지 않는다.
+<a id="agents"></a>그룹 에이전트(agent group)는 컴퓨터의 agent가 애플리케이션을 배우고 그것에 닿게 하는 setup part를 보여 준다([에이전트](cli.ko.md#에이전트)). 이 part는 프로젝트가 아니라 컴퓨터와 사람의 것이므로 그룹은 전역 범위에서만 보인다. 그룹은 host call `setupState()`로 part를 읽는다. 이 call은 사람의 login shell 환경에서 애플리케이션의 `sok`이 `sok setup check`로 보고하는 것을 보고한다. 그룹을 보여 줄 때, 창이 key window가 될 때(`window-active`), 각 `setup-changed` event 뒤, `core.setup.check`를 실행할 때 읽으며, timer는 다시 읽지 않는다.
 
 각 part는 행 하나다(element name `core.settings-modal.setup`, part 순서). 행은 이름(`path`는 명령 경로, `skill`은 스킬, `mcp`는 MCP 등록), 파일, 상태를 보여 준다. 상태는 `ok`이면 설치됨, `absent`인 `missing`이면 설치 안 됨, `differs`이면 다름, `error`이면 오류 글이다. 빠진 `path` 행은 사람이 terminal에서 실행하는 `sudo` 명령인 설치 단계도 보여 준다. 애플리케이션은 관리자 권한을 묻지 않기 때문이다. 설치(`core.settings-modal.setup-install`)는 `skill`과 `mcp` 가운데 `ok`가 아닌 행이 있는 종류로 `core.setup.install`을 실행한다. 그런 행이 있는 동안에만 보인다. 등록은 `PATH`의 첫 `sok`을 가리키므로([MCP 등록](cli.ko.md#mcp-등록)) 어느 애플리케이션의 설치든 같은 등록을 쓴다. 다시 확인(`core.settings-modal.setup-check`)은 `core.setup.check`를 실행한다. 해당하지 않는 part는 행이 없고, 행이 하나도 없으면 그룹은 "이 컴퓨터에서 설정할 에이전트 항목이 없습니다."를 보여 준다.
 

@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The comments of the agent group name it in English and refer to `docs/spec/settings.md#agents` (F849).
 - A test of a `sok` command runs the `sok` of the build tags or features of its run in both languages (F848).
 - The window snapshot cases of the page and the mygo workbench are workbench cases whose tests assert the `error` of a status read and the entries of `exposure.list` (F847).
 - A host removes `SOKSAK_CONFIG_DIR` and `SOKSAK_SURFACE` of its environment before it starts a process, and starts each sidecar with its configuration directory as `SOKSAK_CONFIG_DIR` and without `SOKSAK_SURFACE` (F846).

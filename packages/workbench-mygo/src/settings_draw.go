@@ -58,7 +58,7 @@ func (s *Shell) drawSettings(c *ui.Context, width, height float32) {
 	w := &s.settingsWindow
 	w.width, w.height = float64(width), float64(height)
 	s.tellLanguage(c.Locale())
-	// Showing the 에이전트 group reads the setup parts (docs/spec/settings.md#에이전트); the group stands in the common scope of
+	// Showing the agent group reads the setup parts (docs/spec/settings.md#agents); the group stands in the common scope of
 	// the general section, and the scope is common while no project is selected.
 	s.setupOperations.Show(w.open && w.section == "general" && (w.scope == "common" || s.settings.Project() == ""))
 	if !w.open {
@@ -561,7 +561,7 @@ func (s *Shell) drawSearchControl(c *ui.Context, control *SettingsControl) {
 	})
 }
 
-// drawSetupRow draws a row of the 에이전트 group, as setupGroup of packages/workbench/settings-ui.js draws it: the name column, then
+// drawSetupRow draws a row of the agent group, as setupGroup of packages/workbench/settings-ui.js draws it: the name column, then
 // the state, the file and the install step of a missing path entry. The error of a part is drawn by the error display path.
 func (s *Shell) drawSetupRow(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	row := control.setup

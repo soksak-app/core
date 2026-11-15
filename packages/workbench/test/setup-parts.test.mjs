@@ -1,4 +1,4 @@
-// The setup parts of the agents of the machine and the core.setup entries (docs/spec/settings.md#에이전트). The host calls are answered
+// The setup parts of the agents of the machine and the core.setup entries (docs/spec/settings.md#agents). The host calls are answered
 // by the page-wire cases setup-parts-* (docs/spec/cases/page-wire/README.md).
 import test from "node:test";
 import assert from "node:assert/strict";

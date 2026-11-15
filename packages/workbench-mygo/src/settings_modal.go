@@ -68,7 +68,7 @@ const (
 	controlCaption
 	// controlMark is the mark of the common tab that the project value of its setting applies.
 	controlMark
-	// controlSetup is a row of the 에이전트 group: the name, the state, the file and the install step of a setup part.
+	// controlSetup is a row of the agent group: the name, the state, the file and the install step of a setup part.
 	controlSetup
 )
 
@@ -104,7 +104,7 @@ type SettingsControl struct {
 	theme      *CatalogTheme // the theme of a swatch
 	maxLength  int
 	searchable bool      // a field that runs its command for each change, as the plugin search does
-	setup      *setupRow // the content of a row of the 에이전트 group
+	setup      *setupRow // the content of a row of the agent group
 }
 
 // settingsRow is a row of a group: a name and its controls, with the key and the description of a declared setting.
