@@ -174,9 +174,10 @@ plugin은 다른 plugin이 선언한 확장 지점으로 그 plugin을 확장한
 
 진단 빌드에서 워크벤치는 이 선언을 플러그인의 표면 선언에 더한다. Wails와 Tauri의 workbench는 선언된 diagnostic module을 view page뿐 아니라 workbench page에서도 import하므로 diagnostic staging은 두 import map에 `@soksak/plugin-api/diagnostic-view-frames`를 포함한다. mygo workbench는 view page에서만 import한다. 비진단 staging은 이 mapping과 module을 제외한다. View page는 시작 값의 `diagnostics`에서 diagnostic 선언을 읽고([view 표면](native-surfaces.ko.md#view-표면)) 그 값이 `null`이 아닐 때만 선언된 module을 불러오며 `diagnostics.json`은 요청하지 않는다. 비진단 빌드에서는 그 값이 `null`이므로, release에 그 파일과 module이 있어도 view는 둘 다 요청하지 않는다. import 실패는 오류다. Plugin adapter가 해당 module을 연결하고 해제한다.
 
-## Contract 사본
+## Plugin test
 
-게시된 contract case를 replay하는 plugin 저장소([경계](plugin-processes.ko.md#경계-결합-금지))는 replay하는 각 case 파일을 `test/fixtures/contract/<name>`에 둔다. 그 파일은 `engines.soksak` 범위가 포함하는 각 core version의 `@soksak/plugin-api` release의 `contract/`에 있는 같은 이름 파일의 byte 사본이다. 그런 release가 게시하지 않는 파일의 사본은 두지 않는다. plugin 루트의 `contract-copies.json`은 사본을 `{ "<name>": "<sha256>" }`로 선언한다. 사본마다 member 하나를 두고, 그 값은 사본의 소문자 16진 SHA-256이다. `package.json`의 `files`는 `contract-copies.json`을 나열하므로 모든 plugin release가 이를 담는다. 사본은 test 파일이며 release에 들어가지 않는다. plugin 저장소의 시험은 `test/fixtures/contract/`의 파일과 `contract-copies.json`의 member가 같은 이름이고 각 값이 그 사본의 SHA-256인지 확인하며, core release를 읽지 않는다. plugin API의 `checkPluginRepository`는 이름이 자기 `contract/`의 파일이 아닌 member를 `contract copy <name> has no published contract/<name>`로, 값이 그 파일의 SHA-256이 아닌 member를 `contract copy <name> differs from contract/<name>`로 보고한다. registry는 이를 실행하지 않는다. plugin은 사본을 자기 범위가 포함하는 core와 같게 유지하며, 더 이상 맞지 않는 core는 그 plugin만 거절한다([registry 검사](registry.ko.md#검사)). `contract-copies.json`이 없는 plugin은 contract 사본을 담지 않는다.
+plugin 저장소는 자기 `package.json`이 development dependency로 pin한 `@soksak/plugin-api` release로 module을 test하고, 그 version과 `engines.soksak`으로만 core에 의존한다. test는 그 release의 SDK module을 import하고, view page는 그 release의 view test host(host fixture를 받은 `@soksak/plugin-api/testing`의 `openView`)로 test한다. SDK module, view channel의 host 쪽, core의 contract case의 사본을 두지 않는다. test의 fixture는 core 밖에서 오는 것만 담는다: sidecar의 응답, 다른 plugin의 command, document region의 결과. `checkPluginRepository`는 contract case의 사본을 읽지 않는다.
+
 
 ## 표면 소유권
 
@@ -333,7 +334,7 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 
 게시된 파일이 import하는 모든 파일은 그 `package.json`의 `files` 배열에 나열되어야 하며, `packages/workbench/test/published-imports.test.mjs`가 이를 검증한다.
 
-`@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽고 replay할 수 있도록 `contract/` directory의 모든 파일을 게시한다. plugin 저장소는 replay하는 파일을 [contract 사본](#contract-사본)으로 둔다.
+`@soksak/plugin-api` package는 설치된 consumer가 현재 공개 API contract를 읽을 수 있도록 `contract/` directory의 모든 파일을 게시한다. plugin 저장소는 자기가 pin한 SDK release로 test한다([plugin test](#plugin-test)).
 
 `@soksak/plugin-api` package는 view 테스트 host도 게시한다. host fixture `host`를 받은 `@soksak/plugin-api/testing`의 `openView`는 view 페이지의 각 call을 `@soksak/plugin-api/view-answer`의 `answerViewCall`로, `@soksak/plugin-api/view-host`의 `createTestHost` 옵션과 함께 응답한다. fixture가 없는 route는 실패한다. host는 `view host: <route> has no fixture`를 기록하고, 테스트가 view를 닫을 때 그것을 던진다. `testing.js`는 `jsdom`을 import하며, `jsdom`은 `@soksak/plugin-api`의 선택적 peer dependency다. consumer가 이를 설치하며, 없으면 import가 `jsdom`을 이름으로 밝히는 `ERR_MODULE_NOT_FOUND`로 실패한다.
 

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -108,32 +107,9 @@ test("runtime.command of an undeclared command of the plugin is still reported",
   ]);
 });
 
-// The contract copies of a release (docs/spec/plugins.md#contract-copies): contract-copies.json names each copy with the
-// SHA-256 of its bytes, and each copy is the file of the same name in contract/ of this package.
-const published = (name) => createHash("sha256").update(readFileSync(new URL(`../contract/${name}`, import.meta.url))).digest("hex");
-const copies = (declaration) => ({ "contract-copies.json": JSON.stringify(declaration) });
-
-test("a contract copy with the SHA-256 of the published contract file passes", (t) => {
-  const root = repository(t, { id: "probe" }, copies({ "expose.json": published("expose.json") }));
-  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), []);
-});
-
-test("a contract copy whose SHA-256 differs from the published contract file is reported", (t) => {
-  const root = repository(t, { id: "probe" }, copies({ "expose.json": published("calls.json") }));
-  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
-    "contract copy expose.json differs from contract/expose.json",
-  ]);
-});
-
-test("a contract copy without a published contract file is reported", (t) => {
-  const root = repository(t, { id: "probe" }, copies({ "declared-ui-snapshot.json": published("expose.json"), "../package.json": published("expose.json") }));
-  assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), [
-    "contract copy declared-ui-snapshot.json has no published contract/declared-ui-snapshot.json",
-    "contract copy ../package.json has no published contract/../package.json",
-  ]);
-});
-
-test("a release without contract-copies.json holds no contract copy", (t) => {
-  const root = repository(t, { id: "probe" }, {});
+// A plugin depends on core only through engines.soksak and the SDK release that it pins (docs/spec/plugins.md#plugin-tests): the
+// check reads no contract-copies.json, so a copy that differs from contract/ of this package is not an error of the plugin.
+test("the check of a plugin repository reads no contract copies", (t) => {
+  const root = repository(t, { id: "probe" }, { "contract-copies.json": JSON.stringify({ "expose.json": "0".repeat(64) }) });
   assert.deepEqual(checkPluginRepository(root, { status: [], commands: [] }), []);
 });
