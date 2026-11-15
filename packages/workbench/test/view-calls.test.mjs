@@ -20,6 +20,7 @@ const { contributionsOf, contributionsState, installContributions } = await impo
 const { beginSettings, setPluginSettings } = await import("../settings.js");
 const { logGate } = await import("../log-gate.js");
 const reports = await import("../tab-reports.js");
+const { viewFocusOf } = await import("../view-focus.js");
 const { HostWorkspaceStore } = await import("../host-store.js");
 const projects = await import("../projects.js");
 
@@ -62,7 +63,7 @@ registry.configure({ surfacePlugin: (surface) => owners.get(surface) ?? null, pr
 // The core commands that the tests run. A core command is registered by the module that owns it; these record the params that they receive.
 const ran = { core: [] };
 const failing = new Set();
-for (const name of ["core.tab.select", "core.library.search.focus", "core.surface.menu"]) {
+for (const name of ["core.tab.select", "core.library.search.focus", "core.surface.menu", "core.file.place"]) {
   registry.command(name, async (params, context) => {
     ran.core.push({ name, params, cids: context?.cids });
     if (failing.has(name)) throw new Error("no focus target");
@@ -568,6 +569,39 @@ test("tab.notify takes {text, policy} and tab.keep takes {reason, on} from the p
   assert.deepEqual(reports.tabNotices().filter(([tab]) => tab === h.id), [[h.id, "끝났습니다"]]);
   assert.equal(reports.tabNotice(h.id), null, "a notice with the policy system is not the notice of the tab");
   assert.deepEqual(reports.tabKeeps(h.id), ["keep:busy"]);
+  await h.close();
+});
+
+test("tab.keep with on false clears the busy keep that the same view set with on true", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-keep-off");
+  // tab.keep {reason: "busy", on: true}, then tab.keep {reason: "busy", on: false}
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(reports.tabKeeps(h.id), ["keep:busy"]);
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(reports.tabKeeps(h.id), []);
+  await h.close();
+});
+
+test("tab.focus records the {name, index} of the view, clears it with null, and refuses any other value", { timeout: 5000 }, async () => {
+  const h = await mountView("tab-focus");
+  const from = wire.calls.length;
+  // tab.focus {name: "doc", index: 2}, then null, then {name: "", index: 0}, which is refused
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(viewFocusOf(h.id), { name: "doc", index: 2 });
+  assert.equal((await h.call()).result, null);
+  assert.equal(viewFocusOf(h.id), null);
+  assert.equal((await h.call()).error.message, 'view call tab.focus requires {name, index} or null, not {"name":"","index":0}');
+  assert.equal(viewFocusOf(h.id), null, "a refused value records nothing");
+  assert.deepEqual(h.after(from), [], "the page sends no host call for a focus");
+  await h.close();
+});
+
+test("core.file.place runs the core command with the params of the view and replies its result", { timeout: 5000 }, async () => {
+  const h = await mountView("core-file-place");
+  const before = ran.core.length;
+  // core.file.place {name: "notes.txt"}, which the registered core command answers with null
+  assert.equal((await h.call()).result, null);
+  assert.deepEqual(ran.core.slice(before), [{ name: "core.file.place", params: { name: "notes.txt" }, cids: undefined }]);
   await h.close();
 });
 

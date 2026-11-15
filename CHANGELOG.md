@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F867-1: Page-wire cases record the answers of `tab.focus`, `tab.keep` off, `core.file.place` and a document stream event of a view, so that every view call route that plugins use has a case before the answer code moves into the SDK.
 - F867-2: `command-route.js`, `view-commands.js` and `view-events.js` move from `@soksak/workbench` to `@soksak/plugin-api`, so that the answer code of view calls can be published in the SDK; the workbench imports them through its import map.
 - The local candidate acceptance is removed, because publication reads no acceptance report and checks only the release files of its run: the acceptance collection, the candidate context, the candidate policy and report, the candidate mode of the window-check runner, the `--artifacts` mode and `make test-app-candidate` are deleted (F864).
 - A core version enters the registry without a check of the plugins that it installs; a plugin keeps its own compatibility with a new core (F866).
