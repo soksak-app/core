@@ -28,6 +28,8 @@ export function selectPageWire(name) {
     calls: wire.calls,
     unsubscribed: wire.unsubscribed,
     release: wire.release,
+    change: wire.change,
+    close: wire.close,
     deliverNotice: wire.deliverNotice,
     finish() {
       host = null;

@@ -1,6 +1,6 @@
 {
   "name": "view-calls-settings",
-  "description": "A view reads the settings of its plugin and subscribes to their changes twice.",
+  "description": "A view reads the settings of its plugin and subscribes to their changes twice; the changed settings reach the view as one push.",
   "replay": false,
   "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {"ts-us-1":{"type":"integer","example":1791000000877452,"source":"page"},"mono-ns-1":{"type":"integer","example":5876996289,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
@@ -16,6 +16,7 @@
     {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":3,"command":"runtime.settings.on","params":null}}},
     {"call":{"name":"viewReply","payload":{"id":3,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
     {"reply":{"result":null}},
+    {"change":{"state":"settings","value":{"home":"https://changed.test"}}},
     {"call":{"name":"setTheme","payload":{"scheme":"dark","tokens":{"--bg":"#101117","--card":"#191b24","--fg":"#ececf5","--muted":"#8f92a4","--edge":"#2b2e3d","--rule":"#22242f","--rail":"#7279ff","--focus":"#ffb36b","--no":"#ff7c7c","--r":"10px","--half-gap":"6px","--bw":"1px","--font":"ui-monospace,SFMono-Regular,Menlo,monospace","--size":"13px"}}}},
     {"reply":{"result":null}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"settings","data":{"home":"https://changed.test"},"surface":"probe-surface"}}},

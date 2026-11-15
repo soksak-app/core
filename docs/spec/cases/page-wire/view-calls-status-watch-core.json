@@ -1,6 +1,6 @@
 {
   "name": "view-calls-status-watch-core",
-  "description": "A view watches the core status core.grid and the status probe.count, which no surface registers, and unwatches core.grid.",
+  "description": "A view watches the core status core.grid and the status probe.count, which no surface registers, and unwatches core.grid; the value of core.grid changes between the watches and the unwatch.",
   "replay": false,
   "reason": "The view calls reach the page as the notice view-call of a view that the host runs in a window, which the Go producer does not run (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {"ts-us-1":{"type":"integer","example":1791000000956711,"source":"page"},"mono-ns-1":{"type":"integer","example":5956255247,"source":"page"},"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"},"ts-us-2":{"type":"integer","example":1791000000000456,"source":"page"},"mono-ns-2":{"type":"integer","example":5000000789,"source":"page"}},
@@ -17,6 +17,7 @@
     {"reply":{"result":null}},
     {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
     {"reply":{"result":null}},
+    {"change":{"state":"status","name":"core.grid","value":"a"}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.grid","value":"a"},"surface":"probe-surface"}}},
     {"reply":{"result":null}},
     {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":3,"command":"runtime.status.unwatch","params":{"name":"core.grid"}}}},

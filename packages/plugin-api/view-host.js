@@ -17,6 +17,15 @@ const listenersOf = (map, key) => {
   return map.get(key);
 };
 
+// Adds fn to the set, and returns the function that removes it.
+const addListener = (set, fn) => {
+  set.add(fn);
+  return () => { set.delete(fn); };
+};
+
+// The key of a status value as the fixtures name it: the name, or the surface and the name of a watch on a surface.
+const statusKeyOf = (name, surface) => (surface === undefined ? name : `${surface} ${name}`);
+
 const KINDS = Object.values(EXPOSE_KINDS);
 
 /**
@@ -35,12 +44,13 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *                       unsubscribe, detach}, image: {attach, focus, caret, text, detach}}
  *     data              the project data declarations {key: {schema, default}}; the values are stored by the host
  *     project           the project {id, root} of the start values of the view, or null
- *     settings, textSize, logLevels   the values that the view reads: the settings of the plugin, the text scale and the log levels
- *     statuses          the values of the statuses by name, and by "<surface> <name>" for a watch on a surface; a status without a value
- *                       delivers nothing
+ *     settings, textSize, logLevels   the values that the view reads at its start: the settings of the plugin, the text scale and the log levels
+ *     statuses          the values of the statuses at the start, by name, and by "<surface> <name>" for a watch on a surface; a status
+ *                       without a value delivers nothing until change.status gives it one
+ *     run               true when a run continues at the start of the view (false when none)
  *     shortcuts         the rows of the shortcut table of the window
  *     state             {read(), write(value)}, present only when the plugin declares surface.unload
- *     menu              {declared, frame}: whether the plugin declares the surface menu, and the applied frame {x, y} or null
+ *     menu              {declared, frame}: whether the plugin declares the surface menu, and the applied frame {x, y} at the start, or null
  *     faults            {route: message}: the route rejects with the message
  *     viewEvent         fn(event, data): the reply of each push of the view, which the host answers; without it the reply is null
  *
@@ -49,7 +59,7 @@ const KINDS = Object.values(EXPOSE_KINDS);
  * with the error `view host: <route> has no fixture` and the failure is recorded in observed.failures. A route with a declared
  * fault rejects with the fault message. Every route work is tracked, so settled waits for it.
  *
- * Returns {options, observed, push, settled}.
+ * Returns {options, observed, push, settled, change, close}.
  *
  *     options   the options of answerViewCall (view-answer.js of this package)
  *     observed  tab: the last title, footer, directory, modified, error and focus, and the lists notify and keep
@@ -61,6 +71,12 @@ const KINDS = Object.values(EXPOSE_KINDS);
  *               event sidecar-failure with {sidecar, surface, reason} to the failure listeners of its surface; it throws when no
  *               subscription holds the event, as a page-wire notice without a listener is a failure
  *     settled   resolves when every route work that started has ended; a held fixture ends only when the test resolves it
+ *     close     ends the subscriptions of the view through the close of createViewSubscriptions, as the page ends them when the view closes;
+ *               the events that a change pushes after it reach no subscription
+ *     change    the changes of the window that a test makes, each one set as the window sets it: the value that the view reads is
+ *               replaced, and the listeners that createViewSubscriptions registered for it are called, so the subscriptions push the
+ *               events that follow. settings(values), textSize(value), logLevels(levels), status(name, value, surface), run(active),
+ *               data(key, value), leftOut(value) and frame(value), which sets the applied frame of the surface of the view
  */
 export function createTestHost(fixtures) {
   if (typeof fixtures?.plugin !== "string" || fixtures.plugin === "") throw new TypeError("createTestHost requires the plugin id of the view");
@@ -153,10 +169,22 @@ export function createTestHost(fixtures) {
     };
   };
 
+  // The values that the view reads from the window, and the listeners of their changes. The change methods set a value and call the
+  // listeners that the subscriptions registered, as the window does when its state changes.
+  let settingValues = fixtures.settings ?? {};
+  let textSizeValue = fixtures.textSize ?? 1;
+  let logLevelValues = fixtures.logLevels ?? {};
+  let runActive = fixtures.run === true;
+  let leftOutNow = false;
+  let appliedFrame = fixtures.menu?.frame ?? null;
   const settingListeners = new Set();
   const textSizeListeners = new Set();
   const logListeners = new Set();
-  const statuses = fixtures.statuses ?? {};
+  const runStartListeners = new Set();
+  const runEndListeners = new Set();
+  // The value of each status by its key, and the listeners of each key.
+  const statusValues = new Map(Object.entries(fixtures.statuses ?? {}));
+  const statusListeners = new Map();
   const installed = fixtures.contributions ?? [];
   const resolved = resolveContributions(installed);
   const connected = (point) => {
@@ -172,8 +200,8 @@ export function createTestHost(fixtures) {
     }));
   };
 
-  // A view has no run of the workbench, so the run state is idle and no run event is delivered.
-  const run = { active: () => false, onStart: () => () => {}, onEnd: () => () => {} };
+  // The run state of the window: whether a run continues, and the listeners of each start and end of a run.
+  const run = { active: () => runActive, onStart: (fn) => addListener(runStartListeners, fn), onEnd: (fn) => addListener(runEndListeners, fn) };
   const sidecar = {
     // The message route of a session is a registration of the host; no message is delivered through the subscriptions.
     route: () => Promise.resolve(() => {}),
@@ -185,12 +213,12 @@ export function createTestHost(fixtures) {
     textSize: (listener) => subscribeTo(textSizeListeners, listener),
     settings: (listener) => subscribeTo(settingListeners, listener),
     data: (listener) => subscribeTo(dataListeners, listener),
-    logLevels: { read: () => fixtures.logLevels ?? {}, on: (listener) => subscribeTo(logListeners, listener) },
-    // A status value is delivered once, when its fixture is present; a watch on a surface reads the value of that surface.
+    logLevels: { read: () => logLevelValues, on: (listener) => subscribeTo(logListeners, listener) },
+    // A status value is delivered when the watch starts, if the value is present; each later value comes from change.status.
     status: (name, watched, listener) => {
-      const key = watched === undefined ? name : `${watched} ${name}`;
-      if (Object.hasOwn(statuses, key)) listener(statuses[key]);
-      return () => {};
+      const key = statusKeyOf(name, watched);
+      if (statusValues.has(key)) listener(statusValues.get(key));
+      return addListener(listenersOf(statusListeners, key), listener);
     },
     run,
     push: (event, data) => {
@@ -199,7 +227,7 @@ export function createTestHost(fixtures) {
     },
     report: (text) => observed.errors.push(text),
     cancel: () => {},
-    leftOut: () => false,
+    leftOut: () => leftOutNow,
   });
   const registeredCommands = new Set();
 
@@ -254,7 +282,7 @@ export function createTestHost(fixtures) {
     runtime: {
       native: gate,
       holdsSurface: (owner, name) => (fixtures.surfaces ?? []).some((entry) => entry.plugin === owner && entry.surface === name),
-      menu: { declared: () => fixtures.menu?.declared === true, frame: () => fixtures.menu?.frame ?? null },
+      menu: { declared: () => fixtures.menu?.declared === true, frame: () => appliedFrame },
       data: { of: dataOf },
       clipboard: {
         read: (type) => route("clipboard.read", at("clipboard", "read"), [type]),
@@ -264,8 +292,8 @@ export function createTestHost(fixtures) {
       },
       links: { open: (url) => { observed.links.push(url); return Promise.resolve(null); } },
       report: (line) => { observed.errors.push(line); return Promise.resolve(null); },
-      textSize: { read: () => fixtures.textSize ?? 1, on: (listener) => subscribeTo(textSizeListeners, listener) },
-      settings: { read: () => fixtures.settings ?? {}, on: (listener) => subscribeTo(settingListeners, listener) },
+      textSize: { read: () => textSizeValue, on: (listener) => subscribeTo(textSizeListeners, listener) },
+      settings: { read: () => settingValues, on: (listener) => subscribeTo(settingListeners, listener) },
       subscribe: {
         native: (name) => subscriptions.native(name),
         sidecarMessage: (id, name) => {
@@ -322,5 +350,45 @@ export function createTestHost(fixtures) {
     },
   };
 
-  return { options, observed, push, settled };
+  // The changes of the window that a test makes. Each one sets the value that the view reads, then calls the listeners that the
+  // subscriptions registered for it.
+  const change = {
+    settings(values) {
+      settingValues = values;
+      for (const listener of [...settingListeners]) listener(values);
+    },
+    textSize(value) {
+      textSizeValue = value;
+      for (const listener of [...textSizeListeners]) listener(value);
+    },
+    logLevels(levels) {
+      logLevelValues = levels;
+      for (const listener of [...logListeners]) listener();
+    },
+    status(name, value, surface) {
+      const key = statusKeyOf(name, surface);
+      statusValues.set(key, value);
+      for (const listener of [...(statusListeners.get(key) ?? [])]) listener(value);
+    },
+    run(active) {
+      if (typeof active !== "boolean") throw new TypeError("change.run requires true or false");
+      if (active === runActive) return;
+      runActive = active;
+      for (const listener of [...(active ? runStartListeners : runEndListeners)]) listener();
+    },
+    data(key, value) {
+      if (!fixtures.project) throw new TypeError("change.data requires the start project of the view");
+      storeOf(fixtures.project).set(key, value);
+      for (const listener of [...dataListeners]) listener(key);
+    },
+    leftOut(value) {
+      if (typeof value !== "boolean") throw new TypeError("change.leftOut requires true or false");
+      leftOutNow = value;
+    },
+    frame(value) {
+      appliedFrame = value;
+    },
+  };
+
+  return { options, observed, push, settled, change, close: () => subscriptions.close() };
 }

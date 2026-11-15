@@ -1,11 +1,13 @@
 {
   "name": "view-events-left-out",
-  "description": "The host sends two events of a section view; the page pushes only the second, after the section was drawn again.",
+  "description": "The host sends two events of a section view while the section is left out and drawn again between them; the page pushes only the second, after the section was drawn again.",
   "replay": false,
   "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
   "steps": [
     {"listen":{"event":"exposure-request"}},
+    {"change":{"state":"leftOut","value":true}},
     {"notice":{"event":"exposure-request","payload":{"surface":"spc-aaaaaa/left/probe.tree","n":1}}},
+    {"change":{"state":"leftOut","value":false}},
     {"notice":{"event":"exposure-request","payload":{"surface":"spc-aaaaaa/left/probe.tree","n":2}}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"exposure-request","data":{"surface":"spc-aaaaaa/left/probe.tree","n":2},"surface":"spc-aaaaaa/left/probe.tree"}}},
     {"reply":{"result":true}}

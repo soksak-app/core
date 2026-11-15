@@ -7,6 +7,18 @@ import { createWire, readCase } from "@soksak/plugin-api/wire-case";
 /** The directory of the page-wire cases. This module lives in packages/workbench/test/runtime, four levels below the repository root. */
 const CASE_DIRECTORY = new URL("../../../../docs/spec/cases/page-wire/", import.meta.url);
 
+// The members that each state of a change step names besides its value (docs/spec/cases/page-wire/README.md).
+const CHANGE_MEMBERS = {
+  settings: [],
+  textSize: [],
+  logLevels: [],
+  run: [],
+  leftOut: [],
+  data: ["key"],
+  status: ["name"],
+  frame: ["view"],
+};
+
 const SHAPE = {
   subject: "page",
   identity: "name",
@@ -14,9 +26,20 @@ const SHAPE = {
   noticeData: "payload",
   callLabel: "a host call",
   logName: "log",
-  kinds: ["call", "reply", "notice", "listen"],
+  kinds: ["call", "reply", "notice", "listen", "change", "close"],
   header: () => {},
   others: {
+    change(change, where, fail, only) {
+      if (!Object.hasOwn(CHANGE_MEMBERS, change.state)) fail(`${where} change must name a state of ${Object.keys(CHANGE_MEMBERS).join(", ")}`);
+      only(["state", "value", "name", "surface", "key", "view"]);
+      if (!("value" in change)) fail(`${where} change must have a value`);
+      for (const member of CHANGE_MEMBERS[change.state]) {
+        if (typeof change[member] !== "string" || change[member] === "") fail(`${where} change ${change.state} must name its ${member}`);
+      }
+    },
+    close(close, where, fail, only) {
+      only([]);
+    },
     listen(listen, where, fail, only) {
       if (typeof listen.event !== "string" || listen.event === "") fail(`${where} listen must name an event`);
       only(["event", "error", "held", "unsubscribeError"]);
@@ -100,6 +123,19 @@ export function openPageWire(name) {
     unsubscribed,
     /** Settles the held reply or held registration that the key names (the oldest one without a key). */
     release: wire.release,
+    /** Plays the next step, which must be a change, and returns a copy of its object for the test to apply to the state of the window. */
+    change() {
+      const step = wire.peek();
+      if (!step || !("change" in step)) throw wire.fail(`change found ${step ? JSON.stringify(step) : "no further step"} at step ${wire.cursor}`);
+      wire.advance();
+      return structuredClone(step.change);
+    },
+    /** Plays the next step, which must be a close step, at the point where the test closes the view. The page sends no call for it. */
+    close() {
+      const step = wire.peek();
+      if (!step || !("close" in step)) throw wire.fail(`close found ${step ? JSON.stringify(step) : "no further step"} at step ${wire.cursor}`);
+      wire.advance();
+    },
     /** Plays the next step, which must be a notice, by calling each listener of its event with its payload. */
     deliverNotice() {
       const step = wire.peek();

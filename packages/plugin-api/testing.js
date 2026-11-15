@@ -310,6 +310,8 @@ export async function openView(name, { cases, host: fixtures, start, declaration
     async close() {
       window.dispatchEvent(new window.Event("pagehide"));
       await turn();
+      // The view ends its subscriptions with its page (createTestHost close, as the page ends them in its surface close).
+      if (testHost !== null) await testHost.close();
       delete globalThis.window;
       window.close();
       if (wire !== null) wire.finish();

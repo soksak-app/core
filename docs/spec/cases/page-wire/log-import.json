@@ -1,5 +1,5 @@
 {
-  "name": "view-calls-import",
+  "name": "log-import",
   "description": "The page imports its modules and records the start of the workbench; the first flush reads the clock of the host and sends the events.",
   "replay": false,
   "reason": "The page writes its events through the host call log with its own clock readings, which the Go producer cannot reproduce without the page (docs/spec/cases/page-wire/README.md#producer-runs).",

@@ -8742,7 +8742,7 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.status.watch subscribes a core status or a status of the plugin and runtime.status.unwatch ends it" },
       { file: "packages/workbench/test/view-calls.test.mjs", id: "runtime.status.watch and runtime.status.unwatch refuse a status of another plugin and a name that is not text, and subscribe to nothing" },
-      { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch pushes each value of its name as the status event and ends at unwatch" },
+      { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch pushes each value of its name as the status event, and ends at unwatch and at close" },
       { file: "packages/workbench/test/view-events.test.mjs", id: "a status watch that the page refuses registers nothing and rejects with the refusal" },
       { file: "packages/workbench/test/surface-view.test.mjs", id: "a view watch of a status that the exposure does not declare is refused with its name" },
       { file: "packages/plugin-api/test/view-status-contract.test.mjs", id: "view status contract publishes the required cases in order" },

@@ -1,16 +1,30 @@
 {
   "name": "view-events-status-run",
-  "description": "The page pushes the first value of a status during a run, holds the values of the run, and pushes the newest value at the end of the run and a later value at once.",
+  "description": "The page pushes the first value of a status during a run at once, holds the values that change during the run and pushes only the newest one at the end of the run, pushes a value after the run at once, pushes the start of the next run, and delivers no held value after the unwatch of its status.",
   "replay": false,
   "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
   "steps": [
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.status.watch","params":{"name":"core.grid"}}}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.grid","value":{"w":1}},"surface":"probe-surface"}}},
     {"reply":{"result":true}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"change":{"state":"status","name":"core.grid","value":{"w":2}}},
+    {"change":{"state":"status","name":"core.grid","value":{"w":3}}},
+    {"change":{"state":"run","value":false}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.grid","value":{"w":3}},"surface":"probe-surface"}}},
     {"reply":{"result":true}},
+    {"change":{"state":"status","name":"core.grid","value":{"w":4}}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"status","data":{"name":"core.grid","value":{"w":4}},"surface":"probe-surface"}}},
     {"reply":{"result":true}},
+    {"change":{"state":"run","value":true}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"run-start","data":{},"surface":"probe-surface"}}},
-    {"reply":{"result":true}}
+    {"reply":{"result":true}},
+    {"change":{"state":"status","name":"core.grid","value":{"w":5}}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.status.unwatch","params":{"name":"core.grid"}}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"change":{"state":"run","value":false}}
   ]
 }

@@ -1,9 +1,17 @@
 {
   "name": "view-events-text-size",
-  "description": "The page pushes the new text scale of the view.",
+  "description": "The view subscribes to the text scale of its surface, a second subscription replies null, and the page pushes the new text scale of the view.",
   "replay": false,
   "reason": "The events of a view reach the page as notices of a window that the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
   "steps": [
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.textSize.on","params":null}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.textSize.on","params":null}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"change":{"state":"textSize","value":1.5}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"textSize","data":1.5,"surface":"probe-surface"}}},
     {"reply":{"result":true}}
   ]

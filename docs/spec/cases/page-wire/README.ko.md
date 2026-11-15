@@ -31,12 +31,15 @@ case는 이 디렉터리의 추적되는 JSON 파일 하나다. consumer는 work
 
 ## Step
 
-step은 네 객체 중 하나다.
+step은 여섯 객체 중 하나다.
 
 - `{"call": {"name": ..., "payload": ..., "cids": [...]}}`: page가 host 메서드 `name`을 호출한다. `payload`는 호출의 인자 하나이며, page가 인자를 보내지 않으면 없다. `cids`는 page가 호출과 함께 넘기는 상관 식별자 목록이며, 넘기지 않으면 없다.
 - `{"reply": {"result": ...}}` 또는 `{"reply": {"error": "..."}}`: 바로 앞 호출에 대한 host의 응답이다. `result`는 호출이 resolve하는 JSON 값이며, host가 아무것도 답하지 않으면 `null`이다. `error`는 호출이 reject하는 오류 텍스트다. host는 실패한 호출에 텍스트로 답하고, 각 애플리케이션의 runtime은 그 텍스트를 가진 `Error`로 reject하므로(Wails runtime의 `RuntimeError`, Tauri runtime은 command 값을 감싸는 `hostInvoke`의 `Error`) page는 `Error`가 아닌 reject를 받지 않으며, code와 data를 가진 구조화된 오류 객체는 wire의 값이 아니다. `"held": true`이면 reader가 테스트가 풀 때까지 응답을 붙잡으므로, 테스트는 호출이 끝나지 않은 동안 page가 동작하게 할 수 있다. producer는 이 응답을 다른 응답처럼 비교한다.
 - `{"notice": {"event": ..., "payload": ...}}`: host가 page가 `event`에 등록한 listener에 인자 하나 `payload`와 함께 notice `event`를 보낸다. notice에 인자가 없으면 `payload`는 없다.
 - `{"listen": {"event": ...}}` 또는 `{"listen": {"event": ..., "error": "...", "held": true}}`: page가 `host.on(event, listener)`로 `event`의 listener를 등록한다. `error`가 없으면 등록은 unsubscribe 함수로 resolve한다. `error`가 있으면 등록은 그 텍스트로 reject하고 listener는 등록되지 않는다. `"held": true`이면 reader가 응답과 마찬가지로 테스트가 풀 때까지 등록의 settle을 붙잡는다. `"unsubscribeError": "..."`는 resolve한 등록의 unsubscribe 함수가 listener를 제거한 뒤 그 텍스트의 오류를 throw하게 한다. `error`가 있는 등록에는 unsubscribe 함수가 없다.
+
+- `{"change": {"state": ..., "value": ...}}`: 다음 step 전에 window의 상태 하나가 바뀌고, 그 변화가 일으키는 각 구독이 그 이벤트를 다음 step의 시점에 push한다. `state`는 `settings`(`value`는 plugin 설정의 객체), `textSize`(`value`는 글자 크기 배율), `logLevels`(`value`는 각 class의 저장된 수준 객체), `run`(run이 시작하면 `true`, 끝나면 `false`인 `value`), `leftOut`(view의 section이 그림에서 빠지면 `true`, 다시 그려지면 `false`인 `value`), `data`(`key`와 함께, 시작 project의 project data `key`가 `value`가 된다), `status`(`name`과 함께, status `name`이 `value`가 되며, 그 status가 surface에서 watch되면 `surface`를 함께 둔다), `frame`(`view`와 함께, view의 surface `view`에 적용된 frame이 `value`가 되며, 없으면 `null`이다) 중 하나다. change는 호출이 아니며 응답이 없다. page는 change에 호출을 보내지 않으므로 호출 매칭은 change를 보지 않고, 테스트가 case가 그 step에 이르면 change를 실행한다.
+- `{"close": {}}`: view가 닫힌다. page는 view의 각 구독을 끝내므로, 이 step 뒤의 각 change는 아무것도 push하지 않는다. step은 member가 없고 page는 이 step에 호출을 보내지 않는다. 테스트는 구독을 닫기 전, view를 닫는 자리에서 reader의 `close()`로 이 step을 실행한다. view를 닫은 결과로 page가 보내는 호출(예: unwatch의 forward)은 case의 뒤따르는 step이다.
 
 호출 step 다음에는 그 호출의 응답 step이 오고, notice와 listen step은 그 쌍 사이에 온다. 호출은 page의 호출과 필드 단위로 정확히 비교하며, JSON 인코딩 후에 비교한다. 따라서 없는 필드와 `null`은 서로 다른 값이다.
 
@@ -52,11 +55,13 @@ workbench 테스트 runtime(`packages/workbench/test/runtime/page-wire.js`이며
 - `unsubscribed`는 page가 등록이 resolve한 함수로 제거한 listener의 event를 제거한 순서대로 담는다.
 - 환경 변수 `PAGE_WIRE_TRACE=1`이면 reader가 page가 보내는 각 호출을 맞든 틀리든 표준 오류에 쓴다. case를 쓰는 사람은 이것으로 page의 호출 순서를 읽는다.
 - `deliverNotice()`는 다음 step을 실행한다. 그 step은 notice여야 하며, page가 그 event에 등록한 각 listener를 호출한다. listener가 없는 notice는 failure다. 테스트는 host가 notice를 보낼 시점에 이를 전달한다.
+- `change()`는 다음 step을 실행한다. 그 step은 change여야 하며, 테스트가 window의 상태를 page가 읽는 source에 적용하도록 그 객체를 반환한다. case에 change step이 있는 자리에서 page가 호출하면, 다른 step과 같이 failure다.
+- `close()`는 다음 step을 실행한다. 그 step은 close step이어야 한다. case에 close step이 있는 자리에서 page가 호출하면, 다른 step과 같이 failure다.
 - `finish()`는 남은 failure가 있거나, 실행되지 않은 step(어느 stream이든)이 있거나, 풀리지 않은 응답이 있으면 throw한다. 테스트는 본문 끝에서 이를 호출한다.
 
 ## Producer 실행
 
-page-wire producer를 가진 각 패키지는 `replay: true`인 case를 실제 host에 실행한다. Go producer는 window 없이 host를 실행하고 notice는 window의 listener에만 닿으므로, notice나 listen step이 있는 `replay: true` case를 거부한다. 그런 case는 window가 있는 producer가 실행할 때까지 `replay: false`와 그 이유를 가진다. 실제 host가 case와 다르게 응답하면 host 또는 case의 결함이다. producer는 case의 step 순서대로 실행하며 두 stream을 구분하지 않는다: `log` 호출의 응답은 event writer의 상태에만, `workspace` 호출의 응답은 저장소에만 달려 있으므로, 두 stream 사이의 순서는 producer가 비교하는 어떤 응답도 바꾸지 않는다. host의 producer runner는 `packages/host/go/tests/page_wire_test.go`(`TestPageWire`)다. 이 runner는 `replay: true`인 각 case를 bindings의 기록 진입점(`host.RecordedCall`)과 각 호출의 host 메서드가 실행하는 작업(`log`는 `host.LogCommand`, `workspace`는 `host.Workspace.Apply`)을 거쳐 실행한다. 이 디렉터리 case의 응답은 요청에 대해 host 소스가 돌려주는 값이다: `packages/host/go/src/event_relay.go`의 `log` 호출(`LogCommand`, `Log`), `packages/host/go/src/log_policy.go`의 `setLogPolicy`, `packages/host/go/src/workspace.go`의 `workspace` 호출(`snapshot`, `Apply`, `runWorkspace`). Rust producer runner는 `packages/host/rust/tests/page_wire_test.rs`이며, 비교와 예시 값을 view-wire runner와 공유하고(`packages/host/rust/tests/support/wire_replay.rs`), 같은 규칙으로 case를 읽고 `log`는 `event_relay::log_command`로, `workspace`는 `Workspace::apply`로 실행한다. 그 답은 `packages/host/rust/src/event_relay.rs`와 `packages/host/rust/src/workspace.rs`의 값이다.
+page-wire producer를 가진 각 패키지는 `replay: true`인 case를 실제 host에 실행한다. Go producer는 window 없이 host를 실행하고 notice는 window의 listener에만 닿으므로, notice나 listen step이 있는 `replay: true` case를 거부한다. 그런 case는 window가 있는 producer가 실행할 때까지 `replay: false`와 그 이유를 가진다. 실제 host가 case와 다르게 응답하면 host 또는 case의 결함이다. change step이나 close step이 있는 case는 상태와 view의 종료가 window에 속하므로 `replay: false`다. producer는 case의 step 순서대로 실행하며 두 stream을 구분하지 않는다: `log` 호출의 응답은 event writer의 상태에만, `workspace` 호출의 응답은 저장소에만 달려 있으므로, 두 stream 사이의 순서는 producer가 비교하는 어떤 응답도 바꾸지 않는다. host의 producer runner는 `packages/host/go/tests/page_wire_test.go`(`TestPageWire`)다. 이 runner는 `replay: true`인 각 case를 bindings의 기록 진입점(`host.RecordedCall`)과 각 호출의 host 메서드가 실행하는 작업(`log`는 `host.LogCommand`, `workspace`는 `host.Workspace.Apply`)을 거쳐 실행한다. 이 디렉터리 case의 응답은 요청에 대해 host 소스가 돌려주는 값이다: `packages/host/go/src/event_relay.go`의 `log` 호출(`LogCommand`, `Log`), `packages/host/go/src/log_policy.go`의 `setLogPolicy`, `packages/host/go/src/workspace.go`의 `workspace` 호출(`snapshot`, `Apply`, `runWorkspace`). Rust producer runner는 `packages/host/rust/tests/page_wire_test.rs`이며, 비교와 예시 값을 view-wire runner와 공유하고(`packages/host/rust/tests/support/wire_replay.rs`), 같은 규칙으로 case를 읽고 `log`는 `event_relay::log_command`로, `workspace`는 `Workspace::apply`로 실행한다. 그 답은 `packages/host/rust/src/event_relay.rs`와 `packages/host/rust/src/workspace.rs`의 값이다.
 
 ## 한계
 

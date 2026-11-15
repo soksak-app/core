@@ -12,7 +12,7 @@ import { pageIdentity } from "../page-identity.js";
 import { drained } from "./support/drained.mjs";
 
 // The host is read when host.js is imported, so the case of the import is selected first; the page sends no call while it imports.
-const importing = selectPageWire("view-calls-import");
+const importing = selectPageWire("log-import");
 const { registerPlugin } = await import("../registry.js");
 const { seedSourceOrigins } = await import("../source-origins.js");
 const { notifyTextSize, setSurfaceTextSize } = await import("../text-size.js");
@@ -177,6 +177,12 @@ async function mountView(name, { id = "probe-surface", plugin = "probe", unload 
 
 // The project of the start values of a view: the project that the window shows, as the placement of the window names it.
 const START_PROJECT = { id: "p1", root: "/projects/p1" };
+/** Plays the next change step of the case, which names the state of the window that the test sets; the state must be the named one. */
+const playChange = (state) => {
+  const change = wire.change();
+  assert.equal(change.state, state, "the case records another change of the window");
+  return change;
+};
 /** The project data patches that the page sent to the host since from. */
 const patches = (h, from) => h.sent(from, ["workspace"]).map(([, payload]) => payload).filter(({ kind }) => kind === "patch");
 
@@ -774,10 +780,12 @@ test("runtime.textSize.read returns the scale of the surface and runtime.textSiz
     assert.equal((await h.call()).result, null);
     assert.equal((await h.call()).result, null);
     assert.deepEqual(h.sent(from, ["viewEvent"]), []);
-    setSurfaceTextSize(() => 2);
+    // The change of the scale that the case records before the push, applied through the scale of the surface
+    const change = playChange("textSize");
+    setSurfaceTextSize(() => change.value);
     notifyTextSize();
     await drained();
-    assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "textSize", data: 2, surface: "probe-surface" }]]);
+    assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "textSize", data: change.value, surface: "probe-surface" }]]);
   } finally {
     setSurfaceTextSize(() => 1);
   }
@@ -792,9 +800,10 @@ test("runtime.log.levels.on subscribes the view to the changes of the stored lev
   try {
     // runtime.log.levels.on, and a change of the policy of the page gate
     assert.equal((await h.call()).result, null);
-    logGate.set({ ...kept, lifecycle: "info" });
+    const change = playChange("logLevels");
+    logGate.set(change.value);
     await drained();
-    assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "log.levels", data: { ...kept, lifecycle: "info" }, surface: "probe-surface" }]]);
+    assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "log.levels", data: change.value, surface: "probe-surface" }]]);
   } finally {
     logGate.set(kept);
   }
@@ -808,9 +817,11 @@ test("runtime.settings.read returns the settings of the plugin and runtime.setti
   assert.deepEqual((await h.call()).result, { home: "https://example.test" });
   assert.equal((await h.call()).result, null);
   assert.equal((await h.call()).result, null);
-  beginSettings({ common: { "probe.home": "https://changed.test" }, projects: [] }, null);
+  // The changed setting that the case records before the push, applied through the settings of the plugin
+  const change = playChange("settings");
+  beginSettings({ common: { "probe.home": change.value.home }, projects: [] }, null);
   await drained();
-  assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "settings", data: { home: "https://changed.test" }, surface: "probe-surface" }]]);
+  assert.deepEqual(h.sent(from, ["viewEvent"]), [["viewEvent", { generation: 1, event: "settings", data: change.value, surface: "probe-surface" }]]);
   beginSettings({ common: {}, projects: [] }, null);
   await h.close();
 });
@@ -869,13 +880,16 @@ test("runtime.status.watch subscribes a core status or a status of the plugin an
   // runtime.status.watch {name: "core.grid"}, and of probe.count, which no surface registers and which the page answers with null; the value of core.grid changes; the unwatch of core.grid
   assert.equal((await h.call()).result, null);
   assert.equal((await h.call()).result, null);
-  setGrid("a");
+  // The change of core.grid that the case records before its push, applied through the grid of the window
+  const change = playChange("status");
+  assert.equal(change.name, "core.grid");
+  setGrid(change.value);
   await drained();
-  assert.deepEqual(events(), [["core.grid", null], ["probe.count", null], ["core.grid", "a"]]);
+  assert.deepEqual(events(), [["core.grid", null], ["probe.count", null], ["core.grid", change.value]]);
   assert.equal((await h.call()).result, null);
   setGrid("b");
   await drained();
-  assert.deepEqual(events(), [["core.grid", null], ["probe.count", null], ["core.grid", "a"]], "a value after the unwatch reached the view");
+  assert.deepEqual(events(), [["core.grid", null], ["probe.count", null], ["core.grid", change.value]], "a value after the unwatch reached the view");
   assert.deepEqual(h.sent(from, ["exposureForward"]), []);
   setGrid(null);
   await h.close();
@@ -1141,10 +1155,14 @@ test("surface.menu runs core.surface.menu at the window point of a right click i
     // surface.menu of the view of the plugin probe-bare, which declares none
     assert.equal((await h.call()).result, false, "a surface whose plugin declares no menu opens none");
     assert.equal(ran.core.length, before + 1);
-    // surface.menu of the view probe-surface after its frame ended, and with x as text and y as infinity
-    frames.delete("probe-surface");
+    // The applied frame of probe-surface ends and is applied again, as the case records between the calls; the frames are the table
+    // that the registry reads for the frame of a surface.
+    const applyFrame = ({ view, value }) => { if (value === null) frames.delete(view); else frames.set(view, value); };
+    applyFrame(playChange("frame"));
+    // surface.menu of the view probe-surface after its frame ended
     assert.equal((await h.call()).error.message, "view call surface.menu surface probe-surface has no applied frame");
-    frames.set("probe-surface", { x: 0, y: 0, w: 400, h: 300 });
+    applyFrame(playChange("frame"));
+    // surface.menu of the view probe-surface with x as text and y as infinity
     assert.equal((await h.call()).error.message, "view call surface.menu requires x and y as finite numbers");
     assert.equal(ran.core.length, before + 1);
   } finally {

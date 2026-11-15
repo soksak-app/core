@@ -1,8 +1,10 @@
 // Replays the page-wire cases of the view calls and the view events (docs/spec/cases/page-wire/README.md) against answerViewCall, with the
-// options that createTestHost builds. The replies of the view (each viewReply of the case) and the pushes of the view (each viewEvent of
-// the case) are compared in order. The notices of the case drive the host: a view-call notice starts answerViewCall, a cancel notice
-// cancels it, a listen step registers the subscription of the page, and any other notice is delivered to the subscriptions as a host event.
-// The host calls that the page makes for the workbench (workspace, exposureForward, the log, the window) are not compared.
+// options that createTestHost builds. Each view of a case has its own test host, which is named by the surface of the view. The replies of
+// the view (each viewReply of the case) and the pushes of the view (each viewEvent of the case) are compared in order. The notices of the
+// case drive the host: a view-call notice starts answerViewCall of the view that it names, a cancel notice cancels it, a listen step
+// registers the subscription of the page, a change step sets a state of the window through the change methods of the host, and any other
+// notice is delivered to the subscriptions as a host event. The host calls that the page makes for the workbench (workspace, exposureForward,
+// the log, the window) are not compared.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
@@ -10,26 +12,6 @@ import { answerViewCall } from "../view-answer.js";
 import { createTestHost } from "../view-host.js";
 
 const CASES = new URL("../../../docs/spec/cases/page-wire/", import.meta.url);
-
-// The cases that do not replay, each with its reason. A case replays when its replies and pushes depend on the plugin and on the fixtures.
-const EXCLUDED = {
-  "view-calls-import": "The case has no view call and no view event: its steps are the page log calls of the clock and the batch, which the workbench page sends and answerViewCall does not produce.",
-  "view-calls-data-on": "The case serves two views, one with the project and one without it (probe-surface and probe-surface-none), and createTestHost serves one view.",
-  "view-calls-log-levels-on": "The push of the stored log levels follows a change of the log gate of the page, which the case records as no notice or call; createTestHost changes no log level.",
-  "view-calls-settings": "The push of the changed settings follows the setTheme call of the window, which the case records as no notice; createTestHost changes no setting.",
-  "view-calls-text-size": "The push of the new text scale follows a change of the text scale in the window, which the case records as no notice; createTestHost changes no text scale.",
-  "view-calls-status-watch-core": "The push of the core.grid value a follows a change of the core status in the window, which the case records as no notice; createTestHost changes no status after the watch.",
-  "view-calls-surface-menu": "The case serves two views (probe with surface.menu and an applied frame, probe-bare without it), and createTestHost serves one view.",
-  "view-events-data": "The push follows a change of the project data outside any view call, which the case records as no notice; createTestHost changes project data only through a view call.",
-  "view-events-left-out": "The section surface is left out between the two notices, and the case records no step for the drawing that leaves it out; createTestHost's leftOut is always false.",
-  "view-events-log-levels": "The push follows a change of the stored log levels in the page, which the case records as no notice; createTestHost changes no log level.",
-  "view-events-run-start": "The push follows the start of a run of the workbench, which the case records as no notice; the run state of createTestHost is always idle.",
-  "view-events-settings": "The push follows a settings change through the theme of the window, which the case records as no notice; createTestHost changes no setting.",
-  "view-events-status-core": "The pushes carry values of core statuses that change in the window, and the case records no notice or call that causes them; createTestHost changes no status.",
-  "view-events-status-run": "The pushes follow the start of a run and the values held during it, which the case records as no notice; the run state of createTestHost is always idle.",
-  "view-events-status-surface": "The watches of the section and tab surfaces are made by the page and no view call of the case starts them, and the values come from the registry of the window; createTestHost has no status change source.",
-  "view-events-text-size": "The push of the new text scale follows a change in the window, which the case records as no notice; createTestHost changes no text scale.",
-};
 
 const START_PROJECT = { id: "p1", root: "/projects/p1" };
 const SHORTCUT_ROWS = [
@@ -53,6 +35,8 @@ const INSTALLED = () => [
 ];
 const BINARY_ID = "0123456789abcdef0123456789abcdef";
 const DECLARED_COMPOSITION = { kind: "view", regions: [{ name: "doc", kind: "document", input: "native" }, { name: "picture", kind: "image" }], overlays: [] };
+// The levels of the log classes that the window starts with.
+const LEVELS = { lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" };
 
 /** The fixtures of the probe view. Each call builds new fixtures, because a fixture can hold a state of its own. */
 const base = () => ({
@@ -76,7 +60,8 @@ const queue = (...values) => () => {
   return values.shift();
 };
 
-// The fixtures of each case that needs more than the base. A held fixture is released by the replay after the last step of the case.
+// The fixtures of each case that needs more than the base: one fixtures object for the view of the case, or a list of them for a case with
+// two views. A held fixture is released by the replay after the last step of the case.
 const FIXTURES = {
   "view-calls-cancel-pending": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
   "view-calls-pending-id-refused": (releases) => ({ ...base(), sidecar: { "fixture-sidecar": () => new Promise((resolve) => releases.push(() => resolve(null))) } }),
@@ -127,28 +112,40 @@ const FIXTURES = {
   }),
   "view-calls-core-file-place": () => ({ ...base(), commands: { "core.file.place": () => null } }),
   "view-calls-data-no-project": () => ({ ...base(), project: null }),
+  "view-calls-data-on": () => [base(), { ...base(), surface: "probe-surface-none", project: null }],
   "view-calls-document-subscribe": () => ({
     ...base(),
     composition: { document: { subscribe: queue({ handle: 7 }, {}) } },
   }),
+  "view-calls-log-levels-on": () => ({ ...base(), logLevels: LEVELS }),
   "view-calls-native-call": () => ({ ...base(), native: { exposureReply: () => null } }),
   "view-calls-restart-tab-state": () => {
     let stored = null;
     return { ...base(), state: { read: () => stored, write: (value) => { stored = value; } } };
   },
+  "view-calls-settings": () => ({ ...base(), settings: { home: "https://example.test" } }),
   "view-calls-shortcuts-read": () => ({
     ...base(),
     shortcuts: [...SHORTCUT_ROWS, { key: "cmd+x", owner: "page", command: "core.none" }],
   }),
   "view-calls-sidecar-send": () => ({ ...base(), sidecar: { "fixture-sidecar": () => null } }),
   "view-calls-subscription-calls": () => base(),
+  "view-calls-surface-menu": () => [
+    { ...base(), commands: { "core.surface.menu": () => null }, menu: { declared: true, frame: { x: 100, y: 200 } } },
+    { ...base(), plugin: "probe-bare", surface: "probe-bare-surface", declarations: {} },
+  ],
   "view-calls-tab-state-read": () => ({ ...base(), state: { read: () => ({ count: 2 }), write: () => {} } }),
   "view-calls-tab-state-write": () => ({ ...base(), state: { read: () => null, write: () => {} } }),
+  "view-calls-text-size": () => ({ ...base(), textSize: 1.5 }),
   "view-calls-status-unwatch-closed-surface": () => ({
     ...base(),
     surfaces: [{ surface: "tab-a", plugin: "probe" }, { surface: "spc-aaaaaa/left/files.tree", plugin: "probe" }, { surface: "tab-z", plugin: "probe" }],
     statuses: { "tab-z probe.lines": null },
   }),
+  "view-calls-status-watch-core": () => ({ ...base(), statuses: { "core.grid": null, "probe.count": null } }),
+  "view-events-data": () => base(),
+  "view-events-left-out": () => base(),
+  "view-events-log-levels": () => ({ ...base(), logLevels: LEVELS }),
   "view-events-ordered-delivery": (releases) => {
     // The reply of the first push is held until the replay releases it. The second push must start after that reply, and a push that
     // starts earlier is refused with its own error, which the check of the case reports.
@@ -170,8 +167,14 @@ const FIXTURES = {
     ...base(),
     viewEvent: () => { throw new Error("probe-surface has no ready document"); },
   }),
+  "view-events-run-start": () => base(),
+  "view-events-settings": () => ({ ...base(), settings: { home: "https://example.test" } }),
   "view-events-sidecar-route": () => base(),
   "view-events-document-stream": () => base(),
+  "view-events-status-core": () => ({ ...base(), statuses: { "core.grid": { tabs: 2 }, "core.focus": 1 } }),
+  "view-events-status-run": () => ({ ...base(), run: true, statuses: { "core.grid": { w: 1 } } }),
+  "view-events-status-surface": () => base(),
+  "view-events-text-size": () => base(),
 };
 
 /** The observed state that the case checks beyond its replies and pushes. */
@@ -202,6 +205,18 @@ const CHECKS = {
   ]),
 };
 
+// The change of each state of the window, applied to the host of a view through its change methods (createTestHost).
+const CHANGE = {
+  settings: (change, body) => change.settings(body.value),
+  textSize: (change, body) => change.textSize(body.value),
+  logLevels: (change, body) => change.logLevels(body.value),
+  status: (change, body) => change.status(body.name, body.value, body.surface),
+  run: (change, body) => change.run(body.value),
+  data: (change, body) => change.data(body.key, body.value),
+  leftOut: (change, body) => change.leftOut(body.value),
+  frame: (change, body) => change.frame(body.value),
+};
+
 /** The payload of a reply or a push without the members that the page adds for the workbench. */
 const withoutPage = ({ page, generation, surface, ...rest }) => rest;
 const flush = async () => {
@@ -209,21 +224,41 @@ const flush = async () => {
 };
 
 /**
- * Replays one case: the notices and the listen steps drive the host, and the replies and the pushes of the view are compared with the
- * viewReply and viewEvent steps of the case, in order.
+ * Replays one case: the notices and the listen steps drive the hosts, the change steps set the state of the window, and the replies and the
+ * pushes of the views are compared with the viewReply and viewEvent steps of the case, in order.
  */
 async function replay(name) {
   const kase = JSON.parse(readFileSync(new URL(`${name}.json`, CASES), "utf8"));
   const releases = [];
-  const fixtures = FIXTURES[name]?.(releases) ?? base();
-  const host = createTestHost(fixtures);
-  const { options } = host;
+  const views = FIXTURES[name]?.(releases) ?? base();
+  // One test host for each view of the case, by surface id. A host event that names no view goes to the first view.
+  const hosts = new Map((Array.isArray(views) ? views : [views]).map((fixtures) => [fixtures.surface, createTestHost(fixtures)]));
+  const [first] = hosts.values();
+  // A case with one view sends each view call to that view, whichever surface the case names for it.
+  const hostOf = (surface) => {
+    if (hosts.size === 1) return first;
+    if (!hosts.has(surface)) throw new Error(`${name}: the case has no view of ${surface}`);
+    return hosts.get(surface);
+  };
   const replies = [];
   const started = [];
+  // The pushes of the views in the order that they were made: the record of each host is read after each step.
+  const pushes = [];
+  const read = new Map([...hosts.keys()].map((surface) => [surface, 0]));
+  const readPushes = () => {
+    for (const [surface, host] of hosts) {
+      const entries = host.observed.document;
+      for (const entry of entries.slice(read.get(surface))) {
+        if (entry.name === "viewEvent") pushes.push(entry.payload);
+      }
+      read.set(surface, entries.length);
+    }
+  };
   for (const step of kase.steps) {
     if ("notice" in step) {
       const { event, payload } = step.notice;
       if (event === "view-call") {
+        const { options } = hostOf(payload.surface);
         if (payload.cancel === true) {
           await answerViewCall(payload, options);
         } else {
@@ -233,29 +268,41 @@ async function replay(name) {
           ));
         }
       } else {
-        host.push(event, payload);
+        first.push(event, payload);
       }
     } else if ("listen" in step) {
       const { event } = step.listen;
+      const { options } = first;
       if (event === "sidecar-failure") await options.runtime.subscribe.sidecarFailure(options.surface);
       else await options.runtime.subscribe.native(event);
+    } else if ("close" in step) {
+      // The case closes its view here: the subscriptions of the view end, so the changes after this step push nothing.
+      await first.close();
+    } else if ("change" in step) {
+      const { state } = step.change;
+      const apply = CHANGE[state];
+      if (apply === undefined) throw new Error(`${name}: ${state} is not a state of the window`);
+      // A frame belongs to the view that it names; every other state of the window reaches each view of the case.
+      const targets = state === "frame" ? [hostOf(step.change.view)] : [...hosts.values()];
+      for (const host of targets) apply(host.change, step.change);
     }
     await flush();
+    readPushes();
   }
   for (const release of releases.splice(0)) release();
-  await host.settled();
+  for (const host of hosts.values()) await host.settled();
   await Promise.all(started);
   await flush();
-  await host.settled();
+  for (const host of hosts.values()) await host.settled();
+  readPushes();
 
   const expectedReplies = kase.steps.filter((step) => step.call?.name === "viewReply").map(({ call }) => withoutPage(call.payload));
   assert.deepEqual(JSON.parse(JSON.stringify(replies)), expectedReplies, `${name}: the replies of the view`);
   const expectedPushes = kase.steps.filter((step) => step.call?.name === "viewEvent")
     .map(({ call }) => ({ event: call.payload.event, data: call.payload.data }));
-  const observedPushes = host.observed.document.filter((entry) => entry.name === "viewEvent").map(({ payload }) => payload);
-  assert.deepEqual(observedPushes, expectedPushes, `${name}: the pushes of the view`);
-  assert.deepEqual(host.observed.failures, [], `${name}: a route has no fixture`);
-  CHECKS[name]?.(host.observed);
+  assert.deepEqual(pushes, expectedPushes, `${name}: the pushes of the view`);
+  for (const [surface, host] of hosts) assert.deepEqual(host.observed.failures, [], `${name}: a route of ${surface} has no fixture`);
+  CHECKS[name]?.(first.observed);
 }
 
 const NAMES = readdirSync(CASES)
@@ -263,14 +310,7 @@ const NAMES = readdirSync(CASES)
   .map((file) => file.slice(0, -".json".length))
   .sort();
 
-test("every excluded case names an existing case and gives its reason", () => {
-  for (const [name, reason] of Object.entries(EXCLUDED)) {
-    assert.ok(NAMES.includes(name), `${name} is not a view case`);
-    assert.ok(reason.length > 0, `${name} has no reason`);
-  }
-});
-
-for (const name of NAMES.filter((item) => !Object.hasOwn(EXCLUDED, item))) {
+for (const name of NAMES) {
   test(`the page-wire case ${name} replays through answerViewCall`, async () => {
     await replay(name);
   });
@@ -304,6 +344,16 @@ test("a data value that is set reads back and notifies the subscription of the v
   assert.deepEqual(host.observed.document.filter((entry) => entry.name === "viewEvent").map(({ payload }) => payload), [
     { event: "data", data: { key: "note" } },
   ]);
+});
+
+test("a change of a run state that does not change the run pushes nothing", async () => {
+  const host = createTestHost({ ...base(), run: true });
+  await answerViewCall({ id: 1, command: "runtime.textSize.on" }, host.options);
+  host.change.run(true);
+  await flush();
+  await host.settled();
+  assert.deepEqual(host.observed.document, [], "a run that stays active pushed an event");
+  assert.throws(() => host.change.run("yes"), { message: "change.run requires true or false" });
 });
 
 test("settled resolves after the pending fixture promise resolves", async () => {

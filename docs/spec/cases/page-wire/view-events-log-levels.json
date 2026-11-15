@@ -1,10 +1,22 @@
 {
   "name": "view-events-log-levels",
-  "description": "The page pushes the stored log levels of the view after the policy changed to debug at the class frame.",
+  "description": "The view subscribes to the stored log levels, and a second subscription replies null; the page pushes the stored log levels of the view after the policy changed to debug at the class frame, and pushes nothing for a change that keeps the levels.",
   "replay": false,
   "reason": "The page pushes the event to the view that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {"page-identity":{"type":"string","example":"0b6e1f5c-3d2a-4b7e-9c1d-2f4a6b8c0d1e","source":"page"}},
   "steps": [
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":1,"command":"runtime.log.levels.on","params":null}}},
+    {"call":{"name":"viewReply","payload":{"id":1,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"notice":{"event":"view-call","payload":{"surface":"probe-surface","plugin":"probe","generation":1,"id":2,"command":"runtime.log.levels.on","params":null}}},
+    {"call":{"name":"viewReply","payload":{"id":2,"result":null,"page":"$page-identity","generation":1,"surface":"probe-surface"}}},
+    {"reply":{"result":null}},
+    {"change":{"state":"logLevels","value":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}},
+    {"change":{"state":"logLevels","value":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"debug"}}},
     {"call":{"name":"viewEvent","payload":{"generation":1,"event":"log.levels","data":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"debug"},"surface":"probe-surface"}}},
-    {"reply":{"result":true}}
+    {"reply":{"result":true}},
+    {"change":{"state":"logLevels","value":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"debug"}}},
+    {"close":{}},
+    {"change":{"state":"logLevels","value":{"lifecycle":"error","input":"error","call":"error","io":"error","frame":"error"}}}
   ]
 }
