@@ -79,10 +79,15 @@ static void checkFactsKeepTheFeature(NSWindow *window) {
 }
 
 int main(void) { @autoreleasepool {
+    // Each result line goes out when it is written, so the record of an activation (support/no_activation.m), written to the
+    // standard error, stands after the result of the step that came before it.
+    setvbuf(stdout, NULL, _IOLBF, 0);
     [NSApplication sharedApplication];
+    // The application keeps the prohibited activation policy for the whole check. The open and save panels of the sheets below
+    // show their content from a service of the system, whose requests the check does not control; an application with the
+    // prohibited policy cannot be activated, so the check activates nothing whatever those requests are.
     [NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
     [NSApp finishLaunching];
-    [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
     NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 400, 300)
         styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
     [window setReleasedWhenClosed:NO];

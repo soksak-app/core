@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The window facts test keeps the prohibited activation policy, so it activates nothing (F858).
 - `installCoreExposure` refuses a page without its memory saver before it registers any entry (F857).
 - The snapshot page test installs the real memory saver, and the recorded settings case holds the `setupState` call of the agent group (F856).
 - `go.work.sum` holds the sums that the module downloads of the CI jobs write (F855).
