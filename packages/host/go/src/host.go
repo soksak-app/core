@@ -50,7 +50,7 @@ func removeAgentVariables() error {
 }
 
 // applicationVersion is the version that the endpoint announces.
-const applicationVersion = "0.0.40"
+const applicationVersion = "0.0.41"
 
 // system is the operating system implementation that Run selected.
 var system platform.Platform

@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F871: release candidate는 0.0.41이다.
 - F870: sok test의 case player가 끝날 때까지 listener를 열어 두어, close에서 accept loop를 깨우는 연결이 거부되지 않는다.
 - F869: view가 `runtime.log`로 쓰는 기록이 view의 surface를 가진다.
 - F867-11: view test host의 view window가 plugin 안 page의 주소(`page`)를 가진다.

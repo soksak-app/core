@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F871: The release candidate is 0.0.41.
 - F870: The case player of the sok tests keeps its listener open until it ends, so waking its accept loop at the close is never refused.
 - F869: A record that a view writes through `runtime.log` carries the surface of the view.
 - F867-11: The window of a view in the view test host has the address of its page in the plugin (`page`).
