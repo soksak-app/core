@@ -402,3 +402,13 @@ test("a declared fault of runtime.data.get refuses the read of the page with its
     await view.close();
   }
 });
+
+test("the window of a view has the address of its page in the plugin, as the app serves the page", { timeout: 5000 }, async () => {
+  const view = await openView("probe", { start: START, host: fixtures(), page: "ui/view.html" });
+  try {
+    assert.equal(view.window.location.href, "soksak://probe/ui/view.html");
+    assert.equal(new view.window.URL("./studio/index.html", view.window.location.href).href, "soksak://probe/ui/studio/index.html");
+  } finally {
+    await view.close();
+  }
+});

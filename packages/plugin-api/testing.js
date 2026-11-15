@@ -255,6 +255,8 @@ const SHAPE = {
  * an exposure request, and view.sidecarMessage(sidecar, id, {body, cids}) delivers a sidecar message to the page's sidecar listener.
  *
  * Host-mode options beyond the fixtures: `start` null opens the view without window.sokSurface, so a page that reads it refuses to load;
+ * `page` is the path of the page of the view in its plugin, as its composition declares it (for example ui/view.html): the window has
+ * the address soksak://<plugin>/<page>, so a relative address of the page resolves as the app resolves it. The default is the root of the plugin.
  * `root` is the file URL of the plugin directory, whose files window.fetch serves to the page (a path outside it or a missing file answers
  * status 404); each module that the contributions fixture names is imported by the page through the URL that the host answers.
  * While a host-mode view is open its window names are the global names of the test process, except the names that the process defines
@@ -276,11 +278,13 @@ const SHAPE = {
  * replied and the route work of the test host has ended. close ends the view as a page ends: pagehide, then the window is removed
  * after the writer chain of the page ended, then the check that the case was played (case mode) or the failures (host mode).
  */
-export async function openView(name, { cases, host: fixtures, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>", root }) {
+export async function openView(name, { cases, host: fixtures, start, declarations = {}, layout = {}, html = "<!doctype html><body></body>", root, page = "" }) {
   if (cases !== undefined && fixtures !== undefined) throw new TypeError("openView takes either the case folder `cases` or the host fixtures `host`, not both");
   if (fixtures === undefined && !(cases instanceof URL)) throw new TypeError(`openView requires the case folder \`cases\` as a URL or the host fixtures \`host\`, found ${inspect(cases)}`);
   // start is the start values of the view, or null for a view without window.sokSurface (a page that reads it refuses to load).
   if (start === undefined) throw new TypeError("openView requires the start values of the view, or null for a view without window.sokSurface");
+  // page is the path of the page of the view in its plugin, as the composition declares it; the window has its address in the plugin.
+  if (typeof page !== "string" || page.startsWith("/") || page.split("/").includes("..")) throw new TypeError(`openView page must be a path of the plugin, found ${inspect(page)}`);
   if (root !== undefined && !(root instanceof NodeURL && root.protocol === "file:")) throw new TypeError(`openView root must be the file URL of the plugin directory, found ${inspect(root)}`);
   // In host mode name is the plugin id of the view, so the fixtures do not name it a second time.
   if (fixtures !== undefined && "plugin" in fixtures) throw new TypeError("openView host fixtures take no plugin: the plugin of the view is the name");
@@ -288,7 +292,7 @@ export async function openView(name, { cases, host: fixtures, start, declaration
   const kase = testHost === null ? readCase(cases, name, SHAPE) : null;
   const plugin = testHost === null ? kase.plugin : name;
   const wire = kase === null ? null : createWire(name, kase, SHAPE);
-  const dom = new JSDOM(html, { url: `soksak://${plugin}/`, runScripts: "outside-only", pretendToBeVisual: true });
+  const dom = new JSDOM(html, { url: `soksak://${plugin}/${page}`, runScripts: "outside-only", pretendToBeVisual: true });
   const { window } = dom;
   const sent = [];
   const calls = [];

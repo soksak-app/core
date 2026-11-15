@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F867-11: view test host의 view window가 plugin 안 page의 주소(`page`)를 가진다.
 - F867-10: host page-wire producer가 page-wire case의 change와 close step을 읽고, overlay.html이 SDK의 새 module을 연결하며, view test host의 각 default가 이유를 적는다.
 - F867-9: view test host가 선언된 fault `command.runtime.data.get`으로 project data 읽기를 거부한다.
 - F867-8: view test host가 plugin page를 앱처럼 실행한다. view마다 window globals, 연 뒤의 변경, plugin 파일 제공, timer 관찰, 거부된 log batch, contribution module, 미뤄진 응답.
