@@ -4,7 +4,8 @@
 // the network process that keeps the network cache and the GPU process that keeps the media cache are the processes that write
 // into the folder. An absent write has no notification, so the check judges the folder after each of those processes has ended:
 // a process that ended writes nothing more. It judges that the entries of the folder stayed the same, which the media cache of
-// the closed document would change, and that the removed folder did not come back. A child that leaves its store to the removal
+// the closed document would change, and that the removed folder did not come back. A store whose network process ends before it
+// answers the end ends without an error and without a new network process for its session. A child that leaves its store to the removal
 // of its temporary folder shows that the removal ends the store first, and a child that leaves its document open fails.
 #import <Cocoa/Cocoa.h>
 #import <Network/Network.h>
@@ -287,6 +288,40 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(removefile(unloaded.fileSystemRepresentation, NULL, REMOVEFILE_RECURSIVE) == 0, @"the folder of a store that loaded nothing is removed");
     NSArray<NSString *> *unloadedWritten = present(unloaded);
     check(unloadedWritten == nil, [NSString stringWithFormat:@"no process writes into the folder of a store that loaded nothing: %@", unloadedWritten]);
+
+    // A network process that ends after the end asked it for the records of the store and before it answered, such as the
+    // process that the end of an earlier store ended when WebKit had not yet seen it end, leaves the session in no process. The
+    // end then names no process and ends without an error; a read of the identifier would start a new network process for the
+    // session, which writes into the folder. The case ends the network process of the store in the turn that starts the end, so
+    // the answer arrives only after WebKit has seen the process end.
+    NSString *terminated = [temporaryFolder(@"soksak-document-store-terminated-") stringByAppendingPathComponent:@"store"];
+    void *terminatedSurface = prepareSurface();
+    WKWebsiteDataStore *terminatedStore = nil;
+    @autoreleasepool {
+        void *terminatedDocument = sp_document_create(terminatedSurface, terminated.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+        check(terminatedDocument != NULL, @"a document whose network process ends during the end of its store is created");
+        terminatedStore = [((WKWebView *)terminatedDocument).configuration.websiteDataStore retain];
+        sp_document_close(terminatedDocument);
+    }
+    sp_surface_close(terminatedSurface);
+    // The first read gives the store a network process, whose identifier is 0 until it has launched.
+    eventWait(@"the network process of the store launches", ^BOOL { return terminatedStore._networkProcessIdentifier > 0; });
+    pid_t terminatedProcess = terminatedStore._networkProcessIdentifier;
+    storeClosed = NO;
+    [storeError release];
+    storeError = nil;
+    sp_document_store_close(terminated.fileSystemRepresentation, recordStoreClosed, NULL);
+    [terminatedStore _terminateNetworkProcess];
+    [terminatedStore release];
+    eventWait(@"the data store whose network process ended ends", ^BOOL { return storeClosed; });
+    check(storeError == nil,
+        [NSString stringWithFormat:@"the data store whose network process ended before it answered the end ends without an error: %@", storeError]);
+    awaitExit(terminatedProcess, @"network");
+    check(removefile(terminated.fileSystemRepresentation, NULL, REMOVEFILE_RECURSIVE) == 0,
+        @"the folder of a store whose network process ended is removed");
+    NSArray<NSString *> *terminatedWritten = present(terminated);
+    check(terminatedWritten == nil,
+        [NSString stringWithFormat:@"no process writes into the folder of a store whose network process ended: %@", terminatedWritten]);
 
     // The removal of a temporary folder ends the store under it, so the folder stays removed.
     int status = 0;

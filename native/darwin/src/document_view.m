@@ -2081,9 +2081,19 @@ void sp_document_store_close(const char *directory, sp_document_store_closed clo
         // configuration for a while, so the handler runs when that reference also goes away.
         // The session of the store is removed first; a process that ended
         // before that would start again for the session and open its databases in the directory.
-        pid_t networkProcess = store._networkProcessIdentifier;
+        // A network process that ends before it answers the fetch, such as the process that the end of an earlier store ended
+        // and that WebKit had not yet seen end, answers by the close of its connection, and WebKit first forgets that process
+        // for every store (NetworkProcessProxy::networkProcessDidTerminate). The session then is in no process and nothing
+        // writes it into the directory. The identifier is not read then: its read starts a new network process for the session
+        // (WebsiteDataStore::networkProcess), which would write into the directory and is 0 while it launches.
+        BOOL inProcess = store._networkProcessExists;
+        pid_t networkProcess = inProcess ? store._networkProcessIdentifier : 0;
         if (networkProcess > 0) storeEndProcess = networkProcess;
-        BOOL named = networkProcess > 0;
+        BOOL named = !inProcess || networkProcess > 0;
+        if (!inProcess) {
+            sp_log_info("document view", [NSString stringWithFormat:
+                @"the store %@ ends in no network process: its process ended before it answered the fetch", path].UTF8String);
+        }
         [store _setCompletionHandlerForRemovalFromNetworkProcess:^(NSError *error) {
             char *failure = error ? strdup(error.localizedDescription.UTF8String)
                 : named ? NULL : strdup("the network process of the store has no identifier");

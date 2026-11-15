@@ -125,4 +125,6 @@ extern WKCacheModel WKContextGetCacheModel(WKContextRef context);
 - (instancetype)_initWithConfiguration:(_WKWebsiteDataStoreConfiguration *)configuration;
 - (void)_setCompletionHandlerForRemovalFromNetworkProcess:(void (^)(NSError *error))completionHandler;
 - (pid_t)_networkProcessIdentifier;
+- (BOOL)_networkProcessExists;
+- (void)_terminateNetworkProcess;
 @end

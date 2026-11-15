@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- The end of a document store whose network process ended before it answered ends without an error and starts no network process (F860).
 - `terminateGroup` neither signals nor reports again a member that its SIGKILL already reached (F859).
 - The window facts test keeps the prohibited activation policy, so it activates nothing (F858).
 - `installCoreExposure` refuses a page without its memory saver before it registers any entry (F857).

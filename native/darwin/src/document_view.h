@@ -231,6 +231,7 @@ typedef void (*sp_document_store_closed)(void *context, const char *error);
 // is removed and the WebKit network and GPU processes, which the documents of other stores start again, have ended, so nothing
 // writes to the directory any more. Every document of the directory
 // must be closed first. A directory without a store ends at once; documents of a directory whose store is ending are not
-// created. closed reports an error for a directory that is not an absolute path, a store that is already ending, or an
-// open document of the directory.
+// created. closed reports an error for a directory that is not an absolute path, a store that is already ending, an open
+// document of the directory, or a network process that holds the session of the store and has no identifier. A session that
+// is in no network process, because its process ended before the end asked it, ends without an error.
 void sp_document_store_close(const char *directory, sp_document_store_closed closed, void *context);

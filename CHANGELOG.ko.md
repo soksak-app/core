@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- Network process가 answer 전에 끝난 document store의 end는 error 없이 끝나고 network process를 시작하지 않는다 (F860).
 - `terminateGroup`은 자기 SIGKILL이 이미 닿은 member에 다시 signal을 보내거나 다시 보고하지 않는다 (F859).
 - Window facts test는 prohibited activation policy를 유지하므로 아무것도 활성화하지 않는다 (F858).
 - `installCoreExposure`는 entry를 등록하기 전에 memory saver 없는 page를 거부한다 (F857).
