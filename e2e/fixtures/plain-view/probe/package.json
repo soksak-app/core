@@ -1,6 +1,6 @@
 {
   "name": "@sok-check/probe-plain",
-  "version": "0.0.41",
+  "version": "0.0.42",
   "private": true,
   "type": "module",
   "description": "Benchmark fixture: a view whose document region shows one text line and whose page observes its size, the floor of a view drag, and a section view of the section-view contract.",

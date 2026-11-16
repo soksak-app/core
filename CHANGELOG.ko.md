@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F873: release candidate는 0.0.42이다.
 - F872: release file `soksak-window-check-<version>.tgz`가 `@soksak/client`, `@soksak/log-contract`, `@soksak/plugin-api`를 release URL로 가리키는 대신 담아(`bundleDependencies`) pnpm 11이 기본 설정으로 설치한다. `scripts/test/pack-release-packages.test.mjs`의 설치 test는 `ERR_PNPM_EXOTIC_SUBDEP`로 실패했고 지금은 통과한다.
 - F871: release candidate는 0.0.41이다.
 - F870: sok test의 case player가 끝날 때까지 listener를 열어 두어, close에서 accept loop를 깨우는 연결이 거부되지 않는다.
