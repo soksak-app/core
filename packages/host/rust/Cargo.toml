@@ -65,6 +65,11 @@ harness = false
 name = "stall_watch_test"
 harness = false
 
+# The identity of a folder is the volume UUID of macOS, so the test sits under platform/darwin and names its path.
+[[test]]
+name = "folder_identity_darwin"
+path = "tests/platform/darwin/folder_identity_test.rs"
+
 # The start of the process reads the arguments of the process, so this target runs its test without the harness, whose arguments the
 # start would refuse, and the test runs the start in a child of the same binary without arguments; it answers --list and --exact as
 # the harness does.

@@ -3754,6 +3754,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F877",
+    implementation: [
+      { file: "packages/host/rust/src/platform/darwin/identity.rs", symbol: "Some(errno) => format!(\"errno {errno}\")," },
+    ],
+    tests: [
+      { file: "scripts/test/fallbacks.test.mjs", id: "the repository states a reason for every default and discarded error in product code" },
+      { file: "scripts/test/event-sources.test.mjs", id: "the repository passes the event source check of its enabled rules and prints every pending rule with its item and count" },
+      { file: "scripts/test/soksak-scripts.test.mjs", id: "platform audit finds no selectors outside platform directories" },
+    ],
+    expected: "The Rust host reports a failed volume UUID read as errno <n> or the system error text without a value of its own, and the tests of the macOS folder identity sit under platform/darwin/, so the default, event source and platform file checks pass.",
+    levels: ["unit"],
+  },
+  {
     id: "F874",
     implementation: [
       { file: "packages/host/go/src/platform/darwin/identity.go", symbol: "func (implementation) DirectoryIdentity(path string, info os.FileInfo) (string, error) {" },
@@ -3762,8 +3775,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/shell_project.go", symbol: "var earlierIdentity = regexp.MustCompile" },
     ],
     tests: [
-      { file: "packages/host/go/tests/folder_identity_test.go", id: "TestFolderIdentityNamesVolumeUUID" },
-      { file: "packages/host/rust/tests/folder_identity_test.rs", id: "folder_identity_names_volume_uuid" },
+      { file: "packages/host/go/tests/platform/darwin/system/folder_identity_test.go", id: "TestFolderIdentityNamesVolumeUUID" },
+      { file: "packages/host/rust/tests/platform/darwin/folder_identity_test.rs", id: "folder_identity_names_volume_uuid" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "opening a project whose stored identity has the earlier form is refused with an error that names projects.json" },
       { file: "packages/workbench-mygo/tests/project_identity_test.go", id: "TestAProjectWithTheEarlierIdentityFormIsRefusedByName" },
     ],

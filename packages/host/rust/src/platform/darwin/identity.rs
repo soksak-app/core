@@ -18,7 +18,7 @@ pub fn identity(path: &Path, metadata: &Metadata) -> Result<String, String> {
     };
     let name = CString::new(path.as_os_str().as_bytes()).map_err(|e| error(e.to_string()))?;
     let mut list: libc::attrlist = unsafe { std::mem::zeroed() };
-    list.bitmapcount = libc::ATTR_BIT_MAP_COUNT as u16;
+    list.bitmapcount = libc::ATTR_BIT_MAP_COUNT;
     list.volattr = libc::ATTR_VOL_INFO | libc::ATTR_VOL_UUID;
     // The reply is the length of the reply as a u32 followed by the 16 bytes of the UUID.
     let mut reply = [0u8; 4 + 16];
@@ -32,8 +32,11 @@ pub fn identity(path: &Path, metadata: &Metadata) -> Result<String, String> {
         )
     };
     if status != 0 {
-        let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-        return Err(error(format!("errno {errno}")));
+        let cause = std::io::Error::last_os_error();
+        return Err(error(match cause.raw_os_error() {
+            Some(errno) => format!("errno {errno}"),
+            None => cause.to_string(),
+        }));
     }
     let id = &reply[4..];
     let uuid = format!(

@@ -1,7 +1,7 @@
 //! Tests of the identity of a project folder on the platform that names it by the volume UUID.
 #![cfg(target_os = "macos")]
 
-#[path = "support/folder.rs"]
+#[path = "../../support/folder.rs"]
 mod folder;
 
 use std::os::unix::fs::MetadataExt;

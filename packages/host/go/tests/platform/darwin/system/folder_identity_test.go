@@ -1,6 +1,6 @@
 //go:build darwin
 
-package host_test
+package system_test
 
 import (
 	"os"
