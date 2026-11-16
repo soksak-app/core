@@ -2211,8 +2211,9 @@ int main(int argc, char **argv) { @autoreleasepool {
                 && [eventStr rangeOfString:@"\"focused\":false"].location != NSNotFound) lost = YES;
         }
         check(!lost && window.firstResponder == (NSResponder *)logicalRegion,
-            [NSString stringWithFormat:@"press focus: asynchronous page command preserves logical focus before phase three (events %@)",
-                collectedEvents]);
+            [NSString stringWithFormat:@"press focus: asynchronous page command preserves logical focus before phase three (events %@, first responder %@ %p, region %p, person buttons %lu, press open %d, handler count %lu)",
+                collectedEvents, NSStringFromClass(window.firstResponder.class), window.firstResponder, logicalRegion,
+                sp_input_person_buttons(), (int)sp_input_press_open(window, 0), (unsigned long)handler.count]);
         check(sp_input_pointer(window, point.x, y, 3, 0, 0, 0) == SP_INPUT_DELIVERED,
             @"press focus: logical direct phase three is delivered");
         waitForReleaseEnd(window, page, @"the direct logical release ends");
