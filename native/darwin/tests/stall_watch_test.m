@@ -48,6 +48,14 @@ static void awaitSignal(dispatch_semaphore_t semaphore) { dispatch_semaphore_wai
 static dispatch_semaphore_t watchBlocked;
 static void signalWatchBlocked(void) { dispatch_semaphore_signal(watchBlocked); }
 
+// heartbeatHeld is signaled when a heartbeat is held between its read of the run loop and its send; the hold ends with the start of
+// the next wait of the run loop (waitStarted).
+static dispatch_semaphore_t heartbeatHeld;
+static void holdHeartbeat(void) {
+    dispatch_semaphore_signal(heartbeatHeld);
+    awaitSignal(waitStarted);
+}
+
 int main(void) { @autoreleasepool {
     CFRunLoopTimerRef far = CFRunLoopTimerCreateWithHandler(NULL, CFAbsoluteTimeGetCurrent() + 3600, 0, 0, 0, ^(CFRunLoopTimerRef t) {});
     CFRunLoopAddTimer(CFRunLoopGetMain(), far, kCFRunLoopCommonModes);
@@ -211,6 +219,36 @@ int main(void) { @autoreleasepool {
             (unsigned long long)(faultAnswered - faultAnsweredBefore),
             (unsigned long long)(sp_observe_count("stall_watch.wakes") - faultWakesBefore)]);
 
+    // A heartbeat that read the run loop awake decided to send, and its wake reaches a run loop that started to wait before the
+    // send. The watch decided in no wait, so the send is not a send into a wait: the count of sends into a wait states the decision
+    // of the watch, not the schedule of its thread. The hook holds the heartbeat after its read until the wait of the run loop
+    // started, which the observer of the check after the observer of the watch signals.
+    dispatch_semaphore_t mainAwake = dispatch_semaphore_create(0);
+    heartbeatHeld = dispatch_semaphore_create(0);
+    uint64_t raceSentBefore = 0, raceSentInWaitBefore = 0, raceAnsweredBefore = 0;
+    sp_stall_counts(&raceSentBefore, &raceSentInWaitBefore, &raceAnsweredBefore);
+    atomic_store(&waitArmed, 0);
+    sendToMain(^{
+        dispatch_semaphore_signal(mainAwake);
+        awaitSignal(heartbeatHeld);
+        // The signal of the first wait after this block is the signal that the observer of the watch marked that wait.
+        atomic_store(&waitArmed, 1);
+    });
+    onWorker(^{
+        awaitSignal(mainAwake);
+        sp_stall_set_send_hook_for_test(holdHeartbeat);
+        uint64_t a = 0, b = 0;
+        sp_stall_heartbeat(&a, &b);
+        sp_stall_set_send_hook_for_test(NULL);
+        stopMain();
+    });
+    check(runUntilStopped(), @"the heartbeat that read an awake run loop ends with the stop of the run");
+    uint64_t raceSent = 0, raceSentInWait = 0, raceAnswered = 0;
+    sp_stall_counts(&raceSent, &raceSentInWait, &raceAnswered);
+    check(raceSent - raceSentBefore == 1 && raceSentInWait == raceSentInWaitBefore,
+        [NSString stringWithFormat:@"a heartbeat that read an awake run loop is no send into a wait when the wait started before the send, got %llu sent and %llu sent into a wait",
+            (unsigned long long)(raceSent - raceSentBefore), (unsigned long long)(raceSentInWait - raceSentInWaitBefore)]);
+
     // The scheduling priority of a process that the system runs in the background is 4, as for an application that is not active
     // and whose windows are not shown; the check puts its own process in the background, which the system does the same way, and
     // the CPU time grows by the work of its thread.
@@ -224,8 +262,11 @@ int main(void) { @autoreleasepool {
     check(setpriority(PRIO_DARWIN_PROCESS, 0, 0) == 0, @"the check returns its process to the foreground");
     read = sp_stall_schedule(&restoredPriority, &unused);
     check(read == 0 && restoredPriority == priority, [NSString stringWithFormat:@"the process reads its priority %d again, got %d", priority, restoredPriority]);
+    // The work is measured by the CPU clock of the thread, not by the wall clock: on a loaded machine the system deschedules the
+    // thread, so 50 ms of wall time can hold less than 40 ms of work, and the check judges the CPU time of the reading, not the
+    // share of the machine that the thread received.
     volatile uint64_t spin = 0;
-    for (uint64_t start = sp_mono_ns(); sp_mono_ns() - start < 50000000;) spin++;
+    for (uint64_t start = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID); clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - start < 50000000;) spin++;
     read = sp_stall_schedule(&restoredPriority, &cpuAfter);
     check(read == 0 && cpuAfter - cpuBefore >= 40000000, [NSString stringWithFormat:@"50 ms of work of the thread adds at least 40 ms of CPU time, got %.1f ms",
         milliseconds(cpuAfter - cpuBefore)]);

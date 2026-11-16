@@ -23,8 +23,8 @@ int sp_stall_schedule(int32_t *priority, uint64_t *cpu_ns);
 // A wake that ends in the next wait before this thread runs keeps it blocked, because nothing of that turn was late.
 void sp_stall_await_awake(void);
 
-// The counts of the heartbeats since the start of the process: those that sent their block to the main thread, those whose wake
-// reached a run loop that waited, and the blocks that ran. A test reads them to state that the watch sent nothing through a wait.
+// The counts of the heartbeats since the start of the process: those that sent their block to the main thread, those that the
+// watch decided in a wait of the run loop, and the blocks that ran. A test reads them to state that the watch sent nothing through a wait.
 void sp_stall_counts(uint64_t *sent, uint64_t *sent_in_wait, uint64_t *answered);
 
 // The fault injection of the checks: while it is set, the next sp_stall_await_awake that finds the run loop waiting sends a heartbeat
@@ -35,3 +35,8 @@ void sp_stall_set_send_in_next_wait_for_test(bool send);
 // The hook of the checks that hears that a thread blocks in sp_stall_await_awake, which no event of the system tells: the thread
 // calls it each time it is counted as blocked, before it blocks, so a wake from then on ends that block. NULL removes it.
 void sp_stall_set_blocked_hook_for_test(void (*blocked)(void));
+
+// The hook of the checks that holds a heartbeat between its read of the state of the run loop and its send: sp_stall_heartbeat
+// calls it after it read that the run loop does not wait and before it sends, so a check lets the run loop start its wait at that
+// point. NULL removes it.
+void sp_stall_set_send_hook_for_test(void (*send)(void));

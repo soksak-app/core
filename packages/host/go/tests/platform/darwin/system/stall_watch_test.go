@@ -40,7 +40,8 @@ var stallScenarios = map[string]func(config string) error{}
 
 func init() {
 	stallScenarios["blocked"] = blockedScenario
-	stallScenarios["waits"] = waitsScenario
+	stallScenarios["waits"] = func(config string) error { return waitsScenario(config, 0) }
+	stallScenarios["waits-after-a-late-watch"] = func(config string) error { return waitsScenario(config, stallLateWatch) }
 }
 
 // runStallScenario runs the scenario of a child process on the main goroutine.
@@ -311,9 +312,15 @@ func TestABlockedMainThreadIsRecordedWithItsStacksAndItsEnd(t *testing.T) {
 	requireLevels(t, records)
 }
 
-// waitsScenario starts the watch, runs a main run loop that waits for 2 s, which is longer than a stall, and then holds it from its
-// wake. The heartbeat of the platform counts the heartbeats that it sent through the counts of the native library.
-func waitsScenario(config string) error {
+// stallLateWatch is the time that the watch of the scenario waits-after-a-late-watch spends in its first heartbeat after the
+// start, as a watch that the system does not schedule for that time does. It is longer than the wait of 2 s that the scenario judges.
+const stallLateWatch = 2500 * time.Millisecond
+
+// waitsScenario starts the watch, runs a main run loop until a heartbeat of the watch read its wait, keeps that wait for 2 s, which
+// is longer than a stall, and then holds the run loop from its wake. The heartbeat of the platform counts the heartbeats that it
+// sent through the counts of the native library. The first heartbeat of the watch after its start takes lateWatch longer than
+// the platform needs, which is the delay that the system causes when it does not schedule the watch.
+func waitsScenario(config string, lateWatch time.Duration) error {
 	system, err := platform.Current()
 	if err != nil {
 		return err
@@ -321,16 +328,20 @@ func waitsScenario(config string) error {
 	platformHeartbeat := host.StallHeartbeat(system)
 	var mu sync.Mutex
 	reads := 0
-	sentAtRead := uint64(0)
+	calls := 0
 	heartbeat := func() (time.Duration, time.Duration) {
+		mu.Lock()
+		calls++
+		late := calls == 2
+		mu.Unlock()
+		if late {
+			time.Sleep(lateWatch)
+		}
 		before := sampler.ReadStallCounts().Sent
 		now, answered := platformHeartbeat()
 		if after := sampler.ReadStallCounts().Sent; after == before {
 			// A heartbeat that sent nothing read a wait of the run loop.
 			mu.Lock()
-			if reads == 0 {
-				sentAtRead = after
-			}
 			reads++
 			mu.Unlock()
 		}
@@ -340,18 +351,32 @@ func waitsScenario(config string) error {
 	if err != nil {
 		return err
 	}
+	// The run loop waits until a heartbeat of the watch read the wait, as often as the watch is scheduled: the wait is judged from
+	// that heartbeat on and not from a time at which the watch has to be scheduled.
+	for {
+		mu.Lock()
+		read := reads
+		mu.Unlock()
+		if read > 0 {
+			break
+		}
+		if err := pumpRunLoop(100 * time.Millisecond); err != nil {
+			return err
+		}
+		run.mu.Lock()
+		expired := run.expired
+		run.mu.Unlock()
+		if expired {
+			return errors.New("no heartbeat of the watch read the wait of the run loop")
+		}
+	}
 	// The run loop waits for 2 s: the watch reads the wait with its heartbeat, sends nothing to the waiting run loop, and stores
 	// nothing for the 2 s.
+	atRead := sampler.ReadStallCounts().Sent
 	if err := pumpRunLoop(2 * time.Second); err != nil {
 		return err
 	}
 	sent := sampler.ReadStallCounts().Sent
-	mu.Lock()
-	read, atRead := reads, sentAtRead
-	mu.Unlock()
-	if read == 0 {
-		return errors.New("no heartbeat of the watch read the wait of the run loop")
-	}
 	if sent != atRead {
 		return fmt.Errorf("%d heartbeats were sent to a run loop that waits", sent-atRead)
 	}
@@ -372,7 +397,17 @@ func waitsScenario(config string) error {
 
 // contract: host.stall.waiting-run-loop-takes-no-heartbeat
 func TestARunLoopThatWaitsTakesNoHeartbeat(t *testing.T) {
-	records := stallRecordsOf(t, "waits")
+	requireWaitsRecords(t, stallRecordsOf(t, "waits"))
+}
+
+// contract: host.stall.waiting-run-loop-takes-no-heartbeat
+func TestARunLoopThatWaitsTakesNoHeartbeatWhenTheWatchReadsItLate(t *testing.T) {
+	requireWaitsRecords(t, stallRecordsOf(t, "waits-after-a-late-watch"))
+}
+
+// requireWaitsRecords states the records of the waits scenario: the stall of the wake and its sample only.
+func requireWaitsRecords(t *testing.T, records []stallRecord) {
+	t.Helper()
 	if got := namesOf(records); got != "host.stall,host.stall.sampled" {
 		t.Fatalf("events %q, want the stall of the wake and its sample only", got)
 	}
