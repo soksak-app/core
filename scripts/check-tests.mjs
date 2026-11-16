@@ -3754,6 +3754,23 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F874",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/identity.go", symbol: "func (implementation) DirectoryIdentity(path string, info os.FileInfo) (string, error) {" },
+      { file: "packages/host/rust/src/platform/darwin/identity.rs", symbol: "pub fn identity(path: &Path, metadata: &Metadata) -> Result<String, String> {" },
+      { file: "packages/workbench/projects.js", symbol: "stores the identity ${project.identity} of the earlier form" },
+      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "var earlierIdentity = regexp.MustCompile" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/folder_identity_test.go", id: "TestFolderIdentityNamesVolumeUUID" },
+      { file: "packages/host/rust/tests/folder_identity_test.rs", id: "folder_identity_names_volume_uuid" },
+      { file: "packages/workbench/test/projects-switch.test.mjs", id: "opening a project whose stored identity has the earlier form is refused with an error that names projects.json" },
+      { file: "packages/workbench-mygo/tests/project_identity_test.go", id: "TestAProjectWithTheEarlierIdentityFormIsRefusedByName" },
+    ],
+    expected: "The identity of a project folder on macOS is <volume UUID>:<inode>, which a restart does not change, and a stored identity of the earlier form <device>:<inode> is refused with an error that names projects.json.",
+    levels: ["unit"],
+  },
+  {
     id: "F868",
     implementation: [
       { file: "packages/plugin-api/exposure-check.js", symbol: "export function checkPluginRepository(root, core = coreExposure()) {" },

@@ -5,6 +5,7 @@
 ## 미배포
 
 - F875: release package의 install test가 `@soksak/window-check`의 release closure만 pack해(`releaseClosure`), macOS process identity package를 pack할 수 없는 Linux에서 실행된다.
+- F874: macOS 의 project folder identity 는 `<device>:<inode>` 대신 `<volume UUID>:<inode>` 이다. 두 호스트가 volume UUID 를 `getattrlist` 와 `ATTR_VOL_UUID` 로 읽는다. device number 는 부팅마다 system 이 다시 매기므로, 재시작해도 더는 모든 project 가 `Project directory has changed` 로 거부되지 않는다. 저장 형식은 migration 없이 바뀐다. `projects.json` 에 이전 형식의 identity 를 가진 project 는 열 때 `projects.json` 과 그 identity 를 밝히는 오류로 거부되며, person 이 `projects.json` 을 다시 만들거나 project 를 다시 추가한다. 검증: `TestFolderIdentityNamesVolumeUUID`, `folder_identity_names_volume_uuid`, workbench test `opening a project whose stored identity has the earlier form is refused with an error that names projects.json`, `TestAProjectWithTheEarlierIdentityFormIsRefusedByName` (macOS arm64).
 - F873: release candidate는 0.0.42이다.
 - F872: release file `soksak-window-check-<version>.tgz`가 `@soksak/client`, `@soksak/log-contract`, `@soksak/plugin-api`를 release URL로 가리키는 대신 담아(`bundleDependencies`) pnpm 11이 기본 설정으로 설치한다. `scripts/test/pack-release-packages.test.mjs`의 설치 test는 `ERR_PNPM_EXOTIC_SUBDEP`로 실패했고 지금은 통과한다.
 - F871: release candidate는 0.0.41이다.

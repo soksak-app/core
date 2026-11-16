@@ -545,7 +545,11 @@ async function activateInTurn(id) {
   await awaited("projects.activate.keep", () => keep("library replacement"));
   if (!resumed) await awaited("projects.activate.saveGeometry", saveGeometry);
   const folder = await awaited("projects.activate.folder", () => windows.folder(project.root));
-  if (folder.identity !== project.identity) throw new Error(`Project directory has changed: ${project.root}`);
+  if (folder.identity !== project.identity) {
+    // A stored identity of the earlier form <device>:<inode> never equals the current form, so it is refused by its form and not as a changed directory (docs/spec/projects.md#project-identity).
+    if (/^\d+:\d+$/.test(project.identity)) throw new Error(`projects.json: project ${project.root} stores the identity ${project.identity} of the earlier form <device>:<inode>; the identity is <volume UUID>:<inode>, so add the project again`);
+    throw new Error(`Project directory has changed: ${project.root}`);
+  }
   const result = await awaited("projects.activate.openProject", () => windows.openProject({
     // default: a project whose window was never closed has no stored window position (null).
     id, root: project.root, geometry: project.geometry ?? null,

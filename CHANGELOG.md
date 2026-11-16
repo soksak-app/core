@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F875: The install test of the release packages packs only the release closure of `@soksak/window-check` (`releaseClosure`), so it runs on Linux, where the macOS process identity package cannot be packed.
+- F874: The identity of a project folder on macOS is `<volume UUID>:<inode>`, the volume UUID read with `getattrlist` and `ATTR_VOL_UUID` in both hosts, instead of `<device>:<inode>`, whose device number the system renumbers at each boot, so a restart no longer refuses every project with `Project directory has changed`. The stored form changes without a migration: a project whose `projects.json` holds an identity of the earlier form is refused at its opening with an error that names `projects.json` and the identity, and the person creates `projects.json` again or adds the projects again. Validation: `TestFolderIdentityNamesVolumeUUID`, `folder_identity_names_volume_uuid`, the workbench test `opening a project whose stored identity has the earlier form is refused with an error that names projects.json` and `TestAProjectWithTheEarlierIdentityFormIsRefusedByName` (macOS arm64).
 - F873: The release candidate is 0.0.42.
 - F872: The release file `soksak-window-check-<version>.tgz` holds `@soksak/client`, `@soksak/log-contract` and `@soksak/plugin-api` (`bundleDependencies`) instead of naming them by release URLs, so pnpm 11 installs it with its default settings; the install test of `scripts/test/pack-release-packages.test.mjs` failed with `ERR_PNPM_EXOTIC_SUBDEP` and passes now.
 - F871: The release candidate is 0.0.41.

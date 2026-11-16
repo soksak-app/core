@@ -995,8 +995,8 @@ impl Platform for Darwin {
     fn private_file_options(&self) -> std::fs::OpenOptions {
         private_files::private_file_options()
     }
-    fn directory_identity(&self, _path: &Path, metadata: &Metadata) -> Result<String, String> {
-        Ok(identity::identity(metadata))
+    fn directory_identity(&self, path: &Path, metadata: &Metadata) -> Result<String, String> {
+        identity::identity(path, metadata)
     }
     #[cfg(feature = "diagnostics")]
     fn private_directory(&self, path: &Path) -> Result<(), String> {

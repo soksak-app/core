@@ -1011,6 +1011,7 @@ fn invalid_json_closes_connection() {
 | `workspace.folder.aliases-share-identity` | 디렉터리와 그 심볼릭 링크는 같은 프로젝트 폴더로 해석된다. | all |
 | `workspace.folder.rejects-file` | 일반 파일은 프로젝트 폴더로 거부된다. | all |
 | `workspace.folder.replaced-directory-changes-identity` | 바뀌지 않은 디렉터리는 identity를 유지하고, 같은 root에 새로 만든 다른 디렉터리는 다른 identity를 가진다. | all |
+| `workspace.folder.identity-names-volume-uuid` | macOS 에서 project folder 의 identity 는 `<volume UUID>:<inode>` 이다. volume 이 저장한 UUID(`getattrlist` 와 `ATTR_VOL_UUID`)를 대문자 hyphen 형식으로 쓰고 inode 번호를 붙인다. 부팅마다 system 이 다시 매기는 device number 는 담지 않으므로, 바뀌지 않은 directory 의 identity 는 재시작 뒤에도 같다. | all |
 | `workspace.folder.messages` | 폴더 확인은 요청한 경로를 한 번 담은 문구 하나로 실패한다. 경로나 상위 폴더가 없으면 `project directory does not exist: <path>`, 접근이 거부되면 `project directory is not readable: <path>`, 파일이면 `not a project directory: <resolved path>`, 그 밖의 system 오류는 `project directory cannot be resolved: <path> (errno <n>)`이다. | all |
 | `cli.usage.unknown-command-exits-2` | 알 수 없는 명령은 종료 상태 2로 끝나며 표준 오류에 `sok: unknown command: <word>`와 사용법을 출력한다. | all |
 | `cli.endpoint.missing-file-reports-not-running` | `endpoint.json`이 없으면 명령은 종료 상태 1로 끝나며, 그 파일이 없고 애플리케이션이 실행 중이 아니라고 보고한다. | all |

@@ -1009,6 +1009,7 @@ Items:
 | `workspace.folder.aliases-share-identity` | A directory and a symbolic link to it resolve to the same project folder. | all |
 | `workspace.folder.rejects-file` | A regular file is rejected as a project folder. | all |
 | `workspace.folder.replaced-directory-changes-identity` | An unchanged directory keeps its identity, and another directory created at the same root has another identity. | all |
+| `workspace.folder.identity-names-volume-uuid` | On macOS, the identity of a project folder is `<volume UUID>:<inode>`: the UUID that the volume stores (`getattrlist` with `ATTR_VOL_UUID`) in uppercase hyphenated form, and the inode number. It holds no device number, which the system renumbers at each boot, so the identity of an unchanged directory is the same after a restart. | all |
 | `workspace.folder.messages` | A folder check fails with one message that names the requested path once: `project directory does not exist: <path>` for a missing path or a missing ancestor, `project directory is not readable: <path>` when access is denied, `not a project directory: <resolved path>` for a file, and `project directory cannot be resolved: <path> (errno <n>)` for another system error. | all |
 | `cli.usage.unknown-command-exits-2` | An unknown command exits with status 2 and prints `sok: unknown command: <word>` and the usage on standard error. | all |
 | `cli.endpoint.missing-file-reports-not-running` | Without `endpoint.json` a command exits with status 1 and reports that the file does not exist and the application is not running. | all |
