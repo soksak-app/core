@@ -4,6 +4,10 @@
 
 ## 미배포
 
+- F882: `Session.relaunch` 가 새 endpoint 대기의 결과를 값으로 즉시 받고 `diagnostics.host.relaunch` 의 응답 뒤에 판단해서, 그 응답 전에 오류로 끝난 대기가 unhandled rejection 이 되지 않는다.
+- F880-1: `stall_watch_test`의 CPU time check가 일을 thread의 CPU 시계로 재므로, 부하가 큰 machine에서 더는 실패하지 않는다.
+- F880: 대기로 보낸 heartbeat 의 native 계수는 watch 가 대기에서 정한 send 만 세고, 대기하는 run loop 의 stall scenario 는 heartbeat 가 대기를 읽을 때까지 run loop 를 돌려 2 s 를 그 heartbeat 부터 판단하며, `sp_stall_set_send_hook_for_test` 가 check 를 위해 heartbeat 를 읽기와 send 사이에 잡아 둔다.
+- F878: `input_cursor_rect_test` 가 page 의 crosshair 를 기다리기 전에 application 이 저장한 cursor 와 page 가 move 를 받은 element 를 출력한다.
 - F881: 옮긴 Rust folder identity test가 support module을 `../../../support/folder.rs`에서 읽어 compile된다.
 - F879: Rust darwin folder identity test는 Go test의 대응 경로인 `packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs`에 있어 `make check-host-files`가 통과한다.
 - F877: Rust 호스트가 volume UUID 읽기의 system 오류를 `errno <n>` 으로, errno 가 없으면 자체 값 없이 그 문구로 보고하고, macOS folder identity 의 test 가 `platform/darwin/` 아래에 있으며, 불필요한 `u16` cast 를 제거했다. event source, default, platform file, clippy check 가 F874 에서 통과한다.

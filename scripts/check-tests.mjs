@@ -3754,6 +3754,29 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F882",
+    implementation: [
+      { file: "packages/window-check/app.mjs", symbol: "relaunch" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/session-relaunch.test.mjs", id: "a relaunch whose endpoint.json is not JSON before the request is answered rejects once and leaves no rejection unhandled" },
+    ],
+    expected: "A relaunch whose wait for the endpoint ends with an error before the request is answered rejects once, and no rejection is left unhandled.",
+    levels: ["unit"],
+  },
+  {
+    id: "F880",
+    implementation: [
+      { file: "native/darwin/src/stall_watch.m", symbol: "sendHeartbeat" },
+      { file: "packages/host/go/tests/platform/darwin/system/stall_watch_test.go", symbol: "func waitsScenario(config string, lateWatch time.Duration) error {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/platform/darwin/system/stall_watch_test.go", id: "TestARunLoopThatWaitsTakesNoHeartbeatWhenTheWatchReadsItLate" },
+    ],
+    expected: "A heartbeat counts as a send into a wait only when the watch read the wait, and the run loop wait check starts its interval from the first heartbeat that reads the wait.",
+    levels: ["unit"],
+  },
+  {
     id: "F881",
     implementation: [
       { file: "packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs", symbol: "#[path = \"../../../support/folder.rs\"]" },

@@ -4,13 +4,15 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { connect } from "@soksak/client";
 import { startCasePlayer } from "@soksak/client/testing";
 
 import { Session } from "../app.mjs";
+import { untilEndpoint } from "../endpoint-wait.mjs";
 
 const idleProcess = fileURLToPath(new URL("../fixtures/idle-process.mjs", import.meta.url));
 
@@ -77,4 +79,42 @@ test("a relaunch whose process exited and that no process replaced fails with th
   await rejected;
   const record = JSON.parse(readFileSync(join(configDir, "exited.json"), "utf8"));
   assert.deepEqual([record.check, record.pid], ["full screen", pid]);
+});
+
+test("a relaunch whose endpoint.json is not JSON before the request is answered rejects once and leaves no rejection unhandled", async (t) => {
+  // The client holds the answer of diagnostics.host.relaunch until the test releases it, so the wait for the endpoint settles
+  // while the relaunch still awaits the answer.
+  const configDir = mkdtempSync(join(tmpdir(), "relaunch-early-"));
+  t.after(() => rmSync(configDir, { recursive: true, force: true }));
+  const pid = 2 ** 22 + 1;
+  let answer;
+  const answered = new Promise((resolve) => { answer = resolve; });
+  const requested = Promise.withResolvers();
+  const client = {
+    endpoint: { pid },
+    request: (method) => {
+      requested.resolve(method);
+      return answered;
+    },
+    close() {},
+  };
+  const unhandled = [];
+  const record = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", record);
+  t.after(() => process.off("unhandledRejection", record));
+  const session = new Session({ name: "probe", configDir }, client);
+  const relaunch = session.relaunch();
+  const rejected = assert.rejects(relaunch, (error) => {
+    assert.match(error.message, /endpoint\.json is not JSON: Unexpected end of JSON input/);
+    return true;
+  });
+  await requested.promise;
+  writeEndpoint(configDir, "");
+  // A second wait on the same folder reads the same file after the wait of the relaunch has read it; the immediate lets the
+  // process report the rejections that no handler took before the answer is released.
+  await assert.rejects(untilEndpoint(configDir, pid), /is not JSON/);
+  await new Promise((resolve) => setImmediate(resolve));
+  answer(null);
+  await rejected;
+  assert.deepEqual(unhandled, []);
 });

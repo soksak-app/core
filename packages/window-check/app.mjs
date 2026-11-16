@@ -622,18 +622,19 @@ export class Session {
     const previous = this.client.endpoint.pid;
     // The watch starts before the request, so an endpoint that the new process writes at once is not missed. The wait ends by
     // that endpoint and has no time limit: a process that no process replaces holds the check until the limit of the test.
-    const next = untilEndpoint(this.app.configDir, previous);
+    // The wait can end with an error while the request still awaits its answer, so its outcome is taken as a value at once and
+    // judged after the answer; a rejected promise that no handler has taken is an unhandled rejection of the process.
+    const next = untilEndpoint(this.app.configDir, previous).then((endpoint) => ({ endpoint }), (error) => ({ error }));
     this.step(`relaunch process ${previous}`);
     await this.request("diagnostics.host.relaunch");
-    let endpoint;
-    try {
-      endpoint = await next;
-    } catch (error) {
+    const outcome = await next;
+    if (outcome.error) {
       // A process that exited and that no process replaced is an exit of the application, which ends its later checks too.
-      if (processRuns(previous)) throw error;
+      if (processRuns(previous)) throw outcome.error;
       throw hostExited(this.app, previous, this.check ?? null,
-        `exited in the check "${this.check}" and no process took its place (${error.message})`);
+        `exited in the check "${this.check}" and no process took its place (${outcome.error.message})`);
     }
+    const { endpoint } = outcome;
     this.client.close();
     this.client = await connect({ configDir: this.app.configDir });
     if (this.client.endpoint.pid !== endpoint.pid) {

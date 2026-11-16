@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+- F882: `Session.relaunch` takes the outcome of its wait for the new endpoint as a value at once and judges it after the answer of `diagnostics.host.relaunch`, so a wait that ends with an error before that answer is no unhandled rejection.
+- F880-1: The CPU time check of `stall_watch_test` times its work by the CPU clock of the thread, so a loaded machine no longer fails it.
+- F880: The native count of heartbeats sent into a wait counts only a send that the watch decided in a wait, the stall scenario of a waiting run loop runs the run loop until a heartbeat read the wait and judges the 2 s from that heartbeat, and `sp_stall_set_send_hook_for_test` holds a heartbeat between its read and its send for the checks.
+- F878: `input_cursor_rect_test` prints the cursor that the application stored and the elements that the page took the moves over before it waits for the crosshair of the page.
 - F881: The moved Rust folder identity test reads its support module at `../../../support/folder.rs`, so it compiles.
 - F879: The Rust darwin folder identity test is `packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs`, the counterpart path of the Go test, so `make check-host-files` passes.
 - F877: The Rust host reports the system error of the volume UUID read as `errno <n>` or its text without a value of its own, the tests of the macOS folder identity sit under `platform/darwin/`, and the redundant `u16` cast is removed, so the checks of the event sources, the defaults, the platform files and clippy pass on F874.
