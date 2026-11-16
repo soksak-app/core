@@ -98,7 +98,7 @@ static int runApplication(NSString *folder) {
         return 1;
     }
     void *document = sp_document_create(surface, [folder stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, NULL, NULL, changed, NULL);
+        NULL, NULL, NULL, NULL, false, changed, NULL);
     if (!document) {
         fprintf(stderr, "FAIL: a document region is not created\n");
         return 1;

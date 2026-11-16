@@ -163,7 +163,7 @@ static void *prepareSurface(void) {
 
 // Loads the page, which plays its media, and stores the processes that the loaded document writes with.
 static void *loadPage(void *surface, nw_listener_t listener, NSString *store, Writers *writers) {
-    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+    void *document = sp_document_create(surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
     check(document != NULL, @"a document region is created");
     sp_document_place(document, 0, 0, 0, 0, true);
     NSString *address = [NSString stringWithFormat:@"http://127.0.0.1:%d/page", nw_listener_get_port(listener)];
@@ -274,7 +274,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     NSString *unloaded = [temporaryFolder(@"soksak-document-store-unloaded-") stringByAppendingPathComponent:@"store"];
     void *unloadedSurface = prepareSurface();
     @autoreleasepool {
-        void *unloadedDocument = sp_document_create(unloadedSurface, unloaded.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+        void *unloadedDocument = sp_document_create(unloadedSurface, unloaded.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
         check(unloadedDocument != NULL, @"a document that loads nothing is created");
         sp_document_close(unloadedDocument);
     }
@@ -298,7 +298,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     void *terminatedSurface = prepareSurface();
     WKWebsiteDataStore *terminatedStore = nil;
     @autoreleasepool {
-        void *terminatedDocument = sp_document_create(terminatedSurface, terminated.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+        void *terminatedDocument = sp_document_create(terminatedSurface, terminated.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
         check(terminatedDocument != NULL, @"a document whose network process ends during the end of its store is created");
         terminatedStore = [((WKWebView *)terminatedDocument).configuration.websiteDataStore retain];
         sp_document_close(terminatedDocument);

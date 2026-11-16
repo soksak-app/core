@@ -41,6 +41,7 @@ unsafe extern "C" {
         plugin: *const c_char,
         label: *const c_char,
         channel: *const c_char,
+        shares_process: bool,
         changed: Changed,
         context: *mut c_void,
     ) -> *mut c_void;
@@ -229,6 +230,7 @@ pub fn create(
             channel
                 .as_ref()
                 .map_or(std::ptr::null(), |text| text.as_ptr()),
+            options.shares_process,
             changed,
             receiver as *mut c_void,
         )

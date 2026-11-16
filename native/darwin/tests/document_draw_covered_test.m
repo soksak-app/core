@@ -149,7 +149,7 @@ static Window openWindow(NSRect frame) {
 // A shown document region with the margins (left, top, right, bottom) that loads the page.
 static WKWebView *openDocument(Window window, NSString *store, NSString *address, double left, double top, double right,
     double bottom) {
-    void *document = sp_document_create(window.surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+    void *document = sp_document_create(window.surface, store.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
     check(document != NULL, @"a document region is created in the surface");
     if (!document) exit(1);
     sp_document_place(document, left, top, right, bottom, true);

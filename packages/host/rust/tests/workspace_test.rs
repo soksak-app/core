@@ -291,9 +291,10 @@ fn move_without_delta_is_refused() {
 }
 
 /// The common-only keys, each with a value.
-fn common_only_cases() -> [(&'static str, Value); 4] {
+fn common_only_cases() -> [(&'static str, Value); 5] {
     [
         ("projectOpening", json!("tabs")),
+        ("viewProcess", json!("view")),
         ("textSize", json!(1.5)),
         ("memorySaver", json!(false)),
         ("memorySaverDelay", json!(30)),

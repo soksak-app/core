@@ -137,7 +137,7 @@ func TestTheGeometryOfAPreparationIsCommittedWithItsTicketAfterThePresentationNo
 	slot := Rect{X: 10, Y: 20, W: 300, H: 200}
 	prepared, err := p.s.SyncSurfaces(SyncRequest{Titlebar: 40, Settled: true, Surfaces: []Surface{
 		{ID: "probe-surface", Visible: true, Plugin: "probe", Rect: slot, Composition: composition,
-			Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`)}},
+			Start: &ViewStart{Origin: json.RawMessage(`{"directory":null}`), Diagnostics: json.RawMessage(`null`), Section: json.RawMessage(`null`), Process: "plugin"}},
 	}})
 	if err != nil {
 		t.Fatalf("the preparation failed: %v", err)

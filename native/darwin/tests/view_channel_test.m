@@ -130,7 +130,7 @@ int main(void) { @autoreleasepool {
 
     @autoreleasepool {
         void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL,
-            channelScript.UTF8String, changed, NULL);
+            channelScript.UTF8String, false, changed, NULL);
         check(view != NULL, @"a view configuration is created with the channel script");
         sp_document_set_view_message(view, viewMessage, NULL);
         sp_document_place(view, 0, 0, 0, 0, true);
@@ -189,7 +189,7 @@ int main(void) { @autoreleasepool {
 
     @autoreleasepool {
         void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL,
-            NULL, changed, NULL);
+            NULL, false, changed, NULL);
         check(region != NULL, @"a document region is created without a channel script");
         check(!hasChannelScript((WKWebView *)region), @"the region configuration has no channel script");
         sp_document_place(region, 0, 0, 0, 0, true);
@@ -206,7 +206,7 @@ int main(void) { @autoreleasepool {
     @autoreleasepool {
         writeFile(folder, @"ui/theme.html", themePage);
         void *themed = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL,
-            channelScript.UTF8String, changed, NULL);
+            channelScript.UTF8String, false, changed, NULL);
         check(themed != NULL, @"a themed view configuration is created");
         sp_document_set_view_message(themed, viewMessage, NULL);
         sp_document_add_user_script(themed, themeScript.UTF8String);
@@ -222,7 +222,7 @@ int main(void) { @autoreleasepool {
         // A declared overlay of a view is drawn by the DOM of the view itself, so the overlay mask of the native plane must not
         // cut the view: the view is not a native region of the plane, and the input under the overlay goes to the view.
         void *overlayed = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL,
-            channelScript.UTF8String, changed, NULL);
+            channelScript.UTF8String, false, changed, NULL);
         check(overlayed != NULL, @"a view configuration is created for the overlay check");
         sp_document_place(overlayed, 0, 0, 0, 0, true);
         WKWebView *overlayedView = (WKWebView *)overlayed;

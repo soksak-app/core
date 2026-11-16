@@ -38,7 +38,7 @@ A change redraws the window and keeps the scroll position of the shown content; 
 | 사이드바 크기 | the width settings of [layout values](#layout-values) |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
-| 메모리 (common scope only) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
+| 메모리 (common scope only) | 보기 프로세스 `viewProcess`, 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (a switch that runs `core.settings.debug {on}`) |
 | 에이전트 (common scope only) | the setup parts of [agents](#에이전트), with 설치 and 다시 확인 |
 
@@ -109,7 +109,7 @@ The window draws every setting with one control of a fixed set, chosen by the fo
 | Form | Control | Command |
 |---|---|---|
 | A boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | Switch: a checkbox drawn as a switch | `core.settings.change {key, value, scope}` |
-| A choice of listed values (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
+| A choice of listed values (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, a plugin `enum`) | Select box with one option per value in the declared order | `core.settings.change {key, value, scope}` |
 | A theme of the catalog (`theme`) | Swatch grid with one swatch per theme, drawn with that theme's colors and shape | `core.settings.theme {name, scope}` |
 | A bounded integer (`gap`, `radius`, `size`, `memorySaverDelay`, the [layout values](#layout-values), a plugin `integer`) | Slider between the bounds, followed by the value and its unit | `core.settings.change {key, value, scope}` |
 | A string or an address (a plugin `string` or `address`) | One-line text field | `core.settings.change {key, value, scope}` |
@@ -150,6 +150,7 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `fullRule` | `under`, `over` or `none` |
 | `language` | `auto` or a language of the application menu (`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [Layout values](#layout-values) |
+| `viewProcess` | `plugin` or `view`, common scope, default `plugin`: the WebContent process of a view that the host creates afterwards, shared by the views of its plugin or its own ([view processes](plugin-processes.md#view-processes)) |
 | `memorySaver` | A boolean, common scope, default `true`: the [memory saver](plugins.md#memory-saver) unloads hidden tabs |
 | `memorySaverDelay` | An integer from 5 to 720 (minutes), common scope, default 120: the time a tab stays hidden before the memory saver unloads it; another value is refused with `Invalid setting memorySaverDelay: <value>`, and a change re-arms the scheduler |
 | `sets`, `links` | [Stored sets and links](#stored-sets-and-links) |

@@ -118,7 +118,7 @@ type NativeFunctions struct {
 	DocumentAddScript                      func(unsafe.Pointer, *byte)
 	DocumentBinaryPut                      func(unsafe.Pointer, unsafe.Pointer, uint64, *byte, *byte) *byte
 	DocumentBinaryTake                     func(unsafe.Pointer, *byte, *unsafe.Pointer, *uint64) *byte
-	DocumentCreate                         func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, uintptr) unsafe.Pointer
+	DocumentCreate                         func(unsafe.Pointer, *byte, *byte, *byte, *byte, *byte, bool, uintptr) unsafe.Pointer
 	DocumentQuery                          func(unsafe.Pointer, uintptr)
 	DocumentSetEvent                       func(unsafe.Pointer, uintptr)
 	DocumentSetMessage                     func(unsafe.Pointer, uintptr)

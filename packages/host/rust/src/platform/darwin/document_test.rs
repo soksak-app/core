@@ -24,6 +24,7 @@ fn create_reports_the_native_cause() {
             plugin: "probe",
             label: "",
             channel: None,
+            shares_process: false,
         },
         Box::new(|_| {}),
     ) {
@@ -54,6 +55,7 @@ fn create_reports_a_missing_native_cause() {
             plugin: "probe",
             label: "",
             channel: None,
+            shares_process: false,
         },
         Box::new(|_| {}),
     ) {

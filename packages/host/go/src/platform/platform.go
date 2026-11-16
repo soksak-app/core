@@ -52,6 +52,9 @@ type DocumentOptions struct {
 	// Channel is empty for a document region. A view surface passes the text of the view channel script, and its configuration is
 	// the only one that serves the core root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
 	Channel string
+	// SharesProcess makes a view use the WebContent process of the open sharing views of its plugin and directory
+	// (docs/spec/plugin-processes.md#view-processes). A document region does not share a process.
+	SharesProcess bool
 }
 
 // Window is the handle of a native window: the address of an NSWindow on macOS and an HWND on Windows. An HWND is a value that

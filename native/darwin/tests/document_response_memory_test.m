@@ -169,7 +169,7 @@ int main(void) { @autoreleasepool {
         double fileMiB = kFileBytes / 1048576.0;
         // The region and every autoreleased reference to it live in this pool, so the closed region is released at its end.
         @autoreleasepool {
-            void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
+            void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, false, changed, NULL);
             check(region != NULL, @"a region is created");
             sp_document_place(region, 0, 0, 0, 0, true);
 
@@ -215,7 +215,7 @@ int main(void) { @autoreleasepool {
         check(closed - before < fileMiB / 2,
             [NSString stringWithFormat:@"the footprint stays %.1f MiB above its start after the region closes", closed - before]);
 
-        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, "", changed, NULL);
+        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, "", false, changed, NULL);
         check(view != NULL, @"a view is created");
         sp_document_place(view, 0, 0, 0, 0, true);
         [latest release];

@@ -70,6 +70,9 @@ type ViewStart struct {
 	Diagnostics json.RawMessage `json:"diagnostics,omitempty"`
 	// Section is the section of the view or JSON null, kept raw so that a missing section is refused (validateViewStart).
 	Section json.RawMessage `json:"section,omitempty"`
+	// Process is "plugin" when the view shares the WebContent process of the other views of its plugin and "view" when it starts
+	// its own (docs/spec/plugin-processes.md#view-processes).
+	Process string `json:"process,omitempty"`
 }
 
 // viewStartOf returns the start values that the view of surface uses: those of the request or, when the request carries none, those that the host holds (docs/spec/native-surfaces.md#view-surfaces). It runs on the UI thread, as the record does.
@@ -107,7 +110,19 @@ func validateViewStart(surface string, start *ViewStart) error {
 	if err := checkViewDiagnostics(surface, start.Diagnostics); err != nil {
 		return err
 	}
-	return checkViewSection(surface, start.Section)
+	if err := checkViewSection(surface, start.Section); err != nil {
+		return err
+	}
+	return checkViewProcess(surface, start.Process)
+}
+
+// checkViewProcess checks the process of the start values of the view of surface: it is required and is "plugin" or "view"
+// (docs/spec/plugin-processes.md#view-processes).
+func checkViewProcess(surface, process string) error {
+	if process != "plugin" && process != "view" {
+		return fmt.Errorf("surface %q: view start process %q is not plugin or view", surface, process)
+	}
+	return nil
 }
 
 // checkViewSection checks the section of the start values of the view of surface: it is required, and it is null or an object
@@ -389,6 +404,7 @@ type syncViewStartWire struct {
 	Declarations json.RawMessage `json:"declarations"`
 	Diagnostics  json.RawMessage `json:"diagnostics,omitempty"`
 	Section      json.RawMessage `json:"section,omitempty"`
+	Process      string          `json:"process,omitempty"`
 }
 
 // decodeSyncRequest resolves the request-local declaration table before any surface state is read or changed.
@@ -431,6 +447,7 @@ func decodeSyncRequest(raw json.RawMessage) (SyncRequest, error) {
 			surface.Start = &ViewStart{
 				Params: item.Start.Params, Origin: item.Start.Origin, Project: item.Start.Project,
 				Declarations: declarations[index], Diagnostics: item.Start.Diagnostics, Section: item.Start.Section,
+				Process: item.Start.Process,
 			}
 		} else if item.Start != nil {
 			return SyncRequest{}, fmt.Errorf("surface %q: non-view composition cannot carry start values", item.ID)

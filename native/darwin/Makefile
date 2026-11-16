@@ -323,6 +323,7 @@ NATIVE_TESTS = observe_test \
   webview_geometry_test,-AppleShowScrollBars,Always \
   webview_process_test \
   process_label_test \
+  view_process_test \
   webview_process_end_test \
   application_end_processes_test \
   webview_responsiveness_test \

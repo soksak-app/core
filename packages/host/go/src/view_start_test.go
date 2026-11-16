@@ -189,6 +189,7 @@ func TestSyncRequestRequiresAndResolvesItsDeclarationTable(t *testing.T) {
 // A view surface whose start values carry no origin, or an origin that is not {directory} with a path or null, is refused
 // with its reason; the host never injects a directory in its place. The fixed form with a null directory is accepted.
 // contract: view.start-values.refuses-a-missing-origin
+// contract: view.start-values.refuses-a-process-of-another-form
 func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 	const view = `"id":"probe","plugin":"probe","composition":{"kind":"view","page":"ui/page.html"}`
 	const missing = `surface "probe": view start origin is missing`
@@ -199,7 +200,12 @@ func TestSyncRequestRefusesAViewWithoutAnOriginDirectory(t *testing.T) {
 		{"origin without directory", `{` + view + `,"start":{"origin":{}}}`, malformed},
 		{"directory that is not a string", `{` + view + `,"start":{"origin":{"directory":1}}}`, malformed},
 		{"origin with another member", `{` + view + `,"start":{"origin":{"directory":"/work/one","root":"/work/one"}}}`, malformed},
-		{"null directory", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null}}`, ""},
+		{"no process", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null}}`,
+			`surface "probe": view start process "" is not plugin or view`},
+		{"another process", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"window"}}`,
+			`surface "probe": view start process "window" is not plugin or view`},
+		{"null directory", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"plugin"}}`, ""},
+		{"process of its own", `{` + view + `,"start":{"origin":{"directory":null},"diagnostics":null,"section":null,"process":"view"}}`, ""},
 	}
 	for _, tc := range cases {
 		var surface Surface
@@ -269,7 +275,7 @@ func TestSyncRequestRefusesAViewWithoutASection(t *testing.T) {
 func TestSyncRequestRefusesASectionOfAnotherForm(t *testing.T) {
 	const view = `"id":"probe","plugin":"probe","composition":{"kind":"view","page":"ui/page.html"}`
 	const malformed = `surface "probe": view start section is not {id, sidebar, card}`
-	const start = `"origin":{"directory":null},"diagnostics":null,"section":`
+	const start = `"origin":{"directory":null},"diagnostics":null,"process":"plugin","section":`
 	cases := []struct{ name, section, want string }{
 		{"tab section null", `null`, ""},
 		{"section object", `{"id":"probe.tree","sidebar":"left","card":null}`, ""},
@@ -380,5 +386,19 @@ func TestAViewWithoutStartKeepsTheValuesThatTheHostHolds(t *testing.T) {
 	composition := map[string]SurfaceComposition{"probe": decoded.Surfaces[0].Composition}
 	if _, err := CheckSyncRequest(decoded, composition, map[string]string{"probe": "probe"}); err != nil {
 		t.Fatalf("the check of a request without start values: %v", err)
+	}
+}
+
+// The decoding of a sync request keeps the process of the start values of a view, which the view creation reads
+// (docs/spec/plugin-processes.md#view-processes).
+func TestASyncRequestKeepsTheProcessOfAViewStart(t *testing.T) {
+	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{}],"surfaces":[{"id":"probe","visible":true,"dim":false,"x":0,"y":0,"w":10,"h":10,"plugin":"probe",` +
+		`"composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":0,` +
+		`"diagnostics":null,"section":null,"process":"view"}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := request.Surfaces[0].Start.Process; got != "view" {
+		t.Fatalf("the decoded start process is %q, want view", got)
 	}
 }

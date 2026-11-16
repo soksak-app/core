@@ -364,6 +364,7 @@ var commonOnlyCases = []struct {
 	file  string
 }{
 	{"projectOpening", "tabs", `"tabs"`},
+	{"viewProcess", "view", `"view"`},
 	{"textSize", 1.5, `1.5`},
 	{"memorySaver", false, `false`},
 	{"memorySaverDelay", 30, `30`},

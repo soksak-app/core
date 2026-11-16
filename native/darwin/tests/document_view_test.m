@@ -224,7 +224,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     @autoreleasepool {
         __block void *document = NULL;
         NSArray<NSDictionary *> *creation = capturedEvents(^{
-            document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+            document = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
             sp_document_set_stream(document, stream, NULL);
             // The first deliveries of the observed properties arrive on the run loop after the creation. A JavaScript round trip
             // starts the web content process of the document, and its answer comes after the changes that the process sent
@@ -591,8 +591,8 @@ int main(int argc, char **argv) { @autoreleasepool {
         });
 
         // Documents in the same directory share site data, and documents in different directories do not.
-        void *same = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
-        void *other = sp_document_create(surface, storeB.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+        void *same = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
+        void *other = sp_document_create(surface, storeB.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
         check(same != NULL && other != NULL, @"documents are created for a shared and a separate store directory");
         NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:@{
             NSHTTPCookieDomain: @"127.0.0.1", NSHTTPCookiePath: @"/", NSHTTPCookieName: @"store",
@@ -660,7 +660,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     check(freed(&closedViews[0]), @"nothing holds the web view of a document closed with the keyboard in it");
     if (activation) {
         @autoreleasepool {
-            void *left = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, changed, NULL);
+            void *left = sp_document_create(surface, storeA.fileSystemRepresentation, NULL, NULL, NULL, NULL, false, changed, NULL);
             sp_document_place(left, 10, 20, 30, 40, true);
             // Each JavaScript round trip with the document comes after the change of focus that its process received before it.
             [window makeFirstResponder:(NSView *)left];

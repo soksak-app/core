@@ -113,10 +113,10 @@ int main(void) { @autoreleasepool {
 
     @autoreleasepool {
         // A view without its plugin is not created, so the core root is never granted to an unnamed requester.
-        check(sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, NULL, NULL, "", changed, NULL) == NULL,
+        check(sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, NULL, NULL, "", false, changed, NULL) == NULL,
             @"a view without a plugin is not created");
 
-        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, "", changed, NULL);
+        void *view = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, "", false, changed, NULL);
         check(view != NULL, @"a view is created with the folder and the plugin of its page");
         check(surfaceLayoutPrefersNear60FPS(view) == 0,
             [NSString stringWithFormat:@"a plugin root view renders at the display refresh rate (preference %d)",
@@ -141,7 +141,7 @@ int main(void) { @autoreleasepool {
 
         // A region gets no core root grant: its core requests fail and the resolver is not called for them.
         [resolverCalls removeAllObjects];
-        void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
+        void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, false, changed, NULL);
         check(region != NULL, @"a document region is created with the folder of its plugin");
         sp_document_place(region, 0, 0, 0, 0, true);
         steps = runPage(region);

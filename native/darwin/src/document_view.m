@@ -402,6 +402,9 @@ static NSString *binaryRefusal(SPBinaryStore *store, NSUInteger length, NSString
 @property CGColorRef viewportMarkerOriginalBorderColor;
 - (void)restoreViewportMarker;
 @property BOOL pluginRootView;
+// Whether the view shares the WebContent process of the other sharing views of its plugin and data store
+// (docs/spec/plugin-processes.md#view-processes).
+@property BOOL sharesProcess;
 // Whether the view of a plugin has committed its first document. A view keeps that document for its source generation.
 @property BOOL viewDocumentCommitted;
 - (void)clearBackForwardCache:(NSString *)reason;
@@ -1383,8 +1386,22 @@ bool sp_view_page_insert(const char *html, const char *map, char **output, char 
 // Builds the web view with the configuration of a document region, or with the view configuration (isView) that a view
 // surface uses (docs/spec/native-surfaces.md#view-surfaces). The view is hidden with a zero frame and
 // is attached to no parent; the caller places it and owns the reference until sp_document_close.
+// The open view of plugin in store whose WebContent process a new sharing view uses: a view that shares its process when there
+// is one, otherwise any open view of the plugin, so that a view opened after the setting changes joins the views already open;
+// nil when the plugin has no open view (docs/spec/plugin-processes.md#view-processes).
+static SPDocumentView *sharingView(NSString *plugin, WKWebsiteDataStore *store) {
+    SPDocumentView *found = nil;
+    for (SPDocumentView *view in openDocuments().allObjects) {
+        if (view.closed || !view.pluginRootView) continue;
+        if (![view.plugin isEqualToString:plugin] || view.configuration.websiteDataStore != store) continue;
+        if (view.sharesProcess) return view;
+        if (!found) found = view;
+    }
+    return found;
+}
+
 static SPDocumentView *pluginView(const char *directory, const char *folder, const char *plugin, NSString *label,
-    NSString *channelSource, bool isView, sp_document_changed changed, void *context) {
+    NSString *channelSource, bool isView, bool sharesProcess, sp_document_changed changed, void *context) {
     WKWebsiteDataStore *store = storeForDirectory(directory);
     if (!store) return nil;
     NSString *applicationName = safariApplicationName();
@@ -1404,6 +1421,19 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
         scheme.plugin = [NSString stringWithUTF8String:plugin];
     }
     if (label) [configuration _setProcessDisplayName:label];
+    // WebKit gives a new page the running process of its related page (WebProcessPool::createWebPage), and the first load of
+    // soksak://<plugin> stays in it as a navigation within the same non-HTTP scheme (processForNavigationInternal).
+    // _relatedWebView is private (docs/operations/private-native-apis.md).
+    SPDocumentView *related = sharesProcess ? sharingView(scheme.plugin, store) : nil;
+    if (related) {
+        // WebKit refuses a related web view whose process pool differs from the pool of the configuration
+        // (-[WKWebView _initializeWithConfiguration:]), and the setter of this macOS release does not copy the pool.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        configuration.processPool = related.configuration.processPool;
+#pragma clang diagnostic pop
+        [configuration _setRelatedWebView:related];
+    }
     [configuration setURLSchemeHandler:scheme forURLScheme:kApplicationScheme];
     WKContentWorld *world = [WKContentWorld worldWithName:kDocumentWorld];
     SPDocumentScroll *scroll = [[SPDocumentScroll new] autorelease];
@@ -1436,6 +1466,7 @@ static SPDocumentView *pluginView(const char *directory, const char *folder, con
     view.changed = changed;
     view.context = context;
     view.plugin = folder && plugin ? scheme.plugin : nil;
+    view.sharesProcess = sharesProcess;
     view.binaries = binaries;
     view.navigationDelegate = view;
     view.UIDelegate = view;
@@ -1500,7 +1531,7 @@ bool sp_document_draw_covered(void *handle, bool draw) {
 }
 
 void *sp_document_create(void *surfaceHandle, const char *directory, const char *folder, const char *plugin, const char *label, const char *channel,
-    sp_document_changed changed, void *context) {
+    bool sharesProcess, sp_document_changed changed, void *context) {
     setDocumentFailure(nil);
     if (takeInjectedCreationFailure()) return NULL;
     bool isView = channel != NULL;
@@ -1514,13 +1545,14 @@ void *sp_document_create(void *surfaceHandle, const char *directory, const char 
     if (!changed) return documentCreationFails(@"the change callback is missing");
     if (isView && !folder) return documentCreationFails(@"the view has no folder");
     if (isView && !plugin) return documentCreationFails(@"the view has no plugin");
+    if (!isView && sharesProcess) return documentCreationFails(@"a document region does not share a process");
     NSString *channelSource = isView ? [NSString stringWithUTF8String:channel] : nil;
     if (isView && !channelSource) return documentCreationFails(@"the channel of the view is not UTF-8");
     NSString *labelText = label ? [NSString stringWithUTF8String:label] : nil;
     if (label && !labelText) return documentCreationFails(@"the process label is not UTF-8");
     NSView *nativePlane = (NSView *)sp_surface_native_plane(surface);
     if (!nativePlane) return documentCreationFails(@"the surface has no native plane");
-    SPDocumentView *view = pluginView(directory, folder, plugin, labelText, channelSource, isView, changed, context);
+    SPDocumentView *view = pluginView(directory, folder, plugin, labelText, channelSource, isView, sharesProcess, changed, context);
     if (!view) return NULL;
     view.pluginRootView = isView;
     if (!surfaceLayoutRenderAtDisplayRate(view)) {

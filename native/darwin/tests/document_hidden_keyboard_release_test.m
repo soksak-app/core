@@ -42,7 +42,7 @@ static char kDocumentReleaseMarker;
 static void *shownDocument(void *surface, NSString *store, NSString *folder, BOOL *released) {
     void *document = NULL;
     @autoreleasepool {
-        document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
+        document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, false, changed, NULL);
         if (document) {
             DocumentReleaseMarker *marker = [DocumentReleaseMarker new];
             marker.released = released;

@@ -38,7 +38,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
 | 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
-| 메모리 (전역 범위에서만) | 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
+| 메모리 (전역 범위에서만) | 보기 프로세스 `viewProcess`, 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (`core.settings.debug {on}`을 실행하는 switch) |
 | 에이전트 (전역 범위에서만) | [에이전트](#에이전트)의 setup part, 설치와 다시 확인 |
 
@@ -109,7 +109,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 형식 | 컨트롤 | 명령 |
 |---|---|---|
 | Boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
-| 나열된 값 중 하나 (`projectOpening`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
+| 나열된 값 중 하나 (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
 | 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
@@ -150,6 +150,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `fullRule` | `under`, `over`, `none` 중 하나 |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
+| `viewProcess` | `plugin` 또는 `view`, 전역 범위, 기본값 `plugin`: host가 그 뒤 만드는 view의 WebContent process로, 그 plugin의 view들과 함께 쓰거나 자기 것을 쓴다([View 프로세스](plugin-processes.ko.md#view-프로세스)) |
 | `memorySaver` | boolean, 전역 범위, 기본값 `true`: [메모리 절약](plugins.ko.md#메모리-절약)이 숨겨진 탭을 unload한다 |
 | `memorySaverDelay` | 5부터 720까지의 정수(분), 전역 범위, 기본값 120: 메모리 절약이 탭을 unload하기 전에 탭이 숨겨져 있는 시간. 다른 값은 `Invalid setting memorySaverDelay: <value>`로 거부하고, 변경은 scheduler를 다시 맞춘다 |
 | `sets`, `links` | [저장되는 세트와 연결](#저장되는-세트와-연결) |

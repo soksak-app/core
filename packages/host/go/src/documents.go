@@ -510,6 +510,7 @@ func (s *Surfaces) attachView(surfaceID string, surface unsafe.Pointer, director
 	var handle unsafe.Pointer
 	handle, err = system.CreateDocument(surface, platform.DocumentOptions{
 		Directory: directory, Folder: folder, Plugin: plugin, Label: ProcessLabel(plugin, viewRegionName), Channel: channel,
+		SharesProcess: start.Process == "plugin",
 	}, func(state string) {
 		if !s.documents.currentView(surfaceID, handle, generation) {
 			s.traceStaleViewCallback(surfaceID, "state")

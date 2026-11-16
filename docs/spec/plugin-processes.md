@@ -6,13 +6,43 @@ This specification states where plugin code runs and how its processes communica
 
 ## Decision
 
-Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `soksak://<plugin id>` origin, with one view per tab and one view per sidebar section ([sections](plugins.md#sections)). A plugin draws every screen it owns in its views by any means, and the workbench draws no plugin content.
+Plugin code runs outside the workbench page. Each plugin view is a separate web view on the `soksak://<plugin id>` origin, with one view per tab and one view per sidebar section ([sections](plugins.md#sections)). A plugin draws every screen it owns in its views by any means, and the workbench draws no plugin content. The views of one plugin share one WebContent process unless the setting `viewProcess` gives each view its own ([view processes](#view-processes)).
 
 Measurements do not reverse this decision. They fix the process counts, the per-plugin budgets and the pass values. When a pass value is not met, the design reopens. It does not return to mounting plugin surfaces on the workbench page.
 
 ## Operating-system display labels
 
 A plugin view's WebContent process uses the display label `soksak://plugin/<plugin id>`, and the WebContent process of a document region uses `soksak://plugin/<plugin id>/<region>`, where `<region>` is the name that the manifest declares for the region. The host composes the label and sets it on the WebKit process configuration of the web view; it does not change the isolated `soksak://<plugin id>` origin, grants no access, and is not used to route requests. The plugin identifier comes from the view declaration. This private WebKit setting is per configuration; configurations with distinct labels must not share a WebContent process because one process can expose only one process display label.
+
+## View processes
+
+The setting `viewProcess` ([settings](settings.md#values)) decides the WebContent process of a view when the host creates the view. With `plugin`, the default, the views of one plugin that use one data store share one WebContent process; with `view`, each view starts its own. The workbench sends the value of the setting in the start values of each view (`process`, [view surfaces](native-surfaces.md#view-surfaces)), and the host creates the view from it:
+
+- A view with `process` `plugin` uses the process of an open view of the same plugin and data store: a view created with `plugin` when there is one, otherwise any open view of the plugin, so that a view created after the setting changed to `plugin` joins the views that are already open. It starts a process when the plugin has no open view.
+- A view with `process` `view` starts its own process.
+- A change of the setting moves no open view. An open view keeps its process until it closes, and the setting applies to each view that the host creates afterwards: a new tab or section, a tab that the memory saver opens again, a view that the host creates again after its process ended, and every view at the next start of the application.
+- A process ends when its last view closes. When a shared process ends, every view in it ends, and the host creates each view again under rule 5 with the setting in force at that time.
+- Views of different plugins never share a process, because one process has one display label ([operating-system display labels](#operating-system-display-labels)), and a document region always starts its own process.
+
+The process count of one plugin follows from these rules:
+
+| Views and setting | Action | Processes |
+| --- | --- | --- |
+| 10 views created with `view` | The setting changes to `plugin` | 10 |
+| | One view opens | 10: the view joins the process of one open view |
+| | Five more views open | 10: they join the process of the view created with `plugin` |
+| | One of the first views closes | 9 |
+| | The memory saver opens three of the first views again | 6 |
+| | The application starts again | 1 |
+| 10 views created with `plugin` | The setting changes to `view` | 1 |
+| | One view opens | 2 |
+| | Nine of the first views close | 2 |
+| | The last of the first views closes | 1 |
+| 3 views created with `view` | The setting changes to `plugin`, two views open | 3 |
+| | The setting changes to `view`, one view opens | 4 |
+| | The setting changes to `plugin`, one view opens | 4 |
+
+The default is `plugin` because a separate process for each view of a plugin costs memory and isolates nothing beyond that plugin: each view process of the terminal plugin held about 20 to 30 MB of resident memory, so sixteen terminal views held about 400 MB in separate processes. With `plugin`, the failure of one view ends the other views of its plugin, and the delay of the full JavaScript collection is shared by the views of that plugin; the views of other plugins and the workbench page keep their own processes. `view` keeps each view apart for a plugin whose views must not fail together.
 
 ## Reasons
 

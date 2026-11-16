@@ -422,6 +422,9 @@ pub struct DocumentOptions<'a> {
     /// None for a document region. A view surface passes the text of the view channel script, and its configuration is the
     /// only one that serves the core root and runs the script (docs/spec/native-surfaces.md#view-surfaces).
     pub channel: Option<&'a str>,
+    /// Makes a view use the WebContent process of the open sharing views of its plugin and directory
+    /// (docs/spec/plugin-processes.md#view-processes). A document region does not share a process.
+    pub shares_process: bool,
 }
 
 /// The CSS pixel insets of the surface viewport (left, top, right, bottom).

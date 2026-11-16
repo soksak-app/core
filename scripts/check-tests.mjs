@@ -3825,6 +3825,24 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F883",
+    implementation: [
+      { file: "native/darwin/src/document_view.m", symbol: "static SPDocumentView *sharingView(NSString *plugin, WKWebsiteDataStore *store) {" },
+      { file: "packages/host/go/src/surfaces.go", symbol: "func checkViewProcess(surface, process string) error {" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn check_view_process(surface: &str, process: Option<&str>) -> Result<(), String> {" },
+      { file: "packages/workbench/surface-modules.js", symbol: "process: settingValue(\"viewProcess\")," },
+    ],
+    tests: [
+      { file: "native/darwin/tests/view_process_test.m", id: "two sharing views of one plugin run in one WebContent process" },
+      { file: "native/darwin/tests/view_process_test.m", id: "a sharing view joins the process of an open view of its plugin that does not share" },
+      { file: "packages/host/go/src/view_start_test.go", id: "TestSyncRequestRefusesAViewWithoutAnOriginDirectory" },
+      { file: "packages/host/rust/tests/surfaces_geometry_test.rs", id: "sync_request_check_refuses_a_process_of_another_form" },
+      { file: "packages/workbench/test/surface-view.test.mjs", id: "the start values of a view carry the process that the setting viewProcess chooses" },
+    ],
+    expected: "The views of one plugin and data store share one WebContent process when the setting viewProcess is plugin, a new sharing view joins an open view of its plugin, each view starts its own process with view, and both hosts refuse a start value without plugin or view.",
+    levels: ["unit"],
+  },
+  {
     id: "F874",
     implementation: [
       { file: "packages/host/go/src/platform/darwin/identity.go", symbol: "func (implementation) DirectoryIdentity(path string, info os.FileInfo) (string, error) {" },

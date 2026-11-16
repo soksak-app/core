@@ -366,6 +366,7 @@
   "settings": {
     "defaults": {
       "projectOpening": "windows",
+      "viewProcess": "plugin",
       "theme": "midnight",
       "mode": "dark",
       "language": "auto",
@@ -431,6 +432,10 @@
         "tabs",
         "windows"
       ],
+      "viewProcess": [
+        "plugin",
+        "view"
+      ],
       "projectTabs": [
         "top",
         "left"
@@ -479,6 +484,7 @@
     },
     "commonOnly": [
       "projectOpening",
+      "viewProcess",
       "textSize",
       "memorySaver",
       "memorySaverDelay"

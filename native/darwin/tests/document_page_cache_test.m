@@ -264,7 +264,7 @@ int main(void) { @autoreleasepool {
 
     NSString *storeDirectory = temporaryFolder(@"soksak-document-page-cache-");
     document = sp_document_create(surface, [storeDirectory stringByAppendingPathComponent:@"store"].fileSystemRepresentation,
-        NULL, NULL, NULL, NULL, changed, NULL);
+        NULL, NULL, NULL, NULL, false, changed, NULL);
     if (!document) failStep(@"create", @"a document view is not created inside the surface");
     view = (WKWebView *)document;
     sp_document_set_stream(document, stream, NULL);

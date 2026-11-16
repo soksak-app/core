@@ -104,6 +104,10 @@ pub struct ViewStart {
     /// same check.
     #[serde(default, deserialize_with = "present_value")]
     pub(crate) section: Option<Value>,
+    /// "plugin" when the view shares the WebContent process of the other views of its plugin and "view" when it starts its own
+    /// (docs/spec/plugin-processes.md#view-processes); the Go host runs the same check (checkViewProcess).
+    #[serde(default)]
+    pub(crate) process: Option<String>,
 }
 
 /// The wire start values of a view. `declarations` is an index into the request-local table and has no default, so a
@@ -116,6 +120,7 @@ struct ViewStartRequest {
     declarations: u64,
     diagnostics: Option<Value>,
     section: Option<Value>,
+    process: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for ViewStartRequest {
@@ -137,6 +142,7 @@ impl<'de> Deserialize<'de> for ViewStartRequest {
                 let mut declarations = None;
                 let mut diagnostics = None;
                 let mut section = None;
+                let mut process = None;
                 while let Some(key) = map.next_key::<String>()? {
                     match key.as_str() {
                         "params" => params = map.next_value::<Option<Value>>()?,
@@ -145,6 +151,7 @@ impl<'de> Deserialize<'de> for ViewStartRequest {
                         "declarations" => declarations = Some(map.next_value::<u64>()?),
                         "diagnostics" => diagnostics = Some(map.next_value::<Value>()?),
                         "section" => section = Some(map.next_value::<Value>()?),
+                        "process" => process = map.next_value::<Option<String>>()?,
                         _ => {
                             map.next_value::<de::IgnoredAny>()?;
                         }
@@ -158,6 +165,7 @@ impl<'de> Deserialize<'de> for ViewStartRequest {
                         .ok_or_else(|| de::Error::missing_field("declarations"))?,
                     diagnostics,
                     section,
+                    process,
                 })
             }
         }
@@ -237,7 +245,22 @@ fn validate_view_start(surface: &str, start: &ViewStart) -> Result<(), String> {
     }
     view_origin_directory(surface, start.origin.as_ref())?;
     check_view_diagnostics(surface, start.diagnostics.as_ref())?;
-    check_view_section(surface, start.section.as_ref())
+    check_view_section(surface, start.section.as_ref())?;
+    check_view_process(surface, start.process.as_deref())
+}
+
+/// Checks the process of the start values of the view of surface: it is required and is "plugin" or "view"
+/// (docs/spec/plugin-processes.md#view-processes).
+pub(crate) fn check_view_process(surface: &str, process: Option<&str>) -> Result<(), String> {
+    match process {
+        Some("plugin" | "view") => Ok(()),
+        Some(other) => Err(format!(
+            "surface {surface:?}: view start process {other:?} is not plugin or view"
+        )),
+        None => Err(format!(
+            "surface {surface:?}: view start process \"\" is not plugin or view"
+        )),
+    }
 }
 
 /// Checks the diagnostic declaration of the start values of the view of surface: it is required, and it is an object or null
@@ -683,6 +706,7 @@ impl SyncRequest {
                         declarations: Some(declarations.clone()),
                         diagnostics: start.diagnostics,
                         section: start.section,
+                        process: start.process,
                     })
                 }
                 None => None,

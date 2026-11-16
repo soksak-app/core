@@ -86,6 +86,8 @@ if (!defaultTheme) throw new Error(`the default theme ${declaration.settings.def
  *   sidebarMinWidth, sidebarMaxWidth, sidebarWidth
  *                    layout values (pt): the minimum and maximum width of a card sidebar and the initial width of a new sidebar
  *                    (docs/spec/settings.md)
+ *   viewProcess      the WebContent process of a new view (docs/spec/plugin-processes.md#view-processes). plugin = the views of a plugin
+ *                    share one process, view = each view starts its own. Common-only
  *   memorySaver, memorySaverDelay
  *                    the memory saver (docs/spec/plugins.md#memory-saver): whether hidden tabs are unloaded, and the minutes a tab stays
  *                    hidden before it is unloaded. Both are common-only
@@ -114,9 +116,10 @@ export const SHAPE_RANGES = declaration.settings.shapeRanges;
 
 /* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values).
    workbench.json states the fixed lists; the theme, mode, font, text size and language choices are the catalogs above. */
-const { projectOpening, projectTabs, focusInd, fullRule } = declaration.settings.choices;
+const { projectOpening, viewProcess, projectTabs, focusInd, fullRule } = declaration.settings.choices;
 export const CHOICES = {
   projectOpening,
+  viewProcess,
   theme: THEMES.map((theme) => theme.name),
   mode: MODES,
   font: FONTS.map((font) => font.id),

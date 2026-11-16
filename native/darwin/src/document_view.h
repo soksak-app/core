@@ -44,9 +44,12 @@ typedef void (*sp_view_message)(void *context, const char *json);
 // configuration may request soksak://core/<path> from the core root resolver (sp_core_root_set_resolver). A view needs
 // folder and plugin. label is the display label of the WebContent process of the document, which the host composes
 // (docs/spec/plugin-processes.md#operating-system-display-labels), and NULL gives the process no label of its own. Returns NULL
-// if the webview cannot be created.
+// if the webview cannot be created. A view with sharesProcess uses the WebContent process of an open view of the same plugin and
+// directory, one created with sharesProcess first, and starts one when the plugin has no open view; a view without it starts its own process
+// (docs/spec/plugin-processes.md#view-processes). A document region does not share a process, so sharesProcess with a NULL channel
+// fails.
 void *sp_document_create(void *surface, const char *directory, const char *folder, const char *plugin, const char *label, const char *channel,
-    sp_document_changed changed, void *context);
+    bool sharesProcess, sp_document_changed changed, void *context);
 
 // The cause of the last creation of a document region or view web view that returned NULL on the main thread, as a UTF-8
 // string that names the failed step and the native error text. It is "" when the last creation did not fail, and the next

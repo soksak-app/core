@@ -525,6 +525,7 @@ test("the start values of a view carry its params, origin, project, declarations
     declarations: { status: [], commands: [], element: [] },
     diagnostics,
     section: null,
+    process: "plugin",
   });
   recordOrigin("tab-without-directory", null, "test fixture");
   assert.deepEqual(viewStartValues({ surfaceId: "tab-without-directory", declarations: {}, diagnostics: null }, null), {
@@ -534,6 +535,7 @@ test("the start values of a view carry its params, origin, project, declarations
     declarations: { status: [], commands: [], element: [] },
     diagnostics: null,
     section: null,
+    process: "plugin",
   });
 });
 
@@ -1347,4 +1349,19 @@ test("a page-start view waits for the initial project context and a disposed pre
     globalThis.history = previousHistory;
     dom.window.close();
   }
+});
+
+// The setting viewProcess at the creation of a view decides its process (docs/spec/plugin-processes.md#view-processes). The test
+// runs last in this file because the change of a setting writes page log records.
+test("the start values of a view carry the process that the setting viewProcess chooses", async () => {
+  const { viewStartValues } = await import("../surface-modules.js?view-start");
+  const { set } = await import("../settings.js");
+  recordOrigin("tab-of-process", null, "test fixture");
+  set({ viewProcess: "view" }, "common", "test fixture");
+  try {
+    assert.equal(viewStartValues({ surfaceId: "tab-of-process", declarations: {}, diagnostics: null }, null).process, "view");
+  } finally {
+    set({ viewProcess: "plugin" }, "common", "test fixture");
+  }
+  assert.equal(viewStartValues({ surfaceId: "tab-of-process", declarations: {}, diagnostics: null }, null).process, "plugin");
 });

@@ -5,6 +5,9 @@
 @interface WKWebViewConfiguration (SPPrivateProcessDisplayName)
 // WKWebViewConfigurationPrivate.h: sets the operating-system label of a plugin WebContent process.
 - (void)_setProcessDisplayName:(NSString *)displayName API_AVAILABLE(macos(11.0));
+// WKWebViewConfigurationPrivate.h: the page of the configuration uses the running WebContent process of relatedWebView. The
+// framework header marks it deprecated from macOS 15.2 and keeps it.
+- (void)_setRelatedWebView:(WKWebView *)relatedWebView;
 @end
 
 // _WKInspector.h

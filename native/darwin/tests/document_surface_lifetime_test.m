@@ -82,7 +82,7 @@ int main(void) { @autoreleasepool {
         SurfaceReleaseMarker *marker = [SurfaceReleaseMarker new];
         objc_setAssociatedObject((id)surface, &kSurfaceReleaseMarker, marker, OBJC_ASSOCIATION_RETAIN);
         [marker release];
-        document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, changed, NULL);
+        document = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe", NULL, NULL, false, changed, NULL);
         if (document) {
             DocumentReleaseMarker *documentMarker = [DocumentReleaseMarker new];
             objc_setAssociatedObject((id)document, &kDocumentReleaseMarker, documentMarker, OBJC_ASSOCIATION_RETAIN);

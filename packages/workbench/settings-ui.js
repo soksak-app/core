@@ -321,7 +321,8 @@ function drawGeneral() {
     row("언어", choose("language",
       [["auto", "자동"], ...MENU_LANGUAGES.map(({ id, label }) => [id, label])], value("language"))),
   ]));
-  if (scope === "common") body.append(group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다.", [
+  if (scope === "common") body.append(group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다. 보기 프로세스는 새로 여는 보기부터 적용된다.", [
+    row("보기 프로세스", choose("viewProcess", named("viewProcess", { plugin: "플러그인마다 하나", view: "보기마다 하나" }), value("viewProcess"))),
     row("메모리 절약", toggle("memorySaver", value("memorySaver"))),
     row("숨긴 뒤 내리기까지", slide("memorySaverDelay", ...MEMORY_SAVER_DELAY, value("memorySaverDelay"), "분")),
   ]));

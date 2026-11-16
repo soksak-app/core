@@ -330,6 +330,10 @@ func TestASectionStandsInItsSurface(t *testing.T) {
 	if start["id"] != "fieldprobe.tree" || start["sidebar"] != "left" || start["card"] != nil {
 		t.Fatalf("the start value of the section is %v", start)
 	}
+	// The start values carry the setting viewProcess, whose default is plugin (docs/spec/plugin-processes.md#view-processes).
+	if process := surface["start"].(map[string]any)["process"]; process != "plugin" {
+		t.Fatalf("the start value process of the section is %#v", process)
+	}
 	if page := surface["composition"].(map[string]any)["page"]; page != "ui/tree.html" {
 		t.Fatalf("the composition of the section is %v", surface["composition"])
 	}

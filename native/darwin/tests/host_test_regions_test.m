@@ -136,7 +136,7 @@ int main(int argc, char **argv) { @autoreleasepool {
     char *failure = NULL;
     // The store ends when the last reference to it goes, so the references that the document autoreleases go with this pool.
     @autoreleasepool {
-        void *document = sp_document_create(surface, store, NULL, NULL, NULL, NULL, ignoreEvent, NULL);
+        void *document = sp_document_create(surface, store, NULL, NULL, NULL, NULL, false, ignoreEvent, NULL);
         check(document != NULL, @"a document of the data store is created");
         failure = endStore(store);
         check(failure != NULL && strstr(failure, "a document of the directory is open") != NULL,

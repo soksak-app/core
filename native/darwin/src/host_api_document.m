@@ -57,8 +57,8 @@ void documentQuery(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_query(document, documentQueriedBridge, (void *)context); });
 }
 
-void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, uintptr_t context) {
-    return ON_MAIN(void *, sp_document_create(surface, store, package, plugin, label, channel, documentChangedBridge, (void *)context));
+void *documentCreate(void *surface, const char *store, const char *package, const char *plugin, const char *label, const char *channel, bool sharesProcess, uintptr_t context) {
+    return ON_MAIN(void *, sp_document_create(surface, store, package, plugin, label, channel, sharesProcess, documentChangedBridge, (void *)context));
 }
 void documentSetMessage(void *document, uintptr_t context) {
     hostRunOnMain(^{ sp_document_set_message(document, documentMessageBridge, (void *)context); });

@@ -585,7 +585,10 @@ func (s *Shell) surfaceRequest() (map[string]any, error) {
 		surfaces = append(surfaces, map[string]any{"id": id, "visible": visible, "dim": visible && s.surfaceDimmed(id), "plugin": unit.ID,
 			"composition": held.composition, "x": held.box.X, "y": held.box.Y, "w": held.box.W, "h": held.box.H,
 			"start": map[string]any{"params": tabMember(held.tab, "params", "null"), "origin": tabMember(held.tab, "origin", `{"directory":null}`),
-				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section}})
+				"project": held.project, "declarations": index, "diagnostics": rawOrNull(unit.Diagnostics), "section": held.section,
+				// The setting viewProcess at the creation of the view decides whether it shares the process of its plugin
+				// (docs/spec/plugin-processes.md#view-processes).
+				"process": s.settings.Value("viewProcess")}})
 	}
 	// viewport is the size of the window that the frame laid out, which the host keeps with the layout transaction of the preparation
 	// (docs/spec/native-surfaces.md#layout-transaction), as the page gives it.

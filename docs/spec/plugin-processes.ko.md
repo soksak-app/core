@@ -6,13 +6,43 @@
 
 ## 결정
 
-Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `soksak://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나, sidebar section마다 하나다([섹션](plugins.ko.md#섹션)). Plugin은 자기가 가진 모든 화면을 어떤 수단으로든 자기 view에 그리며, workbench는 plugin 내용을 그리지 않는다.
+Plugin 코드는 workbench 페이지 밖에서 실행된다. 각 plugin view는 `soksak://<plugin id>` origin의 별도 웹뷰이며 탭마다 하나, sidebar section마다 하나다([섹션](plugins.ko.md#섹션)). Plugin은 자기가 가진 모든 화면을 어떤 수단으로든 자기 view에 그리며, workbench는 plugin 내용을 그리지 않는다. 한 plugin의 view들은 설정 `viewProcess`가 view마다 따로 두지 않는 한 WebContent process 하나를 함께 쓴다([View 프로세스](#view-프로세스)).
 
 측정은 이 결정을 뒤집지 않는다. 측정은 프로세스 수, plugin별 예산, 통과값을 정한다. 통과값을 만족하지 못하면 설계를 다시 연다. workbench 페이지에 plugin surface를 mount하는 방식으로 돌아가지 않는다.
 
 ## 운영체제 표시 이름
 
 Plugin view의 WebContent process는 `soksak://plugin/<plugin id>` 표시 이름을 사용하고, document region의 WebContent process는 `soksak://plugin/<plugin id>/<region>`을 사용한다. `<region>`은 manifest가 그 region에 선언한 이름이다. Host가 이 이름을 만들어 web view의 WebKit process configuration에 설정하며, 분리된 `soksak://<plugin id>` origin을 바꾸거나 접근 권한을 주거나 요청을 라우팅하지 않는다. Plugin 식별자는 view 선언에서 가져온다. 이 private WebKit 설정은 configuration별이므로 이름이 다른 configuration은 WebContent process를 공유하면 안 된다. 한 process에는 표시 이름 하나만 설정할 수 있기 때문이다.
+
+## View 프로세스
+
+설정 `viewProcess`([설정](settings.ko.md#값))는 host가 view를 만들 때 그 view의 WebContent process를 정한다. 기본값 `plugin`이면 한 data store를 쓰는 한 plugin의 view들이 WebContent process 하나를 함께 쓰고, `view`면 view마다 자기 process를 시작한다. workbench는 각 view의 시작 값에 설정 값을 보내고(`process`, [view 표면](native-surfaces.ko.md#view-표면)), host는 그 값으로 view를 만든다.
+
+- `process`가 `plugin`인 view는 같은 plugin과 data store의 열린 view의 process를 쓴다. `plugin`으로 만든 view가 있으면 그 view의 것을, 없으면 그 plugin의 아무 열린 view의 것을 쓰므로, 설정이 `plugin`으로 바뀐 뒤 만든 view는 이미 열린 view들에 합류한다. 그 plugin의 열린 view가 없으면 process를 시작한다.
+- `process`가 `view`인 view는 자기 process를 시작한다.
+- 설정을 바꿔도 열린 view는 옮겨지지 않는다. 열린 view는 닫힐 때까지 자기 process를 유지하고, 설정은 그 뒤 host가 만드는 view마다 적용된다. 새 탭이나 section, 메모리 절약이 다시 여는 탭, process가 끝난 뒤 host가 다시 만드는 view, 그리고 애플리케이션을 다음에 시작할 때의 모든 view다.
+- process는 마지막 view가 닫힐 때 끝난다. 함께 쓰는 process가 끝나면 그 안의 모든 view가 끝나고, host는 규칙 5에 따라 그때의 설정으로 각 view를 다시 만든다.
+- 다른 plugin의 view는 process를 함께 쓰지 않는다. process 하나는 표시 이름이 하나이기 때문이다([운영체제 표시 이름](#운영체제-표시-이름)). document region은 언제나 자기 process를 시작한다.
+
+한 plugin의 process 수는 이 규칙에서 나온다.
+
+| view와 설정 | 동작 | process |
+| --- | --- | --- |
+| `view`로 만든 view 10개 | 설정이 `plugin`으로 바뀐다 | 10 |
+| | view 하나가 열린다 | 10: 그 view는 열린 view 하나의 process에 합류한다 |
+| | view 5개가 더 열린다 | 10: `plugin`으로 만든 view의 process에 합류한다 |
+| | 처음 view 중 하나가 닫힌다 | 9 |
+| | 메모리 절약이 처음 view 중 3개를 다시 연다 | 6 |
+| | 애플리케이션이 다시 시작한다 | 1 |
+| `plugin`으로 만든 view 10개 | 설정이 `view`로 바뀐다 | 1 |
+| | view 하나가 열린다 | 2 |
+| | 처음 view 중 9개가 닫힌다 | 2 |
+| | 처음 view의 마지막이 닫힌다 | 1 |
+| `view`로 만든 view 3개 | 설정이 `plugin`으로 바뀌고 view 2개가 열린다 | 3 |
+| | 설정이 `view`로 바뀌고 view 하나가 열린다 | 4 |
+| | 설정이 `plugin`으로 바뀌고 view 하나가 열린다 | 4 |
+
+기본값이 `plugin`인 이유는 plugin의 view마다 process를 따로 두면 메모리가 들고, 그 plugin 밖으로는 더 격리하는 것이 없기 때문이다. terminal plugin의 view process는 각각 resident memory 약 20~30 MB를 썼으므로, terminal view 16개는 따로 된 process에서 약 400 MB를 썼다. `plugin`이면 한 view의 실패가 같은 plugin의 다른 view를 끝내고, 전체 JavaScript 수집의 지연을 그 plugin의 view들이 함께 받는다. 다른 plugin의 view와 workbench 페이지는 자기 process를 유지한다. `view`는 view가 함께 실패하면 안 되는 plugin을 위해 view를 따로 둔다.
 
 ## 근거
 

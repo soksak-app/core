@@ -38,6 +38,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
                 "declarations": index,
                 "diagnostics": null,
                 "section": null,
+                "process": "plugin",
             },
         })
     };
@@ -78,7 +79,7 @@ fn sync_request_resolves_request_local_view_declaration_indices() {
     );
 
     let negative_zero: Result<SyncRequest, _> = serde_json::from_str(
-        r#"{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null,"section":null}}]}"#,
+        r#"{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{"commands":[]}],"surfaces":[{"id":"tab-zero","x":0,"y":0,"w":10,"h":10,"visible":true,"dim":false,"plugin":"page","composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":-0,"diagnostics":null,"section":null,"process":"plugin"}}]}"#,
     );
     assert!(
         negative_zero.is_err(),
@@ -148,7 +149,7 @@ fn surface(id: &str, w: f64) -> serde_json::Value {
     serde_json::json!({
         "id": id, "module": "surface.js", "x": 0.0, "y": 0.0, "w": w, "h": 10.0,
         "visible": true, "dim": false, "plugin": "page", "composition": {"kind": "view", "page": "ui/page.html", "regions": [{"name": "page", "kind": "document", "input": "native"}], "overlays": []},
-        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null},
+        "start": {"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "process": "plugin"},
     })
 }
 
@@ -409,7 +410,7 @@ fn sync_request_check_refuses_a_view_origin_without_a_directory_form() {
     let request = sync_request(serde_json::json!({
         "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0},
         "declarations": [{"commands": []}],
-        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null})))],
+        "surfaces": [view(Some(serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null, "process": "plugin"})))],
     }));
     assert!(check_sync_request(&request, &held, &plugins).is_ok());
 }
@@ -427,7 +428,7 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
     )]);
     let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
     let check = |section: Option<serde_json::Value>| {
-        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null});
+        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "process": "plugin"});
         if let Some(section) = section {
             start["section"] = section;
         }
@@ -470,4 +471,42 @@ fn sync_request_check_refuses_a_view_section_of_another_form() {
             "the section {section} is accepted"
         );
     }
+}
+
+// A view surface whose start values carry no process, or a process other than plugin and view, is refused with its reason; both
+// declared processes are accepted (docs/spec/plugin-processes.md#view-processes). The Go host runs the same cases.
+// contract: view.start-values.refuses-a-process-of-another-form
+#[test]
+fn sync_request_check_refuses_a_process_of_another_form() {
+    let held = HashMap::from([(
+        "tab-1".to_string(),
+        serde_json::from_value(serde_json::json!({"kind": "view", "page": "ui/page.html"}))
+            .expect("the composition fixture is valid"),
+    )]);
+    let plugins = HashMap::from([("tab-1".to_string(), "page".to_string())]);
+    let check = |process: Option<serde_json::Value>| {
+        let mut start = serde_json::json!({"origin": {"directory": null}, "declarations": 0, "diagnostics": null, "section": null});
+        if let Some(process) = process {
+            start["process"] = process;
+        }
+        let request = sync_request(serde_json::json!({
+            "settled": true, "titlebar": 40.0, "viewport": {"width": 800.0, "height": 600.0}, "declarations": [{"commands": []}],
+            "surfaces": [{
+                "id": "tab-1", "module": null, "x": 0.0, "y": 0.0, "w": 10.0, "h": 10.0,
+                "visible": true, "dim": false, "plugin": "page",
+                "composition": {"kind": "view", "page": "ui/page.html"}, "start": start,
+            }],
+        }));
+        check_sync_request(&request, &held, &plugins)
+    };
+    assert_eq!(
+        check(None).unwrap_err(),
+        r#"surface "tab-1": view start process "" is not plugin or view"#
+    );
+    assert_eq!(
+        check(Some(serde_json::json!("window"))).unwrap_err(),
+        r#"surface "tab-1": view start process "window" is not plugin or view"#
+    );
+    assert!(check(Some(serde_json::json!("plugin"))).is_ok());
+    assert!(check(Some(serde_json::json!("view"))).is_ok());
 }

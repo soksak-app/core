@@ -1693,6 +1693,7 @@ fn attach_view(
                     plugin,
                     label: &process_label(plugin, VIEW_NAME),
                     channel: Some(channel),
+                    shares_process: start.process.as_deref() == Some("plugin"),
                 },
                 Box::new(move |state: String| {
                     view_state(&state_window, &state_surface, &state_origin, &state)
@@ -2587,6 +2588,7 @@ fn create(
             plugin: &plugin,
             label: &label,
             channel: None,
+            shares_process: false,
         },
         changed,
     )?;

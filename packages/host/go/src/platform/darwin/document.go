@@ -127,7 +127,7 @@ func (implementation) CreateDocument(surface unsafe.Pointer, options platform.Do
 		defer native.Free(unsafe.Pointer(channelText))
 	}
 	receiver := handles.NewHandle(changed)
-	document := native.DocumentCreate(surface, name, folderText, id, labelText, channelText, uintptr(receiver))
+	document := native.DocumentCreate(surface, name, folderText, id, labelText, channelText, options.SharesProcess, uintptr(receiver))
 	if document == nil {
 		receiver.Delete()
 		return nil, creationError("cannot create a document view in this surface", native.GoString(native.MainSpDocumentLastError()))

@@ -494,7 +494,8 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 	}
 	b.group("언어", "애플리케이션 메뉴가 이 언어를 따른다. 자동은 시스템 언어이고 목록에 없으면 영어다.", choice("언어", "language", languages))
 	if scope == "common" {
-		b.group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다.",
+		b.group("메모리", "메모리 절약을 켜면 숨긴 지 정한 시간이 지난 탭을 내리고, 다시 보일 때 저장된 상태로 다시 연다. 보기 프로세스는 새로 여는 보기부터 적용된다.",
+			choice("보기 프로세스", "viewProcess", map[string]string{"plugin": "플러그인마다 하나", "view": "보기마다 하나"}),
 			s.row(b, "메모리 절약", s.toggle(b, "memorySaver")),
 			s.row(b, "숨긴 뒤 내리기까지", s.slide(b, "memorySaverDelay", catalog.Settings.MemorySaverDelay, "분")))
 		on := s.settings.DebugOn()

@@ -12,7 +12,7 @@ import { callReporter } from "./plugin-processes.js";
 import { plugin } from "./registry.js";
 import { pageIdentity } from "./page-identity.js";
 import { pluginDiagnostics } from "./environment.js";
-import { onSettingsChange, pluginSettings } from "./settings.js";
+import { onSettingsChange, pluginSettings, value as settingValue } from "./settings.js";
 import { onTextSize, surfaceTextSize } from "./text-size.js";
 import { forgetTab, reportDirectory, reportError, reportFooter, reportKeep, reportModified, reportNotice, reportTitle, originHistory, tabOrigin,
   unloadTab, viewRefusal } from "./tab-reports.js";
@@ -316,6 +316,9 @@ function viewStartValuesFromDeclarations(surface, project, origin, declarations)
     diagnostics: surface.diagnostics,
     // default: the surface of a tab has no section, so its start value section is null (docs/spec/native-surfaces.md#view-surfaces).
     section: surface.section ?? null,
+    // The setting viewProcess at the creation of the view decides whether it shares the process of its plugin
+    // (docs/spec/plugin-processes.md#view-processes).
+    process: settingValue("viewProcess"),
   };
 }
 

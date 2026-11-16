@@ -363,7 +363,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
     void *surface = sp_surface_create(sp_window_set_main_webview((__bridge void *)main.window, (__bridge void *)main));
     check(surface != NULL, @"core creates the plugin surface host");
     void *document = surface ? sp_document_create(surface, store.fileSystemRepresentation,
-        folder.fileSystemRepresentation, "probe", "soksak://plugin/probe", "window.sokView = 1;", pluginStateChanged, NULL) : NULL;
+        folder.fileSystemRepresentation, "probe", "soksak://plugin/probe", "window.sokView = 1;", false, pluginStateChanged, NULL) : NULL;
     check(document != NULL, [NSString stringWithFormat:@"core creates the plugin view: %s", sp_document_last_error()]);
     if (!document) {
         if (surface) sp_surface_close(surface);
@@ -412,7 +412,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
         encoding:NSUTF8StringEncoding error:&failure];
     check(secondWritten, [NSString stringWithFormat:@"second plugin fixture page is written: %@", failure]);
     void *secondDocument = secondWritten ? sp_document_create(surface, secondStore.fileSystemRepresentation,
-        secondFolder.fileSystemRepresentation, "other", "soksak://plugin/other", "window.sokView = 1;", pluginStateChanged,
+        secondFolder.fileSystemRepresentation, "other", "soksak://plugin/other", "window.sokView = 1;", false, pluginStateChanged,
         &secondPluginViewState) : NULL;
     check(secondDocument != NULL, [NSString stringWithFormat:@"core creates a second plugin view: %s", sp_document_last_error()]);
     if (secondDocument) {
@@ -455,7 +455,7 @@ static pid_t measureCorePluginViewLabel(NSWindow *window) {
 
     // A document region of the same plugin has its own process, and the label of that process names the plugin and the region.
     void *region = sp_document_create(surface, store.fileSystemRepresentation, folder.fileSystemRepresentation, "probe",
-        "soksak://plugin/probe/studio", NULL, pluginStateChanged, &regionState);
+        "soksak://plugin/probe/studio", NULL, false, pluginStateChanged, &regionState);
     check(region != NULL, [NSString stringWithFormat:@"core creates a document region: %s", sp_document_last_error()]);
     if (region) {
         check(sp_document_load(region, "soksak://probe/page.html"), @"the document region accepts the origin of its plugin");
