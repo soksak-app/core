@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F872: The release file `soksak-window-check-<version>.tgz` holds `@soksak/client`, `@soksak/log-contract` and `@soksak/plugin-api` (`bundleDependencies`) instead of naming them by release URLs, so pnpm 11 installs it with its default settings; the install test of `scripts/test/pack-release-packages.test.mjs` failed with `ERR_PNPM_EXOTIC_SUBDEP` and passes now.
 - F871: The release candidate is 0.0.41.
 - F870: The case player of the sok tests keeps its listener open until it ends, so waking its accept loop at the close is never refused.
 - F869: A record that a view writes through `runtime.log` carries the surface of the view.
