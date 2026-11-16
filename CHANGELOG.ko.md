@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F875: release package의 install test가 `@soksak/window-check`의 release closure만 pack해(`releaseClosure`), macOS process identity package를 pack할 수 없는 Linux에서 실행된다.
 - F873: release candidate는 0.0.42이다.
 - F872: release file `soksak-window-check-<version>.tgz`가 `@soksak/client`, `@soksak/log-contract`, `@soksak/plugin-api`를 release URL로 가리키는 대신 담아(`bundleDependencies`) pnpm 11이 기본 설정으로 설치한다. `scripts/test/pack-release-packages.test.mjs`의 설치 test는 `ERR_PNPM_EXOTIC_SUBDEP`로 실패했고 지금은 통과한다.
 - F871: release candidate는 0.0.41이다.

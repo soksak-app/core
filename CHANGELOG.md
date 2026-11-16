@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F875: The install test of the release packages packs only the release closure of `@soksak/window-check` (`releaseClosure`), so it runs on Linux, where the macOS process identity package cannot be packed.
 - F873: The release candidate is 0.0.42.
 - F872: The release file `soksak-window-check-<version>.tgz` holds `@soksak/client`, `@soksak/log-contract` and `@soksak/plugin-api` (`bundleDependencies`) instead of naming them by release URLs, so pnpm 11 installs it with its default settings; the install test of `scripts/test/pack-release-packages.test.mjs` failed with `ERR_PNPM_EXOTIC_SUBDEP` and passes now.
 - F871: The release candidate is 0.0.41.

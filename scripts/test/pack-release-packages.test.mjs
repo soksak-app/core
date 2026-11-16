@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { packReleasePackages, RELEASE_PACKAGES, releaseFileName, releaseManifest } from '../pack-release-packages.mjs';
+import { packReleasePackages, RELEASE_PACKAGES, releaseClosure, releaseFileName, releaseManifest } from '../pack-release-packages.mjs';
 import { temporaryFolder } from '../temporary-folder.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -31,6 +31,18 @@ test('every workspace dependency of a release package is a package that the rele
   const published = new Map(manifests.map((manifest) => [manifest.name, manifest]));
   for (const manifest of manifests) assert.doesNotThrow(() => releaseManifest(manifest, manifest, published));
   assert.equal(new Set(manifests.map((manifest) => manifest.version)).size, 1, 'the release packages declare different versions');
+});
+
+// The install test packs only the closure of the window check, so it runs on every platform that runs the tests: a release package
+// that is restricted to one platform (`os`), such as the macOS process identity package, cannot be packed on another.
+test('the release closure of the window check holds no package restricted to a platform', { timeout: 1000 }, () => {
+  const closure = releaseClosure(ROOT, 'packages/window-check');
+  assert.deepEqual(closure, CHECK_PACKAGES);
+  for (const folder of closure) {
+    const manifest = JSON.parse(readFileSync(join(ROOT, folder, 'package.json'), 'utf8'));
+    assert.equal(manifest.os, undefined, `${folder} is restricted to the platforms ${manifest.os}`);
+  }
+  assert.throws(() => releaseClosure(ROOT, 'packages/workbench'), /not a package that the release publishes/);
 });
 
 // A plugin repository installs @soksak/window-check from the core release, so the packed packages name no workspace version or address
@@ -79,7 +91,7 @@ test('a pnpm project with the default settings installs the window check release
   const project = temporaryFolder('soksak-release-install-project-');
   t.after(out.remove);
   t.after(project.remove);
-  const files = packReleasePackages({ root: ROOT, destination: out.path });
+  const files = packReleasePackages({ root: ROOT, destination: out.path, folders: releaseClosure(ROOT, 'packages/window-check') });
   const release = files.find((file) => file.endsWith(releaseFileName('@soksak/window-check', JSON.parse(readFileSync(join(ROOT, 'packages/window-check/package.json'), 'utf8')).version)));
   assert.ok(release, 'the window check release file is not packed');
   writeFileSync(join(project.path, 'package.json'), `${JSON.stringify({ name: 'consumer', private: true, type: 'module', devDependencies: { '@soksak/window-check': `file:${release}` } })}\n`);

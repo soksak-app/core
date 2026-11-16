@@ -12629,10 +12629,18 @@ const FEATURE_LINKS = [
     tests: [
       { file: "scripts/test/pack-release-packages.test.mjs", id: "a workspace dependency of a published package is held by the release file of the package" },
       { file: "scripts/test/pack-release-packages.test.mjs", id: "the packed window check packages resolve from the core release and hold their exported modules" },
+      { file: "scripts/test/pack-release-packages.test.mjs", id: "the release closure of the window check holds no package restricted to a platform" },
       { file: "scripts/test/pack-release-packages.test.mjs", id: "a pnpm project with the default settings installs the window check release and imports its modules" },
       { file: "scripts/test/candidate-acceptance.test.mjs", id: "candidate publication hashes the exact downloaded files and complete bundle contents" },
     ],
     expected: "The core release packs @soksak/window-check, @soksak/client and @soksak/log-contract beside @soksak/plugin-api, each workspace dependency of a packed package is held by its release file, every module that the exports of a packed package name is in its release file, and the publication gate requires the five packed packages.",
+    levels: ["unit"],
+  },
+  {
+    id: "F875",
+    implementation: [{ file: "scripts/pack-release-packages.mjs", symbol: "export function releaseClosure" }],
+    tests: [{ file: "scripts/test/pack-release-packages.test.mjs", id: "the release closure of the window check holds no package restricted to a platform" }],
+    expected: "The install test packs only the release closure of @soksak/window-check, which holds no package restricted to a platform.",
     levels: ["unit"],
   },
   {

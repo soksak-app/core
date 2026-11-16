@@ -74,6 +74,26 @@ function holdDependency(destination, work, name, version) {
   renameSync(join(extracted, 'package'), target);
 }
 
+/**
+ * The folders of the release package in `folder` and of the release packages that its `workspace:` dependencies name, transitively,
+ * in the order of `RELEASE_PACKAGES`: the packages whose release files a consumer of that package needs.
+ */
+export function releaseClosure(root, folder) {
+  const manifests = new Map(RELEASE_PACKAGES.map((entry) => [entry, readJson(join(root, entry, 'package.json'))]));
+  const folderOf = new Map([...manifests].map(([entry, manifest]) => [manifest.name, entry]));
+  if (!manifests.has(folder)) throw new Error(`${folder}: not a package that the release publishes`);
+  const needed = new Set();
+  const visit = (entry) => {
+    if (needed.has(entry)) return;
+    needed.add(entry);
+    for (const [name, range] of Object.entries(manifests.get(entry).dependencies ?? {})) {
+      if (range.startsWith('workspace:')) visit(folderOf.get(name));
+    }
+  };
+  visit(folder);
+  return RELEASE_PACKAGES.filter((entry) => needed.has(entry));
+}
+
 /** Packs each folder of `folders` into `destination` and returns the paths of the release files. */
 export function packReleasePackages({ root, destination, folders = RELEASE_PACKAGES, pnpm = 'pnpm' }) {
   const published = new Map(RELEASE_PACKAGES.map((folder) => readJson(join(root, folder, 'package.json'))).map((manifest) => [manifest.name, manifest]));
