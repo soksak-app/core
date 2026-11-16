@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F881: The moved Rust folder identity test reads its support module at `../../../support/folder.rs`, so it compiles.
 - F879: The Rust darwin folder identity test is `packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs`, the counterpart path of the Go test, so `make check-host-files` passes.
 - F877: The Rust host reports the system error of the volume UUID read as `errno <n>` or its text without a value of its own, the tests of the macOS folder identity sit under `platform/darwin/`, and the redundant `u16` cast is removed, so the checks of the event sources, the defaults, the platform files and clippy pass on F874.
 - F875: The install test of the release packages packs only the release closure of `@soksak/window-check` (`releaseClosure`), so it runs on Linux, where the macOS process identity package cannot be packed.

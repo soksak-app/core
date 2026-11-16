@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F881: 옮긴 Rust folder identity test가 support module을 `../../../support/folder.rs`에서 읽어 compile된다.
 - F879: Rust darwin folder identity test는 Go test의 대응 경로인 `packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs`에 있어 `make check-host-files`가 통과한다.
 - F877: Rust 호스트가 volume UUID 읽기의 system 오류를 `errno <n>` 으로, errno 가 없으면 자체 값 없이 그 문구로 보고하고, macOS folder identity 의 test 가 `platform/darwin/` 아래에 있으며, 불필요한 `u16` cast 를 제거했다. event source, default, platform file, clippy check 가 F874 에서 통과한다.
 - F875: release package의 install test가 `@soksak/window-check`의 release closure만 pack해(`releaseClosure`), macOS process identity package를 pack할 수 없는 Linux에서 실행된다.

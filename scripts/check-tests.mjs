@@ -3754,6 +3754,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F881",
+    implementation: [
+      { file: "packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs", symbol: "#[path = \"../../../support/folder.rs\"]" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs", id: "folder_identity_names_volume_uuid" },
+    ],
+    expected: "The moved Rust folder identity test reads its support module and compiles.",
+    levels: ["unit"],
+  },
+  {
     id: "F879",
     implementation: [
       { file: "packages/host/rust/Cargo.toml", symbol: "path = \"tests/platform/darwin/system/folder_identity_test.rs\"" },
