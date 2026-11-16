@@ -64,6 +64,14 @@ static NSString *cursorOf(NSWindow *window) {
     const char *cursor = sp_input_virtual_cursor(window);
     return cursor ? @(cursor) : @"none";
 }
+// Prints the state that the wait for the page cursor judges, before the wait starts: a wait that the limit ends leaves this line
+// as the record of the cursor that the page set and of the elements that the page took the moves over.
+static void measureCursor(WKWebView *view, NSWindow *window, NSString *what) {
+    NSArray *over = evaluate(view, @"over");
+    printf("MEASURE %s: cursor %s, page moves over %s\n", what.UTF8String, cursorOf(window).UTF8String,
+        [over componentsJoinedByString:@","].UTF8String);
+    fflush(stdout);
+}
 
 // The page: its left half sets the crosshair cursor and its right half the text cursor, and it records the element of each move.
 static NSString *const PAGE = @"<!doctype html><style>html,body{margin:0;height:100%}div{position:absolute;top:0;height:100%;width:100px}"
@@ -105,6 +113,7 @@ int main(void) { @autoreleasepool {
     // Over the page AppKit keeps no cursor of a cursor rect, so the page sets its cursor.
     check(sp_input_pointer(window, 50, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"a move onto the page is delivered");
     drain(page);
+    measureCursor(page, window, @"after the move onto the page");
     eventWait(@"the cursor of the virtual key window is the crosshair of the page", ^BOOL { return cursorIs(window, @"crosshair"); });
 
     // A move over the text of the page and a move onto the native view in one turn: the page answers the first move with the
@@ -123,6 +132,7 @@ int main(void) { @autoreleasepool {
     // Back over the page AppKit keeps no cursor of a cursor rect again, so the page sets its cursor.
     check(sp_input_pointer(window, 50, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"a move back onto the page is delivered");
     drain(page);
+    measureCursor(page, window, @"after the move back onto the page");
     eventWait(@"the cursor of the virtual key window is the crosshair of the page again", ^BOOL { return cursorIs(window, @"crosshair"); });
 
     sp_input_virtual_end("no state");
