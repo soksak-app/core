@@ -3754,6 +3754,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F879",
+    implementation: [
+      { file: "packages/host/rust/Cargo.toml", symbol: "path = \"tests/platform/darwin/system/folder_identity_test.rs\"" },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/system/host-structure.test.mjs", id: "host structure audit reports a clean paired-host graph" },
+    ],
+    expected: "The Rust darwin folder identity test has the counterpart path of the Go test, so the paired-host audit passes.",
+    levels: ["unit"],
+  },
+  {
     id: "F877",
     implementation: [
       { file: "packages/host/rust/src/platform/darwin/identity.rs", symbol: "Some(errno) => format!(\"errno {errno}\")," },
@@ -3776,7 +3787,7 @@ const FEATURE_LINKS = [
     ],
     tests: [
       { file: "packages/host/go/tests/platform/darwin/system/folder_identity_test.go", id: "TestFolderIdentityNamesVolumeUUID" },
-      { file: "packages/host/rust/tests/platform/darwin/folder_identity_test.rs", id: "folder_identity_names_volume_uuid" },
+      { file: "packages/host/rust/tests/platform/darwin/system/folder_identity_test.rs", id: "folder_identity_names_volume_uuid" },
       { file: "packages/workbench/test/projects-switch.test.mjs", id: "opening a project whose stored identity has the earlier form is refused with an error that names projects.json" },
       { file: "packages/workbench-mygo/tests/project_identity_test.go", id: "TestAProjectWithTheEarlierIdentityFormIsRefusedByName" },
     ],
