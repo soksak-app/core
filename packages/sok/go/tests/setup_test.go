@@ -134,6 +134,7 @@ func runInBundle(t *testing.T, bundle string, args ...string) (int, string, stri
 }
 
 // TestSokHelperProcess is the sok that runInBundle runs; it returns at once in the test run that does not run it.
+// contract: cli.mcp.install-registers-the-running-sok
 func TestSokHelperProcess(t *testing.T) {
 	encoded := os.Getenv(sokArgsVariable)
 	if encoded == "" {
