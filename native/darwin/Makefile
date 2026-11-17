@@ -285,7 +285,6 @@ NATIVE_TESTS = observe_test \
   window_motion_test \
   input_inject_test \
   input_virtual_test \
-  input_cursor_rect_test \
   input_activate_test \
   input_virtual_key_equivalent_test \
   input_key_time_test \
@@ -392,7 +391,8 @@ NATIVE_TESTS = observe_test \
 
 # The native end-to-end tests: they need the presentation times and the window server images of a display, so they run only
 # locally through e2e (docs/operations/examples.md#test-kinds). test runs the unit tests of NATIVE_TESTS.
-NATIVE_E2E_TESTS = window_titlebar_layout_test \
+NATIVE_E2E_TESTS = input_cursor_rect_test \
+  window_titlebar_layout_test \
   window_titlebar_reload_test \
   surface_layout_test \
   capture_presentation_test \
