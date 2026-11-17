@@ -12,3 +12,8 @@ void eventWake(void);
 /// what names the event that the wait waits for; it is written once as `WAIT <what>` when the wait does not end at once, so the
 /// output of a case that its limit ended names the wait. Only the main thread waits.
 void eventWait(NSString *what, BOOL (^done)(void));
+
+/// Runs the wait like eventWait, and ends it when limit seconds have passed. Returns nil when done held; otherwise it prints
+/// `LIMIT <what> after <seconds> s: <state>` and returns the state that measure reports at the limit, so the caller names the
+/// measured state in its failure. A limit is an upper bound on the wait; the success of the wait is never judged by it.
+NSString *eventWaitUntil(NSString *what, NSTimeInterval limit, BOOL (^done)(void), NSString *(^measure)(void));

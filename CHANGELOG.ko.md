@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F887: native test 대기에 제한이 있는 형태 `eventWaitUntil`을 더했다. limit에서 측정 상태와 함께 끝나며, 입력 커서 test가 이를 쓴다.
 - F886: Rust host의 setup test는 process의 앞 test가 writer에 남긴 기록이 아니라 자기 start의 기록만 판단한다.
 - F885: host는 로그인 session이 모든 애플리케이션에 주는 환경으로 login shell을 읽고 그 shell이 출력한 환경에서 모든 sidecar를 시작하므로, 애플리케이션을 시작한 process의 변수, 예를 들어 agent의 session 변수가 더는 terminal에 닿지 않는다. `sok setup environment`는 모든 변수를 `environment`로 출력한다.
 - F883-1: 파일 열기 handoff의 wire case가 start value `process`를 기록하고, 설정 test가 `viewProcess`를 나열하고, Rust host의 view binary test support가 `shares_process`를 정하고, Go host의 decode test가 자기 contract case를 선언한다.
