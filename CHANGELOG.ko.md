@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F883-1: 파일 열기 handoff의 wire case가 start value `process`를 기록하고, 설정 test가 `viewProcess`를 나열하고, Rust host의 view binary test support가 `shares_process`를 정하고, Go host의 decode test가 자기 contract case를 선언한다.
 - F884: host는 모든 sidecar를 `sok`을 담는 자기 실행 파일의 폴더를 `PATH` 첫 항목으로 두고 시작하므로, 세션의 셸과 그 안의 agent는 path entry 없이 애플리케이션의 `sok`을 실행한다.
 - F883: 한 plugin의 view들은 기본으로 WebContent process 하나를 함께 쓰고, 전역 설정 `viewProcess`(메모리 › 보기 프로세스)를 `view`로 하면 view마다 자기 process를 쓴다. `plugin`으로 만든 view는 같은 plugin과 data store의 열린 view의 process를 쓰며 `plugin`으로 만든 view를 먼저 고르므로, 설정을 바꾼 뒤 연 view는 이미 열린 view들에 합류한다. 설정을 바꿔도 열린 view는 옮겨지지 않는다. view의 시작 값은 `process`를 담고, 두 host는 빠진 값과 다른 값을 거절한다. `view_process_test`는 함께 쓰는 view 둘과, plugin의 열린 view 옆의 함께 쓰는 view가 따로 된 process를 받아 실패했고, 변경 뒤 세 번 연속 통과한다.
 - F882: `Session.relaunch` 가 새 endpoint 대기의 결과를 값으로 즉시 받고 `diagnostics.host.relaunch` 의 응답 뒤에 판단해서, 그 응답 전에 오류로 끝난 대기가 unhandled rejection 이 되지 않는다.

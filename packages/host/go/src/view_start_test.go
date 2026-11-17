@@ -390,7 +390,8 @@ func TestAViewWithoutStartKeepsTheValuesThatTheHostHolds(t *testing.T) {
 }
 
 // The decoding of a sync request keeps the process of the start values of a view, which the view creation reads
-// (docs/spec/plugin-processes.md#view-processes).
+// (docs/spec/plugin-processes.md#view-processes). The Rust host decodes the request of its case before the check.
+// contract: view.start-values.refuses-a-process-of-another-form
 func TestASyncRequestKeepsTheProcessOfAViewStart(t *testing.T) {
 	request, err := decodeSyncRequest(json.RawMessage(`{"settled":true,"titlebar":40,"viewport":{"width":800,"height":600},"declarations":[{}],"surfaces":[{"id":"probe","visible":true,"dim":false,"x":0,"y":0,"w":10,"h":10,"plugin":"probe",` +
 		`"composition":{"kind":"view","page":"ui/page.html"},"start":{"origin":{"directory":null},"declarations":0,` +

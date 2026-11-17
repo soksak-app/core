@@ -341,7 +341,8 @@
                 "project": null,
                 "declarations": 0,
                 "diagnostics": null,
-                "section": null
+                "section": null,
+                "process": "plugin"
               }
             }
           ],
@@ -1016,7 +1017,8 @@
                 "project": null,
                 "declarations": 0,
                 "diagnostics": null,
-                "section": null
+                "section": null,
+                "process": "plugin"
               }
             }
           ],

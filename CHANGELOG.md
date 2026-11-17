@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F883-1: The wire case of the file open handoff records the start value `process`, the settings tests list `viewProcess`, the view binary test support of the Rust host names `shares_process`, and the decode test of the Go host declares its contract case.
 - F884: The host starts every sidecar with the folder of its executable, which holds `sok`, first on `PATH`, so the shells of the sessions and the agents inside them run the `sok` of the application without a path entry.
 - F883: The views of one plugin share one WebContent process by default, and the common setting `viewProcess` (메모리 › 보기 프로세스) gives each view its own process with `view`. A view created with `plugin` uses the process of an open view of its plugin and data store, a view created with `plugin` first, so a view opened after the setting changes joins the views already open; a change of the setting moves no open view. The start values of a view carry `process`, and both hosts refuse a missing or another value. `view_process_test` failed with separate processes for two sharing views and for a sharing view beside an open view of its plugin, and passes three consecutive runs with the change.
 - F882: `Session.relaunch` takes the outcome of its wait for the new endpoint as a value at once and judges it after the answer of `diagnostics.host.relaunch`, so a wait that ends with an error before that answer is no unhandled rejection.

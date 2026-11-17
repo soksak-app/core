@@ -147,6 +147,7 @@ impl Probe {
                 plugin: "probe",
                 label: "probe",
                 channel: Some(""),
+                shares_process: false,
             },
             Box::new(|_| {}),
         )?;
