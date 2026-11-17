@@ -3812,6 +3812,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F884",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) environment() []string {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn sidecar_environment(command: &mut Command, config_directory: &Path) -> Result<(), String> {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarsStartWithTheFolderOfSokFirstOnThePath" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "sidecars_start_with_the_folder_of_sok_first_on_the_path" },
+    ],
+    expected: "The host starts every sidecar with the folder of its executable, which holds sok, first on PATH and in no other entry.",
+    levels: ["unit"],
+  },
+  {
     id: "F874",
     implementation: [
       { file: "packages/host/go/src/platform/darwin/identity.go", symbol: "func (implementation) DirectoryIdentity(path string, info os.FileInfo) (string, error) {" },

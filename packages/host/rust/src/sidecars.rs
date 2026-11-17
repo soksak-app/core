@@ -1630,12 +1630,25 @@ pub struct OutdatedSidecar {
     pub sessions: usize,
 }
 
-/// Sets the environment of a sidecar: the environment of the host without SOKSAK_SURFACE and with SOKSAK_CONFIG_DIR set to the
-/// configuration directory, whatever values of both the host holds (docs/spec/sidecars.md#processes-of-a-surface).
-fn sidecar_environment(command: &mut Command, config_directory: &Path) {
+/// Sets the environment of a sidecar: the environment of the host without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set to the
+/// configuration directory, whatever values of both the host holds, and with the folder of the host executable, where the
+/// application bundle holds sok, first on PATH and in no other entry (docs/spec/sidecars.md#processes-of-a-surface).
+fn sidecar_environment(command: &mut Command, config_directory: &Path) -> Result<(), String> {
+    let executable =
+        std::env::current_exe().map_err(|error| format!("host executable: {error}"))?;
+    let folder = executable
+        .parent()
+        .ok_or_else(|| format!("host executable {} has no folder", executable.display()))?;
+    // silent: a host without PATH has no folder to keep after the folder of sok.
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let folders = std::iter::once(folder.to_path_buf())
+        .chain(std::env::split_paths(&inherited).filter(|entry| entry != folder));
+    let path = std::env::join_paths(folders).map_err(|error| format!("sidecar PATH: {error}"))?;
     command
         .env(soksak_sok::CONFIG_DIR_VARIABLE, config_directory)
-        .env_remove(soksak_sok::SURFACE_VARIABLE);
+        .env_remove(soksak_sok::SURFACE_VARIABLE)
+        .env("PATH", path);
+    Ok(())
 }
 
 #[cfg(feature = "diagnostics")]
@@ -3511,7 +3524,8 @@ impl<O: Owner> Core<O> {
         command
             .arg("--log-dir")
             .arg(core.config_directory.join("logs"));
-        sidecar_environment(&mut command, &core.config_directory);
+        sidecar_environment(&mut command, &core.config_directory)
+            .map_err(|error| format!("sidecar {name}: {error}"))?;
         let platform = current()?;
         // The sidecar leads a process group of its own, which the host ends when the sidecar exits
         // (docs/spec/sidecars.md#declaration-and-startup).
@@ -3715,7 +3729,8 @@ impl<O: Owner> Core<O> {
                 )
                 .map_err(|error| format!("sidecar {name}: service log: {error}"))?;
                 let mut command = Command::new(program);
-                sidecar_environment(&mut command, config);
+                sidecar_environment(&mut command, config)
+                    .map_err(|error| format!("sidecar {name}: {error}"))?;
                 command
                     .arg("--service-dir")
                     .arg(&service_dir)

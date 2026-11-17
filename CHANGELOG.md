@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- F884: The host starts every sidecar with the folder of its executable, which holds `sok`, first on `PATH`, so the shells of the sessions and the agents inside them run the `sok` of the application without a path entry.
 - F882: `Session.relaunch` takes the outcome of its wait for the new endpoint as a value at once and judges it after the answer of `diagnostics.host.relaunch`, so a wait that ends with an error before that answer is no unhandled rejection.
 - F880-1: The CPU time check of `stall_watch_test` times its work by the CPU clock of the thread, so a loaded machine no longer fails it.
 - F880: The native count of heartbeats sent into a wait counts only a send that the watch decided in a wait, the stall scenario of a waiting run loop runs the run loop until a heartbeat read the wait and judges the 2 s from that heartbeat, and `sp_stall_set_send_hook_for_test` holds a heartbeat between its read and its send for the checks.

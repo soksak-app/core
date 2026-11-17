@@ -4,6 +4,7 @@
 
 ## 미배포
 
+- F884: host는 모든 sidecar를 `sok`을 담는 자기 실행 파일의 폴더를 `PATH` 첫 항목으로 두고 시작하므로, 세션의 셸과 그 안의 agent는 path entry 없이 애플리케이션의 `sok`을 실행한다.
 - F882: `Session.relaunch` 가 새 endpoint 대기의 결과를 값으로 즉시 받고 `diagnostics.host.relaunch` 의 응답 뒤에 판단해서, 그 응답 전에 오류로 끝난 대기가 unhandled rejection 이 되지 않는다.
 - F880-1: `stall_watch_test`의 CPU time check가 일을 thread의 CPU 시계로 재므로, 부하가 큰 machine에서 더는 실패하지 않는다.
 - F880: 대기로 보낸 heartbeat 의 native 계수는 watch 가 대기에서 정한 send 만 세고, 대기하는 run loop 의 stall scenario 는 heartbeat 가 대기를 읽을 때까지 run loop 를 돌려 2 s 를 그 heartbeat 부터 판단하며, `sp_stall_set_send_hook_for_test` 가 check 를 위해 heartbeat 를 읽기와 send 사이에 잡아 둔다.

@@ -274,7 +274,9 @@ type Sidecars struct {
 	// other work in between, and it is not called when nil.
 	RetainSending func(name string)
 	configDir     string
-	nextRequest   uint64
+	// sokFolder is the folder of the host executable, where the application bundle holds sok (docs/spec/cli.md).
+	sokFolder   string
+	nextRequest uint64
 }
 
 // restartWindow and restartLimit are the sliding window and the number of counted failures of the restart limit of a sidecar of either
@@ -457,6 +459,11 @@ func NewSidecars(declarations []SidecarDeclaration, configDirectory string) (*Si
 		basenames:           map[string]string{},
 		stopSignal:          make(chan struct{}),
 	}
+	executable, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("host executable: %w", err)
+	}
+	c.sokFolder = filepath.Dir(executable)
 	configDirectoryProvided := strings.TrimSpace(configDirectory) != ""
 	if configDirectoryProvided {
 		config, err := filepath.Abs(configDirectory)
@@ -2133,17 +2140,28 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, stop <-chan struct{}) 
 	return nil, true, nil
 }
 
-// environment is the environment of a sidecar: the environment of the host without SOKSAK_SURFACE and with SOKSAK_CONFIG_DIR set to
-// the configuration directory, whatever values of both the host holds; a host without a configuration directory starts its sidecars
-// without SOKSAK_CONFIG_DIR (docs/spec/sidecars.md#processes-of-a-surface).
+// environment is the environment of a sidecar: the environment of the host without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set to
+// the configuration directory, whatever values of both the host holds, and with the folder of sok first on PATH and in no other
+// entry; a host without a configuration directory starts its sidecars without SOKSAK_CONFIG_DIR
+// (docs/spec/sidecars.md#processes-of-a-surface).
 func (c *Sidecars) environment() []string {
 	environment := []string{}
+	path := c.sokFolder
 	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
-		if name != sok.ConfigDirVariable && name != sok.SurfaceVariable {
+		name, value, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
+		switch name {
+		case sok.ConfigDirVariable, sok.SurfaceVariable:
+		case "PATH":
+			for _, folder := range filepath.SplitList(value) {
+				if folder != c.sokFolder {
+					path += string(filepath.ListSeparator) + folder
+				}
+			}
+		default:
 			environment = append(environment, entry)
 		}
 	}
+	environment = append(environment, "PATH="+path)
 	if c.configDir != "" {
 		environment = append(environment, sok.ConfigDirVariable+"="+c.configDir)
 	}

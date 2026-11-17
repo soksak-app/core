@@ -210,6 +210,59 @@ fn sidecars_start_with_the_configuration_directory_and_without_a_surface() {
     persistent.stop();
 }
 
+// The test runs in a child of the same binary whose PATH holds the folder of the executable later and another folder first, as
+// the path of a shell of an earlier application does.
+// contract: sidecars.environment.puts-sok-first-on-the-path
+#[test]
+fn sidecars_start_with_the_folder_of_sok_first_on_the_path() {
+    const NAME: &str = "sidecars_start_with_the_folder_of_sok_first_on_the_path";
+    let executable = std::env::current_exe().unwrap();
+    let folder = executable.parent().unwrap().to_str().unwrap().to_string();
+    if std::env::var_os(AGENT_ENVIRONMENT_CHILD).is_none() {
+        let output = std::process::Command::new(&executable)
+            .args(["--exact", NAME, "--nocapture", "--test-threads=1"])
+            .env(AGENT_ENVIRONMENT_CHILD, "1")
+            .env("PATH", format!("/other/bin:{folder}:/usr/bin:/bin"))
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed"),
+            "child ended with {:?}\noutput: {stdout}\nerror output: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let config_directory = folder::Folder::new();
+    let config = config_directory.path().canonicalize().unwrap();
+    let record = folder::Folder::new();
+    record.fixture(
+        "echo",
+        &format!(
+            "record-env PATH {}\non 1 reply {{\"surface\":\"s1\",\"body\":\"ok\"}}\non any echo\n",
+            record.path().join("path").display()
+        ),
+    );
+    let sidecars = Sidecars::new(
+        &declare(
+            &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
+            record.path(),
+        ),
+        config,
+    )
+    .unwrap();
+    let (first, events) = owner("path", "/projects/a");
+    sidecars.send_as(&first, ECHO, "s1", &raw("{}")).unwrap();
+    events.recv().unwrap();
+    assert_eq!(
+        std::fs::read_to_string(record.path().join("path")).unwrap(),
+        format!("{folder}:/other/bin:/usr/bin:/bin"),
+        "sidecar PATH"
+    );
+    sidecars.stop();
+}
+
 // contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 #[test]
 fn messages_reach_the_owning_window_only() {

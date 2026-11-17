@@ -139,6 +139,40 @@ func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing
 	}
 }
 
+// contract: sidecars.environment.puts-sok-first-on-the-path
+func TestSidecarsStartWithTheFolderOfSokFirstOnThePath(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	folder := filepath.Dir(executable)
+	// The path of the host holds the folder later and another folder first, as the path of a shell of an earlier application does.
+	t.Setenv("PATH", "/other/bin:"+folder+":/usr/bin:/bin")
+	config, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := t.TempDir()
+	support.Fixture(t, record, "fixture", "record-env PATH "+filepath.Join(record, "path")+"\n"+`on 1 reply {"surface":"s1","body":"ok"}`+"\non any echo\n")
+	sidecars, err := host.NewSidecars(support.Declare(record, `{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}`), config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.Next(t)
+	path, err := os.ReadFile(filepath.Join(record, "path"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := folder + ":/other/bin:/usr/bin:/bin"; string(path) != want {
+		t.Fatalf("sidecar PATH %q, want %q", path, want)
+	}
+}
+
 // contract: sidecars.protocol.message-at-limit-is-delivered
 func TestSidecarMessageAtTheLimitIsDelivered(t *testing.T) {
 	// The body is the string of x characters that fills the line limit beside the surface and the quotes of the message.
