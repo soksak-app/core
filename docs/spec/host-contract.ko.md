@@ -1015,6 +1015,7 @@ fn invalid_json_closes_connection() {
 | `workspace.folder.identity-names-volume-uuid` | macOS 에서 project folder 의 identity 는 `<volume UUID>:<inode>` 이다. volume 이 저장한 UUID(`getattrlist` 와 `ATTR_VOL_UUID`)를 대문자 hyphen 형식으로 쓰고 inode 번호를 붙인다. 부팅마다 system 이 다시 매기는 device number 는 담지 않으므로, 바뀌지 않은 directory 의 identity 는 재시작 뒤에도 같다. | all |
 | `workspace.folder.messages` | 폴더 확인은 요청한 경로를 한 번 담은 문구 하나로 실패한다. 경로나 상위 폴더가 없으면 `project directory does not exist: <path>`, 접근이 거부되면 `project directory is not readable: <path>`, 파일이면 `not a project directory: <resolved path>`, 그 밖의 system 오류는 `project directory cannot be resolved: <path> (errno <n>)`이다. | all |
 | `cli.usage.unknown-command-exits-2` | 알 수 없는 명령은 종료 상태 2로 끝나며 표준 오류에 `sok: unknown command: <word>`와 사용법을 출력한다. | all |
+| `cli.usage.lists-describe` | `sok --help`는 표준 출력에 사용법을 출력하며, 그 안에 `sok describe`의 매개변수인 `describe [window] [--surface S] [--full] [--after KEY] [--limit N]` 줄이 있다. | all |
 | `cli.endpoint.missing-file-reports-not-running` | `endpoint.json`이 없으면 명령은 종료 상태 1로 끝나며, 그 파일이 없고 애플리케이션이 실행 중이 아니라고 보고한다. | all |
 | `cli.output.indents-result-keeping-key-order` | 결과는 endpoint가 보낸 key 순서대로 두 칸 들여쓰기로 출력하며, 빈 container는 `{}`와 `[]`다. | all |
 | `cli.window.single-window-is-default` | `--window`나 `--project`가 없으면 명령은 애플리케이션의 하나뿐인 창을 쓴다. | all |

@@ -277,6 +277,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F891",
+    implementation: [
+      { file: "packages/sok/rust/src/sok.rs", symbol: "  describe [window] [--surface S] [--full] [--after KEY] [--limit N]" },
+      { file: "packages/sok/go/src/sok.go", symbol: "  describe [window] [--surface S] [--full] [--after KEY] [--limit N]" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "usage_lists_describe_with_its_flags" },
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestHelpListsDescribeWithItsFlags" },
+    ],
+    expected: "The usage text of sok --help lists the describe command with its flags in both hosts, so the command that both hosts run is discoverable from the help text.",
+    levels: ["unit"],
+  },
+  {
     id: "F718-7",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) releasePresses(c *endpointConn) {" },

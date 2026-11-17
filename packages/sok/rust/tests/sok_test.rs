@@ -53,6 +53,17 @@ fn unknown_command_exits_with_usage() {
     );
 }
 
+// contract: cli.usage.lists-describe
+#[test]
+fn usage_lists_describe_with_its_flags() {
+    let (code, stdout, stderr) = run(&["--help"]);
+    assert_eq!(code, 0, "{stderr}");
+    assert!(
+        stdout.contains("\n  describe [window] [--surface S] [--full] [--after KEY] [--limit N]\n"),
+        "{stdout}"
+    );
+}
+
 /// A standard error that always rejects writes.
 struct Unwritable;
 

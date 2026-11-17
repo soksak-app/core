@@ -5,6 +5,7 @@
 ## Unreleased
 
 - F887: The native test waits have a limited form, `eventWaitUntil`, that ends at its limit with the measured state; the cursor test of the input uses it.
+- F891: The usage of `sok --help` lists `describe [window] [--surface S] [--full] [--after KEY] [--limit N]`, the command that both hosts run and that the usage text omitted. The pages of `sok describe` already share the list key `rows`; the first page also holds `window`, `layout`, `plugins` and `agent`, as `cli.describe.lists-every-entry` states.
 - F886: The setup test of the Rust host judges only the records of its own start, not the records that the earlier tests of the process left in the writer.
 - F885: The host reads the login shell in the environment that the login session gives every application and starts every sidecar from the environment that the shell prints, so the variables of the process that started the application, such as the session variables of an agent, no longer reach the terminals; `sok setup environment` prints every variable as `environment`.
 - F883-1: The wire case of the file open handoff records the start value `process`, the settings tests list `viewProcess`, the view binary test support of the Rust host names `shares_process`, and the decode test of the Go host declares its contract case.
