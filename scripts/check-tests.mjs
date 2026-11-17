@@ -3844,6 +3844,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F890",
+    implementation: [
+      { file: "packages/sok/rust/src/registration.rs", symbol: "pub fn registered_sok(sok: &Path) -> Result<PathBuf, String> {" },
+      { file: "packages/sok/go/src/registration.go", symbol: "func (s Setup) registeredSok() (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/setup_test.rs", id: "mcp_install_registers_the_running_sok" },
+      { file: "packages/sok/go/tests/setup_test.go", id: "TestMcpInstallRegistersTheRunningSok" },
+      { file: "packages/sok/rust/tests/platform/darwin/setup_test.rs", id: "mcp_install_requires_a_bundle_sok" },
+      { file: "packages/sok/go/tests/platform/darwin/setup_test.go", id: "TestMcpInstallRequiresABundleSok" },
+    ],
+    expected: "sok mcp install registers the running sok by its path, which holds no version, changes nothing when that registration is current, and replaces another registration; the running sok must be the sok of an application bundle on macOS.",
+    levels: ["unit"],
+  },
+  {
     id: "F884",
     implementation: [
       { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) environment() ([]string, error) {" },

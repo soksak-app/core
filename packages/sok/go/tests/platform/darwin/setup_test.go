@@ -136,28 +136,22 @@ func parts(t *testing.T, stdout string) []part {
 	return out.Parts
 }
 
-// contract: cli.mcp.install-requires-a-bundle-sok-first-on-path
-func TestMcpInstallRequiresABundleSokFirstOnPath(t *testing.T) {
+// contract: cli.mcp.install-requires-a-bundle-sok
+func TestMcpInstallRequiresABundleSok(t *testing.T) {
 	program := builtSok(t)
 	h := newHome(t, "claude")
-	plain := copyExecutable(t, repositoryFile(t, "docs/spec/cases/setup/fixture.sh"), filepath.Join(t.TempDir(), "bin", "sok"))
-	running := copyExecutable(t, program, filepath.Join(t.TempDir(), "Mine.app", "Contents", "MacOS", "sok"))
-	path := []string{filepath.Dir(plain), h.fixtures}
-	want := "the first sok on PATH, " + plain + ", is not the sok of an application bundle"
-	code, stdout, stderr := h.run(t, running, path, "mcp", "install")
+	bundle := copyExecutable(t, program, filepath.Join(t.TempDir(), "Mine.app", "Contents", "MacOS", "sok"))
+	plain := copyExecutable(t, program, filepath.Join(t.TempDir(), "bin", "sok"))
+	path := []string{filepath.Dir(bundle), h.fixtures}
+	want := "the running sok, " + plain + ", is not the sok of an application bundle"
+	code, stdout, stderr := h.run(t, plain, path, "mcp", "install")
 	if code != 1 || stdout != "" || stderr != "sok: "+want+"\n" || h.commands(t) != "" {
 		t.Fatalf("code %d stdout %q stderr %q commands %q", code, stdout, stderr, h.commands(t))
 	}
-	_, stdout, _ = h.run(t, running, path, "setup", "check")
+	_, stdout, _ = h.run(t, plain, path, "setup", "check")
 	list := parts(t, stdout)
 	if mcp := list[len(list)-1]; mcp.Part != "mcp" || mcp.State != "error" || mcp.Error != want {
 		t.Fatalf("parts %s", stdout)
-	}
-	// Without a sok on PATH the running sok is registered, and it must be in a bundle too.
-	outside := copyExecutable(t, program, filepath.Join(t.TempDir(), "sok"))
-	code, _, stderr = h.run(t, outside, []string{h.fixtures}, "mcp", "install")
-	if code != 1 || stderr != "sok: the first sok on PATH, "+outside+", is not the sok of an application bundle\n" || h.commands(t) != "" {
-		t.Fatalf("code %d stderr %q", code, stderr)
 	}
 }
 

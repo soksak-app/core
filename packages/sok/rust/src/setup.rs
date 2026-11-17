@@ -524,7 +524,7 @@ pub(crate) fn run_agent_setup(
         }
         ("mcp", "install") => {
             let done = registration::install(&environment, &sok)?;
-            write(stdout, &indent(&done.line(&sok))?)
+            write(stdout, &indent(&done.line())?)
         }
         ("setup", "check") => {
             let parts = check(&setup)?;

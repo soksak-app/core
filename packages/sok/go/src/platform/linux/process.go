@@ -130,7 +130,7 @@ func (linux) ReadOnlyVolume(path string) (bool, error) {
 	return stat.Flags&unix.MS_RDONLY != 0, nil
 }
 
-// RegisteredSok accepts every sok: Linux has no application bundle, so the first sok on PATH is registered as it is.
+// RegisteredSok accepts every sok: Linux has no application bundle, so the running sok is registered as it is.
 func (linux) RegisteredSok(string) error { return nil }
 
 // ReplaceProcess runs execve.

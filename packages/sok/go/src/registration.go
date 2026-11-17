@@ -20,12 +20,11 @@ import (
 // registrationName is the name of the registration of every installed soksak application.
 const registrationName = "soksak"
 
-// MCPInstall is the result of `sok mcp install`: the registration entry as the configuration file holds it, its state
-// (`current` or `registered`) and, when the running sok is not the registered one, the running sok.
+// MCPInstall is the result of `sok mcp install`: the registration entry as the configuration file holds it and its state
+// (`current` or `registered`).
 type MCPInstall struct {
 	Registration json.RawMessage `json:"registration"`
 	State        string          `json:"state"`
-	Running      string          `json:"running,omitempty"`
 }
 
 // findOnPath is the first folder of the PATH text that holds an executable regular file of the name, as a canonical path, or ""
@@ -50,24 +49,17 @@ func findOnPath(path, name string) (string, error) {
 	return "", nil
 }
 
-// registeredSok is the first sok on PATH, or the running sok when no folder of PATH holds one; the platform requires the sok of an
+// registeredSok is the running sok, the sok of the application bundle that runs the command; the platform requires the sok of an
 // application bundle on macOS.
 func (s Setup) registeredSok() (string, error) {
-	first, err := findOnPath(s.Environment.path(), "sok")
-	if err != nil {
-		return "", err
-	}
-	if first == "" {
-		first = s.Sok
-	}
 	system, err := platform.Current()
 	if err != nil {
 		return "", err
 	}
-	if err := system.RegisteredSok(first); err != nil {
+	if err := system.RegisteredSok(s.Sok); err != nil {
 		return "", err
 	}
-	return first, nil
+	return s.Sok, nil
 }
 
 // claudeConfigFile is the configuration file of the claude command in the environment.
@@ -218,9 +210,6 @@ func (s Setup) InstallMCP() (MCPInstall, error) {
 		return MCPInstall{}, err
 	}
 	result := MCPInstall{State: "current"}
-	if sok != s.Sok {
-		result.Running = s.Sok
-	}
 	if !registrationCurrent(entry, sok) {
 		if entry != nil {
 			if err := s.runClaude(claude, "remove", "--scope", "user", registrationName); err != nil {

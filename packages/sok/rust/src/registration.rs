@@ -46,20 +46,16 @@ pub fn claude_command(environment: &Environment) -> Result<Option<PathBuf>, Stri
     find_on_path(environment, "claude")
 }
 
-/// The registered sok: the first sok on `PATH` with symbolic links resolved, else the running sok. On macOS it must be the sok
-/// of an application bundle.
-pub fn registered_sok(environment: &Environment, sok: &Path) -> Result<PathBuf, String> {
-    let registered = match find_on_path(environment, "sok")? {
-        Some(found) => found,
-        None => sok.to_path_buf(),
-    };
-    if !platform::current()?.registrable_sok(&registered)? {
+/// The registered sok: the running sok, which is the sok of the application bundle that runs the command. On macOS it must be
+/// the sok of an application bundle.
+pub fn registered_sok(sok: &Path) -> Result<PathBuf, String> {
+    if !platform::current()?.registrable_sok(sok)? {
         return Err(format!(
-            "the first sok on PATH, {}, is not the sok of an application bundle",
-            registered.display()
+            "the running sok, {}, is not the sok of an application bundle",
+            sok.display()
         ));
     }
-    Ok(registered)
+    Ok(sok.to_path_buf())
 }
 
 /// The configuration file of the `claude` command: `$CLAUDE_CONFIG_DIR/.claude.json` when that variable is set and not empty,
@@ -142,7 +138,7 @@ pub fn part_state(environment: &Environment, sok: &Path) -> Result<Option<McpPar
         return Ok(None);
     }
     let file = config_file(environment)?;
-    let state = registered_sok(environment, sok).and_then(|registered| {
+    let state = registered_sok(sok).and_then(|registered| {
         Ok(match read_entry(&file)? {
             None => Some(Reason::Absent),
             Some(entry) if is_current(&entry, &registered) => None,
@@ -159,31 +155,23 @@ pub enum Done {
     Registered,
 }
 
-/// The result of `sok mcp install`: the entry in the file after it, what it did, and the registered sok.
+/// The result of `sok mcp install`: the entry in the file after it and what it did.
 pub struct Registration {
     pub entry: Box<RawValue>,
     pub state: Done,
-    pub registered: PathBuf,
 }
 
 impl Registration {
-    /// `{"registration": <entry>, "state": ..., "running"?: <sok>}` on one line; `running` names the running sok when it is not
-    /// the registered one.
-    pub fn line(&self, sok: &Path) -> String {
+    /// `{"registration": <entry>, "state": ...}` on one line.
+    pub fn line(&self) -> String {
         let state = match self.state {
             Done::Current => "current",
             Done::Registered => "registered",
         };
-        let mut line = format!(
-            "{{\"registration\":{},\"state\":\"{state}\"",
+        format!(
+            "{{\"registration\":{},\"state\":\"{state}\"}}",
             self.entry.get()
-        );
-        if sok != self.registered {
-            line.push_str(",\"running\":");
-            line.push_str(&Value::from(sok.display().to_string()).to_string());
-        }
-        line.push('}');
-        line
+        )
     }
 }
 
@@ -219,7 +207,7 @@ fn run_claude(
 
 /// `sok mcp install`: registers the registered sok with the `claude` command unless the registration is current.
 pub fn install(environment: &Environment, sok: &Path) -> Result<Registration, String> {
-    let registered = registered_sok(environment, sok)?;
+    let registered = registered_sok(sok)?;
     require_writable_volume(&registered)?;
     let Some(claude) = claude_command(environment)? else {
         return Err(format!(
@@ -235,7 +223,6 @@ pub fn install(environment: &Environment, sok: &Path) -> Result<Registration, St
         return Ok(Registration {
             entry: entry.clone(),
             state: Done::Current,
-            registered,
         });
     }
     if earlier.is_some() {
@@ -272,7 +259,6 @@ pub fn install(environment: &Environment, sok: &Path) -> Result<Registration, St
         Some(entry) if is_current(&entry, &registered) => Ok(Registration {
             entry,
             state: Done::Registered,
-            registered,
         }),
         _ => Err(format!(
             "claude mcp add did not write the registration to {}",

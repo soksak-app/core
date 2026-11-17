@@ -185,7 +185,7 @@ func (darwin) RegisteredSok(path string) error {
 	macos := filepath.Dir(path)
 	contents := filepath.Dir(macos)
 	if filepath.Base(macos) != "MacOS" || filepath.Base(contents) != "Contents" || !strings.HasSuffix(filepath.Base(filepath.Dir(contents)), ".app") {
-		return fmt.Errorf("the first sok on PATH, %s, is not the sok of an application bundle", path)
+		return fmt.Errorf("the running sok, %s, is not the sok of an application bundle", path)
 	}
 	return nil
 }
