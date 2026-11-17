@@ -12620,7 +12620,7 @@ const FEATURE_LINKS = [
   {
     id: "F336",
     implementation: [
-      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.42"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.43"' },
     ],
     tests: [
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
