@@ -313,6 +313,10 @@ fn setup_records_a_skill_file_that_cannot_be_written() {
     let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
     let logs = folder::Folder::new();
     let log = records::start_writer(logs.path());
+    // The start of the writer writes the records that the earlier tests of this process made while no writer was in use, so the
+    // test judges only the records after them.
+    log.flush().unwrap();
+    let earlier = records::read_events(&records::event_log_path(logs.path())).len();
     let h = Home::new("");
     let folder = h.home().join(".claude/skills/soksak");
     let file = folder.join("SKILL.md");
@@ -327,6 +331,7 @@ fn setup_records_a_skill_file_that_cannot_be_written() {
     soksak_host::event_record::use_host_event_log(None);
     let recorded: Vec<Value> = records::read_events(&records::event_log_path(logs.path()))
         .into_iter()
+        .skip(earlier)
         .filter(|event| event["event"] == "host.setup.skill")
         .map(|event| json!([event["level"], event["fields"]]))
         .collect();
