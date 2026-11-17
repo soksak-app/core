@@ -64,6 +64,15 @@ type Setups struct {
 	running sync.Mutex
 }
 
+// sessionVariables are the variables that the login session gives every application of the person, and the only variables of the
+// host that the login shell starts with, so the environment that it prints does not depend on the process that started the
+// application (docs/spec/cli.md#agents-in-the-application).
+var sessionVariables = []string{"HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "SSH_AUTH_SOCK", "__CF_USER_TEXT_ENCODING"}
+
+// shellProcessVariables are the variables that a shell sets for each process that it starts, which the environment of a sidecar
+// does not take from the login shell (docs/spec/sidecars.md#processes-of-a-surface).
+var shellProcessVariables = []string{"PWD", "OLDPWD", "SHLVL", "_"}
+
 // NewSetups returns the setup operations of the sok sokPath of the application identifier; changed sends setup-changed to every
 // window.
 func NewSetups(sokPath, identifier string, processes LoginShellProcesses, changed func()) (*Setups, error) {
@@ -76,8 +85,8 @@ func NewSetups(sokPath, identifier string, processes LoginShellProcesses, change
 		ready: make(chan struct{})}, nil
 }
 
-// Start reads the environment of the login shell once, then brings the skill current and sends setup-changed. The host calls it
-// after the start of the first window; a later call does nothing.
+// Start reads the environment of the login shell once, then brings the skill current and sends setup-changed. The host calls it at
+// its start, and the read runs on a goroutine of its own, off the start path; a later call does nothing.
 func (s *Setups) Start() {
 	s.begin.Do(func() {
 		routine.Go("setup-environment", func() {
@@ -122,6 +131,23 @@ func (s *Setups) bringSkillCurrent() {
 		return
 	}
 	EmitHost(LevelError, "host.setup.skill", map[string]any{"file": nil, "reason": err.Error()})
+}
+
+// SidecarEnvironment returns the environment of a sidecar: the variables of the login shell without the ones that a shell sets for
+// each process, after the start ended; a failed read is the error of every sidecar start.
+func (s *Setups) SidecarEnvironment() (map[string]string, error) {
+	<-s.ready
+	if s.envErr != nil {
+		return nil, s.envErr
+	}
+	variables := make(map[string]string, len(s.env.Variables))
+	for name, value := range s.env.Variables {
+		variables[name] = value
+	}
+	for _, name := range shellProcessVariables {
+		delete(variables, name)
+	}
+	return variables, nil
 }
 
 // State returns the parts as `sok setup check` prints them, after the start ended.
@@ -211,6 +237,12 @@ func (s *Setups) readEnvironment() (_ sok.AgentEnvironment, failure error) {
 	defer stderrRead.Close()
 	command := exec.Command(shell, "-l", "-i", "-c", sok.StepOf(s.sokPath)+" setup environment")
 	command.Stdout, command.Stderr = stdoutWrite, stderrWrite
+	command.Env = []string{}
+	for _, name := range sessionVariables {
+		if value, ok := os.LookupEnv(name); ok {
+			command.Env = append(command.Env, name+"="+value)
+		}
+	}
 	if err := s.processes.NewProcessGroup(command); err != nil {
 		stdoutWrite.Close()
 		stderrWrite.Close()
@@ -304,7 +336,8 @@ func environmentLine(reader io.Reader) (sok.AgentEnvironment, bool) {
 		decoder := json.NewDecoder(bytes.NewReader(line))
 		decoder.DisallowUnknownFields()
 		var environment sok.AgentEnvironment
-		if decoder.Decode(&environment) == nil && decoder.InputOffset() == int64(len(line)) {
+		// A line without environment is the earlier form of the line, which the reader does not take.
+		if decoder.Decode(&environment) == nil && decoder.InputOffset() == int64(len(line)) && environment.Variables != nil {
 			return environment, true
 		}
 	}

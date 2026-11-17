@@ -1856,8 +1856,6 @@ pub fn window_ready(window: &Window) -> Result<(), String> {
     end_reloads(&data, Ok(()));
     crate::exposure::rewatch(window);
     crate::deep_link::ready(window.app_handle());
-    // The environment of the login shell is read after the start of the first window, not on the start path.
-    window.app_handle().state::<crate::setup::Setups>().start();
     emit_window(window, "page-ready", ()).map_err(|e| e.to_string())
 }
 

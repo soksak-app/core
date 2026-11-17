@@ -325,6 +325,7 @@ fn test_setup(machine: &Machine, bundle: &str) -> TestSetup {
                 Path::new("/bin"),
             ])),
             claude_config_dir: None,
+            variables: Default::default(),
         },
         sok,
         paths,
@@ -529,6 +530,7 @@ fn setup_install_records_the_path_step() {
             home: Some(machine.home_text()),
             path: Some(path.display().to_string()),
             claude_config_dir: None,
+            variables: Default::default(),
         };
         let setup = soksak_sok::setup::Setup {
             environment: &environment,
@@ -661,38 +663,61 @@ fn setup_environment_prints_the_variables() {
     let run_unset = run_sok(
         &sok,
         &["setup", "environment"],
-        &[("HOME", &home), ("PATH", "/usr/bin:/bin")],
+        &[("HOME", &home), ("PATH", "/usr/bin:/bin"), ("OTHER", "a=b")],
     );
+    assert_eq!((run_unset.code, run_unset.stderr.as_str()), (0, ""));
+    let read =
+        soksak_sok::setup::Environment::from_line(run_unset.stdout.trim_end()).expect("line");
     assert_eq!(
         (
-            run_unset.code,
-            run_unset.stdout.clone(),
-            run_unset.stderr.as_str()
+            read.home.as_deref(),
+            read.path.as_deref(),
+            read.claude_config_dir.as_deref()
+        ),
+        (Some(home.as_str()), Some("/usr/bin:/bin"), None)
+    );
+    // environment holds every variable of the run, also one that the setup operations do not read.
+    assert_eq!(
+        (
+            read.variables.get("HOME").map(String::as_str),
+            read.variables.get("PATH").map(String::as_str),
+            read.variables.get("OTHER").map(String::as_str),
+            read.variables.get("CLAUDE_CONFIG_DIR")
         ),
         (
-            0,
-            format!(
-                "{{\"HOME\":\"{home}\",\"PATH\":\"/usr/bin:/bin\",\"CLAUDE_CONFIG_DIR\":null}}\n"
-            ),
-            ""
-        )
+            Some(home.as_str()),
+            Some("/usr/bin:/bin"),
+            Some("a=b"),
+            None
+        ),
+        "{}",
+        run_unset.stdout
     );
     let run_set = run_sok(
         &sok,
         &["setup", "environment"],
         &[("CLAUDE_CONFIG_DIR", "/c d")],
     );
-    assert_eq!(
-        run_set.stdout,
-        "{\"HOME\":null,\"PATH\":null,\"CLAUDE_CONFIG_DIR\":\"/c d\"}\n"
+    assert!(
+        run_set.stdout.starts_with(
+            "{\"HOME\":null,\"PATH\":null,\"CLAUDE_CONFIG_DIR\":\"/c d\",\"environment\":{"
+        ),
+        "{}",
+        run_set.stdout
     );
     let read = soksak_sok::setup::Environment::from_line(run_set.stdout.trim_end()).expect("line");
     assert_eq!(
-        read,
-        soksak_sok::setup::Environment {
-            home: None,
-            path: None,
-            claude_config_dir: Some("/c d".into())
-        }
+        (
+            read.claude_config_dir.as_deref(),
+            read.variables.get("CLAUDE_CONFIG_DIR").map(String::as_str)
+        ),
+        (Some("/c d"), Some("/c d"))
+    );
+    // A line without environment is the earlier form, which the reader refuses.
+    assert!(
+        soksak_sok::setup::Environment::from_line(
+            r#"{"HOME":null,"PATH":null,"CLAUDE_CONFIG_DIR":null}"#
+        )
+        .is_err()
     );
 }

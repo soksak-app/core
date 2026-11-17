@@ -274,6 +274,9 @@ type Sidecars struct {
 	// other work in between, and it is not called when nil.
 	RetainSending func(name string)
 	configDir     string
+	// environmentSource returns the base of the environment of every sidecar, which the host sets to the environment of the login
+	// shell. A channel without it, which only tests create, starts its sidecars in the environment of the test process.
+	environmentSource func() (map[string]string, error)
 	// sokFolder is the folder of the host executable, where the application bundle holds sok (docs/spec/cli.md).
 	sokFolder   string
 	nextRequest uint64
@@ -1964,7 +1967,9 @@ func (c *Sidecars) launch(name string, lost *revival) (*sidecar, error) {
 		return nil, fmt.Errorf("sidecar %s: %w", name, err)
 	}
 	cmd := exec.Command(program, arguments...)
-	cmd.Env = c.environment()
+	if cmd.Env, err = c.environment(); err != nil {
+		return nil, fmt.Errorf("sidecar %s: %w", name, err)
+	}
 	// The sidecar leads a process group of its own, which the host ends when the sidecar exits
 	// (docs/spec/sidecars.md#declaration-and-startup).
 	if err := current.NewProcessGroup(cmd); err != nil {
@@ -2140,14 +2145,37 @@ func serviceEndpointLine(cmd *exec.Cmd, stdout io.Reader, stop <-chan struct{}) 
 	return nil, true, nil
 }
 
-// environment is the environment of a sidecar: the environment of the host without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set to
-// the configuration directory, whatever values of both the host holds, and with the folder of sok first on PATH and in no other
-// entry; a host without a configuration directory starts its sidecars without SOKSAK_CONFIG_DIR
+// SetEnvironment sets the base of the environment of every sidecar that starts after the call
 // (docs/spec/sidecars.md#processes-of-a-surface).
-func (c *Sidecars) environment() []string {
+func (c *Sidecars) SetEnvironment(source func() (map[string]string, error)) {
+	c.declarations.Lock()
+	c.environmentSource = source
+	c.declarations.Unlock()
+}
+
+// environment is the environment of a sidecar: the base, the environment of the login shell, without SOKSAK_SURFACE, with
+// SOKSAK_CONFIG_DIR set to the configuration directory, whatever values of both the base holds, and with the folder of sok first on
+// PATH and in no other entry; a host without a configuration directory starts its sidecars without SOKSAK_CONFIG_DIR
+// (docs/spec/sidecars.md#processes-of-a-surface). Without a source, which only a channel of a test has, the base is the
+// environment of the test process.
+func (c *Sidecars) environment() ([]string, error) {
+	c.declarations.RLock()
+	source := c.environmentSource
+	c.declarations.RUnlock()
+	base := os.Environ()
+	if source != nil {
+		variables, err := source()
+		if err != nil {
+			return nil, err
+		}
+		base = make([]string, 0, len(variables))
+		for name, value := range variables {
+			base = append(base, name+"="+value)
+		}
+	}
 	environment := []string{}
 	path := c.sokFolder
-	for _, entry := range os.Environ() {
+	for _, entry := range base {
 		name, value, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
 		switch name {
 		case sok.ConfigDirVariable, sok.SurfaceVariable:
@@ -2165,7 +2193,7 @@ func (c *Sidecars) environment() []string {
 	if c.configDir != "" {
 		environment = append(environment, sok.ConfigDirVariable+"="+c.configDir)
 	}
-	return environment
+	return environment, nil
 }
 
 // processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
@@ -2201,7 +2229,9 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 			}
 		}
 		cmd = exec.Command(program, "--service-dir", serviceDir, "--log-dir", filepath.Join(c.configDir, "logs"))
-		cmd.Env = c.environment()
+		if cmd.Env, err = c.environment(); err != nil {
+			return nil, fmt.Errorf("sidecar %s: %w", name, err)
+		}
 		// A persistent service belongs to the lifetime of the configuration
 		// directory and not of this application process. A new session is started so that the recovery service does not
 		// end together with the application when it exits abnormally.

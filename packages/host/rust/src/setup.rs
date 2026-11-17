@@ -15,6 +15,23 @@ use soksak_sok::setup::{self, Environment, Kind, Part};
 
 use crate::event_log::Level;
 
+/// The variables that the login session gives every application of the person, and the only variables of the host that the
+/// login shell starts with, so the environment that it prints does not depend on the process that started the application
+/// (docs/spec/cli.md#agents-in-the-application).
+const SESSION_VARIABLES: [&str; 7] = [
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TMPDIR",
+    "SSH_AUTH_SOCK",
+    "__CF_USER_TEXT_ENCODING",
+];
+
+/// The variables that a shell sets for each process that it starts, which the environment of a sidecar does not take from the
+/// login shell (docs/spec/sidecars.md#processes-of-a-surface).
+const SHELL_PROCESS_VARIABLES: [&str; 4] = ["PWD", "OLDPWD", "SHLVL", "_"];
+
 /// The time in which the login shell must print the environment: a shell that waits for input has no event that ends it.
 const LOGIN_SHELL_BOUND: Duration = Duration::from_secs(10);
 
@@ -99,7 +116,7 @@ impl Setups {
     }
 
     /// Reads the environment of the login shell once, then brings the skill current and sends setup-changed. The host calls it
-    /// after the start of the first window; a later call does nothing.
+    /// at its start, and the read runs on a thread of its own, off the start path; a later call does nothing.
     pub fn start(&self) {
         let inner = self.inner.clone();
         self.inner.begin.call_once(move || {
@@ -112,6 +129,18 @@ impl Setups {
                 (inner.changed)();
             });
         });
+    }
+
+    /// Returns the environment of a sidecar: the variables of the login shell without the ones that a shell sets for each process,
+    /// after the start ended; a failed read is the error of every sidecar start.
+    pub fn sidecar_environment(
+        &self,
+    ) -> Result<std::collections::BTreeMap<String, String>, String> {
+        let mut variables = self.inner.environment()?.variables;
+        for name in SHELL_PROCESS_VARIABLES {
+            variables.remove(name);
+        }
+        Ok(variables)
     }
 
     /// Returns the parts as `sok setup check` prints them, after the start ended.
@@ -233,6 +262,12 @@ impl Inner {
         let shell = self.processes.login_shell()?;
         let fail = |reason: String| format!("login shell {shell}: {reason}");
         let mut command = Command::new(&shell);
+        command.env_clear();
+        for name in SESSION_VARIABLES {
+            if let Some(value) = std::env::var_os(name) {
+                command.env(name, value);
+            }
+        }
         command
             .args(["-l", "-i", "-c"])
             .arg(format!(

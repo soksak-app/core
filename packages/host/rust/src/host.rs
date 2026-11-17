@@ -460,13 +460,17 @@ pub fn setup(app: &AppHandle, setup: Setup) -> Result<(), Box<dyn std::error::Er
     // default: an executable path always has a folder.
     let bundle = executable.parent().unwrap_or(std::path::Path::new("/"));
     let notifying = app.clone();
-    app.manage(setup::Setups::new(
+    let setups = setup::Setups::new(
         bundle.join("sok"),
         soksak_sok::identity::identity().to_string(),
         Box::new(setup::SystemProcesses(platform::current()?)),
         Box::new(move || windows::notify_setup(&notifying)),
-    )?);
+    )?;
+    // The environment of the login shell is the base of every sidecar, so its read starts with the host, off the start path.
+    setups.start();
+    app.manage(setups.clone());
     let sidecars: WindowSidecars = installed::new_installed_sidecars(directory)?;
+    sidecars.set_environment(Box::new(move || setups.sidecar_environment()))?;
     let reporting = app.clone();
     sidecars.on_status_changed(move |value| {
         crate::exposure::sidecars_status_changed(&reporting, value)

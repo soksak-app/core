@@ -263,6 +263,87 @@ fn sidecars_start_with_the_folder_of_sok_first_on_the_path() {
     sidecars.stop();
 }
 
+// contract: sidecars.environment.starts-from-the-login-shell
+#[test]
+fn sidecars_start_from_the_environment_of_the_login_shell() {
+    let config_directory = folder::Folder::new();
+    let config = config_directory.path().canonicalize().unwrap();
+    let record = folder::Folder::new();
+    let file = |name: &str| record.path().join(name).display().to_string();
+    record.fixture(
+        "echo",
+        &format!(
+            "record-env SOKSAK_BASE {}\nrecord-env HOME {}\nrecord-env PATH {}\nrecord-env SOKSAK_CONFIG_DIR {}\non 1 reply {{\"surface\":\"s1\",\"body\":\"ok\"}}\non any echo\n",
+            file("base"),
+            file("home"),
+            file("path"),
+            file("config")
+        ),
+    );
+    let sidecars = Sidecars::new(
+        &declare(
+            &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
+            record.path(),
+        ),
+        config.clone(),
+    )
+    .unwrap();
+    // The base holds no HOME, which the environment of the test process holds.
+    sidecars
+        .set_environment(Box::new(|| {
+            Ok([
+                ("SOKSAK_BASE".to_string(), "login".to_string()),
+                ("PATH".to_string(), "/usr/bin:/bin".to_string()),
+            ]
+            .into())
+        }))
+        .unwrap();
+    let (first, events) = owner("base", "/projects/a");
+    sidecars.send_as(&first, ECHO, "s1", &raw("{}")).unwrap();
+    events.recv().unwrap();
+    let folder = std::env::current_exe()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .display()
+        .to_string();
+    let read = |name: &str| std::fs::read_to_string(record.path().join(name)).unwrap();
+    assert_eq!(
+        (read("base"), read("home"), read("path"), read("config")),
+        (
+            "login".to_string(),
+            String::new(),
+            format!("{folder}:/usr/bin:/bin"),
+            config.display().to_string()
+        ),
+        "SOKSAK_BASE, HOME, PATH and SOKSAK_CONFIG_DIR of the sidecar"
+    );
+    sidecars.stop();
+    // A failed read of the login shell fails the start of a sidecar with its text.
+    let failing = Sidecars::new(
+        &declare(
+            &files(r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1}"#),
+            record.path(),
+        ),
+        config,
+    )
+    .unwrap();
+    failing
+        .set_environment(Box::new(|| {
+            Err("login shell /bin/zsh: no environment within 10 s".to_string())
+        }))
+        .unwrap();
+    let (second, _events) = owner("failing", "/projects/b");
+    let error = failing
+        .send_as(&second, ECHO, "s1", &raw("{}"))
+        .unwrap_err();
+    assert!(
+        error.contains("login shell /bin/zsh: no environment within 10 s"),
+        "{error}"
+    );
+    failing.stop();
+}
+
 // contract: sidecars.send.delivers-only-to-owning-window, sidecars.send.rejects-surface-owned-by-another-window, sidecars.protocol.request-lines-carry-surface-root-body, sidecars.close-owner.sends-closed-per-surface
 #[test]
 fn messages_reach_the_owning_window_only() {

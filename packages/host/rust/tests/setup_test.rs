@@ -118,6 +118,7 @@ impl Home {
                 "CLAUDE_CONFIG_DIR",
                 "SETUP_FIXTURE_FAIL",
                 "SETUP_FIXTURE_SKIP_WRITE",
+                "SOKSAK_FIXTURE_LEAK",
             ] {
                 std::env::remove_var(name);
             }
@@ -265,6 +266,44 @@ fn setup_reads_the_login_shell_environment_and_brings_the_skill_current() {
             ),
         ]
     );
+}
+
+// contract: setup.host.reads-the-login-shell-environment-without-the-launcher
+#[test]
+fn the_sidecar_environment_is_the_login_shell_environment_without_the_variables_of_the_launcher() {
+    let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let h = Home::new("");
+    // SAFETY: the test holds SERIAL while it changes the environment. The variable stands for a variable of the process that
+    // started the application, such as a session variable of an agent.
+    unsafe { std::env::set_var("SOKSAK_FIXTURE_LEAK", "launcher") };
+    let (setups, changed) = h.setups();
+    setups.start();
+    changed.recv().unwrap();
+    let environment = setups.sidecar_environment().unwrap();
+    // SAFETY: as above.
+    unsafe { std::env::remove_var("SOKSAK_FIXTURE_LEAK") };
+    assert_eq!(
+        environment.get("SOKSAK_FIXTURE_LEAK"),
+        None,
+        "a variable of the launcher reached the login shell: {environment:?}"
+    );
+    assert_eq!(
+        environment.get("HOME"),
+        Some(&h.home().display().to_string())
+    );
+    assert!(
+        environment
+            .get("PATH")
+            .is_some_and(|path| path.starts_with(&h.sok.parent().unwrap().display().to_string())),
+        "the PATH of the start files: {environment:?}"
+    );
+    for name in ["PWD", "SHLVL", "_"] {
+        assert_eq!(
+            environment.get(name),
+            None,
+            "{name} of the shell process: {environment:?}"
+        );
+    }
 }
 
 // contract: setup.host.start-brings-the-skill-current

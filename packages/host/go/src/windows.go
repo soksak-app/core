@@ -254,8 +254,6 @@ func (h *Host) WindowReady(ctx context.Context) error {
 	s.ready = true
 	h.mu.Unlock()
 	s.first.Do(func() { s.Emit("page-ready") })
-	// The environment of the login shell is read after the start of the first window, not on the start path.
-	h.setups.Start()
 	s.imageDetachPageReady()
 	s.responderWorkbenchReady()
 	s.replayRegistrations()

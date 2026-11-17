@@ -162,6 +162,8 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if host.setups, err = NewSetups(filepath.Join(filepath.Dir(executable), "sok"), identifier, system, host.notifySetup); err != nil {
 		return nil, err
 	}
+	// The environment of the login shell is the base of every sidecar, so its read starts with the host, off the start path.
+	host.setups.Start()
 	// The core root of the views serves the files of the configuration folder and the bundled frontend, so the application does not start
 	// when the platform cannot register the resolver.
 	if err := RegisterCoreRoot(system, configDirectory, frontend); err != nil {
@@ -245,6 +247,7 @@ func Prepare(adapter Framework, assets fs.FS, options Options) (_ *Session, fail
 	if err != nil {
 		return nil, err
 	}
+	sidecars.SetEnvironment(host.setups.SidecarEnvironment)
 	host.sidecars = sidecars
 	sidecars.ClosingChanged = host.sidecarsChanged
 	sidecars.ClosingInvalidated = host.notifySidecars

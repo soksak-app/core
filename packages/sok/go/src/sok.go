@@ -46,7 +46,7 @@ commands:
   setup check               prints each setup part with its state and its install step
   setup install [path|skill|mcp]...
                             installs each missing setup part of the named kinds
-  setup environment         prints HOME, PATH and CLAUDE_CONFIG_DIR of the environment as one JSON line
+  setup environment         prints HOME, PATH, CLAUDE_CONFIG_DIR and every variable of the environment as one JSON line
   app update --wait PID --bundle PATH --target PATH [-- ARGUMENT...]
                             replaces the application bundle TARGET with BUNDLE after the process PID ended
   app relaunch --wait PID --target PATH [-- ARGUMENT...]

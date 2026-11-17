@@ -139,6 +139,62 @@ func TestSidecarsStartWithTheConfigurationDirectoryAndWithoutASurface(t *testing
 	}
 }
 
+// contract: sidecars.environment.starts-from-the-login-shell
+func TestSidecarsStartFromTheEnvironmentOfTheLoginShell(t *testing.T) {
+	config, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := t.TempDir()
+	file := func(name string) string { return filepath.Join(record, name) }
+	support.Fixture(t, record, "fixture", "record-env SOKSAK_BASE "+file("base")+"\nrecord-env HOME "+file("home")+"\nrecord-env PATH "+file("path")+
+		"\nrecord-env SOKSAK_CONFIG_DIR "+file("config")+"\n"+`on 1 reply {"surface":"s1","body":"ok"}`+"\non any echo\n")
+	declarations := support.Declare(record, `{"executable":"fixture","displayName":"soksak://sidecar/probe","protocol":1}`)
+	sidecars, err := host.NewSidecars(declarations, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(sidecars.Stop)
+	// The base holds no HOME, which the environment of the test process holds.
+	sidecars.SetEnvironment(func() (map[string]string, error) {
+		return map[string]string{"SOKSAK_BASE": "login", "PATH": "/usr/bin:/bin"}, nil
+	})
+	owner := support.NewSidecarRecorder(t, "/projects/a")
+	if err := owner.Send(sidecars, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	owner.Next(t)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := func(name string) string {
+		data, err := os.ReadFile(file(name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	if base, home, path, directory := read("base"), read("home"), read("path"), read("config"); base != "login" || home != "" ||
+		path != filepath.Dir(executable)+":/usr/bin:/bin" || directory != config {
+		t.Fatalf("SOKSAK_BASE %q, HOME %q, PATH %q, SOKSAK_CONFIG_DIR %q", base, home, path, directory)
+	}
+	// A failed read of the login shell fails the start of a sidecar with its text.
+	failing, err := host.NewSidecars(declarations, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(failing.Stop)
+	failing.SetEnvironment(func() (map[string]string, error) {
+		return nil, errors.New("login shell /bin/zsh: no environment within 10 s")
+	})
+	other := support.NewSidecarRecorder(t, "/projects/b")
+	if err := other.Send(failing, support.EchoSidecar, "s1", json.RawMessage(`{}`)); err == nil ||
+		!strings.Contains(err.Error(), "login shell /bin/zsh: no environment within 10 s") {
+		t.Fatalf("send = %v, want the error of the login shell", err)
+	}
+}
+
 // contract: sidecars.environment.puts-sok-first-on-the-path
 func TestSidecarsStartWithTheFolderOfSokFirstOnThePath(t *testing.T) {
 	executable, err := os.Executable()

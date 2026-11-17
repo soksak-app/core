@@ -20,12 +20,15 @@ import (
 	"golang.org/x/term"
 )
 
-// AgentEnvironment is HOME, PATH and CLAUDE_CONFIG_DIR of the environment of a run; nil is a variable that is not set.
-// `sok setup environment` prints it as one JSON line, which the host reads from the login shell of the person.
+// AgentEnvironment is HOME, PATH and CLAUDE_CONFIG_DIR of the environment of a run, where nil is a variable that is not set, and
+// every variable of that environment, from which the host builds the environment of its sidecars
+// (docs/spec/cli.md#agents-in-the-application). `sok setup environment` prints it as one JSON line, which the host reads from the
+// login shell of the person.
 type AgentEnvironment struct {
-	Home            *string `json:"HOME"`
-	Path            *string `json:"PATH"`
-	ClaudeConfigDir *string `json:"CLAUDE_CONFIG_DIR"`
+	Home            *string           `json:"HOME"`
+	Path            *string           `json:"PATH"`
+	ClaudeConfigDir *string           `json:"CLAUDE_CONFIG_DIR"`
+	Variables       map[string]string `json:"environment"`
 }
 
 // ProcessAgentEnvironment is the agent environment of this process.
@@ -36,7 +39,12 @@ func ProcessAgentEnvironment() AgentEnvironment {
 		}
 		return nil
 	}
-	return AgentEnvironment{Home: lookup("HOME"), Path: lookup("PATH"), ClaudeConfigDir: lookup("CLAUDE_CONFIG_DIR")}
+	variables := map[string]string{}
+	for _, entry := range os.Environ() {
+		name, value, _ := strings.Cut(entry, "=") // silent: an entry of the environment has the form name=value.
+		variables[name] = value
+	}
+	return AgentEnvironment{Home: lookup("HOME"), Path: lookup("PATH"), ClaudeConfigDir: lookup("CLAUDE_CONFIG_DIR"), Variables: variables}
 }
 
 // home is <home>, which a command that needs it requires.

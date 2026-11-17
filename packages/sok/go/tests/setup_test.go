@@ -393,14 +393,26 @@ func TestSetupInstallRecordsThePathStep(t *testing.T) {
 func TestSetupEnvironmentPrintsTheVariables(t *testing.T) {
 	t.Setenv("HOME", `/home/a "b"`)
 	t.Setenv("PATH", "/x:/y")
+	t.Setenv("OTHER", "a=b")
 	unsetenv(t, "CLAUDE_CONFIG_DIR")
 	code, stdout, stderr := run("setup", "environment")
-	if code != 0 || stderr != "" || stdout != `{"HOME":"/home/a \"b\"","PATH":"/x:/y","CLAUDE_CONFIG_DIR":null}`+"\n" {
+	if code != 0 || stderr != "" || !strings.HasPrefix(stdout, `{"HOME":"/home/a \"b\"","PATH":"/x:/y","CLAUDE_CONFIG_DIR":null,"environment":{`) {
 		t.Fatalf("code %d stdout %q stderr %q", code, stdout, stderr)
+	}
+	var line sok.AgentEnvironment
+	if err := json.Unmarshal([]byte(stdout), &line); err != nil {
+		t.Fatal(err)
+	}
+	// environment holds every variable of the run, also one that the setup operations do not read.
+	if line.Variables["HOME"] != `/home/a "b"` || line.Variables["PATH"] != "/x:/y" || line.Variables["OTHER"] != "a=b" {
+		t.Fatalf("environment %v", line.Variables)
+	}
+	if _, present := line.Variables["CLAUDE_CONFIG_DIR"]; present {
+		t.Fatalf("environment %v holds CLAUDE_CONFIG_DIR, which is not set", line.Variables)
 	}
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	unsetenv(t, "HOME")
-	if _, stdout, _ := run("setup", "environment"); stdout != `{"HOME":null,"PATH":"/x:/y","CLAUDE_CONFIG_DIR":""}`+"\n" {
+	if _, stdout, _ := run("setup", "environment"); !strings.HasPrefix(stdout, `{"HOME":null,"PATH":"/x:/y","CLAUDE_CONFIG_DIR":"","environment":{`) {
 		t.Fatalf("stdout %q", stdout)
 	}
 }

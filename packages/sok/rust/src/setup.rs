@@ -12,13 +12,15 @@ use crate::event_log::Level;
 use crate::logged::CALL_TEXT_BYTES;
 use crate::{Error, Options, indent, platform, registration, skill};
 
-/// `HOME`, `PATH` and `CLAUDE_CONFIG_DIR` of the environment that the setup operations read; `None` is a variable that is not
-/// set.
+/// `HOME`, `PATH` and `CLAUDE_CONFIG_DIR` of the environment that the setup operations read, where `None` is a variable that is not
+/// set, and every variable of that environment, from which the host builds the environment of its sidecars
+/// (docs/spec/cli.md#agents-in-the-application).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Environment {
     pub home: Option<String>,
     pub path: Option<String>,
     pub claude_config_dir: Option<String>,
+    pub variables: std::collections::BTreeMap<String, String>,
 }
 
 impl Environment {
@@ -29,10 +31,21 @@ impl Environment {
             Err(std::env::VarError::NotPresent) => Ok(None),
             Err(std::env::VarError::NotUnicode(_)) => Err(format!("{name} is not valid UTF-8")),
         };
+        let mut variables = std::collections::BTreeMap::new();
+        for (name, value) in std::env::vars_os() {
+            let name = name
+                .into_string()
+                .map_err(|name| format!("{} is not valid UTF-8", name.to_string_lossy()))?;
+            let value = value
+                .into_string()
+                .map_err(|_| format!("{name} is not valid UTF-8"))?;
+            variables.insert(name, value);
+        }
         Ok(Environment {
             home: read("HOME")?,
             path: read("PATH")?,
             claude_config_dir: read("CLAUDE_CONFIG_DIR")?,
+            variables,
         })
     }
 
@@ -46,16 +59,19 @@ impl Environment {
             path: &'a Option<String>,
             #[serde(rename = "CLAUDE_CONFIG_DIR")]
             claude_config_dir: &'a Option<String>,
+            environment: &'a std::collections::BTreeMap<String, String>,
         }
         serde_json::to_string(&Line {
             home: &self.home,
             path: &self.path,
             claude_config_dir: &self.claude_config_dir,
+            environment: &self.variables,
         })
         .map_err(|error| error.to_string())
     }
 
-    /// Reads the line that `sok setup environment` prints: an object whose three members are strings or `null`.
+    /// Reads the line that `sok setup environment` prints: an object whose three variables are strings or `null` and whose
+    /// `environment` is an object of strings.
     pub fn from_line(line: &str) -> Result<Environment, String> {
         #[derive(serde::Deserialize)]
         #[serde(deny_unknown_fields)]
@@ -66,6 +82,7 @@ impl Environment {
             path: Option<String>,
             #[serde(rename = "CLAUDE_CONFIG_DIR")]
             claude_config_dir: Option<String>,
+            environment: std::collections::BTreeMap<String, String>,
         }
         let read: Line = serde_json::from_str(line)
             .map_err(|error| format!("the environment line is not valid: {error}"))?;
@@ -73,6 +90,7 @@ impl Environment {
             home: read.home,
             path: read.path,
             claude_config_dir: read.claude_config_dir,
+            variables: read.environment,
         })
     }
 

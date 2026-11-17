@@ -1497,7 +1497,14 @@ struct Core<O> {
     retain_sending: Option<RetainHook>,
     /// The image presents of the sidecars that wait for the main thread, which the stop refuses.
     presents: crate::images::Presents,
+    /// The base of the environment of every sidecar, which the host sets to the environment of the login shell. A channel without
+    /// it, which only tests create, starts its sidecars in the environment of the test process.
+    environment: RwLock<Option<EnvironmentSource>>,
 }
+
+/// Returns the base of the environment of a sidecar, waiting for its read (docs/spec/sidecars.md#processes-of-a-surface).
+pub type EnvironmentSource =
+    Box<dyn Fn() -> Result<std::collections::BTreeMap<String, String>, String> + Send + Sync>;
 
 struct ImageDetachWaiter {
     sidecar: String,
@@ -1534,6 +1541,17 @@ impl Declarations {
 }
 
 impl<O> Core<O> {
+    /// The base of the environment of a sidecar after its read, or None for a channel without a source.
+    fn environment_base(
+        &self,
+    ) -> Result<Option<std::collections::BTreeMap<String, String>>, String> {
+        let source = self
+            .environment
+            .read()
+            .map_err(|error| format!("environment source: {error}"))?;
+        source.as_ref().map(|source| source()).transpose()
+    }
+
     /// The version that installed.json records for the declared sidecar name, or None when it is not declared.
     fn installed(&self, name: &str) -> Option<String> {
         self.declarations
@@ -1630,17 +1648,29 @@ pub struct OutdatedSidecar {
     pub sessions: usize,
 }
 
-/// Sets the environment of a sidecar: the environment of the host without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set to the
-/// configuration directory, whatever values of both the host holds, and with the folder of the host executable, where the
-/// application bundle holds sok, first on PATH and in no other entry (docs/spec/sidecars.md#processes-of-a-surface).
-fn sidecar_environment(command: &mut Command, config_directory: &Path) -> Result<(), String> {
+/// Sets the environment of a sidecar: base, the environment of the login shell, without SOKSAK_SURFACE, with SOKSAK_CONFIG_DIR set
+/// to the configuration directory, whatever values of both base holds, and with the folder of the host executable, where the
+/// application bundle holds sok, first on PATH and in no other entry (docs/spec/sidecars.md#processes-of-a-surface). Without a base,
+/// which only a channel of a test has, the sidecar starts in the environment of the test process.
+fn sidecar_environment(
+    command: &mut Command,
+    config_directory: &Path,
+    base: Option<std::collections::BTreeMap<String, String>>,
+) -> Result<(), String> {
     let executable =
         std::env::current_exe().map_err(|error| format!("host executable: {error}"))?;
     let folder = executable
         .parent()
         .ok_or_else(|| format!("host executable {} has no folder", executable.display()))?;
-    // silent: a host without PATH has no folder to keep after the folder of sok.
-    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let inherited = match base {
+        Some(base) => {
+            command.env_clear().envs(&base);
+            // silent: a login shell without PATH has no folder to keep after the folder of sok.
+            base.get("PATH").cloned().unwrap_or_default().into()
+        }
+        // silent: a test process without PATH has no folder to keep after the folder of sok.
+        None => std::env::var_os("PATH").unwrap_or_default(),
+    };
     let folders = std::iter::once(folder.to_path_buf())
         .chain(std::env::split_paths(&inherited).filter(|entry| entry != folder));
     let path = std::env::join_paths(folders).map_err(|error| format!("sidecar PATH: {error}"))?;
@@ -1715,6 +1745,16 @@ struct Payload<'a> {
 }
 
 impl<O: Owner> Sidecars<O> {
+    /// Sets the base of the environment of every sidecar that starts after the call (docs/spec/sidecars.md#processes-of-a-surface).
+    pub fn set_environment(&self, source: EnvironmentSource) -> Result<(), String> {
+        *self
+            .core
+            .environment
+            .write()
+            .map_err(|error| format!("environment source: {error}"))? = Some(source);
+        Ok(())
+    }
+
     /// Creates the channel with the declared sidecars. The executable is the executable path inside each folder.
     /// Creates the sidecar channel with the canonical application configuration directory.
     pub fn new(
@@ -1755,6 +1795,7 @@ impl<O: Owner> Sidecars<O> {
                 stop_signal: crate::platform::StopSignal::new(),
                 retain_sending: None,
                 presents: crate::images::Presents::default(),
+                environment: RwLock::new(None),
             }),
         };
         sidecars.declare(declarations)?;
@@ -3524,8 +3565,13 @@ impl<O: Owner> Core<O> {
         command
             .arg("--log-dir")
             .arg(core.config_directory.join("logs"));
-        sidecar_environment(&mut command, &core.config_directory)
-            .map_err(|error| format!("sidecar {name}: {error}"))?;
+        sidecar_environment(
+            &mut command,
+            &core.config_directory,
+            core.environment_base()
+                .map_err(|error| format!("sidecar {name}: {error}"))?,
+        )
+        .map_err(|error| format!("sidecar {name}: {error}"))?;
         let platform = current()?;
         // The sidecar leads a process group of its own, which the host ends when the sidecar exits
         // (docs/spec/sidecars.md#declaration-and-startup).
@@ -3729,8 +3775,13 @@ impl<O: Owner> Core<O> {
                 )
                 .map_err(|error| format!("sidecar {name}: service log: {error}"))?;
                 let mut command = Command::new(program);
-                sidecar_environment(&mut command, config)
-                    .map_err(|error| format!("sidecar {name}: {error}"))?;
+                sidecar_environment(
+                    &mut command,
+                    config,
+                    core.environment_base()
+                        .map_err(|error| format!("sidecar {name}: {error}"))?,
+                )
+                .map_err(|error| format!("sidecar {name}: {error}"))?;
                 command
                     .arg("--service-dir")
                     .arg(&service_dir)

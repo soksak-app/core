@@ -336,7 +336,8 @@ func Open(t *testing.T, name string) (*adapter.Framework, *SceneWorkbench, *adap
 // host runs `<sok> setup environment` of its bundle through the login shell of the person and brings the agent skill current in
 // that environment. A test gives the host a HOME of its own, so the login shell reads no start file of the person and the setup
 // writes no file of the person, and puts beside the executable of the host a sok that answers as the setup contract states: one
-// JSON line of HOME, PATH and CLAUDE_CONFIG_DIR with that HOME, which holds no agent folder, so the host logs no error.
+// JSON line of HOME, PATH, CLAUDE_CONFIG_DIR and the environment of these variables with that HOME, which holds no agent folder, so the
+// host logs no error; the environment is the base of the sidecars of the host.
 
 // installSetupSok links the sidecar fixture program of the repository (docs/spec/cases/sidecars/fixture.sh) as the sok of folder and
 // writes its control file, which answers `sok setup environment` with home. A sok or a control file already in folder is an error.
@@ -350,7 +351,8 @@ func installSetupSok(folder, home string) error {
 	if _, err := os.Stat(program); err != nil {
 		return err
 	}
-	environment, err := json.Marshal(map[string]any{"HOME": home, "PATH": "/usr/bin:/bin", "CLAUDE_CONFIG_DIR": nil})
+	environment, err := json.Marshal(map[string]any{"HOME": home, "PATH": "/usr/bin:/bin", "CLAUDE_CONFIG_DIR": nil,
+		"environment": map[string]string{"HOME": home, "PATH": "/usr/bin:/bin"}})
 	if err != nil {
 		return err
 	}

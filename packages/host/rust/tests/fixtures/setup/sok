@@ -2,7 +2,8 @@
 # Fixture program of the sok of an application bundle for the tests of the setup operations of the host
 # (docs/spec/cli.md#agents-in-the-application). A test copies this file into the folder Contents/MacOS of a bundle under the name
 # sok. As `sok setup environment` it prints one JSON line of HOME, PATH and CLAUDE_CONFIG_DIR of its environment, with null for a
-# variable that is not set, as the sok of the command line does. A value holds no control character; the program escapes only the
+# variable that is not set, and the object environment of the variables HOME, PATH, CLAUDE_CONFIG_DIR, SOKSAK_FIXTURE_LEAK, PWD,
+# SHLVL and _ that are set, as the sok of the command line prints every variable. A value holds no control character; the program escapes only the
 # backslash and the double quote.
 set -eu
 if [ "$*" != "setup environment" ]; then
@@ -18,4 +19,11 @@ value() {
     printf 'null'
   fi
 }
-printf '{"HOME":%s,"PATH":%s,"CLAUDE_CONFIG_DIR":%s}\n' "$(value HOME)" "$(value PATH)" "$(value CLAUDE_CONFIG_DIR)"
+environment=
+for name in HOME PATH CLAUDE_CONFIG_DIR SOKSAK_FIXTURE_LEAK PWD SHLVL _; do
+  eval "present=\${$name+set}"
+  if [ "$present" = set ]; then
+    environment="$environment${environment:+,}\"$name\":$(value "$name")"
+  fi
+done
+printf '{"HOME":%s,"PATH":%s,"CLAUDE_CONFIG_DIR":%s,"environment":{%s}}\n' "$(value HOME)" "$(value PATH)" "$(value CLAUDE_CONFIG_DIR)" "$environment"

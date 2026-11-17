@@ -3812,10 +3812,29 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F885",
+    implementation: [
+      { file: "packages/host/go/src/setup.go", symbol: "func (s *Setups) SidecarEnvironment() (map[string]string, error) {" },
+      { file: "packages/host/rust/src/setup.rs", symbol: "pub fn sidecar_environment(" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) SetEnvironment(source func() (map[string]string, error)) {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "pub fn set_environment(&self, source: EnvironmentSource) -> Result<(), String> {" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/setup_test.go", id: "TestTheSidecarEnvironmentIsTheLoginShellEnvironmentWithoutTheVariablesOfTheLauncher" },
+      { file: "packages/host/rust/tests/setup_test.rs", id: "the_sidecar_environment_is_the_login_shell_environment_without_the_variables_of_the_launcher" },
+      { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarsStartFromTheEnvironmentOfTheLoginShell" },
+      { file: "packages/host/rust/tests/sidecars_test.rs", id: "sidecars_start_from_the_environment_of_the_login_shell" },
+      { file: "packages/sok/go/tests/setup_test.go", id: "TestSetupEnvironmentPrintsTheVariables" },
+      { file: "packages/sok/rust/tests/setup_test.rs", id: "setup_environment_prints_the_variables" },
+    ],
+    expected: "The login shell starts with only the variables of the login session, sok setup environment prints every variable, and every sidecar starts from that environment after its read.",
+    levels: ["unit"],
+  },
+  {
     id: "F884",
     implementation: [
-      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) environment() []string {" },
-      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn sidecar_environment(command: &mut Command, config_directory: &Path) -> Result<(), String> {" },
+      { file: "packages/host/go/src/sidecars.go", symbol: "func (c *Sidecars) environment() ([]string, error) {" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn sidecar_environment(" },
     ],
     tests: [
       { file: "packages/host/go/tests/sidecars_test.go", id: "TestSidecarsStartWithTheFolderOfSokFirstOnThePath" },

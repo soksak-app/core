@@ -390,3 +390,28 @@ func TestSetupInstallsTheSkillAndTheRegistrationOneAtATime(t *testing.T) {
 	default:
 	}
 }
+
+// contract: setup.host.reads-the-login-shell-environment-without-the-launcher
+func TestTheSidecarEnvironmentIsTheLoginShellEnvironmentWithoutTheVariablesOfTheLauncher(t *testing.T) {
+	h := newSetupHome(t, "")
+	// The variable stands for a variable of the process that started the application, such as a session variable of an agent.
+	t.Setenv("SOKSAK_FIXTURE_LEAK", "launcher")
+	setups, changed := h.setups(t)
+	setups.Start()
+	<-changed
+	environment, err := setups.SidecarEnvironment()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value, present := environment["SOKSAK_FIXTURE_LEAK"]; present {
+		t.Fatalf("a variable of the launcher reached the login shell: %q in %v", value, environment)
+	}
+	if environment["HOME"] != h.home || !strings.HasPrefix(environment["PATH"], filepath.Dir(h.sok)) {
+		t.Fatalf("HOME and PATH of the start files: %v", environment)
+	}
+	for _, name := range []string{"PWD", "SHLVL", "_"} {
+		if _, present := environment[name]; present {
+			t.Fatalf("%s of the shell process: %v", name, environment)
+		}
+	}
+}
