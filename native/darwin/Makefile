@@ -255,6 +255,7 @@ $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m tests/supp
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
 NATIVE_TESTS = observe_test \
+  event_wait_test \
   ime_cli_test \
   image_region_input_transaction_test \
   image_region_hangul_test \
