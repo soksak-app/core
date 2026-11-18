@@ -22,7 +22,7 @@ The command writes one JSON object on standard output:
 ```
 
 - `file` is the session file that the selection chose ([selection](#selection)).
-- `messages` holds every message of that file, in the order of its records. `role` is `user` or `assistant`. `text` is the text of the message: a string, or the text blocks of the message joined with a newline in their order. A message whose text is empty is not a message, unless it has image items ([Codex](#codex)).
+- `messages` holds every message of that file, in the order of its records. `role` is `user` or `assistant`. `text` is the text of the message: a string, or the text blocks of the message joined with a newline in their order. A message whose text is empty is not a message, unless it has image items ([Codex](#codex) and [Claude Code](#claude-code)).
 - `skipped` is the number of records of the file that are not messages with text. A blank line is not a record and is not counted.
 
 The command has the [output and exit status](cli.md#output-and-exit-status) of every `sok` command: a refusal is written to standard error as `sok: <message>` with exit status 1, and a usage error (a missing or unknown option) has exit status 2.
@@ -45,7 +45,7 @@ Codex writes `<home>/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Each file star
 
 A message is a record of type `response_item` whose `payload.type` is `message` and whose `payload.role` is `user` or `assistant`. Its `payload.content` is a list; its text is the `text` field of each item of type `input_text` or `output_text`, joined with a newline in their order. A message of role `developer` is not a message of this read and counts in `skipped`.
 
-A message of role `user` or `assistant` that has image items (`input_image`) is not skipped, even when it has no text. It carries an `items` list with one `{"type": "image"}` for each image item, and the picture data is not written. A message with text and image items has both its `text` and its `items`. The reason: an image is a message content that the read reports by its kind, so a skipped message would lose that the agent sent it. A `claude-code` message whose only blocks are `image` blocks is not handled by this rule: no such block is observed in the sample, and that case stays skipped and unverified.
+A message of role `user` or `assistant` that has image items (`input_image`) is not skipped, even when it has no text. It carries an `items` list with one `{"type": "image"}` for each image item, and the picture data is not written. A message with text and image items has both its `text` and its `items`. The reason: an image is a message content that the read reports by its kind, so a skipped message would lose that the agent sent it. The same rule applies to `claude-code` records: a `user` or `assistant` record whose `message.content` list has `image` blocks is not skipped, even without text. Its `items` has one `{"type": "image"}` per `image` block, and the picture data is not written. The record shape is unverified: no `image` block was observed in the sampled records of 2026-11-18, so the read assumes the block shape `{"type": "image", "source": {...}}` and reads only the `type` of each block. The Codex image shape is unverified in the same way; the read uses only the `type` of each `input_image` item.
 
 ## Selection
 

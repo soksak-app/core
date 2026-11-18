@@ -22,7 +22,7 @@
 ```
 
 - `file`은 [선택](#선택)이 고른 session 파일이다.
-- `messages`는 그 파일의 모든 메시지를 레코드 순서대로 담는다. `role`은 `user` 또는 `assistant`이다. `text`는 메시지의 텍스트로, 문자열이거나 메시지의 text 블록을 순서대로 줄바꿈으로 이은 값이다. 텍스트가 비어 있는 메시지는 메시지가 아니다. 다만 이미지 항목이 있으면 메시지다([Codex](#codex)).
+- `messages`는 그 파일의 모든 메시지를 레코드 순서대로 담는다. `role`은 `user` 또는 `assistant`이다. `text`는 메시지의 텍스트로, 문자열이거나 메시지의 text 블록을 순서대로 줄바꿈으로 이은 값이다. 텍스트가 비어 있는 메시지는 메시지가 아니다. 다만 이미지 항목이 있으면 메시지다([Codex](#codex)와 [Claude Code](#claude-code)).
 - `skipped`는 파일의 레코드 중 텍스트가 있는 메시지가 아닌 레코드의 수다. 빈 줄은 레코드가 아니므로 세지 않는다.
 
 명령은 모든 `sok` 명령의 [출력과 종료 상태](cli.ko.md#출력과-종료-상태)를 따른다. 거부는 `sok: <message>` 형식으로 표준 오류에 쓰고 종료 상태 1로 끝나며, 사용법 오류(옵션 누락 또는 알 수 없는 옵션)는 종료 상태 2다.
@@ -45,7 +45,7 @@ Codex는 `<home>/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`에 쓴다. 각 파�
 
 메시지는 `payload.type`이 `message`이고 `payload.role`이 `user` 또는 `assistant`인 `response_item` 레코드다. `payload.content`는 목록이다. 텍스트는 그 항목 중 타입이 `input_text` 또는 `output_text`인 항목의 `text` 필드를 순서대로 줄바꿈으로 이은 값이다. `developer` 역할의 메시지는 이 읽기의 메시지가 아니며 `skipped`에 센다.
 
-역할이 `user` 또는 `assistant`이고 이미지 항목(`input_image`)이 있는 메시지는 텍스트가 없어도 건너뛰지 않는다. 그 메시지는 이미지 항목마다 `{"type": "image"}`를 담은 `items` 목록을 가지며, 그림 데이터는 쓰지 않는다. 텍스트와 이미지 항목이 함께 있으면 `text`와 `items`를 모두 가진다. 이유: 이미지는 그 종류로 보고되는 메시지 내용이므로, 건너뛰면 agent가 그 메시지를 보냈다는 사실이 사라진다. `claude-code` 메시지가 `image` 블록만 가진 경우는 이 규칙이 다루지 않는다. 샘플에서 그런 블록이 관찰되지 않았으므로 그 경우는 건너뛰며 검증되지 않았다.
+역할이 `user` 또는 `assistant`이고 이미지 항목(`input_image`)이 있는 메시지는 텍스트가 없어도 건너뛰지 않는다. 그 메시지는 이미지 항목마다 `{"type": "image"}`를 담은 `items` 목록을 가지며, 그림 데이터는 쓰지 않는다. 텍스트와 이미지 항목이 함께 있으면 `text`와 `items`를 모두 가진다. 이유: 이미지는 그 종류로 보고되는 메시지 내용이므로, 건너뛰면 agent가 그 메시지를 보냈다는 사실이 사라진다. `claude-code` 레코드에도 같은 규칙이 적용된다. `user` 또는 `assistant` 레코드의 `message.content` 목록에 `image` 블록이 있으면 텍스트가 없어도 건너뛰지 않는다. 그 `items`는 `image` 블록마다 `{"type": "image"}`를 하나씩 담으며, 그림 데이터는 쓰지 않는다. 레코드 모양은 검증되지 않았다. 2026-11-18 샘플 레코드에서 `image` 블록이 관찰되지 않았으므로, 이 읽기는 `{"type": "image", "source": {...}}` 모양을 가정하고 각 블록의 `type`만 읽는다. Codex 이미지 모양도 같은 방식으로 검증되지 않았다. 이 읽기는 각 `input_image` 항목의 `type`만 쓴다.
 
 ## 선택
 
