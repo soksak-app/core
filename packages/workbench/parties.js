@@ -5,8 +5,8 @@ import { outline } from "soksak";
 import { CHROME } from "./chrome-metrics.js";
 import { windowSidebar } from "./window-sidebars.js";
 
-/** The default colors of a party, the theme tokens party-1 to party-6 of the current theme, in their order. */
-const PARTY_COLORS = ["#5b8def", "#e0834b", "#4fb07a", "#c05ad0", "#d9b13a", "#3fb5c4"];
+/** The theme tokens of the default colors of a party, in their order (docs/spec/parties.md#commands). */
+const PARTY_TOKENS = ["party-1", "party-2", "party-3", "party-4", "party-5", "party-6"];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 /** The parties of the window, in creation order. */
@@ -69,10 +69,14 @@ function nextId() {
   for (let n = 1; ; n++) if (!parties.some((party) => party.id === `p${n}`)) return `p${n}`;
 }
 
+/** The palette of the theme and mode that the window shows; set by installParties (docs/spec/parties.md#drawing). */
+let shownPalette = () => null;
+
 /** The first default color that no party uses, or the first one when all are used. */
 function defaultColor() {
   const used = new Set(parties.map((party) => party.color));
-  return PARTY_COLORS.find((color) => !used.has(color)) ?? PARTY_COLORS[0];
+  const colors = PARTY_TOKENS.map((token) => shownPalette()[token]);
+  return colors.find((color) => !used.has(color)) ?? colors[0];
 }
 
 /** The cards of a party in space order. */
@@ -331,7 +335,7 @@ export function drawParties() {
     layer.append(drawnPath({ "data-party": party.id, d: loopsPath(loops), fill: "none", stroke: party.color, "stroke-width": BORDER }));
     if (party.leader) {
       const leaderLoops = partyLoops(grid, [grid.rect(party.leader)]);
-      layer.append(drawnPath({ "data-party-leader": party.id, d: sidesPath(leaderBorder(loops, leaderLoops)), fill: "none", stroke: party.leaderColor, "stroke-width": BORDER }));
+      layer.append(drawnPath({ "data-party-leader": party.id, d: sidesPath(leaderBorder(loops, leaderLoops)), fill: "none", stroke: party.leaderColor ?? shownPalette()["party-leader"], "stroke-width": BORDER }));
     }
   }
 }
@@ -385,9 +389,10 @@ function sharedPart(a, b) {
  * Registers the party commands and the party status of the window. notifyChange is called after each change so the watchers of
  * core.parties read the new value. status and command are the registration functions of the core exposure.
  */
-export function installParties({ status, command, notifyChange, grid, plane }) {
+export function installParties({ status, command, notifyChange, grid, plane, palette }) {
   notify = notifyChange;
   currentGrid = grid;
+  shownPalette = palette;
   // default: a registry without a page passes no plane, so nothing is drawn.
   planeOf = plane ?? (() => null);
   status("core.parties", () => (currentGrid() ? partyList() : []));
