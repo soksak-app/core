@@ -54,6 +54,8 @@
 
 선언된 command의 flag는 고른 창에 대해 `exposure.list`가 보고하는 매개변수 schema에서 나온다. Surface가 등록하는 command는 `--surface`도 필요하다. 문자열 매개변수는 텍스트를, 숫자 매개변수는 유한한 숫자를, 정수 매개변수는 정수를, enum 매개변수는 그 값 중 하나를 받으며, boolean 매개변수는 참이면 `--<name>`, 거짓이면 `--<name>=false`다. 객체나 배열 매개변수는 JSON 텍스트를 받는다. Type이 목록인 매개변수는 나열된 type 중 하나를 받으며, 목록에 `null`이 있으면 텍스트 `null`은 null이다. Flag는 값을 `=` 뒤나 다음 인자로 받으므로, `--`로 시작하는 값은 `=` 뒤에 준다. `--params <json>`은 매개변수 객체 전체를 주며 매개변수 flag와 함께 쓸 수 없다. Schema가 선언하지 않은 flag나 schema와 맞지 않는 값은 command를 보내기 전에 실패한다.
 
+`sok <command>`는 `command.run`을 보내기 전에 창의 `exposure.list`를 읽는다. 목록이 command로 선언하지 않은 이름은 usage 오류로 거부하며, 매개변수는 선언된 schema에서 만든 뒤에 요청으로 보낸다.
+
 ## 출력과 종료 상태
 
 명령은 결과를 표준 출력에 JSON으로 쓰며, 결과가 없는 명령은 `null`을 쓴다. 오류는 표준 오류에 `sok: <message>`로 쓰고, endpoint 오류 코드가 있으면 괄호 안에 함께 쓴다. 실패한 파일 작업은 파일과 소문자로 시작하는 운영체제 이유를 `<경로>: <이유>`로 적으며, 두 구현의 문구가 같다. 종료 상태는 성공 0, 실패한 명령 1, 사용법 오류 2이며, 사용법 오류는 사용법도 출력한다. sok이 오류를 표준 오류에 쓰지 못하면 종료 상태는 3이고, 명령이나 그 goroutine, thread가 panic하면 4이다([event log](#event-log)). 실패한 쓰기나 풀기 뒤의 정리가 실패하면 오류에 `; cleanup <path>: <reason>`을, 닫지 못한 임시 파일은 `; close <path>: <reason>`을 덧붙인다. 애플리케이션과의 연결을 닫지 못하면 `endpoint connection: <reason>`을 보고한다.
