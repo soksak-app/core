@@ -277,6 +277,24 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F894",
+    implementation: [{ file: "packages/soksak/src/soksak.ts", symbol: "  arrange(mode: 'even'): boolean {" }],
+    tests: [
+      { file: "packages/soksak/test/even.test.mjs", id: "the even arrangement gives every cell the same drawn size" },
+      { file: "packages/soksak/test/even.test.mjs", id: "the even arrangement places the cards in their current order, row by row" },
+      { file: "packages/soksak/test/even.test.mjs", id: "the even arrangement changes nothing when no grid keeps every cell at minSize" },
+    ],
+    expected: "arrange(\"even\") replaces the arrangement with an equal grid of the current cards, adds one empty card when no grid fits, and changes nothing when no grid keeps every cell at minSize.",
+    levels: ["unit"],
+  },
+  {
+    id: "F895",
+    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;" }],
+    tests: [{ file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" }],
+    expected: "The setting cardArrange is a choice of resize and even, drawn as a select box whose options are the declared choices.",
+    levels: ["unit"],
+  },
+  {
     id: "F891",
     implementation: [
       { file: "packages/sok/rust/src/sok.rs", symbol: "  describe [window] [--surface S] [--full] [--after KEY] [--limit N]" },
