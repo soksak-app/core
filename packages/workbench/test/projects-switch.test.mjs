@@ -590,6 +590,21 @@ test("the save patch of a space carries its parties (docs/spec/parties.md#storag
   wire.finish();
 });
 
+test("a space switch moves the parties of the window to the space that is shown (docs/spec/parties.md#storage)", { timeout: 5000 }, async () => {
+  await start("projects-parties-storage");
+  await projects.activate(PROJECT.id);
+  const { storedParties } = await import("../parties.js");
+  projects.addSpace(projects.local().find((p) => p.id === PROJECT.id).spaces[0].layout);
+  // The window state is checked before the patch of the added space is answered, so a broken load fails on this assertion.
+  assert.deepEqual(storedParties(), [], "the added space shows no parties");
+  await projects.flush();
+  projects.activateSpace("spc-one");
+  // The window state is checked before the patch of the switch is answered, so a broken load fails on this assertion.
+  assert.deepEqual(storedParties(), STORED_PARTIES, "the first space shows its parties again after the switch");
+  await projects.flush();
+  wire.finish();
+});
+
 test("a reopened project restores inactive-space origins before retained views can start", { timeout: 5000 }, async () => {
   await prepare("projects-switch-retained-origin");
   const { tabOrigin } = await import("../tab-reports.js");

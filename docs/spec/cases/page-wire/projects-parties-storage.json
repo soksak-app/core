@@ -1,8 +1,8 @@
 {
   "name": "projects-parties-storage",
-  "description": "A project whose space holds two cards and one stored party opens; the party reads back into the window and the save patch of the space carries it.",
+  "description": "A project whose space holds two cards and one stored party opens; the party reads back into the window, the save patch of the space carries it, and a space switch moves the parties between the spaces.",
   "replay": false,
-  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs). The case differs from projects-switch-save-path only by the two cards of the stored layout and the stored party (docs/spec/parties.md:110 and docs/spec/cases/layout/stored.json:5).",
+  "reason": "The case holds the host calls of a window (windowReady, projectOpen, projectShown, windowState, sidecarsRetain and the notices of the window), which the Go producer does not run; the workspace replies are the state of the registry, which the producer builds no project for (docs/spec/cases/page-wire/README.md#producer-runs). The case differs from projects-switch-save-path only by the two cards of each stored layout, the stored party of the first space and the switch back to the first space (docs/spec/parties.md:110, docs/spec/parties.md:112 and docs/spec/cases/layout/stored.json:5).",
   "variables": {
     "cid-1": {
       "type": "string",
@@ -415,6 +415,222 @@
     {
       "reply": {
         "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "spaces": [
+              {
+                "id": "spc-one",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "cards": [
+                      {
+                        "id": "a",
+                        "c0": 0,
+                        "c1": 0,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      },
+                      {
+                        "id": "b",
+                        "c0": 1,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      }
+                    ],
+                    "name": "one"
+                  }
+                },
+                "parties": [
+                  {
+                    "id": "p1",
+                    "cards": [
+                      "a",
+                      "b"
+                    ],
+                    "leader": "a",
+                    "color": "#123456",
+                    "leaderColor": null
+                  }
+                ]
+              },
+              {
+                "id": "$space-id-1",
+                "title": "SPACE2",
+                "layout": {
+                  "state": {
+                    "cards": [
+                      {
+                        "id": "a",
+                        "c0": 0,
+                        "c1": 0,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      },
+                      {
+                        "id": "b",
+                        "c0": 1,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      }
+                    ],
+                    "name": "one"
+                  }
+                }
+              }
+            ],
+            "activeSpaceId": "$space-id-1",
+            "named": 2
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "windowState"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "workspace",
+        "payload": {
+          "kind": "patch",
+          "id": "prj-one",
+          "patch": {
+            "spaces": [
+              {
+                "id": "spc-one",
+                "title": "SPACE1",
+                "layout": {
+                  "state": {
+                    "cards": [
+                      {
+                        "id": "a",
+                        "c0": 0,
+                        "c1": 0,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      },
+                      {
+                        "id": "b",
+                        "c0": 1,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      }
+                    ],
+                    "name": "one"
+                  }
+                },
+                "parties": [
+                  {
+                    "id": "p1",
+                    "cards": [
+                      "a",
+                      "b"
+                    ],
+                    "leader": "a",
+                    "color": "#123456",
+                    "leaderColor": null
+                  }
+                ]
+              },
+              {
+                "id": "$space-id-1",
+                "title": "SPACE2",
+                "layout": {
+                  "state": {
+                    "cards": [
+                      {
+                        "id": "a",
+                        "c0": 0,
+                        "c1": 0,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      },
+                      {
+                        "id": "b",
+                        "c0": 1,
+                        "c1": 1,
+                        "r0": 0,
+                        "r1": 0,
+                        "data": {
+                          "tabs": [],
+                          "activeId": null
+                        }
+                      }
+                    ],
+                    "name": "one"
+                  }
+                }
+              }
+            ],
+            "activeSpaceId": "spc-one",
+            "named": 2
+          }
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": true
+      }
+    },
+    {
+      "call": {
+        "name": "windowState"
+      }
+    },
+    {
+      "reply": {
+        "result": null
       }
     }
   ]
