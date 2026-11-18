@@ -290,7 +290,7 @@ func TestDescribePrintsThePagesOfWindowDescribe(t *testing.T) {
 		}
 		after = next
 	}
-	want := "[host status host.window host command host.window.reload core status core.screen core command core.layout.open core element core.tab terminal-1 status terminal.title terminal-1 command terminal.input unregistered command browser.reload]"
+	want := "[host status host.window host command host.window.reload core status core.parties core status core.screen core command core.layout.open core element core.tab terminal-1 command terminal.input unregistered command browser.reload]"
 	if fmt.Sprint(keys) != want {
 		t.Fatalf("rows %v\nwant %s", keys, want)
 	}
