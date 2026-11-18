@@ -9,8 +9,9 @@ import { openPartyWindow } from "./support/party-window.mjs";
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 test("core.party.create of two touching cards makes one party with the first identifier p1 and no leader", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const reply = await window.run("core.party.create", { cards: ["a", "b"] });
     assert.equal(reply.party.id, "p1");
     assert.deepEqual(reply.party.cards, ["a", "b"]);
@@ -24,8 +25,9 @@ test("core.party.create of two touching cards makes one party with the first ide
 });
 
 test("core.party.create with the card set of an existing party returns that party with changed []", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const first = await window.run("core.party.create", { cards: ["a", "b"] });
     const again = await window.run("core.party.create", { cards: ["b", "a"] });
     assert.deepEqual(again.party, first.party);
@@ -37,8 +39,9 @@ test("core.party.create with the card set of an existing party returns that part
 });
 
 test("core.party.create with fewer than 2 cards is refused with a party needs at least 2 cards", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.create", { cards: ["a"] }), /^Error: a party needs at least 2 cards$/);
   } finally {
     window.close();
@@ -46,8 +49,9 @@ test("core.party.create with fewer than 2 cards is refused with a party needs at
 });
 
 test("core.party.create of cards that do not touch is refused and changes nothing", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.create", { cards: ["a", "c"] }), /^Error: cards are not touching: /);
     assert.deepEqual((await window.get("core.parties")).result, []);
   } finally {
@@ -56,8 +60,9 @@ test("core.party.create of cards that do not touch is refused and changes nothin
 });
 
 test("core.party.create of an unknown card is refused with unknown card <id>", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.create", { cards: ["a", "zz"] }), /^Error: unknown card zz$/);
   } finally {
     window.close();
@@ -65,8 +70,9 @@ test("core.party.create of an unknown card is refused with unknown card <id>", {
 });
 
 test("core.party.create that lists a card twice is refused with card <id> is listed more than once", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.create", { cards: ["a", "a", "b"] }), /^Error: card a is listed more than once$/);
   } finally {
     window.close();
@@ -74,8 +80,9 @@ test("core.party.create that lists a card twice is refused with card <id> is lis
 });
 
 test("core.party.create stores a chosen color as given, with no normalization", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const reply = await window.run("core.party.create", { cards: ["a", "b"], color: "#ABCDEF" });
     assert.equal(reply.party.color, "#ABCDEF");
   } finally {
@@ -84,8 +91,9 @@ test("core.party.create stores a chosen color as given, with no normalization", 
 });
 
 test("core.party.create with a color that is not #rrggbb is refused with color must be #rrggbb", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.create", { cards: ["a", "b"], color: "red" }), /^Error: color must be #rrggbb$/);
   } finally {
     window.close();
@@ -93,8 +101,9 @@ test("core.party.create with a color that is not #rrggbb is refused with color m
 });
 
 test("core.party.create with a leader that is not in the party is refused with leader <id> is not in the party", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.create", { cards: ["a", "b"], leader: "c" }), /^Error: leader c is not in the party$/);
   } finally {
     window.close();
@@ -102,8 +111,9 @@ test("core.party.create with a leader that is not in the party is refused with l
 });
 
 test("core.party.create of a card that another party holds is refused with card <id> belongs to party <party>", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["c", "d"] });
     await assert.rejects(window.run("core.party.create", { cards: ["a", "b", "c"] }), /^Error: card c belongs to party p1$/);
   } finally {
@@ -112,8 +122,9 @@ test("core.party.create of a card that another party holds is refused with card 
 });
 
 test("core.party.create gives two touching parties different default colors", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const first = await window.run("core.party.create", { cards: ["a", "b"] });
     const second = await window.run("core.party.create", { cards: ["c", "d"] });
     assert.notEqual(first.party.color, second.party.color);
@@ -123,8 +134,9 @@ test("core.party.create gives two touching parties different default colors", { 
 });
 
 test("the seventh party of a space takes the first default color when all six are used", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const colors = [];
     for (const pair of [["a", "b"], ["c", "d"], ["e", "f"], ["g", "h"], ["i", "j"], ["k", "l"], ["m", "n"]]) {
       colors.push((await window.run("core.party.create", { cards: pair })).party.color);
@@ -137,8 +149,9 @@ test("the seventh party of a space takes the first default color when all six ar
 });
 
 test("core.party.update with leader null removes the leader and reports the party as changed", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"], leader: "a" });
     const reply = await window.run("core.party.update", { party: "p1", leader: null });
     assert.equal(reply.party.leader, null);
@@ -149,8 +162,9 @@ test("core.party.update with leader null removes the leader and reports the part
 });
 
 test("core.party.update with leaderColor null makes the leader color follow party-leader", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"], leader: "a", leaderColor: "#112233" });
     const reply = await window.run("core.party.update", { party: "p1", leaderColor: null });
     assert.equal(reply.party.leaderColor, null);
@@ -160,8 +174,9 @@ test("core.party.update with leaderColor null makes the leader color follow part
 });
 
 test("core.party.update of an unknown party is refused with unknown party <id>", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.party.update", { party: "p9", color: "#112233" }), /^Error: unknown party p9$/);
   } finally {
     window.close();
@@ -169,8 +184,9 @@ test("core.party.update of an unknown party is refused with unknown party <id>",
 });
 
 test("repeating a core.party.update request gives the same reply and changes nothing the second time", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     const first = await window.run("core.party.update", { party: "p1", color: "#112233" });
     const second = await window.run("core.party.update", { party: "p1", color: "#112233" });
@@ -182,8 +198,9 @@ test("repeating a core.party.update request gives the same reply and changes not
 });
 
 test("core.party.add of a touching card that no party holds adds it to the party", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     const reply = await window.run("core.party.add", { party: "p1", card: "c" });
     assert.deepEqual(reply.party.cards, ["a", "b", "c"]);
@@ -195,8 +212,9 @@ test("core.party.add of a touching card that no party holds adds it to the party
 });
 
 test("core.party.add of a card that does not touch the party is refused and changes nothing", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     await assert.rejects(window.run("core.party.add", { party: "p1", card: "d" }), /^Error: cards are not touching: /);
     assert.deepEqual((await window.run("core.party.get", { party: "p1" })).cards, ["a", "b"]);
@@ -206,8 +224,9 @@ test("core.party.add of a card that does not touch the party is refused and chan
 });
 
 test("core.party.add of a card of another party without take is refused with card <id> belongs to party <party>", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     await window.run("core.party.create", { cards: ["c", "d"] });
     await assert.rejects(window.run("core.party.add", { party: "p1", card: "c" }), /^Error: card c belongs to party p2$/);
@@ -217,8 +236,9 @@ test("core.party.add of a card of another party without take is refused with car
 });
 
 test("core.party.remove removes the card and reports it as removed from the party", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c"] });
     const reply = await window.run("core.party.remove", { party: "p1", card: "c" });
     assert.deepEqual(reply.party.cards, ["a", "b"]);
@@ -229,8 +249,9 @@ test("core.party.remove removes the card and reports it as removed from the part
 });
 
 test("core.party.delete deletes the party and keeps its cards in the layout", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     const reply = await window.run("core.party.delete", { party: "p1" });
     assert.deepEqual(reply.changed, [{ party: "p1", removed: ["a", "b"], leader: null, deleted: true }]);

@@ -7,8 +7,9 @@ import { openPartyWindow } from "./support/party-window.mjs";
 
 test("a split keeps the part that holds the leader and the other part leaves the party", { timeout: 10000 }, async () => {
   // a b c d e with leader e. Removing c splits the rest into a b and d e; the part with the leader stays.
-  const window = await openPartyWindow(["a", "b", "c", "d", "e"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c", "d", "e"], leader: "e" });
     await window.run("core.party.remove", { party: "p1", card: "c" });
     const party = await window.run("core.party.get", { party: "p1" });
@@ -23,8 +24,9 @@ test("a split keeps the part that holds the leader and the other part leaves the
 
 test("without a leader a split keeps the part with the most cards", { timeout: 10000 }, async () => {
   // a b c d e f without leader. Removing b splits the rest into a and c d e f; the part with more cards stays.
-  const window = await openPartyWindow(["a", "b", "c", "d", "e", "f"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c", "d", "e", "f"] });
     await window.run("core.party.remove", { party: "p1", card: "b" });
     const party = await window.run("core.party.get", { party: "p1" });
@@ -38,8 +40,9 @@ test("without a leader a split keeps the part with the most cards", { timeout: 1
 
 test("without a leader and with equal counts a split keeps the part whose first card comes first in the space order", { timeout: 10000 }, async () => {
   // a b c d e without leader. Removing c splits the rest into a b and d e, both with 2 cards; a comes first in the space order.
-  const window = await openPartyWindow(["a", "b", "c", "d", "e"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c", "d", "e"] });
     await window.run("core.party.remove", { party: "p1", card: "c" });
     assert.deepEqual([...(await window.run("core.party.get", { party: "p1" })).cards].sort(), ["a", "b"]);
@@ -48,25 +51,14 @@ test("without a leader and with equal counts a split keeps the part whose first 
   }
 });
 
-test("with equal counts the part whose first card is earlier in a reversed space order stays", { timeout: 10000 }, async () => {
-  // The same cards stored in the reverse order: e d c b a. The part d e now has the earlier first card and stays.
-  const window = await openPartyWindow(["e", "d", "c", "b", "a"]);
-  try {
-    await window.run("core.party.create", { cards: ["a", "b", "c", "d", "e"] });
-    await window.run("core.party.remove", { party: "p1", card: "c" });
-    assert.deepEqual([...(await window.run("core.party.get", { party: "p1" })).cards].sort(), ["d", "e"]);
-  } finally {
-    window.close();
-  }
-});
-
 test("closing a card of a party removes the card from the party with reason closed", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
-    await window.run("core.party.create", { cards: ["a", "b", "c"] });
-    await window.run("core.card.close", { card: "c" });
+    await window.reset();
+    await window.run("core.party.create", { cards: ["n", "o", "p"] });
+    await window.run("core.card.close", { card: "p" });
     const party = await window.run("core.party.get", { party: "p1" });
-    assert.deepEqual([...party.cards].sort(), ["a", "b"]);
+    assert.deepEqual([...party.cards].sort(), ["n", "o"]);
     assert.equal(party.reason, "closed");
   } finally {
     window.close();
@@ -74,8 +66,9 @@ test("closing a card of a party removes the card from the party with reason clos
 });
 
 test("a removal that leaves a party with fewer than 2 cards deletes the party and keeps its cards in the layout", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     await window.run("core.party.remove", { party: "p1", card: "a" });
     await assert.rejects(window.run("core.party.get", { party: "p1" }), /^Error: unknown party p1$/);

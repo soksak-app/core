@@ -7,8 +7,9 @@ import { openPartyWindow } from "./support/party-window.mjs";
 
 test("core.party.add with take moves the card from its former party and reports the move in taken", { timeout: 10000 }, async () => {
   // a b c d e: p1 holds a, b, c and p2 holds d, e. Card c touches d, so it moves to p2 and p1 keeps a and b.
-  const window = await openPartyWindow(["a", "b", "c", "d", "e"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c"] });
     await window.run("core.party.create", { cards: ["d", "e"] });
     const reply = await window.run("core.party.add", { party: "p2", card: "c", take: true });
@@ -23,8 +24,9 @@ test("core.party.add with take moves the card from its former party and reports 
 
 test("a take that leaves the former party with fewer than 2 cards deletes that party and keeps its card in the layout", { timeout: 10000 }, async () => {
   // a b: p1 holds a and b, p2 holds c and d. Card b moves to p2, p1 keeps only a and is deleted.
-  const window = await openPartyWindow(["a", "b", "c", "d"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     await window.run("core.party.create", { cards: ["c", "d"] });
     const reply = await window.run("core.party.add", { party: "p2", card: "b", take: true });
@@ -42,8 +44,9 @@ test("a take that leaves the former party with fewer than 2 cards deletes that p
 
 test("a take of a card that does not touch the target is refused and nothing moves", { timeout: 10000 }, async () => {
   // a b c d e: p1 holds a and b, p2 holds d and e. Card b does not touch d, so the take is refused.
-  const window = await openPartyWindow(["a", "b", "c", "d", "e"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     await window.run("core.party.create", { cards: ["d", "e"] });
     await assert.rejects(window.run("core.party.add", { party: "p2", card: "b", take: true }), /^Error: cards are not touching: /);
@@ -56,8 +59,9 @@ test("a take of a card that does not touch the target is refused and nothing mov
 
 test("a take of the leader leaves the former party without a leader and keeps its color", { timeout: 10000 }, async () => {
   // a b c d e: p1 holds a, b, c with leader c; p2 holds d, e. Card c touches d and moves to p2.
-  const window = await openPartyWindow(["a", "b", "c", "d", "e"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const former = await window.run("core.party.create", { cards: ["a", "b", "c"], leader: "c" });
     await window.run("core.party.create", { cards: ["d", "e"] });
     const reply = await window.run("core.party.add", { party: "p2", card: "c", take: true });
@@ -71,8 +75,9 @@ test("a take of the leader leaves the former party without a leader and keeps it
 });
 
 test("the party that a take joins reports the reason taken", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d", "e"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c"] });
     await window.run("core.party.create", { cards: ["d", "e"] });
     await window.run("core.party.add", { party: "p2", card: "c", take: true });

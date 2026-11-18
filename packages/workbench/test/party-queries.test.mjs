@@ -6,8 +6,9 @@ import test from "node:test";
 import { openPartyWindow } from "./support/party-window.mjs";
 
 test("core.card.get of a card in a party reports the party, the leader flag and the tabs in tab order", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"], leader: "a" });
     const card = await window.run("core.card.get", { card: "a" });
     assert.deepEqual(Object.keys(card), ["card", "party", "leader", "activeTab", "tabs"]);
@@ -21,8 +22,9 @@ test("core.card.get of a card in a party reports the party, the leader flag and 
 });
 
 test("core.card.get of a card in no party reports party null and leader false", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const card = await window.run("core.card.get", { card: "b" });
     assert.equal(card.party, null);
     assert.equal(card.leader, false);
@@ -32,8 +34,9 @@ test("core.card.get of a card in no party reports party null and leader false", 
 });
 
 test("core.card.get of an unknown card is refused with unknown card <id>", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await assert.rejects(window.run("core.card.get", { card: "zz" }), /^Error: unknown card zz$/);
   } finally {
     window.close();
@@ -41,8 +44,9 @@ test("core.card.get of an unknown card is refused with unknown card <id>", { tim
 });
 
 test("a tab whose plugin declares no summary has an empty status object", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     const card = await window.run("core.card.get", { card: "a" });
     assert.deepEqual(card.tabs[0].status, {});
   } finally {
@@ -51,8 +55,9 @@ test("a tab whose plugin declares no summary has an empty status object", { time
 });
 
 test("core.party.get lists the leader first and the other members in space order", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b", "c"], leader: "c" });
     const party = await window.run("core.party.get", { party: "p1" });
     assert.deepEqual(Object.keys(party), ["id", "cards", "leader", "color", "leaderColor", "outline", "reason", "members"]);
@@ -64,8 +69,9 @@ test("core.party.get lists the leader first and the other members in space order
 });
 
 test("the outline of a party is a list of closed loops of [x, y] points", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     const party = await window.run("core.party.get", { party: "p1" });
     assert.ok(Array.isArray(party.outline) && party.outline.length >= 1);
@@ -79,8 +85,9 @@ test("the outline of a party is a list of closed loops of [x, y] points", { time
 });
 
 test("the core.parties status lists one party record per party with the declared fields", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b", "c", "d"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     await window.run("core.party.create", { cards: ["c", "d"] });
     const { result } = await window.get("core.parties");
@@ -92,8 +99,9 @@ test("the core.parties status lists one party record per party with the declared
 });
 
 test("core.party.get reports the same record as the core.parties status for the same party", { timeout: 10000 }, async () => {
-  const window = await openPartyWindow(["a", "b"]);
+  const window = await openPartyWindow();
   try {
+    await window.reset();
     await window.run("core.party.create", { cards: ["a", "b"] });
     const { result } = await window.get("core.parties");
     const party = await window.run("core.party.get", { party: "p1" });
