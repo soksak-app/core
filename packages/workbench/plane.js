@@ -808,10 +808,15 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   pickerEl.setAttribute("aria-label", ask);
   // A list with group titles has many items, so it is drawn taller.
   pickerEl.classList.toggle("picker--grouped", groups.some((group) => group.heading));
+  // An item with a command runs that command after the layer closes, so every item closes the layer through the same pick path
+  // (docs/spec/parties.md#card-menu).
+  const commands = new Map(groups.flatMap((group) => group.items).filter((it) => it.command).map((it) => [it.key, it]));
+  const choose = (key) => {
+    const it = commands.get(key);
+    return it ? run(it.command, it.params) : pick(key);
+  };
   const keys = fillPicker(pickerEl, ask, groups, (b, index, it) => {
-    // An item with a command runs that command itself (docs/spec/parties.md#card-menu); any other item picks its index.
-    if (it.command) mark(b, it.command, it.params);
-    else mark(b, "core.picker.pick", { index });
+    mark(b, "core.picker.pick", { index });
     if (it.notice) {
       b.dataset.notice = "true";
       b.title = systemNotifications.tooltip(it.notice);
@@ -831,7 +836,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { anchor, pick, rect, keys, columns: pickerColumns(pickerEl) };
+  picker = { anchor, pick: choose, rect, keys, columns: pickerColumns(pickerEl) };
   pickerChanged();
   // DOM cannot be drawn over a native view, and a web view is a native view that renders DOM. The application receives this
   // element and renders it in such a view, so the surfaces below keep running. The whole element is passed, so the
