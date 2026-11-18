@@ -666,3 +666,32 @@ func (p *Parties) Outline(g *Grid, partyID string, border float64) ([][]Point, e
 	pad, inset := g.Gap()/2, border/2
 	return ComputeOutline(rects, OutlineOptions{Pad: &pad, Inset: &inset}).Loops, nil
 }
+
+// Restore replaces the parties of the space with the stored parties. Each party must hold cards of the grid that touch, and a
+// leader of its cards. A refused party names its identifier and leaves the parties of the space unchanged.
+func (p *Parties) Restore(g *Grid, stored []StoredParty) error {
+	restored := []*party{}
+	for _, item := range stored {
+		if err := checkCards(g, item.Cards); err != nil {
+			return fmt.Errorf("party %s: %w", item.ID, err)
+		}
+		if err := checkConnected(g, item.Cards); err != nil {
+			return fmt.Errorf("party %s: %w", item.ID, err)
+		}
+		if item.Leader != nil && !slices.Contains(item.Cards, *item.Leader) {
+			return fmt.Errorf("party %s: leader %s is not in the party", item.ID, *item.Leader)
+		}
+		restored = append(restored, &party{ID: item.ID, Cards: slices.Clone(item.Cards), Leader: item.Leader, Color: item.Color, LeaderColor: item.LeaderColor})
+	}
+	p.list = restored
+	return nil
+}
+
+// Stored returns the parties of the space in the form of the storage, in the order of the parties.
+func (p *Parties) Stored() []StoredParty {
+	out := []StoredParty{}
+	for _, item := range p.list {
+		out = append(out, StoredParty{ID: item.ID, Cards: slices.Clone(item.Cards), Leader: item.Leader, Color: item.Color, LeaderColor: item.LeaderColor})
+	}
+	return out
+}
