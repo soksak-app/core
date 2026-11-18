@@ -417,9 +417,10 @@ function sharedPart(a, b) {
 
 /**
  * Registers the party commands and the party status of the window. notifyChange is called after each change so the watchers of
- * core.parties read the new value. status and command are the registration functions of the core exposure.
+ * core.parties read the new value. status is the registration function of the core exposure and registry is the core registry, whose
+ * command registers each party command under its declared name (the exposure check reads the name at that call).
  */
-export function installParties({ status, command, notifyChange, grid, plane, palette }) {
+export function installParties({ status, registry, notifyChange, grid, plane, palette }) {
   notify = notifyChange;
   currentGrid = grid;
   shownPalette = palette;
@@ -432,13 +433,13 @@ export function installParties({ status, command, notifyChange, grid, plane, pal
     notify();
     return result;
   };
-  command("core.party.create", run(create));
-  command("core.party.update", run(update));
-  command("core.party.add", run(add));
-  command("core.party.remove", run(remove));
-  command("core.party.delete", run(deleteParty));
-  command("core.party.get", ({ party }) => ({ ...record(byId(party)), members: memberStates(byId(party)) }));
-  command("core.card.get", ({ card }) => {
+  registry.command("core.party.create", run(create));
+  registry.command("core.party.update", run(update));
+  registry.command("core.party.add", run(add));
+  registry.command("core.party.remove", run(remove));
+  registry.command("core.party.delete", run(deleteParty));
+  registry.command("core.party.get", ({ party }) => ({ ...record(byId(party)), members: memberStates(byId(party)) }));
+  registry.command("core.card.get", ({ card }) => {
     if (!cellOf(card)) fail(`unknown card ${card}`);
     return cardState(card);
   });

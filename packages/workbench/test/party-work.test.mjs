@@ -48,7 +48,7 @@ test("a work change of a card sends no exposureChanged for core.parties until th
       subscribers.add(run);
       return () => subscribers.delete(run);
     }),
-    command: (name, read) => registry.command(name, read),
+    registry,
     notifyChange: () => {
       for (const run of [...subscribers]) run();
     },

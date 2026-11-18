@@ -418,7 +418,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
   installParties({
-    status, command: (name, read) => registry.command(name, read), notifyChange: coreChanged, grid: currentGrid,
+    status, registry, notifyChange: coreChanged, grid: currentGrid,
     plane: () => document.getElementById("plane"), palette: () => THEMES.find((theme) => theme.name === value("theme"))[value("mode")],
   });
 

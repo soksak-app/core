@@ -32,7 +32,7 @@ for (const item of cases) {
     registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
     parties.installParties({
       status: (name, read) => registry.status(name, read, () => () => {}),
-      command: (name, read) => registry.command(name, read),
+      registry,
       notifyChange: () => {},
       grid: () => grid,
       plane: () => null,
