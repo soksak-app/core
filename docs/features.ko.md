@@ -91,8 +91,8 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F899-2 — 디스크의 session 파일에서 agent 대화 읽기(Claude Code, Codex). 읽은 파일을 함께 밝힌다.
   - [ ] F899-3 — 각 터미널의 전경 프로그램과 백그라운드 작업, 그리고 그것을 이름으로 알려 주는 명령.
   - [ ] F899-4 — 터미널 상태 event(idle, running, exited, waiting, agent-busy, agent-waiting).
-  - [ ] F899-5 — TUI 키 adapter(D6)와 대화상자 처리(D5). F899-4 뒤에 한다.
-  - [ ] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7).
+  - [~] F899-5 — TUI 키 adapter(D6)와 대화상자 처리(D5). F899-4 뒤에 한다. sidecar alacritty의 S120으로 구현했다: 키 adapter와 대화상자 supervisor. 미완료: TUI 키 table이 비어 있어서, 키 관찰이 선언되기 전에는 agent 동작이 TUI 키에 도달하지 않는다.
+  - [~] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7). sidecar alacritty의 S121로 구현했다. 거부 계약은 persistent services 사양에 있다. 미완료: 가드 테스트의 Red 실행 기록이 없고, sidecar vt는 가드를 아직 구현하지 않았다.
   - [ ] F899-7 — 터미널 간 메시징: sidecar가 등록한 폴더를 감시해 file event를 보내고, 메시지는 입력 주입으로, agent가 지원하면 MCP 도구 `messages.read`와 `messages.wait`로 전달한다(D3, D4).
   - 계획: docs/plans/terminal-plan.ko.md (5부). 미정 항목 V1~V8과 결정 D1~D7이 있으며, 아직 구현하지 않았다.
 - [ ] F892 — P1, F887 후속: F887 변경의 CI run에서 `build-native` job의 `input_cursor_rect_test`가 실패했다. 페이지가 주입된 마우스 이동을 받지 못했고(`MEASURE`가 `cursor arrow, page moves over `와 빈 목록을 보였다), 제한 대기가 그 상태로 끝났다. F887은 로컬 통과만 기록했으며, 이 CI run이 원인이 남아 있다는 근거다. 기대: CI 환경에서 페이지가 이동을 받거나, 페이지의 event log(이동, drain, event 전달의 순서)로 원인을 측정하고 고친다. 이 기기에서 디스플레이가 있는 상태로 측정: 1회 통과(모든 검사 PASS, 페이지가 crosshair 커서를 설정, 페이지가 text, cross, cross 순으로 이동을 받음). 디스플레이 의존 가설은 아직 증명되지 않았다. 디스플레이가 없는 실행은 하지 않았다. WebKit 페이지 이벤트를 관측하므로 end-to-end 검사의 규칙에 따라 로컬 end-to-end 목록으로 옮겼다.
