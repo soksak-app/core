@@ -235,6 +235,21 @@ Versions are decided at release time under the rule of the repository that owns 
 - Options 3 and 5 are checked with a long session that exceeds the retained history, with the absolute numbers compared before and after.
 - Measurement of cost (time and memory per read) happens after development, as the plan of the owning repository states.
 
+## Status and verification by checklist item
+
+Status: no item is implemented. Each item lists its Red test (fails on the current code) and its Green evidence (passes after the change). Owners are the repositories that hold the code.
+
+| Item | Owner | Red test (to write first) | Green evidence | Status |
+|---|---|---|---|---|
+| F899-1 screen rows by range | sidecars `vt`, `alacritty`; plugins `terminal`, `term` | a `screen.read {from, count}` call returns rows outside the viewport | the same call returns the requested rows in both sidecars and both plugins | not started |
+| F899-2 agent conversation read | sidecars or plugins (method B) | a session file of a known fixture yields its messages in order | the read returns the messages and names the file | not started |
+| F899-3 process list | sidecar `alacritty` (macOS first) | a shell with a background job lists the job by name | `term.process.list` names the foreground and the background job with its source | not started |
+| F899-4 terminal state | sidecars, adapters | a fixture shell prompt, a running command, and a finished command produce idle, running, exited events | each transition emits one event with its source and sequence number | not started |
+| F899-5 key adapters and dialog handling | adapters; supervisor | a fixture TUI with a dialog ignores a key until the adapter sends the declared key | the adapter sends the TUI key when it has one, and the fallback otherwise, and logs the path | not started |
+| F899-6 destructive command guard | sidecar layer | a destructive command fixture is refused, and an unparseable input is refused (fail-closed) | the refusal is in the event log with its rule | not started |
+
+Each Red test is written in the owner repository and recorded as failing before the change. The checks of the owner repository run; no full suite runs for an item.
+
 ## Open items
 
 Each item states its status, its owner, and the condition that closes it. No item is implemented.
