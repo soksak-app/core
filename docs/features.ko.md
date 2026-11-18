@@ -1563,10 +1563,10 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F903-3 — 에이전트: lookup과 host retain 뒤의 retain count를 기록하고 release 뒤 count가 돌아오는지 확인하는 native tracked test를 추가한다.
   - [o] F903-4 — lead가 측정함(macOS, `test/lease-measure-F903` worktree의 native build): 1단계(layer가 first 표시): IOSurfaceIsInUse(first) = 1; 2단계(second가 first 교체): IOSurfaceIsInUse(first) = 1, IOSurfaceIsInUse(second) = 1; 3단계(third가 second 교체): IOSurfaceIsInUse(first) = 1. 교체된 surface의 in-use 상태가 true로 남으므로 계획의 실현 가능성 관문은 실패한다. IOSurfaceIsInUse로 surface 반환을 판단하는 lease 표시는 막혀 있다. lookup test는 release 뒤 retain count가 1로 돌아옴을 보인다. 증거: lead가 두 native test를 실행한 결과이며, 측정한 줄은 위에 기록했다.
 - [ ] F904 — P1: 두 terminal sidecar에서 viewport 밖의 행을 읽는다(F899-1). 입력: `screen.read`는 viewport만 돌려주므로 호출자가 그 위의 행을 읽을 수 없다. 에이전트는 코드를 쓰고, Red와 Green은 lead가 실행한다.
-  - [ ] F904-1 — 에이전트가 `alacritty-core`와 `vt-core`에 Red test를 쓴다: viewport 위의 행을 요청하는 `screen.read {from, count}`가 그 행을 돌려주지 않는다. Lead가 변경 전에 실행해 실패를 기록한다.
-  - [ ] F904-2 — 에이전트가 worktree `sidecars/alacritty-F904`의 `alacritty` 엔진에 `from`과 `count` 인자를 구현하고, 프로토콜에 상한을 적는다.
-  - [ ] F904-3 — 에이전트가 worktree `sidecars/vt-F904`의 `vt` 엔진에 같은 인자를 구현하고, 범위 밖 요청에 같은 오류 문구를 준다.
-  - [ ] F904-4 — Lead가 Green을 실행한다: 두 sidecar에서 viewport 위의 행이 반환되고, 각 저장소의 공유 계약 case가 통과한다.
+  - [o] F904-1 — 에이전트가 `alacritty-core`와 `vt-core`에 Red test를 쓴다: viewport 위의 행을 요청하는 `screen.read {from, count}`가 그 행을 돌려주지 않는다. Lead가 변경 전에 실행해 실패를 기록한다. Red: the test failed to compile before the change (no method `screen_rows`), recorded as a compile-level Red; the test passes after the change.
+  - [o] F904-2 — 에이전트가 worktree `sidecars/alacritty-F904`의 `alacritty` 엔진에 `from`과 `count` 인자를 구현하고, 프로토콜에 상한을 적는다. The alacritty sidecar change S118 implements it.
+  - [o] F904-3 — 에이전트가 worktree `sidecars/vt-F904`의 `vt` 엔진에 같은 인자를 구현하고, 범위 밖 요청에 같은 오류 문구를 준다. The vt sidecar change S176 implements it.
+  - [o] F904-4 — Lead가 Green을 실행한다: 두 sidecar에서 viewport 위의 행이 반환되고, 각 저장소의 공유 계약 case가 통과한다. Green: the test `screen_read_returns_rows_above_the_viewport` passes in both sidecars; the shared contract cases of the protocol are not yet run.
 - [ ] F905 — P2: 이전 작업에서 남은 실패를 해결한다. 입력: the CI run of the F898 Codex contract declaration fix의 결론을 읽지 않았고, `frame_draw_memory_test`는 마지막 창에서 약 16,150개의 할당 block을 유지했으며, `soksak-host` build script가 clippy에 실패한다. 빌드와 repeat 실행은 lead가 한다.
   - [ ] F905-1 — `gh run view`로 F898 Codex 계약 declaration 수정 commit의 CI run 결론을 읽고 기록한다.
   - [ ] F905-2 — Lead가 `frame_draw_memory_test`를 단독으로 repeat target으로 최소 세 번 실행하고, 출력과 block 수를 기록한다.
