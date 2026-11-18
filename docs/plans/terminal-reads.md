@@ -150,6 +150,19 @@ A caller needs the program that runs in each terminal, and the background jobs o
 - Each entry states its source (process table, or OSC 133 command marks when the shell sends them).
 - A process name alone does not identify an agent; the agent is identified by its process arguments and its session file (method B).
 
+## Reference: how other agents deliver messages (F899-2, F899-4 input)
+
+Observed in the local Claude Code 2.1.327 binary and the open-source Codex repository. Strings and source names only; no run was done.
+
+- Claude Code: cross-session messages carry a peer frame and the receiver shows them under a `[SYSTEM NOTIFICATION - NOT USER INPUT]`
+  frame, so a message is not taken as the user's turn. A session states whether it accepts them (`crossSessionInbound`: accept, hold,
+  refuse). The peer list is read from the server endpoint `/v1/code/sessions`. The idle notice tells the sender when the receiver is next
+  idle. A same-machine direct channel was not found in the strings (open item V8).
+- Codex: messages move only between agents of one runtime (`send_message`, `followup_task`, `wait_agent`, `list_agents`), through an
+  in-memory mailbox (`codex-rs/core/src/agent/api.rs`). No cross-process or cross-session transport was found.
+- Consequence for this plan: cross-session delivery between separately launched terminals has no agent-side transport in either agent.
+  The plan keeps input injection as the baseline and the MCP tools as the better channel where the agent offers them.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with

@@ -103,6 +103,14 @@ foreground에서 바쁘거나 졸고 있는 TUI는 백그라운드 또는 바로
 - 각 항목은 출처(프로세스 표, 또는 셸이 보내면 OSC 133 명령 마크)를 밝힌다.
 - 프로세스 이름만으로는 agent를 식별하지 않는다. agent는 프로세스 인자와 session 파일(방법 B)로 식별한다.
 
+## 참고: 다른 agent의 메시지 전달 방식(F899-2, F899-4 입력)
+
+로컬 Claude Code 2.1.327 바이너리와 오픈소스 Codex 저장소에서 관찰했다. 문자열과 소스 이름만 확인했고, 실행은 하지 않았다.
+
+- Claude Code: 세션 간 메시지는 peer 프레임을 가지며, 받는 쪽은 `[SYSTEM NOTIFICATION - NOT USER INPUT]` 프레임 아래 보여 주므로 사용자 턴으로 취급되지 않는다. 세션은 받을지를 밝힌다(`crossSessionInbound`: accept, hold, refuse). peer 목록은 서버 endpoint `/v1/code/sessions`에서 읽는다. idle notice는 받는 쪽이 다음 idle이 될 때 보내는 쪽에 알린다. 같은 머신의 직접 경로는 문자열에서 찾지 못했다(미정 항목 V8).
+- Codex: 메시지는 한 런타임의 agent 사이에서만 오간다(`send_message`, `followup_task`, `wait_agent`, `list_agents`). 메모리 안의 메일함을 쓴다(`codex-rs/core/src/agent/api.rs`). 프로세스나 세션을 넘는 전달 경로는 찾지 못했다.
+- 이 계획에 주는 결과: 따로 실행된 터미널 사이의 세션 간 전달은 두 agent 모두 agent 쪽 전달 경로가 없다. 계획은 입력 주입을 기본 경로로, agent가 제공하면 MCP 도구를 더 나은 경로로 유지한다.
+
 ## 방안과 결과
 
 각 방안은 명령이다. 결과는 한정된다. 모든 읽기는 `count`를 받고 상한이 있으며, 상한을 넘는 읽기는 명시적 오류로 실패한다.
