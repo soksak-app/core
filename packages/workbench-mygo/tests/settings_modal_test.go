@@ -1678,3 +1678,30 @@ func TestTheGeneralSettingsGiveAClassicBarItsRoom(t *testing.T) {
 		t.Fatalf("a theme is at x %v, %v wide beside the classic bar, want x %v and %v wide", got.X, got.W, theme.X, tile(inner-17))
 	}
 }
+
+// The 표시 group of the general section draws the card auto-arrange choice: resize keeps the arrangement, even replaces it
+// with an equal grid, and the choice runs core.settings.change (docs/spec/settings.md#controls).
+func TestTheDisplayGroupDrawsTheCardArrangeChoice(t *testing.T) {
+	f := opened(t)
+	status := f.modal()
+	for _, control := range status.Controls {
+		if control.Name == "core.settings-modal.set" && control.Key != nil && *control.Key == "cardArrange" {
+			if !slices.Equal(control.Options, []string{"resize", "even"}) || *control.Value != "resize" || control.Command.Name != "core.settings.change" {
+				t.Fatalf("cardArrange %+v", control)
+			}
+			return
+		}
+	}
+	t.Fatalf("no control for cardArrange")
+}
+
+// The balance button draws the icon of the arrangement that its command runs: layout-grid for even, columns-3 for resize
+// (docs/spec/settings.md#controls).
+func TestTheBalanceButtonDrawsTheIconOfItsArrangement(t *testing.T) {
+	if got := workbench.BalanceIcon("even"); got != "layout-grid" {
+		t.Fatalf("even draws %q", got)
+	}
+	if got := workbench.BalanceIcon("resize"); got != "columns-3" {
+		t.Fatalf("resize draws %q", got)
+	}
+}

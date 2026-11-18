@@ -77,7 +77,8 @@ func (s *Shell) drawChromeActs(c *ui.Context, browsing bool) {
 	}
 	if !browsing {
 		s.chromeAct(c, "core.chrome.projects", "core.projects.browse", "프로젝트 목록", "projects", false, nil)
-		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", "columns-3", false, nil)
+		arrange, _ := s.settings.Value("cardArrange").(string) // silent: the settings store checks the type of the value.
+		s.chromeAct(c, "core.chrome.balance", "core.layout.balance", "카드 자동 정렬", BalanceIcon(arrange), false, nil)
 	}
 	if !browsing {
 		// The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom
@@ -382,4 +383,13 @@ func (s *Shell) drawSpaceTab(c *ui.Context, project *projectRecord, space layout
 		}
 	}
 	s.drawBarTab(c, tab)
+}
+
+// BalanceIcon is the icon of the card auto-arrange button for the arrangement that its command runs: layout-grid for even, and
+// columns-3 for resize (docs/spec/settings.md#controls).
+func BalanceIcon(arrange string) string {
+	if arrange == "even" {
+		return "layout-grid"
+	}
+	return "columns-3"
 }
