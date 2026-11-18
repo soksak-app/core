@@ -382,6 +382,30 @@ func lineError(path string, line int, reason string) error {
 	return fmt.Errorf("%s: line %d %s", path, line, reason)
 }
 
+// countItems returns the number of items whose `type` is kind.
+func countItems(items []any, kind string) int {
+	count := 0
+	for _, item := range items {
+		if object, _ := item.(map[string]any); object["type"] == kind {
+			count++
+		}
+	}
+	return count
+}
+
+// messageValue is a message with its role and text, and with `items` holding one {"type": "image"} for each of its images image items.
+func messageValue(role, text string, images int) map[string]any {
+	message := map[string]any{"role": role, "text": text}
+	if images > 0 {
+		kinds := make([]any, images)
+		for i := range kinds {
+			kinds[i] = map[string]any{"type": "image"}
+		}
+		message["items"] = kinds
+	}
+	return message
+}
+
 // joinedText joins the `text` fields of the items whose `type` is one of kinds with a newline in their order. A matching item whose
 // `text` is not a string is refused with its line number.
 func joinedText(path string, line int, items []any, kinds ...string) (string, error) {
@@ -413,6 +437,7 @@ func claudeMessages(path string, records []numberedRecord) ([]any, int, error) {
 		}
 		message, _ := record.fields["message"].(map[string]any)
 		var text string
+		images := 0
 		switch content := message["content"].(type) {
 		case string:
 			text = content
@@ -422,13 +447,14 @@ func claudeMessages(path string, records []numberedRecord) ([]any, int, error) {
 				return nil, 0, err
 			}
 			text = joined
+			images = countItems(content, "image")
 		default:
 			return nil, 0, lineError(path, record.line, "has a message content that is neither a string nor a list")
 		}
-		if text == "" {
+		if text == "" && images == 0 {
 			skipped++
 		} else {
-			messages = append(messages, map[string]any{"role": role, "text": text})
+			messages = append(messages, messageValue(role, text, images))
 		}
 	}
 	return messages, skipped, nil
@@ -453,23 +479,10 @@ func codexMessages(path string, records []numberedRecord) ([]any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		images := 0
-		for _, item := range items {
-			if object, _ := item.(map[string]any); object["type"] == "input_image" {
-				images++
-			}
-		}
+		images := countItems(items, "input_image")
 		role, _ := payload["role"].(string)
 		if (role == "user" || role == "assistant") && (text != "" || images > 0) {
-			message := map[string]any{"role": role, "text": text}
-			if images > 0 {
-				kinds := make([]any, images)
-				for i := range kinds {
-					kinds[i] = map[string]any{"type": "image"}
-				}
-				message["items"] = kinds
-			}
-			messages = append(messages, message)
+			messages = append(messages, messageValue(role, text, images))
 		} else {
 			skipped++
 		}

@@ -305,9 +305,12 @@ fn claude_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value
         let content = record
             .get("message")
             .and_then(|message| message.get("content"));
-        let text = match content {
-            Some(Value::String(text)) => text.clone(),
-            Some(Value::Array(blocks)) => joined_text(path, *line_number, blocks, &["text"])?,
+        let (text, images) = match content {
+            Some(Value::String(text)) => (text.clone(), 0),
+            Some(Value::Array(blocks)) => {
+                let images = count_items(blocks, "image");
+                (joined_text(path, *line_number, blocks, &["text"])?, images)
+            }
             _ => {
                 return Err(line_error(
                     path,
@@ -316,10 +319,10 @@ fn claude_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value
                 ));
             }
         };
-        if text.is_empty() {
+        if text.is_empty() && images == 0 {
             skipped += 1;
         } else {
-            messages.push(json!({"role": role, "text": text}));
+            messages.push(message_value(role, text, images));
         }
     }
     Ok((messages, skipped))
@@ -348,25 +351,35 @@ fn codex_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value>
             ));
         };
         let text = joined_text(path, *line_number, items, &["input_text", "output_text"])?;
-        let images = items
-            .iter()
-            .filter(|item| item.get("type").and_then(Value::as_str) == Some("input_image"))
-            .count();
+        let images = count_items(items, "input_image");
         let role = payload
             .and_then(|payload| payload.get("role"))
             .and_then(Value::as_str);
         match role {
             Some(role @ ("user" | "assistant")) if !text.is_empty() || images > 0 => {
-                let mut message = json!({"role": role, "text": text});
-                if images > 0 {
-                    message["items"] = Value::Array(vec![json!({"type": "image"}); images]);
-                }
-                messages.push(message);
+                messages.push(message_value(role, text, images));
             }
             _ => skipped += 1,
         }
     }
     Ok((messages, skipped))
+}
+
+/// The number of items whose `type` is `kind`.
+fn count_items(items: &[Value], kind: &str) -> usize {
+    items
+        .iter()
+        .filter(|item| item.get("type").and_then(Value::as_str) == Some(kind))
+        .count()
+}
+
+/// A message with its role and text, and with `items` holding one `{"type": "image"}` for each of its `images` image items.
+fn message_value(role: &str, text: String, images: usize) -> Value {
+    let mut message = json!({"role": role, "text": text});
+    if images > 0 {
+        message["items"] = Value::Array(vec![json!({"type": "image"}); images]);
+    }
+    message
 }
 
 /// The `text` fields of the items whose `type` is one of `kinds`, joined with a newline in their order. A matching item whose
