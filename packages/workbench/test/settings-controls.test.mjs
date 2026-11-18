@@ -40,13 +40,16 @@ test("every setting form is drawn with its one control", async (t) => {
     ui.openSettings();
     ui.showSection("general");
     // A choice is a select box regardless of how many values it has. There is no choice that lays out buttons.
-    for (const key of ["projectOpening", "mode", "font", "projectTabs", "focusInd", "fullRule", "language"]) {
+    for (const key of ["projectOpening", "mode", "font", "projectTabs", "focusInd", "fullRule", "cardArrange", "language"]) {
       const control = controlOf(key);
       assert.deepEqual([control.tag, control.command], ["SELECT", "core.settings.change"], `${key} is not a select box`);
       assert.equal(document.querySelector(`[data-set="${key}"]`).value, settings.scopedValue(key, "common"));
     }
     assert.deepEqual(controlOf("mode").options, settings.CHOICES.mode);
     assert.deepEqual(controlOf("fullRule").options, settings.CHOICES.fullRule);
+    // The card auto-arrange setting: resize keeps the arrangement (balance), even replaces it with an equal grid.
+    assert.deepEqual(controlOf("cardArrange").options, ["resize", "even"]);
+    assert.equal(settings.scopedValue("cardArrange", "common"), "resize");
     assert.equal(document.querySelectorAll('[data-key^="pick:"]:not([data-expose="core.settings-modal.scope"])').length, 0,
       "a choice is drawn as buttons");
     for (const key of ["left", "right", "top", "bottom", "dim"]) assert.equal(controlOf(key).type, "checkbox", `${key} is not a switch`);

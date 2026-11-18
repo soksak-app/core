@@ -15,6 +15,7 @@ const PATHS = {
   star: '<path d="m12 3 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9Z"/>',
   projects: declaredIcons["projects"],
   "columns-3": declaredIcons["columns-3"],
+  "layout-grid": declaredIcons["layout-grid"],
   sun: declaredIcons["sun"],
   moon: declaredIcons["moon"],
   settings: declaredIcons["settings"],

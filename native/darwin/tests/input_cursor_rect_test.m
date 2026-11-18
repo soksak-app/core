@@ -114,7 +114,14 @@ int main(void) { @autoreleasepool {
     check(sp_input_pointer(window, 50, 150, 0, 0, 0, 0) == SP_INPUT_DELIVERED, @"a move onto the page is delivered");
     drain(page);
     measureCursor(page, window, @"after the move onto the page");
-    eventWait(@"the cursor of the virtual key window is the crosshair of the page", ^BOOL { return cursorIs(window, @"crosshair"); });
+    NSString *unset = eventWaitUntil(@"the cursor of the virtual key window is the crosshair of the page", 20,
+        ^BOOL { return cursorIs(window, @"crosshair"); },
+        ^NSString * {
+            NSArray *moves = evaluate(page, @"over");
+            return [NSString stringWithFormat:@"cursor %@, page moves over %@", cursorOf(window),
+                [moves componentsJoinedByString:@","]];
+        });
+    check(unset == nil, [NSString stringWithFormat:@"the page sets the crosshair cursor after its move (%@)", unset]);
 
     // A move over the text of the page and a move onto the native view in one turn: the page answers the first move with the
     // text cursor after the second move, as it answers a move of a person that went on to the native content.

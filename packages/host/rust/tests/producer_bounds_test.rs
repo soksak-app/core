@@ -333,10 +333,18 @@ fn an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue
             assert_eq!(reply["result"], Value::Null, "the unwatch answered {reply}");
         }
     }
+    // The page records its call when the call starts, which can happen after the reply of the unwatch has reached the client,
+    // so the test waits for the call with a bound instead of reading the channel at once.
+    let call = calls
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the page call of the unwatch");
     assert_eq!(
-        calls.try_iter().collect::<Vec<_>>(),
-        vec!["status.unwatch".to_string()],
-        "the page calls after the first watch"
+        call, "status.unwatch",
+        "the first page call after the first watch"
+    );
+    assert!(
+        calls.try_iter().next().is_none(),
+        "the page calls after the unwatch"
     );
     endpoint.stop();
     use_host_event_log(None);

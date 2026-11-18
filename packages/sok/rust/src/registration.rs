@@ -46,20 +46,16 @@ pub fn claude_command(environment: &Environment) -> Result<Option<PathBuf>, Stri
     find_on_path(environment, "claude")
 }
 
-/// The registered sok: the first sok on `PATH` with symbolic links resolved, else the running sok. On macOS it must be the sok
-/// of an application bundle.
-pub fn registered_sok(environment: &Environment, sok: &Path) -> Result<PathBuf, String> {
-    let registered = match find_on_path(environment, "sok")? {
-        Some(found) => found,
-        None => sok.to_path_buf(),
-    };
-    if !platform::current()?.registrable_sok(&registered)? {
+/// The registered sok: the running sok, which is the sok of the application bundle that runs the command. On macOS it must be
+/// the sok of an application bundle.
+pub fn registered_sok(sok: &Path) -> Result<PathBuf, String> {
+    if !platform::current()?.registrable_sok(sok)? {
         return Err(format!(
-            "the first sok on PATH, {}, is not the sok of an application bundle",
-            registered.display()
+            "the running sok, {}, is not the sok of an application bundle",
+            sok.display()
         ));
     }
-    Ok(registered)
+    Ok(sok.to_path_buf())
 }
 
 /// The configuration file of the `claude` command: `$CLAUDE_CONFIG_DIR/.claude.json` when that variable is set and not empty,
@@ -135,21 +131,155 @@ pub struct McpPart {
     pub state: Result<Option<Reason>, String>,
 }
 
-/// The `mcp` part, or None when the `claude` command is not on `PATH` and the part does not apply. It fails when `HOME` is not set
-/// or the search of `PATH` fails.
+/// The `mcp` part, or None when neither the `claude` command nor the `codex` command is on `PATH` and the part does not apply. The part
+/// is ok only when every agent on `PATH` has the current registration. It fails when `HOME` is not set or the search of `PATH` fails.
 pub fn part_state(environment: &Environment, sok: &Path) -> Result<Option<McpPart>, String> {
-    if claude_command(environment)?.is_none() {
+    let claude = claude_command(environment)?;
+    let codex = codex_command(environment)?;
+    if claude.is_none() && codex.is_none() {
         return Ok(None);
     }
-    let file = config_file(environment)?;
-    let state = registered_sok(environment, sok).and_then(|registered| {
-        Ok(match read_entry(&file)? {
-            None => Some(Reason::Absent),
-            Some(entry) if is_current(&entry, &registered) => None,
-            Some(_) => Some(Reason::Differs),
-        })
-    });
+    let registered = registered_sok(sok);
+    let file = match &claude {
+        Some(_) => config_file(environment)?,
+        None => codex_config_file(environment)?,
+    };
+    let claude_state = match (&claude, &registered) {
+        (None, _) => Ok(None),
+        (Some(_), Err(error)) => Err(error.clone()),
+        (Some(_), Ok(registered)) => {
+            read_entry(&config_file(environment)?).map(|entry| match entry {
+                None => Some(Reason::Absent),
+                Some(entry) if is_current(&entry, registered) => None,
+                Some(_) => Some(Reason::Differs),
+            })
+        }
+    };
+    let state = match (claude_state, codex, &registered) {
+        (Err(error), _, _) => Err(error),
+        (Ok(Some(reason)), _, _) => Ok(Some(reason)),
+        (Ok(None), None, _) => Ok(None),
+        (Ok(None), Some(_), Err(error)) => Err(error.clone()),
+        (Ok(None), Some(codex), Ok(registered)) => match codex_entry(&codex, environment) {
+            Err(error) => Err(error),
+            Ok(None) => Ok(Some(Reason::CodexAbsent)),
+            Ok(Some(text)) if codex_current(&text, registered) => Ok(None),
+            Ok(Some(_)) => Ok(Some(Reason::CodexDiffers)),
+        },
+    };
     Ok(Some(McpPart { file, state }))
+}
+
+/// The `codex` command on `PATH`, or None.
+pub fn codex_command(environment: &Environment) -> Result<Option<PathBuf>, String> {
+    find_on_path(environment, "codex")
+}
+
+/// The configuration file of the `codex` command: `<home>/.codex/config.toml`.
+pub fn codex_config_file(environment: &Environment) -> Result<PathBuf, String> {
+    Ok(Path::new(environment.home()?)
+        .join(".codex")
+        .join("config.toml"))
+}
+
+/// The registration of soksak in the `codex` command as `codex mcp get soksak --json` prints it, or None when codex has none.
+/// codex exits with status 1 and "No MCP server named" on standard error for a name that is not registered.
+fn codex_entry(codex: &Path, environment: &Environment) -> Result<Option<String>, String> {
+    let mut command = std::process::Command::new(codex);
+    command
+        .args(["mcp", "get", "soksak", "--json"])
+        .stdin(std::process::Stdio::null());
+    environment.apply(&mut command);
+    let output = command
+        .output()
+        .map_err(|error| format!("codex mcp get soksak: {}", crate::files::os_reason(&error)))?;
+    if output.status.success() {
+        return Ok(Some(
+            String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        ));
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("No MCP server named") {
+        return Ok(None);
+    }
+    // default: a command that writes nothing to its standard error has an empty first line.
+    let first = stderr.lines().next().unwrap_or("");
+    Err(format!(
+        "codex mcp get soksak failed with {}: {first}",
+        status_text(&output.status)
+    ))
+}
+
+/// Whether the codex entry is enabled and runs the registered sok with the argument mcp over standard input and output.
+fn codex_current(text: &str, registered: &Path) -> bool {
+    let Ok(Value::Object(server)) = serde_json::from_str::<Value>(text) else {
+        return false;
+    };
+    let Some(Value::Object(transport)) = server.get("transport") else {
+        return false;
+    };
+    server.get("enabled") == Some(&Value::Bool(true))
+        && transport.get("type") == Some(&Value::from("stdio"))
+        && transport.get("command") == Some(&Value::from(registered.display().to_string()))
+        && transport.get("args") == Some(&Value::Array(vec![Value::from("mcp")]))
+}
+
+/// Registers the registered sok with the `codex` command unless its registration is current, and returns the state.
+fn install_codex(
+    codex: &Path,
+    environment: &Environment,
+    registered: &Path,
+) -> Result<Done, String> {
+    let earlier = codex_entry(codex, environment)?;
+    if let Some(text) = &earlier
+        && codex_current(text, registered)
+    {
+        return Ok(Done::Current);
+    }
+    if earlier.is_some() {
+        run_codex(codex, environment, "remove", &["soksak"])?;
+    }
+    let registered_text = registered.display().to_string();
+    run_codex(
+        codex,
+        environment,
+        "add",
+        &["soksak", "--", &registered_text, "mcp"],
+    )?;
+    match codex_entry(codex, environment)? {
+        Some(text) if codex_current(&text, registered) => Ok(Done::Registered),
+        _ => Err("codex mcp add did not write the registration of soksak".into()),
+    }
+}
+
+/// Runs `codex mcp <action> <args>` with the environment, and fails with the first line of its standard error when it ends with
+/// another status than 0.
+fn run_codex(
+    codex: &Path,
+    environment: &Environment,
+    action: &str,
+    args: &[&str],
+) -> Result<(), String> {
+    let mut command = std::process::Command::new(codex);
+    command
+        .arg("mcp")
+        .arg(action)
+        .args(args)
+        .stdin(std::process::Stdio::null());
+    environment.apply(&mut command);
+    let output = command
+        .output()
+        .map_err(|error| format!("codex mcp {action}: {}", crate::files::os_reason(&error)))?;
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // default: a command that writes nothing to its standard error has an empty first line.
+    let first = stderr.lines().next().unwrap_or("");
+    Err(format!(
+        "codex mcp {action} failed with {}: {first}",
+        status_text(&output.status)
+    ))
 }
 
 /// What `sok mcp install` did.
@@ -159,31 +289,34 @@ pub enum Done {
     Registered,
 }
 
-/// The result of `sok mcp install`: the entry in the file after it, what it did, and the registered sok.
+/// The result of `sok mcp install`: the entry of the claude command in the file after it (None when the claude command is not on
+/// `PATH`), what it did, and what it did to the registration of the codex command (None when codex is not on `PATH`).
 pub struct Registration {
-    pub entry: Box<RawValue>,
+    pub entry: Option<Box<RawValue>>,
     pub state: Done,
-    pub registered: PathBuf,
+    pub codex: Option<Done>,
 }
 
 impl Registration {
-    /// `{"registration": <entry>, "state": ..., "running"?: <sok>}` on one line; `running` names the running sok when it is not
-    /// the registered one.
-    pub fn line(&self, sok: &Path) -> String {
-        let state = match self.state {
-            Done::Current => "current",
-            Done::Registered => "registered",
-        };
-        let mut line = format!(
-            "{{\"registration\":{},\"state\":\"{state}\"",
-            self.entry.get()
-        );
-        if sok != self.registered {
-            line.push_str(",\"running\":");
-            line.push_str(&Value::from(sok.display().to_string()).to_string());
+    /// `{"registration": <entry or null>, "state": ..., "codex": ...}` on one line; `codex` is absent when codex is not on `PATH`.
+    pub fn line(&self) -> String {
+        let state = done_text(self.state);
+        let entry = self.entry.as_ref().map_or("null", |entry| entry.get());
+        match self.codex {
+            Some(codex) => format!(
+                "{{\"registration\":{entry},\"state\":\"{state}\",\"codex\":\"{}\"}}",
+                done_text(codex)
+            ),
+            None => format!("{{\"registration\":{entry},\"state\":\"{state}\"}}"),
         }
-        line.push('}');
-        line
+    }
+}
+
+/// The text of a state in the output of `sok mcp install`.
+fn done_text(done: Done) -> &'static str {
+    match done {
+        Done::Current => "current",
+        Done::Registered => "registered",
     }
 }
 
@@ -217,30 +350,63 @@ fn run_claude(
     ))
 }
 
-/// `sok mcp install`: registers the registered sok with the `claude` command unless the registration is current.
+/// `sok mcp install`: registers the registered sok with the `claude` command when it is on `PATH`, and with the `codex` command
+/// when it is on `PATH`, each unless its registration is current. It fails when neither command is on `PATH`.
 pub fn install(environment: &Environment, sok: &Path) -> Result<Registration, String> {
-    let registered = registered_sok(environment, sok)?;
+    let registered = registered_sok(sok)?;
     require_writable_volume(&registered)?;
-    let Some(claude) = claude_command(environment)? else {
+    let claude = claude_command(environment)?;
+    let codex = codex_command(environment)?;
+    if claude.is_none() && codex.is_none() {
         return Err(format!(
             "the claude command is not on PATH; register the MCP server \"{} mcp\" (standard input and output) with the agent",
             registered.display()
         ));
+    }
+    let codex_state = match &codex {
+        Some(codex) => Some(install_codex(codex, environment, &registered)?),
+        None => None,
     };
+    let Some(claude) = claude else {
+        let state = if codex_state == Some(Done::Registered) {
+            Done::Registered
+        } else {
+            Done::Current
+        };
+        return Ok(Registration {
+            entry: None,
+            state,
+            codex: codex_state,
+        });
+    };
+    let mut done = install_claude(&claude, environment, &registered)?;
+    if codex_state == Some(Done::Registered) {
+        done.state = Done::Registered;
+    }
+    done.codex = codex_state;
+    Ok(done)
+}
+
+/// Registers the registered sok with the `claude` command unless the registration is current.
+fn install_claude(
+    claude: &Path,
+    environment: &Environment,
+    registered: &Path,
+) -> Result<Registration, String> {
     let file = config_file(environment)?;
     let earlier = read_entry(&file)?;
     if let Some(entry) = earlier.as_ref()
-        && is_current(entry, &registered)
+        && is_current(entry, registered)
     {
         return Ok(Registration {
-            entry: entry.clone(),
+            entry: Some(entry.clone()),
             state: Done::Current,
-            registered,
+            codex: None,
         });
     }
     if earlier.is_some() {
         run_claude(
-            &claude,
+            claude,
             environment,
             "remove",
             &["--scope", "user", "soksak"],
@@ -248,7 +414,7 @@ pub fn install(environment: &Environment, sok: &Path) -> Result<Registration, St
     }
     let registered_text = registered.display().to_string();
     if let Err(error) = run_claude(
-        &claude,
+        claude,
         environment,
         "add",
         &["--scope", "user", "soksak", "--", &registered_text, "mcp"],
@@ -269,10 +435,10 @@ pub fn install(environment: &Environment, sok: &Path) -> Result<Registration, St
         });
     }
     match read_entry(&file)? {
-        Some(entry) if is_current(&entry, &registered) => Ok(Registration {
-            entry,
+        Some(entry) if is_current(&entry, registered) => Ok(Registration {
+            entry: Some(entry),
             state: Done::Registered,
-            registered,
+            codex: None,
         }),
         _ => Err(format!(
             "claude mcp add did not write the registration to {}",

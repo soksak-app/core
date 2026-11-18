@@ -109,7 +109,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 형식 | 컨트롤 | 명령 |
 |---|---|---|
 | Boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
-| 나열된 값 중 하나 (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
+| 나열된 값 중 하나 (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
 | 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
@@ -148,6 +148,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `diagnostics.log` | class와 수준의 객체 |
 | `focusInd` | `border` 또는 `corner` |
 | `fullRule` | `under`, `over`, `none` 중 하나 |
+| `cardArrange` | `resize`(구조를 유지하고 카드에 공정한 크기를 준다, 기본값) 또는 `even`(카드를 같은 크기의 격자로 배치한다, `arrange(\"even\")`) 중 하나. 카드 자동 정렬 명령은 이 설정 값을 실행하고, 툴바 아이콘이 이 값을 보인다 |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
 | `viewProcess` | `plugin` 또는 `view`, 전역 범위, 기본값 `plugin`: host가 그 뒤 만드는 view의 WebContent process로, 그 plugin의 view들과 함께 쓰거나 자기 것을 쓴다([View 프로세스](plugin-processes.ko.md#view-프로세스)) |

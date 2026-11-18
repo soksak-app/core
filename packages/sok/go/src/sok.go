@@ -23,9 +23,12 @@ const Usage = `usage: sok <command> [options]
 
 commands:
   <declared command> [window] [--surface S] [--<parameter> VALUE]... [--params JSON]
+                            A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
   commands [window]
   windows
   exposures [window]
+  describe [window] [--surface S] [--full] [--after KEY] [--limit N]
+                            prints the description of the window in pages; --after takes the next key of a page
   status NAME [window] [--surface S] [--watch]
   element rect|click|input|dispatch NAME [window] [--surface S] [--index N] [--value V] [--event JSON]
   input pointer [window] [--pointer NAME] --x X --y Y --phase move|down|drag|up|scroll [--button left|right] [--delta-x N] [--delta-y N] [--clicks N] [--activate]
@@ -53,6 +56,8 @@ commands:
                             starts the application bundle TARGET again in the background after the process PID ended
   process wait PID
                             waits for the operating system to report that PID ended
+  conversation read --agent claude-code|codex --cwd PATH
+                            prints the messages of the agent conversation of the working directory, read from its session file
   registry build DIRECTORY  checks a registry and writes its index.json
   registry use INDEX        sets the registry index that installation reads
   plugin install|update|remove|enable|disable ID
@@ -656,6 +661,10 @@ func run(args []string, stdout, stderr io.Writer, options Options) (err error) {
 	}
 	if len(args) > 0 && args[0] == "process" {
 		return runProcess(args[1:], stdout)
+	}
+	// The arguments after the word are parsed by the command, which takes its own options (docs/spec/agent-conversation.md).
+	if len(args) > 0 && args[0] == "conversation" {
+		return runConversation(args[1:], stdout)
 	}
 	// A command word with a dot is a declared command (docs/spec/cli.md).
 	if strings.Contains(commandWord(args), ".") {

@@ -1,9 +1,18 @@
 # Changelog
 
+
 [한국어](CHANGELOG.ko.md)
 
-## Unreleased
+## 2026-11-18
 
+- F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
+- F897: The Rust host test of the unwatch bound waits for the page call with a bound instead of reading the call list at once, which failed when the page call was not yet recorded.
+- F895: The card auto-arrange command runs the setting `cardArrange` (`resize`, the default, keeps the arrangement; `even` runs `arrange("even")`), which the settings window shows as a choice. The toolbar icon of the command changes with the setting.
+- F894: The layout model has the even arrangement `arrange("even")`, which replaces the arrangement with an equal grid of the current cards and adds one empty card when no grid fits. A grid is taken only when each cell is at least `minSize`.
+
+- F887: The native test waits have a limited form, `eventWaitUntil`, that ends at its limit with the measured state; the cursor test of the input uses it.
+- F891: The usage of `sok --help` lists `describe [window] [--surface S] [--full] [--after KEY] [--limit N]`, the command that both hosts run and that the usage text omitted. The pages of `sok describe` already share the list key `rows`; the first page also holds `window`, `layout`, `plugins` and `agent`, as `cli.describe.lists-every-entry` states.
+- F890: The MCP registration of `sok mcp install` names the running `sok`, the sok of the application bundle that runs the command, instead of the first `sok` on `PATH`; an install from one bundle replaces a registration of another bundle, and a current registration is left unchanged. The check of the registered sok on macOS names the running sok in its error.
 - F886: The setup test of the Rust host judges only the records of its own start, not the records that the earlier tests of the process left in the writer.
 - F885: The host reads the login shell in the environment that the login session gives every application and starts every sidecar from the environment that the shell prints, so the variables of the process that started the application, such as the session variables of an agent, no longer reach the terminals; `sok setup environment` prints every variable as `environment`.
 - F883-1: The wire case of the file open handoff records the start value `process`, the settings tests list `viewProcess`, the view binary test support of the Rust host names `shares_process`, and the decode test of the Go host declares its contract case.

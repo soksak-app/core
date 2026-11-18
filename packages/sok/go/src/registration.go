@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/soksak-app/core/packages/sok/go/src/platform"
@@ -20,12 +21,13 @@ import (
 // registrationName is the name of the registration of every installed soksak application.
 const registrationName = "soksak"
 
-// MCPInstall is the result of `sok mcp install`: the registration entry as the configuration file holds it, its state
-// (`current` or `registered`) and, when the running sok is not the registered one, the running sok.
+// MCPInstall is the result of `sok mcp install`: the registration entry as the configuration file holds it and its state
+// (`current` or `registered`).
 type MCPInstall struct {
 	Registration json.RawMessage `json:"registration"`
 	State        string          `json:"state"`
-	Running      string          `json:"running,omitempty"`
+	// Codex is the state of the registration in the codex command: `current` or `registered`; it is absent when codex is not on PATH.
+	Codex string `json:"codex,omitempty"`
 }
 
 // findOnPath is the first folder of the PATH text that holds an executable regular file of the name, as a canonical path, or ""
@@ -50,24 +52,17 @@ func findOnPath(path, name string) (string, error) {
 	return "", nil
 }
 
-// registeredSok is the first sok on PATH, or the running sok when no folder of PATH holds one; the platform requires the sok of an
+// registeredSok is the running sok, the sok of the application bundle that runs the command; the platform requires the sok of an
 // application bundle on macOS.
 func (s Setup) registeredSok() (string, error) {
-	first, err := findOnPath(s.Environment.path(), "sok")
-	if err != nil {
-		return "", err
-	}
-	if first == "" {
-		first = s.Sok
-	}
 	system, err := platform.Current()
 	if err != nil {
 		return "", err
 	}
-	if err := system.RegisteredSok(first); err != nil {
+	if err := system.RegisteredSok(s.Sok); err != nil {
 		return "", err
 	}
-	return first, nil
+	return s.Sok, nil
 }
 
 // claudeConfigFile is the configuration file of the claude command in the environment.
@@ -193,6 +188,95 @@ func (s Setup) runClaude(claude, subcommand string, args ...string) error {
 	return nil
 }
 
+// codexEntry reads the registration of soksak in the codex command with `codex mcp get soksak --json`, or nil when codex has
+// none. codex exits with status 1 and "No MCP server named" for a name that is not registered.
+func (s Setup) codexEntry(codex string) (json.RawMessage, error) {
+	command := exec.Command(codex, "mcp", "get", registrationName, "--json")
+	command.Env = s.Environment.applied(os.Environ())
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && strings.Contains(stderr.String(), "No MCP server named") {
+		return nil, nil
+	}
+	if err != nil {
+		line, _, _ := strings.Cut(stderr.String(), "\n") // silent: a standard error without a line feed is its own first line.
+		return nil, fmt.Errorf("codex mcp get %s failed: %v: %s", registrationName, err, line)
+	}
+	return json.RawMessage(bytes.TrimSpace(stdout.Bytes())), nil
+}
+
+// codexCurrent reports whether the codex entry runs the sok command with the argument mcp over standard input and output, enabled.
+func codexCurrent(entry json.RawMessage, sok string) bool {
+	if entry == nil {
+		return false
+	}
+	var server struct {
+		Enabled   bool `json:"enabled"`
+		Transport struct {
+			Type    string   `json:"type"`
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"transport"`
+	}
+	if err := json.Unmarshal(entry, &server); err != nil {
+		return false
+	}
+	return server.Enabled && server.Transport.Type == "stdio" && server.Transport.Command == sok &&
+		slices.Equal(server.Transport.Args, []string{"mcp"})
+}
+
+// installCodexMCP registers the sok command with the codex command unless its registration is current, and returns the state
+// (`current` or `registered`), or "" when the codex command is not on PATH.
+func (s Setup) installCodexMCP(sok string) (string, error) {
+	codex, err := findOnPath(s.Environment.path(), "codex")
+	if err != nil || codex == "" {
+		return "", err
+	}
+	entry, err := s.codexEntry(codex)
+	if err != nil {
+		return "", err
+	}
+	if codexCurrent(entry, sok) {
+		return "current", nil
+	}
+	if entry != nil {
+		if err := s.runCodex(codex, "remove", registrationName); err != nil {
+			return "", err
+		}
+	}
+	if err := s.runCodex(codex, "add", registrationName, "--", sok, "mcp"); err != nil {
+		return "", err
+	}
+	if entry, err = s.codexEntry(codex); err != nil {
+		return "", err
+	}
+	if !codexCurrent(entry, sok) {
+		return "", fmt.Errorf("codex mcp add did not write the registration of %s", registrationName)
+	}
+	return "registered", nil
+}
+
+// runCodex runs the codex command with the subcommand mcp and the arguments.
+func (s Setup) runCodex(codex, subcommand string, args ...string) error {
+	command := exec.Command(codex, append([]string{"mcp", subcommand}, args...)...)
+	command.Env = s.Environment.applied(os.Environ())
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	err := command.Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		line, _, _ := strings.Cut(stderr.String(), "\n") // silent: a standard error without a line feed is its own first line.
+		return fmt.Errorf("codex mcp %s failed with status %d: %s", subcommand, exit.ExitCode(), line)
+	}
+	if err != nil {
+		return fmt.Errorf("codex mcp %s: %w", subcommand, err)
+	}
+	return nil
+}
+
 // InstallMCP registers the registered sok with the claude command unless its registration is current.
 func (s Setup) InstallMCP() (MCPInstall, error) {
 	sok, err := s.registeredSok()
@@ -206,8 +290,26 @@ func (s Setup) InstallMCP() (MCPInstall, error) {
 	if err != nil {
 		return MCPInstall{}, err
 	}
-	if claude == "" {
+	codex, err := findOnPath(s.Environment.path(), "codex")
+	if err != nil {
+		return MCPInstall{}, err
+	}
+	if claude == "" && codex == "" {
 		return MCPInstall{}, fmt.Errorf("the claude command is not on PATH; register the MCP server \"%s mcp\" (standard input and output) with the agent", sok)
+	}
+	result := MCPInstall{State: "current"}
+	if codex != "" {
+		state, err := s.installCodexMCP(sok)
+		if err != nil {
+			return MCPInstall{}, err
+		}
+		result.Codex = state
+		if state == "registered" {
+			result.State = "registered"
+		}
+	}
+	if claude == "" {
+		return result, nil
 	}
 	file, err := s.claudeConfigFile()
 	if err != nil {
@@ -216,10 +318,6 @@ func (s Setup) InstallMCP() (MCPInstall, error) {
 	entry, err := readRegistration(file)
 	if err != nil {
 		return MCPInstall{}, err
-	}
-	result := MCPInstall{State: "current"}
-	if sok != s.Sok {
-		result.Running = s.Sok
 	}
 	if !registrationCurrent(entry, sok) {
 		if entry != nil {
@@ -245,31 +343,51 @@ func (s Setup) InstallMCP() (MCPInstall, error) {
 	return result, nil
 }
 
-// mcpPart is the setup part of the registration, and false when the claude command is not on PATH.
+// mcpPart is the setup part of the registration, and false when neither the claude command nor the codex command is on PATH. The
+// part is ok only when every agent on PATH has the current registration.
 func (s Setup) mcpPart() (SetupPart, bool, error) {
 	claude, err := findOnPath(s.Environment.path(), "claude")
-	if err != nil || claude == "" {
-		return SetupPart{}, false, err
-	}
-	file, err := s.claudeConfigFile()
 	if err != nil {
 		return SetupPart{}, false, err
 	}
-	part := SetupPart{Part: "mcp", File: file, Step: StepOf(s.Sok) + " mcp install"}
-	sok, err := s.registeredSok()
-	var entry json.RawMessage
-	if err == nil {
-		entry, err = readRegistration(file)
+	codex, err := findOnPath(s.Environment.path(), "codex")
+	if err != nil {
+		return SetupPart{}, false, err
 	}
-	switch {
-	case err != nil:
-		part.State, part.Error = "error", err.Error()
-	case entry == nil:
-		part.State, part.Reason = "missing", "absent"
-	case registrationCurrent(entry, sok):
-		part.State = "ok"
-	default:
-		part.State, part.Reason = "missing", "differs"
+	if claude == "" && codex == "" {
+		return SetupPart{}, false, nil
+	}
+	sok, err := s.registeredSok()
+	if err != nil {
+		return SetupPart{Part: "mcp", Step: StepOf(s.Sok) + " mcp install", State: "error", Error: err.Error()}, true, nil
+	}
+	part := SetupPart{Part: "mcp", Step: StepOf(s.Sok) + " mcp install", State: "ok"}
+	if claude != "" {
+		file, err := s.claudeConfigFile()
+		if err != nil {
+			return SetupPart{}, false, err
+		}
+		part.File = file
+		entry, err := readRegistration(file)
+		switch {
+		case err != nil:
+			part.State, part.Error = "error", err.Error()
+		case entry == nil:
+			part.State, part.Reason = "missing", "absent"
+		case !registrationCurrent(entry, sok):
+			part.State, part.Reason = "missing", "differs"
+		}
+	}
+	if codex != "" && part.State == "ok" {
+		entry, err := s.codexEntry(codex)
+		switch {
+		case err != nil:
+			part.State, part.Error = "error", err.Error()
+		case entry == nil:
+			part.State, part.Reason = "missing", "codex absent"
+		case !codexCurrent(entry, sok):
+			part.State, part.Reason = "missing", "codex differs"
+		}
 	}
 	return part, true, nil
 }

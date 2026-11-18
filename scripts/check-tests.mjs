@@ -277,6 +277,49 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F898",
+    implementation: [{ file: "packages/sok/go/src/skill.go", symbol: "codexHome := false" }],
+    tests: [
+      { file: "packages/sok/go/tests/codex_test.go", id: "TestSkillInstallCreatesTheCodexAgentFolderWhenCodexIsPresent" },
+      { file: "packages/sok/go/tests/codex_test.go", id: "TestMcpInstallRegistersTheSokWithCodexWhenCodexIsOnPath" },
+      { file: "packages/sok/rust/tests/codex_test.rs", id: "skill_install_creates_the_codex_agent_folder_when_codex_is_present" },
+      { file: "packages/sok/rust/tests/codex_test.rs", id: "mcp_install_registers_the_sok_with_codex_when_codex_is_on_path" },
+    ],
+    expected: "The skill of the Codex agent is written to the Codex agents folder when the Codex home is a directory, and sok mcp install registers the running sok with the codex command when it is on PATH.",
+    levels: ["unit"],
+  },
+  {
+    id: "F894",
+    implementation: [{ file: "packages/soksak/src/soksak.ts", symbol: "  arrange(mode: 'even'): boolean {" }],
+    tests: [
+      { file: "packages/soksak/test/even.test.mjs", id: "the even arrangement gives every cell the same drawn size" },
+      { file: "packages/soksak/test/even.test.mjs", id: "the even arrangement places the cards in their current order, row by row" },
+      { file: "packages/soksak/test/even.test.mjs", id: "the even arrangement changes nothing when no grid keeps every cell at minSize" },
+    ],
+    expected: "arrange(\"even\") replaces the arrangement with an equal grid of the current cards, adds one empty card when no grid fits, and changes nothing when no grid keeps every cell at minSize.",
+    levels: ["unit"],
+  },
+  {
+    id: "F895",
+    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;" }],
+    tests: [{ file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" }],
+    expected: "The setting cardArrange is a choice of resize and even, drawn as a select box whose options are the declared choices.",
+    levels: ["unit"],
+  },
+  {
+    id: "F891",
+    implementation: [
+      { file: "packages/sok/rust/src/sok.rs", symbol: "  describe [window] [--surface S] [--full] [--after KEY] [--limit N]" },
+      { file: "packages/sok/go/src/sok.go", symbol: "  describe [window] [--surface S] [--full] [--after KEY] [--limit N]" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/sok_test.rs", id: "usage_lists_describe_with_its_flags" },
+      { file: "packages/sok/go/tests/sok_test.go", id: "TestHelpListsDescribeWithItsFlags" },
+    ],
+    expected: "The usage text of sok --help lists the describe command with its flags in both hosts, so the command that both hosts run is discoverable from the help text.",
+    levels: ["unit"],
+  },
+  {
     id: "F718-7",
     implementation: [
       { file: "packages/host/go/src/endpoint.go", symbol: "func (e *Endpoint) releasePresses(c *endpointConn) {" },
@@ -3828,6 +3871,21 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/setup_test.rs", id: "setup_environment_prints_the_variables" },
     ],
     expected: "The login shell starts with only the variables of the login session, sok setup environment prints every variable, and every sidecar starts from that environment after its read.",
+    levels: ["unit"],
+  },
+  {
+    id: "F890",
+    implementation: [
+      { file: "packages/sok/rust/src/registration.rs", symbol: "pub fn registered_sok(sok: &Path) -> Result<PathBuf, String> {" },
+      { file: "packages/sok/go/src/registration.go", symbol: "func (s Setup) registeredSok() (string, error) {" },
+    ],
+    tests: [
+      { file: "packages/sok/rust/tests/setup_test.rs", id: "mcp_install_registers_the_running_sok" },
+      { file: "packages/sok/go/tests/setup_test.go", id: "TestMcpInstallRegistersTheRunningSok" },
+      { file: "packages/sok/rust/tests/platform/darwin/setup_test.rs", id: "mcp_install_requires_a_bundle_sok" },
+      { file: "packages/sok/go/tests/platform/darwin/setup_test.go", id: "TestMcpInstallRequiresABundleSok" },
+    ],
+    expected: "sok mcp install registers the running sok by its path, which holds no version, changes nothing when that registration is current, and replaces another registration; the running sok must be the sok of an application bundle on macOS.",
     levels: ["unit"],
   },
   {
@@ -12592,7 +12650,7 @@ const FEATURE_LINKS = [
   {
     id: "F336",
     implementation: [
-      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.42"' },
+      { file: "scripts/check-versions.mjs", symbol: 'export const RELEASE = "0.0.44"' },
     ],
     tests: [
       { file: "scripts/test/versions.test.mjs", id: "every declared workspace version is the release candidate" },
@@ -15468,7 +15526,7 @@ export function auditFeatureLinks(features, files, readSource = (file) => readFi
 // F510 records execution of existing suites and introduces no product capability.
 // F673 makes stall_watch_test wait for the states of the run loop instead of fixed run times; it changes no runtime capability.
 // F676 makes surface_keyboard_test judge the given keys when the event queue is empty instead of after a fixed interval; it changes no runtime capability.
-const NON_CAPABILITY_COMPLETIONS = new Set(["F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
+const NON_CAPABILITY_COMPLETIONS = new Set(["F887", "F886", "F883-1", "F873", "F872", "F871", "F870", "F869", "F867-11", "F867-10", "F867-9", "F867-8", "F867-7", "F867", "F523", "F866", "F865", "F864", "F863","F862", "F861", "F860", "F859", "F858", "F857", "F856", "F855", "F854", "F853", "F852", "F851", "F850", "F849", "F848", "F847", "F846", "F845", "F835", "F843", "F842", "F841", "F840", "F839", "F838", "F837", "F836", "F834", "F833", "F832", "F830-3", "F830-2", "F830-1", "F830", "F825-1", "F829", "F827-1", "F827", "F828", "F826", "F825", "F820-1", "F823-1", "F824", "F822", "F823", "F821", "F819", "F818", "F817", "F816", "F814", "F813", "F812", "F811", "F810", "F809", "F808", "F805", "F804", "F803", "F802", "F801", "F800", "F799", "F795-5", "F798", "F795-1-1", "F795-7", "F796", "F795-2", "F795-1", "F788", "F676", "F673", "F510", "F664-1", "F648", "F646", "F582", "F497", "F496", "F494", "F492", "F495", "F493", "F491", "F490", "F489", "F488", "F639", "F637", "F629", "F486", "F487", "F485", "F484", "F435-8-2", "F483-1", "F435-8-1", "F435-7", "F483", "F482", "F435-6", "F631", "F481", "F479", "F435-5", "F478", "F477", "F476", "F474", "F475", "F473", "F472", "F471", "F239-276", "F97", "F16", "F470", "F469", "F468", "F466", "F467", "F465", "F463", "F464", "F561", "F581", "F462", "F453", "F461", "F460", "F459", "F458", "F457", "F455", "F435-4", "F435-3", "F435-2", "F443", "F454", "F446-2", "F446", "F452", "F451", "F450-1", "F447-2", "F447-1", "F450", "F449", "F448", "F446-1", "F445", "F532", "F524", "F521", "F517", "F503", "F433", "F239-273", "F239-273-1", "F239-273-2", "F432", "F431", "F402", "F401", "F292-70-5", "F400", "F317", "F394", "F393-2", "F393-1", "F393", "F392", "F391", "F390", "F389", "F386-7", "F387", "F382", "F385", "F383", "F325", "F379", "F331-1", "F330-1", "F378", "F367", "F366", "F364", "F363", "F361", "F360", "F359", "F357", "F355", "F334", "F329", "F292-34", "F314", "F240", "F239-289", "F239-286", "F239-285", "F239-279", "F239-287", "F239-284", "F239-275", "F239-274", "F239-268", "F239-190", "F239-228", "F239-227", "F239-217", "F239-215", "F205", "F252", "F13", "F25", "G1.4-2", "R2", "R4", "R6", "V3", "F96", "F99", "F99.1", "F99.2", "F99.3", "F99.4", "F106", "F108", "F194", "F206", "F211", "F214-1", "F215", "F216", "F243", "F247", "F253", "F256", "F257-2", "F261", "F266", "F267", "F239-47-5", "F239-47-34", "F239-113", "F239-113-2", "F239-114", "F239-114-3", "F239-115", "F239-116", "F239-117", "F239-120", "F239-126", "F239-129", "F239-135", "F239-138", "F239-140", "F239-142", "F239-71", "F239-195", "F239-198", "F239-47-30-4", "F239-199", "F239-202", "F239-203", "F239-244", "F239-246", "F239-248", "F239-249", "F239-250", "F239-251", "F239-253", "F239-254", "F239-256", "F239-257", "F239-258"]);
 
 // Completed capabilities whose implementation and tests are in a plugin or sidecar repository: those that
 // moved there (R1-5, docs/spec/plugins.md#repositories) and changes made there (F98, F100, F101, F109, and F203, the service exits of vt item S66), the window checks of plugins (F110) and the registry listing of the hwp plugin (F141, registry items G37 and G38). Core cannot read

@@ -71,10 +71,10 @@ fn mcp_install_registers_once() {
     assert_eq!(calls(&machine), vec![add_call(&sok)]);
 }
 
-// contract: cli.mcp.install-registers-the-first-sok-on-path
+// contract: cli.mcp.install-registers-the-running-sok
 #[test]
-fn mcp_install_registers_the_first_sok_on_path() {
-    let machine = Machine::new("mcp-first");
+fn mcp_install_registers_the_running_sok() {
+    let machine = Machine::new("mcp-running");
     let first = machine.bundle_sok("First.app");
     let second = machine.bundle_sok("Second.app");
     let path = path_of(&[
@@ -89,14 +89,10 @@ fn mcp_install_registers_the_first_sok_on_path() {
     let run_install = run_sok(&second, &["mcp", "install"], &variables);
     assert_eq!(run_install.code, 0, "{}", run_install.stderr);
     assert_eq!(
-        run_install.stdout,
-        format!(
-            "{{\n  \"registration\": {{\n    \"type\": \"stdio\",\n    \"command\": \"{}\",\n    \"args\": [\n      \"mcp\"\n    ],\n    \"env\": {{}}\n  }},\n  \"state\": \"registered\",\n  \"running\": \"{}\"\n}}\n",
-            first.display(),
-            second.display()
-        )
+        run_install.json(),
+        serde_json::json!({"registration": entry(&second), "state": "registered"})
     );
-    assert_eq!(calls(&machine), vec![add_call(&first)]);
+    assert_eq!(calls(&machine), vec![add_call(&second)]);
     let check = run_sok(&second, &["setup", "check"], &variables);
     let parts = check.json()["parts"].clone();
     let mcp = parts
@@ -107,18 +103,26 @@ fn mcp_install_registers_the_first_sok_on_path() {
         .expect("mcp part")
         .clone();
     assert_eq!(mcp["state"], "ok", "{mcp}");
-    // Without a sok on PATH the running sok is registered and the output has no running.
-    let alone = Machine::new("mcp-alone");
-    let sok = alone.bundle_sok("Alone.app");
-    let path = alone.claude_path();
-    let run_alone = run_sok(
-        &sok,
-        &["mcp", "install"],
-        &[("HOME", &alone.home_text()), ("PATH", &path)],
+    // A second install from the same bundle with the current registration changes nothing.
+    let again = run_sok(&second, &["mcp", "install"], &variables);
+    assert_eq!(
+        again.json(),
+        serde_json::json!({"registration": entry(&second), "state": "current"})
+    );
+    assert_eq!(calls(&machine), vec![add_call(&second)]);
+    // An install from the first bundle replaces the registration of the second one.
+    let from_first = run_sok(&first, &["mcp", "install"], &variables);
+    assert_eq!(
+        from_first.json(),
+        serde_json::json!({"registration": entry(&first), "state": "registered"})
     );
     assert_eq!(
-        run_alone.json(),
-        serde_json::json!({"registration": entry(&sok), "state": "registered"})
+        calls(&machine),
+        vec![
+            add_call(&second),
+            "claude mcp remove --scope user soksak".to_string(),
+            add_call(&first),
+        ]
     );
 }
 

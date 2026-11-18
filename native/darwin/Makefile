@@ -143,7 +143,7 @@ $(PKGCONFIG): pkgconfig-current | $(BUILD)
 	  'dynamic_library=$(MYGO_LIBRARY)' \
 	  'Name: soksak-darwin' \
 	  'Description: Shared macOS window, webview, and surface layout code' \
-	  'Version: 0.0.42' \
+	  'Version: 0.0.44' \
 	  'Cflags: -I$(CURDIR)/src $(MINIMUM)' \
 	  'Libs: -L$(BUILD) -lsoksak-darwin $(FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi
@@ -255,6 +255,7 @@ $(BUILD)/capture_presentation_test: tests/capture_presentation_test.m tests/supp
 # through the test runner (scripts/native-tests.mjs), which writes the start, the end and the elapsed time of each; NATIVE_TEST_ONLY=<text>
 # runs only the entries that contain the text.
 NATIVE_TESTS = observe_test \
+  event_wait_test \
   ime_cli_test \
   image_region_input_transaction_test \
   image_region_hangul_test \
@@ -284,7 +285,6 @@ NATIVE_TESTS = observe_test \
   window_motion_test \
   input_inject_test \
   input_virtual_test \
-  input_cursor_rect_test \
   input_activate_test \
   input_virtual_key_equivalent_test \
   input_key_time_test \
@@ -391,7 +391,8 @@ NATIVE_TESTS = observe_test \
 
 # The native end-to-end tests: they need the presentation times and the window server images of a display, so they run only
 # locally through e2e (docs/operations/examples.md#test-kinds). test runs the unit tests of NATIVE_TESTS.
-NATIVE_E2E_TESTS = window_titlebar_layout_test \
+NATIVE_E2E_TESTS = input_cursor_rect_test \
+  window_titlebar_layout_test \
   window_titlebar_reload_test \
   surface_layout_test \
   capture_presentation_test \
@@ -568,7 +569,7 @@ $(HOST_TEST_PKGCONFIG): pkgconfig-current Makefile | $(BUILD)
 	  'callback_worker_library=$(HOST_CALLBACK_WORKER_LIBRARY)' \
 	  'Name: soksak-host-test' \
 	  'Description: Native-only test sampler, recorder, dispatcher and transfer frame support' \
-	  'Version: 0.0.42' \
+	  'Version: 0.0.44' \
 	  'Cflags: -I$(CURDIR)/tests/support $(MINIMUM)' \
 	  'Libs: -L$(HOST_TEST_BUILD) -lhost_test $(HOST_TEST_FRAMEWORKS) $(MINIMUM)' > $@.next
 	@if cmp -s $@.next $@; then rm $@.next; else mv $@.next $@; fi

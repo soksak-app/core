@@ -42,6 +42,14 @@ func TestUnknownCommandExitsWithUsage(t *testing.T) {
 	}
 }
 
+// contract: cli.usage.lists-describe
+func TestHelpListsDescribeWithItsFlags(t *testing.T) {
+	code, stdout, stderr := run("--help")
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "\n  describe [window] [--surface S] [--full] [--after KEY] [--limit N]\n") {
+		t.Fatalf("code %d stderr %q stdout %q", code, stderr, stdout)
+	}
+}
+
 // unwritable is a standard error that always rejects writes.
 type unwritable struct{}
 

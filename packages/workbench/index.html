@@ -514,6 +514,11 @@ function drawBars() {
     chromeActs.replaceChildren(...wanted);
   }
   for (const { side, button } of sidebarSwitches) button.dataset.on = String(value(side));
+  const arrange = value("cardArrange") === "even" ? "layout-grid" : "columns-3";
+  if (balanceButton.dataset.icon !== arrange) {
+    balanceButton.innerHTML = icon(arrange);
+    balanceButton.dataset.icon = arrange;
+  }
   const mode = modeName() === "dark" ? "sun" : "moon";
   if (modeButton.dataset.icon !== mode) {
     modeButton.innerHTML = icon(mode);
@@ -526,10 +531,12 @@ installBrandLogo(document.querySelector(".brand__logo"));
 
 /* Chrome buttons: project list, card auto-arrange, a switch for the sidebar of each window side, light/dark, settings. The command arguments
    are computed from the values at the time of the press. Each button has a name, so a new button moves no other. */
+// The icon shows the operation that the setting cardArrange chooses; it changes with the setting (chrome draw below).
+const balanceButton = act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance");
 const layoutButtons = [
   act("projects", "프로젝트 목록", false, "core.projects.browse", {}, "core.chrome.projects"),
   // Keeps the layout and gives the cards a fair share (packages/soksak/docs/layout.md#balancing).
-  act("columns-3", "카드 자동 정렬", false, "core.layout.balance", {}, "core.chrome.balance"),
+  balanceButton,
 ];
 // The switch of each side shows or hides its window sidebar, in the order left, right, top, bottom (docs/spec/external-sidebars.md#window-controls),
 // and writes the scope that the applied value of the side comes from (docs/spec/settings.md#scope-of-a-control).

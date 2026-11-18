@@ -970,6 +970,76 @@ export class Soksak {
   }
 
   /**
+   * Replaces the arrangement with an equal grid of the cards in their current
+   * order, and removes every split and merge (packages/soksak/docs/layout.md#even-arrangement).
+   * The grid has `rows * columns` equal to the card count `n` or `n + 1`; one
+   * empty card is added when `n + 1` is chosen. Among the grids whose cells are at
+   * least `minSize` on both axes, the one whose cell is closest to square is taken,
+   * and a tie goes to the grid without an empty card. Returns false, and changes
+   * nothing, when no grid keeps every cell at least `minSize`.
+   */
+  arrange(mode: 'even'): boolean {
+    if (mode !== 'even') throw new Error(`unknown arrangement "${String(mode)}"`);
+    const n = this.list.length;
+    if (n === 0) return false;
+    // The drawn size of a card along an axis with `count` cells: a card at the border
+    // insets by half a gap on one side only, so the line spacing carries that inset.
+    const cellSize = (count: number, size: number): number =>
+      count === 1 ? size - this.gap : (size - (count - 1) * this.gap) / count;
+    let best: { rows: number; columns: number; empty: number; skew: number } | null = null;
+    for (let rows = 1; rows <= n + 1; rows++) {
+      const columns = Math.ceil(n / rows);
+      const empty = rows * columns - n;
+      if (empty > 1) continue;
+      const cellW = cellSize(columns, this.w);
+      const cellH = cellSize(rows, this.h);
+      if (cellW < this.min || cellH < this.min) continue;
+      const skew = Math.abs(Math.log(cellW / cellH));
+      const better =
+        !best ||
+        skew < best.skew - 1e-9 ||
+        (Math.abs(skew - best.skew) <= 1e-9 && empty < best.empty);
+      if (better) best = { rows, columns, empty, skew };
+    }
+    if (!best) return false;
+    const { rows, columns, empty } = best;
+    // Lines of one axis: the border lines are at the plane edges, and every inner line
+    // is at the next cell start plus the gap that the border insets take.
+    const lines = (count: number, size: number): number[] => {
+      if (count === 1) return [0, size];
+      const d = cellSize(count, size);
+      const out = [0, d + this.gap / 2];
+      for (let i = 2; i < count; i++) out.push(out[i - 1] + d + this.gap);
+      out.push(size);
+      return out;
+    };
+    const xs = lines(columns, this.w).map((value) => value / this.w);
+    const ys = lines(rows, this.h).map((value) => value / this.h);
+    const cards = this.list.map((card, k) => {
+      const { width: _width, height: _height, ...rest } = card;
+      return { ...rest, c0: k % columns, c1: (k % columns) + 1, r0: Math.floor(k / columns), r1: Math.floor(k / columns) + 1 };
+    });
+    for (let k = 0; k < empty; k++) {
+      const at = n + k;
+      cards.push({
+        id: this.nextId(),
+        c0: at % columns,
+        c1: (at % columns) + 1,
+        r0: Math.floor(at / columns),
+        r1: Math.floor(at / columns) + 1,
+        fixed: false,
+      });
+    }
+    this.replace({
+      xs,
+      ys,
+      cards,
+      paidBy: Object.fromEntries(this.paidBy),
+    });
+    return true;
+  }
+
+  /**
    * Gives every card a fair share of the plane and keeps the arrangement.
    *
    * The cuts of the arrangement stay as they are; each gives its sides space in

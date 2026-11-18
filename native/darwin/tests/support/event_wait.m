@@ -42,3 +42,30 @@ void eventWait(NSString *what, BOOL (^done)(void)) {
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e10, true);
     }
 }
+
+NSString *eventWaitUntil(NSString *what, NSTimeInterval limit, BOOL (^done)(void), NSString *(^measure)(void)) {
+    if (!NSThread.isMainThread) {
+        fprintf(stderr, "FAIL: the wait for %s does not run on the main thread\n", what.UTF8String);
+        exit(1);
+    }
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:limit];
+    if (done()) return nil;
+    fprintf(stdout, "WAIT %s\n", what.UTF8String);
+    fflush(stdout);
+    for (;;) {
+        if (NSApp) {
+            NSEvent *event;
+            while ((event = [NSApp nextEventMatchingMask:NSEventMaskAny untilDate:NSDate.distantPast
+                inMode:NSDefaultRunLoopMode dequeue:YES])) [NSApp sendEvent:event];
+        }
+        if (done()) return nil;
+        NSTimeInterval remaining = [deadline timeIntervalSinceNow];
+        if (remaining <= 0) {
+            NSString *state = measure();
+            fprintf(stdout, "LIMIT %s after %.3f s: %s\n", what.UTF8String, limit, state.UTF8String);
+            fflush(stdout);
+            return state;
+        }
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, MIN(remaining, 1.0), true);
+    }
+}

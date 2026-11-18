@@ -83,14 +83,25 @@ func (s Setup) skillFolders() ([]skillFolder, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	home, err := s.Environment.home()
+	if err != nil {
+		return nil, nil, err
+	}
+	// Codex reads the skills of ~/.agents/skills, so the install creates <home>/.agents when <home>/.codex is a directory.
+	codexFolder := filepath.Join(home, ".agents")
+	codexHome := false
+	if info, err := os.Stat(filepath.Join(home, ".codex")); err == nil && info.IsDir() {
+		codexHome = true
+	}
 	var found []skillFolder
 	seen := map[string]bool{}
 	for _, folder := range folders {
 		info, err := os.Stat(folder)
-		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || (err == nil && !info.IsDir()) {
+		created := codexHome && folder == codexFolder && errors.Is(err, fs.ErrNotExist)
+		if !created && (errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR) || (err == nil && !info.IsDir())) {
 			continue
 		}
-		if err != nil {
+		if err != nil && !created {
 			return nil, nil, fileError(folder, err)
 		}
 		dir := filepath.Join(folder, "skills", skillName)
