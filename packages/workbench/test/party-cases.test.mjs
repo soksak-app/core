@@ -56,9 +56,13 @@ for (const item of cases) {
         assert.deepEqual(reply, step.returns, `${step.call} ${call}: reply`);
         continue;
       }
-      // The reply holds the record of the party with its outline; a case states the fields of the record that it checks.
-      const stated = party && Object.fromEntries(Object.keys(party).map((key) => [key, asCase(reply.party ?? {})[key]]));
-      assert.deepEqual(party === undefined ? rest : { ...rest, party: stated }, step.returns, `${step.call} ${call}: reply`);
+      // Each member that the returns name is compared with the reply: a member other than party is compared as a whole.
+      assert.deepEqual(Object.fromEntries(Object.keys(rest).map((key) => [key, reply[key]])), rest, `${step.call} ${call}: members`);
+      // The party record in the reply carries its outline; a case states only the fields of the record that it checks.
+      if (party !== undefined) {
+        const stated = Object.fromEntries(Object.keys(party).map((key) => [key, asCase(reply.party ?? {})[key]]));
+        assert.deepEqual(stated, party, `${step.call} ${call}: party`);
+      }
     }
   });
 }

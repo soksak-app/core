@@ -52,6 +52,35 @@ func sortedKeys(set map[float64]bool) []float64 {
 	return keys
 }
 
+// sameReply compares a reply with the returns of a step as the owning JavaScript test does: each member that the returns name is
+// equal in the reply, and a party member is compared on the keys that the returns name, because a case states the fields it checks.
+func sameReply(want, got any) bool {
+	wantMap, wantOK := want.(map[string]any)
+	gotMap, gotOK := got.(map[string]any)
+	if !wantOK || !gotOK {
+		return false
+	}
+	for key, value := range wantMap {
+		if key == "party" {
+			wantParty, isObject := value.(map[string]any)
+			if !isObject {
+				if !reflect.DeepEqual(value, gotMap[key]) {
+					return false
+				}
+				continue
+			}
+			if !subsetOf(wantParty, gotMap[key]) {
+				return false
+			}
+			continue
+		}
+		if !reflect.DeepEqual(value, gotMap[key]) {
+			return false
+		}
+	}
+	return true
+}
+
 func TestPartyCasesRunEverySteps(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
@@ -109,8 +138,8 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 				if err := json.Unmarshal(s.Returns, &want); err != nil {
 					t.Fatal(err)
 				}
-				if !subsetOf(want, got) {
-					t.Fatalf("%s: step %d %s: reply %s does not hold the returns %s", kase.Name, i, s.Call, text, s.Returns)
+				if !sameReply(want, got) {
+					t.Fatalf("%s: step %d %s: reply %s, want the returns %s", kase.Name, i, s.Call, text, s.Returns)
 				}
 			}
 		})
