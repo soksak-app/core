@@ -3,7 +3,7 @@
 
 [한국어](CHANGELOG.ko.md)
 
-## Unreleased
+## 2026-11-18
 
 - F897: The Rust host test of the unwatch bound waits for the page call with a bound instead of reading the call list at once, which failed when the page call was not yet recorded.
 - F895: The card auto-arrange command runs the setting `cardArrange` (`resize`, the default, keeps the arrangement; `even` runs `arrange("even")`), which the settings window shows as a choice. The toolbar icon of the command changes with the setting.
