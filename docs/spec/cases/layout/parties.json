@@ -1078,6 +1078,66 @@
           }
         }
       ]
+    },
+    {
+      "name": "update sets the party color to a theme color",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.update",
+          "params": {
+            "party": "p1",
+            "color": "#ace06c"
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "a",
+                "b"
+              ],
+              "leader": null,
+              "color_token": "party-4",
+              "leaderColor": null,
+              "reason": "updated"
+            },
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
