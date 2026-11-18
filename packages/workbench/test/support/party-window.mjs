@@ -109,6 +109,9 @@ async function start(cardIds) {
       const { result } = await get("core.parties");
       for (const party of result) await registry.run("core.party.delete", { party: party.id });
     },
-    close: () => dom.window.close(),
+    // A test calls close in its finally block. The page is shared by the tests of the process, so close keeps the document: closing the
+    // JSDOM window removes the plane element, and a later test would read a plane that the document no longer holds. The process ends
+    // with the page.
+    close: () => {},
   };
 }
