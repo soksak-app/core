@@ -443,6 +443,70 @@ fn claude_text_that_is_not_a_string_is_refused() {
     );
 }
 
+// contract: conversation.refuses-a-content-item-that-is-not-an-object
+#[test]
+fn claude_content_item_that_is_not_an_object_is_refused() {
+    let home = Folder::new("conversation-content-item-claude");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".claude/projects/-work-core/session.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": "question"}}),
+            json!({"type": "assistant", "cwd": cwd, "message": {"role": "assistant", "content": ["plain string item"]}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: line 2 has a content item that is not an object with a string type\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
+// contract: conversation.refuses-a-content-item-that-is-not-an-object
+#[test]
+fn codex_content_item_without_a_string_type_is_refused() {
+    let home = Folder::new("conversation-content-item-codex");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-item.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "session_meta", "payload": {"id": "session", "cwd": cwd}}),
+            json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"text": "question"}]}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "codex", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: line 2 has a content item that is not an object with a string type\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
 // contract: conversation.refuses-a-message-content-of-the-wrong-type
 #[test]
 fn claude_message_content_that_is_neither_string_nor_list_is_refused() {
