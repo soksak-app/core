@@ -71,7 +71,7 @@ A layout change is a close, a move, a split, or a resize that changes which card
 - A closed card leaves its party.
 - A card that is moved or split away from its party, or whose move breaks the group, leaves the party. The remaining cards are divided into connected parts. The part that holds the leader stays with the leader. Without a leader, the part with the most cards stays. Only when the parts have equal numbers of cards does the part whose first card comes first in the space order stay. The space order is the order in which the space stores its cards ([persistence](projects.md#persistence)).
 - A party that keeps fewer than 2 cards is deleted, and its cards stay in the layout.
-- Each change records one reason in `reason` of the party state: `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed` or `updated`.
+- Each change records one reason in `reason` of the party state: `created` for a party made by `core.party.create`, `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed` or `updated`.
 
 ## Drawing
 

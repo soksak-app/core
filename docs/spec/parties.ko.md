@@ -71,7 +71,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - 닫힌 카드는 그 party를 떠난다.
 - 이동이나 분할로 party에서 떨어진 카드, 또는 그 이동이 묶음을 깨는 카드는 party를 떠난다. 남은 카드는 연결된 부분들로 나뉜다. leader가 있는 부분은 leader와 함께 남는다. leader가 없으면 카드가 가장 많은 부분이 남는다. 부분들의 카드 수가 같을 때만 space 순서에서 첫 카드가 앞선 부분이 남는다. space 순서는 space가 카드를 저장하는 순서다([영속성](projects.ko.md#저장)).
 - 카드가 2개 미만 남은 party는 지우며, 그 카드들은 배치에 남는다.
-- 각 변경은 party 상태의 `reason`에 이유 하나를 기록한다: `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed`, `updated`.
+- 각 변경은 party 상태의 `reason`에 이유 하나를 기록한다: `core.party.create`로 만든 party에는 `created`, 그 밖에는 `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed`, `updated`.
 
 ## 그리기
 
