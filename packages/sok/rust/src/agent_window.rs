@@ -1044,6 +1044,125 @@ fn agent_place(
 
 /// One page of the description of a window from the result of exposure.snapshot. agent is `agent` of the description, None for
 /// null. full gives the rows as the snapshot gives them; after and limit select the page.
+/// A party record of core.parties: its identifier, its cards and its leader (docs/spec/parties.md#storage).
+struct PartyRecord {
+    id: String,
+    cards: Vec<String>,
+    leader: Option<String>,
+}
+
+/// The core.parties value of exposure.snapshot as text, with its records; None when the snapshot has no core group.
+fn parties_of(groups: &[SnapshotGroup]) -> Result<Option<(Raw, Vec<PartyRecord>)>, Failure> {
+    let Some(group) = groups.iter().find(|group| group.owner == "core") else {
+        return Ok(None);
+    };
+    let statuses = group
+        .lists
+        .iter()
+        .find(|(kind, _)| *kind == "status")
+        .map(|(_, entries)| entries.as_slice())
+        .unwrap_or(&[]);
+    for raw in statuses {
+        let entry: serde_json::Value = serde_json::from_str(raw.get()).map_err(|_| {
+            Failure::Other(format!(
+                "exposure.snapshot has an unexpected status: {}",
+                raw.get()
+            ))
+        })?;
+        if entry.get("name").and_then(|name| name.as_str()) != Some("core.parties") {
+            continue;
+        }
+        let value = entry
+            .get("value")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        let unexpected = || {
+            Failure::Other(format!(
+                "core.parties of exposure.snapshot has an unexpected value: {value}"
+            ))
+        };
+        let mut records = Vec::new();
+        for record in value.as_array().ok_or_else(unexpected)? {
+            let id = record
+                .get("id")
+                .and_then(|id| id.as_str())
+                .ok_or_else(unexpected)?
+                .to_owned();
+            let cards = record
+                .get("cards")
+                .and_then(|cards| cards.as_array())
+                .ok_or_else(unexpected)?
+                .iter()
+                .map(|card| card.as_str().map(str::to_owned).ok_or_else(unexpected))
+                .collect::<Result<Vec<String>, Failure>>()?;
+            let leader = match record.get("leader") {
+                None | Some(serde_json::Value::Null) => None,
+                Some(leader) => Some(leader.as_str().ok_or_else(unexpected)?.to_owned()),
+            };
+            records.push(PartyRecord { id, cards, leader });
+        }
+        return Ok(Some((raw_text(value.to_string())?, records)));
+    }
+    Err(Failure::Other(
+        "exposure.snapshot has a core group without the core.parties status".into(),
+    ))
+}
+
+/// The layout with the party and the leader of each card; a card without a party has a null party and leader false.
+fn with_card_parties(layout: &RawValue, records: &[PartyRecord]) -> Result<Raw, Failure> {
+    let mut tree: serde_json::Value = serde_json::from_str(layout.get()).map_err(|error| {
+        Failure::Other(format!(
+            "exposure.snapshot has an unexpected layout: {error}"
+        ))
+    })?;
+    fn walk(node: &mut serde_json::Value, records: &[PartyRecord]) {
+        match node {
+            serde_json::Value::Object(map) => {
+                if let Some(card) = map.get("card").and_then(|card| card.as_str()).map(str::to_owned) {
+                    let mut party = serde_json::Value::Null;
+                    let mut leader = false;
+                    for record in records {
+                        if record.cards.contains(&card) {
+                            party = serde_json::Value::String(record.id.clone());
+                            leader = record.leader.as_deref() == Some(card.as_str());
+                        }
+                    }
+                    map.insert("party".into(), party);
+                    map.insert("leader".into(), serde_json::Value::Bool(leader));
+                    return;
+                }
+                for child in map.values_mut() {
+                    walk(child, records);
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for child in items {
+                    walk(child, records);
+                }
+            }
+            _ => {}
+        }
+    }
+    walk(&mut tree, records);
+    raw_text(tree.to_string())
+}
+
+/// Whether a status entry is a summary status: its summary member, false when absent or null, and an error when not a boolean.
+fn summary_status(raw: &RawValue) -> Result<bool, Failure> {
+    let unexpected = || {
+        Failure::Other(format!(
+            "exposure.snapshot has a status whose summary is not a boolean: {}",
+            raw.get()
+        ))
+    };
+    let entry: serde_json::Value = serde_json::from_str(raw.get()).map_err(|_| unexpected())?;
+    match entry.get("summary") {
+        None | Some(serde_json::Value::Null) => Ok(false),
+        Some(serde_json::Value::Bool(summary)) => Ok(*summary),
+        Some(_) => Err(unexpected()),
+    }
+}
+
 fn describe_window(
     snapshot: &str,
     agent: Option<Raw>,
@@ -1091,6 +1210,10 @@ fn describe_window(
         };
         for (kind, entries) in &group.lists {
             for entry in entries {
+                // Without full, a tab holds only its summary statuses (docs/spec/parties.md#describe).
+                if !full && *kind == "status" && group.owner == "surface" && !summary_status(entry)? {
+                    continue;
+                }
                 rows.push(entry_row(name, group, kind, entry, full)?);
             }
         }
@@ -1137,8 +1260,18 @@ fn describe_window(
     page.insert("total".into(), raw(&rows.len())?);
     page.insert("next".into(), null());
     if after.is_empty() {
+        // The first page holds the parties, which are the records of core.parties (docs/spec/parties.md#describe), and the
+        // cards carry their party. A surface description holds no core group, so it has no parties member (docs/spec/cli.md#window-description).
+        match parties_of(&groups)? {
+            Some((parties, records)) => {
+                page.insert("parties".into(), parties);
+                page.insert("layout".into(), with_card_parties(layout, &records)?);
+            }
+            None => {
+                page.insert("layout".into(), compacted(layout)?);
+            }
+        }
         page.insert("window".into(), compacted(window)?);
-        page.insert("layout".into(), compacted(layout)?);
         page.insert("plugins".into(), compacted(plugins)?);
         // default: a run outside the window of an agent has no agent place, which the page states as null.
         page.insert("agent".into(), agent.unwrap_or_else(null));
