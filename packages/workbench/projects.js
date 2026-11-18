@@ -13,6 +13,7 @@ import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
 import { sectionSurfacePlugin } from "./registry.js";
+import { loadParties, storedParties } from "./parties.js";
 import { spaceSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
 
 let store;
@@ -250,6 +251,7 @@ export function begin(snapshot) {
   begun = opened.id;
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
+  loadSpaceParties(opened, opened.spaces.find((s) => s.id === opened.activeSpaceId));
   listener.load(layout, opened.activeSpaceId);
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
@@ -460,9 +462,15 @@ export function readStoredSpace(project, space) {
   return { ...space, parties: space.parties };
 }
 
-/** Returns the space object to store. It always holds the `parties` member, an array (docs/spec/parties.md#storage). */
+/** Returns the space object to store. It holds the `parties` member only when the space has parties (docs/spec/parties.md#storage). */
 export function writeStoredSpace(space) {
-  return { ...space, parties: space.parties ?? [] };
+  const { parties, ...rest } = space;
+  return parties?.length ? { ...rest, parties } : rest;
+}
+
+/** Replaces the parties of the window with the stored parties of a space that is shown (docs/spec/parties.md#storage). */
+function loadSpaceParties(project, space) {
+  loadParties(readStoredSpace(project, space).parties);
 }
 
 export function keep(path) {
@@ -472,10 +480,11 @@ export function keep(path) {
   const space = project.spaces.find((s) => s.id === project.activeSpaceId);
   const previous = space.layout;
   space.layout = listener.save(path);
+  space.parties = storedParties();
   // The tabs that the previous stored layout of this space held and the saved one does not hold leave their origins (docs/spec/projects.md#tab-origin).
   // default: a keep without a writing path is the store of the drawn layout after a render.
   forgetTabsLeft(previous.state.cards, space.layout.state.cards, `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
-  const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
+  const patch = { spaces: project.spaces.map(writeStoredSpace), activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
   savedLayout = key;
@@ -540,6 +549,7 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
   changed();
   savedLayout = "";
+  loadSpaceParties(project, project.spaces.find((s) => s.id === project.activeSpaceId));
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout, project.activeSpaceId);
   changed();
   // Replace the start-document preview synchronously before waking mounts that could declare native composition.
@@ -652,6 +662,7 @@ export const move = (id, delta) => store.move(id, delta);
 
 function restore(path) {
   const p = active();
+  loadSpaceParties(p, p.spaces.find((s) => s.id === p.activeSpaceId));
   listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout, p.activeSpaceId);
   changed();
   keep(path);

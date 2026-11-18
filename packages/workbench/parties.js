@@ -165,6 +165,20 @@ function record(party) {
   };
 }
 
+/** The parties of the window in the form of the storage member of a space (docs/spec/parties.md#storage). */
+export function storedParties() {
+  return parties.map(({ id, cards, leader, color, leaderColor }) => ({ id, cards: [...cards], leader, color, leaderColor }));
+}
+
+/**
+ * Replaces the parties of the window with the parties of the shown space (docs/spec/parties.md#storage). A loaded party changes no
+ * composition, so its reason is null.
+ */
+export function loadParties(stored) {
+  parties = stored.map(({ id, cards, leader, color, leaderColor }) => ({ id, cards: [...cards], leader, color, leaderColor, reason: null }));
+  notify();
+}
+
 /** The list of the party records, one per party (core.parties). */
 export function partyList() {
   return parties.map(record);
