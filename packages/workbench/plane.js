@@ -1814,7 +1814,7 @@ export function openCardTools(id) {
     active: b.getAttribute("aria-pressed") === "true",
   }));
   // The group item opens the chooser of the touching cards (docs/spec/parties.md#card-menu).
-  if (groupCandidates(id).length) items.push({ key: "group", name: "group", mark: "", svg: "", expose: "core.party.menu.group", active: false });
+  if (groupCandidates(id).length) items.push({ key: "group", name: "카드 묶기", mark: "", svg: "", expose: "core.party.menu.group", active: false });
   // The party items of the card: each is an element of its name that runs its own command (docs/spec/parties.md#card-menu).
   for (const [index, item] of partyMenuItems(id).entries()) {
     items.push({ key: `party-${index}`, name: item.label, mark: "", svg: "", expose: item.element, command: item.command, params: item.params, active: false });
@@ -1838,10 +1838,10 @@ export function openCardTools(id) {
 function openGroupChooser(anchor, cardId, chosen) {
   const items = groupCandidates(cardId).map((other) => ({ key: `card-${other}`, name: other, mark: "", svg: "", active: chosen.includes(other) }));
   if (chosen.length) {
-    items.push({ key: "confirm", name: `group ${chosen.length + 1} cards`, mark: "", svg: "", expose: "core.party.menu.group",
+    items.push({ key: "confirm", name: `카드 ${chosen.length + 1}개 묶기`, mark: "", svg: "", expose: "core.party.menu.group",
       command: "core.party.create", params: { cards: [cardId, ...chosen] }, active: false });
   }
-  openLayer(anchor, "group cards", items, (key) => {
+  openLayer(anchor, "묶을 카드 고르기", items, (key) => {
     const other = key.slice("card-".length);
     return openGroupChooser(anchor, cardId, chosen.includes(other) ? chosen.filter((card) => card !== other) : [...chosen, other]);
   });

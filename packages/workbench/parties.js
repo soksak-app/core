@@ -166,16 +166,18 @@ export function partyMenuItems(card) {
   const items = [];
   if (party) {
     items.push(party.leader === card
-      ? { element: "core.party.menu.leader", label: "remove leader", command: "core.party.update", params: { party: party.id, leader: null } }
-      : { element: "core.party.menu.leader", label: "make leader", command: "core.party.update", params: { party: party.id, leader: card } });
+      ? { element: "core.party.menu.leader", label: "대표 카드 해제", command: "core.party.update", params: { party: party.id, leader: null } }
+      : { element: "core.party.menu.leader", label: "대표 카드로 지정", command: "core.party.update", params: { party: party.id, leader: card } });
     for (const token of PARTY_TOKENS) {
-      items.push({ element: "core.party.menu.color", label: `color ${token}`, command: "core.party.update", params: { party: party.id, color: shownPalette()[token] } });
+      items.push({ element: "core.party.menu.color", label: `색 ${token.slice("party-".length)}`, command: "core.party.update", params: { party: party.id, color: shownPalette()[token] } });
     }
   }
   // A take removes the card from its holder, so a card in no party has no take item (docs/spec/parties.md#card-menu).
   for (const other of party ? parties : []) {
     if (other === party || !other.cards.some((member) => touches(cell, cellOf(member)))) continue;
-    items.push({ element: "core.party.menu.take", label: `take into ${other.id}`, command: "core.party.add", params: { party: other.id, card, take: true } });
+    // A take that leaves its former party with fewer than 2 cards deletes that party, and the label states it (docs/spec/parties.md#card-menu).
+    const note = party.cards.length === 2 ? `, 파티 ${party.id}가 사라짐` : "";
+    items.push({ element: "core.party.menu.take", label: `파티 ${other.id}에 합치기${note}`, command: "core.party.add", params: { party: other.id, card, take: true } });
   }
   return items;
 }
