@@ -92,6 +92,13 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - `core.parties`는 party 구성이 바뀔 때만 바뀐다. 구성은 묶기, 빼기, leader, 색을 뜻한다. member 카드의 작업 상태는 그 변경에 들지 않는다. 그 상태는 탭 자신의 status를 `sok status <name> --surface <tab> --watch`로 보며([명령줄](cli.ko.md#명령)의 규정), 그래서 작업을 시작하는 terminal이 `core.parties`를 바꾸지 않는다.
 - `sok status core.parties`와 MCP 도구 `status_get`은 목록 전체를 돌려준다.
 
+## 호스트 호출
+
+- party의 값을 바꾸는 명령은 space를 한 번 쓴다. 그 쓰기는 [영속성](projects.ko.md#저장)의 배치 쓰기이며, 그리기가 끝난 뒤에 응답한다([그리기](#그리기)).
+- 감시 중인 `core.parties`의 값이 바뀌면, 그 명령의 응답 전에 페이지는 `{name, value}`를 실은 호출 `exposureChanged`를 보낸다([exposure](exposure.ko.md)). 값은 새 party 기록 목록이며, 바뀔 때마다 한 번 보낸다.
+- 거부된 명령은 아무것도 쓰지 않으며, `exposureChanged`도 배치 쓰기도 보내지 않는다.
+- 카드의 작업 상태 변화는 `core.parties`에 대한 `exposureChanged`를 보내지 않는다.
+
 ## 창 설명
 
 `sok describe`와 `window_describe`는 창의 party 목록으로 시작한다. 목록은 `core.parties`와 같은 party 기록이다. 배치의 카드마다 카드 상태의 `party`와 `leader`를 담고, 탭마다 카드 상태와 같은 `status`를 담는다. 설명은 탭마다 summary를 담으며, `--full`은 탭마다 모든 상태 값을 준다([창 설명](cli.ko.md#창-설명)).

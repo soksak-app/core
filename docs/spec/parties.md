@@ -92,6 +92,13 @@ Three queries return the member state of cards. They share one card state shape 
 - `core.parties` changes only when the composition of parties changes: a grouping, a removal, a leader or a color. The work state of a member card is not part of that change. It is watched through the status of the tab itself, `sok status <name> --surface <tab> --watch`, as [command line](cli.md#commands) specifies, so a terminal that starts work does not change `core.parties`.
 - `sok status core.parties` and the MCP tool `status_get` return the whole list.
 
+## Host calls
+
+- A command that changes the parties of a space writes that space once, in the layout write of [persistence](projects.md#persistence), and replies after the change is drawn ([drawing](#drawing)).
+- When the value of `core.parties` changes while a watch of it is held, the page sends the call `exposureChanged` with `{name, value}` ([exposure](exposure.md)) with the new list of party records, once for each such change, before the reply of the command that caused it.
+- A refused command writes nothing and sends neither `exposureChanged` nor a layout write.
+- A change of the work state of a card sends no `exposureChanged` for `core.parties`.
+
 ## Describe
 
 `sok describe` and `window_describe` begin with the list of the window's parties, the same party records as `core.parties`. Each card of the layout carries the card state fields `party` and `leader`, and each tab carries its `status` as in the card state. The description holds the summary of each tab; `--full` gives every status value of each tab ([window description](cli.md#window-description)).
