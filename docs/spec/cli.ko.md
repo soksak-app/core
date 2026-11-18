@@ -43,6 +43,7 @@
 | `sok plugin list` | 설치된 plugin을 나열한다 |
 | `sok registry use <index>` | 설치가 읽는 registry index를 정한다 |
 | `sok registry build <directory>` | Registry를 검증하고 그 `index.json`을 쓴다 |
+| `sok message send <folder> <text>` | `SOKSAK_SURFACE`가 밝히는 surface의 message 하나를 folder `<folder>`(절대 경로)에 쓴다. Text는 UTF-8이며 최대 64 KiB다. 더 큰 text는 한도를 밝히는 명시적 error로 실패하며 파일을 쓰지 않는다. 명령은 text를 임시 이름 `.tmp-<random>`으로 folder에 쓰고, file을 닫은 뒤 `<from>.<token>.txt`로 rename한다. Rename이 message가 보이는 시점이다([message](messaging.md#message)). 애플리케이션에 연결하지 않으며, `SOKSAK_SURFACE`가 없으면 명시적 error로 실패한다. 쓴 message 파일의 이름을 `{path}`로 출력하며, 없는 folder는 파일 작업처럼 실패한다([출력과 종료 상태](#출력과-종료-상태)) |
 
 선언된 command 이름에는 점이 있으므로(`core.card.split`, `terminal.input`) 위의 명령 단어와 겹치지 않는다.
 
