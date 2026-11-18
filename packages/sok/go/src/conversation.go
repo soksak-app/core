@@ -152,9 +152,9 @@ func readConversation(agent, home, cwd string) (string, []any, int, error) {
 	return chosen, messages, skipped, nil
 }
 
-// claudeFolderName is the folder name of a Claude Code session (the bundle of Claude Code 2.1.325): each UTF-16 code unit that is not
-// an ASCII letter or digit is written as `-`. A name longer than 200 characters is its first 200 characters, `-` and the base-36
-// text of the absolute value of the hash of the working directory.
+// claudeFolderName is the folder name of a Claude Code session: each UTF-16 code unit that is not an ASCII letter or digit is
+// written as `-`. A name longer than 200 characters is its first 200 characters, `-` and the base-36 text of the absolute value of
+// the hash of the working directory (docs/spec/agent-conversation.md#claude-code; the length rule is unverified).
 func claudeFolderName(cwd string) string {
 	units := utf16.Encode([]rune(cwd))
 	name := make([]byte, 0, len(units))
@@ -453,9 +453,23 @@ func codexMessages(path string, records []numberedRecord) ([]any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
+		images := 0
+		for _, item := range items {
+			if object, _ := item.(map[string]any); object["type"] == "input_image" {
+				images++
+			}
+		}
 		role, _ := payload["role"].(string)
-		if (role == "user" || role == "assistant") && text != "" {
-			messages = append(messages, map[string]any{"role": role, "text": text})
+		if (role == "user" || role == "assistant") && (text != "" || images > 0) {
+			message := map[string]any{"role": role, "text": text}
+			if images > 0 {
+				kinds := make([]any, images)
+				for i := range kinds {
+					kinds[i] = map[string]any{"type": "image"}
+				}
+				message["items"] = kinds
+			}
+			messages = append(messages, message)
 		} else {
 			skipped++
 		}
