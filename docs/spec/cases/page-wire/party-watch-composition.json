@@ -62,16 +62,6 @@
       ],
       "source": "page"
     },
-    "reason-1": {
-      "type": "string",
-      "example": "created",
-      "source": "page"
-    },
-    "reason-2": {
-      "type": "string",
-      "example": "created",
-      "source": "page"
-    },
     "create-1": {
       "type": "object",
       "example": {
@@ -170,7 +160,7 @@
               "color": "$colour-1",
               "leaderColor": null,
               "outline": "$outline-1",
-              "reason": "$reason-1"
+              "reason": "created"
             }
           ]
         }
@@ -229,7 +219,7 @@
               "color": "$colour-1",
               "leaderColor": null,
               "outline": "$outline-1",
-              "reason": "$reason-1"
+              "reason": "created"
             },
             {
               "id": "p2",
@@ -241,7 +231,7 @@
               "color": "$colour-2",
               "leaderColor": null,
               "outline": "$outline-2",
-              "reason": "$reason-2"
+              "reason": "created"
             }
           ]
         }
