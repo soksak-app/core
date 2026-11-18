@@ -40,6 +40,7 @@
 | `sok setup install [path\|skill\|mcp]...` | 지정한 종류의, 이름이 없으면 모든 종류의 빠진 setup part를 설치한다([setup part](#setup-part)) |
 | `sok setup environment` | 자기 환경의 `{HOME, PATH, CLAUDE_CONFIG_DIR, environment}`를 출력한다. `environment`는 모든 변수를 담는다. Login shell의 환경을 읽는 host가 쓴다([애플리케이션 안의 에이전트](#애플리케이션-안의-에이전트)) |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | 설치된 plugin을 바꾼다([설치](installation.ko.md)) |
+| `sok conversation read --agent claude-code\|codex --cwd <path>` | 작업 디렉터리에서 동작하는 agent의 대화 메시지를 agent의 session 파일에서 읽어 `{file, messages, skipped}`를 출력한다. 읽은 파일을 함께 밝힌다([agent 대화](agent-conversation.ko.md)). 실행 중인 애플리케이션이 필요하지 않다 |
 | `sok plugin list` | 설치된 plugin을 나열한다 |
 | `sok registry use <index>` | 설치가 읽는 registry index를 정한다 |
 | `sok registry build <directory>` | Registry를 검증하고 그 `index.json`을 쓴다 |
