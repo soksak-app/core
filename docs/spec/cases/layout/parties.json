@@ -1,0 +1,409 @@
+{
+  "description": "The party cases of the layout model (docs/spec/parties.md#commands). Each case builds a grid of content cards from state, then runs its steps in order: each step calls one party command with params. A step that returns names the reply that the command gives, with color_token naming the theme token party-1 to party-6 that the first party takes (docs/spec/parties.md#commands). A step that errors names the exact text of the refusal (docs/spec/parties.md#commands). The owning test in packages/workbench runs these cases against the party module.",
+  "cases": [
+    {
+      "name": "two touching cards make one party with the first color",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "a",
+                "b"
+              ],
+              "leader": null,
+              "color_token": "party-1",
+              "leaderColor": null,
+              "reason": "created"
+            },
+            "taken": [],
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "one card is refused",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a"
+            ]
+          },
+          "error": "a party needs at least 2 cards"
+        }
+      ]
+    },
+    {
+      "name": "cards that do not touch are refused",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "c"
+            ]
+          },
+          "error": "cards are not touching: a, c"
+        }
+      ]
+    },
+    {
+      "name": "a card of another party is refused without take",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "b",
+              "c"
+            ]
+          },
+          "error": "card b belongs to party p1"
+        }
+      ]
+    },
+    {
+      "name": "take moves a card and reports the former party",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c"
+            ]
+          }
+        },
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "c",
+              "d"
+            ],
+            "take": true
+          },
+          "returns": {
+            "party": {
+              "id": "p2",
+              "cards": [
+                "c",
+                "d"
+              ],
+              "leader": null,
+              "color_token": "party-2",
+              "leaderColor": null
+            },
+            "taken": [
+              {
+                "card": "c",
+                "from": "p1"
+              }
+            ],
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "c"
+                ],
+                "leader": null,
+                "deleted": false
+              },
+              {
+                "party": "p2",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "delete keeps the cards of the party in the layout",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.delete",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "party": {
+              "id": "p1"
+            },
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "a",
+                  "b"
+                ],
+                "leader": null,
+                "deleted": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "add takes a touching card into the party",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.add",
+          "params": {
+            "party": "p1",
+            "card": "c"
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "a",
+                "b",
+                "c"
+              ],
+              "leader": null,
+              "color_token": "party-1",
+              "leaderColor": null
+            },
+            "taken": [],
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "an unknown party is refused",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p9"
+          },
+          "error": "unknown party p9"
+        }
+      ]
+    }
+  ]
+}
