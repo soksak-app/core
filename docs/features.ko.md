@@ -1544,6 +1544,33 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
+- [~] F900 — P1: 병렬 작업의 완료된 문서와 sidecar 변경을 커밋하고 push하며 그 CI 결과를 확인한다. 입력: core의 F899 문서 commit, F899-7 등록 commit, vt S175 commit, alacritty S117 commit은 커밋되었으나 push되지 않았고 CI 상태는 읽지 않았다. F901–F905의 역할 규칙: 에이전트는 코드 변경과 개발만 하고, 빌드·캡처·측정·검증은 lead만 실행한다.
+  - [ ] F900-1 — core `main`을 push한다. 로컬에서 `make check-push`가 통과한 뒤 `gh run view`로 CI 결과를 읽고 기록한다.
+  - [ ] F900-2 — vt와 alacritty `main`을 push한다. 각 저장소의 로컬 검사가 통과한 뒤 `gh run view`로 CI 결과를 읽는다.
+  - [ ] F900-3 — F900-1과 F900-2에서 push한 commit ID를 각 저장소 changelog에 기록한다. 커밋 메시지는 바꾸지 않는다.
+- [ ] F901 — P1: 실행 중인 애플리케이션에서 S175와 S117의 dim 수정을 검증한다. 입력: 엔진 테스트는 통과했으나 dim TUI 추천 텍스트의 캡처 frame을 측정하지 않았다. F901-2와 F901-3은 lead가 실행한다.
+  - [ ] F901-1 — `git worktree add`로 core 검증 checkout `core-dim-F901`을 만든다. 빌드된 애플리케이션은 이 checkout 밖에 둔다.
+  - [ ] F901-2 — Red (lead): `065fef9^`와 `014ebac^`의 sidecar를 빌드하고, `SGR 2` 텍스트를 출력하는 fixture TUI를 `diagnostics.capture.still`로 캡처해 추천 글자의 전경색을 기록한다.
+  - [ ] F901-3 — Green (lead): 수정된 commit의 sidecar를 빌드해 같은 fixture를 캡처하고, 측정한 색이 엔진 테스트의 혼합값(`#1e1e1e` 위의 `#949494`)인지 기록한다.
+- [ ] F902 — P1: sidecar 0.0.28(vt)과 다음 alacritty 버전의 릴리즈 후보를 publish하지 않고 준비한다. 입력: `sidecars/vt-release-0028`에 0.0.28을 선언한 the vt 0.0.28 version declaration가 있고, alacritty 릴리즈 후보는 없다. 빌드는 lead가 실행한다.
+  - [ ] F902-1 — vt의 `docs/operations/local-native-package.md`와 alacritty의 릴리즈 목표를 읽고 명령과 출력 폴더를 기록한다.
+  - [ ] F902-2 — Lead가 `sidecars/vt-release-0028`에서 `make release OUT=<새 폴더>`로 vt 0.0.28 후보를 빌드하고, 패키지가 S175 dim 수정을 담는지 확인한다.
+  - [ ] F902-3 — Lead가 `sidecars/alacritty-release` worktree에서 같은 명령으로 alacritty 후보를 빌드하고, 패키지가 S117 dim 수정을 담는지 확인한다.
+  - [ ] F902-4 — 두 후보를 보고하고, publish나 core pin 변경은 별도 publication 결정을 기다린다.
+- [ ] F903 — P1: 프레임워크에서 Metal surface의 lease 표시가 가능한지 측정한다. 입력: `present: lease` region 계획에 측정이 없고, surface를 표시한 뒤 교체했을 때의 `IOSurfaceIsInUse` 동작을 알 수 없다. 에이전트는 측정 test를 작성하고, lead가 실행한다.
+  - [ ] F903-1 — worktree `core-lease-F903`을 branch `test/lease-measure-F903`으로 만든다.
+  - [ ] F903-2 — 에이전트: layer에 IOSurface를 표시하고 교체한 뒤 render server commit을 기다리며, 세 상태에서 `IOSurfaceIsInUse`를 기록하는 native tracked test를 추가한다.
+  - [ ] F903-3 — 에이전트: lookup과 host retain 뒤의 retain count를 기록하고 release 뒤 count가 돌아오는지 확인하는 native tracked test를 추가한다.
+  - [ ] F903-4 — Lead가 두 test를 실행하고 측정값을 macOS 버전, native build와 함께 이 항목에 기록한다. 교체 뒤에도 in-use가 true이면 lease 표시가 불가능하다고 적고 중단한다.
+- [ ] F904 — P1: 두 terminal sidecar에서 viewport 밖의 행을 읽는다(F899-1). 입력: `screen.read`는 viewport만 돌려주므로 호출자가 그 위의 행을 읽을 수 없다. 에이전트는 코드를 쓰고, Red와 Green은 lead가 실행한다.
+  - [ ] F904-1 — 에이전트가 `alacritty-core`와 `vt-core`에 Red test를 쓴다: viewport 위의 행을 요청하는 `screen.read {from, count}`가 그 행을 돌려주지 않는다. Lead가 변경 전에 실행해 실패를 기록한다.
+  - [ ] F904-2 — 에이전트가 worktree `sidecars/alacritty-F904`의 `alacritty` 엔진에 `from`과 `count` 인자를 구현하고, 프로토콜에 상한을 적는다.
+  - [ ] F904-3 — 에이전트가 worktree `sidecars/vt-F904`의 `vt` 엔진에 같은 인자를 구현하고, 범위 밖 요청에 같은 오류 문구를 준다.
+  - [ ] F904-4 — Lead가 Green을 실행한다: 두 sidecar에서 viewport 위의 행이 반환되고, 각 저장소의 공유 계약 case가 통과한다.
+- [ ] F905 — P2: 이전 작업에서 남은 실패를 해결한다. 입력: the CI run of the F898 Codex contract declaration fix의 결론을 읽지 않았고, `frame_draw_memory_test`는 마지막 창에서 약 16,150개의 할당 block을 유지했으며, `soksak-host` build script가 clippy에 실패한다. 빌드와 repeat 실행은 lead가 한다.
+  - [ ] F905-1 — `gh run view`로 F898 Codex 계약 declaration 수정 commit의 CI run 결론을 읽고 기록한다.
+  - [ ] F905-2 — Lead가 `frame_draw_memory_test`를 단독으로 repeat target으로 최소 세 번 실행하고, 출력과 block 수를 기록한다.
+  - [ ] F905-3 — Lead가 로컬 toolchain으로 `soksak-host` build script의 clippy 실패를 재현하고, 실패한 lint를 정확히 기록한다.
 - [!] F714 — P1: 창 사이드바가 정한 순서로 네 변에 선다. 입력: 설정 창, 창 chrome, 플러그인 선언, 저장 배치는 왼쪽·오른쪽 창 사이드바만 알고, 그 사이드바는 언제나 높이 전체에 걸친다. 기대: 변 `left`, `right`, `top`, `bottom`이 각각 표시 스위치, 일반 세트, 플러그인 오버라이드, 저장 크기, chrome 스위치를 가진 고정 창 사이드바 하나를 갖고, 설정 `sidebarOrder`가 어느 사이드바가 plane의 공간을 먼저 차지하는지 정한다([외부 창 사이드바](spec/external-sidebars.ko.md)). JavaScript와 Go workbench가 같은 계약을 지킨다. 남은 것: F714-10 다시 빌드한 앱의 확인, F714-11 kit의 용어 release. 보류: 남은 일은 다시 build 한 Tauri, Wails, mygo 애플리케이션에서 확인하는 F714-10 과 kit release 를 기다리는 F714-11 이다. 원인: release 는 F714-10 의 확인을 요구하지 않고, F714-11 은 KR28 을 담은 kit release 를 기다린다. 재시도 조건: 이 확인을 위해 세 애플리케이션을 다시 build 하고, KR28 을 담은 kit release 가 공개될 때.
   - [o] F714-1 — 네 변과 그 순서의 명세(외부 사이드바, 설정, 플러그인, 프로젝트).
   - [o] F714-2 — 네 변의 place와 연결: plugin API와 Go workbench의 연결 검사, manifest reader의 `sidebars.window`, 두 workbench의 `core.settings.link` exposure에 `top`, `bottom`, `window-top`, `window-bottom`.
