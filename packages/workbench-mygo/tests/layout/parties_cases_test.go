@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -81,6 +82,24 @@ func sameReply(want, got any) bool {
 	return true
 }
 
+// shownPalette returns the party theme tokens of the default theme in its default mode, read from the declaration the page reads.
+func shownPalette(t *testing.T) map[string]string {
+	t.Helper()
+	declared, err := workbench.ReadDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	palette := map[string]string{}
+	for _, token := range []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6", "party-leader"} {
+		value, err := declared.PartyColor("midnight", "dark", token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		palette[token] = value
+	}
+	return palette
+}
+
 func TestPartyCasesRunEverySteps(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
@@ -112,7 +131,7 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: the state of the case is refused: %v", kase.Name, err)
 			}
-			parties := layout.NewParties()
+			parties := layout.NewParties(shownPalette(t))
 			for i, s := range kase.Steps {
 				reply, err := parties.Run(grid, s.Call, s.Params)
 				if s.Error != nil {

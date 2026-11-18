@@ -13,16 +13,41 @@ import (
 // A command validates its whole request before it changes a party, so a refused command changes nothing.
 type Parties struct {
 	list []*party
+	// palette holds the party theme tokens of the shown theme and mode, token to #rrggbb value, read from the declaration.
+	palette map[string]string
 }
 
 // party is a group of touching cards. Cards keeps the order in which the cards joined the party.
 type party struct {
+	ID          string
+	Cards       []string
+	Leader      *string
+	Color       string
+	LeaderColor *string
+	Reason      *string
+}
+
+// partyView is the party record of a reply: the color is the theme token that holds the value, or null for a color that the person chose.
+type partyView struct {
 	ID          string   `json:"id"`
 	Cards       []string `json:"cards"`
 	Leader      *string  `json:"leader"`
-	ColorToken  string   `json:"color_token"`
+	ColorToken  *string  `json:"color_token"`
 	LeaderColor *string  `json:"leaderColor"`
 	Reason      *string  `json:"reason"`
+}
+
+// view returns the record of a party for a reply.
+func (p *Parties) view(target *party) partyView {
+	var token *string
+	for _, name := range partyTokens {
+		if value, ok := p.palette[name]; ok && value == target.Color {
+			found := name
+			token = &found
+			break
+		}
+	}
+	return partyView{ID: target.ID, Cards: target.Cards, Leader: target.Leader, ColorToken: token, LeaderColor: target.LeaderColor, Reason: target.Reason}
 }
 
 // partyReply is the reply of create and add: the party, the cards that changed party, and each party that changed.
@@ -65,8 +90,9 @@ type tabState struct {
 // partyTokens are the theme tokens of the six party colors, in the order a new party takes them.
 var partyTokens = []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6"}
 
-// NewParties returns a space with no party.
-func NewParties() *Parties { return &Parties{} }
+// NewParties returns a space with no party. palette holds the party theme tokens of the shown theme and mode, token to #rrggbb value,
+// as the declaration of workbench.json states them (docs/spec/parties.md#identity-and-values).
+func NewParties(palette map[string]string) *Parties { return &Parties{palette: palette} }
 
 // Run runs one party command over the grid and returns its reply. An unknown command or an invalid parameter is an error.
 func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error) {
@@ -132,7 +158,7 @@ func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error)
 		if found == nil {
 			return nil, fmt.Errorf("unknown party %s", in.Party)
 		}
-		return found, nil
+		return p.view(found), nil
 	case "core.card.get":
 		var in struct {
 			Card string `json:"card"`
@@ -185,21 +211,25 @@ func (p *Parties) nextID() string {
 	}
 }
 
-// nextToken returns the first party color token that no party uses, or the first token when all six are used.
-func (p *Parties) nextToken() string {
+// nextColor returns the value of the first party theme token that no party uses, or of the first token when all six are used.
+func (p *Parties) nextColor() (string, error) {
 	for _, token := range partyTokens {
+		value, ok := p.palette[token]
+		if !ok {
+			return "", fmt.Errorf("the theme palette has no %s", token)
+		}
 		used := false
 		for _, item := range p.list {
-			if item.ColorToken == token {
+			if item.Color == value {
 				used = true
 				break
 			}
 		}
 		if !used {
-			return token
+			return value, nil
 		}
 	}
-	return partyTokens[0]
+	return p.palette[partyTokens[0]], nil
 }
 
 // checkCards refuses a card list that names an unknown card or a card twice, and a list of fewer than two cards.
@@ -356,7 +386,7 @@ func (p *Parties) create(g *Grid, cards []string, take bool, color, leader, lead
 	}
 	for _, existing := range p.list {
 		if sameSet(existing.Cards, cards) {
-			return partyReply{Party: existing, Taken: []takenCard{}, Changed: []partyChange{}}, nil
+			return partyReply{Party: p.view(existing), Taken: []takenCard{}, Changed: []partyChange{}}, nil
 		}
 	}
 	if err := checkConnected(g, cards); err != nil {
@@ -374,18 +404,24 @@ func (p *Parties) create(g *Grid, cards []string, take bool, color, leader, lead
 		return partyReply{}, err
 	}
 	// The identifier is the smallest one that no party holds when the party is created, so it is chosen before a former party is settled.
-	fresh := &party{ID: p.nextID(), Cards: slices.Clone(cards), Leader: leader, ColorToken: p.nextToken(), LeaderColor: leaderColor}
+	chosen := ""
+	if color != nil {
+		chosen = *color
+	} else {
+		value, err := p.nextColor()
+		if err != nil {
+			return partyReply{}, err
+		}
+		chosen = value
+	}
+	fresh := &party{ID: p.nextID(), Cards: slices.Clone(cards), Leader: leader, Color: chosen, LeaderColor: leaderColor}
 	return p.join(g, fresh, cards, "created")
 }
 
-// checkColors refuses a color that is not #rrggbb. A valid party color cannot be stored yet: it needs the theme palette, which the
-// model does not read (docs/features.md, F908-5b2), so it is refused with that reason rather than stored as a token.
+// checkColors refuses a color that is not #rrggbb.
 func checkColors(color, leaderColor *string) error {
-	if color != nil {
-		if !hexColor.MatchString(*color) {
-			return fmt.Errorf("color must be #rrggbb")
-		}
-		return fmt.Errorf("color %s needs the theme palette, which the party model does not read yet", *color)
+	if color != nil && !hexColor.MatchString(*color) {
+		return fmt.Errorf("color must be #rrggbb")
 	}
 	if leaderColor != nil && !hexColor.MatchString(*leaderColor) {
 		return fmt.Errorf("color must be #rrggbb")
@@ -403,7 +439,7 @@ func (p *Parties) add(g *Grid, partyID, card string, take bool) (partyReply, err
 		return partyReply{}, fmt.Errorf("unknown party %s", partyID)
 	}
 	if slices.Contains(target.Cards, card) {
-		return partyReply{Party: target, Taken: []takenCard{}, Changed: []partyChange{}}, nil
+		return partyReply{Party: p.view(target), Taken: []takenCard{}, Changed: []partyChange{}}, nil
 	}
 	if owner := p.partyOf(card); owner != nil && !take {
 		return partyReply{}, fmt.Errorf("card %s belongs to party %s", card, owner.ID)
@@ -459,7 +495,7 @@ func (p *Parties) join(g *Grid, target *party, cards []string, reason string) (p
 	}
 	target.Reason = &reason
 	changed = append(changed, partyChange{Party: target.ID, Removed: []string{}, Leader: target.Leader})
-	return partyReply{Party: target, Taken: taken, Changed: changed}, nil
+	return partyReply{Party: p.view(target), Taken: taken, Changed: changed}, nil
 }
 
 // remove removes a card from a party and applies the split rule to the cards that remain. A card that the party does not hold changes nothing.
@@ -470,9 +506,9 @@ func (p *Parties) remove(g *Grid, partyID, card string) (any, error) {
 	}
 	if !slices.Contains(target.Cards, card) {
 		return struct {
-			Party   *party        `json:"party"`
+			Party   partyView     `json:"party"`
 			Changed []partyChange `json:"changed"`
-		}{target, []partyChange{}}, nil
+		}{p.view(target), []partyChange{}}, nil
 	}
 	before := slices.Clone(target.Cards)
 	target.Cards = slices.DeleteFunc(target.Cards, func(id string) bool { return id == card })
@@ -483,7 +519,7 @@ func (p *Parties) remove(g *Grid, partyID, card string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var record any = target
+	var record any = p.view(target)
 	if change.Deleted {
 		record = nil
 	}
@@ -515,7 +551,10 @@ func (p *Parties) update(partyID string, color *string, leader, leaderColor json
 		}
 		nextLeader = &id
 	}
-	before := strOrNull(target.Leader) + "|" + strOrNull(target.LeaderColor)
+	before := target.Color + "|" + strOrNull(target.Leader) + "|" + strOrNull(target.LeaderColor)
+	if color != nil {
+		target.Color = *color
+	}
 	if setLeader {
 		target.Leader = nextLeader
 	}
@@ -523,15 +562,15 @@ func (p *Parties) update(partyID string, color *string, leader, leaderColor json
 		target.LeaderColor = optionalColor(leaderColor)
 	}
 	changed := []partyChange{}
-	if strOrNull(target.Leader)+"|"+strOrNull(target.LeaderColor) != before {
+	if target.Color+"|"+strOrNull(target.Leader)+"|"+strOrNull(target.LeaderColor) != before {
 		reason := "updated"
 		target.Reason = &reason
 		changed = append(changed, partyChange{Party: target.ID, Removed: []string{}, Leader: target.Leader})
 	}
 	return struct {
-		Party   *party        `json:"party"`
+		Party   partyView     `json:"party"`
 		Changed []partyChange `json:"changed"`
-	}{target, changed}, nil
+	}{p.view(target), changed}, nil
 }
 
 // strOrNull names a member that is a string or null, so two states compare by their values.
