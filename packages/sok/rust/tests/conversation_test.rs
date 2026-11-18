@@ -504,54 +504,41 @@ fn codex_message_content_that_is_not_a_list_is_refused() {
     );
 }
 
-// contract: conversation.claude-code.names-the-folder-by-utf16-units
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
 #[test]
-fn working_directory_with_a_character_outside_the_bmp_names_two_dashes() {
-    let home = Folder::new("conversation-utf16");
-    let cwd = "/work/\u{1F642}/core";
-    let file = home
-        .path()
-        .join(".claude/projects/-work----core/session.jsonl");
-    write_records(&file, &claude_records(cwd, "question", "answer"));
-
-    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
-
-    assert_eq!(
-        (code, stderr.as_str()),
-        (0, ""),
-        "exit status and standard error"
+fn folder_names_follow_the_recorded_pairs() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../docs/spec/cases/conversation-folder-names.json"
     );
-    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
-    assert_eq!(
-        output["file"],
-        json!(file.display().to_string()),
-        "the chosen file"
-    );
-}
+    let text = std::fs::read_to_string(path).expect("folder name pairs");
+    let pairs: Value = serde_json::from_str(&text).expect("folder name pairs JSON");
+    let pairs = pairs.as_array().expect("a list of pairs");
+    assert!(!pairs.is_empty(), "the pairs");
+    for pair in pairs {
+        let folder = pair["folder"].as_str().expect("folder");
+        let cwd = pair["cwd"].as_str().expect("cwd");
+        let home = Folder::new("conversation-pair");
+        let file = home
+            .path()
+            .join(".claude/projects")
+            .join(folder)
+            .join("session.jsonl");
+        write_records(&file, &claude_records(cwd, "question", "answer"));
 
-// contract: conversation.claude-code.names-a-long-folder-with-a-hash
-#[test]
-fn long_working_directory_folder_is_the_first_200_characters_and_a_hash() {
-    let home = Folder::new("conversation-long");
-    let cwd = format!("/{}", "x".repeat(209));
-    let file = home.path().join(format!(
-        ".claude/projects/-{}-mainyv/session.jsonl",
-        "x".repeat(199)
-    ));
-    write_records(&file, &claude_records(&cwd, "question", "answer"));
+        let (code, stdout, stderr) =
+            run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
 
-    let (code, stdout, stderr) =
-        run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd.as_str()]);
-
-    assert_eq!(
-        (code, stderr.as_str()),
-        (0, ""),
-        "exit status and standard error"
-    );
-    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
-    assert_eq!(
-        output["file"],
-        json!(file.display().to_string()),
-        "the chosen file"
-    );
+        assert_eq!(
+            (code, stderr.as_str()),
+            (0, ""),
+            "exit status and standard error for {cwd}"
+        );
+        let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+        assert_eq!(
+            output["file"],
+            json!(file.display().to_string()),
+            "the file of the folder {folder}"
+        );
+    }
 }

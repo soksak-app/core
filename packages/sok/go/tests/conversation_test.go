@@ -366,36 +366,34 @@ func TestCodexMessageContentThatIsNotAListIsRefused(t *testing.T) {
 	}
 }
 
-// contract: conversation.claude-code.names-the-folder-by-utf16-units
-func TestWorkingDirectoryWithACharacterOutsideTheBmpNamesTwoDashes(t *testing.T) {
-	h := newAgentHome(t)
-	cwd := "/work/\U0001F642/core"
-	file := filepath.Join(h.home, ".claude/projects/-work----core/session.jsonl")
-	convWriteRecords(t, file, convClaudeRecords(cwd, "question", "answer"))
-
-	code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", cwd)
-
-	if code != 0 || stderr != "" {
-		t.Fatalf("exit status %d and standard error %q", code, stderr)
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+func TestFolderNamesFollowTheRecordedPairs(t *testing.T) {
+	text, err := os.ReadFile(repositoryFile(t, "docs/spec/cases/conversation-folder-names.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if output := convDecode(t, stdout); output["file"] != file {
-		t.Fatalf("the chosen file %v, want %s", output["file"], file)
+	var pairs []struct {
+		Folder string `json:"folder"`
+		Cwd    string `json:"cwd"`
 	}
-}
-
-// contract: conversation.claude-code.names-a-long-folder-with-a-hash
-func TestLongWorkingDirectoryFolderIsTheFirst200CharactersAndAHash(t *testing.T) {
-	h := newAgentHome(t)
-	cwd := "/" + strings.Repeat("x", 209)
-	file := filepath.Join(h.home, ".claude/projects/-"+strings.Repeat("x", 199)+"-mainyv/session.jsonl")
-	convWriteRecords(t, file, convClaudeRecords(cwd, "question", "answer"))
-
-	code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", cwd)
-
-	if code != 0 || stderr != "" {
-		t.Fatalf("exit status %d and standard error %q", code, stderr)
+	if err := json.Unmarshal(text, &pairs); err != nil {
+		t.Fatal(err)
 	}
-	if output := convDecode(t, stdout); output["file"] != file {
-		t.Fatalf("the chosen file %v, want %s", output["file"], file)
+	if len(pairs) == 0 {
+		t.Fatal("the pairs are empty")
+	}
+	for _, pair := range pairs {
+		h := newAgentHome(t)
+		file := filepath.Join(h.home, ".claude/projects", pair.Folder, "session.jsonl")
+		convWriteRecords(t, file, convClaudeRecords(pair.Cwd, "question", "answer"))
+
+		code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", pair.Cwd)
+
+		if code != 0 || stderr != "" {
+			t.Fatalf("cwd %s: exit status %d and standard error %q", pair.Cwd, code, stderr)
+		}
+		if output := convDecode(t, stdout); output["file"] != file {
+			t.Fatalf("cwd %s: the chosen file %v, want %s", pair.Cwd, output["file"], file)
+		}
 	}
 }
