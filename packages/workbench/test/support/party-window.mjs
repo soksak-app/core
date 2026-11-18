@@ -1,23 +1,33 @@
-// Opens the workbench registry over a layout of content cards in one row, for the party tests (docs/spec/parties.md).
-// The cards are the grid cells of one row, one column each, so two cards whose columns are adjacent touch. The page modules
-// are the real ones: the environment is installed from the same document shape that the projects-format-1 test uses, and the
-// core entries are installed with the page memory saver. The party commands and the party status are declared by the core
-// exposure file and registered by the party module of the page; a test that calls them before that module exists fails.
+// The page window of the party tests (docs/spec/parties.md). A node test file runs in one process, the environment can be installed
+// once per process (environment.js refuses a second install), and the page start is shared by the tests of the file, as the page
+// tests of this directory share it. The window is one row of the cards a to p, one card per column, so the cards of adjacent
+// columns touch. openPartyWindow starts the page once. Each test calls reset first, which deletes every party that the test before
+// it left, so each test starts from a layout with no party and the cards in their columns. The page document is the markup of
+// index.html, as the page test workbench-statuses uses it, because the modules of the page look up its elements when imported.
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
+// The party module of the page. It does not exist before the party implementation (F908-4), so every party test fails here first.
+import "../../parties.js";
 import { pageMemorySaver } from "./memory-saver.mjs";
+
+export const CARDS = "abcdefghijklmnop".split("");
 
 const probeManifest = {
   id: "probe-plain", name: "Plain", description: "검사용.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
   surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
 };
 
-/**
- * Opens a window whose one row holds the cards in the given order, each card one column.
- * The order of the array is the order in which the space stores its cards (docs/spec/parties.md#queries).
- */
-export async function openPartyWindow(cardIds) {
-  const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
+let started = null;
+
+/** Starts the page once per process and returns the window: registry, run, get, reset. */
+export function openPartyWindow() {
+  started ??= start();
+  return started;
+}
+
+async function start() {
+  const markup = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const dom = new JSDOM(markup, { url: "http://localhost/" });
   dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
@@ -25,14 +35,15 @@ export async function openPartyWindow(cardIds) {
   globalThis.CSS = dom.window.CSS;
   globalThis.PointerEvent = dom.window.PointerEvent;
   globalThis.MouseEvent = dom.window.MouseEvent;
+  globalThis.addEventListener = dom.window.addEventListener.bind(dom.window);
   globalThis.devicePixelRatio = 2;
   globalThis.innerWidth = 1200;
   globalThis.innerHeight = 800;
 
-  const xs = cardIds.map((_, index) => index).concat(cardIds.length);
+  const xs = CARDS.map((_, index) => index).concat(CARDS.length);
   const environmentDocument = {
     runtime: "runtime",
-    workspace: { focus: cardIds[0], grid: { xs, ys: [0, 1], cards: cardIds.map((id, index) => ({
+    workspace: { focus: CARDS[0], grid: { xs, ys: [0, 1], cards: CARDS.map((id, index) => ({
       id, c0: index, c1: index + 1, r0: 0, r1: 1, tabs: [{ plugin: "probe-plain", title: id }],
     })) } },
     sidebars: { sets: [], links: [] },
@@ -49,12 +60,21 @@ export async function openPartyWindow(cardIds) {
     memorySaver: await pageMemorySaver(),
     library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   });
-  // The party module of the page registers the party commands and the party status when it is imported.
-  await import("../../parties.js");
+
+  const get = async (name, params = {}) => {
+    const reply = await registry.handle({ method: "status.get", params: { name, ...params } });
+    if (reply.error) throw new Error(reply.error.message);
+    return reply;
+  };
   return {
     registry,
     run: (name, params = {}) => registry.run(name, params),
-    get: (name, params = {}) => registry.handle({ method: "status.get", params: { name, ...params } }),
+    get,
+    /** Deletes every party that the previous test left, so the next test starts with no party. */
+    async reset() {
+      const { result } = await get("core.parties");
+      for (const party of result) await registry.run("core.party.delete", { party: party.id });
+    },
     close: () => dom.window.close(),
   };
 }
