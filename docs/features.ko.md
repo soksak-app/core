@@ -104,11 +104,16 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F910-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 registration을 cursor epoch로 정의하고, reads의 `registration` 인자와 `epoch-changed` 거부를 정의한다.
   - [ ] F910-2 — Red: `alacritty-core`의 test가 한 registration의 cursor로 읽고, 같은 folder로 두 번째 sidecar process를 시작한 뒤 `epoch-changed`를 기대한다. 변경 전에 실패해야 한다.
   - [ ] F910-3 — Green: 같은 test가 통과하고, 현재 registration과 `after` 0의 read가 새 registration의 모든 메시지를 돌려준다.
+  - [ ] F910-4 — Red: `alacritty-core`의 test가 sidecar를 같은 process 안에서 한 번, 두 번째 process로 한 번 재시작하고, 새 시작의 registration이 이전 registration과 다르며 이전 cursor가 `epoch-changed`로 거부됨을 기대한다. 변경 전에 실패해야 한다. 컴파일하지 않았다. Red 실행은 기록되지 않았다.
 - [ ] F911 — P1, F899-7 후속: message 파일을 writer가 쓰는 중에 읽는다. 입력: watch는 새 파일을 생성 시점에 보고하며, 그때 writer는 text를 아직 쓰지 않았다. 기대: writer가 `.txt`로 끝나지 않는 이름으로 쓴 뒤 message 이름으로 rename하며, rename만이 가시성의 유일한 시점이다. `spec/messaging.ko.md`가 정한 대로다.
   - [ ] F911-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 임시 이름, 가시성의 유일한 시점인 rename, `sok` 밖의 writer 규칙을 정의한다.
   - [ ] F911-2 — Red: `alacritty-core`의 test가 `.txt` 이름을 만든 뒤 두 번째 단계에서 text를 쓰고, rename 전에는 event도 message도 없음을 기대한다. 생성 시점에 event가 오면 변경 전에 실패해야 한다.
   - [ ] F911-3 — Green: 같은 test가 통과하고, event는 rename 시점에 오며, read는 전체 text를 돌려준다.
   - [ ] F911-4 — 측정: `alacritty-core`의 test가 임시 이름으로 file을 쓰는 동안의 event를 기록한다. rename 전에는 event가 없고, rename에서 `created` 1개가 온다. `spec/messaging.md`(41행)의 미측정 문장을 검증하며, 이 test가 없으면 그 문장은 미측정으로 남는다.
+  - [ ] F911-5 — Send command `sok message send <folder> <text>`가 임시 이름과 rename으로 message를 쓰며, 64 KiB를 넘는 text를 거부한다([cli](spec/cli.ko.md#명령)). 입력: folder와 text. 기대: `spec/cli.ko.md`가 정한 대로다.
+    - [ ] F911-5-1 — Spec: `spec/cli.md`와 `spec/cli.ko.md`가 command, 입력, 64 KiB를 넘는 text의 거부, 임시 이름과 rename을 정의한다.
+    - [ ] F911-5-2 — Red: `packages/sok/rust`와 `packages/sok/go` 각각의 test가 64 KiB에 1 byte를 더한 text를 쓰고 명시적 거부와 folder에 파일이 없음을 기대한다. 또 정상 text를 쓰고 rename 전에는 `.txt` 파일이 없으며 rename 뒤에는 text 전체가 있음을 기대한다. 변경 전에 실패해야 한다. 컴파일하지 않았다. Red 실행은 기록되지 않았다.
+    - [ ] F911-5-3 — Green: 같은 test가 두 package에서 통과한다.
 - [ ] F912 — P2, F899-7과 F908 후속: terminal 사이 작업 hand-off와 결과는 message가 아니라 상태 record다. 입력: message는 text만 돌려주므로 결과가 어느 attempt에 대한 답인지 보이지 않는다. 기대: `spec/messaging.ko.md`가 hand-off를 party와 card 기능이 소유하는 record로 정의하고, 상태 `assigned`, `started`, `result`, `integrated`, `abandoned`, `attempt` 번호, 이전 attempt의 결과를 거부하는 `stale-attempt`를 정의한다.
   - [ ] F912-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 분리, 상태, attempt 번호, `stale-attempt`를 정의한다. Record에는 timer나 lock이 없다.
   - [ ] F912-2 — Red: hand-off record의 소유 module의 test가 attempt 2가 할당된 뒤 attempt 1의 결과를 적용하고 `stale-attempt`를 기대한다. Record가 생기기 전에는 실패해야 한다.
