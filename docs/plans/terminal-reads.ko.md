@@ -41,6 +41,15 @@
 
 상태가 바뀔 때마다 이전 상태, 새 상태, 신호의 출처, 순번을 담은 event를 낸다. 상태 읽기는 현재 상태, 출처, 마지막 변경의 순번을 돌려준다.
 
+### 오픈소스 비교(상태 신호)
+
+- Orca(github.com/stablyai/orca)는 신호를 여러 층으로 쓴다. OSC 133 `A`/`D` 마크, agent 상태 protocol(OSC 7501), agent hook event(Claude Code의 `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `PermissionRequest`, `SessionEnd`), 제목 글자, 출력 정지와 화면 확인을 쓴다. hook 상태의 상태는 `working`, `permission`, `idle`, `done`이다. 명시적 보고가 제목에서 얻은 상태를 이기고, 제목에서 온 idle은 출력이 일정 시간 조용한 뒤에만 받아들인다.
+- omp(github.com/can1357/oh-my-pi)는 감지하는 쪽이 아니라 보고하는 쪽이다. 자기 실행 상태(`idle`, `working`, `done`, `error`, `permission` 또는 `question`인 `blocked`)를 OSC 7501 record로 event 흐름에서 쓰고, record가 유지되는 동안 OSC 133 영역을 끈다.
+- Claude Code는 hook event(`Stop`, `permission_prompt`/`idle_prompt`를 가진 `Notification`, `PermissionRequest`, `StopFailure`)를 제공한다. 화면에서 추측하지 않고 `agent-busy`와 `agent-waiting`의 event 원천으로 쓸 수 있다.
+- Codex는 `notify`가 turn 완료에서만 실행되고, 승인 event에는 `PermissionRequest` hook이 필요하다. 정확한 hook payload는 확인하지 않았다(미정 항목 V4).
+
+이 계획의 결정: agent 상태는 hook event가 있으면 그것으로 정한다. 화면 발견적 판단은 hook이 없는 터미널에만 쓰고, 발견적 판단이라고 표시한다. 상태를 구현하기 전에 V4(Codex hook payload)와 V5(Claude Notification payload 필드)를 확인한다.
+
 ## 방안과 결과
 
 각 방안은 명령이다. 결과는 한정된다. 모든 읽기는 `count`를 받고 상한이 있으며, 상한을 넘는 읽기는 명시적 오류로 실패한다.

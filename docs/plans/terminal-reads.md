@@ -62,6 +62,24 @@ Proposed states, derived in order from the earliest reliable signal:
 Each change emits an event with the previous and new state, the source of the signal, and a sequence number. A state read returns the
 current state, its source, and the sequence number of its last change.
 
+### Open-source comparison (state signals)
+
+- Orca (github.com/stablyai/orca) layers its signals: OSC 133 `A`/`D` marks, an agent status protocol (OSC 7501), agent hook events
+  (Claude Code `SessionStart`, `UserPromptSubmit`, `Stop`, `PreToolUse`, `PermissionRequest`, `SessionEnd`), title glyphs, and output
+  quiescence with a rendered-screen check. Its states are `working`, `permission`, `idle`, and `done` for hook state. An explicit report
+  overrides a title-derived status, and idle from a title is accepted only after output has been quiet for a window.
+- omp (github.com/can1357/oh-my-pi) is the reporter, not a detector: it writes its own run state (`idle`, `working`, `done`, `error`,
+  `blocked` with `permission` or `question`) through the OSC 7501 record, from its event flow, and disables OSC 133 zones while a record is
+  held.
+- Claude Code provides hook events (`Stop`, `Notification` with `permission_prompt`/`idle_prompt`, `PermissionRequest`, `StopFailure`),
+  which are event sources for `agent-busy` and `agent-waiting` without guessing from the screen.
+- Codex: `notify` fires only on turn completion; approval events need the `PermissionRequest` hook. Its exact hook payloads are not
+  verified (open item V4).
+
+Decision for this plan: the agent states come from the agent's hook events when present; the screen heuristic is used only for a
+terminal with no hook, and it is marked as a heuristic. Items V4 (Codex hook payloads) and V5 (Claude Notification payload fields) are
+verified before the states are implemented.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
