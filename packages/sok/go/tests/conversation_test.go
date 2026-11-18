@@ -431,14 +431,21 @@ func TestCodexImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
 
 // contract: conversation.claude-code.keeps-an-image-only-message
 func TestClaudeImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
+	// The block has the observed key structure of docs/spec/cases/conversation-image-block.json; the data value is set here.
+	var block map[string]any
+	if text, err := os.ReadFile(repositoryFile(t, "docs/spec/cases/conversation-image-block.json")); err != nil {
+		t.Fatal(err)
+	} else if err := json.Unmarshal(text, &block); err != nil {
+		t.Fatal(err)
+	}
+	block["source"].(map[string]any)["data"] = "PICTURE-DATA-NOT-WRITTEN"
+
 	h := newAgentHome(t)
 	cwd := "/work/core"
 	file := filepath.Join(h.home, ".claude/projects/-work-core/session.jsonl")
 	convWriteRecords(t, file, []any{
 		map[string]any{"type": "attachment", "cwd": cwd, "sessionId": "session"},
-		map[string]any{"type": "user", "cwd": cwd, "message": map[string]any{"role": "user", "content": []any{
-			map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": "AAAA"}},
-		}}},
+		map[string]any{"type": "user", "cwd": cwd, "message": map[string]any{"role": "user", "content": []any{block}}},
 	})
 
 	code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", cwd)
@@ -446,7 +453,7 @@ func TestClaudeImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("exit status %d and standard error %q", code, stderr)
 	}
-	if strings.Contains(stdout, "AAAA") {
+	if strings.Contains(stdout, "PICTURE-DATA") {
 		t.Fatalf("the picture data is written: %s", stdout)
 	}
 	want := convExpected(file, []any{

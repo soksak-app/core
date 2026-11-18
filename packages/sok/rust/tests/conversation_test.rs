@@ -622,6 +622,15 @@ fn codex_image_only_message_is_emitted_with_its_kind() {
 // contract: conversation.claude-code.keeps-an-image-only-message
 #[test]
 fn claude_image_only_message_is_emitted_with_its_kind() {
+    // The block has the observed key structure of docs/spec/cases/conversation-image-block.json; the data value is set here.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../docs/spec/cases/conversation-image-block.json"
+    );
+    let text = std::fs::read_to_string(path).expect("image block case");
+    let mut block: Value = serde_json::from_str(&text).expect("image block case JSON");
+    block["source"]["data"] = json!("PICTURE-DATA-NOT-WRITTEN");
+
     let home = Folder::new("conversation-claude-image");
     let cwd = "/work/core";
     let file = home
@@ -631,9 +640,7 @@ fn claude_image_only_message_is_emitted_with_its_kind() {
         &file,
         &[
             json!({"type": "attachment", "cwd": cwd, "sessionId": "session"}),
-            json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [
-                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAAA"}}
-            ]}}),
+            json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [block]}}),
         ],
     );
 
@@ -645,7 +652,7 @@ fn claude_image_only_message_is_emitted_with_its_kind() {
         "exit status and standard error"
     );
     assert!(
-        !stdout.contains("AAAA"),
+        !stdout.contains("PICTURE-DATA"),
         "the picture data is not written: {stdout}"
     );
     let output: Value = serde_json::from_str(&stdout).expect("JSON output");
