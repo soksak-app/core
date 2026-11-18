@@ -289,6 +289,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F889-1",
+    implementation: [
+      { file: "packages/host/go/src/sidecars.go", symbol: "path := c.sokFolder" },
+      { file: "packages/host/rust/src/sidecars.rs", symbol: "fn environment_base(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/sidecars_environment_test.go", id: "TestASidecarEnvironmentPutsTheSokFolderFirstOnPath" },
+      { file: "packages/host/rust/src/sidecars_environment_test.rs", id: "a_sidecar_environment_puts_the_sok_folder_first_on_path" },
+    ],
+    expected: "A sidecar process starts with the folder of the sok application first on PATH, and that folder appears in no other PATH entry.",
+    levels: ["unit"],
+  },
+  {
     id: "F894",
     implementation: [{ file: "packages/soksak/src/soksak.ts", symbol: "  arrange(mode: 'even'): boolean {" }],
     tests: [
