@@ -26,6 +26,7 @@ let currentGrid = () => null;
 const cellOf = (id) => currentGrid()?.card(id);
 
 /** The card ids of the grid in space order. */
+// default: a window with no grid shows no cards, so the party status holds no member (docs/spec/parties.md#queries).
 const spaceOrder = () => (currentGrid()?.toJSON().cards ?? []).map((card) => card.id);
 
 /** Splits card ids into connected groups of touching cards; each group keeps the order of ids. */
@@ -49,6 +50,7 @@ function groupsOf(ids) {
   return groups;
 }
 
+// default: a card that no party holds reports a null party (docs/spec/parties.md#queries).
 const partyOf = (card) => parties.find((party) => party.cards.includes(card)) ?? null;
 
 const byId = (id) => {
@@ -69,6 +71,7 @@ let shownPalette = () => null;
 function defaultColor() {
   const used = new Set(parties.map((party) => party.color));
   const colors = PARTY_TOKENS.map((token) => shownPalette()[token]);
+  // default: when all six party colors are used, the first one is taken (docs/spec/parties.md#identity-and-values).
   return colors.find((color) => !used.has(color)) ?? colors[0];
 }
 
@@ -99,6 +102,7 @@ function splitRule(party, remaining) {
   const first = (group) => Math.min(...group.map((card) => order.indexOf(card)));
   const withLeader = groups.find((group) => group.includes(party.leader));
   if (withLeader) return { cards: inSpaceOrder(withLeader), reason: "split-leader" };
+  // default: the group that the split keeps is the largest, and the first card breaks a tie (docs/spec/parties.md#changes-of-the-layout).
   const kept = [...groups].sort((a, b) => b.length - a.length || first(a) - first(b))[0];
   return { cards: inSpaceOrder(kept), reason: "split-most-cards" };
 }
@@ -123,6 +127,7 @@ function settle(party, reason, before) {
   }
   const deleted = party.cards.length < 2;
   party.reason = deleted ? "too-few" : finalReason;
+  // default: a party with no recorded member before the change removes no card (docs/spec/parties.md#changes-of-the-layout).
   const removed = (before ?? []).filter((card) => !party.cards.includes(card));
   return { party: party.id, removed, leader: deleted ? null : party.leader, deleted };
 }
@@ -141,7 +146,9 @@ function memberStates(party) {
 export function cardState(card) {
   const cell = cellOf(card);
   const party = partyOf(card);
+  // default: a card with no tab data has no tabs (docs/spec/parties.md#queries).
   const tabs = (cell.data?.tabs ?? []).map((tab) => ({ tab: tab.id, plugin: tab.plugin, status: {} }));
+  // default: a card with no tab data reports no active tab, and a card in no party reports a null party (docs/spec/parties.md#queries).
   return { card, party: party?.id ?? null, leader: party?.leader === card, activeTab: cell.data?.activeId ?? null, tabs };
 }
 
@@ -243,7 +250,9 @@ function create({ cards, color, leader, leaderColor, take = false }) {
   }
   finish();
   const party = {
+    // default: a create without a leader, a color or a leader color takes the rules of docs/spec/parties.md#identity-and-values: no leader, the first unused color and a leader color that follows the theme.
     id: nextId(), cards: inSpaceOrder(cards), leader: leader ?? null, color: color ?? defaultColor(),
+    // default: the leader color that the person did not choose follows party-leader of the theme (docs/spec/parties.md#identity-and-values).
     leaderColor: leaderColor ?? null, reason: "created",
   };
   parties.push(party);
@@ -365,6 +374,7 @@ export function drawParties() {
     layer.append(drawnPath({ "data-party": party.id, d: loopsPath(loops), fill: "none", stroke: party.color, "stroke-width": BORDER }));
     if (party.leader) {
       const leaderLoops = partyLoops(grid, [grid.rect(party.leader)]);
+      // default: a party with no leader color draws its leader border in the theme token party-leader (docs/spec/parties.md#drawing).
       layer.append(drawnPath({ "data-party-leader": party.id, d: sidesPath(leaderBorder(loops, leaderLoops)), fill: "none", stroke: party.leaderColor ?? shownPalette()["party-leader"], "stroke-width": BORDER }));
     }
   }

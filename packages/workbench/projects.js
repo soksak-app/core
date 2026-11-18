@@ -441,6 +441,7 @@ export function readStoredSpace(project, space) {
     throw new Error(`projects.json: project ${project.root}, space ${space.id}: parties ${found}: ${reason}`);
   };
   if (!Array.isArray(space.parties)) refuse("parties must be an array");
+  // default: a space with no layout holds no card (docs/spec/projects.md#persistence).
   const layoutCards = new Set((space.layout?.state?.cards ?? []).map((card) => card.id));
   const owners = new Map();
   for (const party of space.parties) {
