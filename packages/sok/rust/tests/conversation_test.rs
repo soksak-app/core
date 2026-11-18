@@ -542,3 +542,43 @@ fn folder_names_follow_the_recorded_pairs() {
         );
     }
 }
+
+// contract: conversation.codex.keeps-an-image-only-message
+#[test]
+fn codex_image_only_message_is_emitted_with_its_kind() {
+    let home = Folder::new("conversation-image");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-image.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "session_meta", "payload": {"id": "session", "cwd": cwd}}),
+            json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [
+                {"type": "input_image", "image_url": "data:image/png;base64,AAAA"}
+            ]}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "codex", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "exit status and standard error"
+    );
+    assert!(
+        !stdout.contains("AAAA"),
+        "the picture data is not written: {stdout}"
+    );
+    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+    assert_eq!(
+        output,
+        expected_output(
+            &file,
+            json!([{"role": "user", "text": "", "items": [{"type": "image"}]}]),
+            1
+        )
+    );
+}

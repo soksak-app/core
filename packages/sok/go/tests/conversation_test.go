@@ -397,3 +397,31 @@ func TestFolderNamesFollowTheRecordedPairs(t *testing.T) {
 		}
 	}
 }
+
+// contract: conversation.codex.keeps-an-image-only-message
+func TestCodexImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
+	h := newAgentHome(t)
+	cwd := "/work/core"
+	file := filepath.Join(h.home, ".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-image.jsonl")
+	convWriteRecords(t, file, []any{
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": "session", "cwd": cwd}},
+		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{
+			map[string]any{"type": "input_image", "image_url": "data:image/png;base64,AAAA"},
+		}}},
+	})
+
+	code, stdout, stderr := convRun(t, "--agent", "codex", "--cwd", cwd)
+
+	if code != 0 || stderr != "" {
+		t.Fatalf("exit status %d and standard error %q", code, stderr)
+	}
+	if strings.Contains(stdout, "AAAA") {
+		t.Fatalf("the picture data is written: %s", stdout)
+	}
+	want := convExpected(file, []any{
+		map[string]any{"role": "user", "text": "", "items": []any{map[string]any{"type": "image"}}},
+	}, 1)
+	if got := convDecode(t, stdout); !reflect.DeepEqual(got, want) {
+		t.Fatalf("output %v, want %v", got, want)
+	}
+}
