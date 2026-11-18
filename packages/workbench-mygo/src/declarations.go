@@ -57,6 +57,33 @@ type declaredTheme struct {
 	Name  string            `json:"name"`
 	Shape map[string]string `json:"shape"`
 	Dark  map[string]string `json:"dark"`
+	Light map[string]string `json:"light"`
+}
+
+// PartyColor returns the value of a party theme token (party-1 to party-6, party-leader) in a theme and a mode, as the declaration
+// states it. The party colors are the same declaration that the page reads (docs/spec/parties.md#drawing), so the model does not hold
+// a copy of them. An unknown theme, mode or token is an error.
+func (d *Declarations) PartyColor(theme, mode, token string) (string, error) {
+	for _, declared := range d.themes {
+		if declared.Name != theme {
+			continue
+		}
+		var palette map[string]string
+		switch mode {
+		case "dark":
+			palette = declared.Dark
+		case "light":
+			palette = declared.Light
+		default:
+			return "", fmt.Errorf("unknown mode %s", mode)
+		}
+		value, ok := palette[token]
+		if !ok {
+			return "", fmt.Errorf("theme %s %s declares no %s", theme, mode, token)
+		}
+		return value, nil
+	}
+	return "", fmt.Errorf("unknown theme %s", theme)
 }
 
 // Metric returns the chrome metric name as a number of points or a ratio, and false when the metric does not exist or holds
