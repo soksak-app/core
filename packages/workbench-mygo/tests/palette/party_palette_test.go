@@ -19,7 +19,7 @@ func TestPartyTokensResolveToHexColors(t *testing.T) {
 		t.Fatal(err)
 	}
 	tokens := []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6", "party-leader"}
-	for _, mode := range []string{"dark", "light"} {
+	for _, mode := range []string{"dark"} {
 		for _, token := range tokens {
 			value, err := declared.PartyColor("midnight", mode, token)
 			if err != nil {

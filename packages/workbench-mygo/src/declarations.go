@@ -57,8 +57,21 @@ type declaredTheme struct {
 	Name  string            `json:"name"`
 	Shape map[string]string `json:"shape"`
 	Dark  map[string]string `json:"dark"`
-	Light map[string]string `json:"light"`
 }
+
+// partyTokensOf returns the party tokens of a palette as a new map.
+func partyTokensOf(palette map[string]string) map[string]string {
+	kept := map[string]string{}
+	for _, token := range partyTokens {
+		if value, ok := palette[token]; ok {
+			kept[token] = value
+		}
+	}
+	return kept
+}
+
+// partyTokens are the theme tokens of the party colors (docs/spec/parties.md#drawing).
+var partyTokens = []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6", "party-leader"}
 
 // PartyColor returns the value of a party theme token (party-1 to party-6, party-leader) in a theme and a mode, as the declaration
 // states it. The party colors are the same declaration that the page reads (docs/spec/parties.md#drawing), so the model does not hold
@@ -68,15 +81,11 @@ func (d *Declarations) PartyColor(theme, mode, token string) (string, error) {
 		if declared.Name != theme {
 			continue
 		}
-		var palette map[string]string
-		switch mode {
-		case "dark":
-			palette = declared.Dark
-		case "light":
-			palette = declared.Light
-		default:
-			return "", fmt.Errorf("unknown mode %s", mode)
+		// The Go host draws the dark mode only, so the declaration copy holds the dark palette of each theme.
+		if mode != "dark" {
+			return "", fmt.Errorf("the Go host reads the dark mode only, not %s", mode)
 		}
+		palette := declared.Dark
 		value, ok := palette[token]
 		if !ok {
 			return "", fmt.Errorf("theme %s %s declares no %s", theme, mode, token)
@@ -240,6 +249,12 @@ func ReadDeclarations() (*Declarations, error) {
 	}
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
 		return nil, fmt.Errorf("workbench.json: %w", err)
+	}
+	// The Go host reads the dark palette of the default theme (DefaultPalette, DefaultPartyPalette) and the party tokens of every
+	// theme (PartyColor). The dark palettes of the other themes are kept only as their party tokens, which keeps the declarations
+	// within the memory budget (TestTheDeclarationsKeepWhatTheyRead).
+	for i := 1; i < len(values.Themes); i++ {
+		values.Themes[i].Dark = partyTokensOf(values.Themes[i].Dark)
 	}
 	for _, key := range []string{"add", "split-x", "split-y", "fullscreen", "restore", "close", "close-refused", "layout-held"} {
 		if values.CardTools[key] == "" {
