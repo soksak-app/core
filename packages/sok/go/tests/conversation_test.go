@@ -403,14 +403,22 @@ func TestFolderNamesFollowTheRecordedPairs(t *testing.T) {
 
 // contract: conversation.codex.keeps-an-image-only-message
 func TestCodexImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
+	// The item has the observed key structure of docs/spec/cases/conversation-codex-image-item.json; the image reference is set here.
+	var item map[string]any
+	if text, err := os.ReadFile(repositoryFile(t, "docs/spec/cases/conversation-codex-image-item.json")); err != nil {
+		t.Fatal(err)
+	} else if err := json.Unmarshal(text, &item); err != nil {
+		t.Fatal(err)
+	}
+	item["type"] = "input_image"
+	item["image_url"] = "PICTURE-DATA-NOT-WRITTEN"
+
 	h := newAgentHome(t)
 	cwd := "/work/core"
 	file := filepath.Join(h.home, ".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-image.jsonl")
 	convWriteRecords(t, file, []any{
 		map[string]any{"type": "session_meta", "payload": map[string]any{"id": "session", "cwd": cwd}},
-		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{
-			map[string]any{"type": "input_image", "image_url": "data:image/png;base64,AAAA"},
-		}}},
+		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{item}}},
 	})
 
 	code, stdout, stderr := convRun(t, "--agent", "codex", "--cwd", cwd)
@@ -418,7 +426,7 @@ func TestCodexImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("exit status %d and standard error %q", code, stderr)
 	}
-	if strings.Contains(stdout, "AAAA") {
+	if strings.Contains(stdout, "PICTURE-DATA") {
 		t.Fatalf("the picture data is written: %s", stdout)
 	}
 	want := convExpected(file, []any{

@@ -582,6 +582,16 @@ fn folder_case_long() {
 // contract: conversation.codex.keeps-an-image-only-message
 #[test]
 fn codex_image_only_message_is_emitted_with_its_kind() {
+    // The item has the observed key structure of docs/spec/cases/conversation-codex-image-item.json; the image reference is set here.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../docs/spec/cases/conversation-codex-image-item.json"
+    );
+    let text = std::fs::read_to_string(path).expect("Codex image item case");
+    let mut item: Value = serde_json::from_str(&text).expect("Codex image item case JSON");
+    item["type"] = json!("input_image");
+    item["image_url"] = json!("PICTURE-DATA-NOT-WRITTEN");
+
     let home = Folder::new("conversation-image");
     let cwd = "/work/core";
     let file = home
@@ -591,9 +601,7 @@ fn codex_image_only_message_is_emitted_with_its_kind() {
         &file,
         &[
             json!({"type": "session_meta", "payload": {"id": "session", "cwd": cwd}}),
-            json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [
-                {"type": "input_image", "image_url": "data:image/png;base64,AAAA"}
-            ]}}),
+            json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [item]}}),
         ],
     );
 
@@ -605,7 +613,7 @@ fn codex_image_only_message_is_emitted_with_its_kind() {
         "exit status and standard error"
     );
     assert!(
-        !stdout.contains("AAAA"),
+        !stdout.contains("PICTURE-DATA"),
         "the picture data is not written: {stdout}"
     );
     let output: Value = serde_json::from_str(&stdout).expect("JSON output");
