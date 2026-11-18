@@ -19,13 +19,16 @@ const probeManifest = {
 
 let started = null;
 
-/** Starts the page once per process and returns the window: registry, run, get, reset. */
-export function openPartyWindow() {
-  started ??= start();
+/**
+ * Starts the page once per process and returns the window: registry, run, get, reset. cardIds is the row of the first start in the
+ * process, so a test file that needs another order of the cards starts its own process with that row.
+ */
+export function openPartyWindow(cardIds = CARDS) {
+  started ??= start(cardIds);
   return started;
 }
 
-async function start() {
+async function start(cardIds) {
   const markup = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
   const dom = new JSDOM(markup, { url: "http://localhost/" });
   dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
@@ -40,10 +43,10 @@ async function start() {
   globalThis.innerWidth = 1200;
   globalThis.innerHeight = 800;
 
-  const xs = CARDS.map((_, index) => index).concat(CARDS.length);
+  const xs = cardIds.map((_, index) => index).concat(cardIds.length);
   const environmentDocument = {
     runtime: "runtime",
-    workspace: { focus: CARDS[0], grid: { xs, ys: [0, 1], cards: CARDS.map((id, index) => ({
+    workspace: { focus: cardIds[0], grid: { xs, ys: [0, 1], cards: cardIds.map((id, index) => ({
       id, c0: index, c1: index + 1, r0: 0, r1: 1, tabs: [{ plugin: "probe-plain", title: id }],
     })) } },
     sidebars: { sets: [], links: [] },
