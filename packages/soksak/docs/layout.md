@@ -368,6 +368,31 @@ changes nothing when the arrangement is not slicing.
 grid.balance();
 ```
 
+## Even arrangement
+
+`arrange("even")` replaces the arrangement with a grid of the cards in their
+current order. It removes every split and every merge: the result has no card
+that spans another, and no cut except the grid lines.
+
+- The number of cards `n` is the number of cards of the layout.
+- It chooses `rows` and `columns` so that `rows * columns` is `n` or `n + 1`.
+  When `n + 1` is chosen, one empty card is added so the grid is complete.
+- Among those choices it keeps the ones whose cell is at least `minSize` on both
+  axes, and takes the one whose cell is closest to square. A tie goes to the
+  choice with no empty card.
+- The cards fill the grid in reading order: the first row left to right, then the
+  next row.
+- Every cell has the same drawn size.
+- When no choice keeps every cell at least `minSize`, `arrange("even")` returns
+  false and changes nothing.
+
+The grid is the same for any plane size: a wider plane gets more columns, a taller
+plane gets more rows.
+
+```js
+grid.arrange("even");
+```
+
 ## A card that reaches across the plane
 
 A rail stands between panes and reaches from one side of the plane to the other.
