@@ -51,9 +51,14 @@ for (const item of cases) {
       const reply = await run();
       if (!("returns" in step)) continue;
       const { party, ...rest } = step.returns;
+      // A card query names the holding party by its identifier, so its reply is compared as a whole.
+      if (typeof party === "string") {
+        assert.deepEqual(reply, step.returns, `${step.call} ${call}: reply`);
+        continue;
+      }
       // The reply holds the record of the party with its outline; a case states the fields of the record that it checks.
       const stated = party && Object.fromEntries(Object.keys(party).map((key) => [key, asCase(reply.party ?? {})[key]]));
-      assert.deepEqual({ ...rest, party: stated }, step.returns, `${step.call} ${call}: reply`);
+      assert.deepEqual(party === undefined ? rest : { ...rest, party: stated }, step.returns, `${step.call} ${call}: reply`);
     }
   });
 }

@@ -68,49 +68,51 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 	}
 	caseFile(t, "parties.json", &file)
 	for _, kase := range file.Cases {
-		// The case states hold the cards only: the lines are the sorted edges of the cards, with no gap, as the owning JavaScript test builds them.
-		xs, ys := map[float64]bool{}, map[float64]bool{}
-		for _, card := range kase.State.Cards {
-			xs[float64(card.C0)], xs[float64(card.C1)] = true, true
-			ys[float64(card.R0)], ys[float64(card.R1)] = true, true
-		}
-		state := layout.State{Xs: sortedKeys(xs), Ys: sortedKeys(ys), Cards: kase.State.Cards}
-		gap := 0.0
-		options := layout.DefaultOptions()
-		options.Gap = &gap
-		grid, err := layout.New(&state, options)
-		if err != nil {
-			t.Fatalf("%s: the state of the case is refused: %v", kase.Name, err)
-		}
-		parties := layout.NewParties()
-		for i, s := range kase.Steps {
-			reply, err := parties.Run(grid, s.Call, s.Params)
-			if s.Error != nil {
-				if err == nil || err.Error() != *s.Error {
-					t.Fatalf("%s: step %d %s: error %v, want %q", kase.Name, i, s.Call, err, *s.Error)
+		t.Run(kase.Name, func(t *testing.T) {
+			// The case states hold the cards only: the lines are the sorted edges of the cards, with no gap, as the owning JavaScript test builds them.
+			xs, ys := map[float64]bool{}, map[float64]bool{}
+			for _, card := range kase.State.Cards {
+				xs[float64(card.C0)], xs[float64(card.C1)] = true, true
+				ys[float64(card.R0)], ys[float64(card.R1)] = true, true
+			}
+			state := layout.State{Xs: sortedKeys(xs), Ys: sortedKeys(ys), Cards: kase.State.Cards}
+			gap := 0.0
+			options := layout.DefaultOptions()
+			options.Gap = &gap
+			grid, err := layout.New(&state, options)
+			if err != nil {
+				t.Fatalf("%s: the state of the case is refused: %v", kase.Name, err)
+			}
+			parties := layout.NewParties()
+			for i, s := range kase.Steps {
+				reply, err := parties.Run(grid, s.Call, s.Params)
+				if s.Error != nil {
+					if err == nil || err.Error() != *s.Error {
+						t.Fatalf("%s: step %d %s: error %v, want %q", kase.Name, i, s.Call, err, *s.Error)
+					}
+					continue
 				}
-				continue
+				if err != nil {
+					t.Fatalf("%s: step %d %s: unexpected error %v", kase.Name, i, s.Call, err)
+				}
+				if string(s.Returns) == "null" || len(s.Returns) == 0 {
+					continue
+				}
+				text, err := json.Marshal(reply)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var got, want any
+				if err := json.Unmarshal(text, &got); err != nil {
+					t.Fatal(err)
+				}
+				if err := json.Unmarshal(s.Returns, &want); err != nil {
+					t.Fatal(err)
+				}
+				if !subsetOf(want, got) {
+					t.Fatalf("%s: step %d %s: reply %s does not hold the returns %s", kase.Name, i, s.Call, text, s.Returns)
+				}
 			}
-			if err != nil {
-				t.Fatalf("%s: step %d %s: unexpected error %v", kase.Name, i, s.Call, err)
-			}
-			if string(s.Returns) == "null" || len(s.Returns) == 0 {
-				continue
-			}
-			text, err := json.Marshal(reply)
-			if err != nil {
-				t.Fatal(err)
-			}
-			var got, want any
-			if err := json.Unmarshal(text, &got); err != nil {
-				t.Fatal(err)
-			}
-			if err := json.Unmarshal(s.Returns, &want); err != nil {
-				t.Fatal(err)
-			}
-			if !subsetOf(want, got) {
-				t.Fatalf("%s: step %d %s: reply %s does not hold the returns %s", kase.Name, i, s.Call, text, s.Returns)
-			}
-		}
+		})
 	}
 }
