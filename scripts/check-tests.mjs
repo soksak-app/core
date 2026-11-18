@@ -277,6 +277,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F898",
+    implementation: [{ file: "packages/sok/go/src/skill.go", symbol: "codexHome := false" }],
+    tests: [
+      { file: "packages/sok/go/tests/codex_test.go", id: "TestSkillInstallCreatesTheCodexAgentFolderWhenCodexIsPresent" },
+      { file: "packages/sok/go/tests/codex_test.go", id: "TestMcpInstallRegistersTheSokWithCodexWhenCodexIsOnPath" },
+      { file: "packages/sok/rust/tests/codex_test.rs", id: "skill_install_creates_the_codex_agent_folder_when_codex_is_present" },
+      { file: "packages/sok/rust/tests/codex_test.rs", id: "mcp_install_registers_the_sok_with_codex_when_codex_is_on_path" },
+    ],
+    expected: "The skill of the Codex agent is written to the Codex agents folder when the Codex home is a directory, and sok mcp install registers the running sok with the codex command when it is on PATH.",
+    levels: ["unit"],
+  },
+  {
     id: "F894",
     implementation: [{ file: "packages/soksak/src/soksak.ts", symbol: "  arrange(mode: 'even'): boolean {" }],
     tests: [

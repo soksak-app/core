@@ -10,6 +10,7 @@ import (
 
 // The skill of the Codex agent is written to <home>/.agents/skills/soksak/SKILL.md when <home>/.codex is a directory, so that
 // Codex reads it; the install creates the agents folder when it does not exist.
+// contract: cli.skill.installs-the-codex-folder
 func TestSkillInstallCreatesTheCodexAgentFolderWhenCodexIsPresent(t *testing.T) {
 	h := newAgentHome(t)
 	mkdirs(t, filepath.Join(h.home, ".codex"))
@@ -22,6 +23,7 @@ func TestSkillInstallCreatesTheCodexAgentFolderWhenCodexIsPresent(t *testing.T) 
 
 // The MCP install registers the running sok with the codex command when codex is on PATH, and reports the state of that
 // registration as codex; a second install finds the registration current and runs no codex command.
+// contract: cli.mcp.registers-with-codex
 func TestMcpInstallRegistersTheSokWithCodexWhenCodexIsOnPath(t *testing.T) {
 	f := newRegistrationFixture(t)
 	codexDir := setupFixture(t, "codex")

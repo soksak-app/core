@@ -1679,7 +1679,7 @@ func TestTheGeneralSettingsGiveAClassicBarItsRoom(t *testing.T) {
 	}
 }
 
-// The 표시 group of the general section draws the card auto-arrange choice: resize keeps the arrangement, even replaces it
+// The display group of the general section draws the card auto-arrange choice: resize keeps the arrangement, even replaces it
 // with an equal grid, and the choice runs core.settings.change (docs/spec/settings.md#controls).
 func TestTheDisplayGroupDrawsTheCardArrangeChoice(t *testing.T) {
 	f := opened(t)

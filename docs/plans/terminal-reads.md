@@ -95,6 +95,19 @@ Terminals notify each other when a watched folder changes. The contract is one p
 Why one path: Codex has no file-change event, and Claude's `FileChanged` runs only inside a Claude session. Two paths would deliver the
 same message at different times or not at all.
 
+## Agent delivery (decision D4)
+
+The delivery channel for a message is chosen by one criterion: the better channel that the agent offers.
+
+- Baseline: input injection into the registered terminal. The message, command or skill call uses one declared form. The TUI may queue
+  the input; the queue is accepted behavior. The sidecar does not gate on terminal state and does not work around TUI behavior such as
+  dialogs or timing.
+- Better channel, where the agent offers it: MCP tools of the sok server (`messages.read`, `messages.wait`). The result is structured and
+  leaves no input in the conversation. The agent uses it when its client supports MCP tools.
+- Skills improve the usage of either channel. They are not required by the delivery.
+
+Open item V7: the time limit of a waiting MCP tool call in each client (Claude Code, Codex), which decides how `messages.wait` returns.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
