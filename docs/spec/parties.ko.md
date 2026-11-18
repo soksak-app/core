@@ -99,7 +99,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - 거부된 명령은 아무것도 쓰지 않으며, `exposureChanged`도 배치 쓰기도 보내지 않는다.
 - 카드의 작업 상태 변화는 `core.parties`에 대한 `exposureChanged`를 보내지 않는다.
 - 현재 동작, 즉 party 저장을 쓰기 전의 기존 저장 방식: project 저장은 `{kind: "patch", id, patch}`를 실은 호출 `workspace`를 보내며(`packages/workbench/host-store.js:44`), `patch`는 `{spaces, activeSpaceId, named}`이다(`packages/workbench/projects.js:438`, `projects.js:443`에서 보낸다). `spaces`는 페이지가 가진 project의 space 객체 배열이다. 페이지의 어떤 코드도 아직 space 객체에 `parties` 멤버를 쓰지 않으며, Go와 Rust 호스트는 받은 `spaces`를 그대로 저장한다(`packages/host/go/src/workspace.go:541`, `packages/host/rust/src/workspace.rs:549`).
-- party 감시 케이스는 `workspace`와 `core.parties` 호출의 순서만 읽는다. 케이스는 `log` 호출을 걸러내며 세지 않는다.
+- party 감시 케이스는 `workspace`, `core.parties` 및 exposure 호출의 순서만 읽는다. 케이스는 세지 않는 `log` 호출과 `notificationState`와 `setTheme` 호출(케이스의 `filter` 멤버)을 걸러낸다. reader는 `notificationState`에 `{authorization: "notDetermined", error: null}`로, `setTheme`과 `setMenuLanguage`에 `null`로 답한다. 이 답들은 각각 `docs/spec/cases/page-wire/plane-placeholder-error.json`(단계 2와 3), `docs/spec/cases/page-wire/background-sessions-context.json`(단계 14와 15), `docs/spec/cases/page-wire/library-folders-once.json`(단계 4와 5)이 기록한 reply이다.
 
 ## 창 설명
 

@@ -99,7 +99,7 @@ Three queries return the member state of cards. They share one card state shape 
 - A refused command writes nothing and sends neither `exposureChanged` nor a layout write.
 - A change of the work state of a card sends no `exposureChanged` for `core.parties`.
 - Current behaviour of the existing storage, before the party storage is written: a save of a project sends the call `workspace` with `{kind: "patch", id, patch}` (`packages/workbench/host-store.js:44`), where `patch` is `{spaces, activeSpaceId, named}` (`packages/workbench/projects.js:438`, sent at `projects.js:443`). `spaces` is the array of the project's space objects as the page holds them. No code of the page writes a `parties` member yet, and the Go and Rust hosts store `spaces` as they receive it (`packages/host/go/src/workspace.go:541`, `packages/host/rust/src/workspace.rs:549`).
-- The case of the party watch reads only the order of the `workspace` and `core.parties` calls. The case filters and does not count `log` calls.
+- The case of the party watch reads only the order of the `workspace`, `core.parties` and exposure calls. The case filters the `log` calls, which it does not count, and the `notificationState` and `setTheme` calls (member `filter` of the case). The reader answers `notificationState` with `{authorization: "notDetermined", error: null}`, the reply recorded by `docs/spec/cases/page-wire/plane-placeholder-error.json` (steps 2 and 3), and `setTheme` with `null`, the reply recorded by `docs/spec/cases/page-wire/background-sessions-context.json` (steps 14 and 15), and `setMenuLanguage` with `null`, the reply recorded by `docs/spec/cases/page-wire/library-folders-once.json` (steps 4 and 5).
 
 ## Describe
 

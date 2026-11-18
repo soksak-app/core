@@ -14,6 +14,10 @@ import { pageMemorySaver } from "./memory-saver.mjs";
 // (docs/spec/external-sidebars.md).
 const WINDOW_SIDES = ["left", "right", "top", "bottom"];
 
+// The plane size of the test window, in CSS pixels.
+const PLANE_WIDTH = 1000;
+const PLANE_HEIGHT = 600;
+
 export const CARDS = "abcdefghijklmnop".split("");
 
 const probeManifest = {
@@ -83,6 +87,11 @@ async function start(cardIds) {
   const { installChromeMetrics } = await import("../../chrome-metrics.js");
   installChromeMetrics(document.documentElement);
   (await import("../../settings.js")).install();
+  // JSDOM has no layout, so the plane element reports the size of a window with the page's measured properties. The page measures the
+  // plane with clientWidth and clientHeight and resizes the grid to them (plane.js measureAt).
+  const planeElement = document.getElementById("plane");
+  Object.defineProperty(planeElement, "clientWidth", { value: PLANE_WIDTH });
+  Object.defineProperty(planeElement, "clientHeight", { value: PLANE_HEIGHT });
   const plane = await import("../../plane.js");
   plane.adopt(plane.fresh(), "spc-1");
 

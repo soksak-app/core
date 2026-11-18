@@ -2,6 +2,11 @@
   "name": "party-watch-composition",
   "description": "A watch of core.parties sends its current value, then one value for each change of the parties by composition, and the two parties that touch get different default colors.",
   "replay": false,
+  "filter": [
+    "notificationState",
+    "setTheme",
+    "setMenuLanguage"
+  ],
   "reason": "The producer runs no window, and a status watch is answered by a page that has a window (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {
     "colour-1": {
