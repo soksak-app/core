@@ -162,3 +162,11 @@ func copyCard(c *Card) Card {
 	}
 	return out
 }
+
+// Touches tells whether two cards touch: a side of one meets a side of the other across the gap, and the two cards overlap on the other
+// axis with a positive length. The ends C1 and R1 are exclusive, so cards in adjacent slots meet when one end equals the other start.
+func Touches(a, b Card) bool {
+	overlapRows := a.R0 < b.R1 && b.R0 < a.R1
+	overlapCols := a.C0 < b.C1 && b.C0 < a.C1
+	return (overlapRows && (a.C1 == b.C0 || b.C1 == a.C0)) || (overlapCols && (a.R1 == b.R0 || b.R1 == a.R0))
+}
