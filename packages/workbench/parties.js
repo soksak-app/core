@@ -148,12 +148,20 @@ export function cardState(card) {
   return { card, party: party?.id ?? null, leader: party?.leader === card, activeTab: cell.data?.activeId ?? null, tabs };
 }
 
+/**
+ * The rectilinear loops of the outline of rects (docs/spec/parties.md#drawing). Adjacent cards join at half the gap of the grid, and the
+ * outline is inset by half the border width. A card with no neighbour has the same outline alone.
+ */
+function partyLoops(grid, rects) {
+  return outline(rects, { pad: grid.gap / 2, inset: BORDER / 2 }).loops.map((loop) => loop.map((point) => [point.x, point.y]));
+}
+
 /** The party record of core.parties and core.party.get, with its outline in window points. */
 function record(party) {
   const rects = party.cards.map((card) => currentGrid().rect(card)).filter(Boolean);
   return {
     id: party.id, cards: [...party.cards], leader: party.leader, color: party.color, leaderColor: party.leaderColor,
-    outline: outline(rects).loops.map((loop) => loop.map((point) => [point.x, point.y])), reason: party.reason,
+    outline: partyLoops(currentGrid(), rects), reason: party.reason,
   };
 }
 
@@ -303,15 +311,60 @@ export function drawParties() {
     planeElement.append(layer);
   }
   layer.replaceChildren();
-  const inset = -BORDER / 2;
   for (const party of parties) {
     const rects = party.cards.map((card) => grid.rect(card)).filter(Boolean);
-    layer.append(drawnPath({ "data-party": party.id, d: outline(rects, { pad: inset }).path, fill: "none", stroke: party.color, "stroke-width": BORDER }));
+    const loops = partyLoops(grid, rects);
+    layer.append(drawnPath({ "data-party": party.id, d: loopsPath(loops), fill: "none", stroke: party.color, "stroke-width": BORDER }));
     if (party.leader) {
-      const leaderRect = grid.rect(party.leader);
-      layer.append(drawnPath({ "data-party-leader": party.id, d: outline([leaderRect], { pad: inset }).path, fill: "none", stroke: party.leaderColor, "stroke-width": BORDER }));
+      const leaderLoops = partyLoops(grid, [grid.rect(party.leader)]);
+      layer.append(drawnPath({ "data-party-leader": party.id, d: sidesPath(leaderBorder(loops, leaderLoops)), fill: "none", stroke: party.leaderColor, "stroke-width": BORDER }));
     }
   }
+}
+
+/** The path of closed loops of points. */
+function loopsPath(loops) {
+  return loops.map((loop) => `${loop.map((point, index) => `${index === 0 ? "M" : "L"}${point[0]} ${point[1]}`).join(" ")} Z`).join(" ");
+}
+
+/** The path of separate sides, each a move and a line. */
+function sidesPath(sides) {
+  return sides.map((side) => `M${side[0][0]} ${side[0][1]} L${side[1][0]} ${side[1][1]}`).join(" ");
+}
+
+/** The sides of the loops, each side from a point to the next point of its loop. */
+function loopSides(loops) {
+  return loops.flatMap((loop) => loop.map((point, index) => [point, loop[(index + 1) % loop.length]]));
+}
+
+/**
+ * The parts of the outline loops that lie on the border of the leader card (docs/spec/parties.md#drawing): a side of the party outline
+ * that is on a side of the leader card's own loop, with the overlap of the two sides.
+ */
+function leaderBorder(loops, leaderLoops) {
+  const borders = loopSides(leaderLoops);
+  const out = [];
+  for (const side of loopSides(loops)) {
+    for (const border of borders) {
+      const shared = sharedPart(side, border);
+      if (shared) out.push(shared);
+    }
+  }
+  return out;
+}
+
+/** The overlap of two axis-aligned sides on the same line, or null. */
+function sharedPart(a, b) {
+  const horizontal = a[0][1] === a[1][1] && b[0][1] === b[1][1] && a[0][1] === b[0][1];
+  const vertical = a[0][0] === a[1][0] && b[0][0] === b[1][0] && a[0][0] === b[0][0];
+  if (!horizontal && !vertical) return null;
+  // The coordinate along the side: x for a horizontal side, y for a vertical one.
+  const along = horizontal ? 0 : 1;
+  const lo = Math.max(Math.min(a[0][along], a[1][along]), Math.min(b[0][along], b[1][along]));
+  const hi = Math.min(Math.max(a[0][along], a[1][along]), Math.max(b[0][along], b[1][along]));
+  if (!(lo < hi)) return null;
+  const line = horizontal ? a[0][1] : a[0][0];
+  return horizontal ? [[lo, line], [hi, line]] : [[line, lo], [line, hi]];
 }
 
 /**
