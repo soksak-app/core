@@ -89,7 +89,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 - [ ] F899 — P1: 두 터미널 plugin(term, terminal)에서 보이는 화면 밖을 읽고, 무엇이 실행 중인지 안다.
   - [ ] F899-1 — sidecar와 두 plugin에서 행 구간(`screen.read {from, count}`)과 평문으로 화면 읽기.
   - [ ] F899-2 — 디스크의 session 파일에서 agent 대화 읽기(Claude Code, Codex). 읽은 파일을 함께 밝힌다.
-  - [ ] F899-3 — 각 터미널의 전경 프로그램과 백그라운드 작업, 그리고 그것을 이름으로 알려 주는 명령.
+  - [~] F899-3 — 각 터미널의 전경 프로그램과 백그라운드 작업, 그리고 그것을 이름으로 알려 주는 명령. 진행: 명세 작성 완료, Red와 Green은 sidecar에서 대기. 열린 질문(docs/spec/process-list.ko.md#open-decisions): 1 sidecar operation 이름과 operationField; 2 macOS 전경 process mechanism(V3); 3 background job 식별; 4 osc-133 source 사용; 5 닫힌 session과 읽기 실패의 error 문구; 6 started 시각 format; 7 background job 이름; 8 source wire 표기.
   - [ ] F899-4 — 터미널 상태 event(idle, running, exited, waiting, agent-busy, agent-waiting).
   - [!] F899-5 — TUI 키 adapter(D6)와 대화상자 처리(D5). F899-4 뒤에 한다. sidecar alacritty의 S120으로 구현했다: 키 adapter와 대화상자 supervisor. 보류: TUI 키 table이 비어 있어서 agent 동작이 TUI 키에 도달하지 않는다(alacritty S122). 원인: 어떤 agent TUI의 키도 agent 버전과 함께 관찰되어 기록되지 않았다. 재개 조건: agent TUI의 키가 버전과 함께 관찰되어 `TUI_KEYS`에 기록되고, `key_for`의 red-green 테스트가 그것을 덮는다.
   - [o] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7). sidecar alacritty의 S121과 sidecar vt의 S181로 구현했다. 거부 계약은 persistent services 사양에 있다. 두 sidecar 모두 Red와 Green을 기록했다.
