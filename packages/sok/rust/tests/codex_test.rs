@@ -6,8 +6,6 @@
 mod agents;
 #[path = "support/folder.rs"]
 mod folder;
-#[path = "support/policy.rs"]
-mod policy;
 
 use std::path::Path;
 
