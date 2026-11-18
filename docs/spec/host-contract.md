@@ -1425,6 +1425,23 @@ Items:
 | `surface.sync.closed-window-creates-nothing` | A layout or modal request that is still in flight when its window closes creates no surface or modal view and fails with `project window is closed`, because the close of the window has already closed every surface and nothing would close a later one. | all |
 | `exposure.reply.error-member-names-code-and-message` | A document reply whose `error` member has no `code` or no `message` is refused with `error has no code` or `error has no message`, and no code 0 or empty message is delivered to the request that waits for it. | all |
 | `sok.endpoint.error-member-names-code-and-message` | An error member of an endpoint reply without a `code` or without a `message` is refused with `invalid frame from endpoint: error has no code` or `... error has no message`; no code 0 or empty message stands for it. | all |
+| `conversation.does-not-follow-symbolic-links` | A symbolic link in a session folder is neither followed nor a candidate, so a link that leads back up the tree cannot repeat a folder. | all |
+| `conversation.refuses-a-text-that-is-not-a-string` | A `text` of a `claude-code` text block, or of a `codex` input or output text item, that is not a string is refused with its line number. | all |
+| `conversation.refuses-a-message-content-of-the-wrong-type` | A `claude-code` message whose content is neither a string nor a list, or a `codex` message whose content is not a list, is refused with its line number. | all |
+| `conversation.refuses-a-content-item-that-is-not-an-object` | A content item of a message that is not a JSON object with a string `type` is refused with its line number. | all |
+| `conversation.claude-code.names-the-folder-by-the-recorded-pairs` | The `claude-code` session folder of a working directory is named by the encoding pairs that Claude Code records, as the agent conversation specification states. | all |
+| `conversation.codex.keeps-an-image-only-message` | A `codex` user or assistant message with an image item and no text is kept with its image items and is not skipped. | all |
+| `conversation.claude-code.keeps-an-image-only-message` | A `claude-code` user or assistant message with an image block and no text is kept with its image items and is not skipped. | all |
+| `conversation.claude-code.selects-the-file-by-cwd` | A `claude-code` read selects the session file whose first `cwd` record is the working directory. | all |
+| `conversation.codex.selects-the-file-by-payload-cwd` | A `codex` read selects the session file whose first record is `session_meta` with a `payload.cwd` equal to the working directory. | all |
+| `conversation.reads-an-unchosen-file-only-to-its-session-record` | A candidate file that is not chosen is read only up to its session record, so a malformed line after that record is not read. | all |
+| `conversation.refuses-a-relative-cwd` | A `--cwd` that is not an absolute path is refused with `cwd is not an absolute path: <cwd>`. | all |
+| `conversation.refuses-a-session-working-directory-that-is-not-a-string` | A session file whose working directory is missing or not a string is refused with the working directory message. | all |
+| `conversation.refuses-an-unknown-agent` | An agent that is neither `claude-code` nor `codex` is refused with `unknown agent <agent>`. | all |
+| `conversation.refuses-an-unreadable-file-with-its-reason` | A candidate or chosen file that cannot be read is refused with its path and the operating system reason in lower case. | all |
+| `conversation.refuses-when-no-file-matches` | When no candidate matches the working directory, the read is refused with `no <agent> session file has the working directory <cwd>`. | all |
+| `conversation.selects-the-most-recently-modified-file` | When two or more candidates match, the most recently modified file is chosen. | all |
+| `sidecars.environment.sok-folder-first-on-path` | A sidecar process starts with the folder of the sok application first on PATH, and that folder appears in no other PATH entry. | all |
 
 ## Workbench cases
 

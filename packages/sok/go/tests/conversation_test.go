@@ -333,6 +333,44 @@ func TestClaudeTextThatIsNotAStringIsRefused(t *testing.T) {
 	}
 }
 
+// contract: conversation.refuses-a-content-item-that-is-not-an-object
+func TestClaudeContentItemThatIsNotAnObjectIsRefused(t *testing.T) {
+	h := newAgentHome(t)
+	cwd := "/work/core"
+	file := filepath.Join(h.home, ".claude/projects/-work-core/session.jsonl")
+	convWriteRecords(t, file, []any{
+		map[string]any{"type": "user", "cwd": cwd, "message": map[string]any{"role": "user", "content": "question"}},
+		map[string]any{"type": "assistant", "cwd": cwd, "message": map[string]any{"role": "assistant", "content": []any{
+			"plain string item",
+		}}},
+	})
+
+	code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", cwd)
+
+	if code != 1 || stdout != "" || stderr != "sok: "+file+": line 2 has a content item that is not an object with a string type\n" {
+		t.Fatalf("status %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
+// contract: conversation.refuses-a-content-item-that-is-not-an-object
+func TestCodexContentItemWithoutAStringTypeIsRefused(t *testing.T) {
+	h := newAgentHome(t)
+	cwd := "/work/core"
+	file := filepath.Join(h.home, ".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-item.jsonl")
+	convWriteRecords(t, file, []any{
+		map[string]any{"type": "session_meta", "payload": map[string]any{"id": "session", "cwd": cwd}},
+		map[string]any{"type": "response_item", "payload": map[string]any{"type": "message", "role": "user", "content": []any{
+			map[string]any{"text": "question"},
+		}}},
+	})
+
+	code, stdout, stderr := convRun(t, "--agent", "codex", "--cwd", cwd)
+
+	if code != 1 || stdout != "" || stderr != "sok: "+file+": line 2 has a content item that is not an object with a string type\n" {
+		t.Fatalf("status %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
+
 // contract: conversation.refuses-a-message-content-of-the-wrong-type
 func TestClaudeMessageContentThatIsNeitherStringNorListIsRefused(t *testing.T) {
 	h := newAgentHome(t)
