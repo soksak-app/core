@@ -417,7 +417,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onTextScope(() => coreChanged());
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
-  installParties({ status, command: (name, read) => registry.command(name, read), notifyChange: coreChanged, grid: currentGrid });
+  installParties({ status, command: (name, read) => registry.command(name, read), notifyChange: coreChanged, grid: currentGrid, plane: () => document.getElementById("plane") });
 
   // A refusal of a settings change is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {

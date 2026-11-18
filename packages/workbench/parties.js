@@ -2,6 +2,7 @@
 // (docs/spec/parties.md). The commands core.party.* and core.card.get, and the status core.parties, are registered by
 // installParties; the rules are applied to the layout of the window that currently shows the grid.
 import { outline } from "soksak";
+import { CHROME } from "./chrome-metrics.js";
 import { windowSidebar } from "./window-sidebars.js";
 
 /** The default colors of a party, the theme tokens party-1 to party-6 of the current theme, in their order. */
@@ -258,6 +259,7 @@ function deleteParty({ party: id }) {
 /** Settles the parties after a card closed. The card leaves its party with the reason closed, and the watchers of core.parties are told. */
 export function cardsClosed() {
   const rows = reconcile();
+  drawParties();
   notify();
   return rows;
 }
@@ -272,16 +274,59 @@ export function reconcile() {
   return rows;
 }
 
+// The border width of a party is the rail width of the theme (docs/spec/parties.md#drawing). The outline is inset by half of it.
+const BORDER = parseFloat(CHROME["theme-rail-w"]);
+const SVG_NS = "http://www.w3.org/2000/svg";
+// The layer that holds the party paths. It is created in the plane on the first drawing.
+let layer = null;
+// The plane element of the page, or null when the window has no page (a test of the registry has none).
+let planeOf = () => null;
+
+function drawnPath(attributes) {
+  const element = document.createElementNS(SVG_NS, "path");
+  for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, String(value));
+  return element;
+}
+
+/**
+ * Draws the outer outline of each party and the leader border of its leader into the plane (docs/spec/parties.md#drawing). The
+ * outline is built from the presented rectangles of the cards, and the leader border is the outline of the leader card.
+ */
+export function drawParties() {
+  const grid = currentGrid();
+  const planeElement = planeOf();
+  if (!grid || !planeElement) return;
+  if (!layer || !layer.isConnected) {
+    layer = document.createElementNS(SVG_NS, "svg");
+    layer.setAttribute("class", "parties");
+    layer.setAttribute("style", "position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none");
+    planeElement.append(layer);
+  }
+  layer.replaceChildren();
+  const inset = -BORDER / 2;
+  for (const party of parties) {
+    const rects = party.cards.map((card) => grid.rect(card)).filter(Boolean);
+    layer.append(drawnPath({ "data-party": party.id, d: outline(rects, { pad: inset }).path, fill: "none", stroke: party.color, "stroke-width": BORDER }));
+    if (party.leader) {
+      const leaderRect = grid.rect(party.leader);
+      layer.append(drawnPath({ "data-party-leader": party.id, d: outline([leaderRect], { pad: inset }).path, fill: "none", stroke: party.leaderColor, "stroke-width": BORDER }));
+    }
+  }
+}
+
 /**
  * Registers the party commands and the party status of the window. notifyChange is called after each change so the watchers of
  * core.parties read the new value. status and command are the registration functions of the core exposure.
  */
-export function installParties({ status, command, notifyChange, grid }) {
+export function installParties({ status, command, notifyChange, grid, plane }) {
   notify = notifyChange;
   currentGrid = grid;
+  // default: a registry without a page passes no plane, so nothing is drawn.
+  planeOf = plane ?? (() => null);
   status("core.parties", () => (currentGrid() ? partyList() : []));
   const run = (fn) => (params) => {
     const result = fn(params);
+    drawParties();
     notify();
     return result;
   };
