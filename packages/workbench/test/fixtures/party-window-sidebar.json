@@ -1,0 +1,4 @@
+{
+  "description": "The card row of the window sidebar refusal test: the card left is the window sidebar of the left side, and a and b are content cards.",
+  "cards": ["left", "a", "b"]
+}

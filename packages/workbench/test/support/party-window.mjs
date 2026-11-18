@@ -10,6 +10,9 @@ import { JSDOM } from "jsdom";
 import "../../parties.js";
 import { pageMemorySaver } from "./memory-saver.mjs";
 
+// The window sidebars are the cards named by the four sides: a card with the name of a side is a window sidebar and holds no tab.
+const WINDOW_SIDES = ["left", "right", "top", "bottom"];
+
 export const CARDS = "abcdefghijklmnop".split("");
 
 const probeManifest = {
@@ -47,7 +50,7 @@ async function start(cardIds) {
   const environmentDocument = {
     runtime: "runtime",
     workspace: { focus: cardIds[0], grid: { xs, ys: [0, 1], cards: cardIds.map((id, index) => ({
-      id, c0: index, c1: index + 1, r0: 0, r1: 1, tabs: [{ plugin: "probe-plain", title: id }],
+      id, c0: index, c1: index + 1, r0: 0, r1: 1, tabs: WINDOW_SIDES.includes(id) ? [] : [{ plugin: "probe-plain", title: id }],
     })) } },
     sidebars: { sets: [], links: [] },
   };
