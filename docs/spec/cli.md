@@ -40,6 +40,7 @@ The current Linux and Windows platform implementations report that process exit 
 | `sok setup install [path\|skill\|mcp]...` | Installs each missing setup part of the named kinds, of every kind without a name ([setup parts](#setup-parts)) |
 | `sok setup environment` | Prints `{HOME, PATH, CLAUDE_CONFIG_DIR, environment}` of its environment, where `environment` holds every variable, for the host that reads the environment of the login shell ([agents in the application](#agents-in-the-application)) |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
+| `sok conversation read --agent claude-code\|codex --cwd <path>` | Prints `{file, messages, skipped}`: the messages of the conversation of an agent in a working directory, read from the agent's session file on disk, and the file it read ([agent conversation](agent-conversation.md)); it does not need a running application |
 | `sok plugin list` | Lists the installed plugins |
 | `sok registry use <index>` | Sets the registry index that installation reads |
 | `sok registry build <directory>` | Validates a registry and writes its `index.json` |
