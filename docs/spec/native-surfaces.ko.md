@@ -394,6 +394,16 @@ Terminal의 `terminal.screen` status는 rows를 담고 JSON 값이 같으면 not
 
 진단 build를 명시적인 `SOKSAK_VT_TRACE_DIR`로 시작하면 terminal cursor status는 일치하는 `frame`, `preedit`와 함께 `screen.render` object를 원자적으로 공개한다. Startup option이 없으면 `render`는 null이고 glyph bounds를 계산하지 않는다. Non-null object는 정확한 frame identity를 반복하고 `pixel` `{width,height,bytesPerRow,format:'bgra8',alpha:'premultiplied',colorSpace:'sRGB',origin:'top-left'}`, `grid` `{rows,cols,origin:{x,y},cellWidth,cellHeight}`, `font` `{family,size,ascent,descent,leading,baselineFromCellTop}`을 담는다. Top-level `underline`은 `positionFromBaseline`, `positionCoordinate:'CoreText y-up'`, `thickness`, `minimumThickness`, `colorSource:'glyph.foreground'`를 담는다. `cursor`는 nullable `rect`, shape, visibility, blink visibility, focus, blend (`normal` 또는 `difference`), effective color (`null` 또는 opaque sRGB `#rrggbb`), border를 담는다. 각 `glyphs[]` 항목은 row, column, cell width, 양수 `fontRuns`, grapheme, overlay 및 inverse를 해석한 draw-time opaque sRGB `foreground`와 `background`, leading-cell origin 기준 nullable finite signed fractional `bounds`, nullable `underline.rect`를 담는다. Preedit overlay가 PTY text를 대체해도 원래 PTY screen cell은 바뀌지 않으므로 glyph 색은 draw-time 값이다. Glyph bounds는 leading-cell origin만 뺀 raw `CTFont`/`CTLine` ink bounds이며 underline rectangle도 같은 leading-cell coordinate origin을 사용한다. 둘 다 cell span을 넘어갈 수 있고 원래 값을 보존한다. Difference blend block cursor는 destination pixel을 반전하므로 `color:null`을 보고한다. Renderer는 측정한 draw 입력과 geometry만 공개하며 test threshold나 coverage 판정은 공개하지 않는다. 기본 경로는 glyph bounds를 계산하거나 cell별 render record를 할당하지 않는다. Frame과 render metadata는 같은 성공한 draw에서 image와 screen message를 보내기 전에 생성되며, 실패하거나 지연된 draw의 pending screen state에는 metadata가 없다.
 
+### 복사 경로 프레임
+
+복사 경로는 그림 영역의 `copy` 표시 방식([그림 소비](#그림-영역))이다. 아래 규칙이 그 계약이며, [features](../features.ko.md)는 그 구현을 F906으로 추적한다.
+
+- **요청 시 화면**: 공급자는 현재 화면에 대한 요청의 답으로만 화면 메시지를 보낸다. 어떤 요청도 덮지 않은 출력은 메시지를 보내지 않는다.
+- **바뀐 행만**: 화면 메시지는 호스트가 그 영역에 대해 받아들인 마지막 화면과 다른 행만 담는다. 바뀌지 않은 화면은 메시지를 보내지 않으며, `terminal.screen` 상태도 바뀌지 않은 값을 억제한다.
+- **프레임 박자**: 한 창의 image region들의 프레임은 하나의 박자를 따른다. 박자는 창 화면의 재생률에 맞추며, 그 값은 [host.window](exposure.ko.md)가 `refreshRate`로 보고하고 호스트가 필요할 때 읽는다. 계약은 고정된 프레임 간격을 정하지 않는다.
+- **입력 뒤 즉시 그리기**: 사용자 입력 뒤 200 ms 안에 드는 첫 그리기는 박자의 다음 틱을 기다리지 않고 즉시 보낸다. 그 뒤의 그리기는 박자를 따른다.
+- **그리지 않음**: `drawing` 상태가 false인 region은 그리지 않고 화면 메시지도 받지 않는다. 상태가 true가 되면 현재 화면을 한 번 받는다.
+
 ## 인수 기준
 
 - 모든 프레임에서 네이티브 콘텐츠가 해당 카드 내부에 있어야 한다. 호스트가 각 view에 적용한 frame은 첫 배치에서, 그리고 그 카드의 선이 움직일 때마다 페이지가 선언한 slot의 device pixel 위에 놓인다(`a native view stands on the device pixels of its declared slot at each slot`, `e2e/view-edges.test.mjs`). 네이티브 본문, 카드 UI, 레일 사이드바, 외곽 레일의 상대 좌표는 같은 프레임에서 유지된다. 호스트는 한 배치의 네이티브 geometry를 그 ticket으로 준비하고, 페이지는 그 배치의 카드 UI, 레일 사이드바, 외곽 레일을 한 번의 그리기로 그리며, 호스트는 그 그리기가 표시된 뒤에만 ticket을 commit한다. 그래서 한 배치의 네이티브 본문과 페이지가 한 transaction으로 commit된다. 드래그의 이동마다 transaction의 commit path는 그 이동을 그린 페이지의 표시이거나 그 뒤 마지막으로 join한 view이고, commit 때 읽은 네이티브 frame은 그 이동에 준비한 slot이다. 그 이동의 layout trace가 ticket, begin, commit, path, flush를 기록한다(`commits its native frame with the presentation of the page that drew it`, `clips its content to the slot of the move at its commit`, `native/darwin/tests/surface_layout_test.m`). 일시적인 내부 여백 증가도 이 요구사항을 충족하지 않는다.
