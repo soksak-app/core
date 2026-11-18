@@ -3,9 +3,16 @@ import test from "node:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { allowedEndpointMethods, allowedPortMethods, auditCommonOnlyKeys, auditHostParity, auditMenuTables, auditPlatformCallers, auditPortMethods, commonOnlyKeys, goMenuTables, goPlatformMethods, goPortMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, rustPortMethods, snake, specMenuTables, withoutRustTestItems } from "../check-hosts-same.mjs";
+import { allowedEndpointMethods, allowedPortMethods, auditCommonOnlyKeys, auditHostParity, partyTokenFailures, auditMenuTables, auditPlatformCallers, auditPortMethods, commonOnlyKeys, goMenuTables, goPlatformMethods, goPortMethods, hostProductSources, libraryCrate, rustHandlers, rustMenuTables, rustPlatformMethods, rustPortMethods, snake, specMenuTables, withoutRustTestItems } from "../check-hosts-same.mjs";
 
 // The base sources of the injection checks. Changing only one name in the real sources proves that each failure is produced mechanically.
+// A declaration copy with one theme whose party tokens are the same in the workbench and in each copy.
+function declarationFixture(party = "#a06ce0") {
+  const dark = { "party-1": party, "party-2": "#e06cac", "party-3": "#e0a06c", "party-4": "#ace06c", "party-5": "#6ce0a0", "party-6": "#6ca0e0", "party-leader": "#f0f0f0" };
+  const light = { ...dark, "party-1": "#8040c0" };
+  return JSON.stringify({ settings: { commonOnly: ["projectOpening", "textSize"] }, themes: [{ name: "midnight", dark, light }] });
+}
+
 const sources = () => ({
   tauriv2Runtime: 'const COMMAND = {\n  windowNew: "window_new",\n  overlayShow: "overlay_show",\n};',
   tauriv2Bindings: 'macro_rules! bindings {}\nbindings! {\n#[tauri::command]\nfn window_new() {}\n#[tauri::command(async)]\nasync fn overlay_show() {}\n}',
@@ -22,7 +29,8 @@ const sources = () => ({
   endpointSpec: endpointFixture,
   tauriv2DeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
   wailsv3DeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
-  workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize"]}}',
+  workbenchDeclarationSource: declarationFixture(),
+  mygoDeclarationSource: declarationFixture(),
   tauriv2PlatformSource: rustPlatformFixture,
   wailsv3PlatformSource: goPlatformFixture,
   tauriv2ProductSources: platformSources().tauriv2,
@@ -323,7 +331,7 @@ test("rustHandlers reads a command that is generic over the runtime", { timeout:
 });
 
 test("a common-only key that the workbench refuses and a host accepts fails", { timeout: 1000 }, () => {
-  const changed = { ...sources(), workbenchDeclarationSource: '{"settings": {"commonOnly": ["projectOpening", "textSize", "memorySaver"]}}' };
+  const changed = { ...sources(), workbenchDeclarationSource: declarationFixture().replace('"textSize"]', '"textSize", "memorySaver"]') };
   assert.deepEqual(auditHostParity(changed), [
     'tauriv2 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
     'wailsv3 common-only keys ["projectOpening","textSize"] differ from the common-only keys of the workbench ["memorySaver","projectOpening","textSize"]',
@@ -463,4 +471,23 @@ test("the library crate of a host is the package name in Rust form and its root 
     /Cargo.toml declares no package name or no \[lib\] path under src\//);
   assert.throws(() => libraryCrate('[lib]\npath = "src/host.rs"\n', "Cargo.toml"),
     /Cargo.toml declares no package name or no \[lib\] path under src\//);
+});
+
+test("a party token of a declaration copy that differs from the workbench fails", { timeout: 1000 }, () => {
+  assert.deepEqual(partyTokenFailures({ mygoDeclarationSource: declarationFixture("#a06ce1"), workbenchDeclarationSource: declarationFixture() }), [
+    "mygo declaration copy midnight dark party-1 is #a06ce1, the workbench declares #a06ce0",
+  ]);
+});
+
+test("equal party tokens of every theme and mode pass", { timeout: 1000 }, () => {
+  assert.deepEqual(partyTokenFailures({ mygoDeclarationSource: declarationFixture(), workbenchDeclarationSource: declarationFixture() }), []);
+});
+
+test("the party tokens of the Go declaration copy equal the workbench declaration", { timeout: 1000 }, async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+  assert.deepEqual(partyTokenFailures({
+    mygoDeclarationSource: read("packages/workbench-mygo/src/workbench.json"),
+    workbenchDeclarationSource: read("packages/workbench/workbench.json"),
+  }), []);
 });
