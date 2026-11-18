@@ -69,9 +69,9 @@ The checks run in the order of the table. The first failing check gives the erro
 A layout change is a close, a move, a split, or a resize that changes which cards touch. Each affected party is corrected in the same change:
 
 - A closed card leaves its party.
-- A card that is moved or split away from its party, or whose move breaks the group, leaves the party. The remaining cards are divided into connected parts. The part that holds the leader stays with the leader. Without a leader, the largest part stays; when two parts are equally large, the part whose first card comes first in the space order stays. The space order is the order in which the space stores its cards ([persistence](projects.md#persistence)).
+- A card that is moved or split away from its party, or whose move breaks the group, leaves the party. The remaining cards are divided into connected parts. The part that holds the leader stays with the leader. Without a leader, the part with the most cards stays. Only when the parts have equal numbers of cards does the part whose first card comes first in the space order stay. The space order is the order in which the space stores its cards ([persistence](projects.md#persistence)).
 - A party that keeps fewer than 2 cards is deleted, and its cards stay in the layout.
-- Each change records one reason in `reason` of the party state: `closed`, `moved`, `split-leader`, `split-largest`, `too-few`, `taken`, `removed`, `leader-removed` or `updated`.
+- Each change records one reason in `reason` of the party state: `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed` or `updated`.
 
 ## Drawing
 
