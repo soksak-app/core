@@ -128,9 +128,9 @@ fn read_conversation(agent: Agent, home: &Path, cwd: &str) -> Result<Conversatio
     })
 }
 
-/// The folder name of a Claude Code session (the bundle of Claude Code 2.1.325): each UTF-16 code unit that is not an ASCII letter
-/// or digit is written as `-`. A name longer than 200 characters is its first 200 characters, `-` and the base-36 text of the
-/// absolute value of the hash of the working directory.
+/// The folder name of a Claude Code session: each UTF-16 code unit that is not an ASCII letter or digit is written as `-`. A name
+/// longer than 200 characters is its first 200 characters, `-` and the base-36 text of the absolute value of the hash of the working
+/// directory (docs/spec/agent-conversation.md#claude-code; the length rule is unverified).
 fn claude_folder_name(cwd: &str) -> String {
     let name: String = cwd
         .encode_utf16()
@@ -348,12 +348,20 @@ fn codex_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value>
             ));
         };
         let text = joined_text(path, *line_number, items, &["input_text", "output_text"])?;
+        let images = items
+            .iter()
+            .filter(|item| item.get("type").and_then(Value::as_str) == Some("input_image"))
+            .count();
         let role = payload
             .and_then(|payload| payload.get("role"))
             .and_then(Value::as_str);
         match role {
-            Some(role @ ("user" | "assistant")) if !text.is_empty() => {
-                messages.push(json!({"role": role, "text": text}));
+            Some(role @ ("user" | "assistant")) if !text.is_empty() || images > 0 => {
+                let mut message = json!({"role": role, "text": text});
+                if images > 0 {
+                    message["items"] = Value::Array(vec![json!({"type": "image"}); images]);
+                }
+                messages.push(message);
             }
             _ => skipped += 1,
         }
