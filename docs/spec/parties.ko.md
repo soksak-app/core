@@ -107,6 +107,8 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 `sok describe`와 `window_describe`는 창의 party 목록으로 시작한다. 목록은 `core.parties`와 같은 party 기록이다. 배치의 카드마다 카드 상태의 `party`와 `leader`를 담고, 탭마다 카드 상태와 같은 `status`를 담는다. 설명은 탭마다 summary를 담으며, `--full`은 탭마다 모든 상태 값을 준다([창 설명](cli.ko.md#창-설명)).
 
+Surface 설명, `window_describe {surface}`는 snapshot의 surface 그룹만 읽으므로 `parties` 멤버와 카드 상태 필드를 갖지 않는다.
+
 ## 저장
 
 - `projects.json`의 space 객체는 party가 있을 때 `parties` 멤버를 가지며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `leader`는 카드 식별자 또는 `null`이고, `color`는 `#rrggbb` 값이며, `leaderColor`는 `#rrggbb` 값 또는 테마 token을 따르는 `null`이다.

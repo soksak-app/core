@@ -107,6 +107,8 @@ Three queries return the member state of cards. They share one card state shape 
 
 `sok describe` and `window_describe` begin with the list of the window's parties, the same party records as `core.parties`. Each card of the layout carries the card state fields `party` and `leader`, and each tab carries its `status` as in the card state. The description holds the summary of each tab; `--full` gives every status value of each tab ([window description](cli.md#window-description)).
 
+A surface description, `window_describe {surface}`, reads the surface group of the snapshot only, so it holds no `parties` member and no card state fields.
+
 ## Storage
 
 - A space object of `projects.json` that has parties holds the member `parties`, an array of `{id, cards, leader, color, leaderColor}`. `leader` is a card identifier or `null`; `color` is a `#rrggbb` value; `leaderColor` is a `#rrggbb` value or `null` for the theme token.
