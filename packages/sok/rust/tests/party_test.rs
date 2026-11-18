@@ -3,6 +3,9 @@ use std::sync::Mutex;
 
 use serde_json::Value;
 
+#[path = "support/folder.rs"]
+mod folder;
+
 #[path = "support/case_player.rs"]
 mod case_player;
 
