@@ -504,43 +504,79 @@ fn codex_message_content_that_is_not_a_list_is_refused() {
     );
 }
 
-// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
-#[test]
-fn folder_names_follow_the_recorded_pairs() {
+/// Checks that the read selects the session file of the folder that the fixture case `label` names for its working directory.
+fn check_folder_case(label: &str) {
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../../docs/spec/cases/conversation-folder-names.json"
     );
-    let text = std::fs::read_to_string(path).expect("folder name pairs");
-    let pairs: Value = serde_json::from_str(&text).expect("folder name pairs JSON");
-    let pairs = pairs.as_array().expect("a list of pairs");
-    assert!(!pairs.is_empty(), "the pairs");
-    for pair in pairs {
-        let folder = pair["folder"].as_str().expect("folder");
-        let cwd = pair["cwd"].as_str().expect("cwd");
-        let home = Folder::new("conversation-pair");
-        let file = home
-            .path()
-            .join(".claude/projects")
-            .join(folder)
-            .join("session.jsonl");
-        write_records(&file, &claude_records(cwd, "question", "answer"));
+    let text = std::fs::read_to_string(path).expect("folder name cases");
+    let cases: Value = serde_json::from_str(&text).expect("folder name cases JSON");
+    let case = cases
+        .as_array()
+        .expect("a list of cases")
+        .iter()
+        .find(|case| case["case"] == label)
+        .unwrap_or_else(|| panic!("no folder name case {label}"));
+    let folder = case["folder"].as_str().expect("folder");
+    let cwd = case["cwd"].as_str().expect("cwd");
+    let home = Folder::new("conversation-folder-case");
+    let file = home
+        .path()
+        .join(".claude/projects")
+        .join(folder)
+        .join("session.jsonl");
+    write_records(&file, &claude_records(cwd, "question", "answer"));
 
-        let (code, stdout, stderr) =
-            run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
 
-        assert_eq!(
-            (code, stderr.as_str()),
-            (0, ""),
-            "exit status and standard error for {cwd}"
-        );
-        let output: Value = serde_json::from_str(&stdout).expect("JSON output");
-        assert_eq!(
-            output["file"],
-            json!(file.display().to_string()),
-            "the file of the folder {folder}"
-        );
-    }
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "case {label}: exit status and standard error"
+    );
+    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+    assert_eq!(
+        output["file"],
+        json!(file.display().to_string()),
+        "case {label}: the file of the folder {folder}"
+    );
+}
+
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+#[test]
+fn folder_case_slash() {
+    check_folder_case("slash");
+}
+
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+#[test]
+fn folder_case_dot() {
+    check_folder_case("dot");
+}
+
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+#[test]
+fn folder_case_underscore() {
+    check_folder_case("underscore");
+}
+
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+#[test]
+fn folder_case_space() {
+    check_folder_case("space");
+}
+
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+#[test]
+fn folder_case_non_ascii() {
+    check_folder_case("non-ascii");
+}
+
+// contract: conversation.claude-code.names-the-folder-by-the-recorded-pairs
+#[test]
+fn folder_case_long() {
+    check_folder_case("long");
 }
 
 // contract: conversation.codex.keeps-an-image-only-message

@@ -372,29 +372,32 @@ func TestFolderNamesFollowTheRecordedPairs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var pairs []struct {
+	var cases []struct {
+		Case   string `json:"case"`
 		Folder string `json:"folder"`
 		Cwd    string `json:"cwd"`
 	}
-	if err := json.Unmarshal(text, &pairs); err != nil {
+	if err := json.Unmarshal(text, &cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(pairs) == 0 {
-		t.Fatal("the pairs are empty")
+	if len(cases) == 0 {
+		t.Fatal("the folder name cases are empty")
 	}
-	for _, pair := range pairs {
-		h := newAgentHome(t)
-		file := filepath.Join(h.home, ".claude/projects", pair.Folder, "session.jsonl")
-		convWriteRecords(t, file, convClaudeRecords(pair.Cwd, "question", "answer"))
+	for _, c := range cases {
+		t.Run(c.Case, func(t *testing.T) {
+			h := newAgentHome(t)
+			file := filepath.Join(h.home, ".claude/projects", c.Folder, "session.jsonl")
+			convWriteRecords(t, file, convClaudeRecords(c.Cwd, "question", "answer"))
 
-		code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", pair.Cwd)
+			code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", c.Cwd)
 
-		if code != 0 || stderr != "" {
-			t.Fatalf("cwd %s: exit status %d and standard error %q", pair.Cwd, code, stderr)
-		}
-		if output := convDecode(t, stdout); output["file"] != file {
-			t.Fatalf("cwd %s: the chosen file %v, want %s", pair.Cwd, output["file"], file)
-		}
+			if code != 0 || stderr != "" {
+				t.Fatalf("exit status %d and standard error %q", code, stderr)
+			}
+			if output := convDecode(t, stdout); output["file"] != file {
+				t.Fatalf("the chosen file %v, want %s", output["file"], file)
+			}
+		})
 	}
 }
 
