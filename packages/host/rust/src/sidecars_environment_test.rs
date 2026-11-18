@@ -16,8 +16,12 @@ fn a_sidecar_environment_puts_the_sok_folder_first_on_path() {
         format!("/usr/bin:{}:/opt/bin", folder.display()),
     )]);
     let mut command = Command::new("/usr/bin/true");
-    sidecar_environment(&mut command, std::path::Path::new("/fixture/config"), Some(base))
-        .expect("sidecar environment");
+    sidecar_environment(
+        &mut command,
+        std::path::Path::new("/fixture/config"),
+        Some(base),
+    )
+    .expect("sidecar environment");
     let path = command
         .get_envs()
         .find(|(name, _)| *name == "PATH")
