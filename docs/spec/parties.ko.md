@@ -98,6 +98,8 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - 감시 중인 `core.parties`의 값이 바뀌면, 그 명령의 응답 전에 페이지는 `{name, value}`를 실은 호출 `exposureChanged`를 보낸다([exposure](exposure.ko.md)). 값은 새 party 기록 목록이며, 바뀔 때마다 한 번 보낸다.
 - 거부된 명령은 아무것도 쓰지 않으며, `exposureChanged`도 배치 쓰기도 보내지 않는다.
 - 카드의 작업 상태 변화는 `core.parties`에 대한 `exposureChanged`를 보내지 않는다.
+- 현재 동작, 즉 party 저장을 쓰기 전의 기존 저장 방식: project 저장은 `{kind: "patch", id, patch}`를 실은 호출 `workspace`를 보내며(`packages/workbench/host-store.js:44`), `patch`는 `{spaces, activeSpaceId, named}`이다(`packages/workbench/projects.js:438`, `projects.js:443`에서 보낸다). `spaces`는 페이지가 가진 project의 space 객체 배열이다. 페이지의 어떤 코드도 아직 space 객체에 `parties` 멤버를 쓰지 않으며, Go와 Rust 호스트는 받은 `spaces`를 그대로 저장한다(`packages/host/go/src/workspace.go:541`, `packages/host/rust/src/workspace.rs:549`).
+- party 감시 케이스는 `workspace`와 `core.parties` 호출의 순서만 읽는다. 케이스는 `log` 호출을 걸러내며 세지 않는다.
 
 ## 창 설명
 

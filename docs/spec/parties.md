@@ -98,6 +98,8 @@ Three queries return the member state of cards. They share one card state shape 
 - When the value of `core.parties` changes while a watch of it is held, the page sends the call `exposureChanged` with `{name, value}` ([exposure](exposure.md)) with the new list of party records, once for each such change, before the reply of the command that caused it.
 - A refused command writes nothing and sends neither `exposureChanged` nor a layout write.
 - A change of the work state of a card sends no `exposureChanged` for `core.parties`.
+- Current behaviour of the existing storage, before the party storage is written: a save of a project sends the call `workspace` with `{kind: "patch", id, patch}` (`packages/workbench/host-store.js:44`), where `patch` is `{spaces, activeSpaceId, named}` (`packages/workbench/projects.js:438`, sent at `projects.js:443`). `spaces` is the array of the project's space objects as the page holds them. No code of the page writes a `parties` member yet, and the Go and Rust hosts store `spaces` as they receive it (`packages/host/go/src/workspace.go:541`, `packages/host/rust/src/workspace.rs:549`).
+- The case of the party watch reads only the order of the `workspace` and `core.parties` calls. The case filters and does not count `log` calls.
 
 ## Describe
 
