@@ -38,7 +38,7 @@ All commands are idempotent: the same request in the same state gives the same r
 
 `taken` lists `{card, from}` for each card that changed party, where `from` is the former party identifier or `null`. A card that is already in the target party is not listed. `changed` lists `{party, removed, leader, deleted}` for each party that changed, including a party that `create` or `add` made: `removed` lists the cards that left that party, `leader` is its leader after the change or `null`, and `deleted` is true when the party no longer exists.
 
-The reply of a delete carries the identifier of the deleted party only in party.
+In the reply of a delete, party is {id}, the object of the deleted party with its identifier only.
 
 Refusals and their texts. The texts other than `card <id> belongs to party <party>` are proposed; their wording is an open decision ([open decisions](#open-decisions)).
 

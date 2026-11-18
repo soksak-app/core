@@ -38,7 +38,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 `taken`은 party가 바뀐 카드마다 `{card, from}`을 담으며, `from`은 이전 party 식별자 또는 `null`이다. 목표 party에 이미 있는 카드는 나오지 않는다. `changed`는 바뀐 party마다 `{party, removed, leader, deleted}`를 담으며, `create`나 `add`가 만든 party도 포함한다. `removed`는 그 party를 떠난 카드들, `leader`는 바뀐 뒤의 leader 또는 `null`, `deleted`는 party가 더는 없으면 true다.
 
-삭제의 응답은 삭제된 party의 식별자를 `party`에만 담는다.
+삭제의 응답에서 `party`는 `{id}`이며, 삭제된 party의 식별자만 담은 객체다.
 
 거부와 그 문구. `card <id> belongs to party <party>` 외 문구는 제안이며, 문구의 표현은 [열린 결정](#열린-결정)에 있다.
 
