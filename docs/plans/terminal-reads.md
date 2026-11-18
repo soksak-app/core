@@ -16,7 +16,15 @@ terminals in the same way.
 - The `alacritty` sidecar already parses OSC 133 shell marks (`A`, `B`, `C`, `D`) and tracks a prompt start and an absolute line
   number (`dropped + history + line`) that stays stable while history is kept (`engine.rs`, `fn absolute`). No command exposes these.
 - The `vt` sidecar and the OSC 133 handling of `vt-core` are not verified yet (open item V1).
-- A report of scrolling that returned the same screen was observed once and is not reproduced. Item V2 reproduces it before any fix.
+- Why scrolling does not move the screen of a TUI agent (Claude Code, Codex): a TUI runs on the alternate screen. The engine keeps no
+  history for the alternate screen (`alacritty/tests/engine_test.rs`, `alternate_screen_is_separate_from_primary_scrollback`). The
+  wheel is routed by `WheelRoute::of` (`alacritty-core/src/protocol.rs`): with mouse reporting and no Shift it goes to the program; on the
+  alternate screen with alternate scroll it becomes cursor keys to the program; only the primary screen moves the viewport. The viewport
+  command clamps the offset to the history (`SurfaceCommand::Viewport`), which is empty on the alternate screen, so the screen does not
+  move. The plugin shows no message for this case. This explains the report; V2 confirms it in a running TUI before a change.
+- A TUI agent keeps its conversation in a file on disk, not in the terminal: Claude Code writes `~/.claude/projects/<cwd>/<session>.jsonl`
+  (records `user`, `assistant`), and Codex writes `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (records `response_item`, `event_msg`,
+  with `session_meta` carrying the working directory). These files hold the conversation whatever the screen shows.
 
 ## Options and their results
 
@@ -35,6 +43,11 @@ an explicit error.
 5. **Command output by shell mark** (`command.list {limit}` and `command.read {index, format, from, count}`). Each command is the rows
    between a `C` mark and the following `D` mark, with the exit code of `D`. `command.list` gives each command's index, absolute start
    and end, and exit code. A terminal without shell integration answers an empty list, and `command.list` states that no mark was seen.
+7. **Agent conversation** (`agent.conversation {limit, after}`). Finds the agent of the session from its foreground process
+   (`claude` or `codex`) and reads its session file, returning the messages in order with their role, text and time. The file is read
+   from the disk of the same user; the sidecar does not decode the screen. Which file belongs to the session comes from the working
+   directory of the session and the newest file of that directory (Claude) or the `session_meta` working directory (Codex). Each result
+   states the file it read and whether a file was found.
 6. **Raw output log** (`transcript.read {offset, bytes}`). Returns the PTY output bytes of the session from an offset, from a log with a
    fixed byte bound. This option needs a memory bound decision before implementation (decision D1).
 
@@ -67,6 +80,8 @@ Versions are decided at release time under the rule of the repository that owns 
 ## Open items
 
 - V1: check how `vt` handles OSC 133 marks (`sidecars/vt`, `vt-core`).
-- V2: reproduce the observed scroll report with the current `term` plugin before changing scrolling.
+- V2: reproduce the scroll report in a running Claude Code or Codex session in `term` and in `terminal` (the wheel route and the offset
+  before and after), and check whether each TUI scrolls its own content when it receives the wheel.
+- V3: check which process the sidecar can name as the foreground process of a session on macOS, for option 7.
 - D1: choose the byte bound of the transcript (option 6) before implementation.
 - D2: choose whether `history.find` searches cell text only or also the style of the cells.

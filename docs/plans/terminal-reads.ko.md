@@ -10,7 +10,8 @@
 - `terminal.scrollback.set`과 `term.scrollback.set`은 display offset을 바꾸고, sidecar는 이를 세션 status의 `scrollback.offset`과 `scrollback.history`로 보고한다. offset은 텍스트를 돌려주지 않는다.
 - `alacritty` sidecar는 이미 OSC 133 셸 마크(`A`, `B`, `C`, `D`)를 파싱하고, 절대 행 번호(`dropped + history + line`)를 계산한다. 기록이 유지되는 동안 이 번호는 안정적이다(`engine.rs`, `fn absolute`). 이를 노출하는 명령은 없다.
 - `vt` sidecar와 `vt-core`의 OSC 133 처리는 아직 확인하지 않았다(미확인 항목 V1).
-- 스크롤했는데 같은 화면이 돌아온 보고가 한 번 관찰되었고 재현되지 않았다. 수정 전에 V2에서 재현한다.
+- TUI agent(Claude Code, Codex)에서 스크롤이 화면을 움직이지 않는 이유: TUI는 대체 화면(alternate screen)에서 돈다. 엔진은 대체 화면에 기록을 두지 않는다(`alacritty/tests/engine_test.rs`, `alternate_screen_is_separate_from_primary_scrollback`). 휠은 `WheelRoute::of`(`alacritty-core/src/protocol.rs`)가 라우팅한다. 마우스 보고가 켜져 있고 Shift가 없으면 program으로 가고, 대체 화면에서 alternate scroll이 켜져 있으면 program에 커서 키가 된다. viewport는 primary 화면에서만 움직인다. viewport 명령은 offset을 기록 범위로 자르는데(`SurfaceCommand::Viewport`), 대체 화면의 기록은 비어 있으므로 화면이 움직이지 않는다. plugin은 이 경우를 알리지 않는다. 이것이 보고된 현상을 설명한다. 변경 전에 V2에서 실행 중인 TUI로 확인한다.
+- TUI agent는 대화를 터미널이 아니라 디스크의 파일에 남긴다. Claude Code는 `~/.claude/projects/<cwd>/<session>.jsonl`(`user`, `assistant` 레코드)을, Codex는 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`(`response_item`, `event_msg` 레코드, 작업 디렉터리는 `session_meta`)을 쓴다. 이 파일들은 화면이 무엇을 보이든 대화를 담는다.
 
 ## 방안과 결과
 
@@ -21,6 +22,7 @@
 3. **절대 행 번호로 기록 읽기**(`history.read {from, count, format}`). 유지되는 기록의 행을 절대 행 번호로 읽는다. 결과는 `first`(가장 오래된 유지 행), `last`(가장 새 행), `dropped`를 담는다. 기록을 지우기 전까지 절대 번호는 의미가 바뀌지 않으며, 지워진 양은 `dropped`가 보고한다.
 4. **검색**(`history.find {pattern, from, limit}`). 일치하는 항목의 절대 행 번호와 일치한 글자를 최대 `limit`개까지 돌려준다. pattern은 정규식이며, 잘못된 pattern은 오류 글을 담아 실패한다.
 5. **셸 마크로 명령 출력 읽기**(`command.list {limit}`와 `command.read {index, format, from, count}`). 명령 하나는 `C` 마크와 다음 `D` 마크 사이의 행이며, `D`의 종료 코드를 가진다. `command.list`는 각 명령의 index, 절대 시작과 끝, 종료 코드를 준다. 셸 통합이 없는 터미널은 빈 목록을 돌려주고, `command.list`는 마크를 본 적이 없다고 밝힌다.
+7. **agent 대화**(`agent.conversation {limit, after}`). 전경 프로세스(`claude` 또는 `codex`)로 session의 agent를 찾고 그 session 파일을 읽어, 메시지를 순서대로 역할, 글, 시각과 함께 돌려준다. 파일은 같은 사용자의 디스크에서 읽으며 sidecar는 화면을 해석하지 않는다. session에 속한 파일은 session의 작업 디렉터리와 그 디렉터리의 가장 새 파일(Claude), 또는 `session_meta`의 작업 디렉터리(Codex)로 정한다. 각 결과는 읽은 파일과 파일을 찾았는지를 밝힌다.
 6. **원시 출력 로그**(`transcript.read {offset, bytes}`). 고정된 바이트 상한의 로그에서 세션의 PTY 출력 바이트를 offset부터 돌려준다. 구현 전에 메모리 상한 결정이 필요하다(결정 D1).
 
 모든 읽기는 멱등하다. 상태를 바꾸지 않으며, 내용이 바뀌기 전까지 같은 요청은 같은 결과를 돌려준다. 결과는 `generation`을 가지며, sidecar는 내용이 바뀔 때마다 이를 증가시킨다. 호출자는 이로써 결과가 오래되었는지 알 수 있다.
@@ -49,6 +51,7 @@
 ## 미정 항목
 
 - V1: `vt`가 OSC 133 마크를 어떻게 처리하는지 확인한다(`sidecars/vt`, `vt-core`).
-- V2: 스크롤 보고를 현재 `term` plugin에서 재현한 뒤 스크롤을 바꾼다.
+- V2: 실행 중인 Claude Code 또는 Codex session에서 `term`과 `terminal` 각각 스크롤을 재현한다(휠 경로와 전후 offset). 각 TUI가 휠을 받았을 때 자기 내용을 스크롤하는지도 확인한다.
+- V3: 방안 7을 위해 macOS에서 sidecar가 session의 전경 프로세스를 어떻게 알 수 있는지 확인한다.
 - D1: 방안 6의 로그 바이트 상한을 구현 전에 정한다.
 - D2: `history.find`가 글자만 검색할지, cell의 스타일도 검색할지 정한다.
