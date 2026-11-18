@@ -108,6 +108,25 @@ The delivery channel for a message is chosen by one criterion: the better channe
 
 Open item V7: the time limit of a waiting MCP tool call in each client (Claude Code, Codex), which decides how `messages.wait` returns.
 
+## Unattended dialog handling (decision D5)
+
+A product capability: when a terminal waits on a dialog and the user has enabled supervision for that terminal, the supervising agent
+answers the dialog through this capability. The capability is not a one-time instruction; it applies whenever the situation occurs. The
+supervisor decides by these rules:
+
+- Destructive: the dialog would delete or overwrite files, discard uncommitted changes, rewrite or force-push history, remove processes or
+  data, change permissions or credentials, or write to an external service. The supervisor cancels (Esc or Ctrl-C), then sends a message
+  to the agent that states the reason and the safer path.
+- Not destructive: the dialog is reversible and scoped to the project (for example, run tests, read a file inside the project, continue
+  a paused turn). The supervisor selects the accepting option.
+- Unclear: treated as destructive. The supervisor cancels and records the case.
+- Every decision is written to the event log with the dialog text, the options, the decision, and the rule that decided it.
+
+Requirement: cancel and select must work on any dialog. The keys and the option positions come from the terminal state of each agent
+adapter. The supervisor runs only when enabled by the user for a terminal.
+
+Status: not implemented. The terminal state, the dialog detection and the key commands are open work.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
