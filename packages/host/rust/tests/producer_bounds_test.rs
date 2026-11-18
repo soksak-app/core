@@ -338,7 +338,10 @@ fn an_unwatch_is_not_refused_by_the_bound_and_ends_the_subscription_in_its_queue
     let call = calls
         .recv_timeout(Duration::from_secs(10))
         .expect("the page call of the unwatch");
-    assert_eq!(call, "status.unwatch", "the first page call after the first watch");
+    assert_eq!(
+        call, "status.unwatch",
+        "the first page call after the first watch"
+    );
     assert!(
         calls.try_iter().next().is_none(),
         "the page calls after the unwatch"
