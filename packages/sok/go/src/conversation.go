@@ -355,7 +355,10 @@ func sessionCwd(agent, path string) (string, error) {
 				return false, nil
 			}
 		} else {
-			payload, _ := record["payload"].(map[string]any)
+			payload, isObject := record["payload"].(map[string]any)
+			if !isObject {
+				return true, refused
+			}
 			value = payload["cwd"]
 			if record["type"] != "session_meta" {
 				return true, refused
@@ -382,15 +385,30 @@ func lineError(path string, line int, reason string) error {
 	return fmt.Errorf("%s: line %d %s", path, line, reason)
 }
 
-// countItems returns the number of items whose `type` is kind.
-func countItems(items []any, kind string) int {
+// contentItem returns the object of a content item and its `type`. A content item that is not a JSON object with a string type
+// is refused with its line number.
+func contentItem(path string, line int, item any) (map[string]any, string, error) {
+	object, isObject := item.(map[string]any)
+	kind, isString := object["type"].(string)
+	if !isObject || !isString {
+		return nil, "", lineError(path, line, "has a content item that is not an object with a string type")
+	}
+	return object, kind, nil
+}
+
+// countItems returns the number of items whose `type` is kind. A content item that is not an object with a string type is refused.
+func countItems(path string, line int, items []any, kind string) (int, error) {
 	count := 0
 	for _, item := range items {
-		if object, _ := item.(map[string]any); object["type"] == kind {
+		_, itemKind, err := contentItem(path, line, item)
+		if err != nil {
+			return 0, err
+		}
+		if itemKind == kind {
 			count++
 		}
 	}
-	return count
+	return count, nil
 }
 
 // messageValue is a message with its role and text, and with `items` holding one {"type": "image"} for each of its image items.
@@ -411,8 +429,10 @@ func messageValue(role, text string, images int) map[string]any {
 func joinedText(path string, line int, items []any, kinds ...string) (string, error) {
 	var texts []string
 	for _, item := range items {
-		object, _ := item.(map[string]any)
-		kind, _ := object["type"].(string)
+		object, kind, err := contentItem(path, line, item)
+		if err != nil {
+			return "", err
+		}
 		if !slices.Contains(kinds, kind) {
 			continue
 		}
@@ -430,12 +450,15 @@ func claudeMessages(path string, records []numberedRecord) ([]any, int, error) {
 	messages := []any{}
 	skipped := 0
 	for _, record := range records {
-		role, _ := record.fields["type"].(string)
+		role, _ := record.fields["type"].(string) // silent: a record whose type is not a string is not a user or assistant message, and is counted in skipped.
 		if role != "user" && role != "assistant" {
 			skipped++
 			continue
 		}
-		message, _ := record.fields["message"].(map[string]any)
+		message, isObject := record.fields["message"].(map[string]any)
+		if !isObject {
+			return nil, 0, lineError(path, record.line, "has a message content that is neither a string nor a list")
+		}
 		var text string
 		images := 0
 		switch content := message["content"].(type) {
@@ -447,7 +470,10 @@ func claudeMessages(path string, records []numberedRecord) ([]any, int, error) {
 				return nil, 0, err
 			}
 			text = joined
-			images = countItems(content, "image")
+			images, err = countItems(path, record.line, content, "image")
+			if err != nil {
+				return nil, 0, err
+			}
 		default:
 			return nil, 0, lineError(path, record.line, "has a message content that is neither a string nor a list")
 		}
@@ -465,8 +491,8 @@ func codexMessages(path string, records []numberedRecord) ([]any, int, error) {
 	messages := []any{}
 	skipped := 0
 	for _, record := range records {
-		payload, _ := record.fields["payload"].(map[string]any)
-		payloadType, _ := payload["type"].(string)
+		payload, _ := record.fields["payload"].(map[string]any) // silent: a record without a payload object is not a message, and is counted in skipped.
+		payloadType, _ := payload["type"].(string)              // silent: a payload whose type is not a string is not a message, and is counted in skipped.
 		if record.fields["type"] != "response_item" || payloadType != "message" {
 			skipped++
 			continue
@@ -479,8 +505,11 @@ func codexMessages(path string, records []numberedRecord) ([]any, int, error) {
 		if err != nil {
 			return nil, 0, err
 		}
-		images := countItems(items, "input_image")
-		role, _ := payload["role"].(string)
+		images, err := countItems(path, record.line, items, "input_image")
+		if err != nil {
+			return nil, 0, err
+		}
+		role, _ := payload["role"].(string) // silent: a message without a string role is neither user nor assistant, and is counted in skipped.
 		if (role == "user" || role == "assistant") && (text != "" || images > 0) {
 			messages = append(messages, messageValue(role, text, images))
 		} else {
