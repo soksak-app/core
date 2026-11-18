@@ -33,3 +33,20 @@ test("a card in a party offers the leader item and the six color items (docs/spe
     window.close();
   }
 });
+
+test("a party item of the card menu closes the picker when it runs (docs/spec/parties.md#card-menu)", { timeout: 10000 }, async () => {
+  const { openCardTools } = await import("../plane.js");
+  const window = await openPartyWindow();
+  try {
+    await window.reset();
+    openCardTools("a");
+    const button = document.querySelector('#picker .picker__item[data-expose="core.party.menu.group"]');
+    assert.ok(button, "the group item of the card is drawn in the picker");
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal((await window.get("core.parties")).result.length, 1, "the group item created the party");
+    assert.equal((await window.get("core.picker")).result.open, false, "the picker is closed after the party item runs");
+  } finally {
+    window.close();
+  }
+});
