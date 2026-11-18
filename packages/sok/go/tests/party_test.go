@@ -1,10 +1,8 @@
 package tests
 
-// Red tests of the party contract of sok (docs/spec/cli.md#window-description, docs/spec/parties.md#queries). The cases of these tests
+// Tests of the party contract of sok (docs/spec/cli.md#window-description, docs/spec/parties.md#queries). The cases of these tests
 // are in docs/spec/cases/endpoint (sok-describe-parties, sok-describe-summary-and-full, sok-status-parties, sok-party-get-and-card-get,
-// sok-commands-query-party). The application does not answer the party requests yet, so each test fails on the unchanged
-// implementation: the describe output has no parties member, the status and the commands are absent, and the card state has no party.
-// The Rust tests in rust/tests/party_test.rs have the same names.
+// sok-commands-query-party). The Rust tests in rust/tests/party_test.rs have the same names and run the same cases.
 
 import (
 	"encoding/json"
