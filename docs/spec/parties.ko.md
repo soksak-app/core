@@ -107,9 +107,9 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 ## 저장
 
-- `projects.json`의 각 space 객체는 `parties` 멤버를 가지며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `leader`는 카드 식별자 또는 `null`이고, `color`는 `#rrggbb` 값이며, `leaderColor`는 `#rrggbb` 값 또는 테마 token을 따르는 `null`이다.
+- `projects.json`의 space 객체는 party가 있을 때 `parties` 멤버를 가지며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `leader`는 카드 식별자 또는 `null`이고, `color`는 `#rrggbb` 값이며, `leaderColor`는 `#rrggbb` 값 또는 테마 token을 따르는 `null`이다.
 - 저장에는 이유와 외곽선을 두지 않는다. 둘 다 파생 값이다.
-- `parties`가 없는 space 객체는 `parties: []`로 읽는다. 이는 선택 필드가 없을 때의 선언된 빈 기록 기본값이다([영속성](projects.ko.md#저장)). `parties`에 명시적 `null`이 있거나 다른 형식의 값이면 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다. `parties: []`로 읽힌 space를 저장하면 멤버 `parties: []`를 쓴다.
+- `parties`가 없는 space 객체는 `parties: []`로 읽는다. 이는 선택 필드가 없을 때의 선언된 빈 기록 기본값이다([영속성](projects.ko.md#저장)). `parties`에 명시적 `null`이 있거나 다른 형식의 값이면 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다. `parties`가 없는 space는 `parties`를 쓰지 않는다. `parties`가 없는 space를 읽으면 빈 목록을 읽는다.
 - 리더는 규칙을 어기는 party도 거부한다. 카드 2개 미만, 두 party에 든 카드, 배치에 없는 카드, cards 밖의 leader, 잘못된 색이 여기 해당한다.
 - [설정](settings.ko.md#값)이 거부하는 `rail`과 `railWidth` 키는 계속 거부한다.
 - 저장 규칙의 진입점은 `packages/workbench/projects.js`에 있다. `readStoredSpace(project, space)`는 `parties` 배열을 가진 space를 반환하며, 멤버가 없으면 `[]`이고, `null`이거나 배열이 아닌 값, 또는 규칙을 어기는 party 기록이면 `Error`를 던진다. 그 텍스트는 `projects.json`, project 루트, space 식별자, 발견한 값을 JSON 텍스트로 적는다: `projects.json: project <root>, space <space id>: parties <found JSON text>` (제안된 문구, [열린 결정](#열린-결정)). `writeStoredSpace(space)`는 저장할 space 객체를 반환하며, 항상 배열인 멤버 `parties`를 가진다.
