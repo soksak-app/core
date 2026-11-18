@@ -647,3 +647,22 @@ func sameSet(a, b []string) bool {
 	}
 	return true
 }
+
+// Outline returns the loops of the outer outline of a party: the outline of the presented rectangles of its cards, with adjacent
+// cards joined at half the gap and the outline inset by half the border width (docs/spec/parties.md#drawing).
+func (p *Parties) Outline(g *Grid, partyID string, border float64) ([][]Point, error) {
+	target := p.find(partyID)
+	if target == nil {
+		return nil, fmt.Errorf("unknown party %s", partyID)
+	}
+	rects := make([]Rect, 0, len(target.Cards))
+	for _, id := range target.Cards {
+		rect, ok := g.Rect(id)
+		if !ok {
+			return nil, fmt.Errorf("unknown card %s", id)
+		}
+		rects = append(rects, rect)
+	}
+	pad, inset := g.Gap()/2, border/2
+	return ComputeOutline(rects, OutlineOptions{Pad: &pad, Inset: &inset}).Loops, nil
+}
