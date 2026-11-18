@@ -72,6 +72,7 @@ Codex는 `<home>/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`에 쓴다. 각 파�
 | `claude-code`의 `user` 또는 `assistant` 레코드에서 `message.content`가 문자열도 목록도 아니다 | `<path>: line <n> has a message content that is neither a string nor a list` |
 | `codex` 메시지 레코드의 `payload.content`가 목록이 아니다 | `<path>: line <n> has a message content that is not a list` |
 | `claude-code` text 블록의 `text`, 또는 `codex` 항목 중 타입이 `input_text` 또는 `output_text`인 항목의 `text`가 문자열이 아니다 | `<path>: line <n> has a text that is not a string` |
+| `claude-code` 또는 `codex` 메시지의 content 항목이 문자열 `type`을 가진 JSON 객체가 아니다 | `<path>: line <n> has a content item that is not an object with a string type` |
 
 `<n>`은 빈 줄을 포함한 파일의 물리 줄 번호다.
 

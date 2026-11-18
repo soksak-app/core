@@ -72,6 +72,7 @@ Each refusal is an explicit error with exit status 1. Nothing is dropped silentl
 | A `user` or `assistant` record of `claude-code` has a `message.content` that is neither a string nor a list | `<path>: line <n> has a message content that is neither a string nor a list` |
 | A `codex` message record has a `payload.content` that is not a list | `<path>: line <n> has a message content that is not a list` |
 | A `text` of a `claude-code` text block, or of a `codex` item of type `input_text` or `output_text`, is not a string | `<path>: line <n> has a text that is not a string` |
+| A content item of a `claude-code` or `codex` message is not a JSON object with a string `type` | `<path>: line <n> has a content item that is not an object with a string type` |
 
 `<n>` counts the physical lines of the file, blank lines included.
 
