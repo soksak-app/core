@@ -48,6 +48,7 @@ import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } f
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
+import { cardsClosed, installParties } from "./parties.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -416,6 +417,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onTextScope(() => coreChanged());
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
+  installParties({ status, command: (name, read) => registry.command(name, read), notifyChange: coreChanged, grid: currentGrid });
 
   // A refusal of a settings change is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {
@@ -600,7 +602,11 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     return openFile(checkOpenPath(path), card);
   });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
-  registry.command("core.card.close", ({ card }) => closeCard(card));
+  registry.command("core.card.close", ({ card }) => {
+    const result = closeCard(card);
+    cardsClosed();
+    return result;
+  });
   // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
   registry.command("core.layout.open", (params) => openInLayout(params));
   registry.command("core.layout.select", (params) => selectInLayout(params));
