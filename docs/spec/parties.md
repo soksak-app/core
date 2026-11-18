@@ -78,6 +78,7 @@ A layout change is a close, a move, a split, or a resize that changes which card
 - The whole party is drawn as one outer outline, built by `outline` of `packages/soksak` from the presented rectangles of its cards. Adjacent cards join at half the gap, and the outline is inset by half the border width.
 - The leader card's border segments on the outline are drawn in the leader color, and the leader mark is drawn in its header.
 - When a party outline overlaps the rail, the rail is outside and the party outline is inside, separated by the rail width. The two lines never coincide. The focus indication is independent of the party outline.
+- Element names. The outer outline of party `<id>` is the SVG element `path[data-party="<id>"]`. Its leader border segments are the element `path[data-party-leader="<id>"]`, whose `stroke` is the leader color. The rail outline is the element `#railPath` of the workbench document. A test that checks the rule above compares the `d` value of `#railPath` with the `d` value of the party outline.
 - The party outline is drawn with the card chrome and the native screens in the same draw and the same transaction, as the acceptance criteria of [native surfaces](native-surfaces.md#acceptance-criteria) require for the rail.
 
 ## Queries
@@ -102,6 +103,7 @@ Three queries return the member state of cards. They share one card state shape 
 - A space object without `parties` reads as `parties: []`, the declared empty-record default of an absent optional field ([persistence](projects.md#persistence)). An explicit `null` for `parties`, or a value of another form, fails with an error that names the file `projects.json`, the project root, the space identifier and what it found, and the file is not changed. Saving a space that read as `parties: []` writes the member `parties: []`.
 - The reader also refuses a party that breaks a rule: fewer than 2 cards, a card in two parties, a card missing from the space layout, a leader outside the cards, or an invalid color.
 - The `rail` and `railWidth` keys refused by [settings](settings.md#values) keep their refusal.
+- Entry points of the storage rules, in `packages/workbench/projects.js`. `readStoredSpace(project, space)` returns the space with its `parties` array, which is `[]` when the member is absent, and throws an `Error` for a `null` or non-array value, or for a party record that breaks a rule above. Its text names `projects.json`, the project root, the space identifier and the found value as JSON text: `projects.json: project <root>, space <space id>: parties <found JSON text>` (proposed wording, [open decisions](#open-decisions)). `writeStoredSpace(space)` returns the space object to store, which always holds the member `parties`, an array.
 
 ## Card menu
 

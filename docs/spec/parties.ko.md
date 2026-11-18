@@ -78,6 +78,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - party 전체는 하나의 바깥 외곽선으로 그린다. 외곽선은 `packages/soksak`의 `outline`이 카드들의 표시된 사각형으로 만든다. 인접한 카드는 통로 간격의 절반에서 이어지며, 외곽선은 테두리 너비의 절반만큼 안쪽으로 옮긴다.
 - leader 카드가 외곽선 위에 가진 테두리 구간은 leader 색으로 그리고, leader 표시는 그 머리에 그린다.
 - party 외곽선이 rail과 겹치면 rail은 바깥에, party 외곽선은 안쪽에 두고 rail 너비만큼 떨어뜨려 두 선이 겹치지 않게 한다. 포커스 표시는 party 외곽선과 무관하다.
+- 요소 이름. party `<id>`의 바깥 외곽선은 요소 `path[data-party="<id>"]`이다. 그 leader 테두리 구간은 요소 `path[data-party-leader="<id>"]`이며, `stroke`가 leader 색이다. rail 외곽선은 workbench 문서의 요소 `#railPath`이다. 위 규칙을 검사하는 테스트는 `#railPath`의 `d` 값과 party 외곽선의 `d` 값을 비교한다.
 - party 외곽선은 카드 chrome과 네이티브 화면과 같은 그리기 pass, 같은 transaction에서 그린다. 이는 rail에 대해 [네이티브 surface](native-surfaces.ko.md#인수-기준)의 인수 기준이 요구하는 방식이다.
 
 ## 조회
@@ -102,6 +103,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - `parties`가 없는 space 객체는 `parties: []`로 읽는다. 이는 선택 필드가 없을 때의 선언된 빈 기록 기본값이다([영속성](projects.ko.md#저장)). `parties`에 명시적 `null`이 있거나 다른 형식의 값이면 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다. `parties: []`로 읽힌 space를 저장하면 멤버 `parties: []`를 쓴다.
 - 리더는 규칙을 어기는 party도 거부한다. 카드 2개 미만, 두 party에 든 카드, 배치에 없는 카드, cards 밖의 leader, 잘못된 색이 여기 해당한다.
 - [설정](settings.ko.md#값)이 거부하는 `rail`과 `railWidth` 키는 계속 거부한다.
+- 저장 규칙의 진입점은 `packages/workbench/projects.js`에 있다. `readStoredSpace(project, space)`는 `parties` 배열을 가진 space를 반환하며, 멤버가 없으면 `[]`이고, `null`이거나 배열이 아닌 값, 또는 규칙을 어기는 party 기록이면 `Error`를 던진다. 그 텍스트는 `projects.json`, project 루트, space 식별자, 발견한 값을 JSON 텍스트로 적는다: `projects.json: project <root>, space <space id>: parties <found JSON text>` (제안된 문구, [열린 결정](#열린-결정)). `writeStoredSpace(space)`는 저장할 space 객체를 반환하며, 항상 배열인 멤버 `parties`를 가진다.
 
 ## 카드 메뉴
 
