@@ -127,6 +127,29 @@ adapter. The supervisor runs only when enabled by the user for a terminal.
 
 Status: not implemented. The terminal state, the dialog detection and the key commands are open work.
 
+## TUI key adapters (decision D6)
+
+Keys such as Ctrl-B (send the running command to the background), Ctrl-Enter (send the input now), Esc and Ctrl-C differ by TUI and by
+version. Each agent adapter declares the keys it supports for each action. The supervisor and the messaging use the action, not the key:
+
+- If the TUI supports the action, the adapter sends the TUI's own key.
+- If it does not, the adapter uses the sok fallback for that action. The fallback is the sok behavior, for example a queued message
+  delivered at the next idle state, or a cancel through the terminal's own interrupt.
+- The adapter records which path it used for each action in the event log.
+
+A foreground TUI that is busy or asleep does not receive a message until the background or send-now action runs, so that action is
+required for delivery.
+
+## What runs in a terminal (F899-3)
+
+A caller needs the program that runs in each terminal, and the background jobs of its shell, by name. Proposed command `term.process.list`:
+
+- Foreground: the process group that owns the terminal, its leader's name and arguments, and the time it started.
+- Background: the jobs of the shell that the terminal reports (names, process ids, states such as running or stopped), read from the
+  process table of the session, not from the screen.
+- Each entry states its source (process table, or OSC 133 command marks when the shell sends them).
+- A process name alone does not identify an agent; the agent is identified by its process arguments and its session file (method B).
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
