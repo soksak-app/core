@@ -80,6 +80,21 @@ Decision for this plan: the agent states come from the agent's hook events when 
 terminal with no hook, and it is marked as a heuristic. Items V4 (Codex hook payloads) and V5 (Claude Notification payload fields) are
 verified before the states are implemented.
 
+## Terminal messaging (decision D3)
+
+Terminals notify each other when a watched folder changes. The contract is one path for every agent:
+
+- The only source of messaging events is a file event observed by the terminal sidecar. The sidecar watches the folders that a terminal
+  registers and publishes an event for each change. It does not poll.
+- Agent hooks (Claude Code `FileChanged`, Codex hook events) are not on the delivery path. They may enrich the agent state (see
+  Terminal state), but a message is delivered the same way whichever agent wrote the file.
+- A trigger acts through the terminal: it injects input into the registered terminal or runs a declared command. No agent API is used.
+- The delivery latency is measured on the shared machine before any bound is written into the contract. The FSEvents delay recorded
+  in the shared-machine measurement is 3 to 14 seconds, so no bound is claimed before that measurement (open item V6).
+
+Why one path: Codex has no file-change event, and Claude's `FileChanged` runs only inside a Claude session. Two paths would deliver the
+same message at different times or not at all.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
