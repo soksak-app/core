@@ -1561,7 +1561,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F903-1 — worktree `core-lease-F903`을 branch `test/lease-measure-F903`으로 만든다.
   - [ ] F903-2 — 에이전트: layer에 IOSurface를 표시하고 교체한 뒤 render server commit을 기다리며, 세 상태에서 `IOSurfaceIsInUse`를 기록하는 native tracked test를 추가한다.
   - [ ] F903-3 — 에이전트: lookup과 host retain 뒤의 retain count를 기록하고 release 뒤 count가 돌아오는지 확인하는 native tracked test를 추가한다.
-  - [ ] F903-4 — Lead가 두 test를 실행하고 측정값을 macOS 버전, native build와 함께 이 항목에 기록한다. 교체 뒤에도 in-use가 true이면 lease 표시가 불가능하다고 적고 중단한다.
+  - [o] F903-4 — lead가 측정함(macOS, `test/lease-measure-F903` worktree의 native build): 1단계(layer가 first 표시): IOSurfaceIsInUse(first) = 1; 2단계(second가 first 교체): IOSurfaceIsInUse(first) = 1, IOSurfaceIsInUse(second) = 1; 3단계(third가 second 교체): IOSurfaceIsInUse(first) = 1. 교체된 surface의 in-use 상태가 true로 남으므로 계획의 실현 가능성 관문은 실패한다. IOSurfaceIsInUse로 surface 반환을 판단하는 lease 표시는 막혀 있다. lookup test는 release 뒤 retain count가 1로 돌아옴을 보인다. 증거: lead가 두 native test를 실행한 결과이며, 측정한 줄은 위에 기록했다.
 - [ ] F904 — P1: 두 terminal sidecar에서 viewport 밖의 행을 읽는다(F899-1). 입력: `screen.read`는 viewport만 돌려주므로 호출자가 그 위의 행을 읽을 수 없다. 에이전트는 코드를 쓰고, Red와 Green은 lead가 실행한다.
   - [ ] F904-1 — 에이전트가 `alacritty-core`와 `vt-core`에 Red test를 쓴다: viewport 위의 행을 요청하는 `screen.read {from, count}`가 그 행을 돌려주지 않는다. Lead가 변경 전에 실행해 실패를 기록한다.
   - [ ] F904-2 — 에이전트가 worktree `sidecars/alacritty-F904`의 `alacritty` 엔진에 `from`과 `count` 인자를 구현하고, 프로토콜에 상한을 적는다.
