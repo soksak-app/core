@@ -191,10 +191,13 @@ fn list_folder(folder: &Path) -> Result<Vec<PathBuf>, Error> {
 /// Adds the rollout files of a Codex sessions folder at any depth to `out`.
 fn collect_rollouts(folder: &Path, out: &mut Vec<PathBuf>) -> Result<(), Error> {
     for path in list_folder(folder)? {
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let Some(file_name) = path.file_name() else {
+            return Err(Error::Failed(format!(
+                "{}: the folder entry has no file name",
+                path.display()
+            )));
+        };
+        let name = file_name.to_string_lossy().into_owned();
         // A symbolic link is neither followed nor a candidate, so a link that leads back up the tree cannot repeat a folder.
         let link = std::fs::symlink_metadata(&path)
             .map_err(|error| Error::Failed(file_error(path.display(), &error)))?;
