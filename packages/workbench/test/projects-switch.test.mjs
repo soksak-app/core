@@ -566,13 +566,15 @@ test("each layout save names its writing path: add space for a new space of the 
 
 // The stored party of the space of projects-parties-storage (docs/spec/parties.md#storage).
 const STORED_PARTIES = [{ id: "p1", cards: ["a", "b"], leader: "a", color: "#123456", leaderColor: null }];
-const partyFields = ({ id, cards, leader, color, leaderColor }) => ({ id, cards, leader, color, leaderColor });
 
 test("a stored party reads back into the window with the same record (docs/spec/parties.md#storage)", { timeout: 5000 }, async () => {
   await start("projects-parties-storage");
   await projects.activate(PROJECT.id);
-  const { partyList } = await import("../parties.js");
-  assert.deepEqual(partyList().map(partyFields), STORED_PARTIES, "the window holds the stored party after the read");
+  // The storage form holds no outline (docs/spec/parties.md#storage), so the window state is compared in that form.
+  const { storedParties } = await import("../parties.js");
+  assert.deepEqual(storedParties(), STORED_PARTIES, "the window holds the stored party after the read");
+  // The shown layout is written after the read, which plays the save steps of the case.
+  await projects.keep();
   wire.finish();
 });
 
@@ -581,10 +583,10 @@ test("the save patch of a space carries its parties (docs/spec/parties.md#storag
   await projects.activate(PROJECT.id);
   // The save of the shown layout writes the space with the parties of the window (docs/spec/parties.md#storage).
   await projects.keep();
-  const { partyList } = await import("../parties.js");
+  const { storedParties } = await import("../parties.js");
   const saved = workspaceCalls("patch").filter(({ payload }) => payload.patch.spaces).at(-1);
   assert.ok(saved, "a save patch of the spaces was written");
-  assert.deepEqual(saved.payload.patch.spaces[0].parties, partyList().map(partyFields), "the space of the save patch carries the parties of the window");
+  assert.deepEqual(saved.payload.patch.spaces[0].parties, storedParties(), "the space of the save patch carries the parties of the window");
   wire.finish();
 });
 

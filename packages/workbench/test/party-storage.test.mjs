@@ -16,9 +16,15 @@ test("a space object without a parties member reads as parties []", () => {
   assert.deepEqual(space.parties, []);
 });
 
-test("saving a space that read as parties [] writes the member parties []", () => {
+test("saving a space without parties writes no parties member (docs/spec/parties.md#storage)", () => {
   const space = readStoredSpace(project, { id: "spc-1", title: "SPACE1", layout });
-  assert.deepEqual(writeStoredSpace(space).parties, []);
+  assert.equal("parties" in writeStoredSpace(space), false);
+});
+
+test("saving a space with parties writes the member parties", () => {
+  const party = { id: "p1", cards: ["a", "b"], leader: null, color: "#123456", leaderColor: null };
+  const space = readStoredSpace(project, { id: "spc-1", title: "SPACE1", layout, parties: [party] });
+  assert.deepEqual(writeStoredSpace(space).parties, [party]);
 });
 
 test("an explicit null parties member is refused with an error that names projects.json, the project, the space and the found value", () => {
