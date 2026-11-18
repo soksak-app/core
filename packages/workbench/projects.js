@@ -425,6 +425,46 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
   return ended;
 }
 
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/**
+ * Reads the `parties` member of a space of projects.json (docs/spec/parties.md#storage). A space without the member has no party.
+ * A value of another form, or a party that breaks a rule of the specification, is refused. The error names the file, the project root,
+ * the space identifier and the found value as JSON text.
+ */
+export function readStoredSpace(project, space) {
+  if (space.parties === undefined) return { ...space, parties: [] };
+  const found = JSON.stringify(space.parties);
+  const refuse = (reason) => {
+    throw new Error(`projects.json: project ${project.root}, space ${space.id}: parties ${found}: ${reason}`);
+  };
+  if (!Array.isArray(space.parties)) refuse("parties must be an array");
+  const layoutCards = new Set((space.layout?.state?.cards ?? []).map((card) => card.id));
+  const owners = new Map();
+  for (const party of space.parties) {
+    if (typeof party !== "object" || party === null || typeof party.id !== "string" || !Array.isArray(party.cards)) {
+      refuse("a party record needs an id and a list of cards");
+    }
+    if (party.cards.length < 2) refuse("a party needs at least 2 cards");
+    for (const card of party.cards) {
+      if (!layoutCards.has(card)) refuse(`card ${card} is not in the space layout`);
+      if (owners.has(card)) refuse(`card ${card} belongs to party ${owners.get(card)} and party ${party.id}`);
+      owners.set(card, party.id);
+    }
+    if (party.leader !== null && !party.cards.includes(party.leader)) refuse(`leader ${party.leader} is not a card of party ${party.id}`);
+    if (typeof party.color !== "string" || !HEX_COLOR.test(party.color)) refuse(`color of party ${party.id} is not #rrggbb`);
+    if (party.leaderColor !== null && (typeof party.leaderColor !== "string" || !HEX_COLOR.test(party.leaderColor))) {
+      refuse(`leader color of party ${party.id} is not #rrggbb or null`);
+    }
+  }
+  return { ...space, parties: space.parties };
+}
+
+/** Returns the space object to store. It always holds the `parties` member, an array (docs/spec/parties.md#storage). */
+export function writeStoredSpace(space) {
+  return { ...space, parties: space.parties ?? [] };
+}
+
 export function keep(path) {
   const project = active();
   if (!project || !listener || browsing) return writing;
