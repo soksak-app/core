@@ -1,11 +1,12 @@
 # Changelog
 
-- F895: The card auto-arrange command runs the setting `cardArrange` (`resize`, the default, keeps the arrangement; `even` runs `arrange("even")`), which the settings window shows as a choice. The toolbar icon of the command changes with the setting.
-- F894: The layout model has the even arrangement `arrange("even")`, which replaces the arrangement with an equal grid of the current cards and adds one empty card when no grid fits. A grid is taken only when each cell is at least `minSize`.
 
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
+
+- F895: The card auto-arrange command runs the setting `cardArrange` (`resize`, the default, keeps the arrangement; `even` runs `arrange("even")`), which the settings window shows as a choice. The toolbar icon of the command changes with the setting.
+- F894: The layout model has the even arrangement `arrange("even")`, which replaces the arrangement with an equal grid of the current cards and adds one empty card when no grid fits. A grid is taken only when each cell is at least `minSize`.
 
 - F887: The native test waits have a limited form, `eventWaitUntil`, that ends at its limit with the measured state; the cursor test of the input uses it.
 - F891: The usage of `sok --help` lists `describe [window] [--surface S] [--full] [--after KEY] [--limit N]`, the command that both hosts run and that the usage text omitted. The pages of `sok describe` already share the list key `rows`; the first page also holds `window`, `layout`, `plugins` and `agent`, as `cli.describe.lists-every-entry` states.

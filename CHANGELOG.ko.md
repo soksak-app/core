@@ -1,11 +1,12 @@
 # 변경 기록
 
-- F895: 카드 자동 정렬 명령은 설정 `cardArrange`(기본값 `resize`는 구조를 유지하고, `even`은 `arrange("even")`을 실행한다)의 값을 따른다. 설정 창에서 선택하며, 명령의 툴바 아이콘은 설정 값에 따라 바뀐다.
-- F894: 레이아웃 모델에 균등 배치 `arrange("even")`을 추가한다. 현재 카드를 같은 크기의 격자로 바꾸고, 맞는 격자가 없으면 빈 카드 하나를 더한다. 각 셀이 `minSize` 이상인 격자만 고른다.
 
 [English](CHANGELOG.md)
 
 ## 미배포
+
+- F895: 카드 자동 정렬 명령은 설정 `cardArrange`(기본값 `resize`는 구조를 유지하고, `even`은 `arrange("even")`을 실행한다)의 값을 따른다. 설정 창에서 선택하며, 명령의 툴바 아이콘은 설정 값에 따라 바뀐다.
+- F894: 레이아웃 모델에 균등 배치 `arrange("even")`을 추가한다. 현재 카드를 같은 크기의 격자로 바꾸고, 맞는 격자가 없으면 빈 카드 하나를 더한다. 각 셀이 `minSize` 이상인 격자만 고른다.
 
 - F887: native test 대기에 제한이 있는 형태 `eventWaitUntil`을 더했다. limit에서 측정 상태와 함께 끝나며, 입력 커서 test가 이를 쓴다.
 - F891: `sok --help`의 사용법이 두 host가 실행하며 사용법 글에서 빠져 있던 `describe [window] [--surface S] [--full] [--after KEY] [--limit N]`을 나열한다. `sok describe`의 페이지들은 이미 목록 키 `rows`를 공유하며, 첫 페이지는 `window`, `layout`, `plugins`, `agent`를 더 담는다(`cli.describe.lists-every-entry`).
