@@ -278,7 +278,7 @@ function deleteParty({ party: id }) {
   const party = byId(id);
   const row = { party: party.id, removed: [...party.cards], leader: null, deleted: true };
   parties = parties.filter((candidate) => candidate !== party);
-  return { party: null, changed: [row] };
+  return { party: { id: party.id }, changed: [row] };
 }
 
 /** Brings the parties in line with the cards of the grid after a layout change, and returns the change rows. */
