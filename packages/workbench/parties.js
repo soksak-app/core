@@ -1,7 +1,7 @@
 // Parties of the window: groups of touching content cards with one outer outline, an optional leader and the colors
 // (docs/spec/parties.md). The commands core.party.* and core.card.get, and the status core.parties, are registered by
 // installParties; the rules are applied to the layout of the window that currently shows the grid.
-import { outline } from "soksak";
+import { outline, touches } from "soksak";
 import { CHROME } from "./chrome-metrics.js";
 import { windowSidebar } from "./window-sidebars.js";
 
@@ -27,13 +27,6 @@ const cellOf = (id) => currentGrid()?.card(id);
 
 /** The card ids of the grid in space order. */
 const spaceOrder = () => (currentGrid()?.toJSON().cards ?? []).map((card) => card.id);
-
-/** Whether two cards touch: their sides meet across the gap of the grid, with the other axis overlapping. */
-function touches(a, b) {
-  const overlapRows = a.r0 < b.r1 && b.r0 < a.r1;
-  const overlapCols = a.c0 < b.c1 && b.c0 < a.c1;
-  return (overlapRows && (a.c1 === b.c0 || b.c1 === a.c0)) || (overlapCols && (a.r1 === b.r0 || b.r1 === a.r0));
-}
 
 /** Splits card ids into connected groups of touching cards; each group keeps the order of ids. */
 function groupsOf(ids) {
