@@ -828,11 +828,10 @@ func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {
 			Name  string       `json:"name"`
 			State layout.State `json:"state"`
 			Steps []struct {
-				Call   string `json:"call"`
-				Params struct {
-					Cards []string `json:"cards"`
-				} `json:"params"`
-				Error *string `json:"error"`
+				Call    string          `json:"call"`
+				Params  json.RawMessage `json:"params"`
+				Returns json.RawMessage `json:"returns"`
+				Error   *string         `json:"error"`
 			} `json:"steps"`
 		} `json:"cases"`
 	}
@@ -844,16 +843,25 @@ func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {
 			cards[card.ID] = card
 		}
 		for _, s := range kase.Steps {
-			if s.Call != "core.party.create" || len(s.Params.Cards) != 2 {
+			if s.Call != "core.party.create" {
+				continue
+			}
+			var params struct {
+				Cards []string `json:"cards"`
+			}
+			if err := json.Unmarshal(s.Params, &params); err != nil {
+				t.Fatal(err)
+			}
+			if len(params.Cards) != 2 {
 				continue
 			}
 			if s.Error != nil && !strings.HasPrefix(*s.Error, "cards are not touching") {
 				continue
 			}
-			a, b := cards[s.Params.Cards[0]], cards[s.Params.Cards[1]]
+			a, b := cards[params.Cards[0]], cards[params.Cards[1]]
 			want := s.Error == nil
 			if got := layout.Touches(a, b); got != want {
-				t.Fatalf("%s: touches of cards %v is %v, want %v", kase.Name, s.Params.Cards, got, want)
+				t.Fatalf("%s: touches of cards %v is %v, want %v", kase.Name, params.Cards, got, want)
 			}
 			judged++
 		}
