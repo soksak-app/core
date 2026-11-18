@@ -695,3 +695,36 @@ func (p *Parties) Stored() []StoredParty {
 	}
 	return out
 }
+
+// Record is a party of the status core.parties: its stored fields, its outline as [x, y] pairs in window points, and the reason of its
+// last change.
+type Record struct {
+	ID          string         `json:"id"`
+	Cards       []string       `json:"cards"`
+	Leader      *string        `json:"leader"`
+	Color       string         `json:"color"`
+	LeaderColor *string        `json:"leaderColor"`
+	Outline     [][][2]float64 `json:"outline"`
+	Reason      *string        `json:"reason"`
+}
+
+// Records returns one record for each party, in the order of the parties (docs/spec/parties.md#commands).
+func (p *Parties) Records(g *Grid, border float64) ([]Record, error) {
+	out := []Record{}
+	for _, item := range p.list {
+		loops, err := p.Outline(g, item.ID, border)
+		if err != nil {
+			return nil, err
+		}
+		pairs := [][][2]float64{}
+		for _, loop := range loops {
+			next := [][2]float64{}
+			for _, point := range loop {
+				next = append(next, [2]float64{point.X, point.Y})
+			}
+			pairs = append(pairs, next)
+		}
+		out = append(out, Record{ID: item.ID, Cards: slices.Clone(item.Cards), Leader: item.Leader, Color: item.Color, LeaderColor: item.LeaderColor, Outline: pairs, Reason: item.Reason})
+	}
+	return out, nil
+}

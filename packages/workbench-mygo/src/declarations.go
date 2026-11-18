@@ -197,6 +197,24 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 		Rail: color("rail"), Focus: color("focus"), No: color("no"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
 }
 
+// DefaultPartyPalette returns the party theme tokens of the default theme in its dark mode, the same theme and mode that
+// DefaultPalette reads (docs/spec/parties.md#drawing).
+func (d *Declarations) DefaultPartyPalette() (map[string]string, error) {
+	if len(d.themes) == 0 {
+		return nil, errors.New("workbench.json declares no theme")
+	}
+	theme := d.themes[0]
+	palette := map[string]string{}
+	for _, token := range []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6", "party-leader"} {
+		value, ok := theme.Dark[token]
+		if !ok {
+			return nil, fmt.Errorf("theme %s has no color %s", theme.Name, token)
+		}
+		palette[token] = value
+	}
+	return palette, nil
+}
+
 // Declared returns the declarations of the embedded copies.
 var Declared = sync.OnceValues(ReadDeclarations)
 
