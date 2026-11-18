@@ -38,6 +38,8 @@ All commands are idempotent: the same request in the same state gives the same r
 
 `taken` lists `{card, from}` for each card that changed party, where `from` is the former party identifier or `null`. A card that is already in the target party is not listed. `changed` lists `{party, removed, leader, deleted}` for each party that changed, including a party that `create` or `add` made: `removed` lists the cards that left that party, `leader` is its leader after the change or `null`, and `deleted` is true when the party no longer exists.
 
+The reply of a delete carries the identifier of the deleted party only in party.
+
 Refusals and their texts. The texts other than `card <id> belongs to party <party>` are proposed; their wording is an open decision ([open decisions](#open-decisions)).
 
 | Condition | Text |
@@ -129,6 +131,6 @@ The take item names the party it joins. When the take removes the former party, 
 
 ## Open decisions
 
-- The six party colors `party-1` to `party-6` and the leader color `party-leader` of each theme. A person sees these colors; this specification fixes only that each differs from the rail color of its theme.
+- The six party colors `party-1` to `party-6` and the leader color `party-leader` of each theme. A person sees these colors; this specification fixes only that each differs from the rail color of its theme. The values are derived from the rail hue of each palette.
 - The labels of the menu items and the wording of the take item, including the note for a former party that disappears. A person reads these labels.
 - The wording of the refusal texts in the table above, except `card <id> belongs to party <party>`, and the wording of the storage refusal. A person reads these messages.
