@@ -68,18 +68,22 @@ Each question states the reason it is open.
 7. Whether a read message is consumed, moved or left in place, and how a repeated read of the same message behaves. Reason: the plan does not define consumption.
 8. The order of messages when several arrive together, and the handling of a message that is written again. Reason: the plan does not define ordering or repetition.
 9. Behavior when a registered folder is removed or renamed after registration, including whether the watch ends with an explicit event, and whether a re-created folder resumes the watch. Reason: the plan covers only the registration of an existing folder.
-10. Whether an injected message passes the destructive command guard, and whether a message that a guard rule matches is refused or reported differently. Reason: the guard judges each submitted line ([persistent services](persistent-services.md#destructive-command-guard)), and a message is submitted input; the plan does not state it.
-11. The declared command that carries an injected message into the terminal, and its parameters. Reason: the plan names the trigger path ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)) but no command.
-12. The form of an injected message in the input of the terminal, such as the text, the prefix that marks it as a message, and the submission. Reason: the plan states "one declared form" without defining it ([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
-13. Which TUI action delivers a message to a busy foreground TUI (background, send-now, or the idle-state queue), and the rule for each agent. Reason: the adapter action keys are defined per agent and are not yet declared ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
-14. The arguments of `messages.read`. Reason: the plan names the tool only.
-15. The reply of `messages.read`: its member names, the order of messages, and the error text for an unknown terminal. Reason: the plan states that the result is structured but defines no shape.
-16. The arguments of `messages.wait`. Reason: the plan names the tool only.
-17. The reply of `messages.wait` on arrival, on timeout, and on client cancellation. Reason: the plan does not define them; [cli](cli.md#mcp-server) defines the cancellation of the status watch as a precedent, not a decision for this tool.
-18. The naming form of the two tools: dotted, as the feature row names them, or underscore, as every tool of [cli](cli.md#mcp-server) has. Reason: the two forms conflict, and the decision changes the tool table.
-19. How the sidecar or the trigger learns that an agent supports MCP tools, and whether the adapter declares it per action ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). Reason: the plan states the condition but no declaration.
-20. The time limit of a waiting `messages.wait` call in Claude Code and Codex. Reason: plan open item V7 is unmeasured ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
-21. The delivery latency bound of file events on the shared machine. Reason: plan open item V6 is unmeasured; the plan states that no bound is written before measurement ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
-22. Whether Claude Code has a same-machine direct path for session messages. Reason: plan open item V8 is unrecorded ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
-23. The transport of the file-watching sidecar, `stdio` or `persistent`, and whether its watches survive a reconnection of a persistent service. Reason: the persistent service contract defines reconnection for sessions ([persistent services](persistent-services.md#service-transport)) and does not name watches.
-24. The event names in the sidecar catalog for file events, registration, and message delivery, and their gate levels in the event log ([logging](logging.md#sidecar-catalogs)). Reason: no event name is declared.
+10. The declared command that carries an injected message into the terminal, and its parameters. Reason: the plan names the trigger path ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)) but no command.
+11. The form of an injected message in the input of the terminal, such as the text, the prefix that marks it as a message, and the submission. Reason: the plan states "one declared form" without defining it ([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
+12. Which TUI action delivers a message to a busy foreground TUI (background, send-now, or the idle-state queue), and the rule for each agent. Reason: the adapter action keys are defined per agent and are not yet declared ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
+13. The arguments of `messages.read`. Reason: the plan names the tool only.
+14. The reply of `messages.read`: its member names, the order of messages, and the error text for an unknown terminal. Reason: the plan states that the result is structured but defines no shape.
+15. The arguments of `messages.wait`. Reason: the plan names the tool only.
+16. The reply of `messages.wait` on arrival, on timeout, and on client cancellation. Reason: the plan does not define them; [cli](cli.md#mcp-server) defines the cancellation of the status watch as a precedent, not a decision for this tool.
+17. How the sidecar or the trigger learns that an agent supports MCP tools, and whether the adapter declares it per action ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). Reason: the plan states the condition but no declaration.
+18. The time limit of a waiting `messages.wait` call in Claude Code and Codex. Reason: plan open item V7 is unmeasured ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+19. The delivery latency bound of file events on the shared machine. Reason: plan open item V6 is unmeasured; the plan states that no bound is written before measurement ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
+20. Whether Claude Code has a same-machine direct path for session messages. Reason: plan open item V8 is unrecorded ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+21. The transport of the file-watching sidecar, `stdio` or `persistent`, and whether its watches survive a reconnection of a persistent service. Reason: the persistent service contract defines reconnection for sessions ([persistent services](persistent-services.md#service-transport)) and does not name watches.
+22. The event names in the sidecar catalog for file events, registration, and message delivery, and their gate levels in the event log ([logging](logging.md#sidecar-catalogs)). Reason: no event name is declared.
+
+## Settled by existing contracts
+
+
+- Tool names: the two MCP tools are named with underscores, as every tool of [cli](cli.md#mcp-server) is (`messages_read`, `messages_wait`). The feature row's dotted form is replaced; the tool table does not change for these two names.
+- Guard: an injected message is submitted through the same `input` operation as a typed line, so the destructive command guard judges it like any submitted line ([persistent services](persistent-services.md#destructive-command-guard)). A refused message gets the reply `guardRefused` with its `rule` and `reason`.
