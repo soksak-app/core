@@ -122,10 +122,12 @@ The menu of a content card holds these items. Each item is an element with the n
 
 | Element | Command | Shown when |
 | --- | --- | --- |
-| `core.party.menu.group` | `core.party.create` with the card and the touching cards that the person chooses | the card is in no party |
+| `core.party.menu.group` | opens the group chooser of the card; its confirm item runs `core.party.create` with the card and the selected touching cards | the card is in no party and has a touching card in no party |
 | `core.party.menu.leader` | `core.party.update` with `leader` set to the card, or `null` to remove the leader | the card is in a party |
 | `core.party.menu.color` | `core.party.update` with `color` or `leaderColor` | the card is in a party |
 | `core.party.menu.take` | `core.party.add` with the card and `take: true` | the card touches a party that another party holds it in |
+
+The group chooser is a picker layer that lists the touching cards that are in no party. A press on a listed card selects it, or clears it when it is selected, and the layer reopens with the selection marked. Once a card is selected, the layer lists the confirm item, which runs `core.party.create` with the card and the selected cards and closes the layer. A card press never creates a party by itself.
 
 The take item names the party it joins. When the take removes the former party, because it keeps fewer than 2 cards, the item states it. The menu asks no confirmation: a party change never deletes card content.
 

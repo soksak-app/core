@@ -122,10 +122,12 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 | Element | 명령 | 표시 조건 |
 | --- | --- | --- |
-| `core.party.menu.group` | 카드와 사람이 고른 닿은 카드들로 `core.party.create` | 카드가 어떤 party에도 없다 |
+| `core.party.menu.group` | 카드의 그룹 선택기를 열며, 그 확인 항목은 카드와 고른 닿은 카드들로 `core.party.create`를 실행한다 | 카드가 어떤 party에도 없고 party에 없는 닿은 카드가 있다 |
 | `core.party.menu.leader` | `leader`를 카드로 또는 leader를 없애려고 `null`로 하여 `core.party.update` | 카드가 party에 있다 |
 | `core.party.menu.color` | `color` 또는 `leaderColor`로 `core.party.update` | 카드가 party에 있다 |
 | `core.party.menu.take` | 카드와 `take: true`로 `core.party.add` | 카드가 닿은 다른 party에 속해 있다 |
+
+그룹 선택기는 party에 없는 닿은 카드들을 나열하는 picker 레이어다. 나열된 카드를 누르면 그 카드를 고르거나, 이미 고른 카드이면 고르기를 푼다. 레이어는 선택 표시와 함께 다시 열린다. 카드를 하나 고르면 레이어에 확인 항목이 나타나며, 이 항목은 카드와 고른 카드들로 `core.party.create`를 실행하고 레이어를 닫는다. 카드를 누르는 것만으로는 party가 만들어지지 않는다.
 
 take 항목은 들어갈 party를 이름으로 보여준다. take가 이전 party를 지우면, 즉 이전 party에 카드가 2개 미만 남으면, 그 항목이 이를 밝힌다. 메뉴는 확인을 묻지 않는다. party 변경은 카드 내용을 지우지 않는다.
 
