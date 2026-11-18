@@ -7,7 +7,7 @@ This document defines the messaging contract between terminals and agents. Imple
 ## Decisions in force
 
 - Decision D3 of the [terminal plan](../plans/terminal-plan.md#32-event-path-decision-d3): file events observed by the terminal sidecar are the only messaging event path. Agent hooks (Claude Code `FileChanged`, Codex hook events) are not on the delivery path. A message is delivered the same way whichever agent wrote the file.
-- Decision D4 of the [terminal plan](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4): input injection into the registered terminal is the baseline channel. The MCP tools `messages.read` and `messages.wait` are the better channel where the agent supports MCP tools. Delivery does not depend on a skill.
+- Decision D4 of the [terminal plan](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4): input injection into the registered terminal is the baseline channel. The MCP tools `messages_read` and `messages_wait` are the better channel where the agent supports MCP tools. Delivery does not depend on a skill.
 - The sidecar does not poll. It observes folder changes through an event source. The rule of [AGENTS](../../AGENTS.md) applies: file watching uses a maintained library of the ecosystem. The library is not named in this document ([open decisions](#open-decisions), question 1).
 
 ## Registered folder
@@ -36,54 +36,54 @@ A registered folder that does not exist is a failure. The rules that apply are t
 
 A trigger acts through the terminal. It injects input into the registered terminal, or it runs a declared command. No agent API is used ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
 
-The sidecar receives input through the `input` and `paste` operations of its session ([persistent services](persistent-services.md#destructive-command-guard)). Each submitted line that these operations carry is judged by the destructive command guard. A line that a declared rule matches, or whose command cannot be decided, is refused with the error `guardRefused` and writes no byte to the session ([persistent services](persistent-services.md#destructive-command-guard)). Whether an injected message passes this guard is open ([open decisions](#open-decisions), question 10).
+The sidecar receives input through the `input` and `paste` operations of its session ([persistent services](persistent-services.md#destructive-command-guard)). Each submitted line that these operations carry is judged by the destructive command guard. A line that a declared rule matches, or whose command cannot be decided, is refused with the error `guardRefused` and writes no byte to the session ([persistent services](persistent-services.md#destructive-command-guard)). An injected message is judged by this guard ([settled](#settled-by-existing-contracts)).
 
-The declared command that carries an injected message, and the form of a message in the input, are open ([open decisions](#open-decisions), questions 11 and 12). A terminal whose agent is busy in a foreground TUI receives input only through the background or send-now action of the TUI adapter ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)); which action a message uses is open (question 13).
+The form of a message in the input is open ([open decisions](#open-decisions), question 10). A terminal whose agent is busy in a foreground TUI receives input only through the background or send-now action of the TUI adapter ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)); which of the two each agent uses is open (question 11).
 
 ## MCP tools
 
-The sok MCP server exposes a fixed set of tools, and no tool is made from the exposure ([cli](cli.md#mcp-server), the rule of the tool table). The messaging tools are `messages.read` and `messages.wait`, as the feature row names them.
+The sok MCP server exposes a fixed set of tools, and no tool is made from the exposure ([cli](cli.md#mcp-server), the rule of the tool table). The messaging tools are `messages_read` and `messages_wait`.
 
 | Tool | Arguments | Reply |
 | --- | --- | --- |
-| `messages.read` | open (question 14) | open (question 15) |
-| `messages.wait` | open (question 16) | open (question 17) |
+| `messages_read` | open (question 12) | open (question 13) |
+| `messages_wait` | open (question 14) | open (question 15) |
 
-The names are dotted, but every tool of the table in [cli](cli.md#mcp-server) has an underscore name, such as `windows_list` and `status_get`. The naming form is open (question 18).
+Every tool of the table in [cli](cli.md#mcp-server) has an underscore name, such as `windows_list` and `status_get`; the messaging tools follow the same form ([settled](#settled-by-existing-contracts)).
 
 A refused or failed call returns an explicit error and is never reported as an empty result, because every error is reported ([AGENTS](../../AGENTS.md)). A tool call that fails returns a tool error, as [cli](cli.md#mcp-server) defines for the other tools. The error text of each messaging tool is open with its reply.
 
-The agent uses the MCP tools only where its client supports MCP tools ([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)). How the sidecar or the trigger learns that an agent supports them is open (question 19).
+The agent uses the MCP tools only where its client supports MCP tools ([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)). How the sidecar or the trigger learns that an agent supports them is open (question 16).
 
 ## Open decisions
 
 Each question states the reason it is open.
 
-1. Which maintained library watches folders on each platform. Reason: AGENTS requires a maintained library for file watching, and the repository does not name one for this contract.
+1. Which maintained library watches folders on each platform. Reason: AGENTS requires a maintained library for file watching, and the repository does not name one for this contract. The one folder-watching library the repository uses, `@parcel/watcher`, serves its Node test tooling and carries a local FSEvents patch; that use does not decide the sidecar's library.
 2. Which declared request registers a folder, and its parameters. Reason: the plan names the registration only as "a terminal registers a folder" ([terminal plan, 3.1](../plans/terminal-plan.md#31-requirement)).
 3. The reply of a registration, and its error texts for a folder that is missing, is not a directory, or is already registered by another surface. Reason: the plan does not define a reply.
 4. The body of a file event: its fields, its kind of change, and the path it names. Reason: the plan requires a source and a sequence number but defines neither.
-5. The sequence number and source of a file event: their scope (per registration, per folder, per sidecar run, or per boot), and what the source names. Reason: the plan does not define the scope; the event log requires a sequence in the form of [logging](logging.md#event).
+5. The sequence number and source of a file event: their scope (per registration, per folder, per sidecar run, or per boot), and what the source names. Reason: the plan does not define the scope; the event log requires a sequence in the form of [logging](logging.md#event), which assigns `seq` per process writer for log records only and does not define the sequence of a delivered file event.
 6. The format of a message file (for example JSON or text, and its maximum size), its file name rule, and the folder in which it is written. Reason: the plan does not define the message format.
 7. Whether a read message is consumed, moved or left in place, and how a repeated read of the same message behaves. Reason: the plan does not define consumption.
 8. The order of messages when several arrive together, and the handling of a message that is written again. Reason: the plan does not define ordering or repetition.
 9. Behavior when a registered folder is removed or renamed after registration, including whether the watch ends with an explicit event, and whether a re-created folder resumes the watch. Reason: the plan covers only the registration of an existing folder.
-10. The declared command that carries an injected message into the terminal, and its parameters. Reason: the plan names the trigger path ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)) but no command.
-11. The form of an injected message in the input of the terminal, such as the text, the prefix that marks it as a message, and the submission. Reason: the plan states "one declared form" without defining it ([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
-12. Which TUI action delivers a message to a busy foreground TUI (background, send-now, or the idle-state queue), and the rule for each agent. Reason: the adapter action keys are defined per agent and are not yet declared ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
-13. The arguments of `messages.read`. Reason: the plan names the tool only.
-14. The reply of `messages.read`: its member names, the order of messages, and the error text for an unknown terminal. Reason: the plan states that the result is structured but defines no shape.
-15. The arguments of `messages.wait`. Reason: the plan names the tool only.
-16. The reply of `messages.wait` on arrival, on timeout, and on client cancellation. Reason: the plan does not define them; [cli](cli.md#mcp-server) defines the cancellation of the status watch as a precedent, not a decision for this tool.
-17. How the sidecar or the trigger learns that an agent supports MCP tools, and whether the adapter declares it per action ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). Reason: the plan states the condition but no declaration.
-18. The time limit of a waiting `messages.wait` call in Claude Code and Codex. Reason: plan open item V7 is unmeasured ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
-19. The delivery latency bound of file events on the shared machine. Reason: plan open item V6 is unmeasured; the plan states that no bound is written before measurement ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
-20. Whether Claude Code has a same-machine direct path for session messages. Reason: plan open item V8 is unrecorded ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
-21. The transport of the file-watching sidecar, `stdio` or `persistent`, and whether its watches survive a reconnection of a persistent service. Reason: the persistent service contract defines reconnection for sessions ([persistent services](persistent-services.md#service-transport)) and does not name watches.
-22. The event names in the sidecar catalog for file events, registration, and message delivery, and their gate levels in the event log ([logging](logging.md#sidecar-catalogs)). Reason: no event name is declared.
+10. The form of an injected message in the input of the terminal, such as the text, the prefix that marks it as a message, and the submission. Reason: the plan states "one declared form" without defining it ([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
+11. Which action of the TUI adapter, background or send-now, delivers a message to a busy foreground TUI for each agent, and the keys of each action. Reason: the plan requires one of the two actions ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)), but no agent key is declared; the key table of the TUI adapter is empty, so no key is observed.
+12. The arguments of `messages_read`. Reason: the plan names the tool only.
+13. The reply of `messages_read`: its member names, the order of messages, and the error text for an unknown terminal. Reason: the plan states that the result is structured but defines no shape.
+14. The arguments of `messages_wait`. Reason: the plan names the tool only.
+15. The reply of `messages_wait` on arrival, on timeout, and on client cancellation. Reason: the plan does not define them; [cli](cli.md#mcp-server) defines the cancellation of the status watch as a precedent, not a decision for this tool.
+16. How the sidecar or the trigger learns that an agent supports MCP tools, and whether the adapter declares it per action ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). Reason: the plan states the condition but no declaration.
+17. The time limit of a waiting `messages_wait` call in Claude Code and Codex. Reason: measurement; plan open item V7 is unmeasured ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+18. The delivery latency bound of file events on the shared machine. Reason: measurement; plan open item V6 is unmeasured, and the plan states that no bound is written before measurement ([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
+19. Whether Claude Code has a same-machine direct path for session messages. Reason: measurement; plan open item V8 is unrecorded, and the strings observed so far do not show one ([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+20. The transport of the file-watching sidecar, `stdio` or `persistent`, and whether its watches survive a reconnection of a persistent service. Reason: the persistent service contract defines reconnection for sessions ([persistent services](persistent-services.md#service-transport)) and does not name watches.
+21. The event names in the sidecar catalog for file events, registration, and message delivery, and their gate levels in the event log ([logging](logging.md#sidecar-catalogs)). Reason: no event name is declared; the catalog form is fixed, but the names are not.
 
 ## Settled by existing contracts
 
-
-- Tool names: the two MCP tools are named with underscores, as every tool of [cli](cli.md#mcp-server) is (`messages_read`, `messages_wait`). The feature row's dotted form is replaced; the tool table does not change for these two names.
+- Tool names: the two MCP tools are named with underscores, as every tool of [cli](cli.md#mcp-server) is (`messages_read`, `messages_wait`). This document uses these names in its tool table.
 - Guard: an injected message is submitted through the same `input` operation as a typed line, so the destructive command guard judges it like any submitted line ([persistent services](persistent-services.md#destructive-command-guard)). A refused message gets the reply `guardRefused` with its `rule` and `reason`.
+- Carrier: an injected message reaches the terminal through the `input` operation of its session, the operation that carries a typed line ([persistent services](persistent-services.md#destructive-command-guard)). The parameters of that operation are declared by the terminal sidecar in its own repository, not by this repository ([AGENTS](../../AGENTS.md#structure)).
+- Busy foreground TUI: delivery to a busy foreground TUI requires the background or send-now action of the TUI adapter. The plan states that such a TUI does not receive a message until one of them runs ([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).

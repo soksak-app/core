@@ -7,7 +7,7 @@
 ## 유효한 결정
 
 - [terminal plan](../plans/terminal-plan.md#32-event-path-decision-d3)의 결정 D3: terminal sidecar가 관찰하는 file event가 messaging 이벤트의 유일한 경로다. Agent hook(Claude Code `FileChanged`, Codex hook event)은 전달 경로에 없다. 메시지는 어느 agent가 파일을 썼든 같은 방식으로 전달된다.
-- [terminal plan](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)의 결정 D4: 등록된 terminal로의 input injection이 기본 경로다. Agent가 MCP tool을 지원하는 곳에서는 MCP tool `messages.read`와 `messages.wait`가 더 나은 경로다. 전달은 skill에 의존하지 않는다.
+- [terminal plan](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)의 결정 D4: 등록된 terminal로의 input injection이 기본 경로다. Agent가 MCP tool을 지원하는 곳에서는 MCP tool `messages_read`와 `messages_wait`가 더 나은 경로다. 전달은 skill에 의존하지 않는다.
 - Sidecar는 polling하지 않는다. Folder 변경은 event source로 관찰한다. [AGENTS](../../AGENTS.md)의 규칙이 적용된다: file watching은 생태계의 maintained library를 사용한다. 이 문서는 library 이름을 정하지 않는다([open decisions](messaging.md#open-decisions), 질문 1).
 
 ## 등록된 folder
@@ -36,54 +36,54 @@ Message는 등록된 folder에 쓰인 파일이다. 파일 형식, 파일 이름
 
 Trigger는 terminal을 통해 동작한다. 등록된 terminal에 input을 주입하거나, 선언된 command를 실행한다. Agent API는 쓰지 않는다([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
 
-Sidecar는 session의 `input`과 `paste` operation으로 input을 받는다([persistent services](persistent-services.md#destructive-command-guard)). 이 operation이 담은 제출 줄마다 destructive command guard가 판정한다. 선언된 규칙에 맞는 줄이나 명령을 판정할 수 없는 줄은 오류 `guardRefused`로 거부되며 session에 byte를 쓰지 않는다([persistent services](persistent-services.md#destructive-command-guard)). 주입된 message가 이 guard를 통과하는지는 열려 있다([open decisions](messaging.md#open-decisions), 질문 10).
+Sidecar는 session의 `input`과 `paste` operation으로 input을 받는다([persistent services](persistent-services.md#destructive-command-guard)). 이 operation이 담은 제출 줄마다 destructive command guard가 판정한다. 선언된 규칙에 맞는 줄이나 명령을 판정할 수 없는 줄은 오류 `guardRefused`로 거부되며 session에 byte를 쓰지 않는다([persistent services](persistent-services.md#destructive-command-guard)). 주입된 message는 이 guard의 판정을 받는다([기존 계약으로 정해진 사항](messaging.md#settled-by-existing-contracts)).
 
-Message를 terminal로 옮기는 선언된 command, input 안의 message 형식은 열려 있다([open decisions](messaging.md#open-decisions), 질문 11과 12). Agent가 foreground TUI에서 바쁠 때는 TUI adapter의 background 또는 send-now 동작을 통해서만 input을 받는다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). Message가 어느 동작을 쓰는지는 열려 있다(질문 13).
+Input 안의 message 형식은 열려 있다([open decisions](messaging.md#open-decisions), 질문 10). Agent가 foreground TUI에서 바쁠 때는 TUI adapter의 background 또는 send-now 동작을 통해서만 input을 받는다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). 두 동작 중 agent별로 어느 것을 쓰는지는 열려 있다(질문 11).
 
 ## MCP tool
 
-Sok MCP server는 고정된 tool 집합을 제공하며, exposure에서 tool을 만들지 않는다([cli](cli.md#mcp-server), tool 표의 규칙). Messaging tool은 feature row가 적은 이름 `messages.read`와 `messages.wait`다.
+Sok MCP server는 고정된 tool 집합을 제공하며, exposure에서 tool을 만들지 않는다([cli](cli.md#mcp-server), tool 표의 규칙). Messaging tool은 `messages_read`와 `messages_wait`다.
 
 | Tool | 인자 | Reply |
 | --- | --- | --- |
-| `messages.read` | 열림 (질문 14) | 열림 (질문 15) |
-| `messages.wait` | 열림 (질문 16) | 열림 (질문 17) |
+| `messages_read` | 열림 (질문 12) | 열림 (질문 13) |
+| `messages_wait` | 열림 (질문 14) | 열림 (질문 15) |
 
-이름은 점으로 구분되지만, [cli](cli.md#mcp-server)의 tool 표에 있는 모든 tool은 밑줄 이름(예: `windows_list`, `status_get`)이다. 이름 형식은 열려 있다(질문 18).
+[cli](cli.md#mcp-server)의 tool 표에 있는 모든 tool은 밑줄 이름(예: `windows_list`, `status_get`)이다. Messaging tool도 같은 형식을 따른다([기존 계약으로 정해진 사항](messaging.md#settled-by-existing-contracts)).
 
 거부되거나 실패한 호출은 명시적 오류를 돌려준다. 빈 결과로 보고하지 않는다. 모든 오류는 보고된다([AGENTS](../../AGENTS.md)). Tool 호출이 실패하면 [cli](cli.md#mcp-server)가 다른 tool에 정의한 대로 tool 오류를 돌려준다. 각 messaging tool의 오류 문구는 reply와 함께 열려 있다.
 
-Agent는 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)). Sidecar나 trigger가 agent의 MCP 지원을 아는 방법은 열려 있다(질문 19).
+Agent는 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)). Sidecar나 trigger가 agent의 MCP 지원을 아는 방법은 열려 있다(질문 16).
 
 ## 열린 결정
 
 각 질문은 열린 이유를 적는다.
 
-1. 플랫폼별 folder 감시에 쓸 maintained library. 이유: AGENTS는 file watching에 maintained library를 요구하며, 저장소가 이 계약에 대해 library를 지정하지 않는다.
+1. 플랫폼별 folder 감시에 쓸 maintained library. 이유: AGENTS는 file watching에 maintained library를 요구하며, 저장소가 이 계약에 대해 library를 지정하지 않는다. 저장소가 folder 감시에 쓰는 유일한 library인 `@parcel/watcher`는 Node 검사 도구에 쓰이며 FSEvents에 로컬 patch가 있다. 그 사용은 sidecar의 library를 정하지 않는다.
 2. Folder를 등록하는 선언된 요청과 그 parameter. 이유: plan은 등록을 "a terminal registers a folder"로만 적는다([terminal plan, 3.1](../plans/terminal-plan.md#31-requirement)).
 3. 등록의 reply와, folder가 없거나 디렉터리가 아니거나 다른 surface가 이미 등록한 경우의 오류 문구. 이유: plan이 reply를 정의하지 않는다.
 4. File event의 body: 필드, 변경 종류, 가리키는 경로. 이유: plan은 source와 sequence number를 요구하지만 정의하지 않는다.
-5. File event의 sequence number와 source: 범위(등록별, folder별, sidecar 실행별, boot별)와 source가 가리키는 값. 이유: plan이 범위를 정하지 않으며, event log는 [logging](logging.md#event)의 형식으로 sequence를 요구한다.
+5. File event의 sequence number와 source: 범위(등록별, folder별, sidecar 실행별, boot별)와 source가 가리키는 값. 이유: plan이 범위를 정하지 않는다. Event log는 [logging](logging.md#event)의 형식으로 sequence를 요구하며, 그 `seq`는 log record에 대해서만 process writer가 정하고 전달된 file event의 sequence는 정의하지 않는다.
 6. Message 파일의 형식(예: JSON 또는 text, 최대 크기), 파일 이름 규칙, 쓰이는 folder. 이유: plan이 message 형식을 정의하지 않는다.
 7. 읽은 message를 소비하는지, 옮기는지, 그대로 두는지, 같은 message를 다시 읽을 때의 동작. 이유: plan이 소비를 정의하지 않는다.
 8. 여러 message가 함께 도착할 때의 순서, 다시 쓰인 message의 처리. 이유: plan이 순서와 반복을 정의하지 않는다.
 9. 등록 후 folder가 제거되거나 이름이 바뀔 때의 동작: 명시적 event로 watch가 끝나는지, 다시 만들어진 folder에서 watch가 재개되는지. 이유: plan은 이미 있는 folder의 등록만 다룬다.
-10. 주입된 message를 terminal로 옮기는 선언된 command와 그 parameter. 이유: plan은 trigger 경로를 적지만 command를 적지 않는다([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
-11. Terminal input 안의 주입된 message 형식(text, message임을 나타내는 접두어, 제출 방식). 이유: plan은 "one declared form"이라고만 적고 정의하지 않는다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
-12. 바쁜 foreground TUI에 message를 전달하는 TUI 동작(background, send-now, 또는 idle 상태의 대기열)과 agent별 규칙. 이유: adapter의 동작 key는 agent별로 정의되지만 아직 선언되지 않았다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
-13. `messages.read`의 인자. 이유: plan은 tool 이름만 적는다.
-14. `messages.read`의 reply: 멤버 이름, message의 순서, 알 수 없는 terminal의 오류 문구. 이유: plan은 결과가 구조화된다고만 적고 형식을 정의하지 않는다.
-15. `messages.wait`의 인자. 이유: plan은 tool 이름만 적는다.
-16. `messages.wait`의 reply: 도착 시, 시간 초과 시, client 취소 시. 이유: plan이 정의하지 않는다. [cli](cli.md#mcp-server)의 status watch 취소는 선례일 뿐 이 tool의 결정이 아니다.
-17. Sidecar나 trigger가 agent의 MCP tool 지원을 아는 방법, 그리고 adapter가 동작별로 이를 선언하는지([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). 이유: plan은 조건을 적지만 선언을 적지 않는다.
-18. Claude Code와 Codex에서 기다리는 `messages.wait` 호출의 시간 제한. 이유: plan의 열린 항목 V7은 측정되지 않았다([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
-19. 공유 기기에서 file event의 전달 지연 상한. 이유: plan의 열린 항목 V6은 측정되지 않았으며, plan은 측정 전에 상한을 적지 않는다고 한다([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
-20. Claude Code에 session message를 위한 같은 기기 직접 경로가 있는지. 이유: plan의 열린 항목 V8은 기록되지 않았다([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
-21. File 감시 sidecar의 transport, `stdio` 또는 `persistent`, 그리고 persistent service가 재연결될 때 watch가 유지되는지. 이유: persistent service 계약은 session의 재연결을 정의하지만([persistent services](persistent-services.md#service-transport)) watch를 적지 않는다.
-22. File event, 등록, message 전달의 sidecar catalog event 이름과 event log의 gate 수준([logging](logging.md#sidecar-catalogs)). 이유: 선언된 event 이름이 없다.
+10. Terminal input 안의 주입된 message 형식(text, message임을 나타내는 접두어, 제출 방식). 이유: plan은 "one declared form"이라고만 적고 정의하지 않는다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)).
+11. 바쁜 foreground TUI에 message를 전달할 때 agent별로 TUI adapter의 background와 send-now 중 어느 동작을 쓰는지, 그리고 각 동작의 key. 이유: plan은 둘 중 하나가 필요하다고 정하지만([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)), agent key가 선언되지 않았다. TUI adapter의 key table이 비어 있어 관찰된 key가 없다.
+12. `messages_read`의 인자. 이유: plan은 tool 이름만 적는다.
+13. `messages_read`의 reply: 멤버 이름, message의 순서, 알 수 없는 terminal의 오류 문구. 이유: plan은 결과가 구조화된다고만 적고 형식을 정의하지 않는다.
+14. `messages_wait`의 인자. 이유: plan은 tool 이름만 적는다.
+15. `messages_wait`의 reply: 도착 시, 시간 초과 시, client 취소 시. 이유: plan이 정의하지 않는다. [cli](cli.md#mcp-server)의 status watch 취소는 선례일 뿐 이 tool의 결정이 아니다.
+16. Sidecar나 trigger가 agent의 MCP tool 지원을 아는 방법, 그리고 adapter가 동작별로 이를 선언하는지([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)). 이유: plan은 조건을 적지만 선언을 적지 않는다.
+17. Claude Code와 Codex에서 기다리는 `messages_wait` 호출의 시간 제한. 이유: measurement. Plan의 열린 항목 V7은 측정되지 않았다([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+18. 공유 기기에서 file event의 전달 지연 상한. 이유: measurement. Plan의 열린 항목 V6은 측정되지 않았으며, plan은 측정 전에 상한을 적지 않는다고 한다([terminal plan, 3.2](../plans/terminal-plan.md#32-event-path-decision-d3)).
+19. Claude Code에 session message를 위한 같은 기기 직접 경로가 있는지. 이유: measurement. Plan의 열린 항목 V8은 기록되지 않았고, 지금까지 관찰된 문자열에는 그 경로가 보이지 않는다([terminal plan, 3.6](../plans/terminal-plan.md#36-open-items-in-part-3)).
+20. File 감시 sidecar의 transport, `stdio` 또는 `persistent`, 그리고 persistent service가 재연결될 때 watch가 유지되는지. 이유: persistent service 계약은 session의 재연결을 정의하지만([persistent services](persistent-services.md#service-transport)) watch를 적지 않는다.
+21. File event, 등록, message 전달의 sidecar catalog event 이름과 event log의 gate 수준([logging](logging.md#sidecar-catalogs)). 이유: 선언된 event 이름이 없다. Catalog의 형식은 정해져 있으나 이름은 정해져 있지 않다.
 
 ## 기존 계약으로 정해진 사항
 
-
-- 도구 이름: 두 MCP 도구는 [cli](cli.md#mcp-server)의 모든 도구처럼 밑줄 이름을 쓴다(`messages_read`, `messages_wait`). 기능 행의 점 표기는 쓰지 않는다. 도구 표는 이 두 이름 때문에 바뀌지 않는다.
-- Guard: 주입된 message는 입력한 줄과 같은 `input` 동작으로 보내므로 destructive command guard가 다른 제출 줄처럼 판단한다([persistent services](persistent-services.md#destructive-command-guard)). 거부된 message는 `rule`과 `reason`을 담은 `guardRefused` 응답을 받으며.
+- 도구 이름: 두 MCP 도구는 [cli](cli.md#mcp-server)의 모든 도구처럼 밑줄 이름을 쓴다(`messages_read`, `messages_wait`). 이 문서는 도구 표에서 이 이름을 쓴다.
+- Guard: 주입된 message는 입력한 줄과 같은 `input` 동작으로 보내므로 destructive command guard가 다른 제출 줄처럼 판단한다([persistent services](persistent-services.md#destructive-command-guard)). 거부된 message는 `rule`과 `reason`을 담은 `guardRefused` 응답을 받는다.
+- 전달 경로: 주입된 message는 terminal session의 `input` 동작으로 들어간다. 이 동작은 입력한 줄을 받는 동작이다([persistent services](persistent-services.md#destructive-command-guard)). 이 동작의 parameter는 terminal sidecar가 자기 저장소에서 선언하며 이 저장소가 정하지 않는다([AGENTS](../../AGENTS.md#structure)).
+- 바쁜 foreground TUI: 바쁜 foreground TUI에 message를 전달하려면 TUI adapter의 background 또는 send-now 동작이 필요하다. Plan은 이 둘 중 하나가 실행되기 전에는 그런 TUI가 message를 받지 않는다고 정한다([terminal plan, 4.1](../plans/terminal-plan.md#41-tui-key-adapters-decision-d6)).
