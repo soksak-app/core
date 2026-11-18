@@ -35,6 +35,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | status | `name` | Entry name |
 | status | `description` | One-sentence description |
 | status | `schema` | Value schema |
+| status | `summary` | Optional boolean. `true` puts the value in the `status` of each tab whose plugin declares it in the card state of [parties](parties.md#queries). Core copies the value and names no plugin. The default is `false`. |
 | command | `name` | Entry name |
 | command | `description` | One-sentence description |
 | command | `params` | Parameter schema |

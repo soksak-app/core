@@ -35,6 +35,7 @@
 | status | `name` | 항목 이름 |
 | status | `description` | 한 문장 설명 |
 | status | `schema` | 값 스키마 |
+| status | `summary` | 선택적 boolean. `true`이면 plugin이 선언한 이 값을 [party](parties.ko.md#조회)의 카드 상태에서 그 plugin의 탭 `status`에 넣는다. core는 값을 복사할 뿐 plugin을 이름으로 알지 않는다. 기본값은 `false`다. |
 | command | `name` | 항목 이름 |
 | command | `description` | 한 문장 설명 |
 | command | `params` | 매개변수 스키마 |
