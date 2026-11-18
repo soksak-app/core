@@ -393,7 +393,7 @@ func countItems(items []any, kind string) int {
 	return count
 }
 
-// messageValue is a message with its role and text, and with `items` holding one {"type": "image"} for each of its images image items.
+// messageValue is a message with its role and text, and with `items` holding one {"type": "image"} for each of its image items.
 func messageValue(role, text string, images int) map[string]any {
 	message := map[string]any{"role": role, "text": text}
 	if images > 0 {
