@@ -1,5 +1,7 @@
 # Changelog
 
+- F894: The layout model has the even arrangement `arrange("even")`, which replaces the arrangement with an equal grid of the current cards and adds one empty card when no grid fits. A grid is taken only when each cell is at least `minSize`.
+
 [한국어](CHANGELOG.ko.md)
 
 ## Unreleased
