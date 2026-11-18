@@ -311,7 +311,7 @@ fn claude_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value
         let (text, images) = match content {
             Some(Value::String(text)) => (text.clone(), 0),
             Some(Value::Array(blocks)) => {
-                let images = count_items(blocks, "image");
+                let images = count_items(path, *line_number, blocks, "image")?;
                 (joined_text(path, *line_number, blocks, &["text"])?, images)
             }
             _ => {
@@ -354,7 +354,7 @@ fn codex_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value>
             ));
         };
         let text = joined_text(path, *line_number, items, &["input_text", "output_text"])?;
-        let images = count_items(items, "input_image");
+        let images = count_items(path, *line_number, items, "input_image")?;
         let role = payload
             .and_then(|payload| payload.get("role"))
             .and_then(Value::as_str);
@@ -368,12 +368,38 @@ fn codex_messages(path: &Path, records: &[(usize, Value)]) -> Result<(Vec<Value>
     Ok((messages, skipped))
 }
 
-/// The number of items whose `type` is `kind`.
-fn count_items(items: &[Value], kind: &str) -> usize {
-    items
-        .iter()
-        .filter(|item| item.get("type").and_then(Value::as_str) == Some(kind))
-        .count()
+/// The object of a content item and its `type`. A content item that is not a JSON object with a string type is refused with its
+/// line number.
+fn content_item<'a>(
+    path: &Path,
+    line_number: usize,
+    item: &'a Value,
+) -> Result<(&'a Value, &'a str), Error> {
+    match item.get("type").and_then(Value::as_str) {
+        Some(kind) if item.is_object() => Ok((item, kind)),
+        _ => Err(line_error(
+            path,
+            line_number,
+            "has a content item that is not an object with a string type",
+        )),
+    }
+}
+
+/// The number of items whose `type` is `kind`. A content item that is not an object with a string type is refused.
+fn count_items(
+    path: &Path,
+    line_number: usize,
+    items: &[Value],
+    kind: &str,
+) -> Result<usize, Error> {
+    let mut count = 0;
+    for item in items {
+        let (_, item_kind) = content_item(path, line_number, item)?;
+        if item_kind == kind {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 /// A message with its role and text, and with `items` holding one `{"type": "image"}` for each of its `images` image items.
@@ -395,14 +421,11 @@ fn joined_text(
 ) -> Result<String, Error> {
     let mut texts = Vec::new();
     for item in items {
-        let matches = item
-            .get("type")
-            .and_then(Value::as_str)
-            .is_some_and(|kind| kinds.contains(&kind));
-        if !matches {
+        let (object, kind) = content_item(path, line_number, item)?;
+        if !kinds.contains(&kind) {
             continue;
         }
-        match item.get("text").and_then(Value::as_str) {
+        match object.get("text").and_then(Value::as_str) {
             Some(text) => texts.push(text),
             None => {
                 return Err(line_error(
