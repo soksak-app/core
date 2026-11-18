@@ -309,6 +309,16 @@ export declare class Soksak {
      */
     centerBoundary(axis: Axis, line: number): number;
     /**
+     * Replaces the arrangement with an equal grid of the cards in their current
+     * order, and removes every split and merge (packages/soksak/docs/layout.md#even-arrangement).
+     * The grid has `rows * columns` equal to the card count `n` or `n + 1`; one
+     * empty card is added when `n + 1` is chosen. Among the grids whose cells are at
+     * least `minSize` on both axes, the one whose cell is closest to square is taken,
+     * and a tie goes to the grid without an empty card. Returns false, and changes
+     * nothing, when no grid keeps every cell at least `minSize`.
+     */
+    arrange(mode: 'even'): boolean;
+    /**
      * Gives every card a fair share of the plane and keeps the arrangement.
      *
      * The cuts of the arrangement stay as they are; each gives its sides space in

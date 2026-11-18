@@ -74,6 +74,8 @@ if (!defaultTheme) throw new Error(`the default theme ${declaration.settings.def
  *   left, right      whether the left and right regions are shown. links decides what they show
  *   dim              whether a surface that lost focus is dimmed
  *   focusInd         how the focused card is shown. border = a border, corner = marks at the four corners
+ *   cardArrange      what the card auto-arrange command does. resize = keeps the arrangement and gives the cards fair sizes (balance);
+ *                    even = replaces the arrangement with an equal grid of the cards (arrange "even")
  *   fullRule         where the boundary line of the section that a card crosses is drawn. over = over the surface, under = under the card,
  *                    none = not drawn
  *   gap, radius, font, size
@@ -116,7 +118,7 @@ export const SHAPE_RANGES = declaration.settings.shapeRanges;
 
 /* The core settings that take one choice. The select control of the settings window shows the choices in this order (docs/spec/settings.md#values).
    workbench.json states the fixed lists; the theme, mode, font, text size and language choices are the catalogs above. */
-const { projectOpening, viewProcess, projectTabs, focusInd, fullRule } = declaration.settings.choices;
+const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;
 export const CHOICES = {
   projectOpening,
   viewProcess,
@@ -127,6 +129,7 @@ export const CHOICES = {
   projectTabs,
   focusInd,
   fullRule,
+  cardArrange,
   language: ["auto", ...MENU_LANGUAGES.map((language) => language.id)],
 };
 
