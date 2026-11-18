@@ -582,3 +582,43 @@ fn codex_image_only_message_is_emitted_with_its_kind() {
         )
     );
 }
+
+// contract: conversation.claude-code.keeps-an-image-only-message
+#[test]
+fn claude_image_only_message_is_emitted_with_its_kind() {
+    let home = Folder::new("conversation-claude-image");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".claude/projects/-work-core/session.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "attachment", "cwd": cwd, "sessionId": "session"}),
+            json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AAAA"}}
+            ]}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "exit status and standard error"
+    );
+    assert!(
+        !stdout.contains("AAAA"),
+        "the picture data is not written: {stdout}"
+    );
+    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+    assert_eq!(
+        output,
+        expected_output(
+            &file,
+            json!([{"role": "user", "text": "", "items": [{"type": "image"}]}]),
+            1
+        )
+    );
+}

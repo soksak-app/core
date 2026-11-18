@@ -425,3 +425,31 @@ func TestCodexImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
 		t.Fatalf("output %v, want %v", got, want)
 	}
 }
+
+// contract: conversation.claude-code.keeps-an-image-only-message
+func TestClaudeImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
+	h := newAgentHome(t)
+	cwd := "/work/core"
+	file := filepath.Join(h.home, ".claude/projects/-work-core/session.jsonl")
+	convWriteRecords(t, file, []any{
+		map[string]any{"type": "attachment", "cwd": cwd, "sessionId": "session"},
+		map[string]any{"type": "user", "cwd": cwd, "message": map[string]any{"role": "user", "content": []any{
+			map[string]any{"type": "image", "source": map[string]any{"type": "base64", "media_type": "image/png", "data": "AAAA"}},
+		}}},
+	})
+
+	code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", cwd)
+
+	if code != 0 || stderr != "" {
+		t.Fatalf("exit status %d and standard error %q", code, stderr)
+	}
+	if strings.Contains(stdout, "AAAA") {
+		t.Fatalf("the picture data is written: %s", stdout)
+	}
+	want := convExpected(file, []any{
+		map[string]any{"role": "user", "text": "", "items": []any{map[string]any{"type": "image"}}},
+	}, 1)
+	if got := convDecode(t, stdout); !reflect.DeepEqual(got, want) {
+		t.Fatalf("output %v, want %v", got, want)
+	}
+}
