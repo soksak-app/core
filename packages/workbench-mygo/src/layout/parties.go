@@ -22,6 +22,7 @@ type party struct {
 	Leader      *string  `json:"leader"`
 	ColorToken  string   `json:"color_token"`
 	LeaderColor *string  `json:"leaderColor"`
+	Reason      *string  `json:"reason"`
 }
 
 // partyReply is the reply of create and add: the party, the cards that changed party, and each party that changed.
@@ -45,6 +46,22 @@ type partyChange struct {
 	Deleted bool     `json:"deleted"`
 }
 
+// cardState is the card query of docs/spec/parties.md#queries: the holding party, whether the card leads it, and its tabs.
+type cardState struct {
+	Card      string     `json:"card"`
+	Party     *string    `json:"party"`
+	Leader    bool       `json:"leader"`
+	ActiveTab *string    `json:"activeTab"`
+	Tabs      []tabState `json:"tabs"`
+}
+
+// tabState is one tab of a card state. Status is empty: the statuses that a plugin declares with summary are not read by this model.
+type tabState struct {
+	Tab    string            `json:"tab"`
+	Plugin string            `json:"plugin"`
+	Status map[string]string `json:"status"`
+}
+
 // partyTokens are the theme tokens of the six party colors, in the order a new party takes them.
 var partyTokens = []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6"}
 
@@ -56,13 +73,16 @@ func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error)
 	switch call {
 	case "core.party.create":
 		var in struct {
-			Cards []string `json:"cards"`
-			Take  bool     `json:"take"`
+			Cards       []string `json:"cards"`
+			Take        bool     `json:"take"`
+			Color       *string  `json:"color"`
+			Leader      *string  `json:"leader"`
+			LeaderColor *string  `json:"leaderColor"`
 		}
 		if err := decodeParams(params, &in); err != nil {
 			return nil, err
 		}
-		return p.create(g, in.Cards, in.Take)
+		return p.create(g, in.Cards, in.Take, in.Color, in.Leader, in.LeaderColor)
 	case "core.party.add":
 		var in struct {
 			Party string `json:"party"`
@@ -73,6 +93,26 @@ func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error)
 			return nil, err
 		}
 		return p.add(g, in.Party, in.Card, in.Take)
+	case "core.party.remove":
+		var in struct {
+			Party string `json:"party"`
+			Card  string `json:"card"`
+		}
+		if err := decodeParams(params, &in); err != nil {
+			return nil, err
+		}
+		return p.remove(g, in.Party, in.Card)
+	case "core.party.update":
+		var in struct {
+			Party       string          `json:"party"`
+			Color       *string         `json:"color"`
+			Leader      json.RawMessage `json:"leader"`
+			LeaderColor json.RawMessage `json:"leaderColor"`
+		}
+		if err := decodeParams(params, &in); err != nil {
+			return nil, err
+		}
+		return p.update(in.Party, in.Color, in.Leader, in.LeaderColor)
 	case "core.party.delete":
 		var in struct {
 			Party string `json:"party"`
@@ -93,6 +133,14 @@ func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error)
 			return nil, fmt.Errorf("unknown party %s", in.Party)
 		}
 		return found, nil
+	case "core.card.get":
+		var in struct {
+			Card string `json:"card"`
+		}
+		if err := decodeParams(params, &in); err != nil {
+			return nil, err
+		}
+		return p.cardGet(g, in.Card)
 	}
 	return nil, fmt.Errorf("unknown party command %s", call)
 }
@@ -172,36 +220,137 @@ func checkCards(g *Grid, cards []string) error {
 	return nil
 }
 
-// checkConnected refuses a card list that does not form one group of touching cards.
-func checkConnected(g *Grid, cards []string) error {
+// groups returns the connected groups of touching cards, each group in the order of the cards, and the groups in the order of their first card.
+func groups(g *Grid, cards []string) ([][]string, error) {
 	rects := make([]Card, len(cards))
 	for i, id := range cards {
 		card, ok := g.Card(id)
 		if !ok {
-			return fmt.Errorf("unknown card %s", id)
+			return nil, fmt.Errorf("unknown card %s", id)
 		}
 		rects[i] = card
 	}
-	reached := map[int]bool{0: true}
-	queue := []int{0}
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for next := range rects {
-			if !reached[next] && Touches(rects[current], rects[next]) {
-				reached[next] = true
-				queue = append(queue, next)
+	done := make([]bool, len(cards))
+	var out [][]string
+	for start := range cards {
+		if done[start] {
+			continue
+		}
+		done[start] = true
+		group := []int{start}
+		for next := 0; next < len(group); next++ {
+			for other := range cards {
+				if !done[other] && Touches(rects[group[next]], rects[other]) {
+					done[other] = true
+					group = append(group, other)
+				}
 			}
 		}
+		slices.Sort(group)
+		members := make([]string, len(group))
+		for i, index := range group {
+			members[i] = cards[index]
+		}
+		out = append(out, members)
 	}
-	if len(reached) != len(cards) {
+	return out, nil
+}
+
+// checkConnected refuses a card list that does not form one group of touching cards.
+func checkConnected(g *Grid, cards []string) error {
+	parts, err := groups(g, cards)
+	if err != nil {
+		return err
+	}
+	if len(parts) != 1 {
 		return fmt.Errorf("cards are not touching: %s", strings.Join(cards, ", "))
 	}
 	return nil
 }
 
+// spaceIndex returns the position of the card in the space order, which is the order in which the grid holds its cards.
+func spaceIndex(g *Grid, card string) int {
+	for i, c := range g.Cards() {
+		if c.ID == card {
+			return i
+		}
+	}
+	return -1
+}
+
+// inSpaceOrder returns the cards in the space order.
+func inSpaceOrder(g *Grid, cards []string) []string {
+	out := slices.Clone(cards)
+	slices.SortFunc(out, func(a, b string) int { return spaceIndex(g, a) - spaceIndex(g, b) })
+	return out
+}
+
+// splitRule applies the split rule of docs/spec/parties.md#changes-of-the-layout to the cards that remain of a party. The part with
+// the leader stays. Without a leader the part with the most cards stays, and equal counts keep the part whose first card comes first
+// in the space order. It returns the kept cards and the reason, or an empty reason when the cards still form one group.
+func splitRule(g *Grid, target *party, cards []string) ([]string, string, error) {
+	parts, err := groups(g, cards)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(parts) <= 1 {
+		return cards, "", nil
+	}
+	if target.Leader != nil {
+		for _, part := range parts {
+			if slices.Contains(part, *target.Leader) {
+				return inSpaceOrder(g, part), "split-leader", nil
+			}
+		}
+	}
+	first := func(part []string) int { return spaceIndex(g, inSpaceOrder(g, part)[0]) }
+	slices.SortStableFunc(parts, func(a, b []string) int {
+		if len(a) != len(b) {
+			return len(b) - len(a)
+		}
+		return first(a) - first(b)
+	})
+	return inSpaceOrder(g, parts[0]), "split-most-cards", nil
+}
+
+// settle applies the split rule to a party after its cards changed and deletes it when it keeps fewer than 2 cards. before holds the
+// cards before the change; the change lists the cards of before that the party no longer holds.
+func (p *Parties) settle(g *Grid, target *party, before []string, reason string) (partyChange, error) {
+	reasonText := reason
+	if len(target.Cards) >= 2 {
+		kept, split, err := splitRule(g, target, target.Cards)
+		if err != nil {
+			return partyChange{}, err
+		}
+		if split != "" {
+			target.Cards = kept
+			if target.Leader != nil && !slices.Contains(kept, *target.Leader) {
+				target.Leader = nil
+			}
+			reasonText = split
+		}
+	}
+	deleted := len(target.Cards) < 2
+	if deleted {
+		reasonText = "too-few"
+	}
+	target.Reason = &reasonText
+	removed := []string{}
+	for _, card := range before {
+		if !slices.Contains(target.Cards, card) {
+			removed = append(removed, card)
+		}
+	}
+	change := partyChange{Party: target.ID, Removed: removed, Leader: target.Leader, Deleted: deleted}
+	if deleted {
+		change.Leader = nil
+		p.list = slices.DeleteFunc(p.list, func(item *party) bool { return item == target })
+	}
+	return change, nil
+}
+
 // create makes a party from the cards, or returns the party that holds exactly these cards.
-func (p *Parties) create(g *Grid, cards []string, take bool) (partyReply, error) {
+func (p *Parties) create(g *Grid, cards []string, take bool, color, leader, leaderColor *string) (partyReply, error) {
 	if err := checkCards(g, cards); err != nil {
 		return partyReply{}, err
 	}
@@ -218,8 +367,30 @@ func (p *Parties) create(g *Grid, cards []string, take bool) (partyReply, error)
 			return partyReply{}, fmt.Errorf("card %s belongs to party %s", id, owner.ID)
 		}
 	}
-	fresh := &party{ID: p.nextID(), Cards: slices.Clone(cards), ColorToken: p.nextToken()}
-	return p.join(g, fresh, cards, "created"), nil
+	if leader != nil && !slices.Contains(cards, *leader) {
+		return partyReply{}, fmt.Errorf("leader %s is not in the party", *leader)
+	}
+	if err := checkColors(color, leaderColor); err != nil {
+		return partyReply{}, err
+	}
+	// The identifier is the smallest one that no party holds when the party is created, so it is chosen before a former party is settled.
+	fresh := &party{ID: p.nextID(), Cards: slices.Clone(cards), Leader: leader, ColorToken: p.nextToken(), LeaderColor: leaderColor}
+	return p.join(g, fresh, cards, "created")
+}
+
+// checkColors refuses a color that is not #rrggbb. A valid party color cannot be stored yet: it needs the theme palette, which the
+// model does not read (docs/features.md, F908-5b2), so it is refused with that reason rather than stored as a token.
+func checkColors(color, leaderColor *string) error {
+	if color != nil {
+		if !hexColor.MatchString(*color) {
+			return fmt.Errorf("color must be #rrggbb")
+		}
+		return fmt.Errorf("color %s needs the theme palette, which the party model does not read yet", *color)
+	}
+	if leaderColor != nil && !hexColor.MatchString(*leaderColor) {
+		return fmt.Errorf("color must be #rrggbb")
+	}
+	return nil
 }
 
 // add adds a touching card to a party, and moves the card out of its former party when take is true.
@@ -241,19 +412,23 @@ func (p *Parties) add(g *Grid, partyID, card string, take bool) (partyReply, err
 	if err := checkConnected(g, members); err != nil {
 		return partyReply{}, err
 	}
-	return p.join(g, target, []string{card}, "added"), nil
+	return p.join(g, target, []string{card}, "added")
 }
 
 // join moves the cards into the party. Each former party loses the cards, drops its leader when the leader moved, and is
 // deleted when it keeps fewer than 2 cards. The former parties are listed before the party that the cards join.
-func (p *Parties) join(g *Grid, target *party, cards []string, reason string) partyReply {
+func (p *Parties) join(g *Grid, target *party, cards []string, reason string) (partyReply, error) {
 	taken := []takenCard{}
 	changed := []partyChange{}
+	formerBefore := map[string][]string{}
 	for _, card := range cards {
 		owner := p.partyOf(card)
 		// A card with no former party, or one already in the target party, changed no party and is not listed.
 		if owner == nil || owner == target {
 			continue
+		}
+		if _, seen := formerBefore[owner.ID]; !seen {
+			formerBefore[owner.ID] = slices.Clone(owner.Cards)
 		}
 		owner.Cards = slices.DeleteFunc(owner.Cards, func(id string) bool { return id == card })
 		if owner.Leader != nil && *owner.Leader == card {
@@ -267,45 +442,116 @@ func (p *Parties) join(g *Grid, target *party, cards []string, reason string) pa
 			target.Cards = append(target.Cards, card)
 		}
 	}
-	// Former parties come first in the changes, as the taken cards list them.
+	// Former parties come first in the changes, in the order in which the cards left them.
 	for _, record := range taken {
-		if record.From == nil {
-			continue
-		}
 		owner := p.find(*record.From)
 		if owner == nil || slices.ContainsFunc(changed, func(c partyChange) bool { return c.Party == owner.ID }) {
 			continue
 		}
-		removed := []string{}
-		for _, other := range taken {
-			if other.From != nil && *other.From == owner.ID {
-				removed = append(removed, other.Card)
-			}
-		}
-		change := partyChange{Party: owner.ID, Removed: removed, Leader: owner.Leader}
-		if len(owner.Cards) < 2 {
-			change.Deleted = true
-			change.Leader = nil
-			p.list = slices.DeleteFunc(p.list, func(item *party) bool { return item == owner })
+		change, err := p.settle(g, owner, formerBefore[owner.ID], "taken")
+		if err != nil {
+			return partyReply{}, err
 		}
 		changed = append(changed, change)
 	}
 	if !slices.ContainsFunc(p.list, func(item *party) bool { return item == target }) {
 		p.list = append(p.list, target)
 	}
+	target.Reason = &reason
 	changed = append(changed, partyChange{Party: target.ID, Removed: []string{}, Leader: target.Leader})
-	return partyReply{Party: withReason(target, reason), Taken: taken, Changed: changed}
+	return partyReply{Party: target, Taken: taken, Changed: changed}, nil
 }
 
-// withReason returns the party record with the reason of the command that made the change, as the reply of create carries it.
-func withReason(target *party, reason string) any {
-	if reason == "created" {
-		return struct {
-			*party
-			Reason string `json:"reason"`
-		}{target, reason}
+// remove removes a card from a party and applies the split rule to the cards that remain. A card that the party does not hold changes nothing.
+func (p *Parties) remove(g *Grid, partyID, card string) (any, error) {
+	target := p.find(partyID)
+	if target == nil {
+		return nil, fmt.Errorf("unknown party %s", partyID)
 	}
-	return target
+	if !slices.Contains(target.Cards, card) {
+		return struct {
+			Party   *party        `json:"party"`
+			Changed []partyChange `json:"changed"`
+		}{target, []partyChange{}}, nil
+	}
+	before := slices.Clone(target.Cards)
+	target.Cards = slices.DeleteFunc(target.Cards, func(id string) bool { return id == card })
+	if target.Leader != nil && *target.Leader == card {
+		target.Leader = nil
+	}
+	change, err := p.settle(g, target, before, "removed")
+	if err != nil {
+		return nil, err
+	}
+	var record any = target
+	if change.Deleted {
+		record = nil
+	}
+	return struct {
+		Party   any           `json:"party"`
+		Changed []partyChange `json:"changed"`
+	}{record, []partyChange{change}}, nil
+}
+
+// update sets the leader and the leader color of a party. A leader is null or a card of the party, and a leader color is null or
+// a #rrggbb value. A change of the party color is refused until the model reads the theme palette (see checkColors).
+func (p *Parties) update(partyID string, color *string, leader, leaderColor json.RawMessage) (any, error) {
+	target := p.find(partyID)
+	if target == nil {
+		return nil, fmt.Errorf("unknown party %s", partyID)
+	}
+	if err := checkColors(color, optionalColor(leaderColor)); err != nil {
+		return nil, err
+	}
+	var nextLeader *string
+	setLeader := len(leader) > 0
+	if setLeader && string(leader) != "null" {
+		var id string
+		if err := json.Unmarshal(leader, &id); err != nil {
+			return nil, fmt.Errorf("invalid parameters: leader must be a card identifier or null")
+		}
+		if !slices.Contains(target.Cards, id) {
+			return nil, fmt.Errorf("leader %s is not in the party", id)
+		}
+		nextLeader = &id
+	}
+	before := strOrNull(target.Leader) + "|" + strOrNull(target.LeaderColor)
+	if setLeader {
+		target.Leader = nextLeader
+	}
+	if len(leaderColor) > 0 {
+		target.LeaderColor = optionalColor(leaderColor)
+	}
+	changed := []partyChange{}
+	if strOrNull(target.Leader)+"|"+strOrNull(target.LeaderColor) != before {
+		reason := "updated"
+		target.Reason = &reason
+		changed = append(changed, partyChange{Party: target.ID, Removed: []string{}, Leader: target.Leader})
+	}
+	return struct {
+		Party   *party        `json:"party"`
+		Changed []partyChange `json:"changed"`
+	}{target, changed}, nil
+}
+
+// strOrNull names a member that is a string or null, so two states compare by their values.
+func strOrNull(value *string) string {
+	if value == nil {
+		return "null"
+	}
+	return *value
+}
+
+// optionalColor decodes a color member that is null or a #rrggbb string, and returns nil for null or an absent member.
+func optionalColor(raw json.RawMessage) *string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil
+	}
+	return &value
 }
 
 // deleteParty removes the party and keeps its cards in the layout.
@@ -320,6 +566,34 @@ func (p *Parties) deleteParty(id string) (any, error) {
 		Party   map[string]string `json:"party"`
 		Changed []partyChange     `json:"changed"`
 	}{map[string]string{"id": id}, []partyChange{change}}, nil
+}
+
+// cardGet reads the state of one card, whether or not a party holds it (docs/spec/parties.md#queries).
+func (p *Parties) cardGet(g *Grid, id string) (cardState, error) {
+	card, ok := g.Card(id)
+	if !ok {
+		return cardState{}, fmt.Errorf("unknown card %s", id)
+	}
+	state := cardState{Card: id, Tabs: []tabState{}}
+	if owner := p.partyOf(id); owner != nil {
+		holder := owner.ID
+		state.Party = &holder
+		state.Leader = owner.Leader != nil && *owner.Leader == id
+	}
+	data, err := DecodeCardData(card.Data)
+	if err != nil {
+		return cardState{}, err
+	}
+	if data != nil {
+		for _, tab := range data.Tabs {
+			state.Tabs = append(state.Tabs, tabState{Tab: tab.ID, Plugin: tab.Plugin, Status: map[string]string{}})
+		}
+		if data.activeSet {
+			active := data.activeText
+			state.ActiveTab = &active
+		}
+	}
+	return state, nil
 }
 
 // sameSet tells whether two card lists hold the same cards.
