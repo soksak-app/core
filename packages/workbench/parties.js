@@ -237,6 +237,9 @@ function create({ cards, color, leader, leaderColor, take = false }) {
   if (leader !== undefined && leader !== null && !cards.includes(leader)) fail(`leader ${leader} is not in the party`);
   if (color !== undefined && !HEX.test(color)) fail("color must be #rrggbb");
   if (leaderColor !== undefined && leaderColor !== null && !HEX.test(leaderColor)) fail("color must be #rrggbb");
+  // The identifier is the smallest one that no party holds when the party is created (docs/spec/parties.md#identity-and-values), so it is
+  // chosen before a former party that the take empties is deleted, and the new party never takes the identifier of a former party.
+  const id = nextId();
   const taken = [];
   const changed = [];
   for (const card of cards) {
@@ -251,7 +254,7 @@ function create({ cards, color, leader, leaderColor, take = false }) {
   finish();
   const party = {
     // default: a create without a leader, a color or a leader color takes the rules of docs/spec/parties.md#identity-and-values: no leader, the first unused color and a leader color that follows the theme.
-    id: nextId(), cards: inSpaceOrder(cards), leader: leader ?? null, color: color ?? defaultColor(),
+    id, cards: inSpaceOrder(cards), leader: leader ?? null, color: color ?? defaultColor(),
     // default: the leader color that the person did not choose follows party-leader of the theme (docs/spec/parties.md#identity-and-values).
     leaderColor: leaderColor ?? null, reason: "created",
   };
