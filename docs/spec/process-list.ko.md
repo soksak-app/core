@@ -38,7 +38,7 @@ foreground object의 key는 다음과 같다.
 | Key | Value |
 | --- | --- |
 | `name` | foreground process group의 leader process 이름 |
-| `arguments` | leader process의 arguments |
+| `arguments` | 문자열 배열: leader process의 program 이름 뒤 arguments를 인자마다 한 문자열로, 프로세스의 순서대로 담는다(없으면 빈 배열). agent는 이 arguments로 식별된다([Sources](#sources) 절) |
 | `started` | leader process의 시작 시각(format은 open question 6) |
 | `source` | entry의 source(Sources 참조) |
 

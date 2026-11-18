@@ -38,7 +38,7 @@ The foreground object has these keys:
 | Key | Value |
 | --- | --- |
 | `name` | The name of the leader process of the foreground process group |
-| `arguments` | The arguments of the leader process |
+| `arguments` | An array of strings: the arguments of the leader process after its program name, one string per argument, in the order of the process (an empty array when there are none). The agent is identified by these arguments (see [Sources](#sources)) |
 | `started` | The start time of the leader process (format open, question 6) |
 | `source` | The source of the entry (see Sources) |
 
