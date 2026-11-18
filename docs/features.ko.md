@@ -96,6 +96,23 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [o] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7). sidecar alacritty의 S121과 sidecar vt의 S181로 구현했다. 거부 계약은 persistent services 사양에 있다. 두 sidecar 모두 Red와 Green을 기록했다.
   - [ ] F899-7 — 터미널 간 메시징: sidecar가 등록한 폴더를 감시해 file event를 보내고, 메시지는 입력 주입으로, agent가 지원하면 MCP 도구 `messages.read`와 `messages.wait`로 전달한다(D3, D4).
   - 계획: docs/plans/terminal-plan.ko.md (5부). 미정 항목 V1~V8과 결정 D1~D7이 있으며, 아직 구현하지 않았다.
+- [ ] F909 — P1, F899-7 후속: 메시지에 보낸 terminal이 없어서 reader에게 응답 주소가 없다. 입력: 메시지 파일은 text만 담으므로 reader가 보낸 terminal을 지정할 수 없다. 기대: 메시지 파일 이름이 보낸 surface를 담고, `messages_read`와 file event가 `from`을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
+  - [ ] F909-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 파일 이름의 sender 규칙, reads와 event의 `from` member, `invalid-sender` 거부를 정의한다.
+  - [ ] F909-2 — Red: `alacritty-core`의 test가 sender가 없는 이름의 메시지를 쓰고 path와 함께 `invalid-sender`를 기대한다. 변경 전에 실패해야 한다.
+  - [ ] F909-3 — Green: 같은 test가 통과하고, sender가 있는 메시지는 `messages_read`와 file event에서 `from`을 돌려준다.
+- [ ] F910 — P1, F899-7 후속: sidecar가 재시작하면 cursor가 초기화된다. `seq`가 process마다 1부터 세므로, 재시작 뒤 `after` cursor는 메시지를 건너뛰거나 반복한다. 기대: 이전 registration에서 얻은 cursor는 `epoch-changed`로 거부되며, 각 read는 epoch로 registration을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
+  - [ ] F910-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 registration을 cursor epoch로 정의하고, reads의 `registration` 인자와 `epoch-changed` 거부를 정의한다.
+  - [ ] F910-2 — Red: `alacritty-core`의 test가 한 registration의 cursor로 읽고, 같은 folder로 두 번째 sidecar process를 시작한 뒤 `epoch-changed`를 기대한다. 변경 전에 실패해야 한다.
+  - [ ] F910-3 — Green: 같은 test가 통과하고, 현재 registration과 `after` 0의 read가 새 registration의 모든 메시지를 돌려준다.
+- [ ] F911 — P1, F899-7 후속: message 파일을 writer가 쓰는 중에 읽는다. 입력: watch는 새 파일을 생성 시점에 보고하며, 그때 writer는 text를 아직 쓰지 않았다. 기대: writer가 `.txt`로 끝나지 않는 이름으로 쓴 뒤 message 이름으로 rename하며, rename만이 가시성의 유일한 시점이다. `spec/messaging.ko.md`가 정한 대로다.
+  - [ ] F911-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 임시 이름, 가시성의 유일한 시점인 rename, `sok` 밖의 writer 규칙을 정의한다.
+  - [ ] F911-2 — Red: `alacritty-core`의 test가 `.txt` 이름을 만든 뒤 두 번째 단계에서 text를 쓰고, rename 전에는 event도 message도 없음을 기대한다. 생성 시점에 event가 오면 변경 전에 실패해야 한다.
+  - [ ] F911-3 — Green: 같은 test가 통과하고, event는 rename 시점에 오며, read는 전체 text를 돌려준다.
+  - [ ] F911-4 — 측정: `alacritty-core`의 test가 임시 이름으로 file을 쓰는 동안의 event를 기록한다. rename 전에는 event가 없고, rename에서 `created` 1개가 온다. `spec/messaging.md`(41행)의 미측정 문장을 검증하며, 이 test가 없으면 그 문장은 미측정으로 남는다.
+- [ ] F912 — P2, F899-7과 F908 후속: terminal 사이 작업 hand-off와 결과는 message가 아니라 상태 record다. 입력: message는 text만 돌려주므로 결과가 어느 attempt에 대한 답인지 보이지 않는다. 기대: `spec/messaging.ko.md`가 hand-off를 party와 card 기능이 소유하는 record로 정의하고, 상태 `assigned`, `started`, `result`, `integrated`, `abandoned`, `attempt` 번호, 이전 attempt의 결과를 거부하는 `stale-attempt`를 정의한다.
+  - [ ] F912-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 분리, 상태, attempt 번호, `stale-attempt`를 정의한다. Record에는 timer나 lock이 없다.
+  - [ ] F912-2 — Red: hand-off record의 소유 module의 test가 attempt 2가 할당된 뒤 attempt 1의 결과를 적용하고 `stale-attempt`를 기대한다. Record가 생기기 전에는 실패해야 한다.
+  - [ ] F912-3 — Green: 같은 test가 통과하고, record는 현재 attempt 하나만 가진다.
 - [ ] F892 — P1, F887 후속: F887 변경의 CI run에서 `build-native` job의 `input_cursor_rect_test`가 실패했다. 페이지가 주입된 마우스 이동을 받지 못했고(`MEASURE`가 `cursor arrow, page moves over `와 빈 목록을 보였다), 제한 대기가 그 상태로 끝났다. F887은 로컬 통과만 기록했으며, 이 CI run이 원인이 남아 있다는 근거다. 기대: CI 환경에서 페이지가 이동을 받거나, 페이지의 event log(이동, drain, event 전달의 순서)로 원인을 측정하고 고친다. 이 기기에서 디스플레이가 있는 상태로 측정: 1회 통과(모든 검사 PASS, 페이지가 crosshair 커서를 설정, 페이지가 text, cross, cross 순으로 이동을 받음). 디스플레이 의존 가설은 아직 증명되지 않았다. 디스플레이가 없는 실행은 하지 않았다. WebKit 페이지 이벤트를 관측하므로 end-to-end 검사의 규칙에 따라 로컬 end-to-end 목록으로 옮겼다.
 - [ ] F893 — P1, F889 후속: 애플리케이션이 시작할 때 agent session에 PATH 맨 앞으로 넣은 폴더를 기록한다(폴더와 번들 `sok`을 담은 log 한 줄). 기대: 시작마다 기록이 남고, host의 소유 module의 test가 그 기록을 읽는다.
 - [o] F887 — P1, F878 후속: F884의 CI run `build-native` job에서 `input_cursor_rect_test`가 120.009 s 동안 돌고 limit에서 종료되었다. sample은 그 run의 failure artifact에 있다. 결과: `event_wait_test`의 Red run(제한 0.5 s, stub)은 측정 상태 검사와 limit 검사에서 실패했고(Red), 구현한 `eventWaitUntil`은 모든 검사를 통과했다(Green: limit이 0.502 s에 끝나고 `cursor arrow, page moves 0`을 남김). `input_cursor_rect_test`는 제한 있는 대기로 통과한다.
