@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Soksak } from "soksak";
 import { createRegistry } from "../exposure.js";
+import { THEMES, value } from "../settings.js";
 
 const isPartiesChange = (call) => call.name === "exposureChanged" && call.arg.name === "core.parties" && !("surface" in call.arg);
 
@@ -52,6 +53,8 @@ test("a work change of a card sends no exposureChanged for core.parties until th
       for (const run of [...subscribers]) run();
     },
     grid: () => grid,
+    // The palette of the shown theme and mode, as core-exposure passes it (docs/spec/parties.md#commands).
+    palette: () => THEMES.find((theme) => theme.name === value("theme"))[value("mode")],
   });
 
   await registry.handle({ id: 1, method: "status.watch", params: { name: "core.parties" } });
