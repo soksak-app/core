@@ -38,12 +38,14 @@ test("a party item of the card menu closes the picker when it runs (docs/spec/pa
   const window = await openPartyWindow();
   try {
     await window.reset();
+    await window.run("core.party.create", { cards: ["a", "b"], leader: "a" });
+    const before = (await window.get("core.parties")).result[0].color;
     openCardTools("a");
-    const button = document.querySelector('#picker .picker__item[data-expose="core.party.menu.group"]');
-    assert.ok(button, "the group item of the card is drawn in the picker");
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    const buttons = document.querySelectorAll('#picker .picker__item[data-expose="core.party.menu.color"]');
+    assert.equal(buttons.length, 6, "the six color items of the party are drawn in the picker");
+    buttons[1].dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal((await window.get("core.parties")).result.length, 1, "the group item created the party");
+    assert.notEqual((await window.get("core.parties")).result[0].color, before, "the color item changed the party color");
     assert.equal((await window.get("core.picker")).result.open, false, "the picker is closed after the party item runs");
   } finally {
     window.close();
