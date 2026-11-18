@@ -92,6 +92,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F899-3 — 각 터미널의 전경 프로그램과 백그라운드 작업, 그리고 그것을 이름으로 알려 주는 명령.
   - [ ] F899-4 — 터미널 상태 event(idle, running, exited, waiting, agent-busy, agent-waiting).
   - [ ] F899-5 — TUI 키 adapter(D6)와 대화상자 처리(D5). F899-4 뒤에 한다.
+  - [ ] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7).
   - 계획: docs/plans/terminal-reads.md. 미정 항목 V1~V7과 결정 D1~D6이 있으며, 아직 구현하지 않았다.
 - [ ] F892 — P1, F887 후속: F887 변경의 CI run에서 `build-native` job의 `input_cursor_rect_test`가 실패했다. 페이지가 주입된 마우스 이동을 받지 못했고(`MEASURE`가 `cursor arrow, page moves over `와 빈 목록을 보였다), 제한 대기가 그 상태로 끝났다. F887은 로컬 통과만 기록했으며, 이 CI run이 원인이 남아 있다는 근거다. 기대: CI 환경에서 페이지가 이동을 받거나, 페이지의 event log(이동, drain, event 전달의 순서)로 원인을 측정하고 고친다. 이 기기에서 디스플레이가 있는 상태로 측정: 1회 통과(모든 검사 PASS, 페이지가 crosshair 커서를 설정, 페이지가 text, cross, cross 순으로 이동을 받음). 디스플레이 의존 가설은 아직 증명되지 않았다. 디스플레이가 없는 실행은 하지 않았다. WebKit 페이지 이벤트를 관측하므로 end-to-end 검사의 규칙에 따라 로컬 end-to-end 목록으로 옮겼다.
 - [ ] F893 — P1, F889 후속: 애플리케이션이 시작할 때 agent session에 PATH 맨 앞으로 넣은 폴더를 기록한다(폴더와 번들 `sok`을 담은 log 한 줄). 기대: 시작마다 기록이 남고, host의 소유 module의 test가 그 기록을 읽는다.

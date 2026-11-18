@@ -163,6 +163,27 @@ Observed in the local Claude Code 2.1.327 binary and the open-source Codex repos
 - Consequence for this plan: cross-session delivery between separately launched terminals has no agent-side transport in either agent.
   The plan keeps input injection as the baseline and the MCP tools as the better channel where the agent offers them.
 
+## Destructive command guard (F899-6)
+
+Requirement: a destructive shell command from an agent is stopped before it runs, on every agent the terminal hosts. Two open-source
+guards were read (no code was run): a Rust hook with rule packs for many agents (dcg, MIT-style custom license), and a zero-dependency
+Node hook that also tracks which process, port and worktree belongs to which session (claude-bulkhead, MIT).
+
+Evaluation against our needs:
+
+- Fit: both read the command text. Neither sees a script file, a shell function, or a value computed at run time. The cause of the
+  reported deletions was mostly that kind of value, so these guards are a layer, not the protection.
+- Failure mode: dcg fails open by default for input it cannot parse, and offers an opt-in fail-closed setting. The plan takes the
+  opposite default for destructive guards: unparseable or undecidable input is refused, and the refusal is written to the event log.
+- Bypass: both expose an environment variable that disables the guard. An agent that can set that variable can disable the guard, so
+  the plan does not expose a bypass to the agent.
+- Process ownership: claude-bulkhead tracks which session owns a process and a port. This matches the process list of F899-3 and is
+  a model for it; the plan does not depend on the package.
+- Dependencies: the guards are agent plugins, not libraries for our sidecar. The plan takes no dependency on either package.
+
+Decision D7: build the destructive-command check in the terminal sidecar layer as a declared rule set, with fail-closed behavior and
+an event for each decision. Use the two packages as references for rule coverage and for the process ownership model only.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
