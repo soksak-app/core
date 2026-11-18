@@ -237,6 +237,21 @@ Versions are decided at release time under the rule of the repository that owns 
 
 ## Open items
 
+Each item states its status, its owner, and the condition that closes it. No item is implemented.
+
+- V1 (open): how `vt` handles OSC 133 marks. Owner: sidecar `vt`. Closes when a test shows the marks are parsed or the state is stated as absent.
+- V2 (open): reproduce the scroll report in a running Claude Code or Codex session in `term` and `terminal`. Owner: plugins. Closes with a recorded wheel route and offset before and after.
+- V3 (open): which process the sidecar can name as the foreground process on macOS. Owner: sidecar `alacritty`. Closes with a test that names it.
+- V4 (open): Codex hook payloads for the events the state uses. Owner: adapter. Closes with a recorded payload from a real session.
+- V5 (open): Claude Code `Notification` payload fields. Owner: adapter. Closes with a recorded payload.
+- V6 (open): delivery latency of file events on the shared machine. Owner: sidecar. Closes with a measured bound; no bound is stated before it.
+- V7 (open): time limit of a waiting MCP tool call in Claude Code and Codex. Owner: sok MCP server. Closes with a measured limit per client.
+- V8 (open): whether Claude Code has a same-machine direct path for session messages. Owner: adapter. Closes with a recorded observation.
+- D1 (open): byte bound of the transcript read (option 6). Owner: sidecar. Closes with a decision in this document.
+- D2 (open): whether `history.find` searches cell text only or the cell style too. Owner: sidecar. Closes with a decision.
+- D3 to D7: decided in their sections. Implementation is not started.
+
+
 - V1: check how `vt` handles OSC 133 marks (`sidecars/vt`, `vt-core`).
 - V2: reproduce the scroll report in a running Claude Code or Codex session in `term` and in `terminal` (the wheel route and the offset
   before and after), and check whether each TUI scrolls its own content when it receives the wheel.

@@ -162,6 +162,20 @@ foreground에서 바쁘거나 졸고 있는 TUI는 백그라운드 또는 바로
 
 ## 미정 항목
 
+각 항목은 상태, 소관, 닫는 조건을 가진다. 아직 구현한 항목은 없다.
+
+- V1(미확인): `vt`가 OSC 133 마크를 어떻게 처리하는지. 소관: sidecar `vt`. 테스트가 마크가 파싱됨을 보이거나, 없음을 명시하면 닫는다.
+- V2(미확인): 실행 중인 Claude Code 또는 Codex session에서 `term`과 `terminal`의 스크롤 보고를 재현한다. 소관: plugin. 휠 경로와 전후 offset을 기록하면 닫는다.
+- V3(미확인): macOS에서 sidecar가 session의 전경 프로세스를 이름으로 알 수 있는지. 소관: sidecar `alacritty`. 이름을 알아내는 테스트가 있으면 닫는다.
+- V4(미확인): 상태가 쓰는 event의 Codex hook payload. 소관: adapter. 실제 session에서 얻은 payload를 기록하면 닫는다.
+- V5(미확인): Claude Code `Notification` payload 필드. 소관: adapter. payload를 기록하면 닫는다.
+- V6(미확인): 공용 머신의 파일 event 전달 지연. 소관: sidecar. 측정한 상한을 기록하면 닫는다. 측정 전에는 상한을 적지 않는다.
+- V7(미확인): Claude Code와 Codex에서 기다리는 MCP 도구 호출의 제한 시간. 소관: sok MCP 서버. 클라이언트별 측정값을 기록하면 닫는다.
+- V8(미확인): Claude Code의 같은 머신 직접 세션 메시지 경로 유무. 소관: adapter. 관찰을 기록하면 닫는다.
+- D1(미정): 원시 출력 로그(방안 6)의 바이트 상한. 소관: sidecar. 이 문서에 결정을 적으면 닫는다.
+- D2(미정): `history.find`가 글자만 검색할지 cell 스타일도 검색할지. 소관: sidecar. 결정을 적으면 닫는다.
+- D3~D7: 각 절에서 결정했다. 구현은 아직 시작하지 않았다.
+
 - V1: `vt`가 OSC 133 마크를 어떻게 처리하는지 확인한다(`sidecars/vt`, `vt-core`).
 - V2: 실행 중인 Claude Code 또는 Codex session에서 `term`과 `terminal` 각각 스크롤을 재현한다(휠 경로와 전후 offset). 각 TUI가 휠을 받았을 때 자기 내용을 스크롤하는지도 확인한다.
 - V3: 방안 7을 위해 macOS에서 sidecar가 session의 전경 프로세스를 어떻게 알 수 있는지 확인한다.
