@@ -90,7 +90,9 @@ fn claude_code_file_is_selected_by_cwd() {
         .path()
         .join(".claude/projects/-work-project-one-core/session.jsonl");
     write_records(&file, &claude_records(cwd, "question", "answer"));
-    let other = home.path().join(".claude/projects/-work-other/session.jsonl");
+    let other = home
+        .path()
+        .join(".claude/projects/-work-other/session.jsonl");
     write_records(&other, &claude_records("/work/other", "other", "other"));
 
     let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
@@ -200,7 +202,9 @@ fn two_matching_files_choose_the_most_recently_modified() {
 fn no_matching_file_is_refused_with_the_cwd() {
     let home = Folder::new("conversation-none");
     write_records(
-        &home.path().join(".claude/projects/-work-other/session.jsonl"),
+        &home
+            .path()
+            .join(".claude/projects/-work-other/session.jsonl"),
         &claude_records("/work/other", "other", "other"),
     );
 
@@ -227,11 +231,7 @@ fn relative_cwd_is_refused() {
 
     assert_eq!(
         (code, stdout.as_str(), stderr.as_str()),
-        (
-            1,
-            "",
-            "sok: cwd is not an absolute path: relative/core\n"
-        )
+        (1, "", "sok: cwd is not an absolute path: relative/core\n")
     );
 }
 
@@ -273,5 +273,285 @@ fn unreadable_file_is_refused_with_its_reason() {
             "",
             format!("sok: {}: permission denied\n", file.display()).as_str()
         )
+    );
+}
+
+// contract: conversation.refuses-a-session-working-directory-that-is-not-a-string
+#[test]
+fn claude_cwd_that_is_not_a_string_is_refused() {
+    let home = Folder::new("conversation-cwd-type");
+    let file = home
+        .path()
+        .join(".claude/projects/-work-core/session.jsonl");
+    write_records(
+        &file,
+        &[json!({"type": "user", "cwd": 5, "message": {"role": "user", "content": "question"}})],
+    );
+
+    let (code, stdout, stderr) =
+        run_conversation(&home, &["--agent", "claude-code", "--cwd", "/work/core"]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: the session working directory is missing or not a string\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
+// contract: conversation.refuses-a-session-working-directory-that-is-not-a-string
+#[test]
+fn codex_file_that_does_not_start_with_session_meta_is_refused() {
+    let home = Folder::new("conversation-codex-first");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-first.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [
+                {"type": "input_text", "text": "first"}
+            ]}}),
+            json!({"type": "session_meta", "payload": {"id": "session", "cwd": cwd}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "codex", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: the session working directory is missing or not a string\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
+// contract: conversation.reads-an-unchosen-file-only-to-its-session-record
+#[test]
+fn malformed_line_after_the_session_record_of_an_unchosen_file_is_not_read() {
+    let home = Folder::new("conversation-unchosen");
+    let cwd = "/work/project.one/core";
+    let folder = home.path().join(".claude/projects/-work-project-one-core");
+    let unchosen = folder.join("a-older.jsonl");
+    let chosen = folder.join("z-newer.jsonl");
+    let older_record = claude_records(cwd, "older", "older")[1].to_string();
+    std::fs::create_dir_all(&folder).expect("session folder");
+    std::fs::write(&unchosen, format!("{older_record}\nnot a record\n")).expect("session file");
+    write_records(&chosen, &claude_records(cwd, "newer", "newer"));
+    let base = SystemTime::now();
+    std::fs::File::options()
+        .write(true)
+        .open(&unchosen)
+        .expect("older file")
+        .set_modified(base - Duration::from_secs(3600))
+        .expect("older time");
+    std::fs::File::options()
+        .write(true)
+        .open(&chosen)
+        .expect("newer file")
+        .set_modified(base)
+        .expect("newer time");
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "exit status and standard error"
+    );
+    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+    assert_eq!(
+        output["file"],
+        json!(chosen.display().to_string()),
+        "the chosen file"
+    );
+}
+
+// contract: conversation.does-not-follow-symbolic-links
+#[test]
+fn symbolic_link_to_a_session_file_is_not_a_candidate() {
+    let home = Folder::new("conversation-link");
+    let cwd = "/work/core";
+    let target = home
+        .path()
+        .join("elsewhere/rollout-2026-11-18T10-00-00-linked.jsonl");
+    write_records(&target, &codex_records(cwd, "question", "answer"));
+    let folder = home.path().join(".codex/sessions/2026/11/18");
+    std::fs::create_dir_all(&folder).expect("session folder");
+    std::os::unix::fs::symlink(
+        &target,
+        folder.join("rollout-2026-11-18T10-00-00-link.jsonl"),
+    )
+    .expect("symbolic link");
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "codex", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            "sok: no codex session file has the working directory /work/core\n"
+        )
+    );
+}
+
+// contract: conversation.refuses-a-text-that-is-not-a-string
+#[test]
+fn claude_text_that_is_not_a_string_is_refused() {
+    let home = Folder::new("conversation-text-type");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".claude/projects/-work-core/session.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": "question"}}),
+            json!({"type": "assistant", "cwd": cwd, "message": {"role": "assistant", "content": [
+                {"type": "text", "text": 5}
+            ]}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: line 2 has a text that is not a string\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
+// contract: conversation.refuses-a-message-content-of-the-wrong-type
+#[test]
+fn claude_message_content_that_is_neither_string_nor_list_is_refused() {
+    let home = Folder::new("conversation-content-type");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".claude/projects/-work-core/session.jsonl");
+    write_records(
+        &file,
+        &[json!({"type": "user", "cwd": cwd, "message": {"role": "user", "content": null}})],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: line 1 has a message content that is neither a string nor a list\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
+// contract: conversation.refuses-a-message-content-of-the-wrong-type
+#[test]
+fn codex_message_content_that_is_not_a_list_is_refused() {
+    let home = Folder::new("conversation-codex-content");
+    let cwd = "/work/core";
+    let file = home
+        .path()
+        .join(".codex/sessions/2026/11/18/rollout-2026-11-18T10-00-00-content.jsonl");
+    write_records(
+        &file,
+        &[
+            json!({"type": "session_meta", "payload": {"id": "session", "cwd": cwd}}),
+            json!({"type": "response_item", "payload": {"type": "message", "role": "user", "content": "question"}}),
+        ],
+    );
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "codex", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stdout.as_str(), stderr.as_str()),
+        (
+            1,
+            "",
+            format!(
+                "sok: {}: line 2 has a message content that is not a list\n",
+                file.display()
+            )
+            .as_str()
+        )
+    );
+}
+
+// contract: conversation.claude-code.names-the-folder-by-utf16-units
+#[test]
+fn working_directory_with_a_character_outside_the_bmp_names_two_dashes() {
+    let home = Folder::new("conversation-utf16");
+    let cwd = "/work/\u{1F642}/core";
+    let file = home
+        .path()
+        .join(".claude/projects/-work----core/session.jsonl");
+    write_records(&file, &claude_records(cwd, "question", "answer"));
+
+    let (code, stdout, stderr) = run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd]);
+
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "exit status and standard error"
+    );
+    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+    assert_eq!(
+        output["file"],
+        json!(file.display().to_string()),
+        "the chosen file"
+    );
+}
+
+// contract: conversation.claude-code.names-a-long-folder-with-a-hash
+#[test]
+fn long_working_directory_folder_is_the_first_200_characters_and_a_hash() {
+    let home = Folder::new("conversation-long");
+    let cwd = format!("/{}", "x".repeat(209));
+    let file = home.path().join(format!(
+        ".claude/projects/-{}-mainyv/session.jsonl",
+        "x".repeat(199)
+    ));
+    write_records(&file, &claude_records(&cwd, "question", "answer"));
+
+    let (code, stdout, stderr) =
+        run_conversation(&home, &["--agent", "claude-code", "--cwd", cwd.as_str()]);
+
+    assert_eq!(
+        (code, stderr.as_str()),
+        (0, ""),
+        "exit status and standard error"
+    );
+    let output: Value = serde_json::from_str(&stdout).expect("JSON output");
+    assert_eq!(
+        output["file"],
+        json!(file.display().to_string()),
+        "the chosen file"
     );
 }
