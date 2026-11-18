@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -815,4 +816,49 @@ func sidebarCall(t *testing.T, id string, data *layout.CardData, sets map[string
 	}
 	t.Fatalf("no sidebar call %s", s.Call)
 	return nil, false, nil
+}
+
+// contract: docs/spec/parties.md#commands
+// TestPartyCreateCasesJudgeTouchingCards runs the party cases of docs/spec/cases/layout/parties.json that create a party of two cards: a
+// case with no error, and a case with the error of cards that do not touch, state the touching judgement of the two cards.
+func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {
+	var file struct {
+		Description string `json:"description"`
+		Cases       []struct {
+			Name  string       `json:"name"`
+			State layout.State `json:"state"`
+			Steps []struct {
+				Call   string `json:"call"`
+				Params struct {
+					Cards []string `json:"cards"`
+				} `json:"params"`
+				Error *string `json:"error"`
+			} `json:"steps"`
+		} `json:"cases"`
+	}
+	caseFile(t, "parties.json", &file)
+	judged := 0
+	for _, kase := range file.Cases {
+		cards := map[string]layout.Card{}
+		for _, card := range kase.State.Cards {
+			cards[card.ID] = card
+		}
+		for _, s := range kase.Steps {
+			if s.Call != "core.party.create" || len(s.Params.Cards) != 2 {
+				continue
+			}
+			if s.Error != nil && !strings.HasPrefix(*s.Error, "cards are not touching") {
+				continue
+			}
+			a, b := cards[s.Params.Cards[0]], cards[s.Params.Cards[1]]
+			want := s.Error == nil
+			if got := layout.Touches(a, b); got != want {
+				t.Fatalf("%s: touches of cards %v is %v, want %v", kase.Name, s.Params.Cards, got, want)
+			}
+			judged++
+		}
+	}
+	if judged < 2 {
+		t.Fatalf("the cases judge %d pairs, want at least one touching and one not touching", judged)
+	}
 }
