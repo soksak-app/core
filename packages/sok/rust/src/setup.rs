@@ -197,6 +197,12 @@ pub enum State {
 pub enum Reason {
     Absent,
     Differs,
+    /// The codex command has no registration of soksak.
+    #[serde(rename = "codex absent")]
+    CodexAbsent,
+    /// The registration of soksak in the codex command runs another command.
+    #[serde(rename = "codex differs")]
+    CodexDiffers,
 }
 
 /// One setup part as `sok setup check` prints it; `changed` is set by an install.
@@ -345,11 +351,13 @@ pub fn install(setup: &Setup, kinds: &[Kind], terminal: bool) -> Result<Installe
         match registration::install(setup.environment, setup.sok) {
             Ok(done) => {
                 if done.state == registration::Done::Registered {
-                    changed.push(
+                    // The mcp part reports the claude file, or the codex file when the claude command is not on PATH.
+                    let file = if done.entry.is_some() {
                         registration::config_file(setup.environment)?
-                            .display()
-                            .to_string(),
-                    );
+                    } else {
+                        registration::codex_config_file(setup.environment)?
+                    };
+                    changed.push(file.display().to_string());
                 }
             }
             Err(error) => failures.push(error),

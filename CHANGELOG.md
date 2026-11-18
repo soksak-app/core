@@ -5,6 +5,7 @@
 
 ## 2026-11-18
 
+- F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
 - F897: The Rust host test of the unwatch bound waits for the page call with a bound instead of reading the call list at once, which failed when the page call was not yet recorded.
 - F895: The card auto-arrange command runs the setting `cardArrange` (`resize`, the default, keeps the arrangement; `even` runs `arrange("even")`), which the settings window shows as a choice. The toolbar icon of the command changes with the setting.
 - F894: The layout model has the even arrangement `arrange("even")`, which replaces the arrangement with an equal grid of the current cards and adds one empty card when no grid fits. A grid is taken only when each cell is at least `minSize`.

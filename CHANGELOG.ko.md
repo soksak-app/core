@@ -5,6 +5,7 @@
 
 ## 2026-11-18
 
+- F898: sok가 Codex agent를 지원한다. `~/.codex`가 폴더이면 skill을 `~/.agents/skills/soksak/SKILL.md`에 쓰고, `sok mcp install`은 `PATH`에 `codex` 명령이 있으면 sok를 그 명령에 등록한다.
 - F897: unwatch 상한 Rust 호스트 테스트가 페이지 호출 목록을 즉시 읽는 대신 상한을 두고 호출을 기다리도록 바꿨다. 페이지 호출이 아직 기록되지 않았을 때 실패하던 문제를 고친다.
 - F895: 카드 자동 정렬 명령은 설정 `cardArrange`(기본값 `resize`는 구조를 유지하고, `even`은 `arrange("even")`을 실행한다)의 값을 따른다. 설정 창에서 선택하며, 명령의 툴바 아이콘은 설정 값에 따라 바뀐다.
 - F894: 레이아웃 모델에 균등 배치 `arrange("even")`을 추가한다. 현재 카드를 같은 크기의 격자로 바꾸고, 맞는 격자가 없으면 빈 카드 하나를 더한다. 각 셀이 `minSize` 이상인 격자만 고른다.

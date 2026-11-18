@@ -52,8 +52,12 @@ fn canonical(path: &Path) -> Result<PathBuf, String> {
 pub fn skill_files(environment: &Environment) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
     let mut seen = Vec::new();
+    let home = Path::new(environment.home()?);
+    // Codex reads the skills of ~/.agents/skills, so the install creates <home>/.agents when <home>/.codex is a directory.
+    let codex_home = is_directory(&home.join(".codex"))?;
     for folder in agent_folders(environment)? {
-        if !is_directory(&folder)? {
+        let created = codex_home && folder == home.join(".agents");
+        if !created && !is_directory(&folder)? {
             continue;
         }
         let skill_folder = folder.join("skills").join("soksak");
@@ -117,11 +121,13 @@ impl SkillFailure {
 
 /// Creates the folders `skills` and `skills/soksak` of the skill file at mode 0755 when they are missing.
 fn create_folders(file: &Path) -> Result<(), SkillFailure> {
-    // default: a skill file path always has the folders skills/soksak (skill_files).
+    // default: a skill file path always has the folders <agent>/skills/soksak (skill_files). The agent folder is created too, because
+    // the Codex agent folder may be missing when <home>/.codex is a directory.
     let Some(soksak) = file.parent() else {
         return Ok(());
     };
-    for folder in [soksak.parent(), Some(soksak)].into_iter().flatten() {
+    let agent = soksak.parent().and_then(Path::parent);
+    for folder in [agent, soksak.parent(), Some(soksak)].into_iter().flatten() {
         match std::fs::create_dir(folder) {
             Ok(()) => set_mode(folder, true)?,
             Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
