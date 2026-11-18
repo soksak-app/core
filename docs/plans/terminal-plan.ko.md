@@ -1,0 +1,252 @@
+# 터미널 계획: 읽기, 상태, 메시징, 대화상자, 명령 가드
+
+[English](terminal-plan.md)
+
+이 계획은 터미널 plugin `terminal`(sidecar `vt-alacritty`)과 `term`(sidecar `alacritty`)을 다룬다. 다섯 부로 나뉘며, 부마다 사실, 결정, 검증, 미정 항목을 따로 적는다. 어느 부도 구현하지 않았다. 체크리스트 항목은 [features](../features.ko.md)의 F899-1부터 F899-7까지다.
+
+| 부 | 주제 | 체크리스트 항목 | 결정 | 미정 항목 |
+|---|---|---|---|---|
+| 1 | 화면과 대화 읽기 | F899-1, F899-2 | D1, D2 | V1, V2 |
+| 2 | 터미널 상태와 프로세스 목록 | F899-3, F899-4 | 상태 규칙 | V3, V4, V5 |
+| 3 | 터미널과 agent 사이의 메시징 | F899-7 | D3, D4 | V6, V7, V8 |
+| 4 | 대화상자와 TUI 키 | F899-5 | D5, D6 | 없음 |
+| 5 | 파괴적 명령 가드 | F899-6 | D7 | 없음 |
+
+6부는 공통 release 순서, 검증 규칙, 상태 표를 둔다. 7부는 결정을 색인한다.
+
+## 1부: 화면과 대화 읽기
+
+### 1.1 현재 코드에서 확인한 사실
+
+- `terminal.screen.read`와 `term.screen.read`는 viewport만 돌려준다. 현재 display offset의 `screen_lines` 행이다(`sidecars/alacritty/alacritty/src/engine.rs`, `fn screen`). viewport 위의 행을 돌려주는 명령은 없다.
+- `terminal.scrollback.set`과 `term.scrollback.set`은 display offset을 바꾼다. sidecar는 offset과 기록 길이를 세션 status의 `scrollback.offset`, `scrollback.history`로 보고한다. offset은 글을 돌려주지 않는다.
+- TUI agent(Claude Code, Codex)의 화면이 스크롤되지 않는 이유: TUI는 대체 화면(alternate screen)에서 돈다. 엔진은 대체 화면의 기록을 두지 않는다(`alacritty/tests/engine_test.rs`, `alternate_screen_is_separate_from_primary_scrollback`). 휠은 `WheelRoute::of`(`alacritty-core/src/protocol.rs`)가 라우팅한다. 마우스 보고가 켜져 있고 Shift가 없으면 program으로 가고, 대체 화면에서 alternate scroll이 켜져 있으면 커서 키가 된다. viewport는 primary 화면에서만 움직인다. viewport 명령은 offset을 기록 범위로 자르는데(`SurfaceCommand::Viewport`), 대체 화면의 기록은 비어 있다. plugin은 이 경우를 알리지 않는다. V2가 실행 중인 TUI에서 확인한다.
+- TUI agent는 대화를 터미널이 아니라 디스크의 파일에 남긴다. Claude Code는 `~/.claude/projects/<cwd>/<session>.jsonl`(레코드 `user`, `assistant`)을, Codex는 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`(레코드 `response_item`, `event_msg`, 작업 디렉터리는 `session_meta`)을 쓴다.
+
+### 1.2 방법
+
+- **방법 A, TUI 화면 읽기.** 보이는 화면의 임의 행 구간을 cell과 평문으로, 커서와 줄바꿈 표시와 함께 읽는다. 방안 1과 2가 구현한다.
+- **방법 B, 대화 session 읽기.** 터미널에서 실행 중인 agent(Claude Code 또는 Codex)의 session을 찾고, session 파일에서 메시지를 순서대로 읽는다. 방안 6이 구현한다. 결과는 읽은 파일을 밝힌다.
+
+### 1.3 방안
+
+각 방안은 명령이다. 모든 읽기는 `count`를 받고 상한이 있다. 상한을 넘는 읽기는 명시적 오류로 실패한다. 모든 읽기는 멱등하다. 상태를 바꾸지 않으며, 내용이 바뀌기 전까지 같은 요청은 같은 결과를 돌려준다. 결과는 `generation`을 가진다. sidecar는 내용이 바뀔 때마다 이를 증가시키므로, 호출자는 오래된 결과를 알 수 있다.
+
+1. **viewport 조각**(`screen.read {from, count}`). viewport의 `from`부터 `from + count`행. parameter 없는 호출은 현재 결과를 유지한다.
+2. **평문**(`screen.text {from, count}`, `history.text {from, count}`). 각 행을 뒤쪽 공백 없이 글로 돌려주며 `wrapped` 표시를 붙인다.
+3. **절대 행 번호로 기록 읽기**(`history.read {from, count, format}`). 유지되는 기록의 행을 절대 행 번호로 읽는다. 결과는 `first`, `last`, `dropped`를 담는다. 기록을 지우기 전까지 절대 번호의 의미는 바뀌지 않으며, 지운 양은 `dropped`가 보고한다.
+4. **검색**(`history.find {pattern, from, limit}`). 일치한 절대 행 번호와 글을 최대 `limit`개 돌려준다. pattern은 정규식이며, 잘못된 pattern은 오류 글과 함께 실패한다.
+5. **셸 마크로 명령 출력**(`command.list {limit}`, `command.read {index, format, from, count}`). 명령은 `C` 마크와 다음 `D` 마크 사이의 행이며, `D`의 종료 코드를 가진다. 셸 통합이 없는 터미널은 빈 목록을 돌려주고, `command.list`는 마크를 보지 못했다고 밝힌다.
+6. **agent 대화**(`agent.conversation {limit, after}`). 방법 B. 전경 프로세스(`claude` 또는 `codex`)로 session의 agent를 찾고 session 파일을 읽어, 메시지를 순서대로 역할, 글, 시각과 함께 돌려준다. 파일은 session의 작업 디렉터리로 정한다. Claude Code는 그 디렉터리의 가장 새 파일이고, Codex는 `session_meta`의 작업 디렉터리가 같은 파일이다. 결과는 읽은 파일을 밝히거나, 파일을 찾지 못했다고 밝힌다.
+7. **원시 출력 로그**(`transcript.read {offset, bytes}`). 고정된 바이트 상한의 로그에서 PTY 출력 바이트를 offset부터 돌려준다. 구현 전에 결정 D1이 필요하다.
+
+### 1.4 방안이 놓이는 곳
+
+- Sidecar: 방안 1부터 5까지는 `vt`와 `alacritty`에 모두 구현한다. 방안 5는 `vt`의 OSC 133 처리(V1)가 필요하다. `vt`가 마크를 파싱하지 않으면 명령 목록은 비어 있고, 명세가 그렇게 적는다.
+- Plugin: `terminal`과 `term`은 각 명령을 같은 이름과 schema로 선언한다. 각 plugin은 자기 sidecar의 공유 계약 case를 검사하며, plugin 테스트는 다른 plugin의 파일을 읽지 않는다.
+- Core: 변경 없음.
+
+### 1.5 Red와 Green
+
+- Red: `screen.read {from, count}` 호출이 viewport 밖의 행을 돌려주지 않는다(현재 코드에서 실패).
+- Green: 같은 호출이 두 sidecar와 두 plugin에서 요청한 행을 돌려준다.
+- 방안 6의 Red: fixture session 파일이 메시지를 순서대로 주지 않는다. Green: 메시지를 순서대로 돌려주고 파일 이름을 밝힌다.
+- 방안 3과 5는 기록 상한을 넘는 긴 session으로 검사하며, 변경 전후의 절대 번호를 비교한다.
+
+### 1.6 1부의 미정 항목
+
+- V1(미확인): `vt`가 OSC 133 마크를 어떻게 처리하는지. 소관: sidecar `vt`. 테스트가 마크가 파싱됨을 보이거나, 명세에 없음을 적으면 닫는다.
+- V2(미확인): 실행 중인 Claude Code 또는 Codex session에서 `term`과 `terminal`의 스크롤 보고를 재현한다. 소관: plugin. 휠 경로와 전후 offset을 기록하면 닫는다.
+- D1(미정): 원시 출력 로그(방안 7)의 바이트 상한. 소관: sidecar. 이 문서에 결정을 적으면 닫는다.
+- D2(미정): `history.find`가 글만 검색할지 cell 스타일도 검색할지. 소관: sidecar. 결정을 적으면 닫는다.
+
+## 2부: 터미널 상태와 프로세스 목록
+
+### 2.1 요구
+
+호출자는 각 터미널의 상태를 알아야 한다. 프로그램이 실행 중인지, 멈췄는지, prompt에서 쉬는지, 입력을 기다리는지다. 상태는 sidecar가 바뀔 때 발행하는 event다. 호출자가 polling하지 않는다.
+
+### 2.2 현재 코드에서 확인한 사실
+
+- `alacritty` 엔진은 OSC 133 마크 `A`(prompt 시작), `B`(prompt 끝), `C`(명령 시작), `D`(명령 끝, 종료 코드 포함)를 파싱한다(`alacritty/src/engine.rs`, `ShellMarker`). prompt 시작과 그 절대 행 번호를 기록한다. 이 마크를 알리는 event는 없다.
+- Claude Code나 Codex 같은 TUI agent는 OSC 133 마크를 내지 않는다. 마크는 셸 prompt를 보여 줄 뿐, agent 자신의 작업은 보여 주지 않는다.
+
+### 2.3 상태
+
+- `idle`: 셸이 prompt에 있다(`A` 또는 `B` 이후, `C` 이전). 실행 중인 명령이 없다.
+- `running`: 명령이 시작했고(`C`) 아직 끝나지 않았다(`D`).
+- `exited`: 명령이 끝났다(`D`), 종료 코드를 가진다.
+- `waiting`: 프로그램이 일정 시간 조용했고 화면에 prompt나 질문이 보인다. 발견적 판단이며, 결과가 그렇다고 표시한다.
+- `agent-busy`와 `agent-waiting`(Claude Code, Codex): agent 자신의 신호로 정한다. 예를 들면 agent의 hook event다. 출력이 조용한 것만으로는 정하지 않는다.
+
+상태가 바뀔 때마다 이전 상태, 새 상태, 신호의 출처, 순번을 담은 event를 낸다. 상태 읽기는 현재 상태, 출처, 마지막 변경의 순번을 돌려준다.
+
+### 2.4 오픈소스 비교
+
+- Orca(github.com/stablyai/orca)는 신호를 여러 층으로 쓴다. OSC 133 `A`와 `D` 마크, agent 상태 protocol(OSC 7501), agent hook event, 제목 글자, 출력 정지와 화면 확인이다. 명시적 보고가 제목에서 얻은 상태를 이긴다. 제목에서 온 idle은 출력이 일정 시간 조용한 뒤에만 받아들인다.
+- omp(github.com/can1357/oh-my-pi)는 자기 실행 상태를 OSC 7501 record로 event 흐름에서 보고한다. 화면에서 상태를 추측하지 않으며, record가 유지되는 동안 OSC 133 영역을 끈다.
+- Claude Code는 hook event(`Stop`, `Notification`, `PermissionRequest`, `StopFailure`)를 제공한다. `agent-busy`와 `agent-waiting`의 event 원천이 된다.
+- Codex: `notify`는 turn 완료에서만 실행된다. 승인 event에는 `PermissionRequest` hook이 필요하다. 정확한 payload는 확인하지 않았다(V4).
+
+### 2.5 상태 규칙의 결정
+
+agent 상태는 agent의 hook event가 있으면 그것으로 정한다. 화면 발견적 판단은 hook이 없는 터미널에만 쓰며, 결과가 발견적 판단이라고 표시한다. 상태를 구현하기 전에 V4와 V5로 payload를 확인한다.
+
+### 2.6 프로세스 목록(`term.process.list`)
+
+- 전경: 터미널을 소유한 프로세스 그룹, 그 leader의 이름과 인자, 시작 시각.
+- 백그라운드: 터미널이 보고하는 셸 작업(이름, 프로세스 id, running 또는 stopped 상태). 화면이 아니라 session의 프로세스 표에서 읽는다.
+- 각 항목은 출처를 밝힌다. 프로세스 표이거나, 셸이 보내면 OSC 133 명령 마크다.
+- 프로세스 이름만으로는 agent를 식별하지 않는다. agent는 인자와 session 파일(1부 방안 6)로 식별한다.
+
+### 2.7 Red와 Green
+
+- F899-3의 Red: 백그라운드 작업이 있는 셸이 그 작업을 이름으로 보이지 않는다. Green: `term.process.list`가 전경 프로그램과 백그라운드 작업을 출처와 함께 이름으로 준다.
+- F899-4의 Red: fixture 셸의 prompt, 실행 중 명령, 끝난 명령이 idle, running, exited event를 내지 않는다. Green: 상태가 바뀔 때마다 출처와 순번을 가진 event가 한 번 나온다.
+
+### 2.8 2부의 미정 항목
+
+- V3(미확인): macOS에서 sidecar가 전경 프로세스를 이름으로 알 수 있는지. 소관: sidecar `alacritty`. 이름을 알아내는 테스트가 있으면 닫는다.
+- V4(미확인): 상태가 쓰는 event의 Codex hook payload. 소관: adapter. 실제 session에서 얻은 payload를 기록하면 닫는다.
+- V5(미확인): Claude Code `Notification` payload 필드. 소관: adapter. payload를 기록하면 닫는다.
+
+## 3부: 터미널과 agent 사이의 메시징
+
+### 3.1 요구
+
+터미널이 폴더를 등록한다. 등록한 폴더가 바뀌면 등록한 터미널이 그 변경을 event로 알고, 트리거가 그것으로 동작할 수 있다. 한 터미널이 다른 터미널의 agent에게 메시지를 보낼 수도 있다. 이 부가 체크리스트 항목 F899-7이다.
+
+### 3.2 event 경로(결정 D3)
+
+- 메시징 event의 유일한 원천은 터미널 sidecar가 관찰하는 파일 event다. sidecar는 터미널이 등록한 폴더를 감시하고, 변경마다 event를 낸다. polling하지 않는다.
+- agent hook(Claude Code의 `FileChanged`, Codex hook event)은 전달 경로에 들어가지 않는다. agent 상태를 보강하는 데만 쓸 수 있다(2부). 메시지는 어떤 agent가 파일을 썼든 같은 방식으로 전달된다.
+- 트리거는 터미널을 통해 동작한다. 등록된 터미널에 입력을 주입하거나 선언된 명령을 실행한다. agent API는 쓰지 않는다.
+- 전달 지연은 공용 머신에서 측정한 뒤에 적는다. 그 측정에서 기록된 FSEvents 지연은 3~14초이므로, V6이 닫히기 전에는 상한을 적지 않는다.
+
+한 경로로 두는 이유: Codex에는 파일 변경 event가 없고, Claude의 `FileChanged`는 Claude 세션 안에서만 돈다. 두 경로를 두면 같은 메시지가 서로 다른 시점에 도착하거나 아예 도착하지 않는다.
+
+### 3.3 agent에게 전달하는 경로(결정 D4)
+
+메시지의 전달 경로는 agent가 제공하는 더 나은 경로다.
+
+- 기본 경로: 등록된 터미널에 입력 주입. 메시지, 명령, skill 호출은 선언된 형식 하나로 보낸다. TUI가 입력을 대기열에 넣는 것은 받아들인 동작이다. sidecar는 터미널 상태로 막지 않으며, 대화상자나 타이밍 같은 TUI 동작을 우회하지 않는다.
+- 더 나은 경로가 있으면 쓴다: agent가 제공하는 경우 sok 서버의 MCP 도구 `messages.read`와 `messages.wait`. 결과가 구조화되고 대화에 입력이 남지 않는다. agent의 클라이언트가 MCP 도구를 지원하면 그 경로를 쓴다.
+- skill은 두 경로의 사용법을 더 잘 안내한다. 전달은 skill에 의존하지 않는다.
+
+### 3.4 다른 agent의 관찰된 전달 방식
+
+로컬 Claude Code 2.1.327 바이너리와 오픈소스 Codex 저장소에서 관찰했다. 문자열과 소스 이름만 확인했고, 실행은 하지 않았다.
+
+- Claude Code: 세션 간 메시지는 peer 프레임을 가진다. 받는 쪽은 `[SYSTEM NOTIFICATION - NOT USER INPUT]` 프레임 아래 보여 주므로 사용자 턴으로 취급되지 않는다. 세션은 받을지를 밝힌다(`crossSessionInbound`: accept, hold, refuse). peer 목록은 서버 endpoint `/v1/code/sessions`에서 읽는다. idle notice는 받는 쪽이 다음 idle이 될 때 보내는 쪽에 알린다. 같은 머신의 직접 경로는 문자열에서 찾지 못했다(V8).
+- Codex: 메시지는 한 런타임의 agent 사이에서만 오간다(`send_message`, `followup_task`, `wait_agent`, `list_agents`). 메모리 안의 메일함을 쓴다(`codex-rs/core/src/agent/api.rs`). 프로세스나 세션을 넘는 전달 경로는 찾지 못했다.
+- 결과: 따로 실행된 터미널 사이의 전달에는 두 agent 모두 agent 쪽 전달 경로가 없다. 계획은 입력 주입을 기본으로, MCP 도구를 더 나은 경로로 둔다.
+
+### 3.5 F899-7의 Red와 Green
+
+- Red: 등록한 폴더에 파일을 만들어도 관찰하는 터미널에 event가 나오지 않는다(현재 코드에서 실패).
+- Green: 변경마다 출처와 순번을 가진 event 하나가 등록한 터미널에 도달한다. 그다음 메시지는 3.3에서 고른 경로로 agent에게 전달된다.
+
+### 3.6 3부의 미정 항목
+
+- V6(미확인): 공용 머신의 파일 event 전달 지연. 소관: sidecar. 측정한 상한을 기록하면 닫는다. 측정 전에는 상한을 적지 않는다.
+- V7(미확인): Claude Code와 Codex에서 기다리는 MCP 도구 호출의 제한 시간. 소관: sok MCP 서버. 클라이언트별 측정값을 기록하면 닫는다.
+- V8(미확인): Claude Code의 같은 머신 직접 세션 메시지 경로 유무. 소관: adapter. 관찰을 기록하면 닫는다.
+
+## 4부: 대화상자와 TUI 키
+
+### 4.1 TUI 키 adapter(결정 D6)
+
+Ctrl-B(실행 중인 명령을 백그라운드로 보냄), Ctrl-Enter(입력을 바로 보냄), Esc, Ctrl-C 같은 키는 TUI마다, 버전마다 다르다. 각 agent adapter는 동작별로 자기가 지원하는 키를 선언한다. 감독과 메시징은 키가 아니라 동작을 쓴다.
+
+- TUI가 그 동작을 지원하면, adapter는 TUI 고유의 키를 보낸다.
+- 지원하지 않으면, adapter는 그 동작의 sok 폴백을 쓴다. 예를 들면 다음 idle 상태에 전달하는 대기열 메시지나, 터미널 interrupt를 통한 취소다.
+- adapter는 동작마다 어느 경로를 썼는지 이벤트 기록에 남긴다.
+
+foreground에서 바쁜 TUI는 백그라운드 또는 바로 보내기 동작을 실행하기 전까지 메시지를 받지 못한다. 그래서 그 동작이 전달에 필요하다.
+
+### 4.2 자리를 비운 동안의 대화상자 처리(결정 D5)
+
+대화상자 처리는 제품 기능이다. 터미널이 대화상자에서 기다리고 사용자가 그 터미널의 감독을 켰으면, 감독 agent는 이 기능으로 대화상자에 응답한다. 한 번의 지시가 아니라, 그 상황이 생길 때마다 적용된다.
+
+- 파괴적: 대화상자의 수락이 파일을 지우거나 덮어쓰거나, 커밋되지 않은 변경을 버리거나, 이력을 다시 쓰거나 강제 push하거나, 프로세스나 데이터를 없애거나, 권한이나 인증 정보를 바꾸거나, 외부 서비스에 쓰게 한다. 감독 agent는 취소(Esc 또는 Ctrl-C)를 보내고, 이유와 더 안전한 경로를 agent에게 메시지로 보낸다.
+- 파괴적이지 않음: 되돌릴 수 있고 프로젝트 안으로 범위가 정해진다. 예를 들면 테스트 실행, 프로젝트 안 파일 읽기, 멈춘 턴 계속이다. 감독 agent는 수락 선택지를 고른다.
+- 불명확: 파괴적인 것으로 본다. 감독 agent는 취소하고 그 경우를 기록한다.
+- 모든 결정은 대화상자 글, 선택지, 결정, 결정한 기준과 함께 이벤트 기록에 남긴다.
+
+취소와 선택은 모든 대화상자에서 동작해야 한다. 키와 선택지 위치는 agent adapter가 터미널 상태에서 얻는다. 감독은 사용자가 그 터미널에 대해 켠 경우에만 동작한다.
+
+### 4.3 F899-5의 Red와 Green
+
+- Red: 선언된 키를 받아도 fixture TUI의 대화상자가 반응하지 않는다.
+- Green: adapter가 TUI 고유의 키가 있으면 그것을, 없으면 sok 폴백을 보내고, 쓴 경로를 이벤트 기록에 남긴다.
+
+상태: 구현하지 않음.
+
+## 5부: 파괴적 명령 가드
+
+### 5.1 요구
+
+agent가 내는 파괴적 셸 명령을 실행 전에 멈춘다. 터미널이 호스팅하는 모든 agent에 적용한다. 이 부가 체크리스트 항목 F899-6이다.
+
+### 5.2 열린 소스 가드 두 개의 평가(코드는 실행하지 않음)
+
+- Rust hook. 여러 agent에 규칙 묶음을 준다. 사용자 정의 라이선스다.
+- 의존성 없는 Node hook. 어떤 세션이 어떤 프로세스, 포트, 워크트리를 소유하는지도 추적한다. MIT 라이선스다.
+
+요구와 비교한 평가:
+
+- 적합성: 둘 다 명령 글을 읽는다. 스크립트 파일, 셸 함수, 실행 시점에 계산되는 값은 보지 못한다. 보고된 삭제 사고의 원인도 대부분 그런 값이었으므로, 이 가드는 여러 층 중 한 층이다.
+- 실패 방식: dcg는 파싱할 수 없는 입력을 기본으로 허용하고, 옵션으로 막기를 켠다. 이 계획은 파괴적 가드에 반대 기본값을 쓴다. 파싱할 수 없거나 판정할 수 없는 입력은 거부하고, 거부를 이벤트 기록에 남긴다.
+- 우회: 둘 다 가드를 끄는 환경 변수를 제공한다. agent가 그 변수를 설정할 수 있으면 가드를 끌 수 있으므로, 이 계획은 agent에게 우회 수단을 주지 않는다.
+- 프로세스 소유: claude-bulkhead는 세션이 소유한 프로세스와 포트를 추적한다. 이는 2부의 프로세스 목록과 맞고, 그 모델을 참고한다.
+- 의존성: 두 가드는 agent용 plugin이며, 우리 sidecar가 쓸 라이브러리가 아니다. 계획은 두 패키지에 의존하지 않는다.
+
+### 5.3 결정 D7
+
+파괴적 명령 검사는 터미널 sidecar 계층에 선언된 규칙 묶음으로 만든다. fail-closed로 동작하며, 결정마다 이벤트를 남긴다. 두 패키지는 규칙 범위와 프로세스 소유 모델의 참고로만 쓴다.
+
+### 5.4 F899-6의 Red와 Green
+
+- Red: 파괴적 명령 fixture가 막히지 않거나, 파싱할 수 없는 입력이 막히지 않는다.
+- Green: 파괴적 명령이 막히고, 파싱할 수 없는 입력도 막히며(fail-closed), 거부마다 규칙과 함께 이벤트 기록에 남는다.
+
+상태: 구현하지 않음.
+
+## 6부: 공통 규칙
+
+### 6.1 release 순서
+
+1. sidecar `alacritty`와 `vt`가 각자 버전으로 명령과 event를 release한다.
+2. plugin `term`과 `terminal`이 그 sidecar release로 의존 버전을 올리고 release한다.
+3. Core는 선언된 노출이 필요한 곳에서만 바뀐다. 버전은 각 부분을 소유한 repository의 규칙에 따라 release 때 정한다.
+
+### 6.2 검증 규칙
+
+- 각 항목은 소유 repository에 Red 테스트를 가진다. 변경 전에 실패함을 기록하고, 변경 후 Green 결과를 기록한다.
+- 각 명령의 공유 계약 case는 두 sidecar와 두 plugin에서 모두 실행한다.
+- 항목마다 소유 repository의 검사만 실행한다. 전체 suite는 항목마다 실행하지 않는다.
+- 비용 측정(읽기당 시간과 메모리, frame당 CPU)은 개발이 끝난 뒤, 소유 repository의 계획대로 한다.
+
+### 6.3 체크리스트 항목별 상태
+
+구현한 항목은 없다.
+
+| 항목 | 부 | 소관 | Red 테스트(먼저 작성) | Green 증거 | 상태 |
+|---|---|---|---|---|---|
+| F899-1 행 구간 화면 읽기 | 1 | sidecar `vt`, `alacritty`; plugin `terminal`, `term` | `screen.read {from, count}`이 viewport 밖의 행을 돌려주지 않는다 | 두 sidecar와 두 plugin에서 요청한 행을 돌려준다 | 시작 전 |
+| F899-2 대화 읽기 | 1 | sidecar 또는 plugin(방법 B) | fixture session 파일이 메시지를 순서대로 주지 않는다 | 메시지를 순서대로, 파일 이름과 함께 돌려준다 | 시작 전 |
+| F899-3 프로세스 목록 | 2 | sidecar `alacritty`(macOS 먼저) | 백그라운드 작업이 있는 셸이 그 작업을 이름으로 보이지 않는다 | `term.process.list`가 전경과 백그라운드 작업을 출처와 함께 준다 | 시작 전 |
+| F899-4 터미널 상태 | 2 | sidecar, adapter | fixture prompt, 실행 중 명령, 끝난 명령이 상태 event를 내지 않는다 | 상태가 바뀔 때마다 출처와 순번을 가진 event가 한 번 나온다 | 시작 전 |
+| F899-5 키 adapter와 대화상자 | 4 | adapter; 감독 agent | fixture TUI의 대화상자가 선언된 키에 반응하지 않는다 | TUI 키 또는 폴백을 보내고 경로를 기록한다 | 시작 전 |
+| F899-6 파괴적 명령 가드 | 5 | sidecar 계층 | 파괴적 명령 fixture가 막히지 않는다 | 거부가 규칙과 함께 이벤트 기록에 남고, 파싱할 수 없는 입력도 막힌다 | 시작 전 |
+| F899-7 메시징 | 3 | sidecar, adapter, sok MCP 서버 | 등록한 폴더에 파일을 만들어도 event가 나오지 않는다 | 변경마다 event 하나가 등록한 터미널에 선택한 경로로 도달한다 | 시작 전 |
+
+## 7부: 결정
+
+- D1(미정, 1부): 원시 출력 로그의 바이트 상한.
+- D2(미정, 1부): `history.find`가 cell 스타일도 검색할지.
+- D3(결정, 3부): 터미널 sidecar의 파일 event가 메시징의 유일한 경로다.
+- D4(결정, 3부): 입력 주입이 기본이고, 제공되면 MCP 도구가 더 나은 경로다.
+- D5(결정, 4부): 파괴적, 파괴적이지 않음, 불명확의 기준으로 감독하는 대화상자 처리.
+- D6(결정, 4부): TUI 키는 adapter가 정하고, TUI에 없으면 sok 폴백을 쓴다.
+- D7(결정, 5부): 파괴적 명령 검사는 sidecar 계층에서 fail-closed로, 결정마다 이벤트와 함께.

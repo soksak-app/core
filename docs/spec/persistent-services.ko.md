@@ -69,7 +69,7 @@ retain은 자기 답이나 그 요청을 나른 연결의 끝으로 끝나며, �
 | `previous` | 변경 형식에서, 변경이 적용되는 화면을 가진 메시지의 `number`. 그 메시지는 `segment`, `rows`, `cols`가 같다. 전체 형식에는 없다 |
 | `changed` | 변경 형식에서, 그 화면과 다른 행들. 각각 `{row, cells}`이고 `row`의 오름차순이며 같은 행이 두 번 오지 않고, 각 행은 `cols`개 칸을 가진다. cursor나 runtime 멤버만 바뀌었으면 비어 있다. 전체 형식에는 없다 |
 
-각 칸은 `grapheme`(칸의 텍스트: 빈 칸과 넓은 문자의 이어지는 칸은 빈 문자열, 그 밖에는 grapheme cluster 하나), `width`(`1`, 넓은 문자의 첫 칸은 `2`, 이어지는 칸은 `0`), `fg`와 `bg`(테마, 반전 속성, 선택 강조를 적용해 정해진 색: 기본색은 `null`, 인덱스 색은 0에서 255까지의 정수, 트루컬러는 소문자 `"#rrggbb"`), `attributes`(화면 hash가 정한 플래그의 0에서 255까지의 정수: bold `01`, dim `02`, italic `04`, underline `08`, blink `10`, inverse `20`, hidden `40`, strikethrough `80`)를 가진다. 칸은 hash가 덮지 않는 `link`를 가질 수 있다. 위의 모든 멤버는 필수다. 메시지에는 생략된 색도 빠진 멤버의 기본값도 없으며, 사이드카는 기본색을 `null`로 적는다.
+각 칸은 `grapheme`(칸의 텍스트: 빈 칸과 넓은 문자의 이어지는 칸은 빈 문자열, 그 밖에는 grapheme cluster 하나), `width`(`1`, 넓은 문자의 첫 칸은 `2`, 이어지는 칸은 `0`), `fg`와 `bg`(테마, 반전 속성, dim 속성, 선택 강조를 적용해 정해진 색. dim 칸의 전경색은 배경 쪽으로 2 대 1로 섞는다: 기본색은 `null`, 인덱스 색은 0에서 255까지의 정수, 트루컬러는 소문자 `"#rrggbb"`), `attributes`(화면 hash가 정한 플래그의 0에서 255까지의 정수: bold `01`, dim `02`, italic `04`, underline `08`, blink `10`, inverse `20`, hidden `40`, strikethrough `80`)를 가진다. 칸은 hash가 덮지 않는 `link`를 가질 수 있다. 위의 모든 멤버는 필수다. 메시지에는 생략된 색도 빠진 멤버의 기본값도 없으며, 사이드카는 기본색을 `null`로 적는다.
 
 화면을 만드는 모든 사이드카가 같은 규칙을 따른다. 사이드카가 페이지에 확정 cell grid를 싣는 메시지는 화면 hash의 멤버와 자신의 frame 기록의 `sequence`를 담으므로 페이지의 frame 기록과 사이드카의 frame 기록을 비교할 수 있다. Provider-specific presentation overlay와 그 caret은 확정 cell이나 engine cursor를 대신하거나 바꾸지 않는 추가 runtime 상태다. 멤버와 frame 기록은 사이드카가 쓰며, 페이지는 메시지에 없는 멤버를 만들어 내지 않는다.
 
