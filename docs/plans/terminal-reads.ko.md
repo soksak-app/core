@@ -13,6 +13,34 @@
 - TUI agent(Claude Code, Codex)에서 스크롤이 화면을 움직이지 않는 이유: TUI는 대체 화면(alternate screen)에서 돈다. 엔진은 대체 화면에 기록을 두지 않는다(`alacritty/tests/engine_test.rs`, `alternate_screen_is_separate_from_primary_scrollback`). 휠은 `WheelRoute::of`(`alacritty-core/src/protocol.rs`)가 라우팅한다. 마우스 보고가 켜져 있고 Shift가 없으면 program으로 가고, 대체 화면에서 alternate scroll이 켜져 있으면 program에 커서 키가 된다. viewport는 primary 화면에서만 움직인다. viewport 명령은 offset을 기록 범위로 자르는데(`SurfaceCommand::Viewport`), 대체 화면의 기록은 비어 있으므로 화면이 움직이지 않는다. plugin은 이 경우를 알리지 않는다. 이것이 보고된 현상을 설명한다. 변경 전에 V2에서 실행 중인 TUI로 확인한다.
 - TUI agent는 대화를 터미널이 아니라 디스크의 파일에 남긴다. Claude Code는 `~/.claude/projects/<cwd>/<session>.jsonl`(`user`, `assistant` 레코드)을, Codex는 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`(`response_item`, `event_msg` 레코드, 작업 디렉터리는 `session_meta`)을 쓴다. 이 파일들은 화면이 무엇을 보이든 대화를 담는다.
 
+## 필수 결과
+
+이 계획은 `term`과 `terminal` 모두에 두 방법을 제공한다.
+
+- **방법 A, TUI 화면 읽기.** 보이는 화면의 임의 행 구간(`from`, `count`)을 cell과 평문으로, 커서와 줄바꿈 표시와 함께 읽는다. 방안 1과 2가 구현한다.
+- **방법 B, 대화 session 찾아 읽기.** 터미널에서 실행 중인 agent(Claude Code 또는 Codex)의 session을 찾고, 디스크의 session 파일에서 메시지를 순서대로 읽는다. 결과는 읽은 파일을 밝힌다. 방안 7이 구현한다.
+
+방안 3부터 6까지는 두 방법이 요구하지 않는다. 각각은 방법 A와 방법 B를 검증한 뒤 따로 정한다.
+
+## 터미널 상태
+
+위의 읽기는 내용을 돌려준다. 호출자는 각 터미널의 상태도 알아야 한다. 프로그램이 실행 중인지, 멈췄는지, prompt에서 쉬고 있는지, 입력을 기다리는지다. 상태는 호출자가 polling하는 값이 아니라, 바뀔 때 sidecar가 발행하는 event다.
+
+현재 코드에서 확인한 사실은 다음과 같다.
+
+- `alacritty` 엔진은 OSC 133 마크 `A`(prompt 시작), `B`(prompt 끝), `C`(명령 시작), `D`(명령 끝, 종료 코드 포함)를 파싱한다(`alacritty/src/engine.rs`, `ShellMarker`). prompt 시작과 그 절대 행 번호를 기록한다. 아직 이 마크를 알리는 event는 없다.
+- Claude Code나 Codex 같은 TUI agent는 OSC 133 마크를 내지 않는다. 그래서 마크는 셸 prompt만 보여 주고, agent 자신의 작업은 보여 주지 않는다.
+
+제안하는 상태는 신뢰도가 높은 신호부터 순서대로 정한다.
+
+- `idle`: 셸이 prompt에 있다(`A`/`B` 이후, `C` 이전). 실행 중인 명령이 없다.
+- `running`: 명령이 시작했고(`C`) 아직 끝나지 않았다(`D`).
+- `exited`: 명령이 끝났다(`D`), 종료 코드를 가진다.
+- `waiting`: 프로그램이 일정 시간 조용했고 화면에 prompt나 질문이 보인다. 발견적 판단이며, 결과에 그렇다고 표시한다.
+- `agent-busy` / `agent-waiting`(Claude Code, Codex): agent 자신의 신호로 정한다. agent가 hook event를 제공하면 그것을 쓴다(아래 오픈소스 비교). 출력이 조용한 것만으로는 판단하지 않는다.
+
+상태가 바뀔 때마다 이전 상태, 새 상태, 신호의 출처, 순번을 담은 event를 낸다. 상태 읽기는 현재 상태, 출처, 마지막 변경의 순번을 돌려준다.
+
 ## 방안과 결과
 
 각 방안은 명령이다. 결과는 한정된다. 모든 읽기는 `count`를 받고 상한이 있으며, 상한을 넘는 읽기는 명시적 오류로 실패한다.

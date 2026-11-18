@@ -26,6 +26,42 @@ terminals in the same way.
   (records `user`, `assistant`), and Codex writes `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (records `response_item`, `event_msg`,
   with `session_meta` carrying the working directory). These files hold the conversation whatever the screen shows.
 
+## Required deliverables
+
+This plan delivers two methods, both for `term` and `terminal`:
+
+- **Method A, read the TUI screen.** Read any slice of the visible screen by row (`from`, `count`) as cells and as plain text, with the
+  cursor and the wrapped flags. Options 1 and 2 implement it.
+- **Method B, find and read the conversation session.** Locate the session of the agent in the terminal (Claude Code or Codex) and read
+  its messages in order from the session file on disk. Option 7 implements it, and its result states the file that it read.
+
+Options 3 to 6 are not required by these two methods; each is decided separately after Method A and Method B are verified.
+
+## Terminal state
+
+The reads above return content. A caller also needs the state of each terminal: whether a program runs, is stopped, is idle at a
+prompt, or waits for input. The state is an event that the sidecar publishes when it changes, not a value that a caller polls.
+
+Facts from the current code:
+
+- The `alacritty` engine parses OSC 133 marks `A` (prompt start), `B` (prompt end), `C` (command start) and `D` (command finished,
+  with its exit code) (`alacritty/src/engine.rs`, `ShellMarker`). It records the prompt start and its absolute line. No event reports
+  these marks yet.
+- A TUI agent such as Claude Code or Codex emits no OSC 133 marks, so the marks show only the shell prompt, not the agent's own work.
+
+Proposed states, derived in order from the earliest reliable signal:
+
+- `idle`: the shell is at a prompt (after `A`/`B`, before `C`) with no command running.
+- `running`: a command started (`C`) and has not finished (`D`).
+- `exited`: the command finished (`D`), with the exit code.
+- `waiting`: the program has been silent for a window and its screen shows a prompt or question. This is a heuristic and is marked
+  as such in the result.
+- `agent-busy` / `agent-waiting` (Claude Code, Codex): decided from the agent's own signal, for example its hook events, if the
+  agents provide them (see the open-source comparison below). Output silence alone is not used as the decision.
+
+Each change emits an event with the previous and new state, the source of the signal, and a sequence number. A state read returns the
+current state, its source, and the sequence number of its last change.
+
 ## Options and their results
 
 Each option is a command. Results are bounded: every read takes a `count` with an upper limit, and a read beyond the limit fails with
