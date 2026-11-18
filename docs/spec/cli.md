@@ -46,6 +46,8 @@ The current Linux and Windows platform implementations report that process exit 
 
 A declared command name contains a dot (`core.card.split`, `terminal.input`), so it never collides with the command words above.
 
+A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
+
 ## Windows
 
 `[window]` is `--window <name>` or `--project <directory>`. `--project` selects the window whose open project folder is the directory after both are resolved to canonical paths. Without either, a `sok` whose environment names a surface uses the window of that surface ([the window of an agent](#the-window-of-an-agent)); otherwise the command uses the only window, and with several windows it fails and lists them.

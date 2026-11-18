@@ -23,6 +23,7 @@ const Usage = `usage: sok <command> [options]
 
 commands:
   <declared command> [window] [--surface S] [--<parameter> VALUE]... [--params JSON]
+                            A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
   commands [window]
   windows
   exposures [window]

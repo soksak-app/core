@@ -46,6 +46,8 @@
 
 선언된 command 이름에는 점이 있으므로(`core.card.split`, `terminal.input`) 위의 명령 단어와 겹치지 않는다.
 
+선언된 submit command는 텍스트를 하나의 input으로 보내고 Enter는 별도의 key input으로 보낸다. CR 또는 LF가 들어 있는 텍스트는 거부하며, 반환 값은 input이 보내졌다는 뜻만 가진다. 수락은 입력 줄과 agent busy 상태의 status로 확인하며, timer로 기다리지 않는다.
+
 ## 창
 
 `[window]`는 `--window <name>` 또는 `--project <directory>`다. `--project`는 둘을 canonical 경로로 바꾼 뒤, 열린 project 폴더가 그 폴더인 창을 고른다. 둘 다 없으면 환경이 surface를 지정한 `sok`은 그 surface의 창을 쓰고([에이전트의 창](#에이전트의-창)), 그 밖에는 창이 하나일 때 그 창을 쓰고, 여러 개면 실패하며 창 목록을 보인다.
