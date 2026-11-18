@@ -475,6 +475,16 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 			entries []json.RawMessage
 		}{{"status", group.Status}, {"command", group.Commands}, {"element", group.Element}} {
 			for _, raw := range list.entries {
+				// Without --full, a tab holds only its summary statuses (docs/spec/parties.md#describe, docs/spec/exposure.md#entry-fields).
+				if !full && list.kind == "status" && group.Owner == "surface" {
+					summary, err := summaryStatus(raw)
+					if err != nil {
+						return nil, err
+					}
+					if !summary {
+						continue
+					}
+				}
 				row, err := entryRow(name, group, list.kind, raw, full)
 				if err != nil {
 					return nil, err
@@ -508,11 +518,26 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 	}
 	page := map[string]any{"rows": []any{}, "total": len(rows), "next": nil}
 	var err error
+	// The first page begins with the parties, which are the same records as core.parties (docs/spec/parties.md#describe).
+	var head []byte
 	if after == "" {
+		partiesText, records, hasCore, err := partiesOf(parts.Groups)
+		if err != nil {
+			return nil, err
+		}
+		// A surface description holds no core group, so it has no parties member (docs/spec/cli.md#window-description).
+		if hasCore {
+			head = append(append([]byte(`{"parties":`), partiesText...), ',')
+		}
 		if page["window"], err = compacted(parts.Window); err != nil {
 			return nil, err
 		}
-		if page["layout"], err = compacted(parts.Layout); err != nil {
+		if hasCore {
+			page["layout"], err = withCardParties(parts.Layout, records)
+		} else {
+			page["layout"], err = compacted(parts.Layout)
+		}
+		if err != nil {
 			return nil, err
 		}
 		if page["plugins"], err = compacted(parts.Plugins); err != nil {
@@ -524,9 +549,13 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 	if err != nil {
 		return nil, err
 	}
+	// head takes the place of the opening brace of base, so the page size counts head and base without that brace.
+	size := len(base)
+	if head != nil {
+		size = len(head) + len(base) - 1
+	}
 	// A page without a row holds an empty list.
 	kept := []json.RawMessage{}
-	size := len(base)
 	for n := start; n < len(rows) && len(kept) < limit; n++ {
 		row := rows[n]
 		text, err := row.encode()
@@ -557,7 +586,101 @@ func describeWindow(snapshot json.RawMessage, agent any, full bool, after string
 	if last := start + len(kept); last < len(rows) {
 		page["next"] = rows[last-1].key
 	}
-	return encodeJSON(page)
+	body, err := encodeJSON(page)
+	if err != nil {
+		return nil, err
+	}
+	if head == nil {
+		return body, nil
+	}
+	return append(head, body[1:]...), nil
+}
+
+// summaryStatus reads the summary member of a status entry of exposure.snapshot. An absent member is false (docs/spec/exposure.md#entry-fields).
+func summaryStatus(raw json.RawMessage) (bool, error) {
+	var entry struct {
+		Summary bool `json:"summary"`
+	}
+	if err := json.Unmarshal(raw, &entry); err != nil {
+		return false, fmt.Errorf("exposure.snapshot has a status whose summary is not a boolean: %s", raw)
+	}
+	return entry.Summary, nil
+}
+
+// partyRecord holds the members of a party record that the description reads (docs/spec/parties.md#storage).
+type partyRecord struct {
+	ID     string   `json:"id"`
+	Cards  []string `json:"cards"`
+	Leader *string  `json:"leader"`
+}
+
+// partiesOf reads the value of the core status core.parties from the core group of exposure.snapshot. It returns the compact text of the
+// value, its records, and whether the snapshot holds a core group. A core group without core.parties is an error, since the description
+// needs the parties of a window.
+func partiesOf(groups []snapshotGroup) ([]byte, []partyRecord, bool, error) {
+	for _, group := range groups {
+		if group.Owner != "core" {
+			continue
+		}
+		for _, raw := range group.Status {
+			var entry struct {
+				Name  string          `json:"name"`
+				Value json.RawMessage `json:"value"`
+			}
+			if err := json.Unmarshal(raw, &entry); err != nil {
+				return nil, nil, true, fmt.Errorf("exposure.snapshot has an unexpected status: %s", raw)
+			}
+			if entry.Name != "core.parties" {
+				continue
+			}
+			var records []partyRecord
+			if err := json.Unmarshal(entry.Value, &records); err != nil {
+				return nil, nil, true, fmt.Errorf("core.parties of exposure.snapshot has an unexpected value: %s", entry.Value)
+			}
+			text, err := compactRaw(entry.Value)
+			return text, records, true, err
+		}
+		return nil, nil, true, errors.New("exposure.snapshot has a core group without the core.parties status")
+	}
+	return nil, nil, false, nil
+}
+
+// withCardParties returns the layout tree with the card state fields party and leader in each card node: the identifier of the party that
+// holds the card or null, and whether the card is the leader of that party (docs/spec/parties.md#describe).
+func withCardParties(layout json.RawMessage, records []partyRecord) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(layout))
+	decoder.UseNumber()
+	var tree any
+	if err := decoder.Decode(&tree); err != nil {
+		return nil, fmt.Errorf("exposure.snapshot has an unexpected layout: %w", err)
+	}
+	var walk func(node any)
+	walk = func(node any) {
+		switch value := node.(type) {
+		case map[string]any:
+			if card, ok := value["card"].(string); ok {
+				value["party"], value["leader"] = nil, false
+				for _, record := range records {
+					for _, member := range record.Cards {
+						if member == card {
+							value["party"] = record.ID
+							value["leader"] = record.Leader != nil && *record.Leader == card
+						}
+					}
+				}
+				return
+			}
+			for _, child := range value {
+				walk(child)
+			}
+		case []any:
+			for _, child := range value {
+				walk(child)
+			}
+		}
+	}
+	walk(tree)
+	return tree, nil
 }
 
 // compacted is the compact text of a value of the snapshot, which encodeJSON writes as it is.
