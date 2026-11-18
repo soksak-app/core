@@ -153,20 +153,25 @@ export function cardState(card) {
 }
 
 /**
- * The card menu items of a content card (docs/spec/parties.md#card-menu). Each item names its element and the command it runs with its
- * params. A card in no party gets one group item per touching card, which groups the two cards. A card in a party gets the leader item,
- * one color item per theme token party-1 to party-6, and a take item per other party that touches the card.
+ * The touching cards that a card in no party can group with: the cards in no party that are not window sidebars (docs/spec/parties.md#card-menu).
+ * A card in a party has no candidates.
+ */
+export function groupCandidates(card) {
+  if (partyOf(card)) return [];
+  return currentGrid().toJSON().cards.map((c) => c.id)
+    .filter((other) => other !== card && !partyOf(other) && !windowSidebar(other) && touches(cellOf(card), cellOf(other)));
+}
+
+/**
+ * The card menu items of a content card that are party items (docs/spec/parties.md#card-menu). Each item names its element and the command
+ * it runs with its params. A card in a party gets the leader item, one color item per theme token party-1 to party-6, and a take item per
+ * other party that touches the card. The group item is the chooser of groupCandidates, which the card tools menu opens.
  */
 export function partyMenuItems(card) {
   const cell = cellOf(card);
   const party = partyOf(card);
   const items = [];
-  if (!party) {
-    for (const other of currentGrid().toJSON().cards.map((c) => c.id)) {
-      if (other === card || partyOf(other) || windowSidebar(other) || !touches(cellOf(card), cellOf(other))) continue;
-      items.push({ element: "core.party.menu.group", label: `group with ${other}`, command: "core.party.create", params: { cards: [card, other] } });
-    }
-  } else {
+  if (party) {
     items.push(party.leader === card
       ? { element: "core.party.menu.leader", label: "remove leader", command: "core.party.update", params: { party: party.id, leader: null } }
       : { element: "core.party.menu.leader", label: "make leader", command: "core.party.update", params: { party: party.id, leader: card } });
