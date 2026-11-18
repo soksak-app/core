@@ -10,7 +10,8 @@ import { JSDOM } from "jsdom";
 import "../../parties.js";
 import { pageMemorySaver } from "./memory-saver.mjs";
 
-// The window sidebars are the cards named by the four sides: a card with the name of a side is a window sidebar and holds no tab.
+// The window sidebars are the cards named by the four sides: a card with the name of a side is a window sidebar and declares no tabs
+// (docs/spec/external-sidebars.md).
 const WINDOW_SIDES = ["left", "right", "top", "bottom"];
 
 export const CARDS = "abcdefghijklmnop".split("");
@@ -18,6 +19,10 @@ export const CARDS = "abcdefghijklmnop".split("");
 const probeManifest = {
   id: "probe-plain", name: "Plain", description: "검사용.", mark: "P", icon: "<path d='M0 0h1v1H0z'/>",
   surface: { composition: { kind: "view", page: "ui/page.html", regions: [{ name: "page", kind: "document", input: "native" }], overlays: [] } },
+  // The status of the tab surface of the terminal work test, declared as the plugin exposes it (docs/spec/exposure.md).
+  exposes: { status: [{ name: "probe-plain.busy", description: "Busy.", schema: { type: "boolean" } }] },
+  // The section of the window sidebars: a set of a window sidebar holds sections of an installed plugin (docs/spec/external-sidebars.md).
+  sections: [{ id: "probe-plain.side", name: "Side", composition: { kind: "view", page: "ui/page.html" }, height: 120 }],
 };
 
 let started = null;
@@ -33,7 +38,8 @@ export function openPartyWindow(cardIds = CARDS) {
 
 async function start(cardIds) {
   const markup = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
-  const dom = new JSDOM(markup, { url: "http://localhost/" });
+  // pretendToBeVisual gives the document the animation frame that the page draws with.
+  const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
   dom.window.matchMedia = (query) => ({ media: query, matches: true, addEventListener: () => {}, removeEventListener: () => {} });
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
@@ -47,12 +53,18 @@ async function start(cardIds) {
   globalThis.innerHeight = 800;
 
   const xs = cardIds.map((_, index) => index).concat(cardIds.length);
+  const windowSides = cardIds.filter((id) => WINDOW_SIDES.includes(id));
   const environmentDocument = {
     runtime: "runtime",
-    workspace: { focus: cardIds[0], grid: { xs, ys: [0, 1], cards: cardIds.map((id, index) => ({
-      id, c0: index, c1: index + 1, r0: 0, r1: 1, tabs: WINDOW_SIDES.includes(id) ? [] : [{ plugin: "probe-plain", title: id }],
+    workspace: { focus: cardIds.find((id) => !WINDOW_SIDES.includes(id)), grid: { xs, ys: [0, 1], cards: cardIds.map((id, index) => ({
+      id, c0: index, c1: index + 1, r0: 0, r1: 1,
+      ...(WINDOW_SIDES.includes(id) ? { fixed: true, width: 190 } : { tabs: [{ plugin: "probe-plain", title: id }] }),
     })) } },
-    sidebars: { sets: [], links: [] },
+    // A window sidebar is a card of the plane while its side has a link to a set (docs/spec/external-sidebars.md).
+    sidebars: {
+      sets: windowSides.length ? [{ id: "set-side", title: "Side", sections: ["probe-plain.side"], layout: "list" }] : [],
+      links: windowSides.map((side) => ({ place: side, plugin: null, set: "set-side" })),
+    },
   };
   const { installEnvironment } = await import("../../environment.js");
   installEnvironment(environmentDocument, { plugins: [
@@ -66,6 +78,13 @@ async function start(cardIds) {
     memorySaver: await pageMemorySaver(),
     library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
   });
+  // The grid of the window exists once a space is shown; the page shows a new space from the environment (docs/spec/parties.md#commands).
+  // The page sets the chrome metrics of workbench.json and the theme shape tokens on its root before it draws (chrome-metrics.js, settings.js install).
+  const { installChromeMetrics } = await import("../../chrome-metrics.js");
+  installChromeMetrics(document.documentElement);
+  (await import("../../settings.js")).install();
+  const plane = await import("../../plane.js");
+  plane.adopt(plane.fresh(), "spc-1");
 
   const get = async (name, params = {}) => {
     const reply = await registry.handle({ method: "status.get", params: { name, ...params } });

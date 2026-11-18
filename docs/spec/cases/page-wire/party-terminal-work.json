@@ -100,10 +100,10 @@
     },
     {
       "call": {
-        "name": "exposureReply",
+        "name": "exposureChanged",
         "payload": {
-          "id": 1,
-          "result": null
+          "name": "core.parties",
+          "value": []
         }
       }
     },
@@ -114,10 +114,10 @@
     },
     {
       "call": {
-        "name": "exposureChanged",
+        "name": "exposureReply",
         "payload": {
-          "name": "core.parties",
-          "value": []
+          "id": 1,
+          "result": null
         }
       }
     },
@@ -133,7 +133,7 @@
           "id": 2,
           "method": "status.watch",
           "params": {
-            "name": "probe.busy",
+            "name": "probe-plain.busy",
             "surface": "tab-a"
           }
         }
@@ -148,7 +148,7 @@
           "surface": "tab-a",
           "method": "status.watch",
           "params": {
-            "name": "probe.busy"
+            "name": "probe-plain.busy"
           }
         }
       }
@@ -164,7 +164,7 @@
       "call": {
         "name": "exposureChanged",
         "payload": {
-          "name": "probe.busy",
+          "name": "probe-plain.busy",
           "surface": "tab-a",
           "value": false
         }
@@ -238,7 +238,7 @@
       "call": {
         "name": "exposureChanged",
         "payload": {
-          "name": "probe.busy",
+          "name": "probe-plain.busy",
           "surface": "tab-a",
           "value": true
         }

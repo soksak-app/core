@@ -100,10 +100,10 @@
     },
     {
       "call": {
-        "name": "exposureReply",
+        "name": "exposureChanged",
         "payload": {
-          "id": 1,
-          "result": null
+          "name": "core.parties",
+          "value": []
         }
       }
     },
@@ -114,10 +114,10 @@
     },
     {
       "call": {
-        "name": "exposureChanged",
+        "name": "exposureReply",
         "payload": {
-          "name": "core.parties",
-          "value": []
+          "id": 1,
+          "result": null
         }
       }
     },
