@@ -153,6 +153,36 @@ export function cardState(card) {
 }
 
 /**
+ * The card menu items of a content card (docs/spec/parties.md#card-menu). Each item names its element and the command it runs with its
+ * params. A card in no party gets one group item per touching card, which groups the two cards. A card in a party gets the leader item,
+ * one color item per theme token party-1 to party-6, and a take item per other party that touches the card.
+ */
+export function partyMenuItems(card) {
+  const cell = cellOf(card);
+  const party = partyOf(card);
+  const items = [];
+  if (!party) {
+    for (const other of currentGrid().toJSON().cards.map((c) => c.id)) {
+      if (other === card || partyOf(other) || windowSidebar(other) || !touches(cellOf(card), cellOf(other))) continue;
+      items.push({ element: "core.party.menu.group", label: `group with ${other}`, command: "core.party.create", params: { cards: [card, other] } });
+    }
+  } else {
+    items.push(party.leader === card
+      ? { element: "core.party.menu.leader", label: "remove leader", command: "core.party.update", params: { party: party.id, leader: null } }
+      : { element: "core.party.menu.leader", label: "make leader", command: "core.party.update", params: { party: party.id, leader: card } });
+    for (const token of PARTY_TOKENS) {
+      items.push({ element: "core.party.menu.color", label: `color ${token}`, command: "core.party.update", params: { party: party.id, color: shownPalette()[token] } });
+    }
+  }
+  // A take removes the card from its holder, so a card in no party has no take item (docs/spec/parties.md#card-menu).
+  for (const other of party ? parties : []) {
+    if (other === party || !other.cards.some((member) => touches(cell, cellOf(member)))) continue;
+    items.push({ element: "core.party.menu.take", label: `take into ${other.id}`, command: "core.party.add", params: { party: other.id, card, take: true } });
+  }
+  return items;
+}
+
+/**
  * The rectilinear loops of the outline of rects (docs/spec/parties.md#drawing). Adjacent cards join at half the gap of the grid, and the
  * outline is inset by half the border width. A card with no neighbour has the same outline alone.
  */

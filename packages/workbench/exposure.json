@@ -4914,6 +4914,22 @@
       {
         "name": "core.library.no-results",
         "description": "The note shown when the search matches no project."
+      },
+      {
+        "name": "core.party.menu.group",
+        "description": "The card menu item that groups the card with a touching card in no party into a new party (core.party.create)."
+      },
+      {
+        "name": "core.party.menu.leader",
+        "description": "The card menu item that makes the card the leader of its party, or removes the leader (core.party.update)."
+      },
+      {
+        "name": "core.party.menu.color",
+        "description": "The card menu item that sets the color of the party of the card (core.party.update)."
+      },
+      {
+        "name": "core.party.menu.take",
+        "description": "The card menu item that adds the card to a party that touches it, taking it from its party (core.party.add)."
       }
     ]
   }

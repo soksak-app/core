@@ -33,6 +33,7 @@ import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
+import { partyMenuItems } from "./parties.js";
 import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
@@ -808,7 +809,9 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   // A list with group titles has many items, so it is drawn taller.
   pickerEl.classList.toggle("picker--grouped", groups.some((group) => group.heading));
   const keys = fillPicker(pickerEl, ask, groups, (b, index, it) => {
-    mark(b, "core.picker.pick", { index });
+    // An item with a command runs that command itself (docs/spec/parties.md#card-menu); any other item picks its index.
+    if (it.command) mark(b, it.command, it.params);
+    else mark(b, "core.picker.pick", { index });
     if (it.notice) {
       b.dataset.notice = "true";
       b.title = systemNotifications.tooltip(it.notice);
@@ -1805,6 +1808,10 @@ export function openCardTools(id) {
     viewBox: b.querySelector("svg").getAttribute("viewBox"),
     active: b.getAttribute("aria-pressed") === "true",
   }));
+  // The party items of the card: each is an element of its name that runs its own command (docs/spec/parties.md#card-menu).
+  for (const [index, item] of partyMenuItems(id).entries()) {
+    items.push({ key: `party-${index}`, name: item.label, mark: "", svg: "", expose: item.element, command: item.command, params: item.params, active: false });
+  }
   focusOn(id);
   settle();
   openLayer(anchor, "카드 도구", items, (key) => {
