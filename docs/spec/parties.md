@@ -99,7 +99,7 @@ Three queries return the member state of cards. They share one card state shape 
 
 - Each space object of `projects.json` holds the member `parties`, an array of `{id, cards, leader, color, leaderColor}`. `leader` is a card identifier or `null`; `color` is a `#rrggbb` value; `leaderColor` is a `#rrggbb` value or `null` for the theme token.
 - The storage holds no reason and no outline; both are derived.
-- The reader accepts only this form. A space object without `parties`, or with another form, fails with an error that names the file `projects.json`, the project root, the space identifier and what it found. The file is not changed. The reader rejects the earlier form and does not convert it, under the 0.0.x rule of [implementation](../../AGENTS.md#implementation).
+- A space object without `parties` reads as `parties: []`, the declared empty-record default of an absent optional field ([persistence](projects.md#persistence)). An explicit `null` for `parties`, or a value of another form, fails with an error that names the file `projects.json`, the project root, the space identifier and what it found, and the file is not changed. Saving a space that read as `parties: []` writes the member `parties: []`.
 - The reader also refuses a party that breaks a rule: fewer than 2 cards, a card in two parties, a card missing from the space layout, a leader outside the cards, or an invalid color.
 - The `rail` and `railWidth` keys refused by [settings](settings.md#values) keep their refusal.
 

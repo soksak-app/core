@@ -99,7 +99,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 - `projects.json`의 각 space 객체는 `parties` 멤버를 가지며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `leader`는 카드 식별자 또는 `null`이고, `color`는 `#rrggbb` 값이며, `leaderColor`는 `#rrggbb` 값 또는 테마 token을 따르는 `null`이다.
 - 저장에는 이유와 외곽선을 두지 않는다. 둘 다 파생 값이다.
-- 리더는 이 형식만 읽는다. `parties`가 없거나 다른 형식인 space 객체는 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다. 이전 형식은 변환하지 않고 거부한다. 0.0.x 규칙이 [구현](../../AGENTS.md#implementation)에 따라 그렇게 정한다.
+- `parties`가 없는 space 객체는 `parties: []`로 읽는다. 이는 선택 필드가 없을 때의 선언된 빈 기록 기본값이다([영속성](projects.ko.md#저장)). `parties`에 명시적 `null`이 있거나 다른 형식의 값이면 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다. `parties: []`로 읽힌 space를 저장하면 멤버 `parties: []`를 쓴다.
 - 리더는 규칙을 어기는 party도 거부한다. 카드 2개 미만, 두 party에 든 카드, 배치에 없는 카드, cards 밖의 leader, 잘못된 색이 여기 해당한다.
 - [설정](settings.ko.md#값)이 거부하는 `rail`과 `railWidth` 키는 계속 거부한다.
 
