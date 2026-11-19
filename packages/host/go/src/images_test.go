@@ -970,6 +970,28 @@ func TestAnUnanswerableScreenRequestEndsAndTheNextRequestIsFull(t *testing.T) {
 	}
 }
 
+// contract: images.wait.supplier-end-names-the-region
+// The end of the supplier connection of a drawing region with a raster fails a presentation wait with the error that names the supplier
+// and the region, and the configuration that the next connection receives ends that error (docs/spec/native-surfaces.md#image-regions).
+func TestTheEndOfASupplierFailsTheWaitUntilTheRegionIsConfiguredAgain(t *testing.T) {
+	images, key, raster, _ := screenFixture(t)
+	images.InvalidateSidecar("sidecar-a")
+	err := images.WaitCurrentError(nil)
+	if want := "the supplier sidecar-a of the image region tab-1/copy ended"; err == nil || err.Error() != want {
+		t.Fatalf("the wait after the end of the supplier ended with %v, want %s", err, want)
+	}
+	configuration, err := images.ConfigureRaster(key, raster.Width, raster.Height, raster.Scale, true)
+	if err != nil || configuration == nil {
+		t.Fatalf("configure the region for the next connection: %+v, %v", configuration, err)
+	}
+	images.mu.Lock()
+	presentationError := images.states[key].PresentationError
+	images.mu.Unlock()
+	if presentationError != "" {
+		t.Fatalf("the configuration of the next connection kept the error %q", presentationError)
+	}
+}
+
 // contract: images.copy-path.clock-tick
 // The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate that
 // the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).

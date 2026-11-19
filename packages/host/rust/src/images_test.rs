@@ -1578,6 +1578,29 @@ fn screen_message_of_the_supplier_is_accepted_over_the_wire() {
     );
 }
 
+// contract: images.wait.supplier-end-names-the-region
+// The end of the supplier connection of a drawing region with a raster fails a presentation wait with the error that names the supplier
+// and the region, and the configuration that the next connection receives ends that error (docs/spec/native-surfaces.md#image-regions).
+#[test]
+fn the_end_of_a_supplier_fails_the_wait_until_the_region_is_configured_again() {
+    let (images, key, _, _, _) = screen_fixture();
+    images.invalidate_sidecar("sidecar-a");
+    assert_eq!(
+        images.wait_current(&|| None),
+        Err("the supplier sidecar-a of the image region tab-1/copy ended".to_string()),
+        "the wait after the end of the supplier"
+    );
+    images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("the region is configured for the next connection");
+    assert_eq!(
+        images.lock().states[&key].presentation_error,
+        None,
+        "the configuration of the next connection ends the error"
+    );
+}
+
 /// A step that ends the unanswered screen request of the region of screen_fixture: (case, the change).
 type ScreenRequestEnd = (&'static str, fn(&super::Images, &super::Key));
 
