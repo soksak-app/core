@@ -141,7 +141,7 @@
       },
       {
         "name": "core.layout",
-        "description": "The stored form of the current space layout with the level of each group record, or null.",
+        "description": "The stored form of the current space layout with the level of each group node, or null.",
         "schema": {
           "type": [
             "object",
@@ -212,7 +212,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. The cards of the child planes follow their group card, each with plane, the group card whose child plane holds it; the leader of each plane carries leader true, and a group card carries its group record {name, level, leader} and no tabs.",
+        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. Each card carries the group card that holds it, and the group cards follow with their rectangles.",
         "schema": {
           "type": [
             "object",
@@ -3289,7 +3289,7 @@
       },
       {
         "name": "core.card.fullscreen",
-        "description": "Toggles one content card across the work area without changing the saved arrangement or OS window state.",
+        "description": "Shows a content card or a group card across the work area, or restores the arrangement.",
         "params": {
           "type": "object",
           "properties": {
@@ -3304,7 +3304,7 @@
       },
       {
         "name": "core.card.menu",
-        "description": "Opens or closes a card's add or split menu.",
+        "description": "Opens or closes the add, split or group menu of a card or a group card.",
         "params": {
           "type": "object",
           "properties": {
@@ -3315,7 +3315,8 @@
               "enum": [
                 "add",
                 "split-x",
-                "split-y"
+                "split-y",
+                "group"
               ]
             }
           }
@@ -3633,7 +3634,7 @@
       },
       {
         "name": "core.group.create",
-        "description": "Turns a card into a group card that holds the card and a new content card toward side.",
+        "description": "Groups a card with a new content card toward side.",
         "params": {
           "type": "object",
           "properties": {
@@ -3673,7 +3674,7 @@
       },
       {
         "name": "core.group.dissolve",
-        "description": "Replaces a group card with the cards of its child plane inside its span.",
+        "description": "Replaces a group card with its members in the level that holds it.",
         "params": {
           "type": "object",
           "properties": {
@@ -3719,7 +3720,7 @@
       },
       {
         "name": "core.group.leader",
-        "description": "Makes a card the leader of its plane.",
+        "description": "Makes a card the leader of its level.",
         "params": {
           "type": "object",
           "properties": {
@@ -3744,8 +3745,23 @@
         }
       },
       {
+        "name": "core.group.menu",
+        "description": "Opens or closes the close menu of a group header.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
+        }
+      },
+      {
         "name": "core.card.move",
-        "description": "Moves a content card or a group card beside a card of any plane, or into a group, as a drop does.",
+        "description": "Moves a content card or a group card beside a card of any level, or into a group, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -3777,7 +3793,7 @@
       },
       {
         "name": "core.card.get",
-        "description": "Reads the state of one content card of any plane with its group path, or one group card.",
+        "description": "Reads the state of one content card of any level with its group path, or one group card.",
         "params": {
           "type": "object",
           "properties": {
@@ -4269,14 +4285,15 @@
       },
       {
         "name": "core.rename.begin",
-        "description": "Starts renaming a project or space tab in place.",
+        "description": "Starts renaming a project or space tab, or a group name, in place.",
         "params": {
           "type": "object",
           "properties": {
             "kind": {
               "enum": [
                 "project",
-                "space"
+                "space",
+                "group"
               ]
             },
             "id": {
@@ -4535,6 +4552,61 @@
       {
         "name": "core.card.split-x",
         "description": "The vertical split buttons of pane cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group",
+        "description": "The frames of the group cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.header",
+        "description": "The headers of the group cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.name",
+        "description": "The names in the group headers in workbench order; a double-click renames.",
+        "many": true
+      },
+      {
+        "name": "core.group.add",
+        "description": "The add buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.split-x",
+        "description": "The vertical split buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.split-y",
+        "description": "The horizontal split buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.wrap",
+        "description": "The group buttons of the group headers in workbench order, shown while the group card can be grouped with a new card toward its longer axis.",
+        "many": true
+      },
+      {
+        "name": "core.group.fullscreen",
+        "description": "The fullscreen buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.close",
+        "description": "The close buttons of the group headers in workbench order; each opens the close menu of its group.",
+        "many": true
+      },
+      {
+        "name": "core.card.group",
+        "description": "The group buttons of the content card headers in workbench order, shown while the card can be grouped with a new card toward its longer axis.",
+        "many": true
+      },
+      {
+        "name": "core.card.leader",
+        "description": "The leader buttons of the card and group headers of levels of two or more members in workbench order; pressed on the leader.",
         "many": true
       },
       {
