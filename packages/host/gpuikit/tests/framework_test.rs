@@ -3,7 +3,6 @@
 use soksak_host::framework::Framework as _;
 use soksak_host_gpuikit::Framework;
 
-// contract: endpoint of the host, the release key of the application update, the state file of the debug view
 #[test]
 fn the_adapter_names_the_gpuikit_host() {
     let framework = Framework;

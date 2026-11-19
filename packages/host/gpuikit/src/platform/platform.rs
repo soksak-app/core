@@ -2,7 +2,7 @@
 //! views; another operating system has no implementation yet.
 
 #[cfg(target_os = "macos")]
-#[path = "darwin.rs"]
+#[path = "darwin/darwin.rs"]
 mod darwin;
 
 #[cfg(target_os = "macos")]
