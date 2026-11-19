@@ -156,9 +156,17 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 						size = height
 					}
 					px := random.Float64() * size
-					at := tree.MoveBoundary(axis, line, px, true)
-					merged := tree.MergeCoincident(axis, line)
-					step = fmt.Sprintf("boundary %s %d %.1f: %.1f merged %v", axis, line, px, at, merged)
+					if random.IntN(2) == 0 {
+						// core.boundary.move toward a position, often the position of a neighbouring line.
+						if random.IntN(2) == 0 {
+							px = grid.BoundaryPos(axis, line+[]int{-1, 1}[random.IntN(2)])
+						}
+						step = fmt.Sprintf("boundary command %s %d %.1f: %.1f", axis, line, px, tree.MoveBoundaryTo(axis, line, px))
+					} else {
+						at := tree.MoveBoundary(axis, line, px, true)
+						merged := tree.MergeCoincident(axis, line)
+						step = fmt.Sprintf("boundary %s %d %.1f: %.1f merged %v", axis, line, px, at, merged)
+					}
 				}
 			case 11:
 				step = fmt.Sprintf("balance: %v", tree.Balance())

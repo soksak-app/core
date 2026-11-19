@@ -30,13 +30,16 @@ type groupStep struct {
 
 // groupArgs are the named arguments of a step.
 type groupArgs struct {
-	Card   string  `json:"card"`
-	Group  string  `json:"group"`
-	Target string  `json:"target"`
-	Side   string  `json:"side"`
-	Name   string  `json:"name"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
+	Card     string      `json:"card"`
+	Group    string      `json:"group"`
+	Target   string      `json:"target"`
+	Side     string      `json:"side"`
+	Name     string      `json:"name"`
+	Axis     layout.Axis `json:"axis"`
+	Line     int         `json:"line"`
+	Position float64     `json:"position"`
+	X        float64     `json:"x"`
+	Y        float64     `json:"y"`
 }
 
 // TestGroupCases runs each case of groups.json.
@@ -94,6 +97,8 @@ func TestGroupCases(t *testing.T) {
 func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (any, bool, error) {
 	t.Helper()
 	switch call {
+	case "boundary":
+		return map[string]float64{"position": tree.MoveBoundaryTo(a.Axis, a.Line, a.Position)}, true, nil
 	case "balance":
 		return nil, false, tree.Balance()
 	case "create":
