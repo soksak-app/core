@@ -25,15 +25,13 @@ func command[T any](s *Shell, name string, run func(value T) (any, error)) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
-		changed := s.watchLayout(name, raw)
-		result, err := run(value)
-		changed(result, err)
-		return result, err
+		return run(value)
 	})
 }
 
-// watchLayout returns what records the command name with its parameters raw when it changed the layout of the active space: the event
-// workbench.layout.change (docs/spec/events.json). It reads the layout only while the gate stores the event.
+// watchLayout is the watcher of the registry that records each command name with its parameters raw that changed the layout of the
+// active space, whether it answers at once or later: the event workbench.layout.change (docs/spec/events.json). It reads the layout
+// only while the gate stores the event.
 func (s *Shell) watchLayout(name string, raw json.RawMessage) func(result any, err error) {
 	if s.events == nil || !s.events.Admits(sok.LevelDebug, "workbench.layout.change") {
 		return func(any, error) {}

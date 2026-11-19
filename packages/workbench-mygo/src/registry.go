@@ -87,6 +87,8 @@ type Registry struct {
 	parts func() (SnapshotParts, error)
 	// recorder receives every command request that ended.
 	recorder func(name string, elapsed time.Duration, failure error)
+	// watcher observes each command from its start to its answer (Watch).
+	watcher func(name string, params json.RawMessage) func(value any, err error)
 	// follow returns the answer of one command name that starts now, which waits until the window shows what the command changed.
 	follow func(name string, answer func(value any, err error)) func(value any, err error)
 }
@@ -173,7 +175,10 @@ func (r *Registry) run(name string, params json.RawMessage) (any, error) {
 	if run == nil {
 		return nil, Refuse(Unregistered, "command %s is not registered", name)
 	}
-	return run(params)
+	ended := r.watched(name, params)
+	result, err := run(params)
+	ended(result, err)
+	return result, err
 }
 
 // RunLater runs the command name with params and gives answer its result: at once for a command that returns, and in a later
@@ -188,7 +193,11 @@ func (r *Registry) RunLater(name string, params json.RawMessage, answer func(val
 	later := r.later[name]
 	r.mu.Unlock()
 	if later != nil {
-		later(params, answer)
+		ended := r.watched(name, params)
+		later(params, func(value any, err error) {
+			ended(value, err)
+			answer(value, err)
+		})
 		return
 	}
 	answer(r.run(name, params))
@@ -300,6 +309,20 @@ func (r *Registry) Answer(method string, params json.RawMessage, changed Changed
 // (docs/spec/logging.md#entrances).
 func (r *Registry) Record(recorder func(name string, elapsed time.Duration, failure error)) {
 	r.recorder = recorder
+}
+
+// Watch installs what observes each command that runs: it is called with the name and the parameters when the command starts and
+// returns what is called with its answer when the command ends, for a command that answers at once and for one that answers later.
+func (r *Registry) Watch(watch func(name string, params json.RawMessage) func(value any, err error)) {
+	r.watcher = watch
+}
+
+// watched is what the watcher calls when the command name that starts now with params ends.
+func (r *Registry) watched(name string, params json.RawMessage) func(value any, err error) {
+	if r.watcher == nil {
+		return func(any, error) {}
+	}
+	return r.watcher(name, params)
 }
 
 // Follow installs what holds the answer of each command that runs through RunLater or Reply until the window shows what the

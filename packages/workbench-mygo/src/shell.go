@@ -519,6 +519,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.exposedFocus.OnTransition(s.events.Info)
 	s.registry.Record(s.events.Command)
 	s.registry.Follow(s.followCommand)
+	s.registry.Watch(s.watchLayout)
 	s.errors = NewShownErrors(s.events.Error)
 	s.binder = NewBinder(s.registry, func(_ string, err error) { s.fail(err) })
 	s.pointer = NewPointerSequence(options.Elements, func() { s.options.Invalidate() }, s.fail)
