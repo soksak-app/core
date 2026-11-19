@@ -286,8 +286,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	nameWidth := spanWidth(c, ui.Span{Text: name, Size: size, Font: family}) + 2*m.tabPadX
 	buttons := float32(len(tools))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
+	mark, marked := leaderMark(tools)
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
-		Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton), TabWidths: []float64{float64(nameWidth)},
+		Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(s.moreWidth(marked)), TabWidths: []float64{float64(nameWidth)},
 		TabGap: float64(m.cardTabsGap), ActiveWidth: float64(nameWidth), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
 	s.heads[id] = fit
 	target := renameTarget{Kind: "group", ID: id}
@@ -300,6 +301,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 				return
 			}
 			for _, tool := range tools {
+				if marked && tool.Do == "leader" {
+					continue
+				}
 				s.binder.Absent(c, tool.Name, tool.Command, id, tool.Params).Disabled(!tool.Enabled)
 			}
 		})
@@ -317,6 +321,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			})
 		}
 		if fit.Tools != "bar" {
+			s.drawLeaderMark(c, id, mark, marked)
 			s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true, false)
 			return
 		}

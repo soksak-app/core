@@ -283,6 +283,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F953",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func leaderMark(tools []headTool) (headTool, bool)" },
+      { file: "packages/workbench/plane.js", symbol: "const leaderMark = (acts) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheLeaderMarkStaysInANarrowHeader" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "the leader keeps its leader mark in a head too narrow for its tools, and its tool menu does not hold it" },
+    ],
+    expected: "The leader keeps its leader mark in a header too narrow for its tools in both workbenches, and its tool menu does not hold the mark.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-10",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) answer(key string, change func() error) bool" },

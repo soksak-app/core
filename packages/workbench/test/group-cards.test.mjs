@@ -223,3 +223,24 @@ test("the layout of the window snapshot gives each card and group card the frame
   near(frame(groups[0].frame), shown.get("card-4"), "the snapshot frame of card-4");
   await run("core.card.fullscreen", { card: "card-4" });
 });
+
+test("the leader keeps its leader mark in a head too narrow for its tools, and its tool menu does not hold it", { timeout: 5000 }, async () => {
+  arrange();
+  // JSDOM has no layout engine: each head is narrower than its tool row, so its tools fold into the menu.
+  for (const id of ["card-1", "card-2"]) {
+    const chrome = cardElement(id).querySelector(".chrome");
+    Object.defineProperty(chrome, "clientWidth", { value: 120, configurable: true });
+    const acts = chrome.querySelector(".chrome__acts");
+    acts.getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
+  }
+  await run("core.card.focus", { card: "card-2" });
+  plane.settle();
+  const chrome = (id) => cardElement(id).querySelector(".chrome");
+  assert.equal(chrome("card-1").dataset.tools, "menu", "the head of card-1 is not folded");
+  assert.equal(chrome("card-1").dataset.mark, "leader", "the head of the leader card-1 does not keep its leader mark");
+  assert.equal(chrome("card-2").dataset.mark, undefined, "the head of card-2, which does not lead, keeps a leader mark");
+  assert.equal(plane.cardActs("card-1").leader.hidden, false, "core.grid reports the leader mark of card-1 hidden");
+  assert.equal(plane.cardActs("card-2").leader.hidden, true, "core.grid reports the leader button of card-2 shown in its folded head");
+  await run("core.card.tools", { card: "card-1" });
+  assert.equal(plane.pickerState().items.some((item) => item.key === "leader"), false, "the tool menu of the leader holds its mark");
+});

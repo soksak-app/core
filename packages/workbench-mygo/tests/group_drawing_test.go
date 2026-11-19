@@ -455,3 +455,38 @@ func TestEveryGroupLevelStandsApartFromItsSurfaceAndTheCards(t *testing.T) {
 		}
 	}
 }
+
+// The leader keeps its leader mark in a header too narrow for its tools: the other tools move into the tool menu, and the mark stays
+// in the header beside the menu button; a member that does not lead moves its leader button into the menu (docs/spec/groups.md#headers).
+func TestTheLeaderMarkStaysInANarrowHeader(t *testing.T) {
+	f := groupedShell(t)
+	f.tester.SetSize(760, 500)
+	f.settle()
+	acts := f.gridCards()["main"]["acts"].(map[string]any)
+	if acts["tools"] != "menu" {
+		t.Fatalf("the head of main is not narrow: its tools stand in %v", acts["tools"])
+	}
+	if !f.has("core.card.leader", "main") || !f.has("core.card.tools", "main") {
+		t.Fatalf("the narrow head of the leader main shows the leader mark %v and the tool menu %v", f.has("core.card.leader", "main"),
+			f.has("core.card.tools", "main"))
+	}
+	if leader := acts["leader"].(map[string]any); leader["hidden"] != false {
+		t.Fatalf("core.grid reports the leader mark of main %v", leader)
+	}
+	if f.has("core.card.split-x", "main") {
+		t.Fatal("the narrow head of main shows the split button beside the leader mark")
+	}
+	mark, more := f.box("core.card.leader", "main"), f.box("core.card.tools", "main")
+	if head := f.box("core.card.header", "main"); mark.X+mark.W > more.X || more.X+more.W > head.X+head.W {
+		t.Fatalf("the leader mark at %+v and the tool menu at %+v do not stand in order inside the head %+v", mark, more, head)
+	}
+	if acts := f.gridCards()["card-3"]["acts"].(map[string]any); acts["tools"] == "menu" && f.has("core.card.leader", "card-3") {
+		t.Fatal("the narrow head of card-3, which does not lead, shows its leader button")
+	}
+	f.click("core.card.tools", "main")
+	for _, item := range f.read("core.picker")["items"].([]any) {
+		if item.(map[string]any)["key"] == "leader" {
+			t.Fatal("the tool menu of the leader main holds the leader mark")
+		}
+	}
+}
