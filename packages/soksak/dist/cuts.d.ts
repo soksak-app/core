@@ -23,58 +23,43 @@
  * recursively with heads and corridors as fixed costs.
  */
 import type { Axis, Card, Rect, Side } from './card.js';
-/** A rectangle of the host that the tree keeps as one child, with the px of its head above its members. */
-export interface Box {
-    id: string;
-    head: number;
-    members: Member[];
-}
-/** A member of the plane or of a box: a card id or a box. */
-export type Member = string | Box;
-/** A card that left with `withdraw`, without its spans, at the coordinates it had and with the rectangle it was drawn at. */
-export interface LeftCard {
-    card: Omit<Card, 'c0' | 'c1' | 'r0' | 'r1'>;
-    x0: number;
-    x1: number;
-    y0: number;
-    y1: number;
-    rect: Rect;
-}
+import type { TreeNode } from './tree.js';
 /** The drawn rectangle of each card by id. */
 export type Drawn = ReadonlyMap<string, Rect>;
 /** The px of the drawn size per unit of span on an axis. */
 export type Rate = (axis: Axis) => number;
-/** An operation laid out: `layout` gives the cells, and `correct` reads their drawing and returns the largest error in px. */
+/** A rectangle in the coordinates of the lines, 0..1 over the sharing slots of each axis. */
+export interface Extent {
+    x0: number;
+    x1: number;
+    y0: number;
+    y1: number;
+}
+/** What an operation of the cuts reads of the grid: the stored tree, where each node stands, the cards, their drawing and the heads. */
+export interface Input {
+    root: TreeNode;
+    extent(node: TreeNode): Extent;
+    card(id: string): Card;
+    /** Whether an id names a card or a box of the tree. */
+    taken(id: string): boolean;
+    drawn: Drawn;
+    heads: ReadonlyMap<string, number>;
+    /** Counts each node that an operation visits (packages/soksak/docs/layout.md#cuts). */
+    visit(): void;
+}
+/** An operation laid out: `layout` gives the stored tree, and `correct` reads its drawing and returns the largest error in px. */
 export interface Plan {
-    layout(): Cells;
+    layout(): TreeNode;
     correct(drawn: Drawn, rate: Rate): number;
     /** The text of the outermost changed node drawn below its minimum, or null. */
     minimum(drawn: Drawn, min: number): string | null;
 }
-/** What `withdraw` took out of the plane: a card or a box with the cards inside it, and the px of heads that stood above it. */
-export interface Withdrawn {
-    id: string;
-    box: Box | null;
-    above: number;
-    cards: LeftCard[];
-}
-/** A card that `insert` adds: a new card, or what `withdraw` returned. */
-export type Arriving = {
-    id: string;
-    data?: unknown;
-} | Withdrawn;
-/** The state the functions read and write: the lines and the cards. */
-export interface Cells {
-    xs: number[];
-    ys: number[];
-    cards: Card[];
-}
-/** ADD: the plan of adding `card` beside `target` toward `side`. */
-export declare function insertCard(cells: Cells, boxes: readonly Box[], drawn: Drawn, target: string | readonly string[], side: Side, card: Arriving, gap: number): Plan;
-/** REMOVE: the plan of taking the member `id` out of its cut, and what left. `prefer` is the outer cut first. */
-export declare function withdrawMember(cells: Cells, boxes: readonly Box[], drawn: Drawn, id: string, prefer: readonly Axis[]): {
+/** ADD: the plan of adding `node`, a new card or what `withdraw` returned, beside `target` toward `side`. */
+export declare function insertNode(input: Input, target: string | readonly string[], side: Side, node: TreeNode, gap: number): Plan;
+/** REMOVE: the plan of taking the card or the box `id` out of its cut, and the stored node that left. */
+export declare function withdrawNode(input: Input, id: string, cards: readonly Card[]): {
     plan: Plan;
-    left: Withdrawn;
+    left: TreeNode;
 };
-/** Even: the plan of giving every child of every cut an equal share. */
-export declare function evenCuts(cells: Cells, boxes: readonly Box[], drawn: Drawn): Plan;
+/** Even: the plan of giving every kid of every cut an equal share. */
+export declare function evenCuts(input: Input): Plan;

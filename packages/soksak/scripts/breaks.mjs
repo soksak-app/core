@@ -16,18 +16,25 @@
  */
 export const BREAKS = [
   {
-    id: "balance-share",
-    what: "balancing counts the largest side instead of the sum along a cut axis",
-    file: "dist/balance.js",
-    find: "return slice.axis === axis ? counts.reduce((a, b) => a + b, 0) : Math.max(...counts);",
-    to: "return Math.max(...counts);",
+    id: "fill-order",
+    what: "a vertical fill order tries the sides of a horizontal one",
+    file: "dist/slicing.js",
+    find: "    v: ['below', 'above', 'right', 'left'],",
+    to: "    v: ['right', 'left', 'below', 'above'],",
+  },
+  {
+    id: "cut-gaps",
+    what: "the size of a cut is the sum of its kids, without the corridors between them",
+    file: "dist/cuts.js",
+    find: "            at = union(node.kids.map(visit));",
+    to: "            at = node.kids.map(visit).reduce((a, e) => ({ x0: a.x0, y0: a.y0, x1: a.x0 + (a.x1 - a.x0) + (e.x1 - e.x0), y1: a.y0 + (a.y1 - a.y0) + (e.y1 - e.y0) }));",
   },
   {
     id: "state",
     what: "toJSON leaves the payload behind",
-    file: "dist/soksak.js",
-    find: "cards: this.list.map((c) => ({ ...c })),",
-    to: "cards: this.list.map(({ data, ...c }) => ({ ...c })),",
+    file: "dist/tree.js",
+    find: "    if (node.data !== undefined)\n        out.data = node.data;\n    if (node.width",
+    to: "    if (node.width",
   },
   {
     id: "frozen",
@@ -44,25 +51,11 @@ export const BREAKS = [
     to: "return axis === 'x' ? this.xs : this.ys;",
   },
   {
-    id: "slicing",
-    what: "isSlicing returns true for anything",
-    file: "dist/slicing.js",
-    find: "export function isSlicing(list, memo = new Map()) {",
-    to: "export function isSlicing(list, memo = new Map()) {\n    return true;",
-  },
-  {
     id: "boundary",
     what: "hasBoundary returns true for any index",
     file: "dist/soksak.js",
     find: "return Number.isInteger(line) && line >= 1 && line <= this.arr(axis).length - 2;",
     to: "return true;",
-  },
-  {
-    id: "insert-size",
-    what: "insertAt takes a size the plane cannot hold",
-    file: "dist/soksak.js",
-    find: "|| init.size < 0 || init.size >= plane)",
-    to: "|| init.size < 0)",
   },
   {
     id: "one-slot",
@@ -77,20 +70,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "set gap(px) {\n        if (!Number.isFinite(px) || px < 0)\n            return;",
     to: "set gap(px) {",
-  },
-  {
-    id: "border",
-    what: "merging drops the plane's border instead of the interior line",
-    file: "dist/soksak.js",
-    find: "const [keep, drop] = border(line) ? [line, found] : [found, line];",
-    to: "const [keep, drop] = [found, line];",
-  },
-  {
-    id: "spanning",
-    what: "mergeCoincident folds a pair a card stands between",
-    file: "dist/soksak.js",
-    find: "if (this.list.some((c) => at(c, lo) === at(c, hi)))\n            return false;",
-    to: ";",
   },
   {
     id: "corridor",
@@ -120,22 +99,18 @@ export const BREAKS = [
     // Anchored by the line that closes the pointermove listener. The mouse path
     // moves the boundary with the same text, and the shorter find patched both.
     find:
-      "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));\n" +
-      "        });",
+      "this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));\n        });",
     to:
-      "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from)), el));\n" +
-      "        });",
+      "this.boundary.move(drag.axis, drag.line, drag.base - (now - drag.from)), el));\n        });",
   },
   {
     id: "drag-way-mouse",
     what: "a mouse drag runs the wrong way",
     file: "dist/dom.js",
     find:
-      "this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));\n" +
-      "        };",
+      "this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));\n        };",
     to:
-      "this.grid.moveBoundary(drag.axis, drag.line, drag.base - (now - drag.from)), el));\n" +
-      "        };",
+      "this.boundary.move(drag.axis, drag.line, drag.base - (now - drag.from)), el));\n        };",
   },
   {
     id: "sweep",
@@ -157,8 +132,8 @@ export const BREAKS = [
     id: "hidden-host",
     what: "a host that reports no size is measured as nothing",
     file: "dist/dom.js",
-    find: "if (host.clientWidth <= 0 || host.clientHeight <= 0)",
-    to: "if (host.clientWidth < 0 || host.clientHeight < 0)",
+    find: "if (host.clientWidth > 0 && host.clientHeight > 0) {",
+    to: "if (host.clientWidth >= 0 && host.clientHeight >= 0) {",
   },
   {
     id: "radius",
@@ -210,20 +185,6 @@ export const BREAKS = [
     to: "            if (this.fits(axis))",
   },
   {
-    id: "border-span",
-    what: "a card that went in at the plane's border returns nothing",
-    file: "dist/soksak.js",
-    find: "                    : card[lo] === 0",
-    to: "                    : false",
-  },
-  {
-    id: "border-span-far",
-    what: "a card standing against the plane's far border returns nothing",
-    file: "dist/soksak.js",
-    find: "                        : card[hi] === this.arr(axis).length - 1",
-    to: "                        : false",
-  },
-  {
     id: "insert-line",
     what: "canInsertAt answers for the line one past the end of the axis",
     file: "dist/soksak.js",
@@ -266,25 +227,11 @@ export const BREAKS = [
     to: "        const half = halfCorridor(plane, axis);",
   },
   {
-    id: "span-side",
-    what: "a closed card's line comes off the side its width came from, not its span",
-    file: "dist/soksak.js",
-    find: "                const from = paid.span === 'lo' || paid.span === 'hi'",
-    to: "                const from = false",
-  },
-  {
     id: "pool-paid",
-    what: "a card the sharing slots paid for gives its width to one slot",
+    what: "a card every kid paid for gives its space to one kid",
     file: "dist/soksak.js",
-    find: "this.settleOn(axis, want, paid.to === '' ? [] : order(first, want.length));",
-    to: "this.settleOn(axis, want, order(first, want.length));",
-  },
-  {
-    id: "took-back",
-    what: "a span taken from every slot is not given back to every slot",
-    file: "dist/soksak.js",
-    find: "if (paid.span === 'all' && took < 1 - EPS) {",
-    to: "if (false) {",
+    find: "            if (paid === '')\n                return { cut: holder, i, to: -1, grows: false };\n",
+    to: "",
   },
   {
     id: "one-sided",
@@ -525,18 +472,11 @@ export const BREAKS = [
     to: "        ;",
   },
   {
-    id: "centre-line",
-    what: "centring measures the next boundary up after it drops a line",
-    file: "dist/soksak.js",
-    find: "            while (line > 1 && this.boundaryPos(axis, line) !== at)\n                line--;",
-    to: "            ;",
-  },
-  {
     id: "drag-resize",
     what: "a resize under a drag leaves the drag holding the position on the old plane",
     file: "dist/dom.js",
-    find: "                    drag.base += this.grid.boundaryPos(drag.axis, drag.line) - was[i];",
-    to: "                    ;",
+    find: "            drag.base += this.grid.boundaryPos(drag.axis, drag.line) - was[i];",
+    to: "            ;",
   },
   {
     id: "second-finger",
@@ -562,30 +502,6 @@ export const BREAKS = [
     file: "dist/dom.js",
     find: "        this.mouseDrag = null;\n        this.mark(drag.on);",
     to: "        this.mouseDrag = null;\n        delete drag.on.dataset.dragging;",
-  },
-  {
-    id: "merge-mouse",
-    what: "a mouse release folds no pair the drag brought together",
-    file: "dist/dom.js",
-    // Anchored to the mouse release. The pointer release folds with the same
-    // text, and the shorter find patched both.
-    find:
-      "            merged = this.grid.mergeCoincident(drag.axis, drag.line);\n" +
-      "            return 0;\n" +
-      "        }, null);\n" +
-      "        this.draw(merged ? 'merge' : 'drag');\n" +
-      "        return drag.moved;\n" +
-      "    }\n" +
-      "    /**\n" +
-      "     * End a drag and report whether it moved the boundary.",
-    to:
-      "            return 0;\n" +
-      "        }, null);\n" +
-      "        this.draw(merged ? 'merge' : 'drag');\n" +
-      "        return drag.moved;\n" +
-      "    }\n" +
-      "    /**\n" +
-      "     * End a drag and report whether it moved the boundary.",
   },
   {
     id: "merge-reason-mouse",
@@ -712,13 +628,6 @@ export const BREAKS = [
     to: "if (false) {",
   },
   {
-    id: "kept-slots",
-    what: "a card that leaves by giving up its slots redraws the slots that stay",
-    file: "dist/soksak.js",
-    find: "const kept = held.filter((_, i) => i < from || i >= from + count);",
-    to: "const kept = held.filter((_, i) => i < from || i > from + count);",
-  },
-  {
     id: "line-order",
     what: "a rewrite of the slot widths leaves the line array out of order",
     file: "dist/soksak.js",
@@ -727,12 +636,10 @@ export const BREAKS = [
   },
   {
     id: "paid-back",
-    what: "a card closed at a boundary gives its size to the other side",
+    what: "a card that spans the plane gives its space to the kid before it, not after it",
     file: "dist/soksak.js",
-    // Re-anchored: the line it hooked on was a guard that could not be reached,
-    // and it went. The behaviour under test is the whole path, not that line.
-    find: "                const gone = from === 'lo' ? card[lo] : card[hi];",
-    to: "                const gone = from === 'lo' ? card[lo] : card[hi];\n                if (true)\n                    continue;",
+    find: "to: i + 1 < holder.kids.length ? i + 1 : i - 1, grows: false };",
+    to: "to: i > 0 ? i - 1 : i + 1, grows: false };",
   },
   {
     id: "range-end",
@@ -828,26 +735,18 @@ export const BREAKS = [
     // One entry per gesture that centres. The mouse path and the key path draw
     // with the same text, and the shorter find patched all three.
     find:
-      "                lastTap = -Infinity;\n" +
-      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
-      "                this.draw('center');",
+      "                lastTap = -Infinity;\n                this.carry(() => this.boundary.center(axis, line), el);\n                this.draw('center');",
     to:
-      "                lastTap = -Infinity;\n" +
-      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
-      "                this.draw('drag');",
+      "                lastTap = -Infinity;\n                this.carry(() => this.boundary.center(axis, line), el);\n                this.draw('drag');",
   },
   {
     id: "centre-reason-mouse",
     what: "a centring by a second mouse press is reported as a drag",
     file: "dist/dom.js",
     find:
-      "                lastPress = -Infinity;\n" +
-      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
-      "                this.draw('center');",
+      "                lastPress = -Infinity;\n                this.carry(() => this.boundary.center(axis, line), el);\n                this.draw('center');",
     to:
-      "                lastPress = -Infinity;\n" +
-      "                this.carry(() => this.grid.centerBoundary(axis, line), el);\n" +
-      "                this.draw('drag');",
+      "                lastPress = -Infinity;\n                this.carry(() => this.boundary.center(axis, line), el);\n                this.draw('drag');",
   },
   {
     id: "centre-reason-key",
@@ -860,8 +759,8 @@ export const BREAKS = [
     id: "watch-host",
     what: "the view watches the host although it was told not to",
     file: "dist/dom.js",
-    find: "if (options.observeResize !== false && typeof ResizeObserver !== 'undefined')",
-    to: "if (typeof ResizeObserver !== 'undefined')",
+    find: "return options.observeResize !== false && observerAvailable;",
+    to: "return observerAvailable;",
   },
   {
     id: "grip",
@@ -893,36 +792,18 @@ export const BREAKS = [
     // Anchored to the insert. The split undoes itself with the same three
     // lines, and the shorter find patched both.
     find:
-      "        this.changed();\n" +
-      "        if (!this.stillFits(axis, was, empty)) {\n" +
-      "            this.restore(undo);\n" +
-      "            return null;\n" +
-      "        }\n" +
-      "        return fresh.id;\n" +
-      "    }\n" +
-      "    /** Whether a card occupies one slot on one axis",
+      "            this.changed();\n            if (!this.stillFits(axis, was, empty)) {\n                this.restore(undo);\n                return null;\n            }\n",
     to:
-      "        this.changed();\n" +
-      "        if (false) {\n" +
-      "            this.restore(undo);\n" +
-      "            return null;\n" +
-      "        }\n" +
-      "        return fresh.id;\n" +
-      "    }\n" +
-      "    /** Whether a card occupies one slot on one axis",
+      "            this.changed();\n",
   },
   {
     id: "split-fits",
     what: "a split that takes another card below the size it has is kept rather than undone",
     file: "dist/soksak.js",
     find:
-      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n" +
-      "        this.changed();\n" +
-      "        if (!this.stillFits(axis, was, empty)) {",
+      "        this.derive();\n        this.changed();\n        if (!this.stillFits(axis, was, empty)) {\n            this.restore(undo);\n            return null;\n        }\n",
     to:
-      "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n" +
-      "        this.changed();\n" +
-      "        if (false) {",
+      "        this.derive();\n        this.changed();\n",
   },
   {
     id: "fits-min",
@@ -930,13 +811,6 @@ export const BREAKS = [
     file: "dist/soksak.js",
     find: "            if (now < Math.min(this.min, was) - 0.01)\n                return false;",
     to: "            ;",
-  },
-  {
-    id: "in-order",
-    what: "split writes a line before the one it follows",
-    file: "dist/soksak.js",
-    find: "const value = Math.min(Math.max(cut.value, a[line - 1]), a[line]);",
-    to: "const value = a[line - 1] - 1e-3;",
   },
   {
     id: "starved",
@@ -970,8 +844,8 @@ export const BREAKS = [
     id: "centre-scaled",
     what: "centring moves once and does not check where the boundary landed",
     file: "dist/soksak.js",
-    find: "let at = this.boundaryPos(axis, line);\n        for (let pass = 0; pass < 8; pass++) {",
-    to: "let at = this.boundaryPos(axis, line);\n        for (let pass = 0; pass < 1; pass++) {",
+    find: "            for (let pass = 0; pass < 8 && this.hasBoundary(axis, line); pass++) {",
+    to: "            for (let pass = 0; pass < 1 && this.hasBoundary(axis, line); pass++) {",
   },
   {
     id: "pixel-grid",
@@ -1002,20 +876,6 @@ export const BREAKS = [
     to: "",
   },
   {
-    id: "stale-payer",
-    what: "a close follows an offset that no longer lands inside the payer",
-    file: "dist/soksak.js",
-    find: "                const first = back && paidAt >= back[lo] && paidAt < back[hi] ? paidAt : merged;",
-    to: "                const first = paidAt;",
-  },
-  {
-    id: "merge-snap-off",
-    what: "mergeCoincident folds a pair although snapping is off",
-    file: "dist/soksak.js",
-    find: "    mergeCoincident(axis, line) {\n        if (this.noAxis(axis))\n            return false;\n        if (this.snap === 'off')\n            return false;\n",
-    to: "    mergeCoincident(axis, line) {\n        if (this.noAxis(axis))\n            return false;\n",
-  },
-  {
     id: "boundary-axis",
     what: "hasBoundary answers for an axis that is not one",
     file: "dist/soksak.js",
@@ -1024,10 +884,10 @@ export const BREAKS = [
   },
   {
     id: "fill-fixed",
-    what: "fill names the neighbours that would grow over a fixed card",
-    file: "dist/slicing.js",
-    find: "export function fillFor(cards, closing, order, memo) {\n    if (closing.fixed)\n        return null;\n",
-    to: "export function fillFor(cards, closing, order, memo) {\n",
+    what: "a fixed card can be closed",
+    file: "dist/soksak.js",
+    find: "if (!card || card.fixed)",
+    to: "if (!card)",
   },
   {
     id: "grip-active",
@@ -1063,13 +923,6 @@ export const BREAKS = [
     to: "        // Every card must have a non-zero area, including one just created.\n",
   },
   {
-    id: "stand-read",
-    what: "a line a card reads is re-stood at the px it stood at, so a run of coincident lines comes apart",
-    file: "dist/soksak.js",
-    find: "            const want = stood[k];\n            if (want === undefined || !this.isVirtual(axis, k))\n                continue;\n",
-    to: "            const want = stood[k];\n            if (want === undefined)\n                continue;\n",
-  },
-  {
     id: "settle-declared",
     what: "the settle names a slot holding a px size as the one that paid",
     file: "dist/soksak.js",
@@ -1092,17 +945,17 @@ export const BREAKS = [
   },
   {
     id: "fill-payer",
-    what: "a close a neighbour fills keeps the width instead of returning it",
+    what: "a close gives the space to a neighbour, not to the kid that holds the card it took the space from",
     file: "dist/soksak.js",
-    find: "            const gives = !!back &&",
-    to: "            const gives = false && !!back &&",
+    find: "if (kid && !this.holdsFixed(kid))\n                return",
+    to: "if (false)\n                return",
   },
   {
     id: "cut-payer",
-    what: "a cut does not record which of the payer's slots it took the width from",
+    what: "a cut does not record which card it took the space from",
     file: "dist/soksak.js",
-    find: "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });\n        this.changed();",
-    to: "        this.paidBy.set(fresh.id, { side: 'lo', to: card.id });\n        this.changed();",
+    find: "        this.paidBy.set(fresh.card, id);\n        this.derive();",
+    to: "        this.derive();",
   },
   {
     id: "no-flex-cut",

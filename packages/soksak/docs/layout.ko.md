@@ -151,9 +151,9 @@ seam이다. tree의 operation은 카드나 box가 속한 cut을 tree에서 읽�
 옮기므로 그 line에 선 모든 seam을 옮기며, 각 seam은 자기 cut 안에서 움직인다
 ([경계](#경계)).
 
-`paidBy`는 카드를 그것이 자리를 받아 온 카드에 대응시킨다. split은 나눈 카드를
-기록하고, close는 그 카드가 같은 cut의 이웃한 kid일 때 카드의 자리를 그 카드에
-주며, 그렇지 않으면 fill 순서를 따른다(R7).
+`paidBy`는 카드를 그것이 자리를 받아 온 카드에 대응시키며, root의 모든 kid가 몫을
+냈을 때는 `''`에 대응시킨다. split은 나눈 카드를 기록하고, close는 카드의 자리를 그
+카드를 담은 같은 cut의 kid에 주며, 그렇지 않으면 fill 순서를 따른다(R7).
 
 `Soksak.from(state, options?)`, 생성자, `replace(state)`와 `checkState(state)`는 이
 형태만 읽는다. 이전 release의 형태인 `xs`, `ys` 또는 `cards`를 가진 state는
@@ -195,13 +195,13 @@ line이 둘 이상의 tree로 읽히는 layout에서였으며 다른 layout에�
 
 ```js
 const grid = new Soksak({
-  xs: [0, 1 / 3, 1],
-  ys: [0, 0.5, 1],
-  cards: [
-    { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-    { id: "terminal", c0: 1, c1: 2, r0: 0, r1: 1 },
-    { id: "browser", c0: 1, c1: 2, r0: 1, r1: 2 },
-  ],
+  root: { cut: "x", kids: [
+    { share: 1 / 3, node: { card: "left", width: 180, fixed: true } },
+    { share: 2 / 3, node: { cut: "y", kids: [
+      { share: 0.5, node: { card: "terminal" } },
+      { share: 0.5, node: { card: "browser" } },
+    ] } },
+  ] },
 }, { width: 1200, height: 800 });
 ```
 
@@ -254,8 +254,7 @@ view.render();
 | 경계선 | `sp-rule` | `data-axis`, `data-virtual` | 위와 같고 `pointer-events: none` 이 더해진다 |
 
 rule 의 `data-virtual` 은 카드가 그 선에서 나뉘는 구간만이 아니라 판 전체를 지나는
-rule 을 표시한다. `isVirtual` 은 다른 것을 보고한다. 어떤 카드든 그 선을 읽는지
-여부다.
+rule 을 표시한다.
 
 ```css
 #stage { position: relative; }
@@ -343,7 +342,10 @@ reduce` 에서는 시트가 스스로 그것을 끈다. 여기서 설정을 읽�
 
 ## 경계
 
-끌기는 그 경계에서 만나는 두 슬롯만 바꾸고 다른 것은 바꾸지 않는다. 고정 크기로 자기
+끌기는 그 경계에서 만나는 두 슬롯만 바꾸고 다른 것은 바꾸지 않는다. 그 축의 다른 선
+위로 끌린 경계는 그 선과 합쳐진다. 선은 tree에서 유도되고 한 좌표를 한 번만 담으므로
+둘의 seam이 한 선에 서고, 이후의 끌기는 둘을 함께 옮긴다. `moveBoundary`는 경계가 닿은
+위치를 선이 다시 유도되기 전에 읽어 돌려준다. 고정 크기로 자기
 슬롯을 잡고 있는 카드 옆에서는 그 크기를 바꾸고 반대쪽 슬롯이 같은 만큼 줄어든다. 그
 밖에서는 선을 옮기고 양쪽이 따라온다.
 
@@ -367,20 +369,21 @@ px 크기를 가진 카드 옆에서는, 경계가 닿을 수 있는 범위가 �
 `boundaryRange` 는 끌기의 한계를 정할 뿐, 끌기가 어디서 멈출 수 있는지를 나열하지
 않는다.
 
-같은 규칙이 나타나거나 사라지는 카드를 정리한다. 경계에 삽입된 카드는 옆 슬롯에서
-너비를 가져오고, 가장 가까운 슬롯이 카드를 `minSize` 아래로 만들지 않고는 자리를 낼 수
-없으면 더 바깥에서 가져오며, 자리를 낸 슬롯이 기록된다. 닫히는 카드의 너비와 그것이
-내놓는 통로는 그 슬롯으로 돌아간다. 그래서 사이드바를 껐다 켜면 다른 모든 카드는 갖고
+같은 규칙이 나타나거나 사라지는 카드를 정리한다. 경계에 삽입된 카드는 경계 뒤의 root
+kid에서, 그렇지 않으면 경계 앞의 kid에서 너비를 가져온다. 그 kid가 카드를 `minSize`
+아래로 만들지 않고 자리를 낼 수 있을 때이며, `paidBy`는 자리를 낸 kid의 카드 하나를
+기록한다. 둘 다 낼 수 없으면 모든 kid가 비례해 몫을 내고 `paidBy`는 `''`를 기록한다.
+닫히는 카드의 span과 그것이 내놓는 통로는 기록된 카드를 담은 같은 cut의 kid로, 그 kid가
+어디에 서 있든 돌아가며, 둘 사이의 kid들은 그 span만큼 밀린다. 모든 kid가 자리를 낸
+카드는 모든 kid에 그 몫을 돌려준다. 그래서 사이드바를 껐다 켜면 다른 모든 카드는 갖고
 있던 너비를 유지한다 — 그 사이에 아무것도 움직이지 않고, 두 시점 모두 판이 그 축의
-선언을 담을 때에 한한다. 배치가 바뀐 뒤에는 닫기가 자리를 냈던 슬롯으로 너비를
-돌려주고 삽입은 지금 자리를 낼 수 있는 슬롯에서 가져오므로, 두 슬롯이 언제나 같지는
-않다. 판이 그 축의 선언을 담지 못하면 선언된 크기는 모두 한 인수로 축소되어 그려지고,
+선언을 담을 때에 한한다. 판이 그 축의 선언을 담지 못하면 선언된 크기는 모두 한 인수로 축소되어 그려지고,
 카드가 들어오거나 나갈 때 그 인수가 바뀌므로, 공간을 돌려주는 것만으로는 그 인수가 그린
 너비를 되돌릴 수 없다.
 
 px 크기는 호스트가 선언한다. 끌기가 그것을 바꾸고, 자르기는 그것을 두 쪽으로 나눈다.
-닫기와 삽입은 지분을 가진 슬롯으로 정리하고, 가장 가까운 슬롯이 카드를 `minSize`
-아래로 만들지 않고는 자리를 낼 수 없으면 더 바깥을 본다.
+닫기는 span을 자기 cut의 kid에 주고, 삽입은 경계 옆의 kid나 모든 kid에서 그것을
+가져온다.
 
 ```js
 grid.dividers();                       // 각 경계를 어디서 잡을 수 있는지
@@ -388,32 +391,6 @@ grid.boundaryPos("x", 1);              // px
 grid.boundaryRange("x", 1);            // [min, max] px, 무언가 minSize 에 닿기 전까지
 grid.moveBoundary("x", 1, 260);        // px
 grid.centerBoundary("x", 1);
-```
-
-## 균형 맞추기
-
-`balance()`는 배치를 유지하고 모든 카드에 판의 공정한 몫을 준다. 자르기로 만든 배치는
-slicing floorplan이므로 slicing tree로 읽히고, 몫은 그 tree에서 축마다 센다.
-
-- 카드 하나는 1로 센다.
-- 그 축을 따라 자른 것은 두 쪽의 합으로 센다.
-- 다른 축을 따라 자른 것은 가장 많이 세는 쪽으로 센다.
-- 자르기마다 그 쪽들에 센 수에 비례해 공간을 준다.
-
-그래서 카드가 가장 많은 줄의 카드들은 같은 크기가 되고, 그중 여럿에 걸친 카드는 그만큼
-걸쳐 그려진다. 세 카드 아래 네 카드가 있으면 윗줄은 1/3씩, 아랫줄은 1/4씩, 두 줄은 높이를
-절반씩 갖고, 나란한 열 카드는 1/10씩 갖는다. 두 줄을 관통하는 선은 그 자체로 자르기이므로,
-그 양쪽은 각자 가장 많은 줄로 센다.
-
-크기는 그려진 크기다. 판 가장자리의 카드는 한쪽만 들여쓰므로 선은 같은 좌표가 아니라 같은
-그려진 크기가 되도록 놓인다. 한 축에 px 크기가 있는 카드는 그려진 크기를 유지하고 그 축에서
-아무것도 세지 않으며, 나머지가 남은 공간을 나눈다. 한 선을 함께 쓰던 두 줄이 그 선을 서로
-다른 곳에 필요로 하면 각자 선을 하나씩 갖는다. 선은 끌기가 움직이는 방식으로 움직이므로 어떤
-카드도 `minSize` 아래로 가지 않고, 공정한 크기를 담지 못하는 판에서는 선이 범위의 끝에서
-멈춘다. 배치가 slicing이 아니면 `balance()`는 false를 돌려주고 아무것도 바꾸지 않는다.
-
-```js
-grid.balance();
 ```
 
 ## Cuts
@@ -426,8 +403,8 @@ row는 seam을 같은 line에 그린다.
 box `{box, data?, inner}`는 tree가 그 cut의 kid 하나로 유지하는 host의 사각형이므로
 어떤 cut도 그것을 가로지르지 않는다. `setHeads({id: px})`는 host가 각 box 안쪽 위,
 inner node 위에 그리는 px를 준다. 항목이 없는 box는 head가 없다. `setHeads`는 box가
-아닌 id에 `soksak: heads name "<id>", which is no box`를, 음수 head에 `soksak: the
-head of "<id>" is below zero`를 던지며, head는 state의 일부가 아니다.
+아닌 id에 `soksak: heads name "<id>", which is no box`를, 음수이거나 유한하지 않은
+head에 `soksak: the head of "<id>" is <value>`를 던지며, head는 state의 일부가 아니다.
 
 kid의 크기는 그려진 크기다. 곧 그 카드들의 그려진 사각형의 첫 가장자리부터 마지막
 가장자리까지의 범위이며 그 사이의 gap을 포함하고, `y` 축에서는 그 위 box의 head를
@@ -586,25 +563,19 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 
 ## 모든 카드가 닫을 수 있는 이유 (R7)
 
-쪼개기는 언제나 카드 하나를 둘로 교체할 뿐이므로(R4) 배치는 항상 **슬라이싱**
-플로어플랜이다. 풍차 — 네 카드가 각각 가운데 카드에 걸쳐 있어 어느 쪽도 그 자리를
-대신할 수 없는 배치 — 가 슬라이싱이 아닌 대표적인 배치이고, 쪼개기로는 거기에 도달할
-수 없다.
+state는 slicing tree이므로(R4) 풍차 — 네 카드가 각각 가운데 카드에 걸쳐 있어 어느
+쪽도 그 자리를 대신할 수 없는 배치 — 는 저장될 수 없고, 어떤 연산도 거기에 도달하지
+않는다.
 
-닫기는 그 성질을 보존한다. 닫기는 맞아떨어지는 이웃 하나만이 아니라 이웃 한 줄이 함께
-커지게 하고, 배치를 슬라이싱으로 남기는 쪽만 받아들인다. 그런 배치에는 그런 쪽이 항상
-존재한다.
-
-고정 카드는 빈자리를 채우지 않는다. 그 크기는 그 카드의 것이다. 그래서 고정 카드 둘
-사이에 선 카드에는 커질 수 있는 이웃이 없다. 그 카드는 다른 길로 나간다. 판의 한쪽
-끝에서 반대쪽 끝까지 닿으므로 그것이 걸친 모든 슬롯이 자기 것이고, 그 슬롯이 그대로
-사라진다. 슬롯이 몇 개인지는 상관없다.
+닫기는 카드를 자기 cut에서 빼고 그 자리를 같은 cut의 kid에 준다. 모든 cut은 kid가 둘
+이상이므로 그런 kid는 항상 존재한다. 고정 카드는 빈자리를 채우지 않는다. 그 크기는 그
+카드의 것이다. 그래서 cut에 자기 말고는 고정 카드만 있는 카드는 그 kid들에 비례해 자리를
+준다.
 
 이로써 마지막 하나를 제외한 모든 열린 카드에 대해 `canClose` 가 참이다. 앞서 무슨 일이
 있었든 그렇다. 위의 R7 경우 — 채울 이웃이 `fixed` 뿐이고 그 슬롯에 다른 카드가 있는
 경우 — 만 예외다. `fixed` 카드에 대해서는 `canClose` 가 거짓을 반환한다. 배치가 그것을
 옮기지 않기 때문이며, `setFixed` 로 먼저 플래그를 지우면 된다.
-`grid.isSlicing()` 은 그 성질 자체를 직접 검사한다.
 
 ## 옵션
 
@@ -613,9 +584,9 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | `gap` | `24` | 카드 사이의 통로, px. 그 절반이 모든 안쪽 가장자리를 들여쓰고 외곽선의 `pad` 가 된다. |
 | `minSize` | `96` | 카드 변의 최소 길이, px. |
 | `grabSize` | `11` | 잡는 영역의 최소 크기, px. `gap` 과 별개이므로 `gap: 0` 에서도 끌 수 있다. |
-| `snap` | `"merge"` | 끌린 경계가 거의 만난 이웃에 내려앉는다. `mergeCoincident` 가 둘을 한 선으로 접으며, 포인터를 놓을 때 `SoksakView` 가 그것을 호출한다. `"off"` 면 둘 다 하지 않는다. |
+| `snap` | `"merge"` | 끌린 경계가 거의 만난 선에 내려앉고, 둘은 그때부터 한 선이다. `"off"` 면 내려앉지 않는다. |
 | `snapDistance` | `7` | 얼마나 가까워야 하는지, px. |
-| `fillOrder` | `"v"` | 닫기가 먼저 시도하는 축. `"v"` 는 위아래에서, `"h"` 는 좌우에서. |
+| `fillOrder` | `"v"` | 닫히는 카드의 자리를 이웃이 갖는 변의 순서. `"v"` 는 아래, 위, 오른쪽, 왼쪽, `"h"` 는 오른쪽, 왼쪽, 아래, 위. 카드의 cut을 따르는 변만 그 cut의 kid를 가리킨다. |
 | `width`, `height` | `0` | 판의 크기. `resize(w, h)` 가 갱신하며 뷰가 대신 해 준다. |
 
 ## API
@@ -632,27 +603,22 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | 카드를 다른 카드의 옆으로 옮긴다. `sides` 는 그 닫기의 변이며 `close` 가 받는 대로다 |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경한다. 반환된 사본은 동결되어 있다 |
 | `setFrames(frames)` | 각 카드와 그 선 사이의 프레임 (R5) |
-| `standings(axis, without?)`, `canInsertAt(axis, line, without?)`, `insertAt`, `moveTo` | 판을 가로지르는 카드 |
+| `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | 판을 가로지르는 카드: 판의 가장자리와 그 축을 따르는 root cut의 seam |
 | `zoneAt(x, y, options)` | 드롭이 내려앉는 곳 |
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | 경계를 끈다 |
-| `moveLinePast(axis, line, px)` | line을 `moveBoundary` 처럼 옮기고, 둘 사이에 카드가 없는 곳에서 닿는 각 line을 지나간다. 다른 line 위에 멈춘 line은 그 line에 합쳐진다 |
-| `shareLines(axis, extra?)` | 그 axis의 모든 line index를 유지하고, px 크기를 가진 카드가 차지하지 않은 모든 slot에 자기 corridor, `extra[slot]` px, 그리고 free length의 같은 몫을 준다. free length는 extent에서 corridor, 고정 크기와 extra를 뺀 값이다. 고정된 slot은 자기 span을 유지한다. 알 수 없는 axis, slot 수와 길이가 다른 extra 목록, 공유 slot이 길이를 갖지 못하는 axis에는 throw 한다 |
-| `balance()` | 배치를 유지하고 모든 카드에 공정한 몫을 준다 |
 | `even()`, `setHeads(heads)`, `visits` | 모든 cut의 모든 kid에 같은 share를 준다. box의 head. 마지막 operation이 방문한 node 수 ([cuts](#cuts)) |
 | `withdraw(id)` | 카드나 box를 그 cut에서 꺼낸다. 나머지가 비율대로 그 자리를 나눈다 ([add and remove](#add-and-remove)) |
 | `insert(target, side, node)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
-| `sliceTree(cards)` | 배치의 slicing tree(`Slice`: 카드 하나, 또는 한 축을 따라 판의 처음부터 나눈 쪽들), 아니면 null |
-| `mergeCoincident(axis, line)` | 이제 같은 자리에 있는 이웃 선으로 접는다 |
-| `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | 가상 선 |
-| `isSlicing()`, `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |
+| `crossings(card)`, `cardsCrossing(axis, line)` | 카드가 가로지르는 선, 그리고 선을 가로지르는 카드 |
+| `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |
 | `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `fillOrder` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
 
 축을 받는 모든 메서드는 `"x"` 나 `"y"` 가 아닌 값을 거절한다. 방향을 받는 모든
 메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 `null`,
 `false` 또는 빈 답을 반환하고 아무것도 바꾸지 않는다.
 
-`toJSON()` 은 `paidBy` 를 함께 담는다. 각 슬롯을 어느 카드에서 가져왔는지 기록하므로,
+`toJSON()` 은 `paidBy` 를 함께 담는다. 각 카드가 어느 카드에서 자리를 가져왔는지 기록하므로,
 그것으로 다시 만든 grid 는 카드를 같은 방식으로 닫는다. `checkState` 는 생성자가
 실행하는 것이다. 오래된 저장 배치를 설치하기 전에 거절하려면 직접 호출하라.
 
@@ -700,8 +666,8 @@ observation round 보다 먼저 실행된다. `observation` 이 그 상태를 `r
 `boundary` 는 `BoundaryModel` 로, 모든 divider gesture 가 실행하는 boundary operation 이다.
 drag 의 한 걸음은 `move(axis, line, px)`, 화살표 키는 `step(axis, line, px)`, 짝의 두 번째 press 와 Enter 는
 `center(axis, line)`, drag 의 끝은 `end(axis, line)` 이며 end 는 line 이 합쳐졌는지를
-돌려준다. 이것이 없으면 뷰는 grid 의 `moveBoundary`, `centerBoundary`, `mergeCoincident` 를
-실행한다. 카드를 grid 와 다른 rectangle 에 그리고 line 에 자기 규칙을 두는 호스트는 자기 것을
+돌려준다. 이것이 없으면 뷰는 grid 의 `moveBoundary`, `centerBoundary` 를 실행하고 `end` 는
+false 를 돌려준다. 다른 선에 닿은 끌기는 이미 그 선과 합쳐졌기 때문이다([경계](#경계)). 카드를 grid 와 다른 rectangle 에 그리고 line 에 자기 규칙을 두는 호스트는 자기 것을
 넘긴다. drag 의 결과를 자기 operation 으로 저장하는 호스트는 drag 가 boundary 를 둔 곳에서
 그 operation 을 `end` 에서 실행한다.
 `drawn` 은 `DrawnModel` 로, 뷰가 그리는 배치다. `rects(fullscreen)` 은 각 카드의 사각형을

@@ -6,16 +6,7 @@ import { Soksak } from "../dist/index.js";
 test("a resize re-expresses the proportions and never rewrites them", () => {
   // Both axes declare a size, so a plane that cannot hold either one is the
   // scale at which a rewriting implementation has something to rewrite.
-  const state = {
-    xs: [0, 0.2, 0.6, 1],
-    ys: [0, 0.3, 1],
-    cards: [
-      { id: "side", c0: 0, c1: 1, r0: 0, r1: 2, width: 190, fixed: true },
-      { id: "head", c0: 1, c1: 2, r0: 0, r1: 1, height: 200 },
-      { id: "body", c0: 1, c1: 2, r0: 1, r1: 2 },
-      { id: "rail", c0: 2, c1: 3, r0: 0, r1: 2, width: 210, fixed: true },
-    ],
-  };
+  const state = { root: { cut: "x", kids: [{ share: 0.2, node: { card: "side", fixed: true, width: 190 } }, { share: 0.39999999999999997, node: { cut: "y", kids: [{ share: 0.3, node: { card: "head", height: 200 } }, { share: 0.7, node: { card: "body" } }] } }, { share: 0.4, node: { card: "rail", fixed: true, width: 210 } }] } };
   const grid = new Soksak(state, { width: 900, height: 634, gap: 24, minSize: 96 });
   const was = [...grid.rects()];
   const xs = grid.lines("x"), ys = grid.lines("y");

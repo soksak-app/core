@@ -97,10 +97,8 @@
   {"call":"canSplit","args":["a","q"],"returns":false},
   {"call":"standings","args":["y"],"returns":[0,1,2]},
   {"call":"standings","args":["x"],"returns":[0,2]},
-  {"call":"standings","args":["y","c"],"returns":[0,1,2]},
   {"call":"canInsertAt","args":["y",1],"returns":true},
   {"call":"canInsertAt","args":["x",1],"returns":false},
-  {"call":"canInsertAt","args":["x",1,"c"],"returns":true},
   {"call":"canInsertAt","args":["x",9],"returns":false}
  ]},
  {"name":"a drop lands on the centre or the nearest side of the card under it","options":{"width":1000,"height":600,"gap":12},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","data":{"tabs":["t1"]}}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},"steps":[
@@ -374,7 +372,6 @@
   {"call":"insertAt","args":["x",0,{}],"returns":null},
   {"call":"insertAt","args":["q",0,{"size":1}],"returns":null},
   {"call":"standings","args":["x"],"returns":[0,1,2,4,5]},
-  {"call":"standings","args":["x","rail"],"returns":[0,1,2,4,5]},
   {"call":"moveTo","args":["rail","x",4],"returns":true},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.04999999999999999,"node":{"card":"card-2","fixed":false,"width":50}},{"share":0.74,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.4375,"node":{"card":"a","fixed":false,"data":{"tabs":["t1"]}}},{"share":0.5624999999999999,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":true}}]}},{"share":0.12,"node":{"card":"rail","fixed":false,"width":120}},{"share":0.09000000000000008,"node":{"card":"card-1","fixed":false,"data":{"kind":"edge"},"width":90}}]},"paidBy":{"rail":"a","card-1":"b","card-2":"a"}}},
   {"call":"rects","returns":{"a":{"x":60,"y":0,"w":305,"h":295},"b":{"x":375,"y":0,"w":395,"h":295},"c":{"x":60,"y":305,"w":710,"h":295},"card-1":{"x":910,"y":0,"w":90,"h":600},"card-2":{"x":0,"y":0,"w":50,"h":600},"rail":{"x":780,"y":0,"w":120,"h":600}}},
