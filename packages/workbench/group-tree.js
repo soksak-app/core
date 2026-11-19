@@ -302,13 +302,6 @@ export class GroupTree {
     this.grid.setFrames(frames);
   }
 
-  /** The union of the rectangles in the grid of the content cards inside a group node. */
-  union(node) {
-    const rects = this.contents(node).map((card) => this.grid.rect(card));
-    const x = Math.min(...rects.map((r) => r.x)), y = Math.min(...rects.map((r) => r.y));
-    return { x, y, w: Math.max(...rects.map((r) => r.x + r.w)) - x, h: Math.max(...rects.map((r) => r.y + r.h)) - y };
-  }
-
   /** The header of the group card id: a row of the head height at the top of its drawn rectangle, across its whole width. */
   headRect(id) {
     const { x, y, w } = this.rect(id);
@@ -1035,7 +1028,7 @@ export class GroupTree {
     for (;;) {
       const hit = members.find((member) => {
         if (typeof member === "string") return false;
-        const r = this.union(member);
+        const r = this.rect(member.card);
         return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
       });
       if (!hit) {
@@ -1046,7 +1039,7 @@ export class GroupTree {
       if (excluded(hit.card)) return null;
       const head = this.headRect(hit.card);
       if (y <= head.y + head.h) return { card: hit.card, zone: "centre" };
-      const r = this.union(hit);
+      const r = this.rect(hit.card);
       const px = (x - r.x) / r.w;
       const py = (y - r.y) / r.h;
       if (!(px > edge && px < 1 - edge && py > edge && py < 1 - edge)) {

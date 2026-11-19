@@ -263,10 +263,10 @@ export class Soksak {
             // default: a side the entry leaves out has no frames.
             const counts = { left: (_a = given.left) !== null && _a !== void 0 ? _a : 0, right: (_b = given.right) !== null && _b !== void 0 ? _b : 0, top: (_c = given.top) !== null && _c !== void 0 ? _c : 0, bottom: (_d = given.bottom) !== null && _d !== void 0 ? _d : 0 };
             for (const count of Object.values(counts)) {
-                if (!Number.isInteger(count))
-                    throw new Error(`soksak: the frames of ${JSON.stringify(id)} count no whole number`);
                 if (count < 0)
                     throw new Error(`soksak: the frames of ${JSON.stringify(id)} count below zero`);
+                if (!Number.isInteger(count))
+                    throw new Error(`soksak: the frames of ${JSON.stringify(id)} count no whole number`);
             }
             next.set(id, counts);
         }
