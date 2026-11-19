@@ -280,6 +280,27 @@ test('group.tint refuses a value that is no integer from 0 to 100', async () => 
   wire.finish();
 });
 
+// The fill of a group card mixes the theme color group-<n> of its level into bg by group.tint in percent, each channel rounded, and a
+// level above 3 takes group-3 (docs/spec/groups.md#drawing).
+test('groupFill mixes the group color of a level into bg by group.tint', async () => {
+  const wire = selectPageWire('settings-group-tint');
+  const { beginSettings, groupFill, THEMES, themeName, modeName } = await import('../settings.js?test=group-fill');
+  const { orderedCallsAnswered } = await import('../host.js');
+  beginSettings({ common: { 'group.tint': 40 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+  const colors = THEMES.find((theme) => theme.name === themeName())[modeName()];
+  const rgb = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const mix = (hex) => {
+    const [group, bg] = [rgb(hex), rgb(colors.bg)];
+    return `#${group.map((c, i) => Math.round(c * 0.4 + bg[i] * 0.6).toString(16).padStart(2, '0')).join('')}`;
+  };
+  assert.equal(groupFill(1), mix(colors['group-1']));
+  assert.equal(groupFill(2), mix(colors['group-2']));
+  assert.equal(groupFill(3), mix(colors['group-3']));
+  assert.equal(groupFill(7), mix(colors['group-3']), 'a level above 3 takes group-3');
+  await orderedCallsAnswered();
+  wire.finish();
+});
+
 test('a change of the settings names its actor and its keys, and its identifiers go with the write', async () => {
   const wire = selectPageWire('settings-actor');
   const { installOperationSink } = await import('../operations.js');
