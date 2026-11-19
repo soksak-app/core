@@ -29,6 +29,11 @@
   - group 해제는 group header의 close menu에 있다.
 - card는 plane 사이를 옮겨도 identifier를 유지한다. card를 지정하는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.get`)는 어느 plane의 card에도 동작한다.
 
+- setting `cardSplit`은 split 뒤의 크기를 정한다. 값은 둘이다.
+  - `exact`(기본값): split되는 card의 rect만 나눈다.
+  - `even`: 그 plane의 card들을 `balance()`로 고른 크기로 다시 배치한다.
+  - 이 setting은 split button, group button의 안쪽 split, `side`를 준 `core.layout.open`에 적용된다.
+
 ## Command와 status
 
 - `core.group.create {card, side}`는 card를 group card로 바꾼다. 그 plane은 원래 card와 `side` 쪽의 새 content card를 가진다. group button은 card의 긴 축을 쓴다: 너비가 높이보다 크면 `right`, 아니면 `bottom`.
