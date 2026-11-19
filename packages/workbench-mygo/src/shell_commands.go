@@ -1,9 +1,11 @@
 package workbench
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
+	sok "github.com/soksak-app/core/packages/sok/go/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -23,8 +25,41 @@ func command[T any](s *Shell, name string, run func(value T) (any, error)) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}
-		return run(value)
+		changed := s.watchLayout(name, raw)
+		result, err := run(value)
+		changed(result, err)
+		return result, err
 	})
+}
+
+// watchLayout returns what records the command name with its parameters raw when it changed the layout of the active space: the event
+// workbench.layout.change (docs/spec/events.json). It reads the layout only while the gate stores the event.
+func (s *Shell) watchLayout(name string, raw json.RawMessage) func(result any, err error) {
+	if s.events == nil || !s.events.Admits(sok.LevelDebug, "workbench.layout.change") {
+		return func(any, error) {}
+	}
+	before := s.layoutText()
+	return func(result any, err error) {
+		if err != nil {
+			return
+		}
+		if after := s.layoutText(); !bytes.Equal(after, before) {
+			s.events.LayoutChange(name, raw, result, after)
+		}
+	}
+}
+
+// layoutText is the JSON text of the stored layout of the active space, {state, groups, leader, lastCard}, or nil without a plane.
+func (s *Shell) layoutText() []byte {
+	if s.plane == nil || s.planes == nil {
+		return nil
+	}
+	groups, leader, last := s.planes.Stored()
+	text, err := json.Marshal(map[string]any{"state": s.plane.ToJSON(), "groups": groups, "leader": leader, "lastCard": last})
+	if err != nil {
+		return []byte(fmt.Sprintf("unserializable: %v", err))
+	}
+	return text
 }
 
 // later registers name with a function of its parameters that answers in a later step.

@@ -23,6 +23,8 @@ const (
 	recordWhereBytes   = 1024
 	recordTextBytes    = 8192
 	callArgumentsBytes = 1024
+	// layoutRecordBytes is the bound of the layout of workbench.layout.change, below eventFieldsBytes with its other fields.
+	layoutRecordBytes = 61440
 )
 
 const (
@@ -284,6 +286,30 @@ func callCids(name string, argument any) []string {
 		Cids []string `json:"cids"`
 	}](argument)
 	return carried.Cids
+}
+
+// Admits tells whether an event of the level passes the gate now, so that a producer computes costly fields only for an event that is
+// stored. It counts nothing: the gate counts an event when it is emitted.
+func (e *Events) Admits(level sok.Level, event string) bool {
+	if e.ended {
+		return false
+	}
+	class, declared := sok.EventClassOf(event)
+	return !declared || sok.PassesEveryGate(event) || e.policy.Allows(class, level)
+}
+
+// LayoutChange stores the event workbench.layout.change of the command name with its parameters, its answer and the stored layout
+// that it left (docs/spec/events.json).
+func (e *Events) LayoutChange(name string, params json.RawMessage, result any, layout []byte) {
+	e.Emit(sok.LevelDebug, "workbench.layout.change", func() map[string]any {
+		answer, _, err := sok.BoundedMarshal(result, callArgumentsBytes)
+		answerText := headOf(answer, callArgumentsBytes)
+		if err != nil {
+			answerText = fmt.Sprintf("unserializable: %v", err)
+		}
+		return map[string]any{"command": name, "params": headOf(params, callArgumentsBytes), "paramsTruncated": len(params) > callArgumentsBytes,
+			"result": answerText, "layout": headOf(layout, layoutRecordBytes), "layoutTruncated": len(layout) > layoutRecordBytes}
+	}, nil)
 }
 
 // Command stores the event workbench.command of a command request that ended (docs/spec/logging.md#entrances).
