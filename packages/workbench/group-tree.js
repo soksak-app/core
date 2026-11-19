@@ -1147,7 +1147,8 @@ export class GroupTree {
 
   /**
    * Moves the card id, a content card or a group card, beside target on side into the level of target, or with side centre into the group
-   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). The card keeps its id.
+   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). The card keeps its id. Returns false when the card
+   * already stands where the move puts it, which changes nothing, and true after a move.
    */
   move(id, target, side) {
     const refused = this.checkMove(id, target, side);
@@ -1156,7 +1157,7 @@ export class GroupTree {
     if (side !== "centre" && !SIDES.includes(side)) throw refusal();
     const found = this.find(id);
     if (!found || !this.find(target)) throw refusal();
-    if (this.moved(id, target, side)) return;
+    if (this.moved(id, target, side)) return false;
     const operation = `move to ${side} of ${target}`;
     this.attempt(id, operation, () => {
       const data = found.node ? undefined : this.grid.card(id).data;
@@ -1196,6 +1197,7 @@ export class GroupTree {
       this.attach(parent, found.node ?? id);
       this.leaderEntered(parent, id);
     });
+    return true;
   }
 
   /** Whether move of the card id to side of target would succeed. */

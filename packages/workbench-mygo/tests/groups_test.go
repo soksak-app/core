@@ -584,3 +584,42 @@ func TestOpenTowardASideFromAGroupMemberStaysInsideTheGroup(t *testing.T) {
 		}
 	}
 }
+
+// contract: layout.move.focuses-the-moved-card
+func TestACardMoveFocusesTheMovedCardAndAMoveThatChangesNothingKeepsTheFocus(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+		gridCard("main", 0, 1, 0, 1, tab("t1", "notes")), gridCard("side", 1, 2, 0, 1, tab("t2", "plain"))))
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	focus := func(card string) {
+		t.Helper()
+		if _, err := f.apply("core.card.focus", `{"card": "`+card+`"}`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	move := func(params, want string) {
+		t.Helper()
+		if answer, err := f.apply("core.card.move", params); err != nil || answer != `{"card":"`+want+`"}` {
+			t.Fatalf("core.card.move %s answered %s, %v", params, answer, err)
+		}
+	}
+	focus("side")
+	move(`{"card": "card-3", "target": "side", "side": "bottom"}`, "card-3")
+	if got := f.layout().focusedCard(); got != "card-3" {
+		t.Fatalf("the focus is on %s after the move of card-3", got)
+	}
+	focus("main")
+	move(`{"card": "card-3", "target": "side", "side": "bottom"}`, "card-3")
+	if got := f.layout().focusedCard(); got != "main" {
+		t.Fatalf("a move that changes nothing moved the focus to %s", got)
+	}
+	if _, err := f.apply("core.group.create", `{"card": "side", "side": "bottom", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	focus("main")
+	move(`{"card": "card-4", "target": "main", "side": "bottom"}`, "card-4")
+	if got := f.layout().focusedCard(); got != "side" {
+		t.Fatalf("the move of the group card card-4 focused %s, not the first card inside it", got)
+	}
+}

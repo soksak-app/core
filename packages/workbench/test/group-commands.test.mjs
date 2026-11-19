@@ -264,3 +264,19 @@ test("core.layout.balance in a space with groups keeps every line index and give
   const widths = ["card-9", "card-11", "card-13"].map((id) => tree.rect(id).w);
   for (const w of widths) assert.ok(Math.abs(w - widths[0]) < 1e-6, `the columns are drawn ${widths}, not one width`);
 });
+
+// contract: layout.move.focuses-the-moved-card
+test("core.card.move focuses the moved card, the first card inside a moved group card, and a move that changes nothing keeps the focus",
+  { timeout: 5000 }, async () => {
+    arrange();
+    plane.focusCard("card-3");
+    assert.deepEqual(await run("core.card.move", { card: "card-2", target: "card-3", side: "right" }), { card: "card-2" });
+    assert.equal(plane.focused(), "card-2", "the move left the focus on another card than the moved card");
+    plane.focusCard("card-1");
+    assert.deepEqual(await run("core.card.move", { card: "card-2", target: "card-3", side: "right" }), { card: "card-2" });
+    assert.equal(plane.focused(), "card-1", "a move that changes nothing moved the focus");
+    arrange();
+    plane.focusCard("card-3");
+    assert.deepEqual(await run("core.card.move", { card: "card-4", target: "card-3", side: "right" }), { card: "card-4" });
+    assert.equal(plane.focused(), "card-1", "the move of a group card did not focus the first card inside it");
+  });

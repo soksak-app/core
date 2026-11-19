@@ -2713,8 +2713,10 @@ export function moveCard(id, target, side) {
   const card = treeCard(id);
   const to = treeCard(target);
   layoutChangeable(card);
-  tree.move(card, to, side);
-  settle();
+  // A move that changes the layout focuses the moved card, as the drop of the only tab of a card does; a move to where the card
+  // stands changes nothing and keeps the focus (docs/spec/groups.md#focus).
+  if (tree.move(card, to, side)) focusCard(card);
+  else settle();
   return { card };
 }
 

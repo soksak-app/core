@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-30 (focus after a card move): `core.card.move` that changes the layout focuses the moved card in the page workbench, or the first content card inside a moved group card, as mygo and the drop of the only tab of a card do, and a move that changes nothing keeps the focus (`docs/spec/groups.md#focus`, workbench case `layout.move.focuses-the-moved-card`). Verification: the page test failed on the unchanged code and passes; the mygo test of the case passes.
 - F968 (fold stage of a head and the selected tab): the fold stage of a card head takes the widest tab of the card in both workbenches, so a header shows the same tabs whichever tab is selected, and the selected tab is always among them. Verification: the shared head cases and the mygo head test failed on the unchanged code and pass.
 - F937-16 (fullscreen toggle of a narrow head): a card or group header too narrow for its tools keeps the fullscreen toggle beside ⋯ in both workbenches, and the tool menu no longer holds it. Verification: the narrow head tests of both workbenches failed on the unchanged code and pass.
 - F956 (text size scope of the stage and of keys): a press on the stage around the plane makes the frame the scope of the text size in both workbenches, and the native input monitor reports no press for a key input, so a Command = no longer moves the scope to the card that holds the keyboard (`docs/spec/text-size.md#scope`). Verification: the scope tests of both workbenches failed on the unchanged code and pass.

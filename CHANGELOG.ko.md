@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-30 (card move 뒤의 focus): page workbench에서 layout을 바꾸는 `core.card.move`는 mygo와 card의 유일한 tab 놓기처럼 옮긴 card에, group card를 옮기면 그 안의 첫 content card에 focus를 주고, 아무것도 바꾸지 않는 move는 focus를 그대로 둔다(`docs/spec/groups.md#focus`, workbench case `layout.move.focuses-the-moved-card`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다. 이 case의 mygo test가 통과한다.
 - F968 (head의 접힘 단계와 선택된 tab): 두 workbench에서 card head의 접힘 단계는 card에서 가장 넓은 tab을 쓰므로, header는 어느 tab이 선택되든 같은 tab을 보이고 선택된 tab은 언제나 그 가운데 있다. 검증: 공유 head case와 mygo head test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-16 (좁은 head의 전체 화면 toggle): 두 workbench에서 tool에 너무 좁은 card header나 group header는 전체 화면 toggle을 ⋯ 옆에 남기며, tool menu는 더 이상 그것을 담지 않는다. 검증: 두 workbench의 좁은 head test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F956 (stage와 key의 글자 크기 범위): 두 workbench에서 판 둘레의 stage를 누르면 프레임이 글자 크기의 범위가 되고, native 입력 monitor가 key 입력에 press를 보고하지 않으므로 Command =가 더 이상 keyboard를 가진 card로 범위를 옮기지 않는다(`docs/spec/text-size.md#scope`). 검증: 두 workbench의 범위 test가 바뀌지 않은 code에서 실패했고 통과한다.
