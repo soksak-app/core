@@ -13,9 +13,9 @@ use std::sync::Arc;
 
 pub use framework::Framework;
 pub use frontend::Frontend;
-pub use menu::key_equivalent;
 use gpui::{App, Styled as _};
 use gpui_kit as gpui;
+pub use menu::key_equivalent;
 use soksak_host::assets::Assets;
 use soksak_host::framework::{AppHandle, BlockingBody, BlockingTask};
 use soksak_host::{RunEvent, Setup};
@@ -69,6 +69,7 @@ pub(crate) const BOOTSTRAP: &str = r#"
   const epoch = `${Date.now()}-${Math.random()}`;
   const pending = new Map();
   const listeners = new Map();
+  let stream = null;
   let serial = 0;
   window.__soksak = {
     call(method, args) {
@@ -87,6 +88,16 @@ pub(crate) const BOOTSTRAP: &str = r#"
       if (!listeners.has(name)) listeners.set(name, new Set());
       listeners.get(name).add(fn);
       return Promise.resolve(() => listeners.get(name)?.delete(fn));
+    },
+    event(name, data) {
+      // default: no listener is registered for that event, so there is nobody to notify.
+      for (const fn of listeners.get(name) ?? []) fn(data);
+    },
+    onStream(fn) {
+      stream = fn;
+    },
+    stream(text) {
+      stream?.(JSON.parse(text));
     },
     receive(message) {
       if (message.event) {

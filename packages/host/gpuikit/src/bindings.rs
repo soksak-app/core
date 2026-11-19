@@ -468,7 +468,7 @@ fn dispatch(
                 };
                 frontend::deliver(
                     &label,
-                    format!("window.__soksakStream && window.__soksakStream({text})"),
+                    format!("window.__soksak && window.__soksak.stream({text})"),
                 );
                 Ok(())
             });

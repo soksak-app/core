@@ -212,7 +212,7 @@ fn with_webview_value<T: Send + 'static>(
 /// The script that delivers an event with name and payload to the entry of the page runtime.
 fn event_script(name: &str, payload: &serde_json::Value) -> port::Result<String> {
     Ok(format!(
-        "window.__soksakEvent && window.__soksakEvent({}, {})",
+        "window.__soksak && window.__soksak.event({}, {})",
         serde_json::to_string(name).map_err(|error| port::Error::from(error.to_string()))?,
         payload
     ))

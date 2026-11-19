@@ -160,7 +160,9 @@ fn open_window(
                 window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
                 titlebar: Some(gpui::TitlebarOptions {
                     title: Some(options.title.clone().into()),
-                    appears_transparent: false,
+                    // The content extends under the title bar and the page draws its first row there, as the
+                    // other hosts place their windows (docs/spec/hosts.md#window-buttons).
+                    appears_transparent: true,
                     traffic_light_position: None,
                 }),
                 // The window is shown after register has prepared the presentation of the first screen.

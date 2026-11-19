@@ -7499,6 +7499,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sok-gpuikit"
+version = "0.0.40"
+dependencies = [
+ "soksak-host",
+ "soksak-host-gpuikit",
+]
+
+[[package]]
 name = "sok-tauriv2"
 version = "0.0.45"
 dependencies = [

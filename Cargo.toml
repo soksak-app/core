@@ -1,7 +1,7 @@
 # The Rust workspace. Its crates share one Cargo.lock and one target/ folder.
 [workspace]
 resolver = "2"
-members = ["apps/tauriv2", "packages/host/rust", "packages/host/tauriv2", "packages/host/tauriv2/tests/fixtures/window-race", "packages/host/gpuikit", "packages/sok/rust"]
+members = ["apps/gpuikit", "apps/tauriv2", "packages/host/rust", "packages/host/tauriv2", "packages/host/tauriv2/tests/fixtures/window-race", "packages/host/gpuikit", "packages/sok/rust"]
 
 # The crates of the workspace that a member outside their package folders uses, such as the fixture program of a test.
 [workspace.dependencies]
