@@ -779,11 +779,11 @@ func TestPersistentTransportReplacesEndpointLeftByDeadService(t *testing.T) {
 	}
 }
 
-// An endpoint whose pid names a live process that started after the endpoint was published is stale, as the endpoint of a
-// machine restart is when its pid belongs to another program: the host removes it and starts the service
-// (docs/spec/persistent-services.md#endpoint-publisher).
-// contract: sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid
-func TestPersistentTransportReplacesTheEndpointOfAReusedPID(t *testing.T) {
+// replacesTheEndpointOfAnotherProcess writes an endpoint whose modification time is published and whose pid is pid, a live process
+// that is not the publisher, with a socket that does not exist, and checks that a send removes it and connects to the service
+// that the creation path starts (docs/spec/persistent-services.md#endpoint-publisher).
+func replacesTheEndpointOfAnotherProcess(t *testing.T, pid int, published time.Time) {
+	t.Helper()
 	executableDir := t.TempDir()
 	configDir := t.TempDir()
 	serviceDir := filepath.Join(configDir, "services", "service")
@@ -795,20 +795,9 @@ func TestPersistentTransportReplacesTheEndpointOfAReusedPID(t *testing.T) {
 	}
 	defer listener.Close()
 	writeHarnessEndpoint(t, configDir, socket)
-	// The process that holds the pid of the endpoint starts after the publication time, which the modification time of the
-	// endpoint states. It reads its input, whose write end the check holds, so it runs until the check ends it.
 	endpointPath := filepath.Join(serviceDir, "endpoint.json")
-	published := time.Now()
-	other := exec.Command("cat")
-	if _, err := other.StdinPipe(); err != nil {
-		t.Fatal(err)
-	}
-	if err := other.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { other.Process.Kill(); other.Wait() }()
 	stale, err := json.Marshal(map[string]any{
-		"protocol": 1, "pid": other.Process.Pid, "socket": filepath.Join(socketDir, "missing.sock"), "token": "stale-token",
+		"protocol": 1, "pid": pid, "socket": filepath.Join(socketDir, "missing.sock"), "token": "stale-token",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -879,9 +868,9 @@ func TestPersistentTransportReplacesTheEndpointOfAReusedPID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	owner := support.NewSidecarRecorder(t, "/reused")
+	owner := support.NewSidecarRecorder(t, "/stale")
 	if err := owner.Send(sidecars, "fixture-service", "surface", json.RawMessage(`{"operation":"open"}`)); err != nil {
-		t.Fatalf("the endpoint of pid %d, which started after the publication, was not replaced: %v", other.Process.Pid, err)
+		t.Fatalf("the endpoint of pid %d, which did not publish it, was not replaced: %v", pid, err)
 	}
 	if event := owner.Next(t); event.Surface != "surface" {
 		t.Fatalf("unexpected surface: %s", event.Surface)
@@ -893,6 +882,31 @@ func TestPersistentTransportReplacesTheEndpointOfAReusedPID(t *testing.T) {
 	if err := <-serverDone; err != nil {
 		t.Fatal(err)
 	}
+}
+
+// An endpoint whose pid names a live process that started after the endpoint was published is stale, as the endpoint of a
+// machine restart is when its pid belongs to another program: the host removes it and starts the service.
+// contract: sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid
+func TestPersistentTransportReplacesTheEndpointOfAReusedPID(t *testing.T) {
+	// The process that holds the pid of the endpoint starts after the publication time, which the modification time of the
+	// endpoint states. It reads its input, whose write end the check holds, so it runs until the check ends it.
+	published := time.Now()
+	other := exec.Command("cat")
+	if _, err := other.StdinPipe(); err != nil {
+		t.Fatal(err)
+	}
+	if err := other.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { other.Process.Kill(); other.Wait() }()
+	replacesTheEndpointOfAnotherProcess(t, other.Process.Pid, published)
+}
+
+// An endpoint whose pid names a live process of another user is stale, although that process started before the publication:
+// the service runs as the user of the host. 1 is launchd, which root runs.
+// contract: sidecars-transport.endpoint.foreign-process-is-not-the-publisher
+func TestPersistentTransportReplacesTheEndpointOfAProcessOfAnotherUser(t *testing.T) {
+	replacesTheEndpointOfAnotherProcess(t, 1, time.Now())
 }
 
 // contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement

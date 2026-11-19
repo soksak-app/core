@@ -672,12 +672,10 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     service.join().unwrap();
 }
 
-// An endpoint whose pid names a live process that started after the endpoint was published is stale, as the endpoint of
-// a machine restart is when its pid belongs to another program: the host removes it and starts the service
-// (docs/spec/persistent-services.md#endpoint-publisher).
-// contract: sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid
-#[test]
-fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
+/// Writes an endpoint whose modification time is `published` and whose pid is `pid`, a live process that is not the
+/// publisher, with a socket that does not exist, and checks that a send removes it and connects to the service that the
+/// creation path starts (docs/spec/persistent-services.md#endpoint-publisher).
+fn replaces_the_endpoint_of_another_process(pid: u32, published: std::time::SystemTime) {
     let executable_directory = folder::Folder::new();
     let config_directory = folder::Folder::new();
     let service_directory = config_directory.path().join("services/echo");
@@ -691,19 +689,12 @@ fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
         "socket": socket_path,
         "token": token
     });
-    // The process that holds the pid of the endpoint starts after the publication time, which the modification time of
-    // the endpoint states. It reads its input, whose write end the Child holds, so it runs until the check ends it.
     let endpoint_path = service_directory.join("endpoint.json");
-    let published = std::time::SystemTime::now();
-    let mut other = Command::new("cat")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
     std::fs::write(
         &endpoint_path,
         serde_json::to_vec(&serde_json::json!({
             "protocol": 1,
-            "pid": other.id(),
+            "pid": pid,
             "socket": service_directory.join("missing.sock"),
             "token": "stale-token"
         }))
@@ -726,7 +717,7 @@ fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
         config_directory.path().to_path_buf(),
     )
     .unwrap();
-    let (owner, events) = owner("reused", "/projects/reused");
+    let (owner, events) = owner("stale", "/projects/stale");
     let service = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
         let mut reader = BufReader::new(stream.try_clone().unwrap());
@@ -755,14 +746,8 @@ fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
         writeln!(stream, "{reply}").unwrap();
     });
 
-    let sent = sidecars.send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#));
-    let other_pid = other.id();
-    other.kill().unwrap();
-    other.wait().unwrap();
-    if let Err(error) = sent {
-        panic!(
-            "the endpoint of pid {other_pid}, which started after the publication, was not replaced: {error}"
-        );
+    if let Err(error) = sidecars.send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#)) {
+        panic!("the endpoint of pid {pid}, which did not publish it, was not replaced: {error}");
     }
     assert_eq!(events.recv().unwrap().surface, "surface");
     assert!(
@@ -771,6 +756,36 @@ fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
     );
     sidecars.stop();
     service.join().unwrap();
+}
+
+// An endpoint whose pid names a live process that started after the endpoint was published is stale, as the endpoint of
+// a machine restart is when its pid belongs to another program: the host removes it and starts the service.
+// contract: sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid
+#[test]
+fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
+    // The process that holds the pid of the endpoint starts after the publication time, which the modification time of
+    // the endpoint states. It reads its input, whose write end the Child holds, so it runs until the check ends it.
+    let published = std::time::SystemTime::now();
+    let mut other = Command::new("cat")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = other.id();
+    let checked =
+        std::panic::catch_unwind(|| replaces_the_endpoint_of_another_process(pid, published));
+    other.kill().unwrap();
+    other.wait().unwrap();
+    if let Err(panic) = checked {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+// An endpoint whose pid names a live process of another user is stale, although that process started before the
+// publication: the service runs as the user of the host. 1 is launchd, which root runs.
+// contract: sidecars-transport.endpoint.foreign-process-is-not-the-publisher
+#[test]
+fn persistent_transport_replaces_the_endpoint_of_a_process_of_another_user() {
+    replaces_the_endpoint_of_another_process(1, std::time::SystemTime::now());
 }
 
 // contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
