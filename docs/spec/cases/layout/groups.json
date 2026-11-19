@@ -2178,6 +2178,456 @@
    ]
   },
   {
+   "name": "a card that leaves a group gives its cells to a neighbour, every other line keeps its coordinate, and no paidBy record returns its room to another card",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 800
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.3,
+      0.65,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 0,
+       "c1": 1,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-6",
+       "c0": 1,
+       "c1": 2,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-2",
+      "members": [
+       "card-2",
+       "card-3",
+       "card-5",
+       "card-6"
+      ]
+     }
+    ],
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "split",
+     "args": {
+      "card": "card-2",
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-7"
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.25,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.3,
+       0.65,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 0,
+        "c1": 1,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 2,
+        "c1": 3,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 0,
+        "c1": 2,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-6",
+        "c0": 2,
+        "c1": 3,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-7",
+        "c0": 1,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 0,
+      "y": 284,
+      "w": 238,
+      "h": 224
+     }
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-7",
+      "target": "card-1",
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-7"
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.25,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.3,
+       0.65,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 0,
+        "c1": 1,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 1,
+        "c1": 3,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 0,
+        "c1": 2,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-6",
+        "c0": 2,
+        "c1": 3,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-7",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 0,
+      "y": 284,
+      "w": 238,
+      "h": 224
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "그룹 1",
+        "leader": "card-2",
+        "members": [
+         "card-2",
+         "card-3",
+         "card-5",
+         "card-6"
+        ]
+       }
+      ],
+      "leader": "card-1",
+      "lastCard": 7
+     }
+    }
+   ]
+  },
+  {
+   "name": "an operation in a space with groups removes the lines that no card uses",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 800
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.3,
+      0.65,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 0,
+       "c1": 1,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-6",
+       "c0": 1,
+       "c1": 2,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-2",
+      "members": [
+       "card-2",
+       "card-3",
+       "card-5",
+       "card-6"
+      ]
+     }
+    ],
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "split",
+     "args": {
+      "card": "card-2",
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-7"
+     }
+    },
+    {
+     "call": "close",
+     "args": {
+      "card": "card-7"
+     },
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.3,
+       0.65,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 0,
+        "c1": 1,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 1,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 0,
+        "c1": 1,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-6",
+        "c0": 1,
+        "c1": 2,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
    "name": "nested headers stack on the top of the rectangles, and a card reads its group path and level",
    "options": {
     "gap": 24,
@@ -3408,6 +3858,181 @@
     "lastCard": 4
    },
    "throws": "group card-4 does not cover one rectangle of the grid"
+  },
+  {
+   "name": "a stored layout with groups and a paidBy record is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 800
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.3,
+      0.65,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 0,
+       "c1": 1,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-6",
+       "c0": 1,
+       "c1": 2,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      }
+     ],
+     "paidBy": {
+      "card-3": {
+       "side": "lo",
+       "to": "card-2",
+       "at": 0
+      }
+     }
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-2",
+      "members": [
+       "card-2",
+       "card-3",
+       "card-5",
+       "card-6"
+      ]
+     }
+    ],
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "throws": "layout with groups stores the paidBy record of card card-3; a layout with groups keeps none"
+  },
+  {
+   "name": "a stored layout with groups and a line that no card uses is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 800
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.25,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.3,
+      0.65,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 3,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 2,
+       "c1": 3,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 0,
+       "c1": 2,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-6",
+       "c0": 2,
+       "c1": 3,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-2",
+      "members": [
+       "card-2",
+       "card-3",
+       "card-5",
+       "card-6"
+      ]
+     }
+    ],
+    "leader": "card-1",
+    "lastCard": 6
+   },
+   "throws": "layout with groups stores the x line 1, which no card uses; a layout with groups keeps none"
   },
   {
    "name": "a stored layout with a lastCard below an issued card number is refused",
