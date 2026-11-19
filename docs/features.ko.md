@@ -98,26 +98,26 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F899-4 — 터미널 상태 event(idle, running, exited, waiting, agent-busy, agent-waiting).
   - [!] F899-5 — TUI 키 adapter(D6)와 대화상자 처리(D5). F899-4 뒤에 한다. sidecar alacritty의 S120으로 구현했다: 키 adapter와 대화상자 supervisor. 보류: TUI 키 table이 비어 있어서 agent 동작이 TUI 키에 도달하지 않는다(alacritty S122). 원인: 어떤 agent TUI의 키도 agent 버전과 함께 관찰되어 기록되지 않았다. 재시도 조건: agent TUI의 키가 버전과 함께 관찰되어 `TUI_KEYS`에 기록되고, `key_for`의 red-green 테스트가 그것을 덮는다.
   - [o] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7). sidecar alacritty의 S121과 sidecar vt의 S181로 구현했다. 거부 계약은 persistent services 사양에 있다. 두 sidecar 모두 Red와 Green을 기록했다.
-  - [ ] F899-7 — 터미널 간 메시징: sidecar가 등록한 폴더를 감시해 file event를 보내고, 메시지는 입력 주입으로, agent가 지원하면 MCP 도구 `messages.read`와 `messages.wait`로 전달한다(D3, D4).
+  - [~] F899-7 — 터미널 간 메시징: sidecar가 등록한 폴더를 감시해 file event를 보내고, 메시지는 입력 주입으로, agent가 지원하면 MCP 도구 `messages.read`와 `messages.wait`로 전달한다(D3, D4). 진행 중: spec과 `sok message send` 명령은 완료했다. sidecar의 감시, event와 그 test는 alacritty-core 저장소에 있으며 이 worktree에는 없다.
   - 계획: docs/plans/terminal-plan.ko.md (5부). 미정 항목 V1~V8과 결정 D1~D7이 있으며, 아직 구현하지 않았다.
-- [ ] F909 — P1, F899-7 후속: 메시지에 보낸 terminal이 없어서 reader에게 응답 주소가 없다. 입력: 메시지 파일은 text만 담으므로 reader가 보낸 terminal을 지정할 수 없다. 기대: 메시지 파일 이름이 보낸 surface를 담고, `messages_read`와 file event가 `from`을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
-  - [ ] F909-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 파일 이름의 sender 규칙, reads와 event의 `from` member, `invalid-sender` 거부를 정의한다.
+- [~] F909 — P1, F899-7 후속: 메시지에 보낸 terminal이 없어서 reader에게 응답 주소가 없다. 입력: 메시지 파일은 text만 담으므로 reader가 보낸 terminal을 지정할 수 없다. 기대: 메시지 파일 이름이 보낸 surface를 담고, `messages_read`와 file event가 `from`을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
+  - [o] F909-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 파일 이름의 sender 규칙, reads와 event의 `from` member, `invalid-sender` 거부를 정의한다.
   - [ ] F909-2 — Red: `alacritty-core`의 test가 sender가 없는 이름의 메시지를 쓰고 path와 함께 `invalid-sender`를 기대한다. 변경 전에 실패해야 한다.
   - [ ] F909-3 — Green: 같은 test가 통과하고, sender가 있는 메시지는 `messages_read`와 file event에서 `from`을 돌려준다.
-- [ ] F910 — P1, F899-7 후속: sidecar가 재시작하면 cursor가 초기화된다. `seq`가 process마다 1부터 세므로, 재시작 뒤 `after` cursor는 메시지를 건너뛰거나 반복한다. 기대: 이전 registration에서 얻은 cursor는 `epoch-changed`로 거부되며, 각 read는 epoch로 registration을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
-  - [ ] F910-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 registration을 cursor epoch로 정의하고, reads의 `registration` 인자와 `epoch-changed` 거부를 정의한다.
+- [~] F910 — P1, F899-7 후속: sidecar가 재시작하면 cursor가 초기화된다. `seq`가 process마다 1부터 세므로, 재시작 뒤 `after` cursor는 메시지를 건너뛰거나 반복한다. 기대: 이전 registration에서 얻은 cursor는 `epoch-changed`로 거부되며, 각 read는 epoch로 registration을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
+  - [o] F910-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 registration을 cursor epoch로 정의하고, reads의 `registration` 인자와 `epoch-changed` 거부를 정의한다.
   - [ ] F910-2 — Red: `alacritty-core`의 test가 한 registration의 cursor로 읽고, 같은 folder로 두 번째 sidecar process를 시작한 뒤 `epoch-changed`를 기대한다. 변경 전에 실패해야 한다.
   - [ ] F910-3 — Green: 같은 test가 통과하고, 현재 registration과 `after` 0의 read가 새 registration의 모든 메시지를 돌려준다.
   - [ ] F910-4 — Red: `alacritty-core`의 test가 sidecar를 같은 process 안에서 한 번, 두 번째 process로 한 번 재시작하고, 새 시작의 registration이 이전 registration과 다르며 이전 cursor가 `epoch-changed`로 거부됨을 기대한다. 변경 전에 실패해야 한다. 컴파일하지 않았다. Red 실행은 기록되지 않았다.
-- [ ] F911 — P1, F899-7 후속: message 파일을 writer가 쓰는 중에 읽는다. 입력: watch는 새 파일을 생성 시점에 보고하며, 그때 writer는 text를 아직 쓰지 않았다. 기대: writer가 `.txt`로 끝나지 않는 이름으로 쓴 뒤 message 이름으로 rename하며, rename만이 가시성의 유일한 시점이다. `spec/messaging.ko.md`가 정한 대로다.
-  - [ ] F911-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 임시 이름, 가시성의 유일한 시점인 rename, `sok` 밖의 writer 규칙을 정의한다.
+- [~] F911 — P1, F899-7 후속: message 파일을 writer가 쓰는 중에 읽는다. 입력: watch는 새 파일을 생성 시점에 보고하며, 그때 writer는 text를 아직 쓰지 않았다. 기대: writer가 `.txt`로 끝나지 않는 이름으로 쓴 뒤 message 이름으로 rename하며, rename만이 가시성의 유일한 시점이다. `spec/messaging.ko.md`가 정한 대로다.
+  - [o] F911-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 임시 이름, 가시성의 유일한 시점인 rename, `sok` 밖의 writer 규칙을 정의한다.
   - [ ] F911-2 — Red: `alacritty-core`의 test가 `.txt` 이름을 만든 뒤 두 번째 단계에서 text를 쓰고, rename 전에는 event도 message도 없음을 기대한다. 생성 시점에 event가 오면 변경 전에 실패해야 한다.
   - [ ] F911-3 — Green: 같은 test가 통과하고, event는 rename 시점에 오며, read는 전체 text를 돌려준다.
   - [ ] F911-4 — 측정: `alacritty-core`의 test가 임시 이름으로 file을 쓰는 동안의 event를 기록한다. rename 전에는 event가 없고, rename에서 `created` 1개가 온다. `spec/messaging.md`(41행)의 미측정 문장을 검증하며, 이 test가 없으면 그 문장은 미측정으로 남는다.
-  - [ ] F911-5 — Send command `sok message send <folder> <text>`가 임시 이름과 rename으로 message를 쓰며, 64 KiB를 넘는 text를 거부한다([cli](spec/cli.ko.md#명령)). 입력: folder와 text. 기대: `spec/cli.ko.md`가 정한 대로다.
-  - [ ] F911-5-1 — Spec: `spec/cli.md`와 `spec/cli.ko.md`가 command, 입력, 64 KiB를 넘는 text의 거부, 임시 이름과 rename을 정의한다.
-  - [ ] F911-5-2 — Red: `packages/sok/rust`와 `packages/sok/go` 각각의 test가 64 KiB에 1 byte를 더한 text를 쓰고 명시적 거부와 folder에 파일이 없음을 기대한다. 또 정상 text를 쓰고 rename 전에는 `.txt` 파일이 없으며 rename 뒤에는 text 전체가 있음을 기대한다. 변경 전에 실패해야 한다. 컴파일하지 않았다. Red 실행은 기록되지 않았다.
-  - [ ] F911-5-3 — Green: 같은 test가 두 package에서 통과한다.
+  - [o] F911-5 — Send command `sok message send <folder> <text>`가 임시 이름과 rename으로 message를 쓰며, 64 KiB를 넘는 text를 거부한다([cli](spec/cli.ko.md#명령)). 입력: folder와 text. 기대: `spec/cli.ko.md`가 정한 대로다.
+  - [o] F911-5-1 — Spec: `spec/cli.md`와 `spec/cli.ko.md`가 command, 입력, 64 KiB를 넘는 text의 거부, 임시 이름과 rename을 정의한다.
+  - [o] F911-5-2 — Red: `packages/sok/rust`와 `packages/sok/go` 각각의 test가 64 KiB에 1 byte를 더한 text를 쓰고 명시적 거부와 folder에 파일이 없음을 기대한다. 또 정상 text를 쓰고 rename 전에는 `.txt` 파일이 없으며 rename 뒤에는 text 전체가 있음을 기대한다. 변경 전에 실패해야 한다. Red 기록: Rust `message_test`가 4개 중 4개 실패했고, Go `TestSend`가 4개 중 4개 실패했으며 모두 알 수 없는 명령 `message`에서 실패했다.
+  - [o] F911-5-3 — Green: 같은 test가 두 package에서 통과한다. Green 기록: Rust `message_test`가 4개 중 4개, Go `TestSend`가 4개 중 4개 통과했다.
 - [ ] F912 — P2, F899-7과 F908 후속: terminal 사이 작업 hand-off와 결과는 message가 아니라 상태 record다. 입력: message는 text만 돌려주므로 결과가 어느 attempt에 대한 답인지 보이지 않는다. 기대: `spec/messaging.ko.md`가 hand-off를 party와 card 기능이 소유하는 record로 정의하고, 상태 `assigned`, `started`, `result`, `integrated`, `abandoned`, `attempt` 번호, 이전 attempt의 결과를 거부하는 `stale-attempt`를 정의한다.
   - [ ] F912-1 — Spec: `spec/messaging.md`와 `spec/messaging.ko.md`가 분리, 상태, attempt 번호, `stale-attempt`를 정의한다. Record에는 timer나 lock이 없다.
   - [ ] F912-2 — Red: hand-off record의 소유 module의 test가 attempt 2가 할당된 뒤 attempt 1의 결과를 적용하고 `stale-attempt`를 기대한다. Record가 생기기 전에는 실패해야 한다.
