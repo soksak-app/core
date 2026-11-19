@@ -367,9 +367,11 @@ static void (*applicationSendEvent)(id, SEL, NSEvent *);
 static void releaseInput(void *owner);
 static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces);
 
-// Gives the input of owner back when no open transaction of owner holds it.
+// Gives the input of owner back when no open transaction of owner holds it and no earlier release of owner is on its way back. A
+// release posts its turns at the start of the queue, so a release during another would put later input ahead of the turns that the
+// earlier release posted; the end of that earlier release gives the input back instead, in its order.
 static void releaseWhenFree(void *owner) {
-    if (!layoutOf(owner)) releaseInput(owner);
+    if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);
 }
 
 static SPKeyWait *keyWait(void *owner) {

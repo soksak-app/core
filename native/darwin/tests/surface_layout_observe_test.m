@@ -454,6 +454,38 @@ static void checkReturnedKeyKeepsItsTurn(void) {
     [window release];
 }
 
+// The keys that the decision gave back are on their way through the queue when the transaction of the window commits; the keys that
+// arrived during that return waited in the hold and go after them, so the commit gives no key back ahead of an earlier one
+// (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+static void checkCommitDuringAReturnKeepsTheKeyOrder(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 900, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    NSMutableString *typed = [NSMutableString string];
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown handler:^NSEvent *(NSEvent *event) {
+        [typed appendString:event.characters];
+        return nil;
+    }];
+    void (^key)(NSString *, unsigned short) = ^(NSString *character, unsigned short code) {
+        [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+            windowNumber:window.windowNumber context:nil characters:character charactersIgnoringModifiers:character isARepeat:NO
+            keyCode:code]];
+    };
+    surfaceLayoutKeysWaitOpen(window, true);
+    check(surfaceLayoutHoldKey(window, ^{ key(@"a", 0); }, ^{}), @"a key waits for the decision");
+    check(surfaceLayoutHoldKey(window, ^{ key(@"b", 11); }, ^{}), @"a second key waits for the decision");
+    surfaceLayoutBegin(window, 91, ^(int allowed) {});
+    surfaceLayoutKeysDecided(window);
+    check(surfaceLayoutHoldKey(window, ^{ key(@"c", 8); }, ^{}), @"a key sent while the decided keys return waits");
+    check(surfaceLayoutCommit(window, 91), @"the transaction of the window commits while the keys return");
+    runQueue();
+    check([typed isEqualToString:@"abc"], [NSString stringWithFormat:
+        @"the keys go in the order they came when the transaction commits during their return (typed %@)", typed]);
+    [NSEvent removeMonitor:monitor];
+    [window close];
+    [window release];
+}
+
 // A key that ends the hold commits the transaction of its window, and the presentation of that ticket answers the commit once,
 // also when a newer layout of the window began before the presentation asked for its commit; the cancel of such a ticket removes
 // that answer (docs/spec/native-surfaces.md#layout-transaction).
@@ -546,6 +578,7 @@ int main(void) { @autoreleasepool {
     checkActionsAreToldOnce();
     resetOwners();
     checkReturnedKeyKeepsItsTurn();
+    checkCommitDuringAReturnKeepsTheKeyOrder();
     resetOwners();
     checkInputEndedTicketCommitsAfterANewerLayout();
     [third release];

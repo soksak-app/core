@@ -332,6 +332,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F983-1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
+    ],
+    expected: "A commit during the return of earlier keys gives no later key back ahead of them.",
+    levels: ["unit"],
+  },
+  {
     id: "F973-1",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },
