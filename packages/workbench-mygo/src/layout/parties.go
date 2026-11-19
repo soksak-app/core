@@ -17,6 +17,22 @@ type Parties struct {
 	palette map[string]string
 	// rail is the rail width of the theme in points. The party border takes it, and each outline is inset by half of it.
 	rail float64
+	// drawn holds the drawings that Drawings computed last and drawnFrom their inputs, so a frame that follows no change of the
+	// inputs reads them without computing the outlines again. The palette and the rail are fixed for the life of the parties.
+	drawn     []Drawing
+	drawnFrom []drawingInput
+}
+
+// drawingInput is what the drawing of a party is computed from: its fields, the presented rectangle of each of its cards, and the
+// gap of the grid.
+type drawingInput struct {
+	ID          string
+	Cards       []string
+	Rects       []Rect
+	Leader      string
+	Color       string
+	LeaderColor string
+	Gap         float64
 }
 
 // party is a group of touching cards. Cards keeps the order in which the cards joined the party.
@@ -770,8 +786,49 @@ type Drawing struct {
 }
 
 // Drawings returns the drawing of each party, in the order of the parties. A party with no leader has no leader sides, and a party
-// with no leader color draws its leader sides in the theme token party-leader.
+// with no leader color draws its leader sides in the theme token party-leader. The drawings are computed once for each change of the
+// parties, of the rectangles of their cards or of the gap, and the callers read them without changing them.
 func (p *Parties) Drawings(g *Grid) ([]Drawing, error) {
+	inputs := make([]drawingInput, 0, len(p.list))
+	for _, item := range p.list {
+		input := drawingInput{ID: item.ID, Cards: item.Cards, Rects: make([]Rect, 0, len(item.Cards)), Color: item.Color, Gap: g.Gap()}
+		for _, id := range item.Cards {
+			rect, ok := g.Rect(id)
+			if !ok {
+				return nil, fmt.Errorf("party %s: unknown card %s", item.ID, id)
+			}
+			input.Rects = append(input.Rects, rect)
+		}
+		if item.Leader != nil {
+			input.Leader = *item.Leader
+		}
+		if item.LeaderColor != nil {
+			input.LeaderColor = *item.LeaderColor
+		}
+		inputs = append(inputs, input)
+	}
+	if p.drawn != nil && slices.EqualFunc(inputs, p.drawnFrom, sameDrawingInput) {
+		return p.drawn, nil
+	}
+	drawings, err := p.computeDrawings(g)
+	if err != nil {
+		return nil, err
+	}
+	for i := range inputs {
+		inputs[i].Cards = slices.Clone(inputs[i].Cards)
+	}
+	p.drawn, p.drawnFrom = drawings, inputs
+	return drawings, nil
+}
+
+// sameDrawingInput tells whether two parties have the same drawing input.
+func sameDrawingInput(a, b drawingInput) bool {
+	return a.ID == b.ID && a.Leader == b.Leader && a.Color == b.Color && a.LeaderColor == b.LeaderColor && a.Gap == b.Gap &&
+		slices.Equal(a.Cards, b.Cards) && slices.Equal(a.Rects, b.Rects)
+}
+
+// computeDrawings computes the drawing of each party, in the order of the parties.
+func (p *Parties) computeDrawings(g *Grid) ([]Drawing, error) {
 	out := []Drawing{}
 	for _, item := range p.list {
 		outline, err := p.outline(g, item.Cards)

@@ -13957,6 +13957,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F924",
+    implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "if p.drawn != nil && slices.EqualFunc(inputs, p.drawnFrom, sameDrawingInput) {" }],
+    tests: [{ file: "packages/workbench-mygo/tests/layout/parties_drawing_cache_test.go", id: "TestPartyDrawingsAreComputedOncePerChange" }],
+    expected: "The mygo host computes the party drawings once for each change of the parties, the card rectangles or the gap.",
+    levels: ["unit"],
+  },
+  {
     id: "F922",
     implementation: [{ file: "packages/host/go/src/images.go", symbol: "logAnswerError(\"image reply \"+d.Name, sendResponse(d.Name, d.JSON))" }],
     tests: [{ file: "packages/host/go/src/images_test.go", id: "TestARefusedFrameIsAnsweredToItsSupplier" }],
