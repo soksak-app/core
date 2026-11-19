@@ -223,7 +223,7 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 			s.plane.Move(from, hit.ID, hit.Zone)
 			s.focusCard(from)
 		}
-		s.settle()
+		s.settleChange(layout.LayoutChange{Moved: []string{from}})
 		return nil
 	}
 	encoded, err := json.Marshal(tabData([]layout.Tab{moving}, moving.ID))
@@ -231,15 +231,17 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 		return err
 	}
 	born, ok := s.plane.SplitToward(hit.ID, hit.Zone, layout.SplitInit{Data: encoded})
-	if ok {
-		source.RemoveTab(tab)
-		source.SettleActiveTab()
-		if err := s.storeCard(from, source); err != nil {
-			return err
-		}
-		s.focusCard(born)
+	if !ok {
+		s.settle()
+		return nil
 	}
-	s.settle()
+	source.RemoveTab(tab)
+	source.SettleActiveTab()
+	if err := s.storeCard(from, source); err != nil {
+		return err
+	}
+	s.focusCard(born)
+	s.settleChange(layout.LayoutChange{Split: []layout.SplitCard{{Card: hit.ID, Born: born}}})
 	return nil
 }
 

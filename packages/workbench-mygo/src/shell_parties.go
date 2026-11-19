@@ -63,6 +63,17 @@ func (s *Shell) runParty(name string, changes bool, params json.RawMessage) (any
 	return reply, nil
 }
 
+// reconcileParties corrects each party of the shown plane that the layout change affected (docs/spec/parties.md#changes-of-the-layout).
+// The caller stores the plane with its parties and asks for the frame that sends core.parties to its watchers.
+func (s *Shell) reconcileParties(change layout.LayoutChange) {
+	if s.plane == nil || s.parties == nil {
+		return
+	}
+	if _, err := s.parties.Reconcile(s.plane, change); err != nil {
+		s.fail(fmt.Errorf("parties: %w", err))
+	}
+}
+
 // restoreParties makes the parties of a space from its stored members, against the cards of its plane.
 func (s *Shell) restoreParties(project *projectRecord, space layout.Space, plane *layout.Grid) error {
 	raw, err := json.Marshal(space)

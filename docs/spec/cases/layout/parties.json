@@ -1,5 +1,5 @@
 {
-  "description": "The party cases of the layout model (docs/spec/parties.md#commands). Each case builds a grid of content cards from state, then runs its steps in order: each step calls one party command with params. A step that returns names the reply that the command gives, with color_token naming the theme token party-1 to party-6 that the first party takes (docs/spec/parties.md#commands). A step that errors names the exact text of the refusal (docs/spec/parties.md#commands). The owning test in packages/workbench runs these cases against the party module. A case may state `drawing`, an object with `theme-rail-w` (the rail width of the theme, which the party border takes), `unit` (the points of one grid line value) and `gap` (the grid gap in points). The plane of the case is `unit` times the largest line value on each axis, and the grid fills it by the layout rules; the outline in `returns` is in points (docs/spec/parties.md#drawing). A card of a state may carry `fixed: true`, which marks a fixed card. A fixed card whose id is a side name (`left`, `right`, `top` or `bottom`) is a window sidebar, because the card ID of a window sidebar is the name of its side (docs/spec/external-sidebars.md#fixed-placement-and-persistence), and no party takes it.",
+  "description": "The party cases of the layout model (docs/spec/parties.md#commands). Each case builds a grid of content cards from state, then runs its steps in order: each step calls one party command with params. A step that returns names the reply that the command gives, with color_token naming the theme token party-1 to party-6 that the first party takes (docs/spec/parties.md#commands). A step that errors names the exact text of the refusal (docs/spec/parties.md#commands). The owning test in packages/workbench runs these cases against the party module. A case may state `drawing`, an object with `theme-rail-w` (the rail width of the theme, which the party border takes), `unit` (the points of one grid line value) and `gap` (the grid gap in points). The plane of the case is `unit` times the largest line value on each axis, and the grid fills it by the layout rules; the outline in `returns` is in points (docs/spec/parties.md#drawing). A card of a state may carry `fixed: true`, which marks a fixed card. A fixed card whose id is a side name (`left`, `right`, `top` or `bottom`) is a window sidebar, because the card ID of a window sidebar is the name of its side (docs/spec/external-sidebars.md#fixed-placement-and-persistence), and no party takes it. A step may instead state `layout`, a layout change of docs/spec/parties.md#changes-of-the-layout that the runner makes through the grid operation that the hosts use, and then corrects the parties through the correction function of the host: `close` closes `card`; `split` splits `card` toward `side` into a new card with the id `born`; `move` moves `card` to `side` of `target`; `boundary` drags the boundary `line` on `axis` to `position` in points and merges the lines that the drag makes coincide, as the end of a divider drag does. A case with a layout step states `drawing`, so its plane has the size that the operation needs. Its `returns` names the `changed` rows of the correction, one for each party that the change corrected.",
   "cases": [
     {
       "name": "two touching cards make one party with the first color",
@@ -1971,6 +1971,593 @@
               }
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "a closed member leaves the party",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c"
+            ]
+          }
+        },
+        {
+          "layout": "close",
+          "card": "c",
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "c"
+                ],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "cards": [
+              "a",
+              "b"
+            ],
+            "reason": "closed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a close that leaves one card deletes the party",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "layout": "close",
+          "card": "b",
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "a",
+                  "b"
+                ],
+                "leader": null,
+                "deleted": true
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "error": "unknown party p1"
+        }
+      ]
+    },
+    {
+      "name": "a split of a member puts the new card in the party",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "layout": "split",
+          "card": "a",
+          "side": "right",
+          "born": "n",
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "cards": [
+              "a",
+              "b",
+              "n"
+            ],
+            "reason": "split",
+            "outline": [
+              [
+                [
+                  2,
+                  2
+                ],
+                [
+                  798,
+                  2
+                ],
+                [
+                  798,
+                  398
+                ],
+                [
+                  2,
+                  398
+                ]
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "a moved member that touches no other member leaves the party",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 0,
+            "c1": 1,
+            "r0": 1,
+            "r1": 2
+          },
+          {
+            "id": "d",
+            "c0": 1,
+            "c1": 2,
+            "r0": 1,
+            "r1": 2
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c"
+            ]
+          }
+        },
+        {
+          "layout": "move",
+          "card": "b",
+          "target": "d",
+          "side": "right",
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "b"
+                ],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "cards": [
+              "a",
+              "c"
+            ],
+            "reason": "moved"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a move that breaks the group keeps the part with the most cards",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "e",
+            "c0": 4,
+            "c1": 5,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "x",
+            "c0": 0,
+            "c1": 5,
+            "r0": 1,
+            "r1": 2
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e"
+            ]
+          }
+        },
+        {
+          "layout": "move",
+          "card": "x",
+          "target": "c",
+          "side": "left",
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "a",
+                  "b"
+                ],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "cards": [
+              "c",
+              "d",
+              "e"
+            ],
+            "leader": null,
+            "reason": "split-most-cards"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a move that breaks the group keeps the part with the leader",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "e",
+            "c0": 4,
+            "c1": 5,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "x",
+            "c0": 0,
+            "c1": 5,
+            "r0": 1,
+            "r1": 2
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e"
+            ],
+            "leader": "a"
+          }
+        },
+        {
+          "layout": "move",
+          "card": "x",
+          "target": "c",
+          "side": "left",
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "c",
+                  "d",
+                  "e"
+                ],
+                "leader": "a",
+                "deleted": false
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "cards": [
+              "a",
+              "b"
+            ],
+            "leader": "a",
+            "reason": "split-leader"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a resize that stops two members touching deletes the party",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 400,
+        "gap": 0
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "l1",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "l2",
+            "c0": 0,
+            "c1": 1,
+            "r0": 1,
+            "r1": 3
+          },
+          {
+            "id": "r1",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 2
+          },
+          {
+            "id": "r2",
+            "c0": 1,
+            "c1": 2,
+            "r0": 2,
+            "r1": 3
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "l2",
+              "r1"
+            ]
+          }
+        },
+        {
+          "layout": "boundary",
+          "axis": "y",
+          "line": 1,
+          "position": 800,
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "l2",
+                  "r1"
+                ],
+                "leader": null,
+                "deleted": true
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "error": "unknown party p1"
         }
       ]
     }

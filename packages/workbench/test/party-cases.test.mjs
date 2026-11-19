@@ -20,6 +20,31 @@ function asCase(party) {
   return { ...rest, color_token: Object.keys(palette()).find((token) => palette()[token] === color) ?? null };
 }
 
+/**
+ * Makes the layout change of a layout step on the grid and returns the change that reconcile of the party module takes: the moved
+ * cards and the new card of a split with the card it was split from. A refused operation fails the case.
+ */
+function layoutChange(grid, step) {
+  if (step.layout === "close") {
+    assert.ok(grid.close(step.card), `close ${step.card}`);
+    return { moved: [], split: [] };
+  }
+  if (step.layout === "split") {
+    assert.equal(grid.splitToward(step.card, step.side, { id: step.born }), step.born, `split ${step.card} toward ${step.side}`);
+    return { moved: [], split: [{ card: step.card, born: step.born }] };
+  }
+  if (step.layout === "move") {
+    assert.ok(grid.move(step.card, step.target, step.side), `move ${step.card} to the ${step.side} of ${step.target}`);
+    return { moved: [step.card], split: [] };
+  }
+  if (step.layout === "boundary") {
+    grid.moveBoundary(step.axis, step.line, step.position, false);
+    grid.mergeCoincident(step.axis, step.line);
+    return { moved: [], split: [] };
+  }
+  throw new Error(`unknown layout step ${step.layout}`);
+}
+
 let instances = 0;
 for (const item of cases) {
   test(`layout case: ${item.name} (docs/spec/parties.md#commands)`, { timeout: 10000 }, async () => {
@@ -46,6 +71,13 @@ for (const item of cases) {
       palette,
     });
     for (const step of item.steps) {
+      if ("layout" in step) {
+        // A layout step changes the grid through the grid operation that plane.js runs, then corrects the parties through
+        // reconcile, as plane.js does after each layout change (docs/spec/parties.md#changes-of-the-layout).
+        const change = layoutChange(grid, step);
+        assert.deepEqual({ changed: parties.reconcile(change) }, step.returns, `layout ${step.layout}: changed`);
+        continue;
+      }
       const call = step.call.replace(/^core\.party\./, "");
       const run = () => registry.run(step.call, step.params);
       if ("error" in step) {

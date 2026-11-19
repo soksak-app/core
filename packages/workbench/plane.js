@@ -33,7 +33,7 @@ import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
-import { groupCandidates, partyMenuItems } from "./parties.js";
+import { groupCandidates, partyMenuItems, reconcile } from "./parties.js";
 import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
@@ -911,7 +911,7 @@ function splitWith(cardId, side, plugin, params) {
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
   if (!born) throw new Error(`card ${cardId} could split toward ${side}, and the split toward ${side} made no card`);
   focusOn(born);
-  settle();
+  settle({ moved: [], split: [{ card: cardId, born }] });
   return { card: born, tab: t.id };
 }
 
@@ -1005,7 +1005,7 @@ function dropTab(fromId, tabId, hit) {
     if (fromId === hit.id) return settle();
     grid.move(fromId, hit.id, hit.zone);
     focusOn(fromId);
-    return settle();
+    return settle({ moved: [fromId], split: [] });
   }
 
   removeTab(from, tabId);                                        // T4 — the slot stays and only the tab moves
@@ -1014,10 +1014,10 @@ function dropTab(fromId, tabId, hit) {
     { data: { tabs: [moving], activeId: moving.id } });
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
-  } else {
-    focusOn(born);
+    return settle();
   }
-  settle();
+  focusOn(born);
+  settle({ moved: [], split: [{ card: hit.id, born }] });
 }
 
 /* ── Card sidebar ─────────────────────────────────────────────────────
@@ -1138,7 +1138,10 @@ function drawCardSidebars(el, card, rect) {
  * It uses `insertAt` and not `splitToward`. A split inherits the row range of the split card and occupies only one row,
  * but a sidebar must reach along its side as far as the order lets it.
  */
-function settle() {
+/** A layout change that moved no card and split no card; the parties are corrected from the grid alone. */
+const NO_CARD_CHANGE = { moved: [], split: [] };
+
+function settle(change = NO_CARD_CHANGE) {
   if (!grid) return;
   closePicker("settled");
   // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
@@ -1147,6 +1150,8 @@ function settle() {
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));
+  // Each party that the change affected is corrected before the render that draws and stores it (docs/spec/parties.md#changes-of-the-layout).
+  reconcile(change);
   view.render();
   syncBackgroundSessions();
 }
@@ -1561,6 +1566,9 @@ function build(kept) {
       for (const divider of plane.querySelectorAll(".sp-divider:not([data-expose])")) {
         divider.dataset.expose = "core.divider";
       }
+      // A drag of the view merges the lines that it makes coincide, which can stop cards touching; the render of settle follows
+      // the correction that settle made (docs/spec/parties.md#changes-of-the-layout).
+      if (reason !== "render") reconcile(NO_CARD_CHANGE);
       keepHiddenSidebars();
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).

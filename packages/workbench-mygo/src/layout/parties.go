@@ -759,3 +759,69 @@ func (p *Parties) record(g *Grid, target *party) (Record, error) {
 	}
 	return Record{ID: target.ID, Cards: slices.Clone(target.Cards), Leader: target.Leader, Color: target.Color, LeaderColor: target.LeaderColor, Outline: pairs, Reason: target.Reason}, nil
 }
+
+// LayoutChange names what a layout change did that the grid alone does not show: the cards it moved and the new card of each split.
+type LayoutChange struct {
+	Moved []string
+	Split []SplitCard
+}
+
+// SplitCard names the new card of a split and the card it was split from.
+type SplitCard struct {
+	Card string
+	Born string
+}
+
+// Reconcile corrects each party that a layout change affected, in the same change (docs/spec/parties.md#changes-of-the-layout). A
+// card that left the grid leaves its party (closed); the new card of a split joins the party of the card it was split from (split);
+// a moved card that touches no other member, or whose move breaks the group, leaves its party (moved); the remaining cards of a party
+// that are no longer connected keep one part by the split rule, and a party with fewer than 2 cards is deleted. It returns one row
+// for each corrected party, in the order of the parties, and no row for a party that the change did not affect.
+func (p *Parties) Reconcile(g *Grid, change LayoutChange) ([]partyChange, error) {
+	rows := []partyChange{}
+	for _, target := range slices.Clone(p.list) {
+		before := slices.Clone(target.Cards)
+		reason := ""
+		present := slices.DeleteFunc(slices.Clone(target.Cards), func(id string) bool { _, ok := g.Card(id); return !ok })
+		if len(present) != len(target.Cards) {
+			target.Cards = present
+			reason = "closed"
+		}
+		for _, split := range change.Split {
+			if _, ok := g.Card(split.Born); ok && slices.Contains(target.Cards, split.Card) && p.partyOf(split.Born) == nil {
+				// The new card joins the party last, as a card that the party takes does.
+				target.Cards = append(target.Cards, split.Born)
+				reason = "split"
+			}
+		}
+		for _, moved := range change.Moved {
+			if !slices.Contains(target.Cards, moved) {
+				continue
+			}
+			parts, err := groups(g, target.Cards)
+			if err != nil {
+				return nil, err
+			}
+			if len(parts) > 1 {
+				target.Cards = slices.DeleteFunc(target.Cards, func(id string) bool { return id == moved })
+				reason = "moved"
+			}
+		}
+		if target.Leader != nil && !slices.Contains(target.Cards, *target.Leader) {
+			target.Leader = nil
+		}
+		parts, err := groups(g, target.Cards)
+		if err != nil {
+			return nil, err
+		}
+		if reason == "" && len(parts) <= 1 {
+			continue
+		}
+		row, err := p.settle(g, target, before, reason)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+	}
+	return rows, nil
+}

@@ -112,10 +112,19 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 			} `json:"drawing"`
 			State layout.State `json:"state"`
 			Steps []struct {
-				Call    string          `json:"call"`
-				Params  json.RawMessage `json:"params"`
-				Returns json.RawMessage `json:"returns"`
-				Error   *string         `json:"error"`
+				// A layout step names its change and the members of its grid operation (docs/spec/parties.md#changes-of-the-layout).
+				Layout   string          `json:"layout"`
+				Card     string          `json:"card"`
+				Side     string          `json:"side"`
+				Born     string          `json:"born"`
+				Target   string          `json:"target"`
+				Axis     string          `json:"axis"`
+				Line     int             `json:"line"`
+				Position float64         `json:"position"`
+				Call     string          `json:"call"`
+				Params   json.RawMessage `json:"params"`
+				Returns  json.RawMessage `json:"returns"`
+				Error    *string         `json:"error"`
 			} `json:"steps"`
 		} `json:"cases"`
 	}
@@ -148,6 +157,52 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 			}
 			parties := layout.NewParties(shownPalette(t), shownRail(t))
 			for i, s := range kase.Steps {
+				if s.Layout != "" {
+					// A layout step changes the grid through the grid operation that the shell runs, then corrects the parties
+					// through Reconcile, as the shell does after each layout change.
+					var change layout.LayoutChange
+					switch s.Layout {
+					case "close":
+						if !grid.Close(s.Card) {
+							t.Fatalf("%s: step %d: close %s is refused", kase.Name, i, s.Card)
+						}
+					case "split":
+						born := s.Born
+						if id, ok := grid.SplitToward(s.Card, s.Side, layout.SplitInit{ID: &born}); !ok || id != born {
+							t.Fatalf("%s: step %d: split %s toward %s made %q, want %s", kase.Name, i, s.Card, s.Side, id, born)
+						}
+						change.Split = []layout.SplitCard{{Card: s.Card, Born: born}}
+					case "move":
+						if !grid.Move(s.Card, s.Target, s.Side) {
+							t.Fatalf("%s: step %d: move %s to the %s of %s is refused", kase.Name, i, s.Card, s.Side, s.Target)
+						}
+						change.Moved = []string{s.Card}
+					case "boundary":
+						grid.MoveBoundary(s.Axis, s.Line, s.Position, false)
+						grid.MergeCoincident(s.Axis, s.Line)
+					default:
+						t.Fatalf("%s: step %d: unknown layout step %s", kase.Name, i, s.Layout)
+					}
+					rows, err := parties.Reconcile(grid, change)
+					if err != nil {
+						t.Fatalf("%s: step %d: layout %s: unexpected error %v", kase.Name, i, s.Layout, err)
+					}
+					text, err := json.Marshal(map[string]any{"changed": rows})
+					if err != nil {
+						t.Fatal(err)
+					}
+					var got, want any
+					if err := json.Unmarshal(text, &got); err != nil {
+						t.Fatal(err)
+					}
+					if err := json.Unmarshal(s.Returns, &want); err != nil {
+						t.Fatal(err)
+					}
+					if !reflect.DeepEqual(want, got) {
+						t.Fatalf("%s: step %d: layout %s: changed %s, want the returns %s", kase.Name, i, s.Layout, text, s.Returns)
+					}
+					continue
+				}
 				reply, err := parties.Run(grid, s.Call, s.Params)
 				if s.Error != nil {
 					if err == nil || err.Error() != *s.Error {

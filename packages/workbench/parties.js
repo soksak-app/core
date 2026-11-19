@@ -326,22 +326,42 @@ function deleteParty({ party: id }) {
   return { party: { id: party.id }, changed: [row] };
 }
 
-/** Brings the parties in line with the cards of the grid after a layout change, and returns the change rows. */
-/** Settles the parties after a card closed. The card leaves its party with the reason closed, and the watchers of core.parties are told. */
-export function cardsClosed() {
-  const rows = reconcile();
-  drawParties();
-  notify();
-  return rows;
-}
-
-export function reconcile() {
+/**
+ * Corrects each party that a layout change affected, in the same change (docs/spec/parties.md#changes-of-the-layout), then draws the
+ * parties and tells the watchers of core.parties when a party changed. change names what the grid alone does not show: `moved`, the
+ * cards that the change moved, and `split`, the new card `born` of each split with the card `card` it was split from. A card that left
+ * the grid leaves its party (closed); the new card of a split joins the party of the card it was split from (split); a moved card whose
+ * party is no longer one group leaves it (moved); the remaining cards that are no longer connected keep one part by the split rule, and
+ * a party with fewer than 2 cards is deleted. Returns one row for each corrected party, in the order of the parties.
+ */
+export function reconcile({ moved, split }) {
+  // default: a window with no grid shows no cards, so no layout change reaches its parties (docs/spec/parties.md#queries).
+  if (!currentGrid()) return [];
   const rows = [];
   for (const party of parties) {
-    if (party.cards.every((card) => cellOf(card))) continue;
-    rows.push(settle(party, "closed", [...party.cards]));
+    const before = [...party.cards];
+    let reason = null;
+    if (party.cards.some((card) => !cellOf(card))) reason = "closed";
+    for (const { card, born } of split) {
+      if (cellOf(born) && party.cards.includes(card) && !partyOf(born)) {
+        party.cards = inSpaceOrder([...party.cards, born]);
+        reason = "split";
+      }
+    }
+    for (const card of moved) {
+      if (!party.cards.includes(card) || groupsOf(party.cards.filter((member) => cellOf(member))).length <= 1) continue;
+      party.cards = party.cards.filter((member) => member !== card);
+      if (party.leader === card) party.leader = null;
+      reason = "moved";
+    }
+    if (!reason && groupsOf(party.cards).length <= 1) continue;
+    rows.push(settle(party, reason, before));
   }
   finish();
+  if (rows.length) {
+    drawParties();
+    notify();
+  }
   return rows;
 }
 
