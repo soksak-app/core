@@ -313,9 +313,8 @@ func (t *GroupTree) heads(path []*node, r0 int) int {
 	return k
 }
 
-// Rect is the drawn rectangle of the card id (docs/spec/groups.md#drawn-rectangles): its rectangle in the grid, for a group card the
-// union of the rectangles of the content cards inside it, moved down and shortened by the headers of the group cards that hold it and
-// start on its first row line.
+// Rect is the drawn rectangle of the card id (docs/spec/groups.md#drawn-rectangles): for a content card its rectangle in the grid, for
+// a group card its frame, each moved down and shortened by the headers of the group cards that hold it and start on its first row line.
 func (t *GroupTree) Rect(id string) (Rect, bool) {
 	path, n, ok := t.find(id)
 	if !ok {
@@ -381,16 +380,6 @@ func (t *GroupTree) place(onto *Rect, whole *node, holders []*node, c0, c1, r0, 
 // headStep is how far one header moves the boxes below it down: the header and the corridor that separates it from them, as between
 // two cards (docs/spec/groups.md#drawn-rectangles).
 func (t *GroupTree) headStep() float64 { return t.head + t.grid.Gap() }
-
-// union is the union of the rectangles in the grid of the content cards inside the node.
-func (t *GroupTree) union(n *node) Rect {
-	x0, y0, x1, y1 := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
-	for _, id := range t.inside(n) {
-		r, _ := t.grid.Rect(id) // silent: the tree holds cards of the grid.
-		x0, y0, x1, y1 = math.Min(x0, r.X), math.Min(y0, r.Y), math.Max(x1, r.X+r.W), math.Max(y1, r.Y+r.H)
-	}
-	return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
-}
 
 // HeadRect is the header of the group card id: a row of the head height at the top of its rectangle, below the headers of the group
 // cards that hold it and start on the same row line.
@@ -1461,7 +1450,7 @@ func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *Z
 			if !n.group {
 				continue
 			}
-			r := t.union(n)
+			r, _ := t.Rect(n.card) // silent: n is a group card of the tree.
 			if x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H {
 				hit = n
 				break
@@ -1481,7 +1470,7 @@ func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *Z
 		if y <= head.Y+head.H {
 			return &ZoneHit{ID: hit.card, Zone: "centre"}
 		}
-		r := t.union(hit)
+		r, _ := t.Rect(hit.card) // silent: hit is a group card of the tree.
 		px, py := (x-r.X)/r.W, (y-r.Y)/r.H
 		if !(px > edge && px < 1-edge && py > edge && py < 1-edge) {
 			nearest := math.Min(math.Min(px, 1-px), math.Min(py, 1-py))
