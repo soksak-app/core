@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-3, F899-7.4, F912: 항목들이 그 경로의 결정을 적는다. process list의 여덟 열린 결정은 contract, 표준, 측정으로 정하고, MCP 도구의 `messages_wait`는 relay `timeout`을 가진 long poll이며 터미널의 folder는 그 project와 surface에서 오고, hand-off record는 messaging이 소유한다.
 - F987: `sok conversation read`와 Rust sok의 configuration folder가 UTF-8이 아닌 `HOME`을 `HOME is not UTF-8: <escaped>`로 거부하고, reader는 이름이 UTF-8이 아닌 folder 항목을 거부하며, path를 바뀐 문자로 쓰지 않는다.
 - F988: 사람 action의 Go diagnostic method가 type check의 결과를 버리지 않고 action이 text인지 검사하며, `node scripts/check-fallbacks.mjs`가 다시 통과한다.
 - F990(터미널의 activity): `spec/terminal-state.md`가 status `<plugin>.activity`를 정의한다. 그것은 각 terminal plugin이 자기 상태와 exit code에서 얻어 `activity: true`로 선언하는 core activity level 또는 null이다. F987과 F988을 등록했다.

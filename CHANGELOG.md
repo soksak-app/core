@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-3, F899-7.4 and F912: the rows state the decisions of their path: the eight open decisions of the process list follow from contract, standard and measurement; `messages_wait` of the MCP tools is a long poll with the relay `timeout` and the folder of a terminal comes from its project and surface; messaging owns the hand-off record.
 - F987: `sok conversation read` and the configuration folder of the Rust sok refuse a `HOME` that is not UTF-8 with `HOME is not UTF-8: <escaped>`, and the reader refuses a folder entry whose name is not UTF-8, instead of writing the path with replaced characters.
 - F988: the Go diagnostic method of a person action checks that the action is text instead of discarding the result of the type check, and `node scripts/check-fallbacks.mjs` passes again.
 - F990 (activity of a terminal): `spec/terminal-state.md` defines the status `<plugin>.activity`, a core activity level or null that each terminal plugin derives from its state and exit code and declares with `activity: true`. F987 and F988 are registered.
