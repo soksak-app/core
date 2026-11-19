@@ -69,3 +69,15 @@ test("a centring that would draw the card below the header below its minimum lea
   assert.ok(tree.rect("card-1").h >= grid.minSize - 0.5, `card-1 is drawn ${tree.rect("card-1").h} high`);
   page.reset();
 });
+
+// The plane marks each divider element with whether it draws its grip, which the stylesheet reads (docs/spec/groups.md#drawing).
+test("each divider element of the plane says whether its stretch draws the grip", { timeout: 5000 }, () => {
+  arrange();
+  const dividers = [...planeEl.querySelectorAll(".sp-divider")];
+  assert.ok(dividers.length > 0, "the plane draws no divider");
+  for (const el of dividers) {
+    const length = parseFloat(el.dataset.axis === "x" ? el.style.height : el.style.width);
+    assert.equal(el.dataset.grip, String(length >= 24), `the divider of length ${length} says grip ${el.dataset.grip}`);
+  }
+  page.reset();
+});

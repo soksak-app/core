@@ -138,10 +138,10 @@ test("a section view whose installed declaration the workbench refuses fails wit
   const refused = (schema) => withReadySchema(view(declared("probeplain", ["probeplain.section"])), schema);
   assert.throws(() => requireSectionDeclarations(refused(readySchema({ content: { type: "string", const: "probeplain section" }, language: single("plaintext") }))),
     { message: "probeplain exposes probeplain.section.view.ready schema.content: unknown field const" });
-  assert.throws(() => requireSectionDeclarations(refused({ ...readySchema({ content: single("probeplain"), language: single("plaintext") }), required: ["ready"] })),
-    { message: "probeplain exposes probeplain.section.view.ready schema: unknown field required" });
-  assert.throws(() => sectionViewDescriptor(refused({ ...readySchema({ content: single("probeplain"), language: single("plaintext") }), required: ["ready"] })),
-    { message: "probeplain exposes probeplain.section.view.ready schema: unknown field required" });
+  assert.throws(() => requireSectionDeclarations(refused({ ...readySchema({ content: single("probeplain"), language: single("plaintext") }), additionalProperties: false })),
+    { message: "probeplain exposes probeplain.section.view.ready schema: unknown field additionalProperties" });
+  assert.throws(() => sectionViewDescriptor(refused({ ...readySchema({ content: single("probeplain"), language: single("plaintext") }), additionalProperties: false })),
+    { message: "probeplain exposes probeplain.section.view.ready schema: unknown field additionalProperties" });
   // The manifest that the check reads is the installed plugin.json: a name that it also declares is refused.
   const twice = view(declared("probeplain", ["probeplain.section"]), { ...manifest, exposes: { commands: [declared("probeplain", [])
     .exposes.commands[0]] } });

@@ -515,7 +515,12 @@ func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
 		again != first || f.status("core.layout") != before {
 		t.Fatalf("the repeat of r1 answered %s, %v, not %s, and changed the layout: %v", again, err, first, f.status("core.layout") != before)
 	}
-	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`, `7`} {
+	// A request that is no string is refused by the params schema, as every registry refuses it (docs/spec/exposure.md#command-parameters).
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": 7}`); err == nil ||
+		err.Error() != "invalid params for core.group.create" {
+		t.Errorf("the request 7 answered %v, not %q", err, "invalid params for core.group.create")
+	}
+	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`} {
 		want := "core.group.create: request must be a string of 1 to 128 characters"
 		if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": `+request+`}`); err == nil ||
 			err.Error() != want {
@@ -528,11 +533,10 @@ func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
 // (docs/spec/groups.md#idempotency).
 func TestEachPressOfTheGroupMenuGroupsTheCard(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes")))
-	// The window is wide, so main stays wider than high after the first group and the second press groups it toward right again.
 	f.tester.SetSize(2400, 600)
 	f.settle()
 	for press := 1; press <= 2; press++ {
-		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "group"}`); err != nil {
+		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "group-x"}`); err != nil {
 			t.Fatal(err)
 		}
 		index := -1

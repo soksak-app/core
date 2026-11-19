@@ -48,6 +48,7 @@ const (
 	codePressOpen     = 1008
 	codePointerHeld   = 1011
 	codeNoSurface     = 1012
+	codeInterrupted   = 1013
 )
 
 // RPCError is the JSON-RPC error object.
@@ -1713,6 +1714,9 @@ func commandRun(e *Endpoint, _ *endpointConn, params json.RawMessage, reply *Rep
 		}
 		if fields.Params[0] != '{' {
 			return nil, rpcError(codeInvalidParams, "params of %s must be an object", name)
+		}
+		if refusal := CommandParamsRefusal(name, hostCommands[name].Params, fields.Params); refusal != "" {
+			return nil, rpcError(codeInvalidParams, "%s", refusal)
 		}
 		return e.backend.HostCommand(window, name, fields.Params, reply)
 	}

@@ -118,8 +118,9 @@ func TestAValueOfAnotherFormIsRefusedWithItsReason(t *testing.T) {
 		{"sidebarOrder", "left,right,top,bottom", `Invalid setting sidebarOrder: "left,right,top,bottom" is not an order of "left", "right", "top", "bottom"`},
 		{"gap", 99.0, `Invalid setting gap: 99 is not an integer from 0 to 48`},
 		{"memorySaverDelay", 1.0, `Invalid setting memorySaverDelay: 1`},
-		{"group.tint", 101.0, `Invalid setting group.tint: 101`},
-		{"group.tint", 50.5, `Invalid setting group.tint: 50.5`},
+		// group.tint mixed the group colors of a theme into the fill of a group card, which the tokens of a card now give
+		// (docs/spec/groups.md#drawing).
+		{"group.tint", 50.0, `Unknown setting: group.tint`},
 		{"acme.level", 9.0, `Invalid setting acme.level: integer value is outside its declared range`},
 		{"nothing", 1.0, `Unknown setting: nothing`},
 	}

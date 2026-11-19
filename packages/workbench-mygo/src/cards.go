@@ -624,19 +624,20 @@ func (s *Shell) headTools(id string) []headTool {
 		changes(headTool{Do: "y", Status: "split-y", Name: "core.card.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
 			Title: names["split-y"], Icon: "card-split-y"}, s.planes.CanSplit(id, "bottom")),
 	}
-	tools = append(tools, s.groupTools(id, "core.card.group", changes)...)
+	tools = append(tools, s.groupTools(id, "core.card", changes)...)
 	return append(tools, whole, changes(closing, canClose))
 }
 
-// groupTools are the group button of the card id, shown while a group of it toward its longer axis would succeed, and its leader
-// button, shown in a plane of two or more cards and pressed on the leader (docs/spec/groups.md#headers). group is the element of the
-// group button of its kind of header.
-func (s *Shell) groupTools(id, group string, changes func(tool headTool, can bool) headTool) []headTool {
+// groupTools are the group split buttons of the card id toward right and toward bottom, enabled while the group of it toward that side
+// would succeed, and its leader button, shown in a plane of two or more cards and pressed on the leader (docs/spec/groups.md#headers).
+// header is the prefix of the elements of its kind of header, core.card or core.group.
+func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bool) headTool) []headTool {
 	names := s.options.Declared.CardTools
-	var tools []headTool
-	if s.planes.CanGroup(id) {
-		tools = append(tools, changes(headTool{Do: "group", Status: "group", Name: group, Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group"},
-			Title: names["group"], Icon: "card-group"}, true))
+	tools := []headTool{
+		changes(headTool{Do: "gx", Status: "group-x", Name: header + ".group-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-x"},
+			Title: names["group-x"], Icon: "card-group-x"}, s.planes.CanGroup(id, "right")),
+		changes(headTool{Do: "gy", Status: "group-y", Name: header + ".group-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-y"},
+			Title: names["group-y"], Icon: "card-group-y"}, s.planes.CanGroup(id, "bottom")),
 	}
 	key := s.planes.Parent(id)
 	if s.planes.LeadCount(key) >= 2 {
@@ -762,7 +763,9 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 		color, text = s.palette.No, "표면 오류 · "+reason
 		s.errors.Show(where, text, "")
 	}
-	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
+	// The state shrinks with the status row and cuts its text with an ellipsis, so an error stays on the one line of the row; its whole
+	// text is the label and the tooltip of the text.
+	ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
 		size, border, turn := m.spinner, m.spinnerBorder, m.spinnerTurn
 		ui.Box(c).Size(size, size).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 			cx, cy, radius := r.X+r.W/2, r.Y+r.H/2, r.W/2
@@ -789,7 +792,7 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 			}
 			p.StrokePath(&ring, border, color)
 		})
-		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text)
+		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text).Tooltip(text)
 	})
 }
 
@@ -813,7 +816,9 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 			where := "tab error " + active.ID
 			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
 				s.errors.Show(where, report.Error, "")
-				ui.Text(c, report.Error).FontSize(s.textCaption()).TextColor(s.palette.No)
+				// The error stays on the one line of the row, cut with an ellipsis; its whole text is the label and the tooltip.
+				ui.Text(c, report.Error).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.No).
+					Label(report.Error).Tooltip(report.Error)
 			} else {
 				s.errors.Hide(where)
 			}
@@ -830,7 +835,8 @@ type LayoutDescription struct {
 	Groups  []LayoutGroup `json:"groups"`
 }
 
-// LayoutNode is a split, {direction, size, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description.
+// LayoutNode is a split, {direction, size, frame, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description;
+// the frame of a split is the smallest rectangle that holds the frames of its children.
 type LayoutNode struct {
 	Direction string
 	Size      float64
@@ -884,14 +890,15 @@ type LayoutTab struct {
 	Params json.RawMessage `json:"params"`
 }
 
-// MarshalJSON writes a split as {direction, size, children} and a card as {card, size, frame, tabs}.
+// MarshalJSON writes a split as {direction, size, frame, children} and a card as {card, size, frame, tabs}.
 func (n LayoutNode) MarshalJSON() ([]byte, error) {
 	if n.Direction != "" {
 		return json.Marshal(struct {
 			Direction string       `json:"direction"`
 			Size      float64      `json:"size"`
+			Frame     LayoutFrame  `json:"frame"`
 			Children  []LayoutNode `json:"children"`
-		}{n.Direction, n.Size, n.Children})
+		}{n.Direction, n.Size, n.Frame, n.Children})
 	}
 	if n.Group != nil {
 		return json.Marshal(struct {
@@ -977,6 +984,16 @@ func (s *Shell) describeGroups(key string, out []LayoutGroup) []LayoutGroup {
 	return out
 }
 
+// frameAround is the smallest rectangle that holds the frames of nodes.
+func frameAround(nodes []LayoutNode) LayoutFrame {
+	left, top, right, bottom := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, node := range nodes {
+		left, top = min(left, node.Frame.X), min(top, node.Frame.Y)
+		right, bottom = max(right, node.Frame.X+node.Frame.Width), max(bottom, node.Frame.Y+node.Frame.Height)
+	}
+	return LayoutFrame{X: left, Y: top, Width: right - left, Height: bottom - top}
+}
+
 // describeNode is the node of the description of a node of the tree.
 func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	if node.Direction != "" {
@@ -988,6 +1005,7 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 			}
 			described.Children = append(described.Children, part)
 		}
+		described.Frame = frameAround(described.Children)
 		return described, nil
 	}
 	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.
@@ -1024,7 +1042,7 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	return described, nil
 }
 
-// The layout operations core.layout.open, core.layout.select and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
+// The layout operations core.layout.open, core.layout.select, core.layout.move and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
 // one step of the main thread, which decides and changes the layout, so the window applies them one at a time.
 
 // currentTarget is the name of the focused card, or of the active tab of the focused card, in a layout operation.
@@ -1059,6 +1077,12 @@ func (s *Shell) registerLayout() {
 		}
 		return map[string]string{"card": card, "tab": tab}, nil
 	})
+	command(s, "core.layout.move", func(value layoutMoveParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		return s.moveLayoutTab(value)
+	})
 	command(s, "core.layout.close", func(value tabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
@@ -1074,6 +1098,50 @@ func (s *Shell) registerLayout() {
 		done, err := s.askedCloseTab(tab)
 		return closed(done), err
 	})
+}
+
+type layoutMoveParam struct {
+	Tab  string  `json:"tab"`
+	Card string  `json:"card"`
+	Side *string `json:"side"`
+}
+
+// moveLayoutTab moves an existing tab with its surface into the target card, card or its neighbour toward the side. A target that
+// already holds the tab selects it; otherwise the tab joins card as a drop on its centre does, or card splits toward the side into a
+// new card with the tab as a drop on that edge does, and the only tab of a card moves its card. The tab never closes.
+func (s *Shell) moveLayoutTab(value layoutMoveParam) (map[string]string, error) {
+	if value.Side != nil && !splitSide(*value.Side) {
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", *value.Side)
+	}
+	from, tab, err := s.layoutTab(value.Tab)
+	if err != nil {
+		return nil, err
+	}
+	card, err := s.layoutCard(value.Card)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.layoutChangeable(card); err != nil {
+		return nil, err
+	}
+	target, zone := card, "centre"
+	if value.Side != nil {
+		target, zone = s.planes.Neighbour(card, *value.Side), *value.Side
+	}
+	holds := target == from
+	if s.isGroup(target) {
+		holds = slices.Contains(s.planes.ContentInside(target), from)
+	}
+	if target != "" && !isPlace(target) && holds {
+		if err := s.showLayoutTab(from, tab); err != nil {
+			return nil, err
+		}
+		return map[string]string{"card": from, "tab": tab}, nil
+	}
+	if err := s.moveTab(tab, card, zone); err != nil {
+		return nil, err
+	}
+	return map[string]string{"card": s.cardOfTab(tab), "tab": tab}, nil
 }
 
 // openLayoutTab selects the first tab of the plugin with the params in the target card, or adds one to the card, or splits the card

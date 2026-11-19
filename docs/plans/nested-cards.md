@@ -27,7 +27,7 @@ This proposal replaces parties (F908) with nested cards in release 0.0.45. It is
 
 ## Drawing
 
-- Each plane draws its corridor with the background of its level: the theme tokens `group-1` to `group-n` with the setting `group.tint` (opacity 0 to 100 percent). At corridor 0 a group is told apart by its header and its tint.
+- Each plane draws its corridor with the body of its level, the stage color mixed into the card color by `group-fill-fade` for each level ([drawing](../spec/groups.md#drawing)). At corridor 0 a group is told apart by its header and its body.
 - Each content card surface receives the token `--card`, the card background mixed with the tint of its plane, through the per-surface theme channel (F926-5 `setTheme {scheme, tokens, surfaces}`). Plugins paint `--card` and no background of their own.
 - The rail outlines the focused content card as today. The leader border uses the theme token `group-leader`.
 

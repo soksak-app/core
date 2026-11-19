@@ -17,13 +17,17 @@ import (
 
 // pickerAsk are the questions of the add menu by its tool.
 var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까",
-	"group": "새 위치에 무엇을 띄울까"}
+	"gx": "새 위치에 무엇을 띄울까", "gy": "새 위치에 무엇을 띄울까"}
 
 // The view box of the map of a group heading (fillPicker of packages/workbench/picker-layer.js).
 const pickerMapWidth, pickerMapHeight = 16, 10
 
 // menuTools are the menus of the card head, with the tool of each and the side that its split takes.
-var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"}, "group": {tool: "group"}}
+var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"},
+	"group-x": {"gx", "right"}, "group-y": {"gy", "bottom"}}
+
+// toolSides are the sides of the tools that split: the splits and the group splits.
+var toolSides = map[string]string{"x": "right", "y": "bottom", "gx": "right", "gy": "bottom"}
 
 // pickerItem is an item of the layer. Expose is the element name of an item that has its own, and Icon the SVG elements of a
 // 16-unit view box.
@@ -137,17 +141,12 @@ func (s *Shell) openAddMenu(anchor, tool, card string) {
 			_, err := s.addTab(card, plugin, nil)
 			return err
 		}
-		if tool == "group" {
+		if tool == "gx" || tool == "gy" {
 			// Each press sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
-			s.binder.run("core.group.create", groupCreateParam{Card: card, Side: string(s.planes.GroupSide(card)), Plugin: plugin,
-				Request: s.newGroupRequest()})
+			s.binder.run("core.group.create", groupCreateParam{Card: card, Side: toolSides[tool], Plugin: plugin, Request: s.newGroupRequest()})
 			return nil
 		}
-		side := "right"
-		if tool == "y" {
-			side = "bottom"
-		}
-		_, err := s.splitCard(card, side, plugin)
+		_, err := s.splitCard(card, toolSides[tool], plugin)
 		return err
 	}).anchor = anchor
 }
@@ -163,6 +162,10 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	tool, known := menuTools[menu]
 	if !known {
 		return fmt.Errorf("unknown menu %s", menu)
+	}
+	// A group header holds no add button: a group card holds no tab (docs/spec/groups.md#headers).
+	if menu == "add" && s.isGroup(card) {
+		return fmt.Errorf("card %s is a group; a group header has no add menu", card)
 	}
 	anchor := s.cardMenuElement(card, menu) + "/" + card
 	if _, drawn := s.picker.drawn[anchor]; !drawn {
@@ -588,8 +591,9 @@ type menuParam struct {
 }
 
 type pointParam struct {
-	Surface string  `json:"surface"`
-	Tab     string  `json:"tab"`
+	// Surface and Tab are omitted when empty, so a run of the workbench gives a command only the members that it declares.
+	Surface string  `json:"surface,omitempty"`
+	Tab     string  `json:"tab,omitempty"`
 	X       float64 `json:"x"`
 	Y       float64 `json:"y"`
 }

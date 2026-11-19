@@ -1166,7 +1166,11 @@ func checkTabParams(plugin *LoadedPlugin, params json.RawMessage) (json.RawMessa
 	if plugin.Params == nil {
 		return nil, fmt.Errorf("plugin %s declares no tab params", plugin.ID)
 	}
-	if !MatchesSchema(plugin.Params, value) {
+	matched, err := matchesSchema(plugin.Params, value)
+	if err != nil {
+		return nil, fmt.Errorf("params of %s: %w", plugin.ID, err)
+	}
+	if !matched {
 		return nil, fmt.Errorf("params do not match %s surface.params", plugin.ID)
 	}
 	return params, nil

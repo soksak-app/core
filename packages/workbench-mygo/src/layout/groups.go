@@ -899,6 +899,8 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 	if axisOf(side) != "y" {
 		return
 	}
+	// The new card takes the frames of its level first, so both drawn heights are the heights that the check of the split reads.
+	t.reframe()
 	upper, lower := target, id
 	if side == "top" {
 		upper, lower = id, target
@@ -922,17 +924,14 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 	}
 }
 
-// balanced runs the balance of cardSplit even after the split of the card id toward side (docs/spec/groups.md#split-setting) and keeps
-// it only when no content card that it changed is drawn below minSize.
-func (t *GroupTree) balanced(id string, side Side) error {
-	before := t.drawn()
-	kept := t.snapshot()
+// balanced runs the balance of cardSplit even after the split of the card id toward side (docs/spec/groups.md#split-setting), in the
+// change of the split, and refuses it when a content card that the split and the balance changed from before is drawn below minSize; the
+// halves of the split alone are not judged, because the balance gives them their size.
+func (t *GroupTree) balanced(id string, side Side, before map[string]Rect) error {
 	if err := t.balance(false); err != nil {
-		t.restore(kept)
 		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance the grid: %w", id, side, err)
 	}
 	if card, rect := t.below(before); card != "" {
-		t.restore(kept)
 		minimum := t.grid.MinSize()
 		return fmt.Errorf("card %s cannot split toward %s: cardSplit even would draw card %s at %s, below its minimum %s", id, side, card,
 			sizeText(rect.W, rect.H), sizeText(minimum, minimum))
@@ -957,7 +956,7 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 	if err := t.CheckGroup(id, side); err != nil {
 		return "", "", err
 	}
-	kept := t.snapshot()
+	before := t.drawn()
 	var group, born string
 	err := t.try(id, "hold a group toward "+side, func() error {
 		name := t.groupName()
@@ -979,13 +978,11 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 			t.setLeader(key, group)
 		}
 		t.levelSplit(id, side, born)
+		if even {
+			return t.balanced(id, side, before)
+		}
 		return nil
 	})
-	if err == nil && even {
-		if err = t.balanced(id, side); err != nil {
-			t.restore(kept)
-		}
-	}
 	if err != nil {
 		return "", "", err
 	}
@@ -1073,7 +1070,7 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool)
 	if err := t.requireCard(id); err != nil {
 		return "", err
 	}
-	kept := t.snapshot()
+	before := t.drawn()
 	var born string
 	err := t.try(id, "split toward "+side, func() error {
 		born = t.issue()
@@ -1085,13 +1082,11 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool)
 		}
 		t.attach(t.Parent(id), &node{card: born})
 		t.levelSplit(id, side, born)
+		if even {
+			return t.balanced(id, side, before)
+		}
 		return nil
 	})
-	if err == nil && even {
-		if err = t.balanced(id, side); err != nil {
-			t.restore(kept)
-		}
-	}
 	if err != nil {
 		return "", err
 	}
@@ -1155,12 +1150,14 @@ func (t *GroupTree) layoutToken() string {
 	return b.String()
 }
 
-// AddCard puts a new content card with data into the group card id at the right edge of its rectangle and returns its id.
-func (t *GroupTree) AddCard(id string, data json.RawMessage) (string, error) {
+// AddCard puts a new content card with data into the group card id at the right edge of its rectangle and returns its id. even balances
+// the grid after the add (cardSplit even, docs/spec/groups.md#split-setting).
+func (t *GroupTree) AddCard(id string, data json.RawMessage, even bool) (string, error) {
 	n, err := t.requireGroup(id)
 	if err != nil {
 		return "", err
 	}
+	before := t.drawn()
 	var born string
 	err = t.try(id, "split toward right", func() error {
 		born = t.issue()
@@ -1168,6 +1165,9 @@ func (t *GroupTree) AddCard(id string, data json.RawMessage) (string, error) {
 			return err
 		}
 		t.attach(id, &node{card: born})
+		if even {
+			return t.balanced(id, "right", before)
+		}
 		return nil
 	})
 	return born, err
@@ -1427,6 +1427,8 @@ func (t *GroupTree) balance(arrange bool) error {
 		}
 		return nil
 	}
+	// The frames follow the tree first, so the drawn rectangles that the balance measures are the ones that the space draws after it.
+	t.reframe()
 	// Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
 	var box func(n *node) Member
 	box = func(n *node) Member {
@@ -1537,19 +1539,11 @@ func (t *GroupTree) Focusable(id string) string {
 	return id
 }
 
-// GroupSide is the side of the group button of the card id: right when it is drawn wider than high, otherwise bottom.
-func (t *GroupTree) GroupSide(id string) Side {
-	if rect, ok := t.Rect(id); ok && rect.W > rect.H {
-		return "right"
-	}
-	return "bottom"
-}
-
-// CanGroup tells whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would
-// succeed (docs/spec/groups.md#headers).
-func (t *GroupTree) CanGroup(id string) bool {
-	return t.answer("group:"+id, func() error {
-		_, _, err := t.CreateGroup(id, t.GroupSide(id), nil, false)
+// CanGroup tells whether the group split button of the card id toward side is enabled: a group of the card and a new card toward side
+// would succeed (docs/spec/groups.md#headers).
+func (t *GroupTree) CanGroup(id string, side Side) bool {
+	return t.answer("group:"+id+":"+string(side), func() error {
+		_, _, err := t.CreateGroup(id, side, nil, false)
 		return err
 	})
 }

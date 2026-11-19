@@ -252,7 +252,7 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 func TestCardMenuRefusesAMenuThatTheCardDoesNotHave(t *testing.T) {
 	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
-	if _, err := f.answer("core.card.menu", map[string]string{"card": card, "menu": "other"}); err == nil || !strings.Contains(err.Error(), "unknown menu other") {
+	if _, err := f.answer("core.card.menu", map[string]string{"card": card, "menu": "other"}); err == nil || err.Error() != "invalid params for core.card.menu" {
 		t.Fatalf("the menu answered %v", err)
 	}
 	if _, err := f.answer("core.card.menu", map[string]string{"card": "none", "menu": "add"}); err == nil {
@@ -422,13 +422,10 @@ func TestAddTabStoresTheDeclaredParamsAndFocusesTheCard(t *testing.T) {
 	if got := len(f.tabsOf(first)); got != before {
 		t.Fatalf("a refused tab was added: %d tabs, was %d", got, before)
 	}
-	// A null is no params.
-	if _, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": nil}); err != nil {
-		t.Fatal(err)
-	}
-	tabs = f.tabsOf(first)
-	if _, stored := tabs[len(tabs)-1].(map[string]any)["params"]; stored {
-		t.Fatalf("a null is stored: %v", tabs[len(tabs)-1])
+	// A null is no object, so the params schema refuses it (docs/spec/exposure.md#command-parameters).
+	if _, err := f.answer("core.card.add-tab", map[string]any{"card": first, "plugin": "acme", "params": nil}); err == nil ||
+		err.Error() != "invalid params for core.card.add-tab" {
+		t.Fatalf("a null params answered %v", err)
 	}
 }
 
@@ -1233,7 +1230,7 @@ func TestEveryCardMenuAsksItsQuestion(t *testing.T) {
 	f.tester.SetSize(1600, 900)
 	f.settle()
 	for menu, want := range map[string]string{"add": "새 탭에 무엇을 띄울까", "split-x": "새 위치에 무엇을 띄울까", "split-y": "새 위치에 무엇을 띄울까",
-		"group": "새 위치에 무엇을 띄울까"} {
+		"group-x": "새 위치에 무엇을 띄울까", "group-y": "새 위치에 무엇을 띄울까"} {
 		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "`+menu+`"}`); err != nil {
 			t.Fatal(err)
 		}

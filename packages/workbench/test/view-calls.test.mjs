@@ -1136,9 +1136,9 @@ test("a call whose cids a line cannot hold is refused and runs nothing", { timeo
 test("a core command call that carries the cids of its cause hands them to runCore", async () => {
   const h = await mountView("command-core-cids");
   const before = ran.core.length;
-  // core.tab.select {}, with the cids ["p1700000000000.5"]
+  // core.tab.select {tab: "current"}, with the cids ["p1700000000000.5"]
   assert.equal((await h.call()).result, null);
-  assert.deepEqual(ran.core.slice(before), [{ name: "core.tab.select", params: {}, cids: ["p1700000000000.5"] }]);
+  assert.deepEqual(ran.core.slice(before), [{ name: "core.tab.select", params: { tab: "current" }, cids: ["p1700000000000.5"] }]);
   await h.close();
 });
 

@@ -376,17 +376,11 @@ export class GroupTree {
     return out;
   }
 
-  /** The side of the group button of the card id: right when it is drawn wider than high, otherwise bottom (docs/spec/groups.md#headers). */
-  groupSide(id) {
-    const rect = this.rect(id);
-    return rect && rect.w > rect.h ? "right" : "bottom";
-  }
-
-  /** Whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would succeed. */
-  canGroup(id, even) {
-    return this.answer(`group:${id}:${even}`, () => this.probe(() => {
+  /** Whether a group split button of the card id toward side is enabled: a group of the card and a new card toward side would succeed. */
+  canGroup(id, side, even) {
+    return this.answer(`group:${id}:${side}:${even}`, () => this.probe(() => {
       try {
-        this.create(id, this.groupSide(id), undefined, even);
+        this.create(id, side, undefined, even);
         return true;
       } catch {
         // silent: the probe answers whether the group succeeds; the refusal is the answer false.
@@ -407,12 +401,14 @@ export class GroupTree {
 
   /**
    * The dividers of the grid cut where they would cross a group header (docs/spec/groups.md#drawing): a divider of a line inside a group
-   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index.
+   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index. Each part
+   * draws its grip, gripLength long, at its center while it holds the grip (grip), so no grip reaches into a header.
    */
-  drawnDividers(dividers) {
+  drawnDividers(dividers, gripLength) {
     const heads = this.headRects();
     return dividers.flatMap((divider) => clearOfHeads(divider.axis, across(divider), along(divider), heads)
-      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key })));
+      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key,
+        grip: part[1] - part[0] >= gripLength })));
   }
 
   /**
@@ -691,6 +687,8 @@ export class GroupTree {
       }
       return;
     }
+    // The frames follow the tree first, so the drawn rectangles that the balance measures are the ones that the space draws after it.
+    this.reframe();
     // Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
     const box = (node) => ({
       id: node.card,
@@ -1027,11 +1025,13 @@ export class GroupTree {
 
   /**
    * Moves the line between the card target and the new card id of a split toward top or bottom, so that both are drawn at one height below
-   * the headers that the upper one stands under (docs/spec/groups.md#split-setting). A split across, and a line that other cards stand on,
+   * the headers that the upper one stands under and inside the frames of their level (docs/spec/groups.md#split-setting). A split across, and a line that other cards stand on,
    * do not change it, so a split moves no line of another card.
    */
   levelSplit(target, side, id) {
     if (side !== "top" && side !== "bottom") return;
+    // The new card takes the frames of its level first, so both drawn heights are the heights that the check of the split reads.
+    this.reframe();
     const [upper, lower] = side === "top" ? [id, target] : [target, id];
     const up = this.rect(upper), down = this.rect(lower);
     const inside = (card) => (this.node(card) ? this.contents(this.node(card)) : [card]);

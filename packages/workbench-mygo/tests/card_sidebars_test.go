@@ -81,7 +81,8 @@ func TestTheStatusOfASidebarNamesTheRectOfItsSet(t *testing.T) {
 	f, card := cardSidebar(t, "left")
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "right", "set": "set-install"})
 	var sidebars []struct {
-		Sidebar string `json:"sidebar"`
+		Sidebar string  `json:"sidebar"`
+		Set     *string `json:"set"`
 		Rect    struct{ X, Y, W, H float32 }
 	}
 	if err := json.Unmarshal([]byte(f.status("core.sidebars")), &sidebars); err != nil {
@@ -89,6 +90,10 @@ func TestTheStatusOfASidebarNamesTheRectOfItsSet(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, drawn := range sidebars {
+		// A window sidebar that shows no set has no element of its set (TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet).
+		if drawn.Set == nil {
+			continue
+		}
 		set := f.box("core.sidebar", drawn.Sidebar)
 		if got := (ui.Rect{X: drawn.Rect.X, Y: drawn.Rect.Y, W: drawn.Rect.W, H: drawn.Rect.H}); got != set {
 			t.Errorf("core.sidebars names %s at %+v, and its set stands at %+v", drawn.Sidebar, got, set)

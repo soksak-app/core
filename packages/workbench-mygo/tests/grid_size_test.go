@@ -17,8 +17,11 @@ func TestTheSizeCommandSetsACardOnAnAxis(t *testing.T) {
 	if got := f.box("core.card", right); got.X < 300 {
 		t.Fatalf("the other card stands at %v", got)
 	}
+	if _, err := f.answer("core.grid.size", map[string]any{"card": left, "axis": "z", "size": 300}); err == nil ||
+		err.Error() != "invalid params for core.grid.size" {
+		t.Fatalf("the axis z answered %v", err)
+	}
 	for _, refused := range []map[string]any{
-		{"card": left, "axis": "z", "size": 300},
 		{"card": "absent", "axis": "x", "size": 300},
 		{"card": left, "axis": "x", "size": -1},
 	} {

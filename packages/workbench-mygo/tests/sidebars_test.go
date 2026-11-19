@@ -218,8 +218,11 @@ func TestTheSectionCommandsRefuseWhatTheSidebarDoesNotHold(t *testing.T) {
 		}
 	}
 	f.frame(t, "right", workbench.FocusedSurface{Card: "c1", Tab: "tab-1", Plugin: "boxprobe"})
-	for _, name := range []string{"core.sidebar.section.fold", "core.sidebar.section.size"} {
-		err := f.run(name, `{"sidebar":"right","section":"boxprobe.tabs","height":100}`)
+	for name, params := range map[string]string{
+		"core.sidebar.section.fold": `{"sidebar":"right","section":"boxprobe.tabs"}`,
+		"core.sidebar.section.size": `{"sidebar":"right","section":"boxprobe.tabs","height":100}`,
+	} {
+		err := f.run(name, params)
 		if err == nil || err.Error() != "sidebar right does not use the list layout" {
 			t.Fatalf("%s: %v", name, err)
 		}

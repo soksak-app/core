@@ -1,0 +1,82 @@
+{
+  "description": "The check of the parameters of a command against its params schema before it runs (docs/spec/exposure.md#command-parameters). Each case names a command, its params schema and the parameters of a request, and the error text that the registry refuses them with, or null when the command runs. The registry of the page, the registry of the mygo workbench and the endpoints of the Go and Rust hosts run every case.",
+  "cases": [
+    {
+      "name": "a member of another type than its schema is refused",
+      "command": "core.group.create",
+      "schema": {"type": "object", "properties": {"card": {"type": "string"}, "side": {"enum": ["left", "right", "top", "bottom"]}, "plugin": {"type": "string"}, "params": {"type": "object"}, "request": {"type": "string"}}, "required": ["card", "side", "plugin"]},
+      "params": {"card": "main", "side": "right", "plugin": "plain", "request": 7},
+      "error": "invalid params for core.group.create"
+    },
+    {
+      "name": "numbers of the declared types run",
+      "command": "host.window.move",
+      "schema": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "integer"}}, "required": ["x", "y"]},
+      "params": {"x": 1.5, "y": 2},
+      "error": null
+    },
+    {
+      "name": "declared members run",
+      "command": "core.project.open",
+      "schema": {"type": "object", "properties": {"root": {"type": "string"}, "color": {"type": "string"}}, "required": ["root"]},
+      "params": {"root": "/tmp/x", "color": "#ffb36b"},
+      "error": null
+    },
+    {
+      "name": "an omitted member that required does not name runs",
+      "command": "core.project.open",
+      "schema": {"type": "object", "properties": {"root": {"type": "string"}, "color": {"type": "string"}}, "required": ["root"]},
+      "params": {"root": "/tmp/x"},
+      "error": null
+    },
+    {
+      "name": "an unknown member is refused before a missing one",
+      "command": "core.project.open",
+      "schema": {"type": "object", "properties": {"root": {"type": "string"}, "color": {"type": "string"}}, "required": ["root"]},
+      "params": {"path": "/tmp/x"},
+      "error": "command core.project.open: unknown parameter path"
+    },
+    {
+      "name": "the first unknown member in code point order is named",
+      "command": "core.layout.select",
+      "schema": {"type": "object", "properties": {"tab": {"type": "string"}}, "required": ["tab"]},
+      "params": {"tab": "current", "zone": "x", "Card": "y"},
+      "error": "command core.layout.select: unknown parameter Card"
+    },
+    {
+      "name": "a missing member is named in the order of required",
+      "command": "core.card.split",
+      "schema": {"type": "object", "properties": {"card": {"type": "string"}, "side": {"type": "string"}, "plugin": {"type": "string"}}, "required": ["side", "card", "plugin"]},
+      "params": {"plugin": "terminal"},
+      "error": "command core.card.split: parameter side is required"
+    },
+    {
+      "name": "a schema without properties takes no parameter",
+      "command": "host.window.close",
+      "schema": {"type": "object"},
+      "params": {"force": true},
+      "error": "command host.window.close: unknown parameter force"
+    },
+    {
+      "name": "a schema without properties runs without parameters",
+      "command": "host.window.close",
+      "schema": {"type": "object"},
+      "params": {},
+      "error": null
+    },
+    {
+      "name": "a member of the wrong type is refused after the names",
+      "command": "host.window.move",
+      "schema": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}, "required": ["x", "y"]},
+      "params": {"x": "10", "y": 20},
+      "error": "invalid params for host.window.move"
+    },
+    {
+      "name": "a member whose schema is an object without properties takes any members",
+      "command": "core.layout.open",
+      "schema": {"type": "object", "properties": {"card": {"type": "string"}, "plugin": {"type": "string"}, "params": {"type": "object"}}, "required": ["card"]},
+      "params": {"card": "main", "plugin": "browser", "params": {"address": "http://localhost:3366", "zoom": 1}},
+      "error": null
+    }
+  ]
+}

@@ -261,3 +261,48 @@ func TestTheRailGroupsHoldThePluginSetsOfTheFourWindowSides(t *testing.T) {
 		t.Fatalf("the rail groups are %+v, want one group of the sidebars right and top", found)
 	}
 }
+
+// A window sidebar that its side holds through a plugin window link while the focused card belongs to another plugin shows no set and
+// draws its status line; core.sidebars reports it with its rectangle and a null set (docs/spec/external-sidebars.md#override-context-and-rail-border).
+func TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet(t *testing.T) {
+	f := sidebarShell(t)
+	f.run("core.settings.set", map[string]any{"patch": map[string]any{"top": true}, "scope": "common"})
+	f.run("core.settings.link", map[string]any{"place": "window-top", "plugin": "boxprobe", "set": "set-page", "scope": "common"})
+	type sidebar struct {
+		Sidebar   string                 `json:"sidebar"`
+		Set       *string                `json:"set"`
+		Layout    *string                `json:"layout"`
+		Placement string                 `json:"placement"`
+		Plugin    *string                `json:"plugin"`
+		Card      *string                `json:"card"`
+		Rect      struct{ W, H float64 } `json:"rect"`
+		Sections  []any                  `json:"sections"`
+	}
+	checked := 0
+	for _, card := range f.tabbedCards() {
+		f.run("core.card.focus", map[string]string{"card": card})
+		f.settle()
+		if status := element(t, f.tester, "core.sidebar.status", "top"); status.Label == "" {
+			t.Fatal("the top sidebar shows no status line")
+		}
+		var top *sidebar
+		for _, entry := range status[[]sidebar](t, f, "core.sidebars") {
+			if entry.Sidebar == "top" {
+				top = &entry
+			}
+		}
+		if top == nil {
+			t.Fatalf("core.sidebars omits the drawn top sidebar while %s has the focus: %s", card, f.status("core.sidebars"))
+		}
+		if top.Plugin != nil {
+			continue
+		}
+		checked++
+		if top.Set != nil || top.Layout != nil || top.Card != nil || top.Placement != "window" || len(top.Sections) != 0 || top.Rect.W <= 0 || top.Rect.H <= 0 {
+			t.Fatalf("the top sidebar without a set is reported as %+v", *top)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no focused card left the top sidebar without a set")
+	}
+}

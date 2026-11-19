@@ -7,8 +7,9 @@ import { sliceTree } from "soksak";
 const SPAN = { x: ["c0", "c1"], y: ["r0", "r1"] };
 
 /**
- * The tree of cards over the line positions xs and ys: a split is {direction, size, children} and a card is the value that
- * leaf(card, size) returns. A region is a row when a vertical line crosses it from edge to edge (sliceTree tries the x axis
+ * The tree of cards over the line positions xs and ys: a split is {direction, size, frame, children} and a card is the value that
+ * leaf(card, size) returns, with its frame {x, y, width, height}. The frame of a split is the smallest rectangle that holds the frames
+ * of its children, so an agent reads the extent of each row and column in window points. A region is a row when a vertical line crosses it from edge to edge (sliceTree tries the x axis
  * first), and size is the share of a node in the extent of its parent along the direction of the parent, 1 for the root.
  * Cards that are not slicing have no tree, which no layout of the plane holds, so it is an error.
  */
@@ -27,16 +28,21 @@ export function layoutTree(cards, xs, ys, leaf) {
     const axis = node.axis;
     const [start, end] = extent(node, axis);
     const whole = lines[axis][end] - lines[axis][start];
-    return {
-      direction: axis === "x" ? "row" : "column",
-      size,
-      children: node.sides.map((side) => {
-        const [from, to] = extent(side, axis);
-        return build(side, (lines[axis][to] - lines[axis][from]) / whole);
-      }),
-    };
+    const children = node.sides.map((side) => {
+      const [from, to] = extent(side, axis);
+      return build(side, (lines[axis][to] - lines[axis][from]) / whole);
+    });
+    return { direction: axis === "x" ? "row" : "column", size, frame: frameAround(children.map((child) => child.frame)), children };
   };
   return build(slice, 1);
+}
+
+/** The smallest rectangle {x, y, width, height} that holds the frames. */
+function frameAround(frames) {
+  const x = Math.min(...frames.map((frame) => frame.x));
+  const y = Math.min(...frames.map((frame) => frame.y));
+  return { x, y, width: Math.max(...frames.map((frame) => frame.x + frame.width)) - x,
+    height: Math.max(...frames.map((frame) => frame.y + frame.height)) - y };
 }
 
 /** The cards under a slice. */

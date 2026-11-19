@@ -9,7 +9,7 @@ import { appliedPatch, borderWidth, cardRadius, halfGap, linkedSet, pluginSettin
 import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
-import { CHROME, placeFocusMark } from "./chrome-metrics.js";
+import { CHROME, gripMetrics, placeFocusMark } from "./chrome-metrics.js";
 import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabName as shownTabName, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
@@ -39,7 +39,7 @@ import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } f
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
-import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
+import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
   tabLabel, tabModified, tabNotice } from "./tab-reports.js";
@@ -343,8 +343,8 @@ function updateCard(el, card, rect) {
       // The content of an ordinary sidebar has no card-surface link and no rail.
       drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     } else {
-      clearSet(holder);
-      holder.replaceChildren();
+      // The place shows no set; it draws its status line, and core.sidebars reports it with a null set.
+      drawSet(holder, card.id, null, { card: null, surface: null, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     }
     setText(statusText, `${SIDE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
@@ -454,7 +454,8 @@ function updateCard(el, card, rect) {
     canClose: grid.canClose(card.id),
     canSplitX: grid.canSplit(card.id, "x"),
     canSplitY: grid.canSplit(card.id, "y"),
-    canGroup: tree.canGroup(card.id, splitsEven()),
+    canGroupX: tree.canGroup(card.id, "right", splitsEven()),
+    canGroupY: tree.canGroup(card.id, "bottom", splitsEven()),
     leads: tree.leadCount(tree.parentOf(card.id)) >= 2,
     leader: tree.leaderOf(tree.parentOf(card.id)) === card.id,
     fullscreen: el.dataset.fullscreen === "true",
@@ -521,25 +522,8 @@ function updateCard(el, card, rect) {
   });
   cardFolds.set(card.id, folded);
   setText(statusText, cardStatusText(card, tabs, folded));
-  showTabError(status, shown.id);
-}
-
-/* The operation error of the active tab, shown in its card's status row (docs/spec/plugins.md#tab-reports). */
-function showTabError(status, tabId) {
-  let line = status.querySelector(".status__error");
-  if (!line) {
-    line = document.createElement("span");
-    line.className = "status__error";
-    status.appendChild(line);
-  }
-  const where = `tab error ${tabId}`;
-  const text = tabError(tabId);
-  if (text !== null) {
-    showError(line, where, text);
-    return;
-  }
-  line.hidden = true;
-  hideError(line, where);
+  // The operation error of the active tab, shown in its card's status row (docs/spec/plugins.md#tab-reports).
+  setTabError(status, shown.id, tabError(shown.id));
 }
 
 // The last drawn out-of-space fold text of each card. When a tab changes the bottom text, only the foot is fixed and nothing is redrawn.
@@ -770,7 +754,8 @@ const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "새 위치에 무엇을 띄울까",
   y: "새 위치에 무엇을 띄울까",
-  group: "새 위치에 무엇을 띄울까",
+  gx: "새 위치에 무엇을 띄울까",
+  gy: "새 위치에 무엇을 띄울까",
 };
 
 delegate(pickerEl);
@@ -792,8 +777,9 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "group" ? createGroup(cardId, tree.groupSide(cardId), k, null)
-      : tree.isGroup(cardId) ? (what === "add" ? addTabTo(cardId, k, null) : splitCard(cardId, TOOL_SPLIT_SIDE[what], k))
+    // Each press of a group item sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
+    (k) => (what === "gx" || what === "gy" ? createGroup(cardId, TOOL_SPLIT_SIDE[what], k, null, newGroupRequest())
+      : tree.isGroup(cardId) ? splitCard(cardId, TOOL_SPLIT_SIDE[what], k)
       : what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
 
@@ -903,7 +889,7 @@ function addTab(cardId, plugin, params) {
 /** Follow-up of the split button. It creates a new card and adds a tab of the selected kind to that card. */
 /** The side where the new card is placed: the vertical-line split of the card tools puts it on the right, the horizontal-line split below. */
 const SPLIT_SIDES = ["left", "right", "top", "bottom"];
-const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
+const TOOL_SPLIT_SIDE = { x: "right", y: "bottom", gx: "right", gy: "bottom" };
 
 function splitWith(cardId, side, plugin, params) {
   restoreFullscreen();
@@ -1367,42 +1353,65 @@ function centreTab(strip, activeId) {
 const PEEK = parseFloat(CHROME["tab-peek-w"]), MIN_TAB = parseFloat(CHROME["tab-min-w"]);
 
 function fitChrome(chrome, strip) {
-  const acts = chrome.querySelector(".chrome__acts");
-  if (!acts) return;
+  if (!chrome.querySelector(".chrome__acts")) return;
   // To measure at every stage, it starts with all tabs and the tool row shown.
   chrome.dataset.fit = "strip";
   chrome.dataset.tools = "bar";
-  // The side margins of the head, the gap between the elements inside it, and the widths of ≡ and ⋯ are decided by the
-  // stylesheet, so they are obtained by measuring. If they were written here, they would diverge from the stylesheet, and the
-  // width at which the header folds would shift by that difference. It is the same reason as measuring the gap between tabs.
-  const head = getComputedStyle(chrome);
-  // default: the computed value normal of columnGap is not a number and is 0 in flex.
-  const gap = parseFloat(head.columnGap) || 0;
   // The head starts with ≡, or with the space app button in a fullscreen card, so it is fitted at a width reduced by the width
   // of that button.
   const apps = chrome.querySelector(".chrome__apps");
   const lead = parseFloat(getComputedStyle(chrome.closest(".card")?.dataset.fullscreen === "true" && apps
     ? apps : chrome.querySelector(".chrome__ham")).width);
+  foldHead(chrome, {
+    lead,
+    tabWidths: [...strip.querySelectorAll(".tab")].map((tab) => tab.getBoundingClientRect().width),
+    // The gap between tabs is a value that the tab list holds.
+    // default: the computed value normal of columnGap is not a number and is 0 in flex.
+    tabGap: parseFloat(getComputedStyle(strip).columnGap) || 0,
+  });
+}
+
+/**
+ * Folds the header of a group card by the fit of a card head: its name stands in the place of the one tab and nothing leads it
+ * (docs/spec/groups.md#headers).
+ */
+function fitGroupHead(head) {
+  head.dataset.fit = "strip";
+  head.dataset.tools = "bar";
+  // The name grows over the room of the header, so it is measured at the width of its text while data-measure holds its growth, as a
+  // tab is measured; no render happens between the two writes.
+  head.dataset.measure = "";
+  const name = head.querySelector(".group__name").getBoundingClientRect().width;
+  delete head.dataset.measure;
+  foldHead(head, { lead: 0, tabWidths: [name], tabGap: 0 });
+}
+
+/**
+ * Writes the stage of fitHead to the head row whose leading button is lead wide and whose tabs are tabWidths wide, tabGap apart. The side
+ * margins of the head, the gap between the elements inside it and the width of ⋯ are decided by the stylesheet, so they are measured: if
+ * they were written here, they would diverge from the stylesheet, and the width at which the header folds would shift by that difference.
+ */
+function foldHead(row, { lead, tabWidths, tabGap }) {
+  const acts = row.querySelector(".chrome__acts");
+  const head = getComputedStyle(row);
+  // default: the computed value normal of columnGap is not a number and is 0 in flex.
+  const gap = parseFloat(head.columnGap) || 0;
   // The head keeps the leader mark and the fullscreen toggle beside ⋯ in the menu stage, so the menu stage needs the room of each
   // (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tools).
   const mark = leaderMark(acts);
   const kept = keptTools(acts);
   const { fit, tools } = fitHead({
-    width: chrome.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
+    width: row.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
     toolsWidth: acts.getBoundingClientRect().width,
     // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
-    moreWidth: parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width)
+    moreWidth: parseFloat(getComputedStyle(row.querySelector(".chrome__more")).width)
       + kept.reduce((sum, b) => sum + b.getBoundingClientRect().width + gap, 0),
-    tabWidths: [...strip.querySelectorAll(".tab")].map((tab) => tab.getBoundingClientRect().width),
-    // The gap between tabs is a value that the tab list holds.
-    // default: the computed value normal of columnGap is not a number and is 0 in flex.
-    tabGap: parseFloat(getComputedStyle(strip).columnGap) || 0,
-    peek: PEEK, minTab: MIN_TAB,
+    tabWidths, tabGap, peek: PEEK, minTab: MIN_TAB,
   });
-  chrome.dataset.fit = fit;
-  chrome.dataset.tools = tools;
-  if (mark && tools === "menu") chrome.dataset.mark = "leader";
-  else delete chrome.dataset.mark;
+  row.dataset.fit = fit;
+  row.dataset.tools = tools;
+  if (mark && tools === "menu") row.dataset.mark = "leader";
+  else delete row.dataset.mark;
 }
 
 /** The pressed leader button of the tool row acts, the leader mark, or null on a card that does not lead. */
@@ -1422,6 +1431,7 @@ function centreTabs() {
     fitChrome(chrome, strip);
     if (!tabDrag) centreTab(strip, card.data.activeId);
   }
+  for (const head of plane.querySelectorAll(".group:not([hidden]) > .group__head")) fitGroupHead(head);
 }
 
 /**
@@ -1631,7 +1641,12 @@ function build(kept) {
       has: (id) => grid.card(id) !== undefined || tree.isGroup(id),
       rects: drawnRects,
       rules: () => tree.drawnRules(grid.rules()),
-      dividers: () => tree.drawnDividers(grid.dividers()),
+      dividers: () => tree.drawnDividers(grid.dividers(), gripMetrics().gripLength),
+    },
+    // A stretch of a divider too short for its grip draws none, which the stylesheet reads from data-grip (docs/spec/groups.md#drawing).
+    updateDivider: (el, divider) => {
+      const grip = String(divider.grip);
+      if (el.dataset.grip !== grip) el.dataset.grip = grip;
     },
     // A divider drag previews its steps on the line of the group tree, which draws the cards below the headers, and its result is
     // the command core.boundary.move from the layout before the drag to the position where the drag left the line
@@ -1737,7 +1752,7 @@ const redrawTabReports = () => {
     const statusText = el.querySelector(":scope > .status .status__text");
     // default: a card not drawn yet has no folded-side text.
     if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
-    if (statusText && !isPlace(card.id) && tabsOf(card).length) showTabError(statusText.parentElement, activeTab(card).id);
+    if (statusText && !isPlace(card.id) && tabsOf(card).length) setTabError(statusText.parentElement, activeTab(card).id, tabError(activeTab(card).id));
   }
 };
 onTabReports(redrawTabReports);
@@ -1930,6 +1945,8 @@ export function openCardMenu(id, menu) {
   layoutChangeable(id);
   const what = DO_OF[menu];
   if (!what) throw new Error(`unknown menu ${menu}`);
+  // A group header holds no add button: a group card holds no tab (docs/spec/groups.md#headers).
+  if (group && what === "add") throw new Error(`card ${id} is a group; a group header has no add menu`);
   // The menus of a group card open under the buttons of its header (docs/spec/groups.md#card-commands-on-a-group-card).
   const holder = group ? plane.querySelector(`.group[data-group-card="${CSS.escape(id)}"] .group__head`) : cardElement(id);
   const anchor = holder?.querySelector(`.chrome__act[data-do="${what}"]:not([hidden])`);
@@ -1947,11 +1964,14 @@ export function openCardMenu(id, menu) {
  * and splitting ask for the plugin of the new tab under the same button.
  */
 export function openCardTools(id) {
-  paneCard(id);
-  const anchor = cardElement(id)?.querySelector(".chrome__more");
+  // A group header folds its buttons into the same tool menu (docs/spec/groups.md#headers).
+  const group = tree?.isGroup(id);
+  if (!group) paneCard(id);
+  const holder = group ? plane.querySelector(`.group[data-group-card="${CSS.escape(id)}"] > .group__head`) : cardElement(id);
+  const anchor = holder?.querySelector(".chrome__more");
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
-  const acts = cardElement(id).querySelector(".chrome__acts");
+  const acts = holder.querySelector(".chrome__acts");
   // The head keeps the leader mark and the fullscreen toggle, so the menu does not hold them (docs/spec/groups.md#headers).
   const kept = keptTools(acts);
   const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden && !kept.includes(b)).map((b) => ({
@@ -1963,12 +1983,14 @@ export function openCardTools(id) {
     viewBox: b.querySelector("svg").getAttribute("viewBox"),
     active: b.getAttribute("aria-pressed") === "true",
   }));
-  focusOn(id);
+  focusOn(group ? tree.focusable(id) : id);
   settle();
   openLayer(anchor, "카드 도구", items, (key) => {
     if (key.startsWith("side-")) return run("core.card.sidebar.toggle", { card: id, side: key.slice(5) });
     if (key === "fullscreen") return run("core.card.fullscreen", { card: id });
     if (key === "close") return run("core.card.close", { card: id });
+    if (key === "leader") return run("core.group.leader", { card: id });
+    if (key === "group-menu") return openGroupMenu(id, anchor);
     return openPicker(anchor, key, id);
   });
 }
@@ -2414,6 +2436,30 @@ export function openInLayout({ card: cardId, plugin: kind, params, path, side })
   return made;
 }
 
+/**
+ * core.layout.move: moves an existing tab with its surface into the target card, card or its neighbour toward side. A target that already
+ * holds the tab selects it; otherwise the tab joins card as a drop on its centre does, or card splits toward side into a new card with
+ * the tab as a drop on that edge does, and the only tab of a card moves its card. The tab never closes. Returns {card, tab}, the card
+ * that holds the tab; a refusal changes nothing.
+ */
+export function moveInLayout({ tab: tabId, card: cardId, side }) {
+  if (side !== undefined && !SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  const named = layoutTab(tabId);
+  if (named === null) throw new Error(`tab ${tabId} is not in the layout of window ${nameOfWindow()}`);
+  const id = treeCard(cardId);
+  if (isPlace(id)) throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+  layoutChangeable(id);
+  const target = side === undefined ? id : tree.neighbour(id, side);
+  const holds = (card) => card && !isPlace(card) && (tree.isGroup(card)
+    ? tree.contents(tree.node(card)).includes(named.card.id) : card === named.card.id);
+  if (holds(target)) {
+    selectTab(named.tab.id);
+    return { card: named.card.id, tab: named.tab.id };
+  }
+  moveTab(named.tab.id, id, side ?? "centre");
+  return { card: cardOfTab(named.tab.id).id, tab: named.tab.id };
+}
+
 /** core.layout.select: makes the tab active and its card focused; a tab that is already so is left as it is. Returns {card, tab}. */
 export function selectInLayout({ tab: tabId }) {
   const named = layoutTab(tabId);
@@ -2637,17 +2683,33 @@ function treeCard(id) {
 }
 
 /**
- * Groups the card id, a content card or a group card, with a new content card toward side that holds a tab of kind with params and
- * returns {group, card, tab}; the focus moves to the new card (docs/spec/groups.md#commands).
+ * The answers of the requests of core.group.create by space and request while the window is open; none is stored
+ * (docs/spec/groups.md#idempotency).
  */
-export function createGroup(id, side, kind, params) {
+const groupRequests = new Map();
+
+/** A request of core.group.create that the shown space has not answered, for one press of a group split button. */
+export const newGroupRequest = () => issueId("request", (id) => groupRequests.get(heldSpace)?.has(id) ?? false);
+
+/**
+ * Groups the card id, a content card or a group card, with a new content card toward side that holds a tab of kind with params and
+ * returns {group, card, tab}; the focus moves to the new card (docs/spec/groups.md#commands). With request, the identifier of one request,
+ * a repeat of a request that the space answered returns its first answer and changes nothing, and a new request groups also where the
+ * group stands (docs/spec/groups.md#idempotency).
+ */
+export function createGroup(id, side, kind, params, request) {
+  if (request !== undefined && (typeof request !== "string" || request.length === 0 || [...request].length > 128)) {
+    throw new Error("core.group.create: request must be a string of 1 to 128 characters");
+  }
+  const answered = request === undefined ? undefined : groupRequests.get(heldSpace)?.get(request);
+  if (answered) return answered;
   if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
   const card = treeCard(id);
   if (isPlace(card)) throw new Error(`card ${card} is a window sidebar; a group holds content cards and group cards`);
   layoutChangeable(card);
   const parent = tree.parentOf(card);
   // The same group of the same card with the same tab toward the same side changes nothing (docs/spec/groups.md#idempotency).
-  if (parent && parent.members.length === 2 && hasPlugin(kind)) {
+  if (request === undefined && parent && parent.members.length === 2 && hasPlugin(kind)) {
     const other = parent.members.map(memberId).find((member) => member !== card);
     const wanted = checkTabParams(kind, plugin(kind).params, params);
     // default: a tab stored without params has the params null.
@@ -2662,7 +2724,12 @@ export function createGroup(id, side, kind, params) {
   const made = tree.create(card, side, { tabs: [t], activeId: t.id }, splitsEven());
   focusOn(made.card);
   settle();
-  return { group: made.group, card: made.card, tab: t.id };
+  const answer = { group: made.group, card: made.card, tab: t.id };
+  if (request !== undefined) {
+    if (!groupRequests.has(heldSpace)) groupRequests.set(heldSpace, new Map());
+    groupRequests.get(heldSpace).set(request, answer);
+  }
+  return answer;
 }
 
 /** Replaces the group card id with its members in the level that holds it; a group that this window dissolved answers again. */
@@ -2681,10 +2748,11 @@ export function dissolveGroup(id) {
  * Opens the close menu of the group card id from the close button of its header, or closes it when it is open. A group whose header
  * holds no close button is refused.
  */
-export function openGroupMenu(id) {
+export function openGroupMenu(id, menuAnchor) {
   const card = treeCard(id);
   tree.requireGroup(card);
-  const anchor = plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
+  // The close item of the tool menu of a folded header opens the menu under ⋯, menuAnchor, and its close button otherwise.
+  const anchor = menuAnchor ?? plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
   if (!anchor) throw new Error(`group ${card} has no close button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return null; }
   openLayer(anchor, "그룹 메뉴", [{ key: "close", name: "그룹 닫기" }, { key: "dissolve", name: "그룹 풀기" }],
