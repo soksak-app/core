@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F912(hand-off record): 명세 부분은 `spec/messaging.md`에서 완료되었다. 항목이 record의 소유자로 적은 party 기능을 F936이 닫았고 어떤 명세도 그 소유 module과 저장을 정의하지 않으므로 test는 보류다.
 - F899-7.3(sidecar vt의 messaging): vt S196이 같은 serve test와 공유 이름 case로 같은 messaging contract를 구현하며, 그것들은 변경하지 않은 sidecar에서 실패했고 이제 통과한다. 쓰기 규칙은 두 sidecar에 대해 측정되었다. vt S200 전까지 release되지 않았다.
 - F899-7.2, F909, F910, F911(sidecar alacritty의 messaging): alacritty S188이 registration, `notify`로 하는 감시, `from`을 가진 file event, cursor epoch `registration`을 가진 읽기, 쓰기 규칙을 구현한다. 그 serve test와 공유 이름 case는 변경하지 않은 sidecar에서 실패했고 이제 통과한다. `spec/messaging.md`는 UTF-8이 아닌 message의 거부 `invalid-text`를 더하고 쓰기 규칙의 측정을 적는다. 변경은 alacritty S194 전까지 release되지 않았다.
 - F899-7.1(두 terminal sidecar의 messaging): `docs/spec/messaging.md`가 sidecar `alacritty`와 `vt`가 각자 자기 surface에 대해 event 이름 `sidecar.<sidecar>.file.changed`, `sidecar.<sidecar>.messages.registered`, `sidecar.<sidecar>.registration.closed`로 messaging을 구현한다고 적는다. `removed` event는 read의 message가 아니다. `docs/spec/cases/messaging/names.json`은 이름 규칙의 공유 case를 담는다.
