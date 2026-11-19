@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
 // Command is the handler of a declared command. params is the JSON of its parameters, which is empty when it has none.
@@ -519,8 +520,8 @@ func (r *Registry) checkRequest(name string, fields map[string]json.RawMessage) 
 	if json.Unmarshal(fields["params"], &input) != nil || input == nil {
 		return Refuse(InvalidParams, "command.run for %s requires params", name)
 	}
-	if !MatchesSchema(r.declared.params[name], input) {
-		return Refuse(InvalidParams, "invalid params for %s", name)
+	if refusal := host.CommandParamsRefusal(name, r.declared.params[name], fields["params"]); refusal != "" {
+		return Refuse(InvalidParams, "%s", refusal)
 	}
 	// The handlers of the workbench take no cause, and an invalid list is refused also for a handler that ignores it.
 	if cids, present := fields["cids"]; present && !validCauses(cids) {

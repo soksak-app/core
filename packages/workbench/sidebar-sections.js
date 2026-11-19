@@ -244,6 +244,22 @@ export function drawSet(container, sidebar, set, context) {
   if (context.orientation !== "horizontal" && context.orientation !== "vertical") throw new Error("section orientation must be horizontal or vertical");
   const { space } = context;
   if (typeof space !== "string" || !space) throw new Error(`sidebar ${sidebar} draws sections without the space of its layout`);
+  // A fixed sidebar place without a set draws no sections, and core.sidebars reports it with a null set and its rectangle
+  // (docs/spec/external-sidebars.md#override-context-and-rail-border). Its container names no element, as it holds none.
+  if (set === null) {
+    const record = drawn.get(container);
+    if (record?.set === null && record.sidebar === sidebar) {
+      record.context = context;
+      return;
+    }
+    if (record) clearSet(container);
+    container.replaceChildren();
+    drawn.set(container, { container, sidebar, key: null, set: null, layout: null, context, entries: [] });
+    container.dataset.sidebar = sidebar;
+    notify();
+    sweep();
+    return;
+  }
   if (set.layout !== "list" && set.layout !== "tabs") throw new Error(`set ${set.id} layout must be list or tabs`);
   // The sections of a plugin that is not loaded remain in the set but are not drawn (docs/spec/plugins.md).
   const sections = set.sections.filter(hasSection).map(section);
@@ -429,7 +445,8 @@ export function restoreSidebarChoices(saved) {
 export function sidebarsState() {
   return [...document.querySelectorAll(".set[data-sidebar]")].map((container) => drawn.get(container)).filter((record) => record && !record.context.hidden)
     .map((record) => {
-      const choice = choiceOf(record.sidebar);
+      // A sidebar without a set has no choice, and its report makes none that the space would store.
+      const choice = record.set === null ? null : choiceOf(record.sidebar);
       return {
         sidebar: record.sidebar, set: record.set, layout: record.layout, orientation: record.context.orientation,
         tab: record.layout === "tabs" ? choice.tab : null,

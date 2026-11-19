@@ -72,6 +72,8 @@ func TestContributionItemsMatchTheSchema(t *testing.T) {
 		{`{"type":"object","properties":{"a":{"type":"string"}}}`, `{"b":1}`, true},
 		{`{"enum":["a",{"b":[1]}]}`, `{"b":[1]}`, true},
 		{`{"enum":["a"]}`, `"b"`, false},
+		{`{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]}`, `{}`, false},
+		{`{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]}`, `{"a":"x"}`, true},
 	} {
 		var schema, value any
 		if err := json.Unmarshal([]byte(c.schema), &schema); err != nil {

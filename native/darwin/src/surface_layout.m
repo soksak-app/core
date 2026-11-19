@@ -432,20 +432,28 @@ static void endHoldByInput(void);
 
 // The observers of the actions of the user, which surfaceInputActionObserve adds.
 static NSMutableArray *actionObservers;
+// The observers of the moves and scrolls of the pointer, which surfaceInputPointerObserve adds.
+static NSMutableArray *pointerObservers;
 
-// The told press and key events that a release gave back to the queue, each as its owner and its content. -[NSApplication
-// postEvent:atStart:] hands the event back as another object with the same content, so the content names it. A key event that
-// comes back carries the location of the pointer at its new dispatch, so the content of a key event holds no location. The end
-// of the release of owner comes after its events in the queue, so it forgets what of owner did not come back, as an event that
-// a tracking loop discarded.
+// Whether event is a move or a scroll of the pointer, which the device tells to the observers of moves and which ends no hold.
+static BOOL movesPointer(NSEvent *event) {
+    return event.type == NSEventTypeMouseMoved || event.type == NSEventTypeScrollWheel;
+}
+
+// The told events that a release gave back to the queue, each as its owner and its content. -[NSApplication postEvent:atStart:]
+// hands the event back as another object with the same content, so the content names it. An event that comes back carries a
+// location that AppKit computes again from the screen, the location of the pointer at its new dispatch for a key event and a
+// point that can differ by a fraction of a point for a pointer event, so the content holds no location. The end of the release of
+// owner comes after its events in the queue, so it forgets what of owner did not come back, as an event that a tracking loop
+// discarded.
 static NSMutableArray<NSArray *> *returnedActions;
 
+// The content of a told event; a scroll has no button number.
 static NSString *actionContent(NSEvent *event) {
     BOOL key = event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp || event.type == NSEventTypeFlagsChanged;
-    NSString *identity = [NSString stringWithFormat:@"%lu %.9f %ld %lu %ld", (unsigned long)event.type, event.timestamp,
-        (long)event.windowNumber, (unsigned long)event.modifierFlags, key ? (long)event.keyCode : (long)event.buttonNumber];
-    if (key) return identity;
-    return [identity stringByAppendingFormat:@" %.3f %.3f", event.locationInWindow.x, event.locationInWindow.y];
+    return [NSString stringWithFormat:@"%lu %.9f %ld %lu %ld", (unsigned long)event.type, event.timestamp, (long)event.windowNumber,
+        (unsigned long)event.modifierFlags,
+        key ? (long)event.keyCode : event.type == NSEventTypeScrollWheel ? 0 : (long)event.buttonNumber];
 }
 
 static void markReturnedAction(void *owner, NSEvent *event) {
@@ -486,8 +494,13 @@ static void sendEventAfterLayout(id application, SEL selector, NSEvent *event) {
     // takes its place behind that input, which the end of the hold gives back in its order. While a release of the window returns,
     // the event is in its turn, as holdInput reads it: a returned call sends its event in its turn, ahead of the input that arrived
     // during the return and waits.
+    // A move and a scroll of the pointer are told to the observers of moves in the same way, and they end no hold.
     // An event that a release gave back comes through this method again; its action was already told, so it is told once.
-    BOOL action = endsHold(event) && !takeReturnedAction(event);
+    BOOL told = (endsHold(event) || movesPointer(event)) && !takeReturnedAction(event);
+    BOOL action = told && endsHold(event);
+    if (told && !action) {
+        for (void (^observer)(NSEvent *) in [[pointerObservers copy] autorelease]) observer(event);
+    }
     if (action) {
         NSWindow *window = event.window;
         BOOL behind = holdOpen && window && !passesHold(event) && inputHeld(window)
@@ -522,6 +535,13 @@ static void discardAfterLayout(id application, SEL selector, NSEventMask mask, N
 
 static void watchInput(void);
 
+void surfaceInputPointerObserve(void (^observer)(NSEvent *event)) {
+    NSCAssert(NSThread.isMainThread, @"the actions of the user belong to the UI thread");
+    watchInput();
+    if (!pointerObservers) pointerObservers = [[NSMutableArray alloc] init];
+    [pointerObservers addObject:[[observer copy] autorelease]];
+}
+
 void surfaceInputActionObserve(void (^observer)(NSEvent *event)) {
     NSCAssert(NSThread.isMainThread, @"the actions of the user belong to the UI thread");
     watchInput();
@@ -539,9 +559,13 @@ static void watchInput(void) {
         Method discard = class_getInstanceMethod(application, @selector(discardEventsMatchingMask:beforeEvent:));
         applicationDiscard = (void (*)(id, SEL, NSEventMask, NSEvent *))method_getImplementation(discard);
         method_setImplementation(discard, (IMP)discardAfterLayout);
-        // A press or key event ends the layout hold at once (docs/spec/native-surfaces.md#layout-transaction).
+        // A press or a key down ends the layout hold at once; a key up and a modifier change continue an action that came before
+        // them and end no hold, so the key up of a keystroke that changed the layout does not commit it before its views presented
+        // (docs/spec/native-surfaces.md#layout-transaction).
         if (!actionObservers) actionObservers = [[NSMutableArray alloc] init];
-        [actionObservers addObject:[[^(NSEvent *event) { endHoldByInput(); } copy] autorelease]];
+        [actionObservers addObject:[[^(NSEvent *event) {
+            if (event.type != NSEventTypeKeyUp && event.type != NSEventTypeFlagsChanged) endHoldByInput();
+        } copy] autorelease]];
     });
 }
 
@@ -567,8 +591,8 @@ static void returnInput(void *owner, NSArray<SPHeldInput *> *pieces) {
     postHeldTurn(end);
     for (SPHeldInput *input in pieces.reverseObjectEnumerator) {
         if (input.event) {
-            // Each press and key event was told when it first reached the application; its return is not told again.
-            if (endsHold(input.event)) markReturnedAction(owner, input.event);
+            // Each press, key event, move and scroll was told when it first reached the application; its return is not told again.
+            if (endsHold(input.event) || movesPointer(input.event)) markReturnedAction(owner, input.event);
             [NSApp postEvent:input.event atStart:YES];
         } else {
             postHeldTurn(input);

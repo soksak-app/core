@@ -80,8 +80,9 @@ type dividerGrip struct {
 	color ui.Color
 }
 
-// drawDividers draws the grab area of each boundary over the cards and returns the grips to paint over the rail. inset is the origin
-// of the plane in its parent. The grab area takes the pointer over its whole area, also over the edges of the native views of the
+// drawDividers draws the grab area of each boundary over the cards and returns the grips to paint over the rail: each stretch of a
+// divider draws its grip at its center while it holds the grip, so no grip reaches into a header (docs/spec/groups.md#drawing). inset is
+// the origin of the plane in its parent. The grab area takes the pointer over its whole area, also over the edges of the native views of the
 // cards beside it, which it covers, as the window overlays give that area to the page of the Wails and Tauri hosts
 // (docs/spec/native-surfaces.md#surface-host-container).
 func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
@@ -102,6 +103,13 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		color := faded(s.palette.Muted, m.gripMix)
 		if box.Hovered() || box.FocusVisible() || (s.held != nil && s.held.item == items[i]) {
 			color = s.palette.Focus
+		}
+		length := divider.H
+		if divider.Axis == "y" {
+			length = divider.W
+		}
+		if float32(length) < m.gripLength {
+			continue
 		}
 		grips = append(grips, dividerGrip{
 			rect:  ui.Rect{X: float32(divider.X) + (float32(divider.W)-across)/2, Y: float32(divider.Y) + (float32(divider.H)-along)/2, W: across, H: along},

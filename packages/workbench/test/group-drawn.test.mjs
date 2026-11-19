@@ -144,3 +144,28 @@ test("a rule of one point that runs through a nested group header is cut at that
   assert.deepEqual(crossing, [], "a rule crosses a group header");
   assert.ok(rules.some((rule) => rule.axis === "x" && rule.line === 1), "the rule of line 1 is drawn below the header of card-5");
 });
+
+/** The length of the grip of a divider along its line, the chrome metric sp-grip-length. */
+const GRIP = 24;
+
+// A divider draws its grip at the center of each drawn stretch that holds the grip and none on a shorter stretch, so no grip reaches into
+// a header: card-6 holds card-5 of card-1 beside card-3 at its top, so the line between card-1 and card-3 crosses the headers of card-6
+// and card-5 and keeps a stretch of one gap between them (docs/spec/groups.md#drawing).
+test("a divider draws its grip only on a drawn stretch that holds the grip", () => {
+  const grid = new Soksak(undefined, { gap: GAP, minSize: MIN, width: W, height: H });
+  const tree = readGroupTree({
+    state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [
+      { id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "card-3", c0: 1, c1: 2, r0: 0, r1: 1 }, { id: "card-2", c0: 2, c1: 3, r0: 0, r1: 1 }] },
+    groups: [{ card: "card-6", name: "그룹 1", leader: "card-5", members: [
+      { card: "card-5", name: "그룹 2", leader: "card-1", members: ["card-1", "card-3"] }, "card-2"] }],
+    leader: "card-6", lastCard: 6,
+  }, { gap: GAP, minSize: MIN, head: HEAD }, grid);
+  const dividers = tree.drawnDividers(grid.dividers(), GRIP);
+  const length = (divider) => (divider.axis === "x" ? divider.h : divider.w);
+  for (const divider of dividers) {
+    assert.equal(divider.grip, length(divider) >= GRIP, `the divider ${divider.key} of length ${length(divider)} draws grip ${divider.grip}`);
+  }
+  const line = dividers.filter((divider) => divider.axis === "x" && divider.line === 1);
+  assert.ok(line.some((divider) => !divider.grip && length(divider) > 0), "the line between card-1 and card-3 has no stretch between the headers");
+  assert.equal(line.filter((divider) => divider.grip).length, 1, "the line between card-1 and card-3 draws one grip beside the cards");
+});

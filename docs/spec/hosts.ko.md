@@ -549,7 +549,7 @@ macOS에서 각 애플리케이션은 애플리케이션 번들에서 실행된�
 | `make check-platform-files` | `scripts/check-platform-files.mjs`를 실행한다 |
 | `make check-host-files` | `make check-windows-build`, `make check-host-debug`, `scripts/check-host-files.mjs`를 실행한다 |
 
-macOS 애플리케이션 bundle build target 네 개는 `Contents`를 교체하기 전에 대상 bundle을 확인한다. 해당 bundle에서 process가 실행 중이면 preparation은 bundle을 변경하기 전에 process PID와 정확한 bundle 경로를 오류로 보고한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
+macOS 애플리케이션 bundle build target 네 개는 새 bundle을 대상 bundle 옆에서 조립하고 대상 bundle을 rename 한 번으로 교체하므로, 실행은 서명된 이전 bundle 전체나 새 bundle 전체를 찾고, 파일이 서명과 더 이상 맞지 않는 bundle은 찾지 않는다. preparation(`scripts/platform/darwin/prepare-app-bundle.mjs`)은 대상 bundle `<folder>/<name>.app`의 staging bundle `<folder>/.staging/<name>.app`을 같은 file system에 새 `Contents` 디렉터리로 새로 만들고, build는 실행 파일, library, Info.plist를 staging bundle에 쓰고 ad hoc으로 서명한다. 그 뒤 installation(`--install`)은 staging bundle의 서명을 `codesign --verify --deep --strict`로 검증하고, `native/darwin/build/sok-swap-bundle`로 staging bundle과 대상 bundle을 `RENAME_SWAP`의 `renamex_np` 한 번(대상 bundle이 없으면 `rename` 한 번)으로 맞바꾸고, staging 경로에서 이전 bundle을 지우고, 대상 bundle을 LaunchServices에 등록한다. 어느 단계도 대상 bundle 안에 쓰지 않는다. preparation과 installation은 먼저 대상 bundle을 확인한다: 그 bundle에서 process가 실행 중이면 무엇도 바꾸기 전에 process PID와 정확한 bundle 경로로 실패한다. 의도한 검증 checkout에서 build하고 실행 중인 애플리케이션이 사용하는 bundle을 build 대상으로 지정하지 않는다.
 
 ## mygo host
 

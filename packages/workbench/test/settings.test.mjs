@@ -131,6 +131,9 @@ test('stored settings of a plugin that is not loaded are kept and not applied', 
   // and no write reaches the settings file of the project.
   assert.deepEqual(settingsWrites(wire).map(({ payload }) => payload), [{ kind: 'settings', id: null, patch: { gap: 9 }, remove: [] }]);
   assert.throws(() => change({ 'absent.option': 5 }, 'common', 'test'), /Unknown setting: absent.option/);
+  // group.tint mixed the group colors of a theme into the fill of a group card, which the tokens of a card now give, so it is no setting of
+  // core (docs/spec/groups.md#drawing).
+  assert.throws(() => change({ 'group.tint': 40 }, 'common', 'test'), /^Error: Unknown setting: group\.tint$/);
   wire.finish();
 });
 
@@ -260,43 +263,6 @@ test('the memory saver settings are common-only with their defaults and ranges',
       { message: `Invalid setting memorySaverDelay: ${JSON.stringify(delay)}` });
   }
   assert.throws(() => change({ memorySaver: 'on' }, 'common', 'test'), /Invalid setting memorySaver: "on" is not a boolean/);
-  await orderedCallsAnswered();
-  wire.finish();
-});
-
-// group.tint is an integer from 0 to 100 percent, default 100, and another value is refused with itself (docs/spec/settings.md#values).
-test('group.tint refuses a value that is no integer from 0 to 100', async () => {
-  const wire = selectPageWire('settings-group-tint');
-  const { beginSettings, set: change, value } = await import('../settings.js?test=group-tint');
-  const { orderedCallsAnswered } = await import('../host.js');
-  beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-  assert.equal(value('group.tint'), 100);
-  for (const tint of [101, -1, 50.5, '50']) {
-    assert.throws(() => change({ 'group.tint': tint }, 'common', 'test'),
-      { message: `Invalid setting group.tint: ${JSON.stringify(tint)}` });
-  }
-  assert.equal(value('group.tint'), 100);
-  await orderedCallsAnswered();
-  wire.finish();
-});
-
-// The fill of a group card mixes the theme color group-<n> of its level into bg by group.tint in percent, each channel rounded, and a
-// level above 3 takes group-3 (docs/spec/groups.md#drawing).
-test('groupFill mixes the group color of a level into bg by group.tint', async () => {
-  const wire = selectPageWire('settings-group-tint');
-  const { beginSettings, groupFill, THEMES, themeName, modeName } = await import('../settings.js?test=group-fill');
-  const { orderedCallsAnswered } = await import('../host.js');
-  beginSettings({ common: { 'group.tint': 40 }, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
-  const colors = THEMES.find((theme) => theme.name === themeName())[modeName()];
-  const rgb = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
-  const mix = (hex) => {
-    const [group, bg] = [rgb(hex), rgb(colors.bg)];
-    return `#${group.map((c, i) => Math.round(c * 0.4 + bg[i] * 0.6).toString(16).padStart(2, '0')).join('')}`;
-  };
-  assert.equal(groupFill(1), mix(colors['group-1']));
-  assert.equal(groupFill(2), mix(colors['group-2']));
-  assert.equal(groupFill(3), mix(colors['group-3']));
-  assert.equal(groupFill(7), mix(colors['group-3']), 'a level above 3 takes group-3');
   await orderedCallsAnswered();
   wire.finish();
 });

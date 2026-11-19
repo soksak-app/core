@@ -49,6 +49,9 @@ mod image;
 #[path = "input.rs"]
 mod input;
 #[cfg(feature = "diagnostics")]
+#[path = "input_person.rs"]
+mod input_person;
+#[cfg(feature = "diagnostics")]
 #[path = "input_reference.rs"]
 mod input_reference;
 #[cfg(all(test, feature = "diagnostics"))]
@@ -57,6 +60,9 @@ mod input_reference_test;
 #[cfg(feature = "diagnostics")]
 #[path = "input_source.rs"]
 mod input_source;
+#[cfg(test)]
+#[path = "input_test.rs"]
+mod input_test;
 #[path = "layout.rs"]
 mod layout;
 #[path = "link.rs"]
@@ -832,6 +838,16 @@ impl Platform for Darwin {
     #[cfg(feature = "diagnostics")]
     fn end_input_reference_wait(&self, window: Handle, reason: &str) {
         input_reference::end(window, reason);
+    }
+    #[cfg(feature = "diagnostics")]
+    fn dispatch_person_input(
+        &self,
+        window: Handle,
+        action: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<(), String> {
+        input_person::dispatch(window, action, x, y)
     }
     #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {

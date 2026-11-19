@@ -116,6 +116,9 @@ type metrics struct {
 	// The state of the surface of the active tab in the status row of its card (.surface-status of packages/workbench/app.css).
 	surfaceStatusGap, surfaceStatusMargin, spinner, spinnerBorder float32
 	spinnerTurn                                                   time.Duration
+	// groupFillFade is the share of bg in the body of a group card for each level, the chrome value group-fill-fade, read at the precision
+	// of the page, which mixes in float64 (docs/spec/groups.md#drawing).
+	groupFillFade float64
 }
 
 func readMetrics(declared *Declarations) (metrics, error) {
@@ -250,6 +253,11 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		failed = errors.New("the chrome metric spinner-turn has no time")
 	}
 	m.spinnerTurn = time.Duration(turn * float64(time.Second))
+	fade, ok := declared.Metric("group-fill-fade")
+	if !ok {
+		failed = errors.New("the chrome metric group-fill-fade has no number")
+	}
+	m.groupFillFade = fade
 	return m, failed
 }
 

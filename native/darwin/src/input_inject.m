@@ -28,6 +28,7 @@
 #import "webview_input.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "private/appkit.h"
 #import "private/coregraphics.h"
 #import "private/webkit.h"
 
@@ -39,6 +40,9 @@
 @public
     NSString *name;
     SPPress *presses[2]; // not retained: the window of a press holds it, and the press clears its slot when it ends
+    // The message of the press of a person that ended the gesture of each button, which the next drag or release of that button
+    // answers once; nil when no press of a person ended it. A delivered press of the button forgets it.
+    NSString *interruptions[2];
 }
 @end
 @implementation SPPointer
@@ -55,6 +59,8 @@
     NSView *page; // the web view that contains the target, or the target: what hears the gesture
     BOOL throughApplication; // the press passed -[NSApplication sendEvent:], and the gesture keeps that path
     BOOL shown; // the button of the press is in the buttons that +[NSEvent pressedMouseButtons] answers
+    NSPoint point; // the window point of the last delivered press or drag, where the press of a person releases the gesture
+    double x, y; // that point in points from the top left of the content, as the caller named it
 }
 @end
 
@@ -247,8 +253,6 @@ static NSView *hitView(NSWindow *window, NSPoint point) {
     return [content hitTest:[content.superview convertPoint:point fromView:nil]];
 }
 
-// The buttons of open synthetic presses of every pointer, by button. They are written on the main thread and read on any thread.
-static _Atomic unsigned syntheticPresses[2];
 static NSUInteger (*appKitPressedButtons)(id, SEL);
 
 // The buttons of the open presses of a pointer that the pages see.
@@ -263,15 +267,45 @@ static NSUInteger pointerButtons(SPPointer *pointer) {
 
 // WebKit makes the buttons of a page event from +[NSEvent pressedMouseButtons], not from the event, and an event delivered
 // to a view does not change that value. It is replaced at the first delivered press, so an application that receives only
-// a person's input keeps the implementation of AppKit. During the delivery of the input of a pointer it adds the buttons of that
-// pointer to the value of AppKit, so a page sees the buttons of its own gesture; otherwise it adds the buttons of every pointer.
+// a person's input keeps the implementation of AppKit. During the delivery of the input of a pointer it answers the buttons of that
+// pointer, so a page sees the buttons of its own gesture; outside a delivery, and on any other thread, it answers the buttons of
+// the person, so the input of a person never carries the buttons of a synthetic gesture.
+// The buttons that the completion of an input method answers while it runs (handleEventInDelivery).
+static _Thread_local BOOL completing = NO;
+static _Thread_local NSUInteger completingButtons = 0;
+
 static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector) {
+    if (completing) return completingButtons;
+    if (deliveringPointer) return pointerButtons(deliveringPointer);
     // A real button never enters a page event of a virtual key window.
-    NSUInteger buttons = sp_input_virtual_any() ? 0 : appKitPressedButtons(self, selector);
-    if (deliveringPointer) return buttons | pointerButtons(deliveringPointer);
-    if (atomic_load(&syntheticPresses[0]) > 0) buttons |= 1;
-    if (atomic_load(&syntheticPresses[1]) > 0) buttons |= 2;
-    return buttons;
+    return sp_input_virtual_any() ? 0 : appKitPressedButtons(self, selector);
+}
+
+// WebKit passes a mouse event of a page with an input context to -[NSTextInputContext handleEvent:completionHandler:] and makes the
+// page event in the completion, which the input method of the system calls after the delivery has returned when it serves the
+// context (the mouse handlers of WebViewImpl). The completion of the event of a pointer answers the buttons that the pointer had
+// when the event was delivered, so WebKit reads the buttons of that gesture there and never the buttons of the person
+// (docs/operations/private-native-apis.md).
+static void (*appKitHandleEvent)(id, SEL, NSEvent *, void (^)(BOOL));
+static void handleEventInDelivery(id self, SEL selector, NSEvent *event, void (^completion)(BOOL)) {
+    if (!deliveringPointer || !completion) {
+        appKitHandleEvent(self, selector, event, completion);
+        return;
+    }
+    NSUInteger buttons = pointerButtons(deliveringPointer);
+    void (^original)(BOOL) = [[completion copy] autorelease];
+    appKitHandleEvent(self, selector, event, ^(BOOL handled) {
+        BOOL previous = completing;
+        NSUInteger previousButtons = completingButtons;
+        completing = YES;
+        completingButtons = buttons;
+        @try {
+            original(handled);
+        } @finally {
+            completing = previous;
+            completingButtons = previousButtons;
+        }
+    });
 }
 
 static void showSyntheticButtons(void) {
@@ -281,7 +315,18 @@ static void showSyntheticButtons(void) {
         NSUInteger (*appKit)(id, SEL) = (NSUInteger (*)(id, SEL))method_getImplementation(method);
         appKitPressedButtons = appKit;
         method_setImplementation(method, (IMP)pressedButtonsWithSynthetic);
+        Method handle = class_getInstanceMethod(NSTextInputContext.class, @selector(handleEvent:completionHandler:));
+        NSCAssert(handle, @"-[NSTextInputContext handleEvent:completionHandler:] is unavailable");
+        appKitHandleEvent = (void (*)(id, SEL, NSEvent *, void (^)(BOOL)))method_setImplementation(handle, (IMP)handleEventInDelivery);
     });
+}
+
+unsigned long sp_input_pointer_buttons(const char *name) {
+    NSCAssert(NSThread.isMainThread, @"mouse presses belong to the main thread");
+    SPPointer *pointer = pointerNamed(name);
+    unsigned long buttons = 0;
+    for (int button = 0; button < 2; button++) if (pointer && pointer->presses[button]) buttons |= 1u << button;
+    return buttons;
 }
 
 unsigned long sp_input_physical_buttons(void) {
@@ -309,9 +354,7 @@ static BOOL keyForInput(NSWindow *window) {
 @implementation SPPress
 // Takes the button of the press out of the buttons that the pages see. The press stays open until it ends.
 - (void)hide {
-    if (!shown) return;
     shown = NO;
-    atomic_fetch_sub(&syntheticPresses[button], 1);
 }
 - (void)dealloc {
     [self hide];
@@ -331,10 +374,14 @@ static NSView *pageOf(NSView *view) {
 }
 
 static void observeWindowCloses(void);
+static void observePersonPresses(void);
 
-// Opens the press of a button of a pointer on view. The window holds the press, and the pages see its button.
-static SPPress *openPress(SPPointer *pointer, int button, NSWindow *window, NSView *view, BOOL throughApplication) {
+// Opens the press of a button of a pointer on view at the window point point, which is x, y of the content. The window holds the
+// press, and the pages see its button. A press of the button forgets the press of a person that ended its last gesture.
+static SPPress *openPress(SPPointer *pointer, int button, NSWindow *window, NSView *view, BOOL throughApplication, NSPoint point,
+    double x, double y) {
     observeWindowCloses();
+    observePersonPresses();
     showSyntheticButtons();
     SPPress *press = [[SPPress alloc] init];
     press->pointer = pointer;
@@ -344,7 +391,11 @@ static SPPress *openPress(SPPointer *pointer, int button, NSWindow *window, NSVi
     press->page = [pageOf(view) retain];
     press->throughApplication = throughApplication;
     press->shown = YES;
-    atomic_fetch_add(&syntheticPresses[button], 1);
+    press->point = point;
+    press->x = x;
+    press->y = y;
+    [pointer->interruptions[button] release];
+    pointer->interruptions[button] = nil;
     pointer->presses[button] = press;
     objc_setAssociatedObject(window, press, press, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [press release];
@@ -445,6 +496,10 @@ static void endQueuedReleases(void) {
     for (dispatch_block_t end in ends) end();
 }
 
+// The synthetic event that this library sends through -[NSApplication sendEvent:] now, or nil: the observer of the presses of a
+// person passes it over.
+static NSEvent *sendingEvent;
+
 // Delivers one event of a gesture on the path of its press. An event that passes the application while the delivery of a press
 // runs an event loop of its own goes to the event queue, which that loop reads.
 static void deliverGesture(NSView *hit, NSEvent *event, BOOL throughApplication) {
@@ -454,7 +509,13 @@ static void deliverGesture(NSView *hit, NSEvent *event, BOOL throughApplication)
         return;
     }
     if (throughApplication) {
-        [NSApp sendEvent:event];
+        NSEvent *previous = sendingEvent;
+        sendingEvent = event;
+        @try {
+            [NSApp sendEvent:event];
+        } @finally {
+            sendingEvent = previous;
+        }
         return;
     }
     switch (event.type) {
@@ -604,6 +665,23 @@ static NSView *pageAt(NSWindow *window, NSPoint point) {
     return hit ? pageOf(hit) : nil;
 }
 
+// The resize edge of window that holds the window point point, or NULL. AppKit decides a press there in
+// -[NSWindow _hitTestWithHysteresisCheck:forEvent:allowWindowDragging:]: for a point at which the private
+// -[NSWindow _resizeDirectionForMouseLocation:] names a direction it calls +[NSWindow _mouseHysteresisCheck:withExpiration:andDistance:
+// finalMouseLocation:] with no expiration, which reads the next mouse events of the application on the main thread before the press
+// returns (docs/operations/private-native-apis.md). The release of a synthetic gesture is sent only after its press returns, so the
+// press would never return. No public interface states the resize edges, which reach about three points into the content view.
+static const char *resizeEdgeAt(NSWindow *window, NSPoint point) {
+    static const char *const names[] = {"right", "top right", "top", "top left", "left", "bottom left", "bottom", "bottom right"};
+    NSCAssert([window respondsToSelector:@selector(_resizeDirectionForMouseLocation:)],
+        @"-[NSWindow _resizeDirectionForMouseLocation:] is unavailable");
+    NSInteger direction = [window _resizeDirectionForMouseLocation:point];
+    if (direction == -1) return NULL;
+    NSCAssert(direction >= 0 && direction < 8, @"-[NSWindow _resizeDirectionForMouseLocation:] answered the unknown direction %ld",
+        (long)direction);
+    return names[direction];
+}
+
 // Delivers an input of pointer while +[NSEvent pressedMouseButtons] answers the buttons of that pointer. When the result is
 // SP_INPUT_BUTTON_HELD, held receives the mask of the rejected turn and the frontmost application; when it is
 // SP_INPUT_POINTER_HELD, held names the pointer whose press rejected it.
@@ -628,6 +706,14 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
         if (!moveTo(window, point)) { held->why = "no tracking area at the point"; return SP_INPUT_REJECTED; }
         return SP_INPUT_DELIVERED;
     }
+    // A person's press on a resize edge resizes the window and reaches no view, and a synthetic press there would stop the main
+    // thread in the tracking of AppKit, so it is refused on both delivery paths.
+    const char *edge = phase == 1 ? resizeEdgeAt(window, point) : NULL;
+    if (edge) {
+        held->why = [NSString stringWithFormat:@"the point (%g, %g) lies on the %s resize edge of the window, where AppKit tracks a "
+            "press as a window resize; the synthetic press was not delivered", x, y, edge].UTF8String;
+        return SP_INPUT_RESIZE_EDGE;
+    }
     if (phase == 4) {
         // The public API has no way to create a scroll event that carries window information. Setting the window number
         // (field 51) and the window location (CGEventSetWindowLocation) on a CGEvent yields an NSEvent with a window and
@@ -649,6 +735,12 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
         if (event.window != window) { held->why = "the scroll event has another window"; return SP_INPUT_REJECTED; }
         [window sendEvent:event];
         return SP_INPUT_DELIVERED;
+    }
+    // A drag or release of a gesture that the press of a person ended answers that press once.
+    if ((phase == 2 || phase == 3) && !pointer->presses[button] && pointer->interruptions[button]) {
+        held->why = [[pointer->interruptions[button] autorelease] UTF8String];
+        pointer->interruptions[button] = nil;
+        return SP_INPUT_INTERRUPTED;
     }
     NSView *hit = pointerTarget(pointer, window, point, phase, button);
     if (!hit) { held->why = phase == 2 || phase == 3 ? "no open press of the pointer and button in the window" : "no view at the point"; return SP_INPUT_REJECTED; }
@@ -691,7 +783,7 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
             BOOL firstLeft = button == 0 && !otherPressIn(pointer, window, 0);
             // A person moves to the point before the press. A window that is not the key window hears no move.
             if (keyForInput(window)) moveTo(window, point);
-            openPress(pointer, button, window, hit, throughApplication);
+            openPress(pointer, button, window, hit, throughApplication, point, x, y);
             // The monitor of the press origin records the press of the application as it records a person's press. A press
             // delivered directly passes no monitor, so the driver records it.
             if (!throughApplication) sp_input_press_origin_set(window, button, point.x, point.y);
@@ -750,6 +842,11 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
                 if (phase == 3) [press hide];
                 if (phase == 3 && lastLeft && !gestureThroughApplication) surfaceLayoutPointerPassing(window, false, point.x, point.y);
                 deliverGesture(hit, event, gestureThroughApplication);
+                if (phase == 2) {
+                    press->point = point;
+                    press->x = x;
+                    press->y = y;
+                }
             } @finally {
                 if (hasOrigin) sp_input_press_context_pop(&context);
                 if (phase == 3 && !queued) {
@@ -819,6 +916,8 @@ static const char *resultName(sp_input_result result) {
         case SP_INPUT_BUTTON_HELD: return "button held";
         case SP_INPUT_PRESS_OPEN: return "press open";
         case SP_INPUT_POINTER_HELD: return "pointer held";
+        case SP_INPUT_RESIZE_EDGE: return "resize edge";
+        case SP_INPUT_INTERRUPTED: return "interrupted";
     }
     return "unknown";
 }
@@ -863,9 +962,15 @@ sp_input_result sp_input_pointer_clicks(void *handle, double x, double y, int ph
     return pointerAt(handle, x, y, phase, button, 0, 0, clicks);
 }
 
-// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD or
-// SP_INPUT_POINTER_HELD.
+// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD,
+// SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED.
 static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held) {
+    if (result == SP_INPUT_RESIZE_EDGE || result == SP_INPUT_INTERRUPTED) {
+        sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = NULL, .reason = held.why };
+        [held.front release];
+        done(context, result, &report);
+        return;
+    }
     if (result == SP_INPUT_POINTER_HELD) {
         sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = held.holder->name.UTF8String, .reason = held.why };
         [held.front release];
@@ -1006,6 +1111,84 @@ static void pointerRequestAnswered(void *context, sp_input_result result, const 
     [request release];
     pointerRequestRuns = NO;
     startPointerRequests();
+}
+
+// Releases press on its view at the point of its last press or drag on the path of its gesture, as the release of a person ends a
+// gesture, and ends it: the page hears the end of the gesture with no button, and the press origin and the press of the surface
+// layout end with it.
+static void releaseInterrupted(SPPress *press) {
+    [press retain];
+    NSWindow *window = press->window;
+    int button = press->button;
+    SPPointer *previous = deliveringPointer;
+    deliveringPointer = press->pointer;
+    BOOL lastLeft = button == 0 && !otherPressIn(press->pointer, window, 0);
+    uint64_t token = 0;
+    bool hasOrigin = sp_input_press_origin_point(window, button, NULL, NULL, &token);
+    BOOL throughApplication = press->throughApplication;
+    @try {
+        [press hide];
+        if (lastLeft && !throughApplication) surfaceLayoutPointerPassing(window, false, press->point.x, press->point.y);
+        NSEventType up = button == 1 ? NSEventTypeRightMouseUp : NSEventTypeLeftMouseUp;
+        if (press->view.window == window) deliverGesture(press->view, mouseEvent(window, up, press->point, 1, 0), throughApplication);
+    } @finally {
+        endPress(press);
+        if (hasOrigin && !throughApplication) sp_input_press_origin_clear(window, button, token);
+        if (lastLeft) sp_surface_press_released(window);
+        deliveringPointer = previous;
+        [press release];
+    }
+}
+
+// The press of a person, a mouse down of any button that reaches -[NSApplication sendEvent:] and that this library did not send,
+// and a move or a scroll of a person that reaches it end every open synthetic gesture of the application in their turn, before
+// any monitor or view sees them: input of the person comes first. Each press is released on its view, and the pointer keeps the
+// message for the next drag or release of the button (docs/spec/exposure.md#named-pointers). The observers are the device of the
+// actions of the user (surface_layout.h), which tells each event once.
+static void interruptGestures(NSEvent *event) {
+    NSMutableArray<SPPress *> *open = [NSMutableArray array];
+    for (SPPointer *pointer in pointers.objectEnumerator) {
+        for (int button = 0; button < 2; button++) if (pointer->presses[button]) [open addObject:pointer->presses[button]];
+    }
+    if (open.count == 0) return;
+    NSWindow *pressed = event.window;
+    // An event without a window carries its point in screen coordinates.
+    NSPoint at = pressed ? contentPointOf(pressed, [pressed convertPointToScreen:event.locationInWindow]) : event.locationInWindow;
+    const char *action = event.type == NSEventTypeMouseMoved ? "move" : event.type == NSEventTypeScrollWheel ? "scroll"
+        : event.type == NSEventTypeLeftMouseDown ? "down of the left button" : event.type == NSEventTypeRightMouseDown
+        ? "down of the right button" : "down of the other button";
+    for (SPPress *press in open) {
+        SPPointer *pointer = press->pointer;
+        NSString *place = pressed == press->window ? @"in the window of the gesture" : pressed ? @"in another window"
+            : @"on the screen outside the windows of the application";
+        NSString *message = [NSString stringWithFormat:@"a person's %s at (%g, %g) %@ ended the synthetic gesture of pointer %@, "
+            "whose press was released at (%g, %g)", action, at.x, at.y, place, pointer->name, press->x, press->y];
+        int button = press->button;
+        releaseInterrupted(press);
+        [pointer->interruptions[button] release];
+        pointer->interruptions[button] = [message retain];
+        NSDictionary *record = @{ @"kind": @"interruption", @"pointer": pointer->name, @"button": @(button), @"message": message };
+        NSError *error = nil;
+        NSData *json = [NSJSONSerialization dataWithJSONObject:record options:NSJSONWritingSortedKeys | NSJSONWritingWithoutEscapingSlashes
+            error:&error];
+        NSCAssert(json, @"the interruption record is not JSON: %@", error);
+        sp_log_info("input inject", [[[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding] autorelease].UTF8String);
+    }
+}
+
+static void observePersonPresses(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        surfaceInputActionObserve(^(NSEvent *event) {
+            NSEventType type = event.type;
+            if (type != NSEventTypeLeftMouseDown && type != NSEventTypeRightMouseDown && type != NSEventTypeOtherMouseDown) return;
+            if (event == sendingEvent) return;
+            interruptGestures(event);
+        });
+        // This library sends no move and no scroll through -[NSApplication sendEvent:]: a synthetic move goes to the owners of the
+        // tracking areas and a synthetic scroll through -[NSWindow sendEvent:], so each one that the device tells is of a person.
+        surfaceInputPointerObserve(^(NSEvent *event) { interruptGestures(event); });
+    });
 }
 
 // The close of a window ends the open presses in it and answers the pointer requests of it that wait for their turn, in the

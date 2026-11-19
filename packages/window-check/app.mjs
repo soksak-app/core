@@ -798,6 +798,8 @@ export class Session {
       // 1005 means that the press or release was delivered but the notification that the document received it was late.
       // The press state of the window changed as delivered.
       if (error.code === 1005) delivered();
+      // 1013 means that an action of a person ended the gesture and the host released its press (docs/spec/exposure.md#named-pointers).
+      if (error.code === 1013) this.presses.delete(key);
       // Whether the rejected event was a press or a release decides whether an open press remains, so the error names
       // the step and the location.
       error.message = `input.pointer ${phase} of the ${button} button at ${x},${y} in ${this.window}: ${error.message}`;
