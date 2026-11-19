@@ -3,9 +3,18 @@
 
 [한국어](CHANGELOG.ko.md)
 
-## 2026-11-18
+## 2026-11-19
 
 - F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
+- F905-4: The Codex contract test does not include the shared `policy` helper it does not call, which failed the clippy check with warnings denied in the F898 CI check (`packages/sok/rust/tests/codex_test.rs`).
+- F899-6: The contract that refuses destructive shell commands of hosted agents before they run, fail-closed, is in the persistent services specification. The implementations are in the sidecar repositories (alacritty S121, vt S181).
+- F899-2: `sok conversation read` reads the agent conversation from the session file on disk (Claude Code and Codex) and reports the file it read. The contract is in `docs/spec/agent-conversation.md`; the Rust reader is `packages/sok/rust/src/conversation.rs` and the Go reader is `packages/sok/go/src/conversation.go`.
+- F899-2.1: The Go sok runs `sok conversation read` with the contract of F899-2; its tests in `packages/sok/go/tests/conversation_test.go` have the names of the Rust tests.
+- F899-2.2: After main was merged into the branch, the Rust conversation tests pass 22 of 22 and the Go conversation tests pass 17 of 17.
+- F889-1: The sidecar environment tests `a_sidecar_environment_puts_the_sok_folder_first_on_path` (Rust) and `TestASidecarEnvironmentPutsTheSokFolderFirstOnPath` (Go) are on main and pass their repeat targets.
+
+## 2026-11-18
+
 - F897: The Rust host test of the unwatch bound waits for the page call with a bound instead of reading the call list at once, which failed when the page call was not yet recorded.
 - F895: The card auto-arrange command runs the setting `cardArrange` (`resize`, the default, keeps the arrangement; `even` runs `arrange("even")`), which the settings window shows as a choice. The toolbar icon of the command changes with the setting.
 - F894: The layout model has the even arrangement `arrange("even")`, which replaces the arrangement with an equal grid of the current cards and adds one empty card when no grid fits. A grid is taken only when each cell is at least `minSize`.
