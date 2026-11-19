@@ -19,7 +19,7 @@ import { frames } from "@soksak/window-check/frame.mjs";
 import { traceSettings } from "../../../scripts/measure-trace.mjs";
 import { fresh } from "../../fixture.mjs";
 import { imagePoint } from "../../input-probe.mjs";
-import { presentedFrame } from "../../raster-probe.mjs";
+import { presentedFrame, REGION } from "../../raster-probe.mjs";
 import { fixtureSettings } from "./b3-run.mjs";
 import { colourCounts, pixelAt, readFrame } from "./frame-pixels.mjs";
 import { openRasterGrid } from "./raster-cards.mjs";
@@ -73,15 +73,26 @@ export function blankFigures(cards, base, counts) {
 }
 
 /**
- * Waits until every raster probe tab `surfaces` presents a frame of the device size of its region (rasterprobe.view) and the window
+ * The raster of the image region of the raster probe tab `surface` in the value `host` of host.window: its frame in device pixels,
+ * each side rounded as the host rounds it (sp_region_raster of native/darwin/src/image_region.m). The size of the view
+ * (rasterprobe.view) is no measure of it, because the view reports a whole point where the region stands a half point wider.
+ */
+export function regionRaster(host, surface) {
+  const region = host.regions.find((item) => item.surface === surface && item.name === REGION);
+  if (region === undefined) throw new Error(`host.window names no image region raster of ${surface}`);
+  return { width: Math.round(region.frame.width * host.scale), height: Math.round(region.frame.height * host.scale) };
+}
+
+/**
+ * Waits until every raster probe tab `surfaces` presents a frame of the raster of its region (regionRaster) and the window
  * presented that state, and returns the display time (ms) of the presented state.
  */
 async function settled(s, surfaces) {
   await s.presented();
+  const host = await s.get("host.window");
   for (const surface of surfaces) {
-    const view = await s.get("rasterprobe.view", surface);
-    await presentedFrame(s, surface, (frame) => frame.width === view.deviceWidth && frame.height === view.deviceHeight,
-      `a frame of ${view.deviceWidth}x${view.deviceHeight} pixels`);
+    const { width, height } = regionRaster(host, surface);
+    await presentedFrame(s, surface, (frame) => frame.width === width && frame.height === height, `a frame of ${width}x${height} pixels`);
   }
   return (await s.presented()).displayed;
 }

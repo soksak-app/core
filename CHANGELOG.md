@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F960 (raster of a card in the layout redraw benchmark): `make benchmark-layout-redraw` waits for a frame of the raster of each region as `host.window` places it, so a region a half point wider than its view no longer holds the wait. Verification: the region raster case failed on the unchanged benchmark and passes.
 - F960 (manifest of the raster probe): the description of the raster probe fixture has 171 characters, so `sok plugin install` accepts it and the image region benchmarks start. Verification: the raster probe fixture test failed on the unchanged manifest with `description must be 1 to 200 characters` and passes.
 - F968 (fold stage of a head and the selected tab): the fold stage of a card head takes the widest tab of the card in both workbenches, so a header shows the same tabs whichever tab is selected, and the selected tab is always among them. Verification: the shared head cases and the mygo head test failed on the unchanged code and pass.
 - F937-16 (fullscreen toggle of a narrow head): a card or group header too narrow for its tools keeps the fullscreen toggle beside ⋯ in both workbenches, and the tool menu no longer holds it. Verification: the narrow head tests of both workbenches failed on the unchanged code and pass.

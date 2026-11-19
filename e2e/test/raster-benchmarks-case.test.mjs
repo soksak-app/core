@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { clickOrder, focusTimes } from "../benchmark/cases/click-cpu.mjs";
-import { actionFrames, blankFigures, redrawActions } from "../benchmark/cases/layout-redraw.mjs";
+import { actionFrames, blankFigures, redrawActions, regionRaster } from "../benchmark/cases/layout-redraw.mjs";
 import { boundaryMoves, startRows, widestCard } from "../benchmark/cases/raster-cards.mjs";
 import { steppedOffset, wheelDelta } from "../benchmark/cases/scroll-cpu.mjs";
 
@@ -57,4 +57,16 @@ test("the leader actions run only where the build declares core.group.leader", {
   const grid = [[{ card: "a" }, { card: "b" }, { card: "c" }]];
   assert.deepEqual(redrawActions(grid, 2, false).map(({ action }) => action), ["balance", "divider drag"]);
   assert.deepEqual(redrawActions(grid, 2, true).map(({ action }) => action), ["balance", "divider drag", "leader", "leader back"]);
+});
+
+test("the raster of a region is its frame in device pixels, also where the view rounds a half point", { timeout: 5000 }, () => {
+  // host.window of a Wails window: the view of the card reports 179 by 286 points (rasterprobe.view, deviceWidth 358), while its
+  // region stands 179.5 by 286.5 points wide and its frames are 359 by 573 pixels (sp_region_raster of native/darwin/src/image_region.m).
+  const host = { scale: 2, regions: [
+    { surface: "tab-a", name: "raster", frame: { x: 210, y: 116, width: 179.5, height: 286.5 } },
+    { surface: "tab-b", name: "raster", frame: { x: 403.5, y: 116, width: 373, height: 259.5 } },
+  ] };
+  assert.deepEqual(regionRaster(host, "tab-a"), { width: 359, height: 573 });
+  assert.deepEqual(regionRaster(host, "tab-b"), { width: 746, height: 519 });
+  assert.throws(() => regionRaster(host, "tab-c"), /host.window names no image region raster of tab-c/);
 });
