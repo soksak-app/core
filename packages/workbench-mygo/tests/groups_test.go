@@ -5,8 +5,11 @@ package workbench_test
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // groupedShell is a layout shell whose card main is wrapped into the group card-2 with the new card card-3 on its right.
@@ -115,10 +118,10 @@ func TestTheGridListsTheCardsWithTheGroupThatHoldsThemAndTheLeaders(t *testing.T
 		t.Fatalf("core.grid lists the cards %v", cards)
 	}
 	want := map[string]any{"name": "그룹 1", "level": float64(1), "leader": "main"}
-	if !reflect.DeepEqual(group["group"], want) || group["leader"] != true || len(group["tabs"].([]any)) != 0 {
+	if !reflect.DeepEqual(group["group"], want) || group["leader"] != true {
 		t.Fatalf("core.grid lists the group card %v", group)
 	}
-	if main["parent"] != "card-2" || main["leader"] != true || born["parent"] != "card-2" || born["leader"] != nil {
+	if main["parent"] != "card-2" || main["leader"] != true || born["parent"] != "card-2" || born["leader"] != false {
 		t.Fatalf("core.grid lists main %v and card-3 %v", main, born)
 	}
 	// The header of the group takes the top of its frame, and main stands one gap inside the frame, the gap between main and card-3.
@@ -402,5 +405,48 @@ func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
 	}
 	if card := cards["terminal"]; card["parent"] != "card-9" || card["r1"] != float64(1) {
 		t.Fatalf("after the close terminal is %v", card)
+	}
+}
+
+// core.grid lists the cards of the grid in workbench order and then the group cards, every entry with parent, null in the root level,
+// and leader as a boolean, and a group card only as {id, x, y, w, h, parent, leader, group} (docs/spec/groups.md#status-and-queries).
+func TestTheGridReportsEveryCardInTheGroupForm(t *testing.T) {
+	f := groupedShell(t)
+	var grid struct {
+		Cards []map[string]json.RawMessage `json:"cards"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.grid")), &grid); err != nil {
+		t.Fatal(err)
+	}
+	order := []string{}
+	for _, entry := range grid.Cards {
+		var id string
+		if err := json.Unmarshal(entry["id"], &id); err != nil {
+			t.Fatal(err)
+		}
+		order = append(order, id)
+		parent, hasParent := entry["parent"]
+		leader, hasLeader := entry["leader"]
+		if !hasParent || !hasLeader || (string(leader) != "true" && string(leader) != "false") {
+			t.Errorf("%s carries parent %s (present %v) and leader %s (present %v)", id, parent, hasParent, leader, hasLeader)
+		}
+		if root := id == "card-2" || layout.IsWindowSide(id); root && (!hasParent || string(parent) != "null") {
+			t.Errorf("%s of the root level carries parent %s (present %v), not null", id, parent, hasParent)
+		}
+		if _, isGroup := entry["group"]; isGroup {
+			keys := []string{}
+			for key := range entry {
+				keys = append(keys, key)
+			}
+			slices.Sort(keys)
+			if want := []string{"group", "h", "id", "leader", "parent", "w", "x", "y"}; !slices.Equal(keys, want) {
+				t.Errorf("the group card %s carries the members %v, not %v", id, keys, want)
+			}
+		}
+	}
+	// The root level in reading order holds the left sidebar, the group card and the right sidebar, and the group card holds main and
+	// card-3; the group card follows the cards of the grid.
+	if want := []string{"left", "main", "card-3", "right", "card-2"}; !slices.Equal(order, want) {
+		t.Errorf("core.grid lists %v, not %v", order, want)
 	}
 }
