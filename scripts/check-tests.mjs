@@ -13999,6 +13999,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F938",
+    implementation: [
+      { file: "packages/host/go/src/event_record.go", symbol: "func NotifyStartBegan() {" },
+      { file: "packages/host/go/src/event_record.go", symbol: "return \"no writer is attached and no start of the host runs\"" },
+    ],
+    tests: [{ file: "packages/host/go/tests/routine_test.go", id: "TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic" }],
+    expected: "A goroutine panic of the Go host while no start runs and no writer is attached writes its record to the standard error and ends the process at once.",
+    levels: ["unit"],
+  },
+  {
     id: "F935",
     implementation: [
       { file: "packages/host/go/src/images.go", symbol: "// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again." },
