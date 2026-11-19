@@ -7,6 +7,7 @@ package sok
 // the version regular expressions of the reader and the UTF-16 length that the reader's string length counts.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -370,6 +371,30 @@ func MatchesSchema(schema map[string]any, value any) bool {
 		}
 	}
 	return true
+}
+
+// MatchesSchemaText reports whether the JSON text value matches the JSON text schema, both read with their numbers as json.Number
+// as the reader reads a manifest, so a reader that holds decoded values checks them with the one matcher of the subset.
+func MatchesSchemaText(schema, value []byte) (bool, error) {
+	var keywords map[string]any
+	if err := decodeNumbered(schema, &keywords); err != nil {
+		return false, fmt.Errorf("schema: %w", err)
+	}
+	if keywords == nil {
+		return false, fmt.Errorf("schema: %s is not an object", schema)
+	}
+	var decoded any
+	if err := decodeNumbered(value, &decoded); err != nil {
+		return false, fmt.Errorf("value: %w", err)
+	}
+	return MatchesSchema(keywords, decoded), nil
+}
+
+// decodeNumbered decodes JSON text into into with its numbers as json.Number.
+func decodeNumbered(text []byte, into any) error {
+	decoder := json.NewDecoder(bytes.NewReader(text))
+	decoder.UseNumber()
+	return decoder.Decode(into)
 }
 
 // installedPluginsFile names the installed plugin document in the errors of its checks.
