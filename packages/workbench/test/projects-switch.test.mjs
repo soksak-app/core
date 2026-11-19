@@ -564,6 +564,58 @@ test("each layout save names its writing path: add space for a new space of the 
   wire.finish();
 });
 
+// The stored party of the space of projects-parties-storage (docs/spec/parties.md#storage).
+const STORED_PARTIES = [{ id: "p1", cards: ["a", "b"], leader: "a", color: "#123456", leaderColor: null }];
+
+// Adds a space and switches back to the first space, which plays the steps 22 to 29 of projects-parties-storage: the patch and the
+// windowState calls of the added space, then the patch and the windowState calls of the switch.
+async function playSpaceSwitch() {
+  projects.addSpace(projects.local().find((p) => p.id === PROJECT.id).spaces[0].layout);
+  await projects.flush();
+  projects.activateSpace("spc-one");
+  await projects.flush();
+}
+
+test("a stored party reads back into the window with the same record (docs/spec/parties.md#storage)", { timeout: 5000 }, async () => {
+  await start("projects-parties-storage");
+  await projects.activate(PROJECT.id);
+  // The storage form holds no outline (docs/spec/parties.md#storage), so the window state is compared in that form.
+  const { storedParties } = await import("../parties.js");
+  assert.deepEqual(storedParties(), STORED_PARTIES, "the window holds the stored party after the read");
+  // The shown layout is written after the read, which plays the save steps of the case.
+  await projects.keep();
+  await playSpaceSwitch();
+  wire.finish();
+});
+
+test("the save patch of a space carries its parties (docs/spec/parties.md#storage)", { timeout: 5000 }, async () => {
+  await start("projects-parties-storage");
+  await projects.activate(PROJECT.id);
+  // The save of the shown layout writes the space with the parties of the window (docs/spec/parties.md#storage).
+  await projects.keep();
+  const { storedParties } = await import("../parties.js");
+  const saved = workspaceCalls("patch").filter(({ payload }) => payload.patch.spaces).at(-1);
+  assert.ok(saved, "a save patch of the spaces was written");
+  assert.deepEqual(saved.payload.patch.spaces[0].parties, storedParties(), "the space of the save patch carries the parties of the window");
+  await playSpaceSwitch();
+  wire.finish();
+});
+
+test("a space switch moves the parties of the window to the space that is shown (docs/spec/parties.md#storage)", { timeout: 5000 }, async () => {
+  await start("projects-parties-storage");
+  await projects.activate(PROJECT.id);
+  const { storedParties } = await import("../parties.js");
+  projects.addSpace(projects.local().find((p) => p.id === PROJECT.id).spaces[0].layout);
+  // The window state is checked before the patch of the added space is answered, so a broken load fails on this assertion.
+  assert.deepEqual(storedParties(), [], "the added space shows no parties");
+  await projects.flush();
+  projects.activateSpace("spc-one");
+  // The window state is checked before the patch of the switch is answered, so a broken load fails on this assertion.
+  assert.deepEqual(storedParties(), STORED_PARTIES, "the first space shows its parties again after the switch");
+  await projects.flush();
+  wire.finish();
+});
+
 test("a reopened project restores inactive-space origins before retained views can start", { timeout: 5000 }, async () => {
   await prepare("projects-switch-retained-origin");
   const { tabOrigin } = await import("../tab-reports.js");

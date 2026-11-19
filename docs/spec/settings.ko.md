@@ -111,7 +111,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | Boolean (`left`, `right`, `top`, `bottom`, `dim`, `memorySaver`) | 스위치: 스위치로 그린 체크 상자 | `core.settings.change {key, value, scope}` |
 | 나열된 값 중 하나 (`projectOpening`, `viewProcess`, `mode`, `font`, `projectTabs`, `focusInd`, `fullRule`, `cardArrange`, `language`, plugin `enum`) | 선언 순서대로 값마다 항목 하나가 있는 선택 상자 | `core.settings.change {key, value, scope}` |
 | Catalog의 theme (`theme`) | Theme마다 그 theme의 색과 형태로 그린 견본 하나가 있는 견본 격자 | `core.settings.theme {name, scope}` |
-| 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위 | `core.settings.change {key, value, scope}` |
+| 경계가 있는 정수 (`gap`, `radius`, `size`, `memorySaverDelay`, [배치 값](#배치-값), plugin `integer`) | 경계 사이의 슬라이더와 그 뒤의 값과 단위. drag는 각 값을 슬라이더 옆에 보이고, 놓을 때의 값으로 command를 한 번 실행한다 | `core.settings.change {key, value, scope}` |
 | 문자열 또는 주소 (plugin `string` 또는 `address`) | 한 줄 글자 입력 | `core.settings.change {key, value, scope}` |
 | 세트 참조 ([사이드바 선택](#사이드바-선택)의 연결) | 사용 안 함과 모든 세트의 선택 상자 | `core.settings.link {place, plugin, set, scope}` |
 | 목록 값의 순서 (`sidebarOrder`) | 현재 순서대로 값마다 값의 이름이 붙은 줄 하나와, 첫 줄에 없는 ▲, 끝 줄에 없는 ▼. 버튼은 자기 줄을 위나 아래 줄과 바꾼다 | 새 목록 전체를 `value`로 한 `core.settings.change {key, value, scope}` |
@@ -139,7 +139,8 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand`, `paper` 중 하나 |
 | `mode` | `dark` 또는 `light` |
 | `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system`, `sans-inter` 중 하나 |
-| `gap`, `radius` | 0에서 24까지의 정수(px) |
+| `gap` | 0에서 48까지의 정수(px): 이웃한 두 card 사이의 gap, 곧 둘 사이의 전체 거리다. plane과 stage 가장자리 사이의 margin은 gap의 절반이다. 0에서는 두 card가 선 하나를 공유한다: plane gap은 border width이고, card는 자기 border와 radius를 그리지 않으며, stage에는 margin이 없다(seam) |
+| `radius` | 0에서 24까지의 정수(px) |
 | `size` | 10에서 18까지의 정수(px) |
 | `textSize` | [글자 크기 단계](text-size.ko.md) 하나 |
 | `projectTabs` | `top` 또는 `left` |

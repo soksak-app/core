@@ -15,6 +15,8 @@ type Space struct {
 	ID     string          `json:"id"`
 	Title  string          `json:"title"`
 	Layout json.RawMessage `json:"layout"`
+	// Parties is the parties member of the space object, kept as stored; ReadStoredParties checks it.
+	Parties json.RawMessage `json:"parties,omitempty"`
 }
 
 // Project is a project record of projects.json. The members that the space functions read and change are fields, and Rest holds

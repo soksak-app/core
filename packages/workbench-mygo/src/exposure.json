@@ -2028,7 +2028,8 @@
             }
           }
         }
-      }
+      },
+      {"name": "core.parties", "description": "The party records of the window, one per party, each with id, cards, leader, color, leaderColor, outline and reason.", "schema": {"type": "array", "items": {"type": "object"}}}
     ],
     "commands": [
       {
@@ -4223,7 +4224,14 @@
             }
           }
         }
-      }
+      },
+      {"name": "core.party.create", "description": "Creates a party from touching content cards with the first unused identifier; a card that another party holds is refused unless take is true.", "params": {"type": "object", "properties": {"cards": {"type": "array", "items": {"type": "string"}}, "color": {"type": "string"}, "leader": {"type": "string"}, "leaderColor": {"type": ["string", "null"]}, "take": {"type": "boolean"}}}, "result": {"type": "object"}},
+      {"name": "core.party.update", "description": "Changes the color, the leader or the leader color of a party; leader null removes the leader.", "params": {"type": "object", "properties": {"party": {"type": "string"}, "color": {"type": "string"}, "leader": {"type": ["string", "null"]}, "leaderColor": {"type": ["string", "null"]}}}, "result": {"type": "object"}},
+      {"name": "core.party.add", "description": "Adds a card that touches the party; a card of another party moves only when take is true.", "params": {"type": "object", "properties": {"party": {"type": "string"}, "card": {"type": "string"}, "take": {"type": "boolean"}}}, "result": {"type": "object"}},
+      {"name": "core.party.remove", "description": "Removes a card from a party and applies the split rule to the cards that remain.", "params": {"type": "object", "properties": {"party": {"type": "string"}, "card": {"type": "string"}}}, "result": {"type": "object"}},
+      {"name": "core.party.delete", "description": "Deletes a party and keeps its cards in the layout.", "params": {"type": "object", "properties": {"party": {"type": "string"}}}, "result": {"type": "object"}},
+      {"name": "core.party.get", "description": "Reads one party with its record and the card states of its members, the leader first.", "params": {"type": "object", "properties": {"party": {"type": "string"}}}, "result": {"type": "object"}},
+      {"name": "core.card.get", "description": "Reads the state of one content card, whether or not a party holds it.", "params": {"type": "object", "properties": {"card": {"type": "string"}}}, "result": {"type": "object"}}
     ],
     "element": [
       {
@@ -4906,6 +4914,22 @@
       {
         "name": "core.library.no-results",
         "description": "The note shown when the search matches no project."
+      },
+      {
+        "name": "core.party.menu.group",
+        "description": "The card menu item that groups the card with a touching card in no party into a new party (core.party.create)."
+      },
+      {
+        "name": "core.party.menu.leader",
+        "description": "The card menu item that makes the card the leader of its party, or removes the leader (core.party.update)."
+      },
+      {
+        "name": "core.party.menu.color",
+        "description": "The card menu item that sets the color of the party of the card (core.party.update)."
+      },
+      {
+        "name": "core.party.menu.take",
+        "description": "The card menu item that adds the card to a party that touches it, taking it from its party (core.party.add)."
       }
     ]
   }

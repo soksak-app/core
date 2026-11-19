@@ -33,6 +33,7 @@ import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
+import { groupCandidates, partyMenuItems, reconcile } from "./parties.js";
 import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
@@ -807,6 +808,13 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   pickerEl.setAttribute("aria-label", ask);
   // A list with group titles has many items, so it is drawn taller.
   pickerEl.classList.toggle("picker--grouped", groups.some((group) => group.heading));
+  // An item with a command runs that command after the layer closes, so every item closes the layer through the same pick path
+  // (docs/spec/parties.md#card-menu).
+  const commands = new Map(groups.flatMap((group) => group.items).filter((it) => it.command).map((it) => [it.key, it]));
+  const choose = (key) => {
+    const it = commands.get(key);
+    return it ? run(it.command, it.params) : pick(key);
+  };
   const keys = fillPicker(pickerEl, ask, groups, (b, index, it) => {
     mark(b, "core.picker.pick", { index });
     if (it.notice) {
@@ -828,7 +836,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { anchor, pick, rect, keys, columns: pickerColumns(pickerEl) };
+  picker = { anchor, pick: choose, rect, keys, columns: pickerColumns(pickerEl) };
   pickerChanged();
   // DOM cannot be drawn over a native view, and a web view is a native view that renders DOM. The application receives this
   // element and renders it in such a view, so the surfaces below keep running. The whole element is passed, so the
@@ -903,7 +911,7 @@ function splitWith(cardId, side, plugin, params) {
   const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
   if (!born) throw new Error(`card ${cardId} could split toward ${side}, and the split toward ${side} made no card`);
   focusOn(born);
-  settle();
+  settle({ moved: [], split: [{ card: cardId, born }] });
   return { card: born, tab: t.id };
 }
 
@@ -997,7 +1005,7 @@ function dropTab(fromId, tabId, hit) {
     if (fromId === hit.id) return settle();
     grid.move(fromId, hit.id, hit.zone);
     focusOn(fromId);
-    return settle();
+    return settle({ moved: [fromId], split: [] });
   }
 
   removeTab(from, tabId);                                        // T4 — the slot stays and only the tab moves
@@ -1006,10 +1014,10 @@ function dropTab(fromId, tabId, hit) {
     { data: { tabs: [moving], activeId: moving.id } });
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
-  } else {
-    focusOn(born);
+    return settle();
   }
-  settle();
+  focusOn(born);
+  settle({ moved: [], split: [{ card: hit.id, born }] });
 }
 
 /* ── Card sidebar ─────────────────────────────────────────────────────
@@ -1130,7 +1138,10 @@ function drawCardSidebars(el, card, rect) {
  * It uses `insertAt` and not `splitToward`. A split inherits the row range of the split card and occupies only one row,
  * but a sidebar must reach along its side as far as the order lets it.
  */
-function settle() {
+/** A layout change that moved no card and split no card; the parties are corrected from the grid alone. */
+const NO_CARD_CHANGE = { moved: [], split: [] };
+
+function settle(change = NO_CARD_CHANGE) {
   if (!grid) return;
   closePicker("settled");
   // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
@@ -1139,6 +1150,8 @@ function settle() {
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));
+  // Each party that the change affected is corrected before the render that draws and stores it (docs/spec/parties.md#changes-of-the-layout).
+  reconcile(change);
   view.render();
   syncBackgroundSessions();
 }
@@ -1553,6 +1566,9 @@ function build(kept) {
       for (const divider of plane.querySelectorAll(".sp-divider:not([data-expose])")) {
         divider.dataset.expose = "core.divider";
       }
+      // A drag of the view merges the lines that it makes coincide, which can stop cards touching; the render of settle follows
+      // the correction that settle made (docs/spec/parties.md#changes-of-the-layout).
+      if (reason !== "render") reconcile(NO_CARD_CHANGE);
       keepHiddenSidebars();
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
@@ -1805,13 +1821,37 @@ export function openCardTools(id) {
     viewBox: b.querySelector("svg").getAttribute("viewBox"),
     active: b.getAttribute("aria-pressed") === "true",
   }));
+  // The group item opens the chooser of the touching cards (docs/spec/parties.md#card-menu).
+  if (groupCandidates(id).length) items.push({ key: "group", name: "카드 묶기", mark: "", svg: "", expose: "core.party.menu.group", active: false });
+  // The party items of the card: each is an element of its name that runs its own command (docs/spec/parties.md#card-menu).
+  for (const [index, item] of partyMenuItems(id).entries()) {
+    items.push({ key: `party-${index}`, name: item.label, mark: "", svg: "", expose: item.element, command: item.command, params: item.params, active: false });
+  }
   focusOn(id);
   settle();
   openLayer(anchor, "카드 도구", items, (key) => {
     if (key.startsWith("side-")) return run("core.card.sidebar.toggle", { card: id, side: key.slice(5) });
     if (key === "fullscreen") return run("core.card.fullscreen", { card: id });
     if (key === "close") return run("core.card.close", { card: id });
+    if (key === "group") return openGroupChooser(anchor, id, []);
     return openPicker(anchor, key, id);
+  });
+}
+
+/**
+ * Opens the group chooser of a card in no party: one picker item per touching card in no party, and the confirm item once a card
+ * is selected. A press on a card selects it, or clears it when it is selected, and reopens the chooser with the selection. The confirm
+ * item runs core.party.create with the card and the selected cards (docs/spec/parties.md#card-menu).
+ */
+function openGroupChooser(anchor, cardId, chosen) {
+  const items = groupCandidates(cardId).map((other) => ({ key: `card-${other}`, name: other, mark: "", svg: "", active: chosen.includes(other) }));
+  if (chosen.length) {
+    items.push({ key: "confirm", name: `카드 ${chosen.length + 1}개 묶기`, mark: "", svg: "", expose: "core.party.menu.group",
+      command: "core.party.create", params: { cards: [cardId, ...chosen] }, active: false });
+  }
+  openLayer(anchor, "묶을 카드 고르기", items, (key) => {
+    const other = key.slice("card-".length);
+    return openGroupChooser(anchor, cardId, chosen.includes(other) ? chosen.filter((card) => card !== other) : [...chosen, other]);
   });
 }
 

@@ -261,7 +261,7 @@ func TestAStageHasALineAround(t *testing.T) {
 	if got, want := f.pixelOf(root.W-0.5, y), opaque(palette.Rule); !near(got, want) {
 		t.Fatalf("the right edge of the stage is %v, want %v", got, want)
 	}
-	bottom := card.Y + card.H + palette.Gap + palette.BorderWidth - 0.5
+	bottom := card.Y + card.H + palette.StagePad() + palette.BorderWidth - 0.5
 	if got, want := f.pixelOf(card.X+card.W/2, bottom), opaque(palette.Rule); !near(got, want) {
 		t.Fatalf("the bottom edge of the stage at %v of %v is %v, want %v", bottom, root.H, got, want)
 	}

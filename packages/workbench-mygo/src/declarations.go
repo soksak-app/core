@@ -59,6 +59,42 @@ type declaredTheme struct {
 	Dark  map[string]string `json:"dark"`
 }
 
+// partyTokensOf returns the party tokens of a palette as a new map.
+func partyTokensOf(palette map[string]string) map[string]string {
+	kept := map[string]string{}
+	for _, token := range partyTokens {
+		if value, ok := palette[token]; ok {
+			kept[token] = value
+		}
+	}
+	return kept
+}
+
+// partyTokens are the theme tokens of the party colors (docs/spec/parties.md#drawing).
+var partyTokens = []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6", "party-leader"}
+
+// PartyColor returns the value of a party theme token (party-1 to party-6, party-leader) in a theme and a mode, as the declaration
+// states it. The party colors are the same declaration that the page reads (docs/spec/parties.md#drawing), so the model does not hold
+// a copy of them. An unknown theme, mode or token is an error.
+func (d *Declarations) PartyColor(theme, mode, token string) (string, error) {
+	for _, declared := range d.themes {
+		if declared.Name != theme {
+			continue
+		}
+		// The Go host draws the dark mode only, so the declaration copy holds the dark palette of each theme.
+		if mode != "dark" {
+			return "", fmt.Errorf("the Go host reads the dark mode only, not %s", mode)
+		}
+		palette := declared.Dark
+		value, ok := palette[token]
+		if !ok {
+			return "", fmt.Errorf("theme %s %s declares no %s", theme, mode, token)
+		}
+		return value, nil
+	}
+	return "", fmt.Errorf("unknown theme %s", theme)
+}
+
 // Metric returns the chrome metric name as a number of points or a ratio, and false when the metric does not exist or holds
 // another unit.
 func (d *Declarations) Metric(name string) (float64, bool) {
@@ -141,7 +177,48 @@ func (d *Declarations) HeightMetric(name string) (float64, bool) {
 // Palette is the colors and the shape of a theme in one mode.
 type Palette struct {
 	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color
-	Radius, Gap, BorderWidth                         float32
+	// Gap is the gap setting: the full distance between two adjacent cards, 0 for the seam (docs/spec/settings.md#values).
+	Radius, Gap, BorderWidth float32
+}
+
+// Seam is whether the cards share one line: the gap is 0 (seam of packages/workbench/settings.js).
+func (p Palette) Seam() bool { return p.Gap == 0 }
+
+// HalfGap is half the distance between two adjacent cards, halfGap of packages/workbench/settings.js: at the seam it is half the border
+// width, so the cards stand one line apart and that line is the border that they share.
+func (p Palette) HalfGap() float32 {
+	if p.Seam() {
+		return p.BorderWidth / 2
+	}
+	return p.Gap / 2
+}
+
+// PlaneGap is the gap of the plane: the gap setting, or the border width at the seam.
+func (p Palette) PlaneGap() float64 { return float64(2 * p.HalfGap()) }
+
+// StagePad is the margin between the plane and the edge of the stage, stagePad of packages/workbench/settings.js: half the gap, and 0
+// at the seam.
+func (p Palette) StagePad() float32 {
+	if p.Seam() {
+		return 0
+	}
+	return p.HalfGap()
+}
+
+// CardBorder is the border width of a card: none at the seam, where the line between two cards is the line of the plane.
+func (p Palette) CardBorder() float32 {
+	if p.Seam() {
+		return 0
+	}
+	return p.BorderWidth
+}
+
+// CardRadius is the corner radius of a card: square at the seam (cardRadius of packages/workbench/settings.js).
+func (p Palette) CardRadius() float32 {
+	if p.Seam() {
+		return 0
+	}
+	return p.Radius
 }
 
 // DefaultPalette is the palette of the first theme of the declaration in its first mode.
@@ -170,6 +247,24 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 		Rail: color("rail"), Focus: color("focus"), No: color("no"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
 }
 
+// DefaultPartyPalette returns the party theme tokens of the default theme in its dark mode, the same theme and mode that
+// DefaultPalette reads (docs/spec/parties.md#drawing).
+func (d *Declarations) DefaultPartyPalette() (map[string]string, error) {
+	if len(d.themes) == 0 {
+		return nil, errors.New("workbench.json declares no theme")
+	}
+	theme := d.themes[0]
+	palette := map[string]string{}
+	for _, token := range []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6", "party-leader"} {
+		value, ok := theme.Dark[token]
+		if !ok {
+			return nil, fmt.Errorf("theme %s has no color %s", theme.Name, token)
+		}
+		palette[token] = value
+	}
+	return palette, nil
+}
+
 // Declared returns the declarations of the embedded copies.
 var Declared = sync.OnceValues(ReadDeclarations)
 
@@ -195,6 +290,12 @@ func ReadDeclarations() (*Declarations, error) {
 	}
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
 		return nil, fmt.Errorf("workbench.json: %w", err)
+	}
+	// The Go host reads the dark palette of the default theme (DefaultPalette, DefaultPartyPalette) and the party tokens of every
+	// theme (PartyColor). The dark palettes of the other themes are kept only as their party tokens, which keeps the declarations
+	// within the memory budget (TestTheDeclarationsKeepWhatTheyRead).
+	for i := 1; i < len(values.Themes); i++ {
+		values.Themes[i].Dark = partyTokensOf(values.Themes[i].Dark)
 	}
 	for _, key := range []string{"add", "split-x", "split-y", "fullscreen", "restore", "close", "close-refused", "layout-held"} {
 		if values.CardTools[key] == "" {

@@ -511,6 +511,10 @@ fn invalid_json_closes_connection() {
 | `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답할 때까지 새 요청을 받지 않는다. | all |
 | `images.copy-path.clock-tick` | 드로잉 region은 window 시계의 매 tick마다 sequence와 window의 refresh rate를 담은 tick을 하나씩 받는다. 드로잉 중이 아닌 region은 tick을 받지 않는다. | all |
 | `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 닿으면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
+| `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
+| `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |
+| `images.copy-path.screen-malformed-names-its-member` | 멤버가 없거나 타입이 틀린 screen 메시지, 또는 올바른 `row`나 `cells`가 없는 행은 `malformed` 오류와 첫 번째 그런 멤버의 점 경로로 답하며, 응답되지 않은 요청은 그대로 둔다. | all |
+| `images.copy-path.screen-without-name-is-not-answered` | 유효한 image `name`이 없는 screen 메시지는 답 없이 소비되며, 답은 image 이름으로 라우팅되므로 host는 이름이 없다는 오류 기록만 쓴다. | all |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | all |
 | `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | all |
 | `performance.sampler.ends-with-the-switch` | 표본 추출은 trace가 켜진 동안 돌고, 꺼지면 끝나며, 다시 켜면 새로 시작한다. | all |
@@ -730,6 +734,7 @@ fn invalid_json_closes_connection() {
 | `images.present.main-thread-failure-reports-present-failed` | 주 스레드 표시가 실패하면 presentFailed로 응답하고 표시 대기는 그 오류를 반환한다. | all |
 | `images.present.older-ack-preserves-newer-rejection` | 성공한 오래된 in-flight presentation은 실제 presented sequence를 전진시키지만 더 새 accepted sequence의 rejection을 지우지 않는다. 최신 accepted sequence의 성공 acknowledgment만 그 rejection을 지운다. | all |
 | `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | all |
+| `images.present.stale-native-raster-requests-reconfiguration` | native raster가 그림과 달라 거부된 표시는 stale로 응답하고, 그 전에 native raster의 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
 | `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
@@ -893,6 +898,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar` | 사이드카가 더 이상 선언되지 않은 실행 중인 상주 service는 `installed` `null`로 오래된 것으로 보고된다. 교체하면 `close-owner`와 `shutdown`을 보내고, 실행 파일을 시작하지 않고, 그 sidecar로 보낸 각 표면에 선언되지 않은 오류의 연결 알림을 보내고, `outdated`에서 빼고, info로 `sidecar <name>: service <running> ended; the sidecar is not declared`를 기록한다. | all |
 | `input.pointer.reads-the-press-target-before-delivery` | 주입된 press는 main thread의 한 단계 안에서 전달 전에 그 아래 view를 읽고, target을 읽을 수 없는 press는 전달하지 않는다. | all |
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | all |
+| `image.drawing.unsent-change-is-sent-again` | 한 번의 전송이 읽었으나 보낸 것으로 기록하지 않은 drawing 상태는 보낸 것으로 보고되지 않고 다음 전송이 다시 돌려준다. | all |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | all |
 | `image.drawing.reports-a-hidden-surface` | region의 그리기 메시지는 바깥 표면이 숨김을 알린 동안 `hidden`을 true로, 그 밖에는 false로 적는다. 아무것도 알리지 않은 표면은 숨겨진 것이 아니고, 값이 바뀌면 메시지를 보내며, 새 연결의 서비스는 그 값을 다시 받는다. | all |
 | `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |
@@ -1162,6 +1168,11 @@ fn invalid_json_closes_connection() {
 | `cli.mcp.search-lists-the-whole-exposure` | Query 없는 `exposure_search`의 page들과 `--query` 없는 `sok exposures`는 창의 `exposure.list` 항목을 그 순서로 정확히 담고, `total`은 그 수다. | all |
 | `cli.describe.lists-every-entry` | `sok describe`와 `window_describe`의 모든 page의 row를 합치면 snapshot의 각 항목을 owner마다 한 번씩, 그리고 `unregistered`의 항목을 담고, `total`은 그 수이며, 첫 page는 `window`, `layout`, `plugins`, `agent`를 담는다. | all |
 | `cli.describe.compact-form-and-pages` | 간결한 형식은 설명을 첫 문장에서, status 값을 200자에서 `cut: true`와 함께 자르고, command 인자를 `<name>: <type>`으로 쓰며, 40000 byte나 `limit`을 넘길 row 앞에서 page를 `next`와 함께 끝낸다. `full`은 snapshot의 row를 자르지 않고 주고, `surface`는 그 surface만 준다. | all |
+| `cli.describe.parties-first-and-card-party` | `sok describe`는 `window` member보다 먼저 `parties` member를 출력하고, party마다 항목 하나를 출력하며, window의 layout에서 각 card의 `party`(party 식별자 또는 `null`)와 `leader` 표시를 출력한다. | all |
+| `cli.describe.summary-and-full` | `sok describe`는 각 tab의 summary status만 나열하고, `sok describe --full`은 tab의 모든 status를 나열한다. | all |
+| `cli.status.core-parties-every-field` | `sok status core.parties`는 party마다 record 하나를 담은 JSON 배열을 출력하고, 각 record는 `id`, `cards`, `leader`, `color`, `leaderColor`, `outline`, `reason` field를 가진다. | all |
+| `cli.party.get-and-card-get` | `sok core.party.get --party <id>`는 `members`를 포함한 party를 출력하고, `sok core.card.get --card <id>`는 `party`와 `leader`를 포함한 card state를 출력한다. | all |
+| `cli.commands.query-party` | `sok commands --query party`는 이름에 `party`가 포함된 command만 출력하고, 다른 command는 출력하지 않는다. | all |
 | `endpoint.surface-window.resolves-the-owner` | `surface.window`는 ready인 창마다 `windows.list`의 순서로 page에 묻고 space를 답한 첫 page의 `{window, space}`로 답하고, page가 section surface에 `{space: null}`로 답하면 `space`는 `null`이다. 어느 page도 그 surface를 갖지 않고 모든 창이 ready이면 1012 `surface <id> is in no window`로, surface가 없거나 비어 있으면 page에 묻지 않고 -32602 `surface must be a non-empty string`으로, `space`가 없는 object처럼 `null`도 `{space}`도 아닌 page의 답에는 그 답의 글과 함께 -32603으로 답한다. | all |
 | `sidecars.environment.names-the-configuration-directory` | Host는 표준 입출력 sidecar와 지속 서비스를 `SOKSAK_CONFIG_DIR`를 자기 설정 폴더로 설정하고 `SOKSAK_SURFACE` 없이 시작하며, host의 환경이 두 변수의 다른 값을 가질 때도 그렇다. | all |
 | `sidecars.environment.puts-sok-first-on-the-path` | Host는 sidecar를 자기 실행 파일의 폴더, 곧 application bundle이 `sok`을 담는 폴더를 `PATH`의 첫 항목으로 두고 다른 항목에는 두지 않으며, 그 뒤에 자기 `PATH`의 항목을 두고 시작한다. | all |

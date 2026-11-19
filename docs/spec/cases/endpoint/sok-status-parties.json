@@ -1,0 +1,88 @@
+{
+  "name": "sok-status-parties",
+  "description": "sok status core.parties returns the list of the party records of the window.",
+  "replay": true,
+  "variables": {
+    "parties": {
+      "type": "array",
+      "example": [
+        {
+          "id": "p1",
+          "cards": [
+            "a",
+            "b"
+          ],
+          "leader": "a",
+          "color": "#112233",
+          "leaderColor": null,
+          "outline": [
+            [
+              [
+                0,
+                40
+              ],
+              [
+                1200,
+                40
+              ],
+              [
+                1200,
+                800
+              ],
+              [
+                0,
+                800
+              ]
+            ]
+          ],
+          "reason": "taken"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "windows.list"
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": [
+          {
+            "window": "main",
+            "title": "soksak",
+            "project": null,
+            "key": true,
+            "ready": true
+          }
+        ]
+      }
+    },
+    {
+      "send": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "status.get",
+        "params": {
+          "window": "main",
+          "name": "core.parties"
+        }
+      }
+    },
+    {
+      "reply": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": "$parties"
+      }
+    },
+    {
+      "close": "client"
+    }
+  ]
+}

@@ -24,17 +24,18 @@ const seconds = (ms) => (ms / 1000).toFixed(3);
  * The tests of the Go packages that match `patterns` (relative to `cwd`). `tags` is a build tag list and `ldflags` the link
  * flags; `buildDir` receives the test binaries. Each test runs with `-test.timeout` of `timeoutMs`, so `t.Deadline` reports
  * its limit, and a test that does not end panics at that limit with the stacks of every goroutine (`stacksAtLimit`). The package
- * list and the test list of each binary run through the runner with the limit `timeoutMs`. Returns `{tests, failures}`: `tests`
- * are runner items with `testName` (the name `go test -json` gives) and `failures` name the patterns whose package list failed
- * or reached its limit, the packages whose build failed and the binaries whose test list failed or reached its limit.
+ * list and the test list of each binary run through the runner without a runner limit (see the comment at the listing). Returns
+ * `{tests, failures}`: `tests` are runner items with `testName` (the name `go test -json` gives) and `failures` name the patterns
+ * whose package list failed, the packages whose build failed and the binaries whose test list failed.
  */
 export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs, env = process.env }) {
   const { env: selectedEnv } = resolveGoNativeInputs({ patterns, tags, cwd, env });
   mkdirSync(buildDir, { recursive: true });
   const tagArgs = tags ? ['-tags', tags] : [];
-  // The package list and the test list of each binary run as steps of the runner under the limit of a test, so a list that waits
-  // reports its start and its elapsed time, and a list that fails or does not end is a failure that names its patterns or binary.
-  const packageList = { name: `list ${id} packages ${patterns.join(' ')}`, command: 'go', cwd, env: selectedEnv, timeoutMs,
+  // The package list and the test list of each binary run as steps of the runner. A listing has no time bound of its own: its step
+  // ends when its process exits, and a listing that fails reports its exit status and output. The limit of a test is `-test.timeout`
+  // of the test process, so a test that does not end is ended by its own limit, and a listing never is.
+  const packageList = { name: `list ${id} packages ${patterns.join(' ')}`, command: 'go', cwd, env: selectedEnv,
     args: ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns] };
   const packageResult = (await runTests({ tests: [packageList], concurrency: 1, write })).results.get(packageList.name);
   if (packageResult.status !== 'pass') {
@@ -61,7 +62,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
       continue;
     }
     const binary = join(buildDir, `${id}-${index}.test`);
-    lists.push({ pkg, binary, item: { name: `list ${id} ${pkg.importPath} (${binary})`, command: binary, args: ['-test.list', '.'], cwd: pkg.dir, env: selectedEnv, timeoutMs } });
+    lists.push({ pkg, binary, item: { name: `list ${id} ${pkg.importPath} (${binary})`, command: binary, args: ['-test.list', '.'], cwd: pkg.dir, env: selectedEnv } });
   }
   const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists.map((list) => list.item), concurrency, write });
   const tests = [];
@@ -81,9 +82,9 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
 
 /**
  * The tests of the Rust package `packageName` built with `features`. `cargo test --no-run` builds the test executables; each
- * executable lists its tests through the runner with the limit `timeoutMs`, and every test runs as `<executable> --exact <name>`
- * in the folder of its manifest. Returns the same `{tests, failures}` as discoverGo; a list that fails or reaches its limit is a
- * failure that names the executable, and a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, every
+ * executable lists its tests through the runner without a runner limit (see the comment at the listing), and every test runs as
+ * `<executable> --exact <name>` in the folder of its manifest. Returns the same `{tests, failures}` as discoverGo; a list that fails
+ * is a failure that names the executable, and a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, every
  * executable is removed once all of them listed their tests, so a check that only lists the tests of several runs holds the executables
  * of one run on the disk; its tests are not run. Only an executable that cargo named and that lies in the target folder of
  * cargo is removed: the run fails, and removes nothing, when one lies elsewhere.
@@ -104,10 +105,10 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
       return { tests: [], failures: outside.map(({ executable }) => `${id}: the executable ${executable} is not in the target folder ${targetDir}`) };
     }
   }
-  // Each executable lists its tests as a step of the runner under the limit of a test, so a list that waits reports its start and
-  // its elapsed time, and a list that does not end fails at that limit with the executable named.
+  // Each executable lists its tests as a step of the runner. A listing has no time bound of its own: its step ends when its process
+  // exits, and a listing that fails reports its exit status and output. The limit of a test applies to the test process only.
   const lists = executables.map(({ executable, dir, target }) => ({
-    name: `list ${id} ${target} (${executable})`, command: executable, args: ['--list', '--format', 'terse'], cwd: dir, timeoutMs,
+    name: `list ${id} ${target} (${executable})`, command: executable, args: ['--list', '--format', 'terse'], cwd: dir,
   }));
   const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists, concurrency: 1, write });
   const tests = [];

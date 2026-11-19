@@ -288,7 +288,7 @@ func versionLine(page PluginPage, row PluginRow) string {
 type PluginLook struct {
 	Bg, Card, Fg, Muted, Edge, Rail, No          ui.Color
 	Control, Small, Caption, LineHeight          float32
-	Radius, RadiusSmall, BorderWidth, Gap        float32
+	Radius, RadiusSmall, BorderWidth, HalfGap    float32
 	Space1, Space2, Space3, FieldPadY, LeastCard float32
 }
 
@@ -319,7 +319,7 @@ func (l PluginLook) error(c *ui.Context, shown *ShownErrors, where string) {
 // many columns of the least card width as the page holds, the grid of .library-plugins of packages/workbench/library.css, in the room its
 // scroll container gives it beside a classic bar.
 func DrawPluginPage(c *ui.Context, binder *Binder, page PluginPage, shown *ShownErrors, look PluginLook) {
-	gap := 2 * look.Gap
+	gap := 2 * look.HalfGap
 	ui.Column(c).FillWidth().Gap(gap).Children(func() {
 		drawPluginFailure(c, page, shown, look)
 		if page.Hosted {

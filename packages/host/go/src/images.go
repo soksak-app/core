@@ -144,7 +144,7 @@ type ImageRasterState struct {
 	// generation change does not reset it, because it counts the frames of the region (host.window presentedFrames).
 	PresentedFrames   uint64
 	PresentationError string
-	// Drawing and Hidden are the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
+	// Drawing and Hidden are the drawing state last sent to the supplier, and DrawingSent whether one was sent (MarkDrawingSent).
 	Drawing     bool
 	Hidden      bool
 	DrawingSent bool
@@ -254,6 +254,12 @@ func (i *Images) newScreenRequestLocked(key ImageKey, state *ImageRasterState, c
 func (i *Images) AnswerScreen(key ImageKey, request ImageScreenRequest, accepted bool) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
+	return i.answerScreenLocked(key, request, accepted)
+}
+
+// answerScreenLocked ends the unanswered screen request of a region and returns an error when it has none with that identifier. Call it
+// while holding i.mu.
+func (i *Images) answerScreenLocked(key ImageKey, request ImageScreenRequest, accepted bool) error {
 	state := i.states[key]
 	if state == nil || request.Request == "" || state.ScreenRequest.Request != request.Request {
 		return fmt.Errorf("image %s of surface %s has no unanswered screen request %q", key.Name, key.Surface, request.Request)
@@ -327,7 +333,8 @@ func (i *Images) shownLocked(key ImageKey, state *ImageRasterState) bool {
 }
 
 // DrawingChanges returns the drawing state of each attached region whose state was not sent yet or changed since it was sent, sorted by
-// surface and name, and records it as sent.
+// surface and name. It does not record a state as sent: the caller records each state whose send succeeded with MarkDrawingSent, so a
+// state whose send failed is returned again by the next call.
 func (i *Images) DrawingChanges() []ImageDrawing {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -344,7 +351,6 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		if state.DrawingSent && state.Drawing == drawing && state.Hidden == hidden {
 			continue
 		}
-		state.Drawing, state.Hidden, state.DrawingSent = drawing, hidden, true
 		// A raster that changed while the region was hidden has no configuration yet, and no later step sends it when the
 		// region is shown without a new layout.
 		var configure *ImageConfigure
@@ -363,6 +369,18 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		return changes[a].Key.Name < changes[b].Key.Name
 	})
 	return changes
+}
+
+// MarkDrawingSent records the drawing state of change as sent to the supplier of its region. A change of an earlier generation records
+// nothing, because the drawing state names the generation and the new generation is sent again.
+func (i *Images) MarkDrawingSent(change ImageDrawing) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[change.Key]
+	if state == nil || state.Generation != change.Generation {
+		return
+	}
+	state.Drawing, state.Hidden, state.DrawingSent = change.Drawing, change.Hidden, true
 }
 
 func NewImages() *Images {
@@ -1016,6 +1034,28 @@ type Present struct {
 	Sequence   int
 }
 
+// ScreenMessage is the screen message of a supplier that answers a screen request (docs/spec/native-surfaces.md#copy-path-frames).
+// Its rows are not interpreted by the host.
+type ScreenMessage struct {
+	Request    string
+	Name       string
+	Generation uint64
+	Raster     uint64
+}
+
+// MalformedScreen is a screen message with a missing or mistyped member. Member is the dotted path of the first such member, Text
+// names it, and Echo holds each of request, name, generation and raster that the message holds with a valid type.
+type MalformedScreen struct {
+	Member string
+	Text   string
+	Echo   map[string]interface{}
+}
+
+// Error returns the text that names the malformed member.
+func (m *MalformedScreen) Error() string {
+	return m.Text
+}
+
 func imageReply(reason, name string, generation, raster uint64, sequence int) *Reply {
 	return &Reply{Name: name, JSON: map[string]interface{}{
 		"image": map[string]interface{}{
@@ -1043,6 +1083,13 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 	imageBytes, err := json.Marshal(imageField)
 	if err != nil {
 		return &NotImage{}
+	}
+
+	var screenHolder struct {
+		Screen json.RawMessage `json:"screen"`
+	}
+	if err := json.Unmarshal(imageBytes, &screenHolder); err == nil && screenHolder.Screen != nil {
+		return decideScreen(screenHolder.Screen)
 	}
 
 	var envelope struct {
@@ -1099,6 +1146,101 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 		Scale: envelope.Scale, Name: envelope.Name, Generation: envelope.Generation,
 		Raster: envelope.Raster, Sequence: envelope.Sequence,
 	}
+}
+
+// decideScreen validates the members of a screen message in their order: request, name, generation, raster and rows. It returns the
+// first missing or mistyped member as a MalformedScreen, and otherwise the ScreenMessage.
+func decideScreen(raw json.RawMessage) Decision {
+	var members map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &members); err != nil {
+		return &MalformedScreen{Member: "screen", Text: "image screen message has no screen object", Echo: map[string]interface{}{}}
+	}
+	echo := map[string]interface{}{}
+	var request, name string
+	var generation, raster uint64
+	var failure *MalformedScreen
+	fail := func(member, text string) {
+		if failure == nil {
+			failure = &MalformedScreen{Member: member, Text: text, Echo: echo}
+		}
+	}
+	if screenMember(members, "request", &request) && request != "" {
+		echo["request"] = request
+	} else {
+		fail("request", "image screen message has no request")
+	}
+	if screenMember(members, "name", &name) && name != "" {
+		echo["name"] = name
+	} else {
+		fail("name", "image screen message has no image name")
+	}
+	if screenMember(members, "generation", &generation) {
+		echo["generation"] = generation
+	} else {
+		fail("generation", "image screen message has no valid generation")
+	}
+	if screenMember(members, "raster", &raster) {
+		echo["raster"] = raster
+	} else {
+		fail("raster", "image screen message has no valid raster")
+	}
+	rows, ok := members["rows"]
+	var rowList []json.RawMessage
+	if !ok || json.Unmarshal(rows, &rowList) != nil {
+		fail("rows", "image screen message has no rows array")
+	}
+	for index, row := range rowList {
+		var fields map[string]json.RawMessage
+		var number uint64
+		if json.Unmarshal(row, &fields) != nil || !screenRowNumber(fields, &number) {
+			fail(fmt.Sprintf("rows.%d.row", index), fmt.Sprintf("image screen message row %d has no valid row number", index))
+		}
+		if _, has := fields["cells"]; !has {
+			fail(fmt.Sprintf("rows.%d.cells", index), fmt.Sprintf("image screen message row %d has no cells", index))
+		}
+	}
+	if failure != nil {
+		return failure
+	}
+	return &ScreenMessage{Request: request, Name: name, Generation: generation, Raster: raster}
+}
+
+// screenMember reads a member of a screen message into target and reports whether it is present and of the type of target.
+func screenMember(members map[string]json.RawMessage, member string, target interface{}) bool {
+	raw, ok := members[member]
+	return ok && json.Unmarshal(raw, target) == nil
+}
+
+// screenRowNumber reads the row number of a row of a screen message and reports whether it is a non-negative integer.
+func screenRowNumber(fields map[string]json.RawMessage, number *uint64) bool {
+	return screenMember(fields, "row", number)
+}
+
+// screenEcho returns the members that identify a screen request, as the host answers them.
+func screenEcho(request, name string, generation, raster uint64) map[string]interface{} {
+	return map[string]interface{}{"request": request, "name": name, "generation": generation, "raster": raster}
+}
+
+// ReceiveScreen answers the screen message of sender for a drawing region. It accepts the message when sender owns the region, its
+// generation and raster are current, and its request is the unanswered request of the region, and it returns "" then. Otherwise it returns
+// the refusal reason: notAttached when the region has no owner that sender is, and stale when the generation, the raster or the request is
+// out of date. A refused message leaves the unanswered request unanswered.
+func (i *Images) ReceiveScreen(key ImageKey, sender string, answer ImageScreenRequest) string {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	owner := i.owners[key]
+	if state == nil || owner == nil || owner.SidecarName != sender || i.handles[key] == nil {
+		return "notAttached"
+	}
+	if answer.Generation != state.Generation || answer.Raster != state.Raster || state.ScreenRequest.Request == "" ||
+		answer.Request != state.ScreenRequest.Request {
+		return "stale"
+	}
+	if err := i.answerScreenLocked(key, answer, true); err != nil {
+		return "stale"
+	}
+	return ""
 }
 
 // LeasedReply is the answer to a frame that a region in the lease mode presents: the host holds its IOSurface.
@@ -1188,8 +1330,6 @@ func logRefusedFrame(surface, sender string, images *Images, name string, genera
 		surface, name, sender, generation, raster, sequence, reason, images.FrameState(ImageKey{Surface: surface, Name: name}))})
 }
 
-// recoverFrame is called, after the current frame failed for a native reason, with that reason
-// (notFound has no IOSurface to display, so it requests a new raster configuration). It returns true when it handled the envelope.
 // logAnswerError records the error of an answer to a frame: an answer that cannot reach a sidecar that ended needs no
 // receiver, because the frames of a sidecar end with its process, and any other failure is an error.
 func logAnswerError(where string, err error) {
@@ -1202,6 +1342,9 @@ func logAnswerError(where string, err error) {
 }
 
 // HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, the recovery after a presentation failure, whether a plugin still declares the sending sidecar, and the callback for a newly presented frame.
+// recoverFrame runs before the answer with notFound, when the native region has no IOSurface to display, and with staleRaster, when the
+// native raster of the region differs from the frame, so the host state holds an earlier raster than the native region; each requests
+// a configuration of the native raster (docs/spec/native-surfaces.md#image-regions). It returns true when it handled the envelope.
 func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
 	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool, presented func()) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
@@ -1213,6 +1356,38 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 	case *Reply:
 		logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, d.Reason)
 		logAnswerError("image reply "+d.Name, sendResponse(d.Name, d.JSON))
+		return true
+
+	case *ScreenMessage:
+		key := ImageKey{Surface: surface, Name: d.Name}
+		reason := images.ReceiveScreen(key, sender,
+			ImageScreenRequest{Request: d.Request, Name: d.Name, Generation: d.Generation, Raster: d.Raster})
+		var screen map[string]interface{}
+		if reason == "" {
+			screen = map[string]interface{}{"accepted": screenEcho(d.Request, d.Name, d.Generation, d.Raster)}
+		} else {
+			screen = screenEcho(d.Request, d.Name, d.Generation, d.Raster)
+			screen["error"] = reason
+		}
+		logAnswerError("image screen "+d.Name, sendResponse(d.Name, map[string]interface{}{"image": map[string]interface{}{"screen": screen}}))
+		return true
+
+	case *MalformedScreen:
+		LogError("image screen", fmt.Sprintf("surface=%s sender=%s %s", surface, sender, d.Text))
+		screen := map[string]interface{}{}
+		for member, value := range d.Echo {
+			screen[member] = value
+		}
+		screen["error"] = "malformed"
+		screen["member"] = d.Member
+		// The answer is routed by the image name. A message without a valid name names no image, so the error is logged and no
+		// answer is sent.
+		name, named := d.Echo["name"].(string)
+		if !named {
+			LogError("image screen", fmt.Sprintf("surface=%s sender=%s image name is missing, so the malformed answer is not sent", surface, sender))
+			return true
+		}
+		logAnswerError("image screen "+name, sendResponse(name, map[string]interface{}{"image": map[string]interface{}{"screen": screen}}))
 		return true
 
 	case *Present:
@@ -1261,10 +1436,16 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			reason, invalidated, line := PresentationOutcome(surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID,
 				err.Error(), images.FrameState(key))
 			Log(line)
+			recovery := ""
 			if !invalidated {
 				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
-				if err := recoverFrame(reason); err != nil {
-					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, reason, err))
+				recovery = reason
+			} else if strings.HasPrefix(err.Error(), "staleRaster") {
+				recovery = "staleRaster"
+			}
+			if recovery != "" {
+				if err := recoverFrame(recovery); err != nil {
+					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, recovery, err))
 				}
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)

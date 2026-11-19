@@ -48,6 +48,7 @@ import { onTabReports, tabError, tabFooter, tabLabel, tabModified, tabNotice } f
 import { appUpdate, followActivation, followPluginChanges, followSidecarChanges, onPluginOperations, pluginOperations } from "./installed-plugins.js";
 import { pageIdentity } from "./page-identity.js";
 import { PLACEMENT_LAST, placementLast } from "./page-layout.js";
+import { installParties } from "./parties.js";
 
 /* Receivers of the watched core statuses. */
 const watchers = new Set();
@@ -416,6 +417,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onTextScope(() => coreChanged());
   status("core.chrome", chrome);
   status("core.rail", () => (currentGrid() ? railState() : null));
+  installParties({
+    status, registry, notifyChange: coreChanged, grid: currentGrid,
+    plane: () => document.getElementById("plane"), palette: () => THEMES.find((theme) => theme.name === value("theme"))[value("mode")],
+  });
 
   // A refusal of a settings change is an invalid request argument (docs/spec/settings.md).
   const invalid = (run) => async (params) => {

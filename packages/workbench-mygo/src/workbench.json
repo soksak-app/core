@@ -4,7 +4,7 @@
       "name": "midnight",
       "shape": {
         "r": "10px",
-        "gap": "6px",
+        "gap": "12px",
         "bw": "1px",
         "font": "mono-system",
         "size": "13px"
@@ -18,7 +18,14 @@
         "rule": "#22242f",
         "rail": "#7279ff",
         "focus": "#ffb36b",
-        "no": "#ff7c7c"
+        "no": "#ff7c7c",
+        "party-1": "#a06ce0",
+        "party-2": "#e06cac",
+        "party-3": "#e0a06c",
+        "party-4": "#ace06c",
+        "party-5": "#6ce0a0",
+        "party-6": "#6cace0",
+        "party-leader": "#e0da6c"
       },
       "light": {
         "bg": "#eef0f4",
@@ -29,14 +36,21 @@
         "rule": "#e3e6ec",
         "rail": "#5962e8",
         "focus": "#c06a1f",
-        "no": "#c62c2c"
+        "no": "#c62c2c",
+        "party-1": "#6a2eb8",
+        "party-2": "#b82e7b",
+        "party-3": "#b86a2e",
+        "party-4": "#7bb82e",
+        "party-5": "#2eb86a",
+        "party-6": "#2e7bb8",
+        "party-leader": "#b8af2e"
       }
     },
     {
       "name": "nord",
       "shape": {
         "r": "8px",
-        "gap": "5px",
+        "gap": "10px",
         "bw": "1px",
         "font": "mono-sf",
         "size": "13px"
@@ -50,7 +64,14 @@
         "rule": "#3a4150",
         "rail": "#81a1c1",
         "focus": "#ebcb8b",
-        "no": "#bf616a"
+        "no": "#bf616a",
+        "party-1": "#6c6ce0",
+        "party-2": "#e06ce0",
+        "party-3": "#e06c6c",
+        "party-4": "#e0e06c",
+        "party-5": "#6ce06c",
+        "party-6": "#6ce0e0",
+        "party-leader": "#e0a66c"
       },
       "light": {
         "bg": "#eceff4",
@@ -61,14 +82,21 @@
         "rule": "#e3e8ef",
         "rail": "#5e81ac",
         "focus": "#b48a2f",
-        "no": "#a3454e"
+        "no": "#a3454e",
+        "party-1": "#352eb8",
+        "party-2": "#b82eb1",
+        "party-3": "#b8352e",
+        "party-4": "#b1b82e",
+        "party-5": "#2eb835",
+        "party-6": "#2eb1b8",
+        "party-leader": "#b87a2e"
       }
     },
     {
       "name": "solar",
       "shape": {
         "r": "6px",
-        "gap": "7px",
+        "gap": "14px",
         "bw": "2px",
         "font": "mono-system",
         "size": "13px"
@@ -82,7 +110,14 @@
         "rule": "#073642",
         "rail": "#268bd2",
         "focus": "#cb4b16",
-        "no": "#dc322f"
+        "no": "#dc322f",
+        "party-1": "#6c76e0",
+        "party-2": "#d66ce0",
+        "party-3": "#e06c76",
+        "party-4": "#e0d66c",
+        "party-5": "#76e06c",
+        "party-6": "#6ce0d6",
+        "party-leader": "#e09c6c"
       },
       "light": {
         "bg": "#fdf6e3",
@@ -93,14 +128,21 @@
         "rule": "#f0e7d0",
         "rail": "#268bd2",
         "focus": "#cb4b16",
-        "no": "#dc322f"
+        "no": "#dc322f",
+        "party-1": "#2e3ab8",
+        "party-2": "#ac2eb8",
+        "party-3": "#b82e3a",
+        "party-4": "#b8ac2e",
+        "party-5": "#3ab82e",
+        "party-6": "#2eb8ac",
+        "party-leader": "#b8672e"
       }
     },
     {
       "name": "forest",
       "shape": {
         "r": "14px",
-        "gap": "6px",
+        "gap": "12px",
         "bw": "1px",
         "font": "sans-system",
         "size": "13px"
@@ -114,7 +156,14 @@
         "rule": "#1a241f",
         "rail": "#3f8f6b",
         "focus": "#d9a441",
-        "no": "#e0736d"
+        "no": "#e0736d",
+        "party-1": "#6cdae0",
+        "party-2": "#726ce0",
+        "party-3": "#e06cda",
+        "party-4": "#e0726c",
+        "party-5": "#dae06c",
+        "party-6": "#6ce072",
+        "party-leader": "#e06ca0"
       },
       "light": {
         "bg": "#eef4f0",
@@ -125,14 +174,21 @@
         "rule": "#e2ebe6",
         "rail": "#2f7a58",
         "focus": "#a8761f",
-        "no": "#b1453f"
+        "no": "#b1453f",
+        "party-1": "#2eb1b8",
+        "party-2": "#342eb8",
+        "party-3": "#b82eb1",
+        "party-4": "#b8342e",
+        "party-5": "#b1b82e",
+        "party-6": "#2eb834",
+        "party-leader": "#b82e6c"
       }
     },
     {
       "name": "ember",
       "shape": {
         "r": "4px",
-        "gap": "4px",
+        "gap": "8px",
         "bw": "2px",
         "font": "mono-jet",
         "size": "13px"
@@ -146,7 +202,14 @@
         "rule": "#271c18",
         "rail": "#c4603a",
         "focus": "#e8a33d",
-        "no": "#e05252"
+        "no": "#e05252",
+        "party-1": "#e0c66c",
+        "party-2": "#86e06c",
+        "party-3": "#6ce0c6",
+        "party-4": "#6c86e0",
+        "party-5": "#c66ce0",
+        "party-6": "#e06c86",
+        "party-leader": "#6cc0e0"
       },
       "light": {
         "bg": "#faf0ea",
@@ -157,7 +220,14 @@
         "rule": "#f3e6dd",
         "rail": "#b1552f",
         "focus": "#a56a17",
-        "no": "#b23a3a"
+        "no": "#b23a3a",
+        "party-1": "#b89b2e",
+        "party-2": "#4ab82e",
+        "party-3": "#2eb89b",
+        "party-4": "#2e4ab8",
+        "party-5": "#9b2eb8",
+        "party-6": "#b82e4a",
+        "party-leader": "#2e8fb8"
       }
     },
     {
@@ -178,7 +248,14 @@
         "rule": "#2c3036",
         "rail": "#6b7480",
         "focus": "#c7ced8",
-        "no": "#d97070"
+        "no": "#d97070",
+        "party-1": "#746ce0",
+        "party-2": "#e06cd7",
+        "party-3": "#e0746c",
+        "party-4": "#d7e06c",
+        "party-5": "#6ce074",
+        "party-6": "#6cd7e0",
+        "party-leader": "#e0ae6c"
       },
       "light": {
         "bg": "#f1f3f5",
@@ -189,14 +266,21 @@
         "rule": "#dcdfe4",
         "rail": "#7b8593",
         "focus": "#3d4854",
-        "no": "#b1453f"
+        "no": "#b1453f",
+        "party-1": "#392eb8",
+        "party-2": "#b82eac",
+        "party-3": "#b8392e",
+        "party-4": "#acb82e",
+        "party-5": "#2eb839",
+        "party-6": "#2eacb8",
+        "party-leader": "#b87e2e"
       }
     },
     {
       "name": "mist",
       "shape": {
         "r": "12px",
-        "gap": "6px",
+        "gap": "12px",
         "bw": "1px",
         "font": "mono-system",
         "size": "13px"
@@ -210,7 +294,14 @@
         "rule": "#1d2531",
         "rail": "#4c6c88",
         "focus": "#8ec5ea",
-        "no": "#dd7a74"
+        "no": "#dd7a74",
+        "party-1": "#6c70e0",
+        "party-2": "#dc6ce0",
+        "party-3": "#e06c70",
+        "party-4": "#e0dc6c",
+        "party-5": "#70e06c",
+        "party-6": "#6ce0dc",
+        "party-leader": "#e0a26c"
       },
       "light": {
         "bg": "#eef2f5",
@@ -221,14 +312,21 @@
         "rule": "#e3eaf0",
         "rail": "#6f92ad",
         "focus": "#2f6f9f",
-        "no": "#b8453f"
+        "no": "#b8453f",
+        "party-1": "#2e37b8",
+        "party-2": "#af2eb8",
+        "party-3": "#b82e37",
+        "party-4": "#b8af2e",
+        "party-5": "#37b82e",
+        "party-6": "#2eb8af",
+        "party-leader": "#b86a2e"
       }
     },
     {
       "name": "grape",
       "shape": {
         "r": "16px",
-        "gap": "5px",
+        "gap": "10px",
         "bw": "1px",
         "font": "sans-inter",
         "size": "13px"
@@ -242,7 +340,14 @@
         "rule": "#221a2e",
         "rail": "#8a5cd6",
         "focus": "#e07bd0",
-        "no": "#e4707f"
+        "no": "#e4707f",
+        "party-1": "#d16ce0",
+        "party-2": "#e06c7a",
+        "party-3": "#e0d16c",
+        "party-4": "#7ae06c",
+        "party-5": "#6ce0d1",
+        "party-6": "#6c7ae0",
+        "party-leader": "#b4e06c"
       },
       "light": {
         "bg": "#f4eefb",
@@ -253,14 +358,21 @@
         "rule": "#ebe2f5",
         "rail": "#7a4fc0",
         "focus": "#a8459a",
-        "no": "#b6455a"
+        "no": "#b6455a",
+        "party-1": "#a72eb8",
+        "party-2": "#b82e3e",
+        "party-3": "#b8a72e",
+        "party-4": "#3eb82e",
+        "party-5": "#2eb8a7",
+        "party-6": "#2e3eb8",
+        "party-leader": "#83b82e"
       }
     },
     {
       "name": "sand",
       "shape": {
         "r": "2px",
-        "gap": "4px",
+        "gap": "8px",
         "bw": "1px",
         "font": "mono-sf",
         "size": "13px"
@@ -274,7 +386,14 @@
         "rule": "#26221c",
         "rail": "#8a7752",
         "focus": "#d7b46a",
-        "no": "#cf6f62"
+        "no": "#cf6f62",
+        "party-1": "#cde06c",
+        "party-2": "#6ce07e",
+        "party-3": "#6ccde0",
+        "party-4": "#7e6ce0",
+        "party-5": "#e06ccd",
+        "party-6": "#e07e6c",
+        "party-leader": "#6c93e0"
       },
       "light": {
         "bg": "#f2ede4",
@@ -285,7 +404,14 @@
         "rule": "#eae3d7",
         "rail": "#a8926b",
         "focus": "#7a5c2e",
-        "no": "#a8443c"
+        "no": "#a8443c",
+        "party-1": "#a4b82e",
+        "party-2": "#2eb841",
+        "party-3": "#2ea4b8",
+        "party-4": "#412eb8",
+        "party-5": "#b82ea4",
+        "party-6": "#b8412e",
+        "party-leader": "#2e60b8"
       }
     },
     {
@@ -306,7 +432,14 @@
         "rule": "#26262a",
         "rail": "#6a6a70",
         "focus": "#e0e0e2",
-        "no": "#c96a6a"
+        "no": "#c96a6a",
+        "party-1": "#a66ce0",
+        "party-2": "#e06ca6",
+        "party-3": "#e0a66c",
+        "party-4": "#a6e06c",
+        "party-5": "#6ce0a6",
+        "party-6": "#6ca6e0",
+        "party-leader": "#e0e06c"
       },
       "light": {
         "bg": "#ffffff",
@@ -317,7 +450,14 @@
         "rule": "#e2e2e5",
         "rail": "#a0a0a6",
         "focus": "#1a1a1c",
-        "no": "#b53a3a"
+        "no": "#b53a3a",
+        "party-1": "#732eb8",
+        "party-2": "#b82e73",
+        "party-3": "#b8732e",
+        "party-4": "#73b82e",
+        "party-5": "#2eb873",
+        "party-6": "#2e73b8",
+        "party-leader": "#b8b82e"
       }
     }
   ],
@@ -413,7 +553,7 @@
     "shapeRanges": {
       "gap": [
         0,
-        24
+        48
       ],
       "radius": [
         0,

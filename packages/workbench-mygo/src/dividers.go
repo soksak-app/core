@@ -177,8 +177,8 @@ func paintGrips(p *ui.Painter, stage ui.Rect, inset float32, grips []dividerGrip
 // drawStageEdge draws the line around the stage of width by height at x, y of the box it is drawn in, under the cards. Its corners are
 // those of the rail, and a stage without a padding has square corners.
 func (s *Shell) drawStageEdge(c *ui.Context, x, y, width, height float32) {
-	border, radius := s.palette.BorderWidth, s.palette.Radius+s.palette.Gap
-	if s.palette.Gap == 0 {
+	border, radius := s.palette.BorderWidth, s.palette.Radius+s.palette.StagePad()
+	if s.palette.Seam() {
 		radius = 0
 	}
 	ui.Box(c).Absolute().Left(x).Top(y).Size(width, height).BorderWidth(border, border, border, border).BorderColor(s.palette.Rule).Radius(radius).PassThrough()
@@ -224,7 +224,7 @@ func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []l
 		} else if over {
 			continue
 		}
-		p.Fill(ruleRect(rule, s.plane.Width(), s.plane.Height(), stage, inset, s.palette.Gap), color, 0)
+		p.Fill(ruleRect(rule, s.plane.Width(), s.plane.Height(), stage, inset, s.palette.StagePad()), color, 0)
 	}
 }
 

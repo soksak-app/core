@@ -131,6 +131,35 @@ struct Inner {
 /// The end of a raster wait by the end of the layout transaction that it belongs to.
 pub(crate) const LAYOUT_WAIT_ENDED: &str = "the layout transaction of the window ended";
 
+/// Ends the unanswered screen request of a region and returns an error when the region has no unanswered request with that identifier.
+/// An accepted answer makes the rows of the request the baseline of the next screen request of the same generation and raster.
+fn answer_screen_locked(
+    inner: &mut Inner,
+    key: &Key,
+    request: &ScreenRequest,
+    accepted: bool,
+) -> Result<(), String> {
+    let answered = inner.states.get_mut(key).filter(|state| {
+        state
+            .screen_request
+            .as_ref()
+            .is_some_and(|pending| pending.request == request.request)
+    });
+    match answered {
+        Some(state) => {
+            state.screen_request = None;
+            if accepted {
+                state.screen_baseline = Some((request.generation, request.raster));
+            }
+            Ok(())
+        }
+        None => Err(format!(
+            "image {:?} of surface {:?} has no unanswered screen request {:?}",
+            key.1, key.0, request.request
+        )),
+    }
+}
+
 impl Inner {
     /// Records and returns the screen request of a drawing region that has no unanswered request, or None when the region gets none.
     fn new_screen_request(&mut self, key: &Key, cids: Vec<String>) -> Option<ScreenRequest> {
@@ -234,7 +263,7 @@ struct RasterState {
     /// change does not reset it, because it counts the frames of the region (host.window presentedFrames).
     presented_frames: u64,
     presentation_error: Option<String>,
-    /// The drawing state and the hiding last returned by drawing_changes, or None before one was returned.
+    /// The drawing state and the hiding last sent to the supplier (mark_drawing_sent), or None before one was sent.
     drawing_sent: Option<(bool, bool)>,
     /// The screen request that the region has not had answered, or None when none is unanswered.
     screen_request: Option<ScreenRequest>,
@@ -403,25 +432,37 @@ impl Images {
         accepted: bool,
     ) -> Result<(), String> {
         let mut guard = self.lock();
-        let answered = guard.states.get_mut(key).filter(|state| {
-            state
-                .screen_request
-                .as_ref()
-                .is_some_and(|pending| pending.request == request.request)
-        });
-        match answered {
-            Some(state) => {
-                state.screen_request = None;
-                if accepted {
-                    state.screen_baseline = Some((request.generation, request.raster));
-                }
-                Ok(())
-            }
-            None => Err(format!(
-                "image {:?} of surface {:?} has no unanswered screen request {:?}",
-                key.1, key.0, request.request
-            )),
+        answer_screen_locked(&mut guard, key, request, accepted)
+    }
+
+    /// Answers the screen message of sender for a drawing region. It accepts the message when sender owns the region, its generation
+    /// and raster are current, and its request is the unanswered request of the region, and it returns Ok. Otherwise it returns the
+    /// refusal reason: notAttached when sender does not own the region, and stale when the generation, the raster or the request is out
+    /// of date. A refused message leaves the unanswered request unanswered.
+    pub fn receive_screen(
+        &self,
+        key: &Key,
+        sender: &str,
+        answer: &ScreenRequest,
+    ) -> Result<(), &'static str> {
+        let mut guard = self.lock();
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+        let attached = guard.handles.get(key).copied().unwrap_or_default() != 0;
+        let sender_matches = guard.sidecars.get(key).is_some_and(|owner| owner == sender);
+        let Some(state) = guard.states.get(key) else {
+            return Err("notAttached");
+        };
+        if !attached || !sender_matches {
+            return Err("notAttached");
         }
+        let unanswered = state
+            .screen_request
+            .as_ref()
+            .is_some_and(|pending| pending.request == answer.request);
+        if answer.generation != state.generation || answer.raster != state.raster || !unanswered {
+            return Err("stale");
+        }
+        answer_screen_locked(&mut guard, key, answer, true).map_err(|_| "stale")
     }
 
     /// Records whether the window is neither occluded nor minimized.
@@ -434,7 +475,8 @@ impl Images {
     }
 
     /// Returns the drawing state of each attached region whose state was not sent yet or changed since it was sent,
-    /// sorted by surface and name, and records it as sent.
+    /// sorted by surface and name. It does not record a state as sent: the caller records each state whose send succeeded
+    /// with `mark_drawing_sent`, so a state whose send failed is returned again by the next call.
     pub fn drawing_changes(&self) -> Vec<Drawing> {
         let mut guard = self.lock();
         let inner = &mut *guard;
@@ -459,7 +501,6 @@ impl Images {
             if state.drawing_sent == Some((drawing, hidden)) {
                 continue;
             }
-            state.drawing_sent = Some((drawing, hidden));
             // A raster that changed while the region was hidden has no configuration yet, and no later step sends it
             // when the region is shown without a new layout.
             let configure = (drawing && !state.configured && state.width > 0).then(|| {
@@ -1239,6 +1280,16 @@ impl Images {
             .ok_or_else(|| format!("image {:?} is not attached", key.1))
     }
 
+    /// Records the drawing state of change as sent to the supplier of its region. A change of an earlier generation
+    /// records nothing, because the drawing state names the generation and the new generation is sent again.
+    pub fn mark_drawing_sent(&self, change: &Drawing) {
+        if let Some(state) = self.lock().states.get_mut(&change.key)
+            && state.generation == change.generation
+        {
+            state.drawing_sent = Some((change.drawing, change.hidden));
+        }
+    }
+
     /// Returns the drawing state last sent to the supplier of a region; it is false before one was sent.
     pub fn sent_drawing(&self, key: &Key) -> bool {
         self.lock()
@@ -1714,6 +1765,20 @@ pub enum Decision {
         raster: u64,
         sequence: i32,
     },
+    /// The screen message of a supplier that answers a screen request. Its rows are not interpreted.
+    ScreenMessage {
+        request: String,
+        name: String,
+        generation: u64,
+        raster: u64,
+    },
+    /// A screen message with a missing or mistyped member. Member is the dotted path of the first such member, text names it, and
+    /// echo holds each of request, name, generation and raster that the message holds with a valid type.
+    Malformed {
+        member: String,
+        text: String,
+        echo: serde_json::Map<String, serde_json::Value>,
+    },
     /// The image to display.
     Present {
         id: u32,
@@ -1744,6 +1809,128 @@ fn image_reply(reason: &str, name: &str, generation: u64, raster: u64, sequence:
     }
 }
 
+/// Validates the members of a screen message in their order: request, name, generation, raster and rows. It returns the first
+/// missing or mistyped member as Malformed, and otherwise the ScreenMessage.
+fn decide_screen(screen: &serde_json::Value) -> Decision {
+    let Some(members) = screen.as_object() else {
+        return Decision::Malformed {
+            member: "screen".to_string(),
+            text: "image screen message has no screen object".to_string(),
+            echo: serde_json::Map::new(),
+        };
+    };
+    let request = members
+        .get("request")
+        .and_then(serde_json::Value::as_str)
+        .filter(|request| !request.is_empty());
+    let name = members
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .filter(|name| !name.is_empty());
+    let generation = members
+        .get("generation")
+        .and_then(serde_json::Value::as_u64);
+    let raster = members.get("raster").and_then(serde_json::Value::as_u64);
+
+    let mut echo = serde_json::Map::new();
+    let mut failures: Vec<(String, String)> = Vec::new();
+    match request {
+        Some(request) => {
+            echo.insert("request".to_string(), request.into());
+        }
+        None => failures.push((
+            "request".to_string(),
+            "image screen message has no request".to_string(),
+        )),
+    }
+    match name {
+        Some(name) => {
+            echo.insert("name".to_string(), name.into());
+        }
+        None => failures.push((
+            "name".to_string(),
+            "image screen message has no image name".to_string(),
+        )),
+    }
+    match generation {
+        Some(generation) => {
+            echo.insert("generation".to_string(), generation.into());
+        }
+        None => failures.push((
+            "generation".to_string(),
+            "image screen message has no valid generation".to_string(),
+        )),
+    }
+    match raster {
+        Some(raster) => {
+            echo.insert("raster".to_string(), raster.into());
+        }
+        None => failures.push((
+            "raster".to_string(),
+            "image screen message has no valid raster".to_string(),
+        )),
+    }
+    match members.get("rows").and_then(serde_json::Value::as_array) {
+        None => failures.push((
+            "rows".to_string(),
+            "image screen message has no rows array".to_string(),
+        )),
+        Some(rows) => {
+            for (index, row) in rows.iter().enumerate() {
+                let fields = row.as_object();
+                let number = fields.and_then(|fields| fields.get("row"));
+                if number.and_then(serde_json::Value::as_u64).is_none() {
+                    failures.push((
+                        format!("rows.{index}.row"),
+                        format!("image screen message row {index} has no valid row number"),
+                    ));
+                }
+                if !fields.is_some_and(|fields| fields.contains_key("cells")) {
+                    failures.push((
+                        format!("rows.{index}.cells"),
+                        format!("image screen message row {index} has no cells"),
+                    ));
+                }
+            }
+        }
+    }
+    if let Some((member, text)) = failures.into_iter().next() {
+        return Decision::Malformed { member, text, echo };
+    }
+    // Each of the four members without a failure is Some, so this pattern fails only when the validation above missed a member.
+    let (Some(request), Some(name), Some(generation), Some(raster)) =
+        (request, name, generation, raster)
+    else {
+        return Decision::Malformed {
+            member: "screen".to_string(),
+            text: "image screen message has a member that the validation did not report"
+                .to_string(),
+            echo,
+        };
+    };
+    Decision::ScreenMessage {
+        request: request.to_string(),
+        name: name.to_string(),
+        generation,
+        raster,
+    }
+}
+
+/// Returns the members that identify a screen request, as the host answers them.
+fn screen_echo(
+    request: &str,
+    name: &str,
+    generation: u64,
+    raster: u64,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut echo = serde_json::Map::new();
+    echo.insert("request".to_string(), request.into());
+    echo.insert("name".to_string(), name.into());
+    echo.insert("generation".to_string(), generation.into());
+    echo.insert("raster".to_string(), raster.into());
+    echo
+}
+
 /// Parses and validates an image envelope and returns the decision.
 /// body must be a JSON object that holds an "image" field.
 /// It returns NotImage when it is not an image envelope.
@@ -1759,6 +1946,10 @@ pub fn decide(body_str: &str, sender: &str, surface: &str, images: &Images) -> D
     let Some(image_val) = obj.get("image") else {
         return Decision::NotImage;
     };
+
+    if let Some(screen) = image_val.get("screen") {
+        return decide_screen(screen);
+    }
 
     // Defines the structure of the image envelope.
     #[derive(Deserialize)]
@@ -1965,7 +2156,9 @@ where
 /// The recovery callback is deliberately separate from the response. The caller can therefore configure the sidecar
 /// again over its own transport without hiding the original error. `declared` reports whether a plugin still declares
 /// the sending sidecar: the failure of a frame of a sidecar that no plugin declares is the end of its process, so the
-/// frame is invalidated without recovery (docs/spec/native-surfaces.md#image-regions).
+/// frame is invalidated without recovery (docs/spec/native-surfaces.md#image-regions). `recover` runs before the answer
+/// with `notFound`, when the native region has no IOSurface to display, and with `staleRaster`, when the native raster
+/// of the region differs from the frame, so the host state holds an earlier raster than the native region.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared, Presented>(
     body_str: &str,
@@ -1989,6 +2182,68 @@ where
 
     match decision {
         Decision::NotImage => false,
+        Decision::ScreenMessage {
+            request,
+            name,
+            generation,
+            raster,
+        } => {
+            let key = (surface.to_string(), name.clone());
+            let answer = ScreenRequest {
+                request: request.clone(),
+                name: name.clone(),
+                generation,
+                raster,
+                full: false,
+                cids: Vec::new(),
+                key: key.clone(),
+                sidecar: sender.to_string(),
+            };
+            let screen = match images.receive_screen(&key, sender, &answer) {
+                Ok(()) => serde_json::json!({
+                    "accepted": screen_echo(&request, &name, generation, raster)
+                }),
+                Err(reason) => {
+                    let mut screen = screen_echo(&request, &name, generation, raster);
+                    screen.insert("error".to_string(), reason.into());
+                    serde_json::Value::Object(screen)
+                }
+            };
+            log_answer_error(
+                &format!("image screen {name}"),
+                send_response(&name, serde_json::json!({ "image": { "screen": screen } })),
+            );
+            true
+        }
+        Decision::Malformed { member, text, echo } => {
+            log_error(
+                "image screen",
+                format!("surface={surface} sender={sender} {text}"),
+            );
+            // The answer is routed by the image name. A message without a valid name names no image, so the error is logged
+            // and no answer is sent.
+            let Some(name) = echo
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string)
+            else {
+                log_error(
+                    "image screen",
+                    format!(
+                        "surface={surface} sender={sender} image name is missing, so the malformed answer is not sent"
+                    ),
+                );
+                return true;
+            };
+            let mut screen = echo;
+            screen.insert("error".to_string(), "malformed".into());
+            screen.insert("member".to_string(), member.into());
+            log_answer_error(
+                &format!("image screen {name}"),
+                send_response(&name, serde_json::json!({ "image": { "screen": screen } })),
+            );
+            true
+        }
         Decision::Reply {
             name,
             json,
@@ -2076,6 +2331,10 @@ where
                                     .ok_or_else(|| "presentFailed".to_string())
                             })
                     }));
+                    // A frame whose native raster differs from it shows that the host state holds an earlier raster than
+                    // the native region, so it requests a configuration of the native raster as notFound does.
+                    let stale_raster =
+                        matches!(&presentation, Err(detail) if detail.starts_with("staleRaster"));
                     let reason = match presentation {
                         Ok(()) => None,
                         Err(detail) if !declared() => {
@@ -2105,19 +2364,23 @@ where
                         }
                     };
 
+                    let mut recovery = None;
                     if let Some(reason) = reason.filter(|reason| *reason != "stale") {
                         images.mark_presentation_failed(&key, generation, raster, sequence, reason);
-                        if reason == "notFound"
-                            && let Err(error) = recover(reason)
-                        {
-                            log_error(
-                                "image recovery",
-                                format!(
-                                    "surface={} name={} reason={} error={}",
-                                    key.0, name, reason, error
-                                ),
-                            );
-                        }
+                        recovery = (reason == "notFound").then_some(reason);
+                    } else if stale_raster && declared() {
+                        recovery = Some("staleRaster");
+                    }
+                    if let Some(recovery) = recovery
+                        && let Err(error) = recover(recovery)
+                    {
+                        log_error(
+                            "image recovery",
+                            format!(
+                                "surface={} name={} reason={} error={}",
+                                key.0, name, recovery, error
+                            ),
+                        );
                     }
 
                     let response = match reason {

@@ -417,6 +417,8 @@ type Shell struct {
 	text *TextSize
 	// planeSpace is the id of the space that the plane was last made of.
 	planeSpace string
+	// parties are the parties of the shown space, read from its stored members when the space loads.
+	parties *layout.Parties
 	// exposedFocus is the keyboard focus of the window, which the first responder and the views report.
 	exposedFocus *Focus
 	// keyboard is what the workbench asked of the host about the keyboard.
@@ -464,6 +466,8 @@ type Shell struct {
 	// order; settingsWaits are the commands that wait for writes. They belong to the main thread.
 	settingsIssued, settingsWritten int
 	settingsWaits                   []*settingsWait
+	// sliderDrag is the slider that the pointer drags and the value it shows; the setting takes the value once, at the release.
+	sliderDrag *sliderDrag
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.

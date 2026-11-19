@@ -125,7 +125,7 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	drag.moved = true
 	s.fullscreen = ""
 	origin := s.planeOrigin()
-	edge := float64(s.palette.BorderWidth)
+	edge := float64(s.palette.CardBorder())
 	header, footer := float64(s.metrics.headH)+edge, float64(s.metrics.footH)+edge
 	options := layout.ZoneOptions{HeaderPx: &header, FooterPx: &footer}
 	data, err := s.cardData(drag.card)
@@ -223,7 +223,7 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 			s.plane.Move(from, hit.ID, hit.Zone)
 			s.focusCard(from)
 		}
-		s.settle()
+		s.settleChange(layout.LayoutChange{Moved: []string{from}})
 		return nil
 	}
 	encoded, err := json.Marshal(tabData([]layout.Tab{moving}, moving.ID))
@@ -231,15 +231,17 @@ func (s *Shell) dropTab(from, tab string, hit *layout.ZoneHit) error {
 		return err
 	}
 	born, ok := s.plane.SplitToward(hit.ID, hit.Zone, layout.SplitInit{Data: encoded})
-	if ok {
-		source.RemoveTab(tab)
-		source.SettleActiveTab()
-		if err := s.storeCard(from, source); err != nil {
-			return err
-		}
-		s.focusCard(born)
+	if !ok {
+		s.settle()
+		return nil
 	}
-	s.settle()
+	source.RemoveTab(tab)
+	source.SettleActiveTab()
+	if err := s.storeCard(from, source); err != nil {
+		return err
+	}
+	s.focusCard(born)
+	s.settleChange(layout.LayoutChange{Split: []layout.SplitCard{{Card: hit.ID, Born: born}}})
 	return nil
 }
 

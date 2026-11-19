@@ -427,10 +427,10 @@ fn describe_prints_the_pages_of_window_describe() {
         [
             "host status host.window",
             "host command host.window.reload",
+            "core status core.parties",
             "core status core.screen",
             "core command core.layout.open",
             "core element core.tab",
-            "terminal-1 status terminal.title",
             "terminal-1 command terminal.input",
             "unregistered command browser.reload",
         ]

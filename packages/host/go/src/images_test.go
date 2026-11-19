@@ -112,6 +112,54 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 	}
 }
 
+// A frame of a raster that a later configuration replaced is refused, and the supplier gets the refusal as its answer, because the
+// supplier draws no next frame until the frame in flight is answered.
+func TestARefusedFrameIsAnsweredToItsSupplier(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-refused", Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	first, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || first == nil {
+		t.Fatalf("configure image: %+v, %v", first, err)
+	}
+	if second, err := images.ConfigureRaster(key, 640, 480, 2, true); err != nil || second == nil || second.Raster == first.Raster {
+		t.Fatalf("reconfigure image: %+v, %v", second, err)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{
+		"name":  "view",
+		"token": map[string]any{"kind": "iosurface-global", "id": uint32(12345), "nonce": "AAAAAAAAAAAAAAAAAAAAAA=="},
+		"width": 800, "height": 600, "scale": 2.0, "format": "bgra8",
+		"generation": first.Generation, "raster": first.Raster, "sequence": 1,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answers := []map[string]interface{}{}
+	handled := HandleEnvelope(body, "sidecar-a", key.Surface, images,
+		func(func() error) error { t.Fatal("a refused frame was presented"); return nil },
+		func(name string, answer map[string]interface{}) error {
+			answers = append(answers, answer)
+			return nil
+		},
+		func(string) error { return nil },
+		func() bool { return true },
+		func() { t.Fatal("a refused frame notified the window") },
+	)
+	if !handled || len(answers) != 1 {
+		t.Fatalf("refused frame: handled %v with answers %v, want handled with one answer", handled, answers)
+	}
+	encoded, _ := json.Marshal(answers[0])
+	if !strings.Contains(string(encoded), `"stale"`) {
+		t.Fatalf("refused frame answer is %s, want the reason stale", encoded)
+	}
+}
+
 // contract: exposure.window.region-reports-presented-frame, images.wait.newer-sequence-rearms-wait
 func TestInFlightFramePresentationIsRecordedAfterANewerFrameIsAccepted(t *testing.T) {
 	images := NewImages()
@@ -939,5 +987,197 @@ func TestInputSendsTheScreenRequestAtOnceWithItsCorrelationIdentifiers(t *testin
 	}
 	if _, sent := images.InputScreenRequest(key, []string{"cid-3"}, inputAt, inputAt.Add(201*time.Millisecond)); sent {
 		t.Fatal("an input 201 ms old sent a screen request at once")
+	}
+}
+
+// screenFixture returns a window with one drawing region of sidecar-a and the unanswered screen request of the region.
+func screenFixture(t *testing.T) (*Images, ImageKey, *ImageConfigure, ImageScreenRequest) {
+	t.Helper()
+	images := NewImages()
+	key := ImageKey{Surface: "tab-1", Name: "copy"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	raster, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || raster == nil {
+		t.Fatalf("configure image: %+v, %v", raster, err)
+	}
+	requests := images.ScreenRequests()
+	if len(requests) != 1 {
+		t.Fatalf("a drawing region got %d screen requests, want 1", len(requests))
+	}
+	return images, key, raster, requests[0]
+}
+
+// handleScreenMessage sends a supplier body through HandleEnvelope and returns whether the host consumed it and each answer it sent.
+func handleScreenMessage(images *Images, body []byte, sender, surface string) (bool, []string, error) {
+	var answers []string
+	var sendErr error
+	handled := HandleEnvelope(body, sender, surface, images,
+		func(work func() error) error { return work() },
+		func(_ string, response map[string]interface{}) error {
+			answer, err := json.Marshal(response)
+			if err != nil {
+				sendErr = err
+				return err
+			}
+			answers = append(answers, string(answer))
+			return nil
+		},
+		func(string) error { return nil },
+		func() bool { return true },
+		func() {},
+	)
+	return handled, answers, sendErr
+}
+
+func screenMessageBody(t *testing.T, member map[string]any) []byte {
+	t.Helper()
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"screen": member}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+// contract: images.copy-path.screen-answer-accepted
+// The screen message that answers the unanswered request of a region is accepted at the wire: the host answers accepted, the rows become the
+// baseline, and the next request sends only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+func TestScreenMessageOfTheSupplierIsAcceptedOverTheWire(t *testing.T) {
+	images, key, raster, first := screenFixture(t)
+	body := screenMessageBody(t, map[string]any{
+		"request": first.Request, "name": "copy", "generation": raster.Generation, "raster": raster.Raster,
+		"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+	})
+	handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
+	if err != nil || !handled {
+		t.Fatalf("screen message handled %t, error %v; want handled without error", handled, err)
+	}
+	want := fmt.Sprintf(`{"image":{"screen":{"accepted":{"generation":%d,"name":"copy","raster":%d,"request":%q}}}}`,
+		raster.Generation, raster.Raster, first.Request)
+	if !reflect.DeepEqual(answers, []string{want}) {
+		t.Fatalf("answers to the screen message = %v, want [%s]", answers, want)
+	}
+	next := images.ScreenRequests()
+	if len(next) != 1 || next[0].Full || next[0].Request == first.Request {
+		t.Fatalf("after the accepted screen the next request is %+v, want one request with full false and a new identifier", next)
+	}
+}
+
+// contract: images.copy-path.screen-answer-refused
+// A screen message with an out-of-date generation or raster, with a request that is not the unanswered one, or from a sender that does not
+// own the region is answered stale or notAttached; the unanswered request of the region stays unanswered (docs/spec/native-surfaces.md#copy-path-frames).
+func TestScreenMessageRefusalsNameTheReasonAndKeepTheRequest(t *testing.T) {
+	cases := []struct {
+		name       string
+		sender     string
+		generation func(uint64) uint64
+		raster     func(uint64) uint64
+		request    func(ImageScreenRequest) string
+		reason     string
+	}{
+		{"stale generation", "sidecar-a", func(g uint64) uint64 { return g + 1 }, func(r uint64) uint64 { return r }, func(q ImageScreenRequest) string { return q.Request }, "stale"},
+		{"stale raster", "sidecar-a", func(g uint64) uint64 { return g }, func(r uint64) uint64 { return r + 1 }, func(q ImageScreenRequest) string { return q.Request }, "stale"},
+		{"superseded request", "sidecar-a", func(g uint64) uint64 { return g }, func(r uint64) uint64 { return r }, func(ImageScreenRequest) string { return "screen-old" }, "stale"},
+		{"other sender", "sidecar-b", func(g uint64) uint64 { return g }, func(r uint64) uint64 { return r }, func(q ImageScreenRequest) string { return q.Request }, "notAttached"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			images, key, raster, first := screenFixture(t)
+			body := screenMessageBody(t, map[string]any{
+				"request": tc.request(first), "name": "copy", "generation": tc.generation(raster.Generation), "raster": tc.raster(raster.Raster),
+				"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+			})
+			handled, answers, err := handleScreenMessage(images, body, tc.sender, key.Surface)
+			if err != nil || !handled {
+				t.Fatalf("screen message handled %t, error %v; want handled without error", handled, err)
+			}
+			want := fmt.Sprintf(`{"image":{"screen":{"error":%q,"generation":%d,"name":"copy","raster":%d,"request":%q}}}`,
+				tc.reason, tc.generation(raster.Generation), tc.raster(raster.Raster), tc.request(first))
+			if !reflect.DeepEqual(answers, []string{want}) {
+				t.Fatalf("answers to the screen message = %v, want [%s]", answers, want)
+			}
+			if again := images.ScreenRequests(); len(again) != 0 {
+				t.Fatalf("a refused screen message ended the unanswered request: next request %+v", again)
+			}
+		})
+	}
+}
+
+// contract: images.copy-path.screen-malformed-names-its-member
+// A screen message with a member that is missing or has the wrong type is rejected with an error that names the member, and the host sends no answer.
+func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
+	images, key, raster, first := screenFixture(t)
+	valid := func() map[string]any {
+		return map[string]any{
+			"request": first.Request, "name": "copy", "generation": raster.Generation, "raster": raster.Raster,
+			"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+		}
+	}
+	cases := []struct {
+		name   string
+		member string
+		change func(map[string]any)
+		want   string
+	}{
+		{"missing request", "request", func(m map[string]any) { delete(m, "request") }, "image screen message has no request"},
+		{"string generation", "generation", func(m map[string]any) { m["generation"] = "2" }, "image screen message has no valid generation"},
+		{"negative raster", "raster", func(m map[string]any) { m["raster"] = -1 }, "image screen message has no valid raster"},
+		{"missing rows", "rows", func(m map[string]any) { delete(m, "rows") }, "image screen message has no rows array"},
+		{"row without cells", "rows.0.cells", func(m map[string]any) { m["rows"] = []any{map[string]any{"row": 0}} }, "image screen message row 0 has no cells"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			member := valid()
+			tc.change(member)
+			body := screenMessageBody(t, member)
+			decision := Decide(body, "sidecar-a", key.Surface, images)
+			malformed, ok := decision.(error)
+			if !ok || !strings.Contains(malformed.Error(), tc.want) {
+				t.Fatalf("decision of the malformed screen message = %T %v, want an error that names %q", decision, decision, tc.want)
+			}
+			handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
+			if err != nil || !handled || len(answers) != 1 {
+				t.Fatalf("malformed screen message handled %t, answers %v, error %v; want handled with one answer", handled, answers, err)
+			}
+			var answer struct {
+				Image struct {
+					Screen map[string]any `json:"screen"`
+				} `json:"image"`
+			}
+			if err := json.Unmarshal([]byte(answers[0]), &answer); err != nil {
+				t.Fatalf("malformed answer %s: %v", answers[0], err)
+			}
+			if answer.Image.Screen["error"] != "malformed" || answer.Image.Screen["member"] != tc.member {
+				t.Fatalf("malformed answer %s, want error malformed naming member %q", answers[0], tc.member)
+			}
+			if again := images.ScreenRequests(); len(again) != 0 {
+				t.Fatalf("a malformed screen message ended the unanswered request: next request %+v", again)
+			}
+		})
+	}
+}
+
+// contract: images.copy-path.screen-without-name-is-not-answered
+// A screen message without a valid image name is consumed and sends no answer, because the answer is routed by the image name.
+func TestScreenMessageWithoutNameIsNotAnswered(t *testing.T) {
+	images, key, raster, first := screenFixture(t)
+	member := map[string]any{
+		"request": first.Request, "generation": raster.Generation, "raster": raster.Raster,
+		"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+	}
+	body := screenMessageBody(t, member)
+	decision := Decide(body, "sidecar-a", key.Surface, images)
+	malformed, ok := decision.(error)
+	if !ok || !strings.Contains(malformed.Error(), "image screen message has no image name") {
+		t.Fatalf("decision of the screen message without a name = %T %v, want an error that names the image name", decision, decision)
+	}
+	handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
+	if err != nil || !handled || len(answers) != 0 {
+		t.Fatalf("screen message without a name handled %t, answers %v, error %v; want handled with no answer", handled, answers, err)
 	}
 }
