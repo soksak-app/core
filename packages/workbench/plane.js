@@ -1146,6 +1146,8 @@ function settle() {
   // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
   arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
     windowSidebars, value("sidebarWidth"), side => value(side));
+  // The window sidebars change the grid through the layout library, so a space with groups removes what they left (docs/spec/groups.md#model).
+  tree.keepForm();
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));

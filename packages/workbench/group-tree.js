@@ -284,9 +284,11 @@ export class GroupTree {
   attempt(id, operation, change) {
     const before = this.drawnCards();
     const kept = this.snapshot();
+    const grouped = this.groups.length > 0;
     let result;
     try {
       result = change();
+      if (grouped) this.keepForm();
       const broken = this.nodes().find((node) => !this.covers(node));
       if (broken) throw new Error(`card ${id} cannot ${operation}: group ${broken.card} would not cover one rectangle`);
       const below = this.belowMinimum(before);
@@ -296,6 +298,18 @@ export class GroupTree {
       throw error;
     }
     return result;
+  }
+
+  /**
+   * Removes the lines that no card uses and every paidBy record of the grid while the space holds a group card, so a later close gives its
+   * cells to the neighbours that the layout library chooses and a later split lands in the middle of its card
+   * (docs/spec/groups.md#model). A space without groups keeps what the library keeps.
+   */
+  keepForm() {
+    if (this.groups.length === 0) return;
+    this.grid.tidy();
+    const state = this.grid.toJSON();
+    if (Object.keys(state.paidBy).length) this.grid.replace({ ...state, paidBy: {} });
   }
 
   /** Runs change and puts everything back, and returns what change returned or throws what it threw. */
@@ -799,6 +813,16 @@ export function readGroupTree({ state, groups, leader, lastCard }, options, grid
   tree.rootLeader = readLeader("root", members, leader, true);
   for (const node of tree.nodes()) {
     if (!tree.covers(node)) throw new Error(`group ${node.card} does not cover one rectangle of the grid`);
+  }
+  if (nodes.length) {
+    // default: paidBy is an optional member of a grid state.
+    const [paid] = Object.keys(state.paidBy ?? {}).sort();
+    if (paid !== undefined) throw new Error(`layout with groups stores the paidBy record of card ${paid}; a layout with groups keeps none`);
+    for (const [axis, lines, lo, hi] of [["x", state.xs, "c0", "c1"], ["y", state.ys, "r0", "r1"]]) {
+      const used = new Set(state.cards.flatMap((card) => [card[lo], card[hi]]));
+      const unused = lines.findIndex((_, k) => !used.has(k));
+      if (unused >= 0) throw new Error(`layout with groups stores the ${axis} line ${unused}, which no card uses; a layout with groups keeps none`);
+    }
   }
   const refused = new Error(`layout stores lastCard ${JSON.stringify(lastCard) ?? "undefined"}, which is not the largest issued card number`);
   if (!Number.isInteger(lastCard) || lastCard < 1 || lastCard > LAST_LIMIT) throw refused;
