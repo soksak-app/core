@@ -530,7 +530,7 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 `painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. 옵션: `createCard`(필수), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules`(기본 켜짐), `commit(rects, draw)`,
 `classPrefix`(기본 `sp`), `observeResize`(기본 켜짐), `bleed`(기본 0),
-`boundary`(기본 grid 의 operation).
+`boundary`(기본 grid 의 operation), `drawn`(기본 grid 의 배치).
 
 `commit(rects, draw)`는 모든 레이아웃 변경 전에 실행되고 장치 픽셀 격자에 맞춘
 사각형을 받는다. 호스트는 자기 뷰를 준비한 뒤 `draw()`를 호출한다. 각 콜백은 자기가 받은
@@ -570,6 +570,14 @@ drag 의 한 걸음은 `move(axis, line, px)`, 화살표 키는 `step(axis, line
 실행한다. 카드를 grid 와 다른 rectangle 에 그리고 line 에 자기 규칙을 두는 호스트는 자기 것을
 넘긴다. drag 의 결과를 자기 operation 으로 저장하는 호스트는 drag 가 boundary 를 둔 곳에서
 그 operation 을 `end` 에서 실행한다.
+`drawn` 은 `DrawnModel` 로, 뷰가 그리는 배치다. `rects(fullscreen)` 은 각 카드의 사각형을
+주고, fullscreen id 가 있으면 그것과 함께 보이는 카드만 주며 다른 카드는 숨겨진다.
+`rules()` 는 rule 을 `DrawnRule` 로 주며 `bleed` 가 false 인 rule 은 판을 둘러싼 프레임에
+닿지 않는다. `dividers()` 는 divider 를 주고, `has(id)` 는 `fullscreen(id)` 가 grid 의 카드나
+호스트의 상자인 `id` 를 보일 수 있는지 말한다. 이것이 없으면 뷰는 grid 의 `rects()`,
+bleed 를 가진 `rules()`, `dividers()` 를 그리고 fullscreen 카드를 판 전체에 보인다. 카드를 자기
+header 아래에 그리거나, rule 을 자기 상자에서 자르거나, 여러 카드의 상자를 fullscreen 으로
+보이는 호스트는 자기 것을 넘긴다.
 `reason` 은 `drag`, `center`, `merge`, `resize`, `render` 중 하나다.
 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius)`,

@@ -16,7 +16,7 @@
  * absolutely inside it.
  */
 import { Soksak } from './soksak.js';
-import type { Axis, Card, Divider, Rect } from './soksak.js';
+import type { Axis, Card, Divider, Rect, Rule } from './soksak.js';
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
 /**
  * The boundary operations that the divider gestures run. A host whose model
@@ -74,12 +74,37 @@ export interface ViewOptions {
     bleed?: number;
     /** The boundary operations of the divider gestures. Default: those of the grid. */
     boundary?: BoundaryModel;
+    /** The drawn arrangement of a host that draws the cards elsewhere than the grid's rects. Default: that of the grid. */
+    drawn?: DrawnModel;
+}
+/** A rule as a host draws it: `bleed` false keeps it off the frame around the plane. */
+export interface DrawnRule extends Rule {
+    bleed: boolean;
+}
+/**
+ * The arrangement the view draws: the rect of each card, the rules and the
+ * dividers, and the boxes it may show fullscreen. A host whose cards stand
+ * elsewhere than the grid's rects, as below headers of its own, supplies its own.
+ */
+export interface DrawnModel {
+    /** Whether the view may show `id` fullscreen: a card of the grid or a box of the host. */
+    has(id: string): boolean;
+    /**
+     * The rect of each card to draw. With `fullscreen` only the cards shown with
+     * it; every other card is hidden.
+     */
+    rects(fullscreen: string | null): ReadonlyMap<string, Rect>;
+    /** The rules to draw while nothing is fullscreen. */
+    rules(): readonly DrawnRule[];
+    /** The dividers to draw while nothing is fullscreen. */
+    dividers(): readonly Divider[];
 }
 export declare class SoksakView {
     private host;
     private grid;
     private options;
     private boundary;
+    private drawn;
     private fullscreenId;
     /** The chosen fullscreen presentation; it does not change the grid. */
     get fullscreenCard(): string | null;

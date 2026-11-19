@@ -78,6 +78,32 @@ export interface ViewOptions {
   bleed?: number;
   /** The boundary operations of the divider gestures. Default: those of the grid. */
   boundary?: BoundaryModel;
+  /** The drawn arrangement of a host that draws the cards elsewhere than the grid's rects. Default: that of the grid. */
+  drawn?: DrawnModel;
+}
+
+/** A rule as a host draws it: `bleed` false keeps it off the frame around the plane. */
+export interface DrawnRule extends Rule {
+  bleed: boolean;
+}
+
+/**
+ * The arrangement the view draws: the rect of each card, the rules and the
+ * dividers, and the boxes it may show fullscreen. A host whose cards stand
+ * elsewhere than the grid's rects, as below headers of its own, supplies its own.
+ */
+export interface DrawnModel {
+  /** Whether the view may show `id` fullscreen: a card of the grid or a box of the host. */
+  has(id: string): boolean;
+  /**
+   * The rect of each card to draw. With `fullscreen` only the cards shown with
+   * it; every other card is hidden.
+   */
+  rects(fullscreen: string | null): ReadonlyMap<string, Rect>;
+  /** The rules to draw while nothing is fullscreen. */
+  rules(): readonly DrawnRule[];
+  /** The dividers to draw while nothing is fullscreen. */
+  dividers(): readonly Divider[];
 }
 
 /**
@@ -121,8 +147,10 @@ interface DragState {
 interface PaintSnapshot {
   fullscreen: string | null;
   cards: readonly Card[];
+  /** The cards the drawn model shows; the others are hidden while something is fullscreen. */
+  shown: ReadonlySet<string>;
   rects: ReadonlyMap<string, Rect>;
-  rules: readonly Rule[];
+  rules: readonly DrawnRule[];
   dividers: readonly Divider[];
   width: number;
   height: number;
@@ -142,6 +170,7 @@ export class SoksakView {
   private grid: Soksak;
   private options: ViewOptions;
   private boundary: BoundaryModel;
+  private drawn: DrawnModel;
   private fullscreenId: string | null = null;
 
   /** The chosen fullscreen presentation; it does not change the grid. */
@@ -150,7 +179,7 @@ export class SoksakView {
   /** Present a card across the plane, or restore normal presentation with null. */
   fullscreen(id: string | null): void {
     if (this.disposed) throw new Error('cannot fullscreen a destroyed view');
-    if (id !== null && (typeof id !== 'string' || !this.grid.card(id))) {
+    if (id !== null && (typeof id !== 'string' || !this.drawn.has(id))) {
       throw new Error(`unknown fullscreen card ${String(id)}`);
     }
     if (this.drags.size > 0 || this.mouseDrag !== null) {
@@ -278,6 +307,14 @@ export class SoksakView {
       center: (axis, line) => grid.centerBoundary(axis, line),
       end: (axis, line) => grid.mergeCoincident(axis, line),
     };
+    // default: `drawn` is optional and documented as the grid's own arrangement: a fullscreen card covers the plane.
+    this.drawn = options.drawn ?? {
+      has: (id) => grid.card(id) !== undefined,
+      rects: (fullscreen) => fullscreen === null ? grid.rects()
+        : new Map([[fullscreen, { x: 0, y: 0, w: grid.width, h: grid.height }]]),
+      rules: () => grid.rules().map((rule) => ({ ...rule, bleed: true })),
+      dividers: () => grid.dividers(),
+    };
     this.observeResolution();
 
     // The start waits for an animation frame, which runs before that frame's
@@ -361,19 +398,19 @@ export class SoksakView {
     // plane that is gone.
     if (this.disposed) return;
     const fullscreen = this.fullscreenId;
-    if (fullscreen !== null && !this.grid.card(fullscreen)) {
+    if (fullscreen !== null && !this.drawn.has(fullscreen)) {
       throw new Error(`unknown fullscreen card ${fullscreen}`);
     }
-    const rects = fullscreen === null ? new Map(this.grid.rects())
-      : new Map(this.grid.cards.map((card) => [card.id, card.id === fullscreen
-        ? { x: 0, y: 0, w: this.grid.width, h: this.grid.height }
-        : { x: 0, y: 0, w: 0, h: 0 }]));
+    // A card that a fullscreen box does not show is hidden with an empty rect.
+    const shown = this.drawn.rects(fullscreen);
+    const rects = new Map(this.grid.cards.map((card) => [card.id, shown.get(card.id) ?? { x: 0, y: 0, w: 0, h: 0 }]));
     const snapshot: PaintSnapshot = {
       fullscreen,
       cards: [...this.grid.cards],
+      shown: new Set(shown.keys()),
       rects,
-      rules: fullscreen === null ? [...this.grid.rules()] : [],
-      dividers: fullscreen === null ? [...this.grid.dividers()] : [],
+      rules: fullscreen === null ? [...this.drawn.rules()] : [],
+      dividers: fullscreen === null ? [...this.drawn.dividers()] : [],
       width: this.grid.width,
       height: this.grid.height,
       step: this.step,
@@ -450,7 +487,7 @@ export class SoksakView {
       }
       held.card = card;
       const rect = onGrid(box.get(card.id) as Rect, step);
-      held.el.hidden = snapshot.fullscreen !== null && card.id !== snapshot.fullscreen;
+      held.el.hidden = snapshot.fullscreen !== null && !snapshot.shown.has(card.id);
       held.el.dataset.fullscreen = String(card.id === snapshot.fullscreen);
       place(held.el, rect);
       this.paintedRects.set(card.id, rect);
@@ -484,8 +521,8 @@ export class SoksakView {
           this.host.appendChild(el);
           this.ruleEls.set(rule.key, el);
         }
-        // default: `bleed` is optional and documented as 0.
-        place(el, onGrid(reach(rule, snapshot.width, snapshot.height, this.options.bleed ?? 0), step));
+        // default: `bleed` is optional and documented as 0; a rule the host keeps off the frame takes none.
+        place(el, onGrid(reach(rule, snapshot.width, snapshot.height, rule.bleed ? this.options.bleed ?? 0 : 0), step));
       }
       this.sweep(this.ruleEls, keep);
     }
