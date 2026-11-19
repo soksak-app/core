@@ -1475,3 +1475,173 @@ fn input_sends_the_screen_request_at_once_with_its_correlation_identifiers() {
         "an input 201 ms old sends no request at once"
     );
 }
+
+// screen_fixture returns a window with one drawing region of sidecar-a, its generation and raster, and the unanswered screen request.
+fn screen_fixture() -> (super::Images, super::Key, u64, u64, super::ScreenRequest) {
+    let images = super::Images::default();
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    let key = (surface.to_string(), "copy".to_string());
+    images.reserve(&key, "owner", "sidecar-a").unwrap();
+    assert!(images.set(&key, 1));
+    let configure = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("a drawing region with a size has a raster configuration");
+    let requests = images.screen_requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "a drawing region gets one screen request"
+    );
+    let first = requests[0].clone();
+    (images, key, configure.generation, configure.raster, first)
+}
+
+// handle_screen_message sends a supplier body through handle_envelope and returns whether the host consumed it and each answer it sent.
+fn handle_screen_message(
+    images: &super::Images,
+    body: &serde_json::Value,
+    sender: &str,
+    surface: &str,
+) -> (bool, Vec<serde_json::Value>) {
+    let answers = Arc::new(Mutex::new(Vec::new()));
+    let sent = Arc::clone(&answers);
+    let handled = super::handle_envelope(
+        &body.to_string(),
+        sender,
+        surface,
+        images,
+        |work| work(),
+        move |_image, response| {
+            sent.lock().unwrap().push(response);
+            Ok(())
+        },
+    );
+    let answers = answers.lock().unwrap().clone();
+    (handled, answers)
+}
+
+// contract: images.copy-path.screen-answer-accepted
+// The screen message that answers the unanswered request of a region is accepted at the wire: the host answers accepted, the rows become the
+// baseline, and the next request sends only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn screen_message_of_the_supplier_is_accepted_over_the_wire() {
+    let (images, key, generation, raster, first) = screen_fixture();
+    let body = serde_json::json!({ "image": { "screen": {
+        "request": first.request, "name": "copy", "generation": generation, "raster": raster,
+        "rows": [{ "row": 0, "cells": "row-0" }],
+    } } });
+    let (handled, answers) = handle_screen_message(&images, &body, "sidecar-a", &key.0);
+    assert!(handled, "the screen message is consumed");
+    assert_eq!(
+        answers,
+        vec![serde_json::json!({ "image": { "screen": { "accepted": {
+            "request": first.request, "name": "copy", "generation": generation, "raster": raster,
+        } } } })],
+        "the answers to the screen message"
+    );
+    let next = images.screen_requests();
+    assert!(
+        next.len() == 1 && !next[0].full && next[0].request != first.request,
+        "after the accepted screen the next request is {next:?}: one request, full false, new identifier"
+    );
+}
+
+// contract: images.copy-path.screen-answer-refused
+// A screen message with an out-of-date generation or raster, with a request that is not the unanswered one, or from a sender that does not
+// own the region is answered stale or notAttached; the unanswered request of the region stays unanswered (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn screen_message_refusals_name_the_reason_and_keep_the_request() {
+    // (case, sender, generation offset, raster offset, request identifier override, reason)
+    let cases: [(&str, &str, u64, u64, Option<&str>, &str); 4] = [
+        ("stale generation", "sidecar-a", 1, 0, None, "stale"),
+        ("stale raster", "sidecar-a", 0, 1, None, "stale"),
+        (
+            "superseded request",
+            "sidecar-a",
+            0,
+            0,
+            Some("screen-old"),
+            "stale",
+        ),
+        ("other sender", "sidecar-b", 0, 0, None, "notAttached"),
+    ];
+    for (case, sender, generation_offset, raster_offset, request, reason) in cases {
+        let (images, key, generation, raster, first) = screen_fixture();
+        let request = request.unwrap_or(first.request.as_str()).to_string();
+        let body = serde_json::json!({ "image": { "screen": {
+            "request": request, "name": "copy",
+            "generation": generation + generation_offset, "raster": raster + raster_offset,
+            "rows": [{ "row": 0, "cells": "row-0" }],
+        } } });
+        let (handled, answers) = handle_screen_message(&images, &body, sender, &key.0);
+        assert!(handled, "{case}: the screen message is consumed");
+        assert_eq!(
+            answers,
+            vec![serde_json::json!({ "image": { "screen": {
+                "error": reason, "request": request, "name": "copy",
+                "generation": generation + generation_offset, "raster": raster + raster_offset,
+            } } })],
+            "{case}: the answers to the screen message"
+        );
+        assert!(
+            images.screen_requests().is_empty(),
+            "{case}: a refused screen message ended the unanswered request"
+        );
+    }
+}
+
+// contract: images.copy-path.screen-malformed-names-its-member
+// A screen message with a missing or mistyped member, or a row without a valid row number or cells, is answered error malformed with the
+// dotted path of its first such member, and its unanswered request stays unanswered (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn malformed_screen_message_names_its_member() {
+    // (case, member, change of the valid message)
+    let cases: [(&str, &str, fn(&mut serde_json::Value)); 6] = [
+        ("missing request", "request", |m| {
+            m.as_object_mut().unwrap().remove("request");
+        }),
+        ("missing name", "name", |m| {
+            m.as_object_mut().unwrap().remove("name");
+        }),
+        ("string generation", "generation", |m| {
+            m["generation"] = serde_json::json!("2");
+        }),
+        ("negative raster", "raster", |m| {
+            m["raster"] = serde_json::json!(-1);
+        }),
+        ("missing rows", "rows", |m| {
+            m.as_object_mut().unwrap().remove("rows");
+        }),
+        ("row without cells", "rows.0.cells", |m| {
+            m["rows"] = serde_json::json!([{ "row": 0 }]);
+        }),
+    ];
+    for (case, member, change) in cases {
+        let (images, key, generation, raster, first) = screen_fixture();
+        let mut message = serde_json::json!({
+            "request": first.request, "name": "copy", "generation": generation, "raster": raster,
+            "rows": [{ "row": 0, "cells": "row-0" }],
+        });
+        change(&mut message);
+        let body = serde_json::json!({ "image": { "screen": message } });
+        let (handled, answers) = handle_screen_message(&images, &body, "sidecar-a", &key.0);
+        assert!(handled, "{case}: the malformed screen message is consumed");
+        assert_eq!(
+            answers.len(),
+            1,
+            "{case}: one answer to the malformed message"
+        );
+        let screen = &answers[0]["image"]["screen"];
+        assert_eq!(
+            (screen["error"].as_str(), screen["member"].as_str()),
+            (Some("malformed"), Some(member)),
+            "{case}: the answer names the member"
+        );
+        assert!(
+            images.screen_requests().is_empty(),
+            "{case}: a malformed screen message ended the unanswered request"
+        );
+    }
+}
