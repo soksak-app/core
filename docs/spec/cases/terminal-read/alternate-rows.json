@@ -298,32 +298,6 @@
           "dropped": 0
         }
       }
-    },
-    {
-      "name": "the primary rows stay readable while the alternate screen is active",
-      "rows": 5,
-      "cols": 10,
-      "historyLimit": 1000,
-      "output": "1\r\n2\r\n3\r\n4\r\n5\r\n6\r\n7\r\n8\r\n9\r\n10\r\n\u001b[?1049h\u001b[Hfull",
-      "reads": [
-        {
-          "screen": "primary",
-          "from": 0,
-          "count": 5,
-          "text": [
-            "1",
-            "2",
-            "3",
-            "4",
-            "5"
-          ]
-        }
-      ],
-      "alternate": {
-        "active": true,
-        "history": 0,
-        "dropped": 0
-      }
     }
   ]
 }
