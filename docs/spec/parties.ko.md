@@ -86,6 +86,7 @@ party가 삭제되면 `removed`는 변경 전 party의 모든 카드를 나열�
 - leader 카드가 외곽선 위에 가진 테두리 구간은 leader 색으로 그리고, leader 표시는 그 머리에 그린다.
 - party 외곽선이 rail과 겹치면 rail은 바깥에, party 외곽선은 안쪽에 두고 rail 너비만큼 떨어뜨려 두 선이 겹치지 않게 한다. 포커스 표시는 party 외곽선과 무관하다.
 - 요소 이름. party `<id>`의 바깥 외곽선은 요소 `path[data-party="<id>"]`이다. 그 leader 테두리 구간은 요소 `path[data-party-leader="<id>"]`이며, `stroke`가 leader 색이다. rail 외곽선은 workbench 문서의 요소 `#railPath`이다. 위 규칙을 검사하는 테스트는 `#railPath`의 `d` 값과 party 외곽선의 `d` 값을 비교한다.
+- mygo host는 같은 외곽선과 leader 구간을 stage의 painter에 rail 아래로 그리며, 상태 `core.parties`에 대해 layout model이 계산하는 외곽선을 쓴다. 요소 이름은 page workbench에만 해당한다. 전체 화면 카드는 rail을 보이지 않듯 party 외곽선도 보이지 않는다.
 - party 외곽선은 카드 chrome과 네이티브 화면과 같은 그리기 pass, 같은 transaction에서 그린다. 이는 rail에 대해 [네이티브 surface](native-surfaces.ko.md#인수-기준)의 인수 기준이 요구하는 방식이다.
 
 ## 조회
