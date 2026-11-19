@@ -56,6 +56,7 @@ impl Assets for StagedFrontend {
     fn get(&self, key: &str) -> Option<std::borrow::Cow<'_, [u8]>> {
         let relative = key.strip_prefix('/')?;
         std::fs::read(self.0.join(relative))
+            // default: a page file that cannot be read is not served; page_file answers 404 without the record that docs/spec/diagnostics.md#failure-points requires (not yet written by this host).
             .ok()
             .map(std::borrow::Cow::Owned)
     }
