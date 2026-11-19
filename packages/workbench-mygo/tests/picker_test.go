@@ -216,7 +216,9 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
 	f.run("core.card.add-tab", map[string]string{"card": card, "plugin": "acme"})
-	f.tester.SetSize(150, 500)
+	// The window holds a head too narrow for its tools and wide enough for tab-min-w beside the kept tools
+	// (docs/spec/example-model.md#card-tabs).
+	f.tester.SetSize(220, 500)
 	f.settle()
 	if f.has("core.card.add", card) || !f.has("core.card.tools", card) || !f.has("core.card.tab-list", card) {
 		t.Fatalf("the head has the tools %v, the menu %v and the list %v", f.has("core.card.add", card), f.has("core.card.tools", card), f.has("core.card.tab-list", card))
@@ -225,7 +227,7 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 	menu := f.menu()
 	// The plane holds two cards and card leads it, so its head keeps the leader mark beside the menu and the menu does not hold it
 	// (docs/spec/groups.md#headers).
-	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:2], []string{"add", "y"}) || !f.has("core.card.leader", card) {
+	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:3], []string{"add", "x", "y"}) || !f.has("core.card.leader", card) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 	f.click("core.picker.item", "add")
@@ -1277,7 +1279,9 @@ func TestALayerWithoutAQuestionDrawsNoHead(t *testing.T) {
 func TestANarrowHeadKeepsTheFullscreenButtonBesideTheToolMenu(t *testing.T) {
 	f := projectWithPlugins(t)
 	card := f.tabbedCards()[0]
-	f.tester.SetSize(150, 500)
+	// The window holds a head too narrow for its tools and wide enough for tab-min-w beside the kept tools
+	// (docs/spec/example-model.md#card-tabs).
+	f.tester.SetSize(220, 500)
 	f.settle()
 	if f.has("core.card.add", card) || !f.has("core.card.tools", card) {
 		t.Fatalf("the head of %s is not folded into its tool menu", card)

@@ -305,3 +305,35 @@ func TestTheStageOfAHeadIsTheSameForEverySelectedTab(t *testing.T) {
 		}
 	}
 }
+
+// A card dragged to its minimum width keeps a part of its active tab at least tab-grab-w wide, the part that a press grabs to drag
+// the tab, and folds the fullscreen toggle into the tool menu before the tab, so only ⋯ stands after the tab
+// (docs/spec/example-model.md#card-tabs).
+func TestACardAtItsMinimumWidthKeepsAPartOfItsTab(t *testing.T) {
+	f, left, right := splitShell(t)
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(0, y)
+	f.tester.Frame()
+	f.tester.Release(0, y)
+	f.settle()
+	if card := f.box("core.card", left); card.W > 100 {
+		t.Fatalf("the drag left the card %v wide, not at its minimum", card.W)
+	}
+	active := f.tabsOf(left)[0].(map[string]any)["id"].(string)
+	if !f.has("core.card.tab", active) {
+		t.Fatalf("the head of the card at its minimum width shows no tab")
+	}
+	if tab := f.box("core.card.tab", active); tab.W < 32 {
+		t.Fatalf("the tab of the card at its minimum width is %v wide, below the grab width 32", tab.W)
+	}
+	if f.has("core.card.fullscreen", left) || !f.has("core.card.tools", left) {
+		t.Fatalf("the head shows the fullscreen toggle %v and the tool menu %v", f.has("core.card.fullscreen", left), f.has("core.card.tools", left))
+	}
+	f.click("core.card.tools", left)
+	if keys := f.menu().keys(); !slices.Contains(keys, "fullscreen") {
+		t.Fatalf("the tool menu of the card at its minimum width is %v, without the fullscreen item", keys)
+	}
+}

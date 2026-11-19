@@ -610,6 +610,7 @@
     "foot-h": "22px",
     "tab-peek-w": "56px",
     "tab-min-w": "48px",
+    "tab-grab-w": "32px",
     "frame-text": "1",
     "brand-gap": "2px",
     "brand-logo-at-base": "20",

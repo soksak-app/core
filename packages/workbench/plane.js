@@ -1351,9 +1351,10 @@ function centreTab(strip, activeId) {
  * than the tools. fitHead decides the stage from the measured widths.
  */
 // PEEK    the spare width beside the widest tab that is needed to keep the strip stage: the chrome metric tab-peek-w
-// MIN_TAB the minimum width of an active tab that is truncated with an ellipsis. Narrower than this, it drops to the ham stage: the chrome
-//         metric tab-min-w
-const PEEK = parseFloat(CHROME["tab-peek-w"]), MIN_TAB = parseFloat(CHROME["tab-min-w"]);
+// MIN_TAB the room of an active tab beside the kept tools under which the kept tools fold into the menu: the chrome metric tab-min-w
+// GRAB    the part of the active tab that a press grabs to drag it, under which the tab drops to the ham stage: the chrome metric
+//         tab-grab-w (docs/spec/example-model.md#card-tabs)
+const PEEK = parseFloat(CHROME["tab-peek-w"]), MIN_TAB = parseFloat(CHROME["tab-min-w"]), GRAB = parseFloat(CHROME["tab-grab-w"]);
 
 function fitChrome(chrome, strip) {
   if (!chrome.querySelector(".chrome__acts")) return;
@@ -1399,17 +1400,17 @@ function foldHead(row, { lead, tabWidths, tabGap }) {
   const head = getComputedStyle(row);
   // default: the computed value normal of columnGap is not a number and is 0 in flex.
   const gap = parseFloat(head.columnGap) || 0;
-  // The head keeps the leader mark and the fullscreen toggle beside ⋯ in the menu stage, so the menu stage needs the room of each
-  // (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tools).
+  // The head keeps the leader mark and the fullscreen toggle beside ⋯ in the menu stage, so the menu stage needs the room of each; the
+  // stage all folds them into the menu too (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tabs).
   const mark = leaderMark(acts);
   const kept = keptTools(acts);
   const { fit, tools } = fitHead({
     width: row.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
     toolsWidth: acts.getBoundingClientRect().width,
     // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
-    moreWidth: parseFloat(getComputedStyle(row.querySelector(".chrome__more")).width)
-      + kept.reduce((sum, b) => sum + b.getBoundingClientRect().width + gap, 0),
-    tabWidths, tabGap, peek: PEEK, minTab: MIN_TAB,
+    moreWidth: parseFloat(getComputedStyle(row.querySelector(".chrome__more")).width),
+    keptWidth: kept.reduce((sum, b) => sum + b.getBoundingClientRect().width + gap, 0),
+    tabWidths, tabGap, peek: PEEK, minTab: MIN_TAB, grab: GRAB,
   });
   row.dataset.fit = fit;
   row.dataset.tools = tools;
@@ -1423,6 +1424,9 @@ const leaderMark = (acts) => acts.querySelector(".chrome__act[data-do=leader][ar
 /** The buttons of the tool row acts that the head keeps beside ⋯ in the menu stage: the leader mark and the fullscreen toggle. */
 const keptTools = (acts) => [...acts.querySelectorAll(".chrome__act[data-do=leader][aria-pressed=true], .chrome__act[data-do=fullscreen]")]
   .filter((b) => !b.hidden);
+
+/** The kept tools that the head row shows beside ⋯: those of keptTools in the menu stage, none in the stage all, where ⋯ holds them. */
+const shownKept = (row, acts) => (row.dataset.tools === "menu" ? keptTools(acts) : []);
 
 /* It measures after the render completes. Measuring before the width is updated computes a wrong position.
    It does not scroll during a tab drag. The coordinates of the dragged tab would be misaligned. */
@@ -1975,8 +1979,9 @@ export function openCardTools(id) {
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const acts = holder.querySelector(".chrome__acts");
-  // The head keeps the leader mark and the fullscreen toggle, so the menu does not hold them (docs/spec/groups.md#headers).
-  const kept = keptTools(acts);
+  // The head keeps the leader mark and the fullscreen toggle in the menu stage, so the menu does not hold them then; in the stage all it
+  // holds them (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tabs).
+  const kept = shownKept(holder.querySelector(".chrome__more").parentElement, acts);
   const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden && !kept.includes(b)).map((b) => ({
     // A sidebar button has no data-do and points to a side with data-side.
     key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
@@ -2608,11 +2613,12 @@ export function cardActs(id) {
   const chrome = cardElement(id)?.querySelector(".chrome");
   const acts = chrome?.querySelector(".chrome__acts");
   if (!acts) return null;
-  const kept = keptTools(acts);
+  const kept = shownKept(chrome, acts);
   const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]")].map((b) => [
     ["close", "fullscreen", "leader"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
-    // A head that folded the tools into a menu draws only the kept buttons of the tool row: the leader mark and the fullscreen toggle.
-    { enabled: !b.disabled, hidden: b.hidden || (chrome.dataset.tools === "menu" && !kept.includes(b)),
+    // A head that folded the tools into a menu draws only the kept buttons of the tool row in the menu stage, the leader mark and the
+    // fullscreen toggle, and none in the stage all.
+    { enabled: !b.disabled, hidden: b.hidden || ((chrome.dataset.tools ?? "bar") !== "bar" && !kept.includes(b)),
       title: b.title },
   ]));
   // default: the head of a card whose tab row is not yet fitted is an unfolded strip.

@@ -266,9 +266,11 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
 	kept := keptTools(s.headTools(id))
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
-		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(s.moreWidth(kept)),
-		TabWidths: widths, TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
+		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton),
+		KeptWidth: float64(s.keptWidth(kept)), TabWidths: widths, TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW),
+		MinTab: float64(m.tabMinW), Grab: float64(m.tabGrabW)})
 	s.heads[id] = fit
+	kept = shownKept(fit, kept)
 	tools := s.moreWidth(kept)
 	if fit.Tools == "bar" {
 		tools = group
@@ -342,6 +344,15 @@ func keptTools(tools []headTool) []headTool {
 	return kept
 }
 
+// shownKept are the kept tools that a head of the stage fit shows beside its tool menu: all of kept in the stage menu, and none in the
+// stage all, where the menu holds them so that a part of the tab stays (docs/spec/example-model.md#card-tabs).
+func shownKept(fit layout.HeadFit, kept []headTool) []headTool {
+	if fit.Tools == "menu" {
+		return kept
+	}
+	return nil
+}
+
 // keeps tells whether kept holds the tool that do names.
 func keeps(kept []headTool, do string) bool {
 	for _, tool := range kept {
@@ -352,10 +363,14 @@ func keeps(kept []headTool, do string) bool {
 	return false
 }
 
-// moreWidth is the width that a header gives its tools in the menu stage: the menu button and before it the kept tools, each with the
-// gap of the head.
+// moreWidth is the width that a header gives its tools in the menu stage: the menu button and before it the kept tools.
 func (s *Shell) moreWidth(kept []headTool) float32 {
-	return s.metrics.cardButton + float32(len(kept))*(s.metrics.cardButton+s.metrics.cardHeadGap)
+	return s.metrics.cardButton + s.keptWidth(kept)
+}
+
+// keptWidth is the width of the kept tools beside the menu button, each with the gap of the head.
+func (s *Shell) keptWidth(kept []headTool) float32 {
+	return float32(len(kept)) * (s.metrics.cardButton + s.metrics.cardHeadGap)
 }
 
 // drawKeptTools draws the kept tools of the header of id before its tool menu button, while the other tools stand in the menu.

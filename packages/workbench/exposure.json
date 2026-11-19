@@ -431,7 +431,8 @@
                       "tools": {
                         "enum": [
                           "bar",
-                          "menu"
+                          "menu",
+                          "all"
                         ]
                       }
                     }

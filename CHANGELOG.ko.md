@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F985 (최소 폭에서 남는 탭): 카드 머리는 카드 최소 너비까지 모든 너비에서 활성 탭의 일부를 적어도 새 chrome metric `tab-grab-w` 32 point만큼 남기므로, 카드를 여전히 탭으로 끌 수 있다. 전체 화면 toggle과 leader mark는 탭이 빠지기 전에 tool menu로 접힌다(tools `all`). 이전에는 최소 폭의 카드가 ≡, leader mark, 전체 화면 toggle, ⋯만 보이고 탭을 보이지 않았다. 검증: 두 workbench의 `docs/spec/cases/layout/head.json` 공용 case, page workbench의 `a head at the minimum width of a card keeps a part of its tab and folds the fullscreen toggle into its tool menu`, mygo의 `TestACardAtItsMinimumWidthKeepsAPartOfItsTab`이 이전 code에서 실패했고 통과한다.
 - F937-38 (두 절반이 들어맞는 split): group header 아래 card의 `bottom` 쪽 split은 새 card가 그 group의 frame을 받은 뒤 line을 놓으므로, 그리는 두 절반이 같은 높이가 되고 두 절반이 들어맞는 split은 더 이상 거부되지 않는다. `cardSplit` `even`의 balance는 현재 tree의 frame을 재며, mygo는 split, group, group에 card 추가에서 balance된 grid만 판정하고, 추가는 이제 `cardSplit`을 따른다(`docs/spec/groups.md#split-setting`). 검증: `docs/spec/cases/layout/groups.json`의 case가 바뀌지 않은 workbench에서 실패했고 두 workbench에서 통과한다.
 - F950-2 (transaction 없는 drag 단계): layout redraw benchmark는 빈 수치를 출력하는 대신, workbench가 그 drag를 native layout transaction 없이 그렸다고 말한다. 검증: 단계 줄 test가 그 함수 없이 실패했고 통과한다.
 - F960 (결과): click, scroll, layout redraw benchmark가 F958-1의 press 수정과 함께 mygo, Wails, Tauri에서 실행되었다. 수치는 checklist 항목에 있다.

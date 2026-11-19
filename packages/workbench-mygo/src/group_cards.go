@@ -318,9 +318,11 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
 	kept := keptTools(tools)
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
-		Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(s.moreWidth(kept)), TabWidths: []float64{float64(nameWidth)},
-		TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
+		Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton), KeptWidth: float64(s.keptWidth(kept)),
+		TabWidths: []float64{float64(nameWidth)}, TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW),
+		Grab: float64(m.tabGrabW)})
 	s.heads[id] = fit
+	kept = shownKept(fit, kept)
 	target := renameTarget{Kind: "group", ID: id}
 	look := s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade)
 	header := ui.Row(s.binder.Name(c, "core.group.header", id))

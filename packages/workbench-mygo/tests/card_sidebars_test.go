@@ -141,7 +141,9 @@ func TestATopSideLiesInTheContentColumn(t *testing.T) {
 func TestTheToolMenuHoldsTheSidesAndTheHeadKeepsTheFullScreen(t *testing.T) {
 	f, card := cardSidebar(t, "left")
 	f.run("core.card.sidebar.set", map[string]string{"card": card, "side": "top", "set": "set-install"})
-	f.tester.SetSize(480, 700)
+	// The window leaves the card too narrow for its tools and for its left side, and wide enough for tab-min-w beside the kept tools
+	// (docs/spec/example-model.md#card-tabs).
+	f.tester.SetSize(640, 700)
 	f.settle()
 	f.click("core.card.tools", card)
 	menu := f.menu()
