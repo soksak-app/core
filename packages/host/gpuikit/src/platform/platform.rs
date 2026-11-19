@@ -1,0 +1,9 @@
+//! The platform functions of the GPUI framework adapter. The macOS implementation reaches AppKit and the wry web
+//! views; another operating system has no implementation yet.
+
+#[cfg(target_os = "macos")]
+#[path = "darwin.rs"]
+mod darwin;
+
+#[cfg(target_os = "macos")]
+pub(crate) use darwin::*;
