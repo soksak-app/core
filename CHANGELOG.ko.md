@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F919-1: mygo host가 party를 카드 뒤, rail 앞에 칠하는 것처럼 page workbench도 party layer를 카드 위, rail 아래에 쌓는다. `packages/workbench/app.css`의 규칙 `.parties`(z-index 2)가 `packages/workbench/parties.js`의 `drawParties`가 만든 layer의 inline style을 대신한다. 그 style에는 z-index가 없어 layer가 모든 카드(z-index 1) 아래에 있었고 seam의 party 띠가 가려졌다. `the party layer stacks above every card that the rail stacks above and below the rail`(`packages/workbench/test/party-layers.test.mjs`)는 카드 `b`와 `right`가 layer 위에 있어 실패했고 이제 통과한다.
 - F925-1: Rust page-wire producer가 Go producer처럼 선언된 case 멤버 `filter`를 읽고 `notificationState`, `setTheme`, `setMenuLanguage` 외의 이름을 거부한다. `every_page_wire_case_with_replay_true_gives_its_recorded_reply`는 `party-watch-composition`에서 모르는 멤버를 거부해 실패했고 이제 통과한다.
 - F914: `docs/spec/hosts.md`의 framework 표가 `make check-host-files`가 Wails counterpart 없이 보고한 gpuikit 전용 test 파일 네 개를 선언한다. row H100(poisoned-lock helper와 log하는 response, 파일 helper), H101(`exit_on_failure` 뒤의 setup 결과), H102(view의 native window와 `harness = false` target의 main-thread runner)다. row H75, H76, H96은 `none` gpuikit cell을, 구분 row는 여섯째 column을 얻어 이유 text가 gpuikit 파일 목록으로 읽히지 않는다.
 - F914-5: GPUI host가 ready에 도달한다. soksak scheme은 주소의 owner의 start document를 응답하고, main thread에서 post한 task는 `post`가 return하기 전에 실행되며, app scheme과 staged frontend(adapter의 `StagedFrontend`)는 page 파일을 앞 구분자가 있거나 없는 page 경로로 읽는다. 검증: `packages/host/gpuikit`의 service와 page file test가 변경 전 adapter에서 실패했고 통과한다. debug bundle이 `ready:true`를 보고하고 project library를 보인다.
