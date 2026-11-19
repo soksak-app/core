@@ -96,33 +96,48 @@ export class GroupTree {
     return node.members.flatMap((member) => (typeof member === "string" ? [member] : this.contents(member)));
   }
 
+  /**
+   * The cards of the grid that hold the cells of a group node: its content cards, or the card of a group node inside it that an operation in
+   * progress merged into one card; a card that the operation took out of the grid is left out.
+   */
+  held(node) {
+    if (this.grid.card(node.card)) return [this.grid.card(node.card)];
+    return node.members.flatMap((member) => (typeof member === "string" ? [this.grid.card(member)].filter(Boolean) : this.held(member)));
+  }
+
   /** The rectangle of a group node in line indices: the span of the content cards inside it. */
   rectangle(node) {
-    const boxes = this.contents(node).map((id) => this.grid.card(id));
+    const boxes = this.held(node);
     return {
       c0: Math.min(...boxes.map((card) => card.c0)), c1: Math.max(...boxes.map((card) => card.c1)),
       r0: Math.min(...boxes.map((card) => card.r0)), r1: Math.max(...boxes.map((card) => card.r1)),
     };
   }
 
-  /** Whether the content cards inside a group node hold exactly the cells of its rectangle. */
+  /**
+   * Whether the cards that hold the cells of a group node (held) hold exactly the cells of their span. A card that an operation in progress
+   * took out of the grid counts no cell, and a group node without a card in the grid covers its rectangle, the card that replaced it.
+   */
   covers(node) {
-    const { c0, c1, r0, r1 } = this.rectangle(node);
-    const cells = this.contents(node).reduce((n, id) => {
-      const card = this.grid.card(id);
-      return n + (card.c1 - card.c0) * (card.r1 - card.r0);
-    }, 0);
+    const present = this.held(node);
+    if (!present.length) return true;
+    const c0 = Math.min(...present.map((card) => card.c0)), c1 = Math.max(...present.map((card) => card.c1));
+    const r0 = Math.min(...present.map((card) => card.r0)), r1 = Math.max(...present.map((card) => card.r1));
+    const cells = present.reduce((n, card) => n + (card.c1 - card.c0) * (card.r1 - card.r0), 0);
     return cells === (c1 - c0) * (r1 - r0);
   }
 
-  /** Every group node of the tree in workbench order. */
+  /**
+   * Every group node of the tree in workbench order. The members of a group node that an operation in progress merged into one card are
+   * not in the grid, so the walk does not enter it.
+   */
   nodes() {
     const out = [];
     const walk = (members) => {
       for (const member of this.readingOrder(members)) {
         if (typeof member === "string") continue;
         out.push(member);
-        walk(member.members);
+        if (!this.grid.card(member.card)) walk(member.members);
       }
     };
     walk(this.groups);
@@ -548,12 +563,44 @@ export class GroupTree {
     const ended = found.node ? this.order().filter(({ id: card, node }) => !node && this.contents(found.node).includes(card)).map(({ id: card }) => card) : [id];
     this.attempt(id, "close", () => {
       if (found.node) this.merge(found.node);
-      if (!this.grid.close(id)) throw refusal();
+      this.closeCell(id, "close");
       this.detach(found.parent, id);
       this.leaderLeft(found.parent, id);
       this.collapse();
     });
     return ended;
+  }
+
+  /**
+   * Closes the card id of the grid for the operation text op and returns the fill sides it closed with: a row of neighbours takes its
+   * cells, the sides are tried in the fill order of the layout library with the sides whose row lies inside the level of the card first,
+   * and the first result that keeps every group card one rectangle is kept; without such a row the slots of the card are removed, as the
+   * library removes them (R7), and the sides are empty. A refusal names its cause (docs/spec/groups.md#closing). parent is the group node
+   * of the level of the card, or null for the root level; a move passes the level that the card had before it left it.
+   */
+  closeCell(id, op, parent = this.parentOf(id)) {
+    const refused = (why) => new Error(`card ${id} cannot ${op}: ${why}`);
+    const card = this.grid.card(id);
+    if (!card || card.fixed || this.grid.cards.filter((other) => !other.fixed).length <= 1) throw refused("it is the last card of the layout");
+    const level = new Set(this.levelMembers(parent).flatMap((member) => (typeof member === "string" ? [member] : this.contents(member))));
+    const inLevel = (side) => this.grid.fill(id, [side])?.cards.every((other) => level.has(other.id)) ?? false;
+    const sides = [...this.grid.fillSides].sort((a, b) => Number(inLevel(b)) - Number(inLevel(a)));
+    // The group cards in workbench order, read before a close takes a card out of the grid that the reading order measures.
+    const groups = this.nodes();
+    let broken = null;
+    for (const side of sides) {
+      if (!this.grid.fill(id, [side])) continue;
+      const kept = this.snapshot();
+      if (this.grid.close(id, [side])) {
+        const group = groups.find((node) => !this.covers(node));
+        if (!group) return [side];
+        broken ??= group.card;
+      }
+      this.restore(kept);
+    }
+    if (broken !== null) throw refused(`group ${broken} would not cover one rectangle`);
+    if (this.grid.close(id, [])) return [];
+    throw refused("no row of cards that can grow covers a side of it, and its slots hold other cards");
   }
 
   /** Whether close of the card id would succeed. */
@@ -658,14 +705,15 @@ export class GroupTree {
     const found = this.find(id);
     if (!found || !this.find(target)) throw refusal();
     if (this.moved(id, target, side)) return;
-    this.attempt(id, `move to ${side} of ${target}`, () => {
+    const operation = `move to ${side} of ${target}`;
+    this.attempt(id, operation, () => {
       const data = found.node ? undefined : this.grid.card(id).data;
       this.detach(found.parent, id);
       this.leaderLeft(found.parent, id);
       if (side === "centre") {
         const into = this.node(target);
         const merged = found.node ? this.merge(found.node) : null;
-        if (!this.grid.close(id)) throw refusal();
+        this.closeCell(id, operation, found.parent);
         this.splitRectangle(into, "right", id, data);
         if (merged) this.unmerge(found.node, merged);
         into.members.push(found.node ?? id);
@@ -680,10 +728,14 @@ export class GroupTree {
       const merged = found.node ? this.merge(found.node) : null;
       const beside = this.node(landing);
       if (beside) {
-        if (!this.grid.close(id)) throw refusal();
+        this.closeCell(id, operation, found.parent);
         this.splitRectangle(beside, side, id, data);
-      } else if (!this.grid.move(id, landing, side)) {
-        throw refusal();
+      } else {
+        // The move closes the card with the sides that closeCell chose on the same state, then lands it beside landing.
+        const kept = this.snapshot();
+        const sides = this.closeCell(id, operation, found.parent);
+        this.restore(kept);
+        if (!this.grid.move(id, landing, side, sides)) throw refusal();
       }
       if (merged) this.unmerge(found.node, merged);
       const parent = this.parentOf(landing);

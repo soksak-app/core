@@ -14021,6 +14021,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/group-tree.js", symbol: "would not cover one rectangle" },
       { file: "packages/workbench/group-tree.js", symbol: "splitRectangle(node, side, id, data)" },
       { file: "packages/workbench/group-tree.js", symbol: "dropAt(x, y, options)" },
+      { file: "packages/workbench/group-tree.js", symbol: "closeCell(id, op, parent = this.parentOf(id))" },
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
       { file: "packages/workbench/plane.js", symbol: "tree = readGroupTree(kept, treeOptions(), grid);" },
       { file: "packages/workbench/plane.js", symbol: "const { groups, leader, lastCard } = tree.stored();" },
