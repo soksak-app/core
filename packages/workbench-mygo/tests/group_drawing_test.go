@@ -3,7 +3,9 @@
 package workbench_test
 
 import (
+	"encoding/json"
 	"math"
+	"os"
 	"slices"
 	"testing"
 
@@ -230,5 +232,150 @@ func TestAFullscreenGroupIsLaidOutAsTheWholeArea(t *testing.T) {
 				t.Fatalf("the fullscreen shows the dividers %v", dividers)
 			}
 		})
+	}
+}
+
+// Every box of a space stands one gap from the box beside it (docs/spec/groups.md#drawn-rectangles): a content card or a frame from
+// its neighbour across a line, from the frame that holds it on its left, right and bottom, and from the header above it.
+func TestEveryBoxStandsOneGapFromTheBoxBesideIt(t *testing.T) {
+	f := nestedSideShell(t)
+	tree := f.tester.ElementTree()
+	cards, frames, heads := exposedAll(tree, "core.card"), exposedAll(tree, "core.group"), exposedAll(tree, "core.group.header")
+	gap := cards["card-3"].Y - (cards["card-1"].Y + cards["card-1"].H)
+	if gap <= 0 {
+		t.Fatalf("card-1 %v and card-3 %v stand no gap apart", cards["card-1"], cards["card-3"])
+	}
+	stage := frames["card-6"]
+	boxes := map[string]ui.Rect{}
+	for id, r := range cards {
+		if r.W > 0 && r.X >= stage.X-1 && r.X+r.W <= stage.X+stage.W+1 {
+			boxes[id] = r
+		}
+	}
+	for id, r := range frames {
+		boxes[id] = r
+	}
+	inside := func(a, b ui.Rect) bool {
+		return a.X >= b.X-0.5 && a.Y >= b.Y-0.5 && a.X+a.W <= b.X+b.W+0.5 && a.Y+a.H <= b.Y+b.H+0.5
+	}
+	overlaps := func(a0, a1, b0, b1 float32) bool { return a0 < b1-0.5 && b0 < a1-0.5 }
+	// nearest is the distance from the side of the box id toward dir to the nearest edge that faces it: the inner side of a frame that
+	// holds it, the outer side of a box beside it, or the bottom of a header above it; -1 when the side meets nothing.
+	nearest := func(id string, dir string) float32 {
+		r := boxes[id]
+		best := float32(-1)
+		take := func(d float32) {
+			if d >= -0.5 && (best < 0 || d < best) {
+				best = d
+			}
+		}
+		for other, o := range boxes {
+			if other == id {
+				continue
+			}
+			switch {
+			case inside(r, o):
+				switch dir {
+				case "left":
+					take(r.X - o.X)
+				case "right":
+					take(o.X + o.W - (r.X + r.W))
+				case "down":
+					take(o.Y + o.H - (r.Y + r.H))
+				}
+			case inside(o, r):
+			default:
+				switch dir {
+				case "left":
+					if overlaps(r.Y, r.Y+r.H, o.Y, o.Y+o.H) {
+						take(r.X - (o.X + o.W))
+					}
+				case "right":
+					if overlaps(r.Y, r.Y+r.H, o.Y, o.Y+o.H) {
+						take(o.X - (r.X + r.W))
+					}
+				case "down":
+					if overlaps(r.X, r.X+r.W, o.X, o.X+o.W) {
+						take(o.Y - (r.Y + r.H))
+					}
+				}
+			}
+		}
+		if dir == "up" {
+			for other, o := range boxes {
+				if other != id && !inside(r, o) && !inside(o, r) && overlaps(r.X, r.X+r.W, o.X, o.X+o.W) && o.Y+o.H <= r.Y+0.5 {
+					take(r.Y - (o.Y + o.H))
+				}
+			}
+			for _, h := range heads {
+				if overlaps(r.X, r.X+r.W, h.X, h.X+h.W) && h.Y+h.H <= r.Y+0.5 {
+					take(r.Y - (h.Y + h.H))
+				}
+			}
+		}
+		return best
+	}
+	for id := range boxes {
+		if id == "card-6" {
+			continue
+		}
+		for _, dir := range []string{"left", "right", "down", "up"} {
+			if dir == "up" && frames[id] != (ui.Rect{}) {
+				continue
+			}
+			if d := nearest(id, dir); d >= 0 && math.Abs(float64(d-gap)) > 0.5 {
+				t.Errorf("%s at %v stands %v from the box toward %s, not the gap %v", id, boxes[id], d, dir, gap)
+			}
+		}
+	}
+	for id, head := range heads {
+		if frame := frames[id]; head.X != frame.X || head.Y != frame.Y || head.W != frame.W {
+			t.Errorf("the header of %s at %v is not the top band of its frame %v", id, head, frame)
+		}
+	}
+}
+
+// A group card is one container filled with the color of the level of its members, its header included, and the setting group.tint
+// mixes that color into bg (docs/spec/groups.md#drawing).
+func TestAGroupIsFilledWithTheColorOfItsLevel(t *testing.T) {
+	f := nestedSideShell(t)
+	f.tester.Frame()
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Themes []struct {
+			Dark map[string]string `json:"dark"`
+		} `json:"themes"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	colors := declared.Themes[0].Dark
+	tree := f.tester.ElementTree()
+	cards, frames, heads := exposedAll(tree, "core.card"), exposedAll(tree, "core.group"), exposedAll(tree, "core.group.header")
+	// The points stand a quarter of the gap from a box, away from the line in the middle of the corridor, where the grid draws its rule.
+	quarter := (cards["card-3"].Y - cards["card-1"].Y - cards["card-1"].H) / 4
+	outer := frames["card-5"].X + frames["card-5"].W + quarter
+	points := []struct {
+		name  string
+		x, y  float32
+		color string
+	}{
+		{"the gap between card-5 and card-2 in card-6", outer, cards["card-2"].Y + cards["card-2"].H/2, "group-1"},
+		{"the gap between card-1 and card-3 in card-5", cards["card-1"].X + cards["card-1"].W/2,
+			cards["card-1"].Y + cards["card-1"].H + quarter, "group-2"},
+		{"the header of card-6", heads["card-6"].X + heads["card-6"].W/2, heads["card-6"].Y + 3, "group-1"},
+	}
+	for _, p := range points {
+		if got, want := f.pixelOf(p.x, p.y), opaque(ui.Hex(colors[p.color])); !near(got, want) {
+			t.Errorf("%s at %v,%v is %v, want %s %v", p.name, p.x, p.y, got, p.color, want)
+		}
+	}
+	f.run(t, "core.settings.set", `{"patch": {"group.tint": 0}}`)
+	f.tester.Frame()
+	if got, want := f.pixelOf(points[0].x, points[0].y), opaque(ui.Hex(colors["bg"])); !near(got, want) {
+		t.Errorf("with group.tint 0 %s is %v, want bg %v", points[0].name, got, want)
 	}
 }

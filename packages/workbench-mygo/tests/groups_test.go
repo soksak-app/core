@@ -121,9 +121,11 @@ func TestTheGridListsTheCardsWithTheGroupThatHoldsThemAndTheLeaders(t *testing.T
 	if main["parent"] != "card-2" || main["leader"] != true || born["parent"] != "card-2" || born["leader"] != nil {
 		t.Fatalf("core.grid lists main %v and card-3 %v", main, born)
 	}
-	// The header of the group takes the top of its rectangle, and the left edge of main stays on the line of the grid.
-	if main["x"] != group["x"] || main["y"].(float64) <= group["y"].(float64) {
-		t.Fatalf("main at %v,%v does not stand under the header of its group at %v,%v", main["x"], main["y"], group["x"], group["y"])
+	// The header of the group takes the top of its frame, and main stands one gap inside the frame, the gap between main and card-3.
+	gap := born["x"].(float64) - main["x"].(float64) - main["w"].(float64)
+	if main["x"].(float64)-group["x"].(float64) != gap || main["y"].(float64) <= group["y"].(float64) {
+		t.Fatalf("main at %v,%v does not stand one gap %v inside the frame and under the header of its group at %v,%v", main["x"], main["y"],
+			gap, group["x"], group["y"])
 	}
 }
 

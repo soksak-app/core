@@ -20,27 +20,31 @@ func quadShell(t *testing.T) *tabShell {
 	return f
 }
 
-// A line that a group card and the cards outside it share is one line: the cards on it are drawn at one coordinate, and one move of
-// its boundary moves it in the group and outside it (docs/spec/groups.md#model).
+// A line that a group card and the cards outside it share is one line: the frame of the group card and the cards outside it on the
+// line are drawn at one coordinate, the cards inside one gap within the frame, and one move of its boundary moves it in the group and
+// outside it (docs/spec/groups.md#drawn-rectangles).
 func TestALineAcrossAGroupIsOneLine(t *testing.T) {
 	f := quadShell(t)
 	if _, err := f.apply("core.group.create", `{"card": "card-1", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
-	edges := func() (float64, float64) {
+	right := func(card map[string]any) float64 { return card["x"].(float64) + card["w"].(float64) }
+	check := func(when string) {
+		t.Helper()
 		cards := f.gridCards()
-		return cards["card-6"]["x"].(float64) + cards["card-6"]["w"].(float64), cards["card-3"]["x"].(float64) + cards["card-3"]["w"].(float64)
+		frame, inside, outside := right(cards[cards["card-6"]["parent"].(string)]), right(cards["card-6"]), right(cards["card-3"])
+		gap := cards["card-6"]["x"].(float64) - right(cards["card-1"])
+		if math.Abs(frame-outside) > 1e-6 || math.Abs(frame-gap-inside) > 1e-6 {
+			t.Fatalf("%s the right edge of the frame is %v, of card-6 in the group %v and of card-3 below it %v, with the gap %v", when, frame,
+				inside, outside, gap)
+		}
 	}
-	if inside, outside := edges(); math.Abs(inside-outside) > 1e-6 {
-		t.Fatalf("the right edge of card-6 in the group is %v and of card-3 below it %v", inside, outside)
-	}
+	check("before the move")
 	line := f.gridCards()["card-3"]["c1"]
 	if _, err := f.apply("core.boundary.move", fmt.Sprintf(`{"axis": "x", "line": %v, "position": 500}`, line)); err != nil {
 		t.Fatal(err)
 	}
-	if inside, outside := edges(); math.Abs(inside-outside) > 1e-6 {
-		t.Fatalf("after the move the right edge of card-6 is %v and of card-3 %v", inside, outside)
-	}
+	check("after the move")
 }
 
 // A boundary stops where a content card under a group header is drawn at minSize (docs/spec/groups.md#minimum-size).

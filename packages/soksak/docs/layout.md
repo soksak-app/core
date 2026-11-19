@@ -53,6 +53,21 @@ rect is never inside out.
 The slot carries the corridor, so a px size is the drawn size: `width: 180`
 draws 180 at the plane's edge, between two cards, and at any `gap`.
 
+A host can draw frames around sets of cards. `setFrames({id: {left, right, top,
+bottom}})` gives each card the number of frames between it and each of its four
+lines, and each frame takes one gap on that side: the edge of a card stands its
+corridor and one gap for each of its frames from the line, and a slot carries the
+most frames of the cards that start on its lower line and the most of the cards
+that end on its upper line. So the corridor of a line is one gap and one gap for
+each frame on it, and a card stands one gap from a frame around it, a frame one
+gap from the next frame, and a card or a frame one gap from its neighbour across
+the line. A frame takes the gap of the corridor, reduced with it when the plane
+cannot hold the corridors and the frames. A card without an entry has no frames,
+the frames are no part of the state, and `setFrames` throws for an id that is no
+card and for a count that is no whole number from zero. A px size is the drawn
+size of a card with the most frames of its slot; a card with fewer is drawn wider
+by a gap for each frame it lacks.
+
 The slots always sum to the plane, and a px size is reduced to keep that true.
 It is drawn as declared while some slot on the axis shares and the plane has the
 room.
@@ -522,6 +537,7 @@ first.
 | `canClose(id)`, `close(id)`, `fill(id)` | remove a card; `fill` reports which neighbours take the space |
 | `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
+| `setFrames(frames)` | the frames between each card and its lines (R5) |
 | `standings(axis, without?)`, `canInsertAt(axis, line, without?)`, `insertAt`, `moveTo` | a card that reaches across the plane |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |

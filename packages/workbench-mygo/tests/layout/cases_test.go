@@ -271,6 +271,10 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &fixed)
 		return g.SetFixed(id, fixed), true, nil
+	case "setFrames":
+		var frames map[string]layout.Frames
+		arg(t, s, 0, &frames)
+		return nil, false, g.SetFrames(frames)
 	case "setSize":
 		var size *float64
 		arg(t, s, 0, &id)
