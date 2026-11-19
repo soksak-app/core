@@ -511,6 +511,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F983",
+    implementation: [
+      { file: "scripts/test-app.mjs", symbol: "export function parseRunCount(text) {" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, \"native.input.held\", fields.UTF8String);" },
+    ],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "--count takes a whole number of runs of at least 1, and one run without it" },
+    ],
+    expected: "A full window run repeats a given number of times and stops at the first failed run, and the held keys write their steps to the event log.",
+    levels: ["unit"],
+  },
+  {
     id: "F983-1",
     implementation: [
       { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
