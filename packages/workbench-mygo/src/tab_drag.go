@@ -297,8 +297,14 @@ func (s *Shell) drawDropPreview(c *ui.Context, inset float32) {
 		return
 	}
 	rect := s.dragging.preview
-	ui.Box(s.binder.Name(c, "core.drop", "")).Role(ui.RoleGroup).Label("놓을 자리").Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).Radius(s.palette.Radius).
-		Background(faded(s.palette.Focus, s.metrics.dropMix)).Border(s.metrics.dropBorder, s.palette.Focus)
+	// .drop: at the seam the preview has the shape of the seam, no radius and a border of the border width (the seam rules of
+	// packages/workbench/app.css).
+	border := s.metrics.dropBorder
+	if s.palette.Seam() {
+		border = s.palette.BorderWidth
+	}
+	ui.Box(s.binder.Name(c, "core.drop", "")).Role(ui.RoleGroup).Label("놓을 자리").Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).Radius(s.palette.CardRadius()).
+		Background(faded(s.palette.Focus, s.metrics.dropMix)).Border(border, s.palette.Focus)
 }
 
 // dragGroupTo takes the drop of the dragged group card at x and y of the plane: the resolution leaves out the group card and the cards

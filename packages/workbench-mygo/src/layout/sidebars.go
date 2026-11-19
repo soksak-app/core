@@ -544,7 +544,8 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 	}
 	KeepWindowSidebarWidths(g, records)
 	// A dock that this plane state already refused is not attempted again, so a plane that holds no size for a sidebar keeps answering.
-	refused := g.dockToken == planeToken(g) && len(arranged) == len(g.dockRefused) && slices.Equal(arranged, g.dockRefused)
+	// A successful arrangement leaves no refusal, so an arrangement without any side is never taken for one.
+	refused := g.dockRefused != nil && g.dockToken == planeToken(g) && slices.Equal(arranged, g.dockRefused)
 	if WindowSidebarsArranged(g, arranged) || refused {
 		return false, nil
 	}

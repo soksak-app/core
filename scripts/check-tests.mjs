@@ -40,7 +40,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
-  lane("sok submit guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs"], { testLanguage: "js-ts" }),
+  lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
@@ -282,6 +282,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
+  {
+    id: "F952",
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "Run on a card that is already inside a group, it nests a new group inside that plane, so run it once per group." }],
+    tests: [
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the MCP instructions name the command that makes a group and its nesting" },
+    ],
+    expected: "The agent skill and the MCP instructions state that core.group.create nests a new group on a card inside a group and runs once per group, and how a card is added to the plane of a group.",
+    levels: ["unit"],
+  },
   {
     id: "F898",
     implementation: [{ file: "packages/sok/go/src/skill.go", symbol: "codexHome := false" }],
@@ -10319,16 +10329,12 @@ const FEATURE_LINKS = [
     id: "F52",
     implementation: [
       { file: "Makefile", symbol: "check-windows-build:" },
-      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
-      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
     ],
     tests: [
       { file: "scripts/test/check-windows-build.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
       { file: "scripts/test/check-windows-build.test.mjs", id: "check-host-files runs the Windows build check" },
-      { file: "packages/host/go/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
-      { file: "packages/host/rust/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
-    expected: "Both hosts compile for Windows in the checks, every unsupported Windows operation returns its error, and a service pid of another user exists.",
+    expected: "Both hosts compile for Windows in the checks and every unsupported Windows operation returns its error; F943 replaces the judgment of a service pid of another user.",
     levels: ["unit"],
   },
   {
@@ -14153,6 +14159,41 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
     ],
     expected: "Both hosts refuse as a whole a projects.json of format 1, the only form whose spaces held the removed member parties.",
+    levels: ["unit"],
+  },
+  {
+    id: "F947",
+    implementation: [
+      { file: "packages/workbench/app.css", symbol: ":root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}" },
+      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "border = s.palette.BorderWidth" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/drop-seam.test.mjs", id: "the drop zone at the seam draws no radius and a border of the border width" },
+      { file: "packages/workbench-mygo/tests/tab_drag_test.go", id: "TestThePreviewOfADropAtTheSeamIsSquareWithTheBorderWidth" },
+    ],
+    expected: "At gap 0 the drop zone of a tab drag draws no radius and a border of the border width in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F944",
+    implementation: [{ file: "packages/workbench-mygo/src/layout/sidebars.go", symbol: "refused := g.dockRefused != nil && g.dockToken == planeToken(g) && slices.Equal(arranged, g.dockRefused)" }],
+    tests: [{ file: "packages/workbench-mygo/tests/layout/window_sidebars_test.go", id: "TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff" }],
+    expected: "The window sidebar of the only side that is on leaves the plane when its switch turns off.",
+    levels: ["unit"],
+  },
+  {
+    id: "F943",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "return owned && process.P_stat != sZomb && !started.After(published), nil" },
+      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Ok(owned && info.pbi_status != libc::SZOMB && started <= published)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesTheEndpointOfAReusedPID" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_the_endpoint_of_a_reused_pid" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesTheEndpointOfAProcessOfAnotherUser" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_the_endpoint_of_a_process_of_another_user" },
+    ],
+    expected: "Both hosts treat an endpoint whose pid names a process that started after the modification time of endpoint.json, or a process of another user, as stale, remove it and start the service through the single creation path.",
     levels: ["unit"],
   },
   {

@@ -2196,6 +2196,24 @@ func (c *Sidecars) environment() ([]string, error) {
 	return environment, nil
 }
 
+// readEndpointFile reads the endpoint file at path and its modification time through one descriptor, so the time is the time of
+// the content that it read (docs/spec/persistent-services.md#endpoint-publisher).
+func readEndpointFile(path string) ([]byte, time.Time, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, time.Time{}, errors.Join(err, file.Close())
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return nil, time.Time{}, errors.Join(err, file.Close())
+	}
+	return data, info.ModTime(), file.Close()
+}
+
 // processPersistent connects to the persistent service name, and starts it when no live service has an endpoint. lost is the revival that runs
 // it, or nil: a revival that finds no live service counts the end of the service process before it spawns, and the restart limit can stop it
 // there (docs/spec/persistent-services.md#service-transport).
@@ -2215,9 +2233,23 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 	var endpoint persistentEndpoint
 	var cmd *exec.Cmd
 	var spawnedAt time.Time
-	if data, err := os.ReadFile(endpointPath); err == nil {
+	if data, published, err := readEndpointFile(endpointPath); err == nil {
 		if err := json.Unmarshal(data, &endpoint); err != nil {
 			return nil, fmt.Errorf("sidecar %s: invalid endpoint: %w", name, err)
+		}
+		// The endpoint names the service only while its pid is the process that published it
+		// (docs/spec/persistent-services.md#endpoint-publisher).
+		exists, err := current.ServiceProcessExists(endpoint.PID, published)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			if err := os.Remove(endpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, fmt.Errorf("sidecar %s: remove stale endpoint: %w", name, err)
+			}
+			// This endpoint was left by a service that ended. Only this record, which was confirmed to be stale, is removed, and
+			// the common single creation path is entered.
+			return c.processPersistent(name, program, lost)
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
 		if lost != nil {
@@ -2286,18 +2318,6 @@ func (c *Sidecars) processPersistent(name, program string, lost *revival) (*side
 		}
 	} else {
 		return nil, fmt.Errorf("sidecar %s: read endpoint: %w", name, err)
-	}
-	exists, err := current.ServiceProcessExists(endpoint.PID)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		if err := os.Remove(endpointPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("sidecar %s: remove stale endpoint: %w", name, err)
-		}
-		// This endpoint was left by a service that ended abnormally. Only this record, which was confirmed to be stale, is removed,
-		// and the common single creation path is entered.
-		return c.processPersistent(name, program, lost)
 	}
 	if endpoint.Protocol != 1 {
 		return nil, fmt.Errorf("sidecar %s: service protocol %d is not supported", name, endpoint.Protocol)

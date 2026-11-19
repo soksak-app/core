@@ -139,7 +139,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand`, `paper` 중 하나 |
 | `mode` | `dark` 또는 `light` |
 | `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system`, `sans-inter` 중 하나 |
-| `gap` | 0에서 48까지의 정수(px): 이웃한 두 card 사이의 gap, 곧 둘 사이의 전체 거리다. plane과 stage 가장자리 사이의 margin은 gap의 절반이다. 0에서는 두 card가 선 하나를 공유한다: plane gap은 border width이고, card는 자기 border와 radius를 그리지 않으며, stage에는 margin이 없다(seam) |
+| `gap` | 0에서 48까지의 정수(px): 이웃한 두 card 사이의 gap, 곧 둘 사이의 전체 거리다. plane과 stage 가장자리 사이의 margin은 gap의 절반이다. 0에서는 두 card가 선 하나를 공유한다: plane gap은 border width이고, card는 자기 border와 radius를 그리지 않으며, 탭 drag의 drop zone은 radius 없이 border width의 border를 그리고, stage에는 margin이 없다(seam) |
 | `radius` | 0에서 24까지의 정수(px) |
 | `size` | 10에서 18까지의 정수(px) |
 | `textSize` | [글자 크기 단계](text-size.ko.md) 하나 |
