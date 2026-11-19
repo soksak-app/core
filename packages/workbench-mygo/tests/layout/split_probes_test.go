@@ -60,7 +60,8 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 		for _, id := range tree.Cards() {
 			tree.CanSplit(id, "right")
 			tree.CanSplit(id, "bottom")
-			tree.CanGroup(id)
+			tree.CanGroup(id, "right")
+			tree.CanGroup(id, "bottom")
 			tree.CanClose(id)
 		}
 	}

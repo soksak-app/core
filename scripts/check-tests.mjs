@@ -283,6 +283,36 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F963",
+    implementation: [
+      { file: "packages/workbench/card-tools.js", symbol: 'export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y", gx: "group-x", gy: "group-y" };' },
+      { file: "packages/workbench/group-tree.js", symbol: "canGroup(id, side, even) {" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bool) headTool) []headTool {" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CanGroup(id string, side Side) bool {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a content card head shows the split and group split buttons toward each direction and the leader button pressed on its leader" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu group-x and group-y group the card with a new card toward right and toward bottom" },
+      { file: "packages/workbench/test/card-tool-names.test.mjs", id: "the tooltip of a card tool is its name and a refusal states its reason" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEachGroupSplitButtonGroupsTowardItsSide" },
+    ],
+    expected: "A card head and a group head hold four split buttons named by result and direction: two splits and two group splits toward right and bottom, each enabled while its operation succeeds and never hidden.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-11",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "if (group && what === \"add\") throw new Error(`card ${id} is a group; a group header has no add menu`);" },
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "return fmt.Errorf(\"card %s is a group; a group header has no add menu\", card)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu on a group card opens the menu of its header, whose items act on the group card" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupHeaderShowsItsNameAndItsButtons" },
+    ],
+    expected: "A group header holds no add button, and the add menu of a group card is refused with its reason.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-19",
     implementation: [
       { file: "packages/workbench/plane.js", symbol: "export const newGroupRequest = () =>" },
@@ -14245,7 +14275,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/settings.js", symbol: "export const currentGroupLook = (level) =>" },
       { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused })" },
       { file: "packages/workbench/plane.js", symbol: "export function drawnCardRects()" },
-      { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroup, leads, leader, fullscreen })" },
+      { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroupX, canGroupY, leads, leader, fullscreen })" },
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
       { file: "packages/workbench/plane.js", symbol: "tree = readGroupTree(kept, treeOptions(), grid);" },
       { file: "packages/workbench/plane.js", symbol: "const { groups, leader, lastCard } = tree.stored();" },
@@ -14292,8 +14322,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card is one container at its drawn rectangle with the fill of its level and its header inside the frame" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card that the tree no longer holds is removed from the plane" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "a fullscreen group card is laid out as the whole area and a focus inside it keeps it fullscreen" },
-      { file: "packages/workbench/test/group-cards.test.mjs", id: "a content card head shows the group button while the group fits and the leader button pressed on its leader" },
-      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu group opens the plugin menu whose item groups the card with a new card toward its longer axis" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a content card head shows the split and group split buttons toward each direction and the leader button pressed on its leader" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu group-x and group-y group the card with a new card toward right and toward bottom" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu on a group card opens the menu of its header, whose items act on the group card" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "core.grid reports the drawn rectangle of each card and group card, and the fullscreen layout of a group card" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "the layout of the window snapshot gives each card and group card the frame that the plane draws" },

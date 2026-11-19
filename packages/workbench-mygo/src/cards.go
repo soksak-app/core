@@ -624,19 +624,20 @@ func (s *Shell) headTools(id string) []headTool {
 		changes(headTool{Do: "y", Status: "split-y", Name: "core.card.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
 			Title: names["split-y"], Icon: "card-split-y"}, s.planes.CanSplit(id, "bottom")),
 	}
-	tools = append(tools, s.groupTools(id, "core.card.group", changes)...)
+	tools = append(tools, s.groupTools(id, "core.card", changes)...)
 	return append(tools, whole, changes(closing, canClose))
 }
 
-// groupTools are the group button of the card id, shown while a group of it toward its longer axis would succeed, and its leader
-// button, shown in a plane of two or more cards and pressed on the leader (docs/spec/groups.md#headers). group is the element of the
-// group button of its kind of header.
-func (s *Shell) groupTools(id, group string, changes func(tool headTool, can bool) headTool) []headTool {
+// groupTools are the group split buttons of the card id toward right and toward bottom, enabled while the group of it toward that side
+// would succeed, and its leader button, shown in a plane of two or more cards and pressed on the leader (docs/spec/groups.md#headers).
+// header is the prefix of the elements of its kind of header, core.card or core.group.
+func (s *Shell) groupTools(id, header string, changes func(tool headTool, can bool) headTool) []headTool {
 	names := s.options.Declared.CardTools
-	var tools []headTool
-	if s.planes.CanGroup(id) {
-		tools = append(tools, changes(headTool{Do: "group", Status: "group", Name: group, Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group"},
-			Title: names["group"], Icon: "card-group"}, true))
+	tools := []headTool{
+		changes(headTool{Do: "gx", Status: "group-x", Name: header + ".group-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-x"},
+			Title: names["group-x"], Icon: "card-group-x"}, s.planes.CanGroup(id, "right")),
+		changes(headTool{Do: "gy", Status: "group-y", Name: header + ".group-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group-y"},
+			Title: names["group-y"], Icon: "card-group-y"}, s.planes.CanGroup(id, "bottom")),
 	}
 	key := s.planes.Parent(id)
 	if s.planes.LeadCount(key) >= 2 {

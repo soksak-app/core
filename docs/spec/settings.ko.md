@@ -150,7 +150,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `focusInd` | `border` 또는 `corner` |
 | `fullRule` | `under`, `over`, `none` 중 하나 |
 | `cardArrange` | `resize`(구조를 유지하고 카드에 공정한 크기를 준다, 기본값) 또는 `even`(카드를 같은 크기의 격자로 배치한다, `arrange(\"even\")`) 중 하나. 카드 자동 정렬 명령은 이 설정 값을 실행하고, 툴바 아이콘이 이 값을 보인다 |
-| `cardSplit` | `exact`(split은 자기가 나누는 카드의 사각형만 나눈다, layout library의 R4, 기본값) 또는 `even`(split 뒤에 `balance()`가 grid의 카드에 구조를 유지한 채 공정한 크기를 준다) 중 하나. `exact`에서 group card의 split은 그 사각형만 나눈다. `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 split, group에 card를 더하는 것, `side`가 있는 `core.layout.open`에 적용된다([group card](groups.ko.md#split-설정)) |
+| `cardSplit` | `exact`(split은 자기가 나누는 카드의 사각형만 나눈다, layout library의 R4, 기본값) 또는 `even`(split 뒤에 `balance()`가 grid의 카드에 구조를 유지한 채 공정한 크기를 준다) 중 하나. `exact`에서 group card의 split은 그 사각형만 나눈다. `core.card.split`과 split 버튼, `core.group.create`와 group split 버튼의 split, group에 card를 더하는 것, `side`가 있는 `core.layout.open`에 적용된다([group card](groups.ko.md#split-설정)) |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
 | `viewProcess` | `plugin` 또는 `view`, 전역 범위, 기본값 `plugin`: host가 그 뒤 만드는 view의 WebContent process로, 그 plugin의 view들과 함께 쓰거나 자기 것을 쓴다([View 프로세스](plugin-processes.ko.md#view-프로세스)) |

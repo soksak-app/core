@@ -454,7 +454,8 @@ function updateCard(el, card, rect) {
     canClose: grid.canClose(card.id),
     canSplitX: grid.canSplit(card.id, "x"),
     canSplitY: grid.canSplit(card.id, "y"),
-    canGroup: tree.canGroup(card.id, splitsEven()),
+    canGroupX: tree.canGroup(card.id, "right", splitsEven()),
+    canGroupY: tree.canGroup(card.id, "bottom", splitsEven()),
     leads: tree.leadCount(tree.parentOf(card.id)) >= 2,
     leader: tree.leaderOf(tree.parentOf(card.id)) === card.id,
     fullscreen: el.dataset.fullscreen === "true",
@@ -770,7 +771,8 @@ const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "새 위치에 무엇을 띄울까",
   y: "새 위치에 무엇을 띄울까",
-  group: "새 위치에 무엇을 띄울까",
+  gx: "새 위치에 무엇을 띄울까",
+  gy: "새 위치에 무엇을 띄울까",
 };
 
 delegate(pickerEl);
@@ -793,7 +795,7 @@ function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
     // Each press of a group item sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
-    (k) => (what === "group" ? createGroup(cardId, tree.groupSide(cardId), k, null, newGroupRequest())
+    (k) => (what === "gx" || what === "gy" ? createGroup(cardId, TOOL_SPLIT_SIDE[what], k, null, newGroupRequest())
       : tree.isGroup(cardId) ? (what === "add" ? addTabTo(cardId, k, null) : splitCard(cardId, TOOL_SPLIT_SIDE[what], k))
       : what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
@@ -904,7 +906,7 @@ function addTab(cardId, plugin, params) {
 /** Follow-up of the split button. It creates a new card and adds a tab of the selected kind to that card. */
 /** The side where the new card is placed: the vertical-line split of the card tools puts it on the right, the horizontal-line split below. */
 const SPLIT_SIDES = ["left", "right", "top", "bottom"];
-const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
+const TOOL_SPLIT_SIDE = { x: "right", y: "bottom", gx: "right", gy: "bottom" };
 
 function splitWith(cardId, side, plugin, params) {
   restoreFullscreen();
@@ -1930,6 +1932,8 @@ export function openCardMenu(id, menu) {
   layoutChangeable(id);
   const what = DO_OF[menu];
   if (!what) throw new Error(`unknown menu ${menu}`);
+  // A group header holds no add button: a group card holds no tab (docs/spec/groups.md#headers).
+  if (group && what === "add") throw new Error(`card ${id} is a group; a group header has no add menu`);
   // The menus of a group card open under the buttons of its header (docs/spec/groups.md#card-commands-on-a-group-card).
   const holder = group ? plane.querySelector(`.group[data-group-card="${CSS.escape(id)}"] .group__head`) : cardElement(id);
   const anchor = holder?.querySelector(`.chrome__act[data-do="${what}"]:not([hidden])`);

@@ -112,10 +112,12 @@ test("a group card is one container at its drawn rectangle with the fill of its 
   assert.equal(header.style.borderBottomColor, probe.style.borderBottomColor, "the header draws the line below it in the color of groupLook");
   assert.equal(header.querySelector('[data-expose="core.group.name"]').textContent, "그룹 1");
   assert.deepEqual([...header.querySelectorAll("button")].map((button) => button.dataset.expose),
-    ["core.group.add", "core.group.split-x", "core.group.split-y", "core.group.wrap", "core.card.leader", "core.group.fullscreen",
+    ["core.group.split-x", "core.group.split-y", "core.group.group-x", "core.group.group-y", "core.card.leader", "core.group.fullscreen",
       "core.group.close"]);
   assert.deepEqual([...header.querySelectorAll("button")].map((button) => button.dataset.command),
     ["core.card.menu", "core.card.menu", "core.card.menu", "core.card.menu", "core.group.leader", "core.card.fullscreen", "core.group.menu"]);
+  assert.deepEqual([...header.querySelectorAll("button")].slice(0, 4).map((button) => JSON.parse(button.dataset.params).menu),
+    ["split-x", "split-y", "group-x", "group-y"], "a group header holds the four split buttons and no add button");
   // The frames stand below the cards.
   const order = [...planeElement.children];
   assert.ok(order.indexOf(group) < order.indexOf(cardElement("card-1")), "the frame comes before the cards in paint order");
@@ -187,39 +189,60 @@ const pick = async (plugin) => {
   await run("core.picker.pick", { index });
 };
 
-test("a content card head shows the group button while the group fits and the leader button pressed on its leader", { timeout: 5000 }, () => {
+// A head holds four split buttons, each named by its result and its direction: the splits beside the card and the group splits toward
+// right and bottom, which are enabled while their group succeeds and are never hidden (docs/spec/groups.md#headers).
+test("a content card head shows the split and group split buttons toward each direction and the leader button pressed on its leader", { timeout: 5000 }, () => {
   arrange();
   assert.deepEqual(headTools("card-1").map((button) => button.dataset.expose),
-    ["core.card.add", "core.card.split-x", "core.card.split-y", "core.card.group", "core.card.leader", "core.card.fullscreen", "core.card.close"]);
+    ["core.card.add", "core.card.split-x", "core.card.split-y", "core.card.group-x", "core.card.group-y", "core.card.leader",
+      "core.card.fullscreen", "core.card.close"]);
   const button = (id, name) => cardElement(id).querySelector(`[data-expose="${name}"]`);
-  assert.equal(button("card-1", "core.card.group").hidden, false);
-  assert.equal(button("card-1", "core.card.group").dataset.command, "core.card.menu");
-  assert.deepEqual(JSON.parse(button("card-1", "core.card.group").dataset.params), { card: "card-1", menu: "group" });
+  for (const [name, menu, title] of [["core.card.group-x", "group-x", "그룹으로 세로 분할"], ["core.card.group-y", "group-y", "그룹으로 가로 분할"]]) {
+    assert.equal(button("card-1", name).hidden, false, `${name} is shown`);
+    assert.equal(button("card-1", name).disabled, false, `${name} is enabled while its group succeeds`);
+    assert.equal(button("card-1", name).title, title);
+    assert.equal(button("card-1", name).dataset.command, "core.card.menu");
+    assert.deepEqual(JSON.parse(button("card-1", name).dataset.params), { card: "card-1", menu });
+  }
   assert.equal(button("card-1", "core.card.leader").dataset.command, "core.group.leader");
   assert.deepEqual(["card-1", "card-2", "card-3"].map((id) => [button(id, "core.card.leader").hidden, button(id, "core.card.leader").getAttribute("aria-pressed")]),
     [[false, "true"], [false, "false"], [false, "false"]], "card-1 leads its level, card-2 does not, and card-4 leads the root level of card-3");
 });
 
-test("core.card.menu group opens the plugin menu whose item groups the card with a new card toward its longer axis", { timeout: 5000 }, async () => {
-  arrange();
-  await run("core.card.menu", { card: "card-3", menu: "group" });
-  assert.equal(plane.pickerState().open, true);
+// Each group split menu groups the card toward its own side, whatever the shape of the card, and each press sends a new request, so a
+// second press groups the card again (docs/spec/groups.md#headers, docs/spec/groups.md#idempotency).
+test("core.card.menu group-x and group-y group the card with a new card toward right and toward bottom", { timeout: 5000 }, async () => {
+  for (const [menu, side] of [["group-x", "right"], ["group-y", "bottom"]]) {
+    arrange();
+    await run("core.card.menu", { card: "card-3", menu });
+    assert.equal(plane.pickerState().open, true);
+    await pick(PLAIN);
+    const tree = plane.currentTree();
+    const made = tree.parentOf("card-3");
+    assert.ok(made, `${menu}: card-3 is a member of a new group card`);
+    assert.equal(made.members.length, 2);
+    const born = made.members.find((member) => member !== "card-3");
+    assert.equal(tree.neighbour("card-3", side), born, `${menu}: the new card stands toward ${side}`);
+  }
+  // card-3 is drawn higher than wide, so it has the room for a second group toward bottom.
+  const first = plane.currentTree().parentOf("card-3").card;
+  await run("core.card.menu", { card: "card-3", menu: "group-y" });
   await pick(PLAIN);
-  const tree = plane.currentTree();
-  const made = tree.parentOf("card-3");
-  assert.ok(made, "card-3 is a member of a new group card");
-  assert.equal(made.members.length, 2);
-  // card-3 is drawn higher than wide, so the new card stands below it.
-  const born = made.members.find((member) => member !== "card-3");
-  assert.equal(tree.neighbour("card-3", "bottom"), born);
+  assert.notEqual(plane.currentTree().parentOf("card-3").card, first, "a second press groups card-3 again");
 });
 
+// A group header holds no add button, so its add menu is refused (docs/spec/groups.md#headers).
 test("core.card.menu on a group card opens the menu of its header, whose items act on the group card", { timeout: 5000 }, async () => {
   arrange();
-  await run("core.card.menu", { card: "card-4", menu: "add" });
-  assert.equal(plane.pickerState().open, true, "the add menu of the group header is open");
+  await assert.rejects(run("core.card.menu", { card: "card-4", menu: "add" }),
+    (error) => error.message === "card card-4 is a group; a group header has no add menu");
+  assert.equal(plane.pickerState().open, false, "no menu opens for the add of a group card");
+  await run("core.card.menu", { card: "card-4", menu: "group-y" });
   await pick(PLAIN);
-  assert.equal(plane.currentTree().node("card-4").members.length, 3, "the add menu adds a content card inside the group card");
+  const wrapped = plane.currentTree().parentOf("card-4");
+  assert.ok(wrapped && wrapped.members.length === 2, "the group split of the group card wraps it with a new card in a new group");
+  assert.equal(plane.currentTree().neighbour("card-4", "bottom"), wrapped.members.find((member) => typeof member === "string"),
+    "the new content card stands below the group card");
   arrange();
   await run("core.card.menu", { card: "card-4", menu: "split-y" });
   await pick(PLAIN);

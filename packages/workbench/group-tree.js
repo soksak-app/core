@@ -376,17 +376,11 @@ export class GroupTree {
     return out;
   }
 
-  /** The side of the group button of the card id: right when it is drawn wider than high, otherwise bottom (docs/spec/groups.md#headers). */
-  groupSide(id) {
-    const rect = this.rect(id);
-    return rect && rect.w > rect.h ? "right" : "bottom";
-  }
-
-  /** Whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would succeed. */
-  canGroup(id, even) {
-    return this.answer(`group:${id}:${even}`, () => this.probe(() => {
+  /** Whether a group split button of the card id toward side is enabled: a group of the card and a new card toward side would succeed. */
+  canGroup(id, side, even) {
+    return this.answer(`group:${id}:${side}:${even}`, () => this.probe(() => {
       try {
-        this.create(id, this.groupSide(id), undefined, even);
+        this.create(id, side, undefined, even);
         return true;
       } catch {
         // silent: the probe answers whether the group succeeds; the refusal is the answer false.

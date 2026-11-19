@@ -12,24 +12,23 @@ const names = declaration.cardTools;
 const svg = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true">${path}</svg>`;
 
 /**
- * The head buttons of the group card id in the order of docs/spec/groups.md#headers: add, the two splits, the group button while the
- * group fits, the leader button in a level of two or more members, fullscreen and close. Each is {do, expose, command, params, title,
- * icon, enabled, pressed}. A fullscreen card holds the layout, so every button that changes it waits.
+ * The head buttons of the group card id in the order of docs/spec/groups.md#headers: the two splits, the two group splits, enabled while
+ * their group succeeds, the leader button in a level of two or more members, fullscreen and close; a group header holds no add button.
+ * Each is {do, expose, command, params, title, icon, enabled, pressed}. A fullscreen card holds the layout, so every button that changes it waits.
  */
 export function groupHeadTools(tree, id, { fullscreen, even }) {
   const held = fullscreen !== null;
   const changes = (tool, can) => ({ ...tool, enabled: !held && can, title: held ? names["layout-held"] : tool.title, pressed: false });
   const tools = [
-    changes({ do: "add", expose: "core.group.add", command: "core.card.menu", params: { card: id, menu: "add" }, title: names.add, icon: "card-add" }, true),
     changes({ do: "x", expose: "core.group.split-x", command: "core.card.menu", params: { card: id, menu: "split-x" }, title: names["split-x"],
       icon: "card-split-x" }, tree.canSplit(id, "right", even)),
     changes({ do: "y", expose: "core.group.split-y", command: "core.card.menu", params: { card: id, menu: "split-y" }, title: names["split-y"],
       icon: "card-split-y" }, tree.canSplit(id, "bottom", even)),
+    changes({ do: "gx", expose: "core.group.group-x", command: "core.card.menu", params: { card: id, menu: "group-x" }, title: names["group-x"],
+      icon: "card-group-x" }, tree.canGroup(id, "right", even)),
+    changes({ do: "gy", expose: "core.group.group-y", command: "core.card.menu", params: { card: id, menu: "group-y" }, title: names["group-y"],
+      icon: "card-group-y" }, tree.canGroup(id, "bottom", even)),
   ];
-  if (tree.canGroup(id, even)) {
-    tools.push(changes({ do: "group", expose: "core.group.wrap", command: "core.card.menu", params: { card: id, menu: "group" }, title: names.group,
-      icon: "card-group" }, true));
-  }
   const parent = tree.parentOf(id);
   if (tree.leadCount(parent) >= 2) {
     tools.push({ ...changes({ do: "leader", expose: "core.card.leader", command: "core.group.leader", params: { card: id }, title: names.leader,

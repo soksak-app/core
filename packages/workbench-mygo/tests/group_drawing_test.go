@@ -21,11 +21,19 @@ import (
 func TestAGroupHeaderShowsItsNameAndItsButtons(t *testing.T) {
 	f := groupedShell(t)
 	f.settle()
-	for _, name := range []string{"core.group", "core.group.header", "core.group.name", "core.group.add", "core.group.split-x",
-		"core.group.split-y", "core.group.close"} {
+	for _, name := range []string{"core.group", "core.group.header", "core.group.name", "core.group.split-x", "core.group.split-y",
+		"core.group.group-x", "core.group.group-y", "core.group.close"} {
 		if !f.has(name, "card-2") {
 			t.Errorf("the group card card-2 has no %s", name)
 		}
+	}
+	// A group header holds no add button, and its add menu is refused (docs/spec/groups.md#headers).
+	if f.has("core.group.add", "card-2") {
+		t.Error("the group card card-2 has an add button")
+	}
+	if _, err := f.apply("core.card.menu", `{"card": "card-2", "menu": "add"}`); err == nil ||
+		err.Error() != "card card-2 is a group; a group header has no add menu" {
+		t.Errorf("the add menu of the group card answered %v", err)
 	}
 	if name, ok := exposedNode(f.tester.ElementTree(), "core.group.name", "card-2"); !ok || name.Label != "그룹 1" {
 		t.Errorf("the group name reads %q", name.Label)
@@ -62,20 +70,31 @@ func TestTheLeaderButtonMakesItsCardTheLeader(t *testing.T) {
 	}
 }
 
-// The group button is shown while the card can hold a group toward its longer axis, and its menu turns the card into a group card.
-func TestTheGroupButtonShowsWhileTheGroupFitsAndMakesAGroup(t *testing.T) {
-	f := layoutShell(t, oneCard(tab("t1", "notes")))
-	f.settle()
-	f.click("core.card.group", "main")
-	f.click("core.picker.item", "plain")
-	cards := f.gridCards()
-	if cards["main"]["parent"] != "card-2" || cards["card-3"]["parent"] != "card-2" {
-		t.Fatalf("after the group menu the grid holds %v", cards)
+// Each group split button groups the card with a new card toward its own side, whatever the shape of the card, and a card too small
+// for a group keeps both buttons, disabled, as a split button that cannot split (docs/spec/groups.md#headers).
+func TestEachGroupSplitButtonGroupsTowardItsSide(t *testing.T) {
+	for _, c := range []struct{ button, side string }{{"core.card.group-x", "right"}, {"core.card.group-y", "bottom"}} {
+		f := layoutShell(t, oneCard(tab("t1", "notes")))
+		f.settle()
+		f.click(c.button, "main")
+		f.click("core.picker.item", "plain")
+		cards := f.gridCards()
+		if cards["main"]["parent"] != "card-2" || cards["card-3"]["parent"] != "card-2" {
+			t.Fatalf("%s: after the menu the grid holds %v", c.button, cards)
+		}
+		main, born := f.box("core.card", "main"), f.box("core.card", "card-3")
+		if toward := born.X > main.X+main.W-1; (c.side == "right") != toward || (c.side == "bottom") != (born.Y > main.Y+main.H-1) {
+			t.Errorf("%s: the new card stands at %+v beside main at %+v, not toward %s", c.button, born, main, c.side)
+		}
 	}
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
 	f.tester.SetSize(420, 300)
 	f.settle()
-	if f.has("core.card.group", "main") {
-		t.Fatal("a card too small for a group shows the group button")
+	acts := f.gridCards()["main"]["acts"].(map[string]any)
+	for _, name := range []string{"group-x", "group-y"} {
+		if tool, ok := acts[name].(map[string]any); !ok || tool["enabled"] != false {
+			t.Errorf("a card too small for a group reports the tool %s as %v, not disabled", name, acts[name])
+		}
 	}
 }
 

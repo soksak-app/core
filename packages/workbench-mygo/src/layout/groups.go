@@ -1518,19 +1518,11 @@ func (t *GroupTree) Focusable(id string) string {
 	return id
 }
 
-// GroupSide is the side of the group button of the card id: right when it is drawn wider than high, otherwise bottom.
-func (t *GroupTree) GroupSide(id string) Side {
-	if rect, ok := t.Rect(id); ok && rect.W > rect.H {
-		return "right"
-	}
-	return "bottom"
-}
-
-// CanGroup tells whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would
-// succeed (docs/spec/groups.md#headers).
-func (t *GroupTree) CanGroup(id string) bool {
-	return t.answer("group:"+id, func() error {
-		_, _, err := t.CreateGroup(id, t.GroupSide(id), nil, false)
+// CanGroup tells whether the group split button of the card id toward side is enabled: a group of the card and a new card toward side
+// would succeed (docs/spec/groups.md#headers).
+func (t *GroupTree) CanGroup(id string, side Side) bool {
+	return t.answer("group:"+id+":"+string(side), func() error {
+		_, _, err := t.CreateGroup(id, side, nil, false)
 		return err
 	})
 }
