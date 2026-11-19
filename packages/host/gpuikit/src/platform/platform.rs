@@ -5,6 +5,7 @@
 #[path = "darwin/darwin.rs"]
 #[cfg(feature = "test-seam")]
 pub mod darwin;
+#[path = "darwin/darwin.rs"]
 #[cfg(not(feature = "test-seam"))]
 mod darwin;
 

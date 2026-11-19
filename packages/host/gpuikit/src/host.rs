@@ -8,6 +8,7 @@ mod menu;
 #[path = "platform/platform.rs"]
 #[cfg(feature = "test-seam")]
 pub mod platform;
+#[path = "platform/platform.rs"]
 #[cfg(not(feature = "test-seam"))]
 mod platform;
 mod service;
