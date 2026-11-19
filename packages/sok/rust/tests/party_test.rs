@@ -184,17 +184,20 @@ fn a_core_parties_status_without_a_value_is_refused_with_its_name() {
         }
         for status in group["status"].as_array_mut().expect("status") {
             if status["name"] == "core.parties" {
-                status.as_object_mut().expect("status object").remove("value");
+                status
+                    .as_object_mut()
+                    .expect("status object")
+                    .remove("value");
             }
         }
     }
-    let player = case_player::play_case_with_raw(
-        "sok-describe-parties",
-        "snapshot",
-        &snapshot.to_string(),
-    );
+    let player =
+        case_player::play_case_with_raw("sok-describe-parties", "snapshot", &snapshot.to_string());
     let (code, _stdout, stderr) = run(&["describe", "--config-dir", &player.dir()]);
-    assert_ne!(code, 0, "describe accepts a core.parties status without a value");
+    assert_ne!(
+        code, 0,
+        "describe accepts a core.parties status without a value"
+    );
     assert!(
         stderr.contains("core.parties has no value"),
         "the error names the status: {stderr}"
