@@ -246,8 +246,10 @@ func (t *GroupTree) ContentInside(id string) []string {
 func (t *GroupTree) span(n *node) (c0, c1, r0, r1 int) {
 	c0, r0 = math.MaxInt, math.MaxInt
 	for _, id := range t.inside(n) {
-		card, _ := t.grid.Card(id) // silent: the tree holds cards of the grid.
-		c0, c1, r0, r1 = min(c0, card.C0), max(c1, card.C1), min(r0, card.R0), max(r1, card.R1)
+		// A card that an operation in progress took out of the grid takes no part in the span.
+		if card, ok := t.grid.Card(id); ok {
+			c0, c1, r0, r1 = min(c0, card.C0), max(c1, card.C1), min(r0, card.R0), max(r1, card.R1)
+		}
 	}
 	return c0, c1, r0, r1
 }
@@ -385,15 +387,18 @@ func (t *GroupTree) below(before map[string]Rect) (string, Rect) {
 	return "", Rect{}
 }
 
-// covers tells whether the group node covers one rectangle: the cells of the content cards inside it fill their span.
+// covers tells whether the group node covers one rectangle: the cells of the content cards inside it fill their span. A card that an
+// operation in progress took out of the grid, or merged into the card of its group, counts no cell, and a group without a card in the
+// grid covers its rectangle, the card that replaced it.
 func (t *GroupTree) covers(n *node) bool {
 	c0, c1, r0, r1 := t.span(n)
-	cells := 0
+	cells, present := 0, false
 	for _, id := range t.inside(n) {
-		card, _ := t.grid.Card(id) // silent: the tree holds cards of the grid.
-		cells += (card.C1 - card.C0) * (card.R1 - card.R0)
+		if card, ok := t.grid.Card(id); ok {
+			cells, present = cells+(card.C1-card.C0)*(card.R1-card.R0), true
+		}
 	}
-	return cells == (c1-c0)*(r1-r0)
+	return !present || cells == (c1-c0)*(r1-r0)
 }
 
 // broken is the first group card in workbench order that does not cover one rectangle, or "".
@@ -951,8 +956,8 @@ func (t *GroupTree) Close(id string) ([]string, error) {
 				return err
 			}
 		}
-		if !t.grid.Close(id) {
-			return fmt.Errorf("card %s cannot close", id)
+		if err := t.closeCell(id, "close"); err != nil {
+			return err
 		}
 		t.collapse(t.detach(id))
 		return nil
@@ -961,6 +966,70 @@ func (t *GroupTree) Close(id string) ([]string, error) {
 		return nil, err
 	}
 	return closed, nil
+}
+
+// closeCell closes the card id of the grid for the operation op. A row of neighbours takes its cells: the sides are tried in the fill
+// order of the layout library, the sides whose row lies in the level of the card first, and the first result that keeps every group card
+// one rectangle is kept; without such a row the slots of the card are removed, as the library removes them (R7). The refusal names the
+// cause (docs/spec/groups.md#closing).
+func (t *GroupTree) closeCell(id, op string) error {
+	refused := func(why string) error { return fmt.Errorf("card %s cannot %s: %s", id, op, why) }
+	if t.grid.removable(id) == nil {
+		return refused("it is the last card of the layout")
+	}
+	level := map[string]bool{}
+	for _, n := range t.level(t.Parent(id)) {
+		for _, inner := range t.inside(n) {
+			level[inner] = true
+		}
+	}
+	inLevel := func(side string) bool {
+		found := t.grid.fillAlong(id, []string{side})
+		if found == nil {
+			return false
+		}
+		for _, c := range found.cards {
+			if !level[c.ID] {
+				return false
+			}
+		}
+		return true
+	}
+	sides := slices.Clone(fillOrders[t.grid.order])
+	slices.SortStableFunc(sides, func(a, b string) int {
+		ia, ib := inLevel(a), inLevel(b)
+		switch {
+		case ia && !ib:
+			return -1
+		case ib && !ia:
+			return 1
+		}
+		return 0
+	})
+	broken := ""
+	for _, side := range sides {
+		if t.grid.fillAlong(id, []string{side}) == nil {
+			continue
+		}
+		kept := t.snapshot()
+		if t.grid.closeAlong(id, []string{side}) {
+			group := t.broken()
+			if group == "" {
+				return nil
+			}
+			if broken == "" {
+				broken = group
+			}
+		}
+		t.restore(kept)
+	}
+	if broken != "" {
+		return refused("group " + broken + " would not cover one rectangle")
+	}
+	if t.grid.closeAlong(id, nil) {
+		return nil
+	}
+	return refused("no row of cards that can grow covers a side of it, and its slots hold other cards")
 }
 
 // CanClose tells whether Close of the card id would succeed.
@@ -1048,7 +1117,14 @@ func (t *GroupTree) Move(id, target, side string) error {
 		moving := t.nodeOf(id)
 		if !moving.group && !t.IsGroup(target) && side != "centre" {
 			into := t.Parent(target)
-			if !t.grid.Move(id, target, side) {
+			var closing error
+			if !t.grid.moveWith(id, target, side, func() bool {
+				closing = t.closeCell(id, op)
+				return closing == nil
+			}) {
+				if closing != nil {
+					return closing
+				}
 				return refused
 			}
 			from := t.detach(id)
@@ -1067,8 +1143,8 @@ func (t *GroupTree) Move(id, target, side string) error {
 			card, _ := t.grid.Card(id) // silent: CheckMove found the card.
 			data = card.Data
 		}
-		if !t.grid.Close(id) {
-			return refused
+		if err := t.closeCell(id, op); err != nil {
+			return err
 		}
 		// The target is decided before a group that the card leaves is replaced by its one member: a move beside that group lands
 		// beside the member, and a move into it keeps the group until the card is back.

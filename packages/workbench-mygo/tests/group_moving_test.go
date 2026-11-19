@@ -58,8 +58,9 @@ func TestABoundaryStopsAtTheDrawnMinimumUnderAHeader(t *testing.T) {
 	}
 }
 
-// A move that would leave a group card without one rectangle is refused with the group (docs/spec/groups.md#commands).
-func TestAMoveThatBreaksAGroupRectangleIsRefused(t *testing.T) {
+// A move of a card of the root level beside a member of a group closes the card with the neighbour that keeps the group one rectangle
+// and puts the card into that group (docs/spec/groups.md#closing).
+func TestAMoveBesideAMemberKeepsTheGroupOneRectangle(t *testing.T) {
 	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
 		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
 		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes")))
@@ -69,9 +70,12 @@ func TestAMoveThatBreaksAGroupRectangleIsRefused(t *testing.T) {
 	f := layoutShell(t, space)
 	f.tester.SetSize(1400, 900)
 	f.settle()
-	if _, err := f.apply("core.card.move", `{"card": "card-4", "target": "card-1", "side": "left"}`); err == nil ||
-		err.Error() != "card card-4 cannot move to left of card-1: group card-5 would not cover one rectangle" {
-		t.Fatalf("the move fails with %v", err)
+	if _, err := f.apply("core.card.move", `{"card": "card-4", "target": "card-1", "side": "left"}`); err != nil {
+		t.Fatal(err)
+	}
+	cards := f.gridCards()
+	if cards["card-4"]["parent"] != "card-5" || cards["card-3"]["w"].(float64) <= cards["card-1"]["w"].(float64) {
+		t.Fatalf("after the move card-4 is %v and card-3 %v", cards["card-4"]["parent"], cards["card-3"]["w"])
 	}
 }
 

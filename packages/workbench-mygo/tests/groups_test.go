@@ -369,3 +369,36 @@ func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
 		}
 	}
 }
+
+// The close of a nested group card at the left of its group gives its cells to the card of the same group beside it, although the
+// fill order of the layout library tries the card of another group above it first (docs/spec/groups.md#closing).
+func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
+	space := gridSpace("spc-aaaaaa", []float64{0, 0.11567838541666667, 0.23510416666666664, 0.5, 1}, []float64{0, 0.33127317676143386, 0.6687268232385661, 1},
+		gridCard("terminal", 0, 2, 0, 1, tab("t1", "notes")), gridCard("browser", 0, 1, 1, 2, tab("t2", "notes")),
+		gridCard("card-8", 3, 4, 2, 3, tab("t3", "notes")), gridCard("card-7", 3, 4, 1, 2, tab("t4", "notes")),
+		gridCard("card-3", 0, 3, 2, 3, tab("t5", "notes")), gridCard("card-5", 3, 4, 0, 1, tab("t6", "notes")),
+		gridCard("card-10", 2, 3, 0, 1, tab("t7", "notes")), gridCard("card-12", 1, 2, 1, 2, tab("t8", "notes")),
+		gridCard("card-13", 2, 3, 1, 2, tab("t9", "notes")))
+	stored := space["layout"].(map[string]any)
+	stored["groups"] = []any{
+		map[string]any{"card": "card-9", "name": "그룹 1", "leader": "terminal", "members": []any{"terminal", "card-10"}},
+		map[string]any{"card": "card-4", "name": "그룹 2", "leader": "card-11", "members": []any{
+			map[string]any{"card": "card-11", "name": "그룹 3", "leader": "browser", "members": []any{"browser", "card-12"}},
+			"card-13", "card-7", "card-3", "card-8"}},
+	}
+	stored["leader"], stored["lastCard"] = "card-9", 13
+	f := layoutShell(t, space)
+	f.tester.SetSize(1908, 900)
+	f.settle()
+	if _, err := f.apply("core.card.close", `{"card": "card-11"}`); err != nil {
+		t.Fatal(err)
+	}
+	cards := f.gridCards()
+	// The window sidebars stand in the first and the last column, so card-13 reaches the column of card-3 below it.
+	if card := cards["card-13"]; card == nil || card["c0"] != cards["card-3"]["c0"] || card["c1"] != cards["card-3"]["c1"] || card["parent"] != "card-4" {
+		t.Fatalf("after the close card-13 is %v", card)
+	}
+	if card := cards["terminal"]; card["parent"] != "card-9" || card["r1"] != float64(1) {
+		t.Fatalf("after the close terminal is %v", card)
+	}
+}

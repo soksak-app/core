@@ -137,7 +137,7 @@ var fillOrders = map[string][]string{
 var spanNames = map[spanKey]string{keyC0: "c0", keyC1: "c1", keyR0: "r0", keyR1: "r1"}
 
 // fillFor is the neighbours that take a closed card's space, or nil. The result remains slicing, which keeps every card closable.
-func fillFor(cards []*Card, closing *Card, order string, memo map[string]bool) *fill {
+func fillFor(cards []*Card, closing *Card, sides []string, memo map[string]bool) *fill {
 	if closing.Fixed {
 		return nil
 	}
@@ -150,7 +150,7 @@ func fillFor(cards []*Card, closing *Card, order string, memo map[string]bool) *
 	if free <= 1 {
 		return nil
 	}
-	for _, side := range fillOrders[order] {
+	for _, side := range sides {
 		dir := directions[side]
 		var row []*Card
 		for _, c := range cards {

@@ -1342,12 +1342,15 @@ func (g *Grid) Fill(id string) *Fill {
 	return &Fill{Side: found.side, Grow: spanNames[found.grow], Cards: cards}
 }
 
-func (g *Grid) fillOf(id string) *fill {
+func (g *Grid) fillOf(id string) *fill { return g.fillAlong(id, fillOrders[g.order]) }
+
+// fillAlong is the fill of the card id that tries the sides in that order.
+func (g *Grid) fillAlong(id string, sides []string) *fill {
 	card := g.find(id)
 	if card == nil {
 		return nil
 	}
-	return fillFor(g.list, card, g.order, g.sliceMemo)
+	return fillFor(g.list, card, sides, g.sliceMemo)
 }
 
 // soleSlots is the axis whose slots hold no other card, or false.
@@ -1417,7 +1420,11 @@ func (g *Grid) removeCard(card *Card) {
 
 // Close removes a card. A row of neighbours expands over the space when one matches the side; otherwise the card's slots are removed.
 // It is false when neither applies, when the card is fixed, or when it is the last card.
-func (g *Grid) Close(id string) bool {
+func (g *Grid) Close(id string) bool { return g.closeAlong(id, fillOrders[g.order]) }
+
+// closeAlong is Close whose row of neighbours is the first that covers one of sides, in that order. The group tree of the workbench
+// passes one side at a time, because the fill order of the library does not know which neighbours keep a group one rectangle.
+func (g *Grid) closeAlong(id string, sides []string) bool {
 	card := g.removable(id)
 	if card == nil {
 		return false
@@ -1507,7 +1514,7 @@ func (g *Grid) Close(id string) bool {
 		}
 	}
 
-	if filling := g.fillOf(id); filling != nil {
+	if filling := g.fillAlong(id, sides); filling != nil {
 		axis := "y"
 		if filling.grow == keyC0 || filling.grow == keyC1 {
 			axis = "x"
@@ -1870,6 +1877,12 @@ func (g *Grid) Standings(axis Axis, without string) []int {
 
 // Move moves a card to one side of another, keeping its id and its payload.
 func (g *Grid) Move(id, targetID string, side Side) bool {
+	return g.moveWith(id, targetID, side, func() bool { return g.Close(id) })
+}
+
+// moveWith is Move whose close of the card is close: the group tree closes it with a row of neighbours that keeps every group card
+// one rectangle.
+func (g *Grid) moveWith(id, targetID string, side Side, close func() bool) bool {
 	card := g.find(id)
 	target := g.find(targetID)
 	if card == nil || target == nil || card == target || card.Fixed {
@@ -1887,7 +1900,7 @@ func (g *Grid) Move(id, targetID string, side Side) bool {
 		height = &h
 	}
 	before := g.ToJSON()
-	if !g.Close(id) {
+	if !close() {
 		return false
 	}
 	landed, ok := g.SplitToward(targetID, side, SplitInit{ID: &id, Data: data})
