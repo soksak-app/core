@@ -726,6 +726,31 @@ function beginTabDrag(e, cardId, tabId) {
   el.addEventListener("pointercancel", onUp);
 }
 
+// A double-click on the name of a group card renames the group (docs/spec/groups.md#headers); the plane takes it for every group
+// header, which group-cards.js draws.
+plane.addEventListener("dblclick", (e) => {
+  const name = e.target.closest?.(".group__name");
+  if (name) run("core.rename.begin", { kind: "group", id: name.closest(".group").dataset.groupCard });
+});
+
+/* The rename of the bars, whose field the header of a renamed group card shows (useGroupRename). */
+let groupRename = { state: () => null, field: () => null };
+
+/** Connects the rename of the bars, renames of bar-tabs.js, so the header of a renamed group card shows its field. */
+export function useGroupRename(renames) {
+  groupRename = renames;
+}
+
+/** The group cards of the shown space for the rename of the kind group of bar-tabs.js (docs/spec/groups.md#headers). */
+export const groupRenames = {
+  name(id) {
+    if (!tree?.isGroup(id)) throw new Error(`no group ${id}`);
+    return tree.groupRecord(id).name;
+  },
+  rename: (id, name) => renameGroup(id, name),
+  redraw: () => settle(),
+};
+
 /* ── Picker layer ──────────────────────────────────────────────────────────
    A layer is not a card, so it does not affect the layout and Soksak does not recognize it.
    When the layout changes, the reference position of the layer becomes invalid, so settle closes it first.     */
@@ -1671,7 +1696,8 @@ function build(kept) {
       }
       keepHiddenSidebars();
       const fullscreen = view.fullscreenCard;
-      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId });
+      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId,
+        renaming: groupRename.state(), renameField: () => groupRename.field() });
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);

@@ -96,6 +96,20 @@ function drawTools(acts, tools) {
   });
 }
 
+/** Shows the rename field in the place of the name of a group header while editing, and the name again after it. */
+function drawRename(header, name, editing, renameField) {
+  const field = header.querySelector(":scope > [data-expose=\"core.rename.input\"]");
+  if (editing && !field) {
+    const input = renameField();
+    input.classList.add("group__rename");
+    name.hidden = true;
+    name.after(input);
+  } else if (!editing && field) {
+    field.remove();
+    name.hidden = false;
+  }
+}
+
 /** The share of the focus color in the frame of a group card d levels above the focused card, group-focus-fade to the power d. */
 const FOCUS_FADE = Number(CHROME["group-focus-fade"]);
 
@@ -119,8 +133,10 @@ function markHeldFocus(el, d) {
  * shown group card by id, which a fullscreen group card gives the group cards inside it, head the height of a header and focused the
  * focused content card, whose group cards mark their frames. A group card that rects does not hold is hidden; the element of a group
  * card that the tree no longer holds is removed. The frames stand below the cards, so they are inserted before the first card.
+ * renaming is the rename in progress of core.rename: the header of the group card that it names shows the field that renameField
+ * creates in the place of its name (docs/spec/groups.md#headers).
  */
-export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused }) {
+export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused, renaming, renameField }) {
   const live = new Set();
   const first = planeEl.querySelector(":scope > .card");
   for (const { id, node } of tree.order()) {
@@ -144,6 +160,7 @@ export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, f
       name.textContent = node.name;
       name.title = node.name;
     }
+    drawRename(header, name, renaming?.kind === "group" && renaming.id === id, renameField);
     drawTools(header.querySelector(".chrome__acts"), groupHeadTools(tree, id, { fullscreen, even }));
   }
   for (const el of planeEl.querySelectorAll(":scope > .group")) if (!live.has(el.dataset.groupCard)) el.remove();

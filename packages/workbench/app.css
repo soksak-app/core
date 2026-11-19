@@ -204,6 +204,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    plane sets to group-focus-fade to the power of the levels up to it (docs/spec/groups.md#focus). Only the color of the frame line
    changes, so the mark adds no line, also at the seam. */
 :root[data-focus-ind=border] .group[data-focus]{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
+.group__rename{flex:1 1 auto;min-width:0}
 .group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden}
 .group__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
   color:var(--fg);cursor:grab;user-select:none}
