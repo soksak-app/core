@@ -362,39 +362,11 @@ func outlinePath(outline layout.Outline, at func(x, y float64) (float32, float32
 	return path
 }
 
-// drawParties draws the outer outline of each party in its color and the sides of that outline on the border of its leader card in
-// the leader color (docs/spec/parties.md#drawing), under the rail. A full screen card shows no party, as it shows no rail.
-func (s *Shell) drawParties(p *ui.Painter, at func(x, y float64) (float32, float32)) {
-	if s.plane == nil || s.parties == nil || s.browsing || s.fullscreen != "" {
-		return
-	}
-	drawings, err := s.parties.Drawings(s.plane)
-	if err != nil {
-		s.fail(err)
-		return
-	}
-	for _, drawing := range drawings {
-		width := float32(drawing.Width)
-		path := outlinePath(drawing.Outline, at)
-		p.StrokePath(&path, width, ui.Hex(drawing.Color))
-		if len(drawing.Leader) == 0 {
-			continue
-		}
-		var sides ui.Path
-		for _, side := range drawing.Leader {
-			sides.MoveTo(at(side[0].X, side[0].Y))
-			sides.LineTo(at(side[1].X, side[1].Y))
-		}
-		p.StrokePath(&sides, width, ui.Hex(drawing.LeaderColor))
-	}
-}
-
 // drawRail draws the rail outline and the focus corners over the cards of the stage. inset is the origin of the plane in the stage.
 func (s *Shell) drawRail(p *ui.Painter, stage ui.Rect, inset float32) {
 	at := func(x, y float64) (float32, float32) {
 		return stage.X + inset + float32(x), stage.Y + inset + float32(y)
 	}
-	s.drawParties(p, at)
 	for _, group := range s.railGroups() {
 		path := outlinePath(group.Outline, at)
 		p.StrokePath(&path, s.palette.BorderWidth, s.palette.Rail)

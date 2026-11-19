@@ -13961,13 +13961,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F924",
-    implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "if p.drawn != nil && slices.EqualFunc(inputs, p.drawnFrom, sameDrawingInput) {" }],
-    tests: [{ file: "packages/workbench-mygo/tests/layout/parties_drawing_cache_test.go", id: "TestPartyDrawingsAreComputedOncePerChange" }],
-    expected: "The mygo host computes the party drawings once for each change of the parties, the card rectangles or the gap.",
-    levels: ["unit"],
-  },
-  {
     id: "F922",
     implementation: [{ file: "packages/host/go/src/images.go", symbol: "logAnswerError(\"image reply \"+d.Name, sendResponse(d.Name, d.JSON))" }],
     tests: [{ file: "packages/host/go/src/images_test.go", id: "TestARefusedFrameIsAnsweredToItsSupplier" }],
@@ -14081,23 +14074,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench-mygo/src/settings_draw.go", symbol: "type sliderDrag struct {" }],
     tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestSliderDragWritesOnce" }],
     expected: "A drag of a settings slider of the mygo host writes the setting once, at its release.",
-    levels: ["unit"],
-  },
-  {
-    id: "F920",
-    implementation: [
-      { file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Reconcile(g *Grid, change LayoutChange) ([]partyChange, error) {" },
-      { file: "packages/workbench/parties.js", symbol: "export function reconcile({ moved, split }) {" },
-    ],
-    tests: [{ file: "packages/workbench-mygo/tests/layout/parties_cases_test.go", id: "TestPartyCasesRunEverySteps" }],
-    expected: "Both hosts correct parties after a close, split, move or boundary drag, and a card split from a member joins its party.",
-    levels: ["unit"],
-  },
-  {
-    id: "F919",
-    implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Drawings(g *Grid) ([]Drawing, error) {" }],
-    tests: [{ file: "packages/workbench-mygo/tests/party_drawing_test.go", id: "TestAPartyDrawsItsOutlineInItsColorAndTheLeaderBorder" }],
-    expected: "The mygo host draws each party outline in its party color and the leader border on the leader card.",
     levels: ["unit"],
   },
   {
@@ -15801,7 +15777,7 @@ const REMOVED_COMPLETIONS = new Set(["F239-189", "F239-47-40-3", "F239-123", "F2
   "F239-201", "F239-229", "F608", "F684", "F239-294", "F275", "F275-1", "F275-2", "F664-4",
   "F556", "F239-173", "F239-177", "F239-179", "F212.12-2-1-1", "F239-239", "F94", "F95",
   "F239-47-15", "F239-47-16", "F239-47-18", "F239-47-20", "F239-47-26", "F239-47-27", "F239-47-29", "F239-47-31", "F239-47-35",
-  "F239-60", "F428", "F239-141", "F212.14-5-32", "F239-152"]);
+  "F239-60", "F428", "F239-141", "F212.14-5-32", "F239-152", "F919", "F920", "F924"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

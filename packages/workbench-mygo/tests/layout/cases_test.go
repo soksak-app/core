@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
@@ -157,7 +156,6 @@ func arg(t *testing.T, s step, i int, out any) bool {
 	return true
 }
 
-// contract: workbench.parties.commands
 func TestGridCases(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
@@ -817,70 +815,4 @@ func sidebarCall(t *testing.T, id string, data *layout.CardData, sets map[string
 	}
 	t.Fatalf("no sidebar call %s", s.Call)
 	return nil, false, nil
-}
-
-// TestPartyCreateCasesJudgeTouchingCards runs the party cases of docs/spec/cases/layout/parties.json that create a party of two cards: a
-// case with no error, and a case with the error of cards that do not touch, state the touching judgement of the two cards.
-func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {
-	var file struct {
-		Description string `json:"description"`
-		Cases       []struct {
-			Name    string `json:"name"`
-			Drawing *struct {
-				RailWidth string  `json:"theme-rail-w"`
-				Unit      float64 `json:"unit"`
-				Gap       float64 `json:"gap"`
-			} `json:"drawing"`
-			State layout.State `json:"state"`
-			Steps []struct {
-				// The members of a layout step, which TestPartyCasesRunEverySteps plays; this test judges only create steps.
-				Layout   string          `json:"layout"`
-				Card     string          `json:"card"`
-				Side     string          `json:"side"`
-				Born     string          `json:"born"`
-				Target   string          `json:"target"`
-				Axis     string          `json:"axis"`
-				Line     int             `json:"line"`
-				Position float64         `json:"position"`
-				Call     string          `json:"call"`
-				Params   json.RawMessage `json:"params"`
-				Returns  json.RawMessage `json:"returns"`
-				Error    *string         `json:"error"`
-			} `json:"steps"`
-		} `json:"cases"`
-	}
-	caseFile(t, "parties.json", &file)
-	judged := 0
-	for _, kase := range file.Cases {
-		cards := map[string]layout.Card{}
-		for _, card := range kase.State.Cards {
-			cards[card.ID] = card
-		}
-		for _, s := range kase.Steps {
-			if s.Call != "core.party.create" {
-				continue
-			}
-			var params struct {
-				Cards []string `json:"cards"`
-			}
-			if err := json.Unmarshal(s.Params, &params); err != nil {
-				t.Fatal(err)
-			}
-			if len(params.Cards) != 2 {
-				continue
-			}
-			if s.Error != nil && !strings.HasPrefix(*s.Error, "cards are not touching") {
-				continue
-			}
-			a, b := cards[params.Cards[0]], cards[params.Cards[1]]
-			want := s.Error == nil
-			if got := layout.Touches(a, b); got != want {
-				t.Fatalf("%s: touches of cards %v is %v, want %v", kase.Name, params.Cards, got, want)
-			}
-			judged++
-		}
-	}
-	if judged < 2 {
-		t.Fatalf("the cases judge %d pairs, want at least one touching and one not touching", judged)
-	}
 }

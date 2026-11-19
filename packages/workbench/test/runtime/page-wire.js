@@ -67,7 +67,7 @@ const SHAPE = {
  * the test calls release(key). unsubscribed lists the events whose listener the page removed. finish throws when a failure
  * happened, when a step of the case was not played or when a held reply was not released.
  */
-// The replies of the host calls that a case may filter (the member filter of the case, docs/spec/parties.md). The reply of
+// The replies of the host calls that a case may filter (the member filter of the case, docs/spec/cases/page-wire/README.md). The reply of
 // notificationState is the one recorded by docs/spec/cases/page-wire/plane-placeholder-error.json (steps 2 and 3), and the reply of
 // setTheme is the one recorded by docs/spec/cases/page-wire/background-sessions-context.json (steps 14 and 15), and the reply of
 // setMenuLanguage is the one recorded by docs/spec/cases/page-wire/library-folders-once.json (steps 4 and 5).

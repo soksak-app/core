@@ -15,7 +15,8 @@ type Space struct {
 	ID     string          `json:"id"`
 	Title  string          `json:"title"`
 	Layout json.RawMessage `json:"layout"`
-	// Parties is the parties member of the space object, kept as stored; ReadStoredParties checks it.
+	// Parties is the member parties, which no current form of a space object holds (docs/spec/projects.md#persistence). The shell
+	// refuses a space that holds it, and a write keeps the member as it is stored, so the file is not converted.
 	Parties json.RawMessage `json:"parties,omitempty"`
 }
 

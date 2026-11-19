@@ -193,41 +193,6 @@ export function commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSou
   };
 }
 
-/** The party theme tokens of the declaration (docs/spec/parties.md#drawing). */
-const PARTY_TOKENS = ['party-1', 'party-2', 'party-3', 'party-4', 'party-5', 'party-6', 'party-leader'];
-
-/**
- * Proposition 6: the party theme tokens of each theme and mode of the Go declaration copy equal the tokens of the workbench declaration.
- * The Go host reads these tokens from its copy, so a copy that differs from the source changes the party colors of the Go host.
- */
-export function partyTokenFailures({ mygoDeclarationSource, workbenchDeclarationSource }) {
-  const themesOf = (source) => {
-    const themes = JSON.parse(source).themes;
-    if (!Array.isArray(themes)) throw new Error('a declaration has no themes array');
-    return themes;
-  };
-  const failures = [];
-  const copies = new Map(themesOf(mygoDeclarationSource).map((theme) => [theme.name, theme]));
-  for (const theme of themesOf(workbenchDeclarationSource)) {
-    const copy = copies.get(theme.name);
-    if (copy === undefined) {
-      failures.push(`mygo declaration copy has no theme ${theme.name}`);
-      continue;
-    }
-    for (const mode of ['dark', 'light']) {
-      for (const token of PARTY_TOKENS) {
-        const expected = theme[mode]?.[token];
-        if (expected === undefined) throw new Error(`the workbench declaration has no ${token} in ${theme.name} ${mode}`);
-        const actual = copy[mode]?.[token];
-        if (actual !== expected) {
-          failures.push(`mygo declaration copy ${theme.name} ${mode} ${token} is ${actual}, the workbench declares ${expected}`);
-        }
-      }
-    }
-  }
-  return failures;
-}
-
 /** Proposition 5: each host refuses the common-only keys that the workbench refuses. */
 export function auditCommonOnlyKeys(keys) {
   const failures = [];
@@ -562,7 +527,7 @@ export function hostProductSources(directory, extension) {
 export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtime, wailsv3HostSources, mygoCallsSource,
   tauriv2EndpointSource, wailsv3EndpointSource, wailsv3DiagnosticsSource,
   hostContractSpec, tauriv2MenuSource, wailsv3MenuSource, hostsSpec, endpointSpec,
-  tauriv2DeclarationSource, wailsv3DeclarationSource, mygoDeclarationSource, workbenchDeclarationSource,
+  tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource,
   tauriv2PlatformSource, wailsv3PlatformSource, tauriv2ProductSources, wailsv3ProductSources,
   tauriv2ApplicationSources, goApplicationSources, tauriv2Crate, tauriv2AdapterCrate, tauriv2PortSource, wailsv3PortSource }) {
   const failures = [];
@@ -629,7 +594,6 @@ export function auditHostParity({ tauriv2Runtime, tauriv2Bindings, wailsv3Runtim
   failures.push(...auditMenuTables(specMenuTables(hostContractSpec), rustMenuTables(tauriv2MenuSource),
     goMenuTables(wailsv3MenuSource)));
   failures.push(...auditCommonOnlyKeys(commonOnlyKeys({ tauriv2DeclarationSource, wailsv3DeclarationSource, workbenchDeclarationSource })));
-  failures.push(...partyTokenFailures({ mygoDeclarationSource, workbenchDeclarationSource }));
   const tauriv2Callers = Object.fromEntries(Object.entries(tauriv2ProductSources)
     .map(([file, source]) => [file, withoutRustTestItems(source)]));
   failures.push(...auditPlatformCallers('tauriv2', rustPlatformMethods(tauriv2PlatformSource), tauriv2Callers,
@@ -678,7 +642,6 @@ if (process.argv[1] && process.argv[1].endsWith('check-hosts-same.mjs')) {
     endpointSpec: read('docs/spec/endpoint.md'),
     tauriv2DeclarationSource: read('packages/host/rust/src/workbench.json'),
     wailsv3DeclarationSource: read('packages/host/go/src/workbench.json'),
-    mygoDeclarationSource: read('packages/workbench-mygo/src/workbench.json'),
     workbenchDeclarationSource: read('packages/workbench/workbench.json'),
     tauriv2PlatformSource: read('packages/host/rust/src/platform/platform.rs'),
     wailsv3PlatformSource: read('packages/host/go/src/platform/platform.go'),
