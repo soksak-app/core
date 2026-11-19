@@ -214,7 +214,7 @@ view는 그 표면의 네이티브 승인이 완료된 뒤에 코어·플러그�
 - status `core.plugin.open-calls`: `[{plugin, count, oldestStartedAt}]`, 열린 call이 있는 각 plugin의 값이다. `oldestStartedAt`은 가장 오래된 열린 call의 시작 시각이고, 없으면 `null`이다.
 - status `core.plugin.losses`: `[{plugin, abandoned, lateReplies, peerLost}]`, 각 plugin의 손실 횟수다. 응용 프로그램이 끝날 때까지 유지한다.
 - status `core.plugin.views`: `[{plugin, surface, responsive}]`, 각 plugin view surface의 응답 상태다.
-- status `core.surfaces`: 각 표면 항목은 `kind`를 가진다. `kind`는 탭 표면이면 `tab`, [section 표면](plugins.ko.md#섹션)이면 `section`이며, section 표면 항목은 `sidebar`도 가진다. 각 표면 항목은 선언된 합성의 종류인 `composition`(`view`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다. compositor record가 가지지 않은 mount된 view는 retained view이며([native surfaces](native-surfaces.ko.md)), `visible: false`, `dim`, `declared`와 `applied`가 `null`인 항목으로 나열되고, `exposes`, 자신의 mount의 `status`(`{phase, error}`), `composition`, `state`를 가진다. retained view는 배치가 아니다. mount가 시작되거나, status가 바뀌거나, dispose될 때와 그 표면의 등록이 바뀔 때 알린다.
+- status `core.surfaces`: 각 표면 항목은 `kind`를 가진다. `kind`는 탭 표면이면 `tab`, [section 표면](plugins.ko.md#섹션)이면 `section`이며, section 표면 항목은 `sidebar`도 가진다. 각 표면 항목은 선언된 합성의 종류인 `composition`(`view`)을 가진다. plugin이 그 표면을 선언하지 않으면 `null`이다. compositor record가 가지지 않은 mount된 view는 retained view이며([native surfaces](native-surfaces.ko.md)), `visible: false`, `dim`, `declared`와 `applied`가 `null`인 항목으로 나열되고, `exposes`, 자신의 mount의 `status`(`{phase, error}`), `composition`, `state`를 가진다. retained view는 배치가 아니다. `exposes`는 그 표면이 등록한 항목을 `<kind> <name>`으로 정렬된 순서로 나열하므로, 순서는 등록의 시점을 따르지 않는다. mount가 시작되거나, status가 바뀌거나, dispose될 때와 그 표면의 등록이 바뀔 때 알린다.
 
 ## 창
 

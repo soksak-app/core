@@ -313,7 +313,9 @@ test("surface registrations are checked against the declarations and the surface
   plugins["tab-y"] = "probe";
   made.revisit();
   assert.deepEqual(made.namesOf("tab-y"), [], "a closed surface drops its held registrations");
-  assert.deepEqual(made.namesOf("tab-a"), ["status probe.lines", "element probe.lines"]);
+  // The entries of a surface are listed as "<kind> <name>" in sorted order, not in the order of their registration, which the timing of
+  // the surface decides (docs/spec/exposure.md#plugin-processes).
+  assert.deepEqual(made.namesOf("tab-a"), ["element probe.lines", "status probe.lines"]);
   assert.equal(changes, 4, "each accepted registration and closed surface is reported");
   made.registered({ surface: "tab-a", closed: true });
   assert.equal(changes, 5, "a closed surface is reported");

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-45 (`core.surfaces`의 `exposes` 순서, page): page는 표면이 등록한 항목을 mygo처럼 정렬된 순서로 나열하므로, 등록의 시점이 순서를 정하지 않는다. 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-44 (`core.grid`에서 fullscreen이 숨긴 card, page): page는 fullscreen card가 숨긴 card의 `acts`와 `pane`을 mygo처럼 null로 알리고 보이는 card의 pane을 그것 없이 센다(`docs/spec/example-model.md#card-fullscreen`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-43 (space 첫 tab의 origin, mygo): mygo는 environment의 grid가 선언한 새 space의 tab을 page처럼, 그리고 `docs/spec/projects.md#tab-origin`이 말하듯 `origin: {directory: null}`과 함께 저장한다. 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-37 (group create 거절의 순서): 두 workbench는 `core.group.create`를 `docs/spec/groups.md#commands`의 순서로 거절한다. 창 sidebar, layout, drawn minimum이 잘못된 `request`보다 먼저이고 plugin이 마지막이다. 두 workbench는 request를 먼저 검사했고, mygo는 drawn minimum보다 plugin을 먼저 검사했다. 검증: contract case `group.create.request-after-the-layout`의 page와 mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
