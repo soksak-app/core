@@ -14,6 +14,7 @@ card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab
 - group card는 space group tree의 node다. 식별자, 이름, leader, 그리고 member를 가진다. member는 grid의 content card와 group card이며 둘 이상이다. window sidebar는 member가 아니다. 각 content card와 group card는 많아야 group card 하나의 member다. 어떤 group card의 member도 아닌 card는 root level의 member다.
 - group card의 사각형은 그 안의 content card, 곧 그 member와 그 안의 group card의 member가 가진 가장 작은 첫 line부터 가장 큰 마지막 line까지의 line index span `[c0, c1) × [r0, r1)`이다. group card는 사각형 하나를 덮는다. 곧 그 안의 content card의 cell이 정확히 그 사각형의 cell이므로, grid의 다른 card는 그 사각형의 cell을 갖지 않는다. group card의 사각형은 그것을 담은 group card의 사각형 안에 놓인다.
 - root level의 level은 0이고, group card의 member의 level은 그 group card의 level에 1을 더한 값이다. level은 tree에서 도출되며 저장되지 않는다.
+- space가 group card를 가진 동안 workbench가 grid에 하는 모든 operation은 `tidy`로 끝나며 `paidBy` 기록을 남기지 않는다. 따라서 close하거나 move하는 card는 layout library가 고르는 이웃에게 자기 cell을 주고(R7), 남은 card가 쓰는 모든 line은 자기 좌표를 유지한다. group을 가진 layout은 이 형태로 저장된다.
 - card의 식별자는 그 space에서 card 하나를 가리킨다. content card와 group card는 식별자를 한 sequence에서 받는다. 곧 `card-<n>`이며, `n`은 layout이 저장하는([저장](#저장)) 그 space가 낸 가장 큰 card 번호 `lastCard`보다 1 크다. 그래서 space는 끝난 식별자를 재시작 뒤에도 다시 내지 않는다. card는 group 안팎으로 옮겨도 식별자를 유지하며, card를 가리키는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.*`, `core.tab.move`, `core.group.*`)는 활성 space의 어느 level의 card든 받는다.
 - group이라는 낱말 하나는 이름 `core.group.*`, `core.card.group`과 이 명세의 기록의 member `group`에서만 group card를 가리킨다. `core.picker` item의 member `group`과 창 snapshot의 groups는 원래 뜻을 유지한다.
 - level의 reading order는 member를 card 또는 group card 사각형의 첫 row line `r0`, 다음으로 첫 column line `c0` 순으로 정렬한다. 이 순서는 layout library의 R2가 요구하듯 배열 순서가 아니라 line으로 정해진다. card의 workbench order는 root level의 reading order이며, 각 group card는 그 member의 reading order 앞에 선다.
@@ -178,6 +179,8 @@ focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [ke
 | 자기 level의 member가 아닌 leader | `level <level> names the leader <id>, which is not a member of that level` |
 | leader인 window sidebar | `level <level> names the window sidebar <id> as its leader` |
 | 사각형 하나를 덮지 않는 group card | `group <id> does not cover one rectangle of the grid` |
+| `paidBy` 기록을 저장한 group을 가진 layout | `layout with groups stores the paidBy record of card <id>; a layout with groups keeps none`. `<id>`는 정렬 순서로 기록의 첫 card다 |
+| 어떤 card도 쓰지 않는 line을 저장한 group을 가진 layout | `layout with groups stores the <axis> line <k>, which no card uses; a layout with groups keeps none`. `x` line이 `y` line보다 먼저이고 `<k>`는 가장 작은 index다 |
 | `lastCard`가 없는 layout, 또는 양의 정수가 아니거나 grid나 group tree의 card 식별자 번호보다 작은 `lastCard` | `layout stores lastCard <value>, which is not the largest issued card number` |
 
 member `groups`, `leader`, `lastCard`는 필수이므로 이 형태는 이전 release의 형태가 아니다. `projects.json`은 format 2를 가지고, format 1 파일은 `<file>: projects.json: format must be 2`로 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이전 파일을 바꾸는 migration은 없다. 형식으로 거부된 파일은 거부된 space와 달리 통째로 거부된다. 그 파일은 registry, 화면 상태, space, plugin의 project 데이터(`plugins`)를 담으므로 그 어느 것도 읽히지 않으며, 파일을 지울 때까지 파일의 모든 쓰기는 그 오류로 실패한다. release는 사람이 `projects.json`을 지우고 project를 다시 더한다는 것, 그리고 project의 설정 파일(`.soksak/settings.json`)과 폴더는 남는다는 것을 말한다. `docs/spec/cases/layout/groups.json`의 layout case가 저장 검사, 그리는 사각형, command와 그 거부, 사각형 operation, drop 결정을 말하며, `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model은 같은 파일을 실행한다.
@@ -232,6 +235,7 @@ group card는 기존 card 디자인으로 그린다. 그 header는 theme과 chro
 - `projects.json`은 format 2를 받는다. `groups`, `leader`, `lastCard`는 format 1 파일에 없는 상태이며, 저장 형식 규칙은 새 format 번호를 요구하고 migration을 두지 않는다. release는 사람이 다시 만드는 파일을 말한다.
 - card 식별자는 기존 형태 `card-<n>`으로 남고, layout이 저장하는 `lastCard`에서 workbench가 낸다. 그래서 재시작을 지나도 식별자는 두 번 나오지 않는다. 무작위 식별자는 content card 식별자의 형태를 바꾸므로 거부되었다. 저장된 식별자에서 도출한 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 거부되었다.
 - `cardSplit` `even`은 grid를 balance한다. grid가 space의 line 집합 하나이기 때문이다. `exact`는 기본값으로 남으며, R4와 그 사각형 일반화의 동작이다. balance가 card를 최소보다 작게 그리면 `even`은 split을 거부한다. `exact` 결과로 돌아가면 말없이 고른 설정을 다른 값으로 바꾸게 되기 때문이다.
+- group을 가진 space는 `paidBy` 기록과 어떤 card도 쓰지 않는 line을 남기지 않는다. `paidBy` 기록은 library가 close된 card의 자리를, 그 card를 split해 낸 card에게 둘 사이의 line을 옮겨 돌려주게 하며, group을 가진 space에서 그 line은 두 card 사이에 있는 group의 card들의 line이므로, operation이 이름을 대지 않은 card가 움직인다. 어떤 card도 쓰지 않는 line은 나중 split의 목표가 되어, split이 card의 가운데 대신 다른 group의 이음매에 놓인다. library는 바뀌지 않으며, group이 없는 space는 library가 남기는 대로 기록과 line을 남긴다.
 - drop은 `zoneAt`의 edge 비율로 group card의 사각형 위에서 root level부터 안쪽으로 결정되고 grid의 `zoneAt`에서 끝나므로, 모든 level의 모든 card의 다섯 zone에 닿고 새 종류의 zone은 더해지지 않는다.
 - group card는 group으로서 전체 화면이 된다. 사람은 card 하나를 보이듯 작업의 상자 하나를 보이므로, 그 사각형이 그 안의 모든 card와 header와 함께 작업 영역을 덮는다. 전체 화면인 동안 layout은 전체 화면 card의 규칙 하나대로 그 안에서도 밖에서도 바뀌지 않는다.
 - group card는 focus ring을 받지 않는다. ring은 surface의 keyboard를 쥐는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
@@ -250,3 +254,4 @@ review는 다음 반론에 답했다.
 - 저장된 group의 거부는 파일 전체의 거부로 읽힐 수 있다: 그것은 space의 거부이며, 형식 거부만 파일을 거부한다.
 - format 상승은 registry와 plugin의 project 데이터를 잃는다: release가 그것을 말하며, layout을 다른 파일로 옮기는 것은 `projects.json`의 형태도 바꾸고 같은 손실을 주므로 거부되었다.
 - group 안의 close는 group 밖의 card에게 card의 자리를 줄 수 있다: 결과를 검사하여 group과 함께 거부하므로, tree는 상자 둘의 group card를 갖지 않는다.
+- group 안에서 split된 card의 `paidBy` 기록은 그 card가 close될 때 space를 가로질러 자리를 돌려줄 수 있다: group을 가진 space는 `paidBy` 기록을 남기지 않으므로, 그 cell을 받는 이웃만 바뀐다.
