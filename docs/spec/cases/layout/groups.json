@@ -6642,6 +6642,199 @@
      }
     }
    ]
+  },
+  {
+   "name": "balance with cardArrange even in a space without groups puts the cards into an equal grid and counts its empty card in lastCard",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [],
+    "leader": "card-1",
+    "lastCard": 3
+   },
+   "steps": [
+    {
+     "call": "balance",
+     "args": {
+      "arrange": true
+     }
+    },
+    {
+     "call": "grid",
+     "returns": {
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.5,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 1,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-4",
+        "c0": 1,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       }
+      ]
+     },
+     "args": {}
+    },
+    {
+     "call": "stored",
+     "returns": {
+      "groups": [],
+      "leader": "card-1",
+      "lastCard": 4
+     },
+     "args": {}
+    }
+   ]
+  },
+  {
+   "name": "balance with cardArrange even refuses when no equal grid keeps every card at its minimum size",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 200,
+    "height": 150
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [],
+    "leader": "card-1",
+    "lastCard": 3
+   },
+   "steps": [
+    {
+     "call": "balance",
+     "args": {
+      "arrange": true
+     },
+     "throws": "the layout cannot balance: no equal grid keeps every card at its minimum size"
+    },
+    {
+     "call": "stored",
+     "returns": {
+      "groups": [],
+      "leader": "card-1",
+      "lastCard": 3
+     },
+     "args": {}
+    }
+   ]
   }
  ]
 }
