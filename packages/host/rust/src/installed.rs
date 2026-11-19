@@ -437,14 +437,26 @@ fn core_content_type(url_path: &str) -> &'static str {
 
 /// Creates the sidecar channel of a host start with the installed sidecars of config_dir. When the installation cannot be
 /// read, it records the error at the place installed plugins and declares no sidecar, so the host starts;
-/// /installed-plugins.json carries the same error to the page (docs/spec/sidecars.md#declaration-and-startup).
+/// /installed-plugins.json carries the same error to the page (docs/spec/sidecars.md#declaration-and-startup). It records
+/// host.sidecar.path with the folder that the environment of every sidecar puts first on PATH.
 pub fn new_installed_sidecars<O: Owner>(config_dir: PathBuf) -> Result<Sidecars<O>, String> {
     // default: an installation that cannot be read declares no sidecar; the error is recorded, and the page shows it.
     let declarations = installed_sidecars(&config_dir).unwrap_or_else(|error| {
         log_error("installed plugins", &error);
         Vec::new()
     });
-    Sidecars::new(&declarations, config_dir)
+    let sidecars = Sidecars::new(&declarations, config_dir)?;
+    // The start records the folder that the environment of every sidecar puts first on PATH (docs/spec/sidecars.md#processes-of-a-surface).
+    let folder = crate::sidecars::sok_folder()?;
+    crate::event_record::emit_host(
+        crate::event_log::Level::Info,
+        "host.sidecar.path",
+        serde_json::json!({
+            "folder": folder.display().to_string(),
+            "sok": folder.join("sok").display().to_string(),
+        }),
+    );
+    Ok(sidecars)
 }
 
 /// Returns the sidecars that the plugin.json dependencies of an enabled installed plugin specify, together with the

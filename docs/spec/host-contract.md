@@ -1463,6 +1463,7 @@ Items:
 | `conversation.refuses-when-no-file-matches` | When no candidate matches the working directory, the read is refused with `no <agent> session file has the working directory <cwd>`. | all |
 | `conversation.selects-the-most-recently-modified-file` | When two or more candidates match, the most recently modified file is chosen. | all |
 | `sidecars.environment.sok-folder-first-on-path` | A sidecar process starts with the folder of the sok application first on PATH, and that folder appears in no other PATH entry. | all |
+| `sidecars.environment.start-records-the-sok-folder` | The start of the sidecar channel of the installed sidecars records one event `host.sidecar.path` at the level `info` whose `folder` is the folder of the host executable and whose `sok` is the `sok` in that folder. | all |
 
 ## Workbench cases
 
