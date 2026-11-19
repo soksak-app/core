@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F916: F916, F916-1, F686-6-1의 feature link는 `package.json`의 kit 0.0.15 pin을 가리킨다. 제거한 kit 0.0.14 로컬 patch에는 더 이상 record 규칙이 없기 때문이다.
 - F915-1: F915가 discovery 목록의 시간 제한을 없앴다. 목록은 자기 프로세스의 종료 상태로 끝나기 때문이다. 제한을 주장하던 test는 이름을 바꾸었다: `each Rust list step reports its start and elapsed time, and a list that exits with a failure fails with its exit status and the executable`와 `each Go test list step reports its start and elapsed time, and a binary whose listing exits with a failure fails with its exit status and output`. F239-109와 F829의 feature link가 이 test를 가리켜 `make check-tests`의 feature link 오류 두 개가 사라졌다.
 - F915 (progress): 실행 한도가 없는 목록도 `RUNNING` heartbeat 줄을 유지하며, 목록 단계의 이름과 실행 시간을 목록이 끝날 때까지 보고한다. 보호 test: `a test without a runner limit that runs past the heartbeat is named by a RUNNING line until it exits`(`scripts/test/test-runner.test.mjs`)는 변경 전 runner에서 통과했다. heartbeat가 이미 실행 중인 모든 단계를 다루기 때문이다.
 - F915: Go package와 Rust test executable의 discovery는 각 목록(Go package 목록, Go test binary의 test 목록, Rust executable의 test 목록)을 시간 한도 없이 실행한다. 목록은 process가 끝날 때 끝나며, 실패한 목록은 종료 상태와 출력을 보고한다. test의 한도는 test process에만 적용된다. Red: `a Go test binary whose listing ends after the limit of a test is still listed`와 `a Rust test binary whose listing ends after the limit of a test is still listed`(`scripts/test/test-discovery.test.mjs`)가 `exceeded 2.000s and was killed`로 실패했다. Green: `make install` 후 이 파일이 15/15 test를 통과한다.

@@ -3238,9 +3238,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F686-6-1",
-    implementation: [{ file: "pnpm-workspace.yaml", symbol: "'@soksak/kit@0.0.14': patches/@soksak__kit@0.0.14.patch" }],
+    implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz" }],
     tests: [{ file: "scripts/test/kit-records.test.mjs", id: "the pinned record validator preserves runtime diagnostics and rejects discovery accounts" }],
-    expected: "The pinned normal record validator accepts the actual Go runtime diagnostic while preserving discovery-account rejection through a declared and lockfile-hashed dependency correction.",
+    expected: "The pinned normal record validator accepts the actual Go runtime diagnostic while preserving discovery-account rejection, a rule that the pinned kit 0.0.15 carries.",
     levels: ["unit"],
   },
   {
@@ -13939,6 +13939,20 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-discovery.test.mjs", id: "a Go test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit" },
     ],
     expected: "A discovery listing has no time limit of its own: a Rust or Go test binary whose listing runs past the limit of a test is still listed when its listing exits with status 0.",
+    levels: ["unit"],
+  },
+  {
+    id: "F916",
+    implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ" }],
+    expected: "Core pins the kit 0.0.15, and the checklist checks of core pass on the pinned kit.",
+    levels: ["unit"],
+  },
+  {
+    id: "F916-1",
+    implementation: [{ file: "scripts/checklist.mjs", symbol: "const shape = (entries) => entries.map(({ id, indent, state }) => ({ id, indent, state }));" }],
+    tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ" }],
+    expected: "The checklist translation check compares the identifier, indent and state of each entry, so translated labels do not fail it.",
     levels: ["unit"],
   },
   {
