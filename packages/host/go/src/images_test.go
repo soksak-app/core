@@ -112,6 +112,54 @@ func TestFailedOrRetiredFrameDoesNotNotifyItsWindowWatcher(t *testing.T) {
 	}
 }
 
+// A frame of a raster that a later configuration replaced is refused, and the supplier gets the refusal as its answer, because the
+// supplier draws no next frame until the frame in flight is answered.
+func TestARefusedFrameIsAnsweredToItsSupplier(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-refused", Name: "view"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	first, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || first == nil {
+		t.Fatalf("configure image: %+v, %v", first, err)
+	}
+	if second, err := images.ConfigureRaster(key, 640, 480, 2, true); err != nil || second == nil || second.Raster == first.Raster {
+		t.Fatalf("reconfigure image: %+v, %v", second, err)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{
+		"name":  "view",
+		"token": map[string]any{"kind": "iosurface-global", "id": uint32(12345), "nonce": "AAAAAAAAAAAAAAAAAAAAAA=="},
+		"width": 800, "height": 600, "scale": 2.0, "format": "bgra8",
+		"generation": first.Generation, "raster": first.Raster, "sequence": 1,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answers := []map[string]interface{}{}
+	handled := HandleEnvelope(body, "sidecar-a", key.Surface, images,
+		func(func() error) error { t.Fatal("a refused frame was presented"); return nil },
+		func(name string, answer map[string]interface{}) error {
+			answers = append(answers, answer)
+			return nil
+		},
+		func(string) error { return nil },
+		func() bool { return true },
+		func() { t.Fatal("a refused frame notified the window") },
+	)
+	if !handled || len(answers) != 1 {
+		t.Fatalf("refused frame: handled %v with answers %v, want handled with one answer", handled, answers)
+	}
+	encoded, _ := json.Marshal(answers[0])
+	if !strings.Contains(string(encoded), `"stale"`) {
+		t.Fatalf("refused frame answer is %s, want the reason stale", encoded)
+	}
+}
+
 // contract: exposure.window.region-reports-presented-frame, images.wait.newer-sequence-rearms-wait
 func TestInFlightFramePresentationIsRecordedAfterANewerFrameIsAccepted(t *testing.T) {
 	images := NewImages()

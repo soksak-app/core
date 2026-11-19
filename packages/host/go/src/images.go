@@ -1340,6 +1340,11 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 	case *NotImage:
 		return false
 
+	case *Reply:
+		logRefusedFrame(surface, sender, images, d.Name, d.Generation, d.Raster, d.Sequence, d.Reason)
+		logAnswerError("image reply "+d.Name, sendResponse(d.Name, d.JSON))
+		return true
+
 	case *ScreenMessage:
 		key := ImageKey{Surface: surface, Name: d.Name}
 		reason := images.ReceiveScreen(key, sender,

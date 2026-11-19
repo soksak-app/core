@@ -13942,6 +13942,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F922",
+    implementation: [{ file: "packages/host/go/src/images.go", symbol: "logAnswerError(\"image reply \"+d.Name, sendResponse(d.Name, d.JSON))" }],
+    tests: [{ file: "packages/host/go/src/images_test.go", id: "TestARefusedFrameIsAnsweredToItsSupplier" }],
+    expected: "The Go host sends a frame that it refuses back to its supplier as the answer of that frame.",
+    levels: ["unit"],
+  },
+  {
     id: "F916",
     implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ" }],
