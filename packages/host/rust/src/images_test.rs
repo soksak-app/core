@@ -1548,13 +1548,22 @@ fn screen_message_of_the_supplier_is_accepted_over_the_wire() {
     );
 }
 
+/// A refused screen message: (case, sender, generation offset, raster offset, request identifier override, reason).
+type ScreenRefusal = (
+    &'static str,
+    &'static str,
+    u64,
+    u64,
+    Option<&'static str>,
+    &'static str,
+);
+
 // contract: images.copy-path.screen-answer-refused
 // A screen message with an out-of-date generation or raster, with a request that is not the unanswered one, or from a sender that does not
 // own the region is answered stale or notAttached; the unanswered request of the region stays unanswered (docs/spec/native-surfaces.md#copy-path-frames).
 #[test]
 fn screen_message_refusals_name_the_reason_and_keep_the_request() {
-    // (case, sender, generation offset, raster offset, request identifier override, reason)
-    let cases: [(&str, &str, u64, u64, Option<&str>, &str); 4] = [
+    let cases: [ScreenRefusal; 4] = [
         ("stale generation", "sidecar-a", 1, 0, None, "stale"),
         ("stale raster", "sidecar-a", 0, 1, None, "stale"),
         (
@@ -1592,13 +1601,15 @@ fn screen_message_refusals_name_the_reason_and_keep_the_request() {
     }
 }
 
+/// A malformed screen message: (case, member, change of the valid message).
+type MalformedScreen = (&'static str, &'static str, fn(&mut serde_json::Value));
+
 // contract: images.copy-path.screen-malformed-names-its-member
 // A screen message with a missing or mistyped member, or a row without a valid row number or cells, is answered error malformed with the
 // dotted path of its first such member, and its unanswered request stays unanswered (docs/spec/native-surfaces.md#copy-path-frames).
 #[test]
 fn malformed_screen_message_names_its_member() {
-    // (case, member, change of the valid message)
-    let cases: [(&str, &str, fn(&mut serde_json::Value)); 5] = [
+    let cases: [MalformedScreen; 5] = [
         ("missing request", "request", |m| {
             m.as_object_mut().unwrap().remove("request");
         }),
