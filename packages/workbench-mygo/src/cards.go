@@ -830,7 +830,8 @@ type LayoutDescription struct {
 	Groups  []LayoutGroup `json:"groups"`
 }
 
-// LayoutNode is a split, {direction, size, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description.
+// LayoutNode is a split, {direction, size, frame, children}, or a card, {card, size, frame, tabs}, of the tree of a layout description;
+// the frame of a split is the smallest rectangle that holds the frames of its children.
 type LayoutNode struct {
 	Direction string
 	Size      float64
@@ -884,14 +885,15 @@ type LayoutTab struct {
 	Params json.RawMessage `json:"params"`
 }
 
-// MarshalJSON writes a split as {direction, size, children} and a card as {card, size, frame, tabs}.
+// MarshalJSON writes a split as {direction, size, frame, children} and a card as {card, size, frame, tabs}.
 func (n LayoutNode) MarshalJSON() ([]byte, error) {
 	if n.Direction != "" {
 		return json.Marshal(struct {
 			Direction string       `json:"direction"`
 			Size      float64      `json:"size"`
+			Frame     LayoutFrame  `json:"frame"`
 			Children  []LayoutNode `json:"children"`
-		}{n.Direction, n.Size, n.Children})
+		}{n.Direction, n.Size, n.Frame, n.Children})
 	}
 	if n.Group != nil {
 		return json.Marshal(struct {
@@ -977,6 +979,16 @@ func (s *Shell) describeGroups(key string, out []LayoutGroup) []LayoutGroup {
 	return out
 }
 
+// frameAround is the smallest rectangle that holds the frames of nodes.
+func frameAround(nodes []LayoutNode) LayoutFrame {
+	left, top, right, bottom := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, node := range nodes {
+		left, top = min(left, node.Frame.X), min(top, node.Frame.Y)
+		right, bottom = max(right, node.Frame.X+node.Frame.Width), max(bottom, node.Frame.Y+node.Frame.Height)
+	}
+	return LayoutFrame{X: left, Y: top, Width: right - left, Height: bottom - top}
+}
+
 // describeNode is the node of the description of a node of the tree.
 func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	if node.Direction != "" {
@@ -988,6 +1000,7 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 			}
 			described.Children = append(described.Children, part)
 		}
+		described.Frame = frameAround(described.Children)
 		return described, nil
 	}
 	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.

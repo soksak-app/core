@@ -391,6 +391,27 @@ test("the lines and cards of each arrangement of tree.json without a window side
   }
 });
 
+// contract: layout.tree.splits-carry-frames
+test("each split of the description carries the frame in window points that holds the frames of its children", { timeout: 5000 }, () => {
+  arrange([0, 0.5, 1], [0, 0.5, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 2, tabs: [view("tab-aaaaa1", PLAIN)] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] },
+    { id: "c", c0: 1, c1: 2, r0: 1, r1: 2, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  const check = (node, where) => {
+    if (node.card) return;
+    assert.deepEqual(Object.keys(node), ["direction", "size", "frame", "children"], `${where}: the split has no frame`);
+    const frames = node.children.map((child) => child.frame);
+    const left = Math.min(...frames.map(({ x }) => x));
+    const top = Math.min(...frames.map(({ y }) => y));
+    assert.deepEqual(node.frame, { x: left, y: top, width: Math.max(...frames.map(({ x, width }) => x + width)) - left,
+      height: Math.max(...frames.map(({ y, height }) => y + height)) - top }, where);
+    node.children.forEach((child, i) => check(child, `${where}/${i}`));
+  };
+  const { root } = layout();
+  assert.equal(root.direction, "row");
+  assert.equal(root.children[1].direction, "column");
+  check(root, "root");
+});
+
 // contract: layout.surface-window.answers-the-space
 test("surface.window answers the space whose layout holds the tab, null for a tab of no space and refuses a missing surface", { timeout: 5000 }, async () => {
   single([view("tab-aaaaa1", PLAIN)]);

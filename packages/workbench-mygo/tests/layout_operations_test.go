@@ -269,6 +269,38 @@ func (f *tabShell) hostCalls(name string) int {
 	return count
 }
 
+// contract: layout.tree.splits-carry-frames
+func TestEachSplitOfTheDescriptionCarriesTheFrameOfItsChildren(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("a", 0, 1, 0, 2, tab("tab-aaaaaa", "notes")), gridCard("b", 1, 2, 0, 1, tab("tab-bbbbbb", "notes")),
+		gridCard("c", 1, 2, 1, 2, tab("tab-cccccc", "notes"))))
+	var check func(node describedNode, where string)
+	check = func(node describedNode, where string) {
+		if node.Direction == "" {
+			return
+		}
+		if node.Frame == nil {
+			t.Fatalf("%s: the split %s has no frame", where, node.shape())
+		}
+		left, top, right, bottom := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+		for _, child := range node.Children {
+			left, top = min(left, child.Frame.X), min(top, child.Frame.Y)
+			right, bottom = max(right, child.Frame.X+child.Frame.Width), max(bottom, child.Frame.Y+child.Frame.Height)
+		}
+		if got := *node.Frame; got.X != left || got.Y != top || got.Width != right-left || got.Height != bottom-top {
+			t.Fatalf("%s: the split frame is %+v, not the frame %v,%v %vx%v of its children", where, got, left, top, right-left, bottom-top)
+		}
+		for i, child := range node.Children {
+			check(child, fmt.Sprintf("%s/%d", where, i))
+		}
+	}
+	root := *f.layout().Root
+	if got := root.shape(); got != "row[a 0.5, column[b 0.5, c 0.5] 0.5]" {
+		t.Fatalf("the tree is %s", got)
+	}
+	check(root, "root")
+}
+
 // contract: layout.open.adds-a-tab-once
 func TestALayoutOpenAddsATabOnce(t *testing.T) {
 	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
