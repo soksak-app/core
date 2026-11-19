@@ -370,3 +370,30 @@ test("core.grid reports no acts and no pane for a card that a fullscreen card hi
   }
   await run("core.card.fullscreen", { card: "card-3" });
 });
+
+// The verification of the plane judges the cards of each level of the group tree on the lines of that level, so a layout with a group
+// card fails no row of it (docs/spec/groups.md#drawn-rectangles).
+test("the verification of the plane fails no row for a layout with a group card", { timeout: 5000 }, async () => {
+  arrange();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const { verify } = await import("../verify.js");
+  const failed = verify().filter((row) => row.ok === false && /^V[1-5] /.test(row.name)).map((row) => `${row.name}: ${row.note}`);
+  assert.deepEqual(failed, [], "the verification fails rows of the layout with a group card");
+});
+
+// A member of a group card and a card outside it can end on one line; the frame of the group card holds the member one gap inside that
+// line, so the verification compares the edges of the cards that have the same frames on that side (docs/spec/groups.md#drawn-rectangles).
+test("the verification of the plane fails no row when a member of a group card and another card end on one line", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 5, leader: "card-4",
+    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
+    state: { xs: [0, 0.4, 0.7, 1], ys: [0, 0.5, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
+      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 0, 2, 1, 2, [view("tab-aaaaa3", PLAIN)]),
+      content("card-5", 2, 3, 0, 2, [view("tab-aaaaa5", PLAIN)])] } }, "spc-aaaaaa");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const { verify } = await import("../verify.js");
+  const failed = verify().filter((row) => row.ok === false && /^V[1-5] /.test(row.name)).map((row) => `${row.name}: ${row.note}`);
+  assert.deepEqual(failed, [], "the verification fails rows of the layout with a group card");
+  arrange();
+});

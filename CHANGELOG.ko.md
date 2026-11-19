@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-48 (group card가 있는 plane 검증, page): page plane의 검증은 다시 만든 사본에 group card의 frame을 주고, 한 line에서 같은 frame을 가진 card의 가장자리끼리 비교하므로, group card가 있는 layout이 더는 application log에 `V1`과 `V4` 실패를 기록하지 않는다. 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-47 (frame 안의 group header, mygo): mygo는 group card의 header를 page처럼, 그리고 content card의 header처럼 frame의 border 안에 그리므로, `core.group.header`와 `core.group.name`이 모든 host에서 같은 사각형을 가진다. 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-46 (전체 화면 menu 항목, Wails host): Wails host의 보기 menu는 전체 화면에 들어가기만 하고 단축키가 없는 `Fullscreen` 항목 대신, 다른 host처럼 `ctrl+cmd+f`를 가진 framework의 전체 화면 토글 항목을 담는다. 검증: host menu test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-45 (`core.surfaces`의 `exposes` 순서, page): page는 표면이 등록한 항목을 mygo처럼 정렬된 순서로 나열하므로, 등록의 시점이 순서를 정하지 않는다. 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.

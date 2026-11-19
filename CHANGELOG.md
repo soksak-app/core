@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-48 (plane verification with group cards, page): the verification of the page plane gives its rebuilt copy the frames of the group cards and compares the edges of cards with the same frames on a line, so a layout with a group card no longer records the `V1` and `V4` failures in the application log. Verification: the page tests failed on the unchanged code and pass.
 - F937-47 (group header inside its frame, mygo): mygo draws the header of a group card inside the border of its frame, as the page does and as the header of a content card stands, so `core.group.header` and `core.group.name` have the same rectangles on every host. Verification: the mygo test failed on the unchanged code and passes.
 - F937-46 (full screen menu item, Wails host): the View menu of the Wails host holds the toggle full screen item of the framework with `ctrl+cmd+f`, as the other hosts do, instead of an item titled `Fullscreen` without a shortcut that only enters full screen. Verification: the host menu test failed on the unchanged code and passes.
 - F937-45 (order of `exposes` in `core.surfaces`, page): the page lists the entries that a surface registered in sorted order, as mygo does, so the timing of the registrations does not decide the order. Verification: the page test failed on the unchanged code and passes.
