@@ -13949,6 +13949,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F920",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Reconcile(g *Grid, change LayoutChange) ([]partyChange, error) {" },
+      { file: "packages/workbench/parties.js", symbol: "export function reconcile({ moved, split }) {" },
+    ],
+    tests: [{ file: "packages/workbench-mygo/tests/layout/parties_cases_test.go", id: "TestPartyCasesRunEverySteps" }],
+    expected: "Both hosts correct parties after a close, split, move or boundary drag, and a card split from a member joins its party.",
+    levels: ["unit"],
+  },
+  {
     id: "F919",
     implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Drawings(g *Grid) ([]Drawing, error) {" }],
     tests: [{ file: "packages/workbench-mygo/tests/party_drawing_test.go", id: "TestAPartyDrawsItsOutlineInItsColorAndTheLeaderBorder" }],

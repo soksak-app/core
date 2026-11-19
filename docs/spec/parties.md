@@ -75,9 +75,10 @@ The `<ids>` of `cards are not touching: <ids>` are the cards of the request that
 A layout change is a close, a move, a split, or a resize that changes which cards touch. Each affected party is corrected in the same change:
 
 - A closed card leaves its party.
-- A card that is moved or split away from its party, or whose move breaks the group, leaves the party. The remaining cards are divided into connected parts. The part that holds the leader stays with the leader. Without a leader, the part with the most cards stays. Only when the parts have equal numbers of cards does the part whose first card comes first in the space order stay. The space order is the order in which the space stores its cards ([persistence](projects.md#persistence)).
+- A split of a party member puts the new card in the party of that member in the same change, because the new card takes the place of a part of that member. The two cards of a split cover the rectangle of the member and touch each other, so a split never breaks the group.
+- A card that is moved away from its party, or whose move breaks the group, leaves the party. A close, a move or a resize can leave the remaining cards in more than one connected part; they are divided into connected parts. The part that holds the leader stays with the leader. Without a leader, the part with the most cards stays. Only when the parts have equal numbers of cards does the part whose first card comes first in the space order stay. The space order is the order in which the space stores its cards ([persistence](projects.md#persistence)).
 - A party that keeps fewer than 2 cards is deleted, and its cards stay in the layout.
-- Each change records one reason in `reason` of the party state: `created` for a party made by `core.party.create`, `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed` or `updated`.
+- Each change records one reason in `reason` of the party state: `created` for a party made by `core.party.create`, `closed`, `split`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed` or `updated`.
 
 ## Drawing
 

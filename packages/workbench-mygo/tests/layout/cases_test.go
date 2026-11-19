@@ -833,10 +833,19 @@ func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {
 			} `json:"drawing"`
 			State layout.State `json:"state"`
 			Steps []struct {
-				Call    string          `json:"call"`
-				Params  json.RawMessage `json:"params"`
-				Returns json.RawMessage `json:"returns"`
-				Error   *string         `json:"error"`
+				// The members of a layout step, which TestPartyCasesRunEverySteps plays; this test judges only create steps.
+				Layout   string          `json:"layout"`
+				Card     string          `json:"card"`
+				Side     string          `json:"side"`
+				Born     string          `json:"born"`
+				Target   string          `json:"target"`
+				Axis     string          `json:"axis"`
+				Line     int             `json:"line"`
+				Position float64         `json:"position"`
+				Call     string          `json:"call"`
+				Params   json.RawMessage `json:"params"`
+				Returns  json.RawMessage `json:"returns"`
+				Error    *string         `json:"error"`
 			} `json:"steps"`
 		} `json:"cases"`
 	}

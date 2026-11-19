@@ -75,9 +75,10 @@ party가 삭제되면 `removed`는 변경 전 party의 모든 카드를 나열�
 배치 변경은 닫기, 이동, 분할, 또는 닿음을 바꾸는 크기 변경이다. 영향받은 party는 같은 변경에서 함께 고친다.
 
 - 닫힌 카드는 그 party를 떠난다.
-- 이동이나 분할로 party에서 떨어진 카드, 또는 그 이동이 묶음을 깨는 카드는 party를 떠난다. 남은 카드는 연결된 부분들로 나뉜다. leader가 있는 부분은 leader와 함께 남는다. leader가 없으면 카드가 가장 많은 부분이 남는다. 부분들의 카드 수가 같을 때만 space 순서에서 첫 카드가 앞선 부분이 남는다. space 순서는 space가 카드를 저장하는 순서다([영속성](projects.ko.md#저장)).
+- party 구성원을 분할하면 새 카드는 같은 변경에서 그 구성원의 party에 들어간다. 새 카드가 그 구성원의 한 부분의 자리를 차지하기 때문이다. 분할의 두 카드는 구성원의 사각형을 덮고 서로 닿으므로, 분할은 묶음을 깨지 않는다.
+- 이동으로 party에서 떨어진 카드, 또는 그 이동이 묶음을 깨는 카드는 party를 떠난다. 닫기, 이동 또는 크기 변경은 남은 카드를 둘 이상의 연결된 부분으로 남길 수 있으며, 그 카드들은 연결된 부분들로 나뉜다. leader가 있는 부분은 leader와 함께 남는다. leader가 없으면 카드가 가장 많은 부분이 남는다. 부분들의 카드 수가 같을 때만 space 순서에서 첫 카드가 앞선 부분이 남는다. space 순서는 space가 카드를 저장하는 순서다([영속성](projects.ko.md#저장)).
 - 카드가 2개 미만 남은 party는 지우며, 그 카드들은 배치에 남는다.
-- 각 변경은 party 상태의 `reason`에 이유 하나를 기록한다: `core.party.create`로 만든 party에는 `created`, 그 밖에는 `closed`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed`, `updated`.
+- 각 변경은 party 상태의 `reason`에 이유 하나를 기록한다: `core.party.create`로 만든 party에는 `created`, 그 밖에는 `closed`, `split`, `moved`, `split-leader`, `split-most-cards`, `too-few`, `taken`, `removed`, `leader-removed`, `updated`.
 
 ## 그리기
 
