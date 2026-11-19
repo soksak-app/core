@@ -233,7 +233,14 @@ export function publish() {
       surface: slotSurface(slot),
     });
   }
-  return deliver(mine, snapshot, chromeRow(drawnFrameText()));
+  // The grab areas of the drawn dividers, which the host gives to this document over its native views
+  // (docs/spec/native-surfaces.md#surface-host-container). A divider of a hidden plane has no box and takes no pointer.
+  const grabs = [];
+  for (const divider of plane.querySelectorAll(".sp-divider")) {
+    const frame = planeFrame(divider.getBoundingClientRect(), host);
+    if (frame.w > 0 && frame.h > 0) grabs.push(frame);
+  }
+  return deliver(mine, snapshot, chromeRow(drawnFrameText()), grabs);
 }
 
 /** Ends the run unless a later gesture continued it. */
@@ -247,7 +254,7 @@ function endRun() {
  * The run itself ends when the settled drawing has presented, so the work held until the end of a run does not compete with that drawing.
  * A settled preparation ends it only by failing, because no drawing follows a failed preparation.
  */
-function deliver(mine, snapshot, titlebar) {
+function deliver(mine, snapshot, titlebar, grabs) {
   const running = !settled();
   if (running !== going) {
     going = running;
@@ -256,7 +263,7 @@ function deliver(mine, snapshot, titlebar) {
     edge?.(going);
   }
   const drawing = mine !== aheadSeq;
-  const result = commit(mine, snapshot, !running, titlebar);
+  const result = commit(mine, snapshot, !running, titlebar, grabs);
   if (!running && runActive()) {
     if (typeof result?.then === "function") result.then(drawing ? endRun : undefined, endRun);
     else if (drawing) endRun();
@@ -432,9 +439,12 @@ export function cancelPrepared(options) {
 /**
  * Prepares the next card placement. An existing surface whose position cannot be calculated is hidden first.
  * titlebar is the height of the first row that the next drawing will show, and the host sets the window title
- * bar to that height in the same transaction (docs/spec/native-surfaces.md#title-bar-height).
+ * bar to that height in the same transaction (docs/spec/native-surfaces.md#title-bar-height). grabs are the grab areas of the dividers
+ * of the layout, in plane coordinates, as the draw places them (the commit hook of the view): the host gives them to this document
+ * over its native views (docs/spec/native-surfaces.md#surface-host-container).
  */
-export function publishAhead(rects, seated, titlebar) {
+export function publishAhead(rects, seated, titlebar, grabs) {
+  if (!Array.isArray(grabs)) throw new TypeError("a preparation needs the grab areas of the dividers of its layout");
   aheadRecord = null;
   aheadComplete = true;
   const seats = [];
@@ -533,7 +543,7 @@ export function publishAhead(rects, seated, titlebar) {
   }
   aheadComplete &&= seats.length - unseated === seated.size && (unseated === 0 || layoutGrid !== null);
   aheadSeq = ++seq;
-  return deliver(aheadSeq, seats, titlebar);
+  return deliver(aheadSeq, seats, titlebar, grabs.map(({ x, y, w, h }) => ({ x, y, w, h })));
 }
 
 /**
@@ -542,11 +552,11 @@ export function publishAhead(rects, seated, titlebar) {
  * `deliver` cancels earlier commits and the sequence only grows, so the snapshot that arrives here is always
  * the most recent one.
  */
-function commit(mine, snapshot, final, titlebar) {
+function commit(mine, snapshot, final, titlebar, grabs) {
   // viewport is the size of the window that this layout was made at, which the host keeps with the layout transaction of the
   // preparation (docs/spec/native-surfaces.md#layout-transaction).
   const viewport = { width: window.innerWidth, height: window.innerHeight };
-  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, viewport, surfaces: [], deferred: [] };
+  const record = { seq: mine, settled: final, drawn: mine !== aheadSeq, titlebar, viewport, grabs, surfaces: [], deferred: [] };
   // A drawn commit runs in the draw of a layout, which follows the acknowledgement of the presentation before it.
   if (record.drawn) writeAcknowledgedHoles();
   const kinds = app.kinds;

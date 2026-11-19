@@ -73,7 +73,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     assert.deepEqual([attemptOf("visible-view"), attemptOf("retained-view")], [1, 2]);
     const view = (id, x) => ({ id, plugin: "placement-probe", dim: false, visible: id === "visible-view", applied: { x, y: 0, w: 20, h: 20 },
       surface: descriptor(id), start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } });
-    const record = { surfaces: [view("visible-view", 0)], settled: true, drawn: true, titlebar: 40 };
+    const record = { surfaces: [view("visible-view", 0)], grabs: [], settled: true, drawn: true, titlebar: 40 };
     const requested = [record.surfaces[0], view("retained-view", 20),
       { ...view("cold-view", 40), retainedTextSize: () => 1.875 }, view("background-view", 60)];
     let held = null;
@@ -130,7 +130,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
       failed: () => {},
     });
     saver.observe(new Set(["retained-view"]), [{ id: "retained-view", plugin: "placement-probe", kind: "tab" }]);
-    const undrawn = { surfaces: [], drawn: false, settled: false, titlebar: 40 };
+    const undrawn = { surfaces: [], grabs: [], drawn: false, settled: false, titlebar: 40 };
     const classified = await memoryPlacement(undrawn, [retained], {
       ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries,
     });
@@ -149,7 +149,7 @@ test("a host placement retains mounted dormant views and excludes cold dormant v
     assert.deepEqual(beforeDraw.placements, [], "the retained-only view entered an empty compositor record");
 
     // The title bar differs, so the drawn commit sends a second request: the settled value alone does not.
-    const drawn = { surfaces: [retained], drawn: true, settled: true, titlebar: 41 };
+    const drawn = { surfaces: [retained], grabs: [], drawn: true, settled: true, titlebar: 41 };
     const afterDraw = await memoryPlacement(drawn, [retained], {
       ready: Promise.resolve(), saver, observe: () => {}, start: (entries) => entries,
     });
@@ -204,7 +204,7 @@ test("surface sync traces its result only while the frame log gate is open", { t
     Object.defineProperty(mounted, "mountRegistration", { configurable: true,
       get: () => { mountTraceLookups += 1; return registration; } });
     logGate.set({ ...priorPolicy, frame: "off" });
-    const record = { surfaces: [view], settled: true, drawn: true, titlebar: 40 };
+    const record = { surfaces: [view], grabs: [], settled: true, drawn: true, titlebar: 40 };
     await assert.rejects(host.surfaces.place(record), /composition missing in current page/);
     await flushEvents();
     assert.deepEqual(syncEvents(), [], "a disabled trace wrote a surface sync record");
@@ -261,7 +261,7 @@ test("host placement sends start values until the host holds them and again afte
     surface: descriptor("held-start-view", "held-start-probe"),
     start: { params: null, origin: { directory: null }, declarations: emptySurfaceDeclarations } };
   const at = (x, params = null) => ({ surfaces: [{ ...view, applied: { ...view.applied, x },
-    start: { ...view.start, params } }], settled: true, drawn: true, titlebar: 40 });
+    start: { ...view.start, params } }], grabs: [], settled: true, drawn: true, titlebar: 40 });
   try {
     const host = await import("../host.js?held-start-values");
     await host.surfaces.theme({ scheme: "dark", tokens: {} });
@@ -296,8 +296,8 @@ test("host placement preserves call order across the lazy view-module import", {
     applied: { x: 0, y: 0, w: 20, h: 20 },
     surface: descriptor(id, "retained-race-plugin"),
     start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
-  const emptyRecord = { surfaces: [], settled: true, drawn: true, titlebar: 40 };
-  const viewRecord = { surfaces: [surface], settled: true, drawn: true, titlebar: 40 };
+  const emptyRecord = { surfaces: [], grabs: [], settled: true, drawn: true, titlebar: 40 };
+  const viewRecord = { surfaces: [surface], grabs: [], settled: true, drawn: true, titlebar: 40 };
 
   try {
     const actualHost = await import("../host.js?retained-race");
@@ -334,7 +334,7 @@ test("an active view that is not in an undrawn record waits for its drawn commit
       surface: descriptor("active-view"), start: { origin: { directory: null }, declarations: emptySurfaceDeclarations } };
     const activeIds = new Set([view.id]);
     const policy = { activeIds, mountedSurface: modules.mountedSurface, authorize: modules.authorizeSurface };
-    const prepared = await placeCompositorRecord({ surfaces: [], settled: true, drawn: false, titlebar: 40 }, [view],
+    const prepared = await placeCompositorRecord({ surfaces: [], grabs: [], settled: true, drawn: false, titlebar: 40 }, [view],
       (request) => host.surfaces.place(request), ["placement-probe"], policy);
     assert.deepEqual(prepared, { placements: [], deferred: [] }, "an upcoming active view was treated as a dormant surface");
     assert.deepEqual(syncs().find(Boolean)?.surfaces, [],
@@ -343,7 +343,7 @@ test("an active view that is not in an undrawn record waits for its drawn commit
     // The plane draws the slot of the tab, which mounts the view, and the host authorizes it.
     await mountDeclared(view.id);
     const callsBefore = syncs().length;
-    const drawn = await placeCompositorRecord({ surfaces: [view], settled: true, drawn: true, titlebar: 40 }, [view],
+    const drawn = await placeCompositorRecord({ surfaces: [view], grabs: [], settled: true, drawn: true, titlebar: 40 }, [view],
       (request) => host.surfaces.place(request), ["placement-probe"], policy);
     assert.deepEqual(drawn.placements.map(({ id }) => id), [view.id], "the active view did not enter the drawn placement");
     assert.deepEqual(syncs()[callsBefore].surfaces.map(({ id }) => id), [view.id]);
@@ -383,7 +383,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
       if (initialized) memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin, kind: "tab" })));
     };
     const policy = { mountedSurface: modules.mountedSurface, authorize: modules.authorizeSurface, prepare: retainedMounts.prepareRetainedSurface };
-    const undrawn = { surfaces: [], settled: true, drawn: false, titlebar: 40 };
+    const undrawn = { surfaces: [], grabs: [], settled: true, drawn: false, titlebar: 40 };
     const beforeDraw = await memoryPlacement(undrawn, candidates, { ready, saver: memory, observe, start: (entries) => entries });
     const prepared = await placeCompositorRecord(undrawn, beforeDraw.surfaces,
       (request) => host.surfaces.place(request), ["placement-probe"], policy);
@@ -396,7 +396,7 @@ test("an unloaded cold view is classified before a drawn host placement", async 
     // before ready resolves. The placement is started before the mark, and one microtask passes before the mark: a placement that
     // did not wait for ready has observed its record by then, so observed is listed before ready.
     order = [];
-    const drawn = { surfaces: [], settled: true, drawn: true, titlebar: 40 };
+    const drawn = { surfaces: [], grabs: [], settled: true, drawn: true, titlebar: 40 };
     const classifiedPlacement = memoryPlacement(drawn, candidates, { ready, saver: memory, observe, start: (entries) => entries }).then((value) => {
       order.push("finished");
       return value;
@@ -463,7 +463,7 @@ test("a disabled memory saver mounts a cold hidden view at startup", async () =>
       ready: Promise.resolve(), saver: memory, start: (entries) => entries,
       observe: (_record, tabs) => memory.observe(new Set(), tabs.map(({ id, plugin }) => ({ id, plugin, kind: "tab" }))),
     });
-    const answer = await placeCompositorRecord({ surfaces: [], drawn: true, settled: true, titlebar: 40 },
+    const answer = await placeCompositorRecord({ surfaces: [], grabs: [], drawn: true, settled: true, titlebar: 40 },
       classified.surfaces, (request) => host.surfaces.place(request), ["placement-probe"], {
         mountedSurface: modules.mountedSurface,
         authorize: modules.authorizeSurface,

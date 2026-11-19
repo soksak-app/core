@@ -545,11 +545,14 @@ constructor runs; call it to reject a stale saved layout before installing one.
 
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
 `painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
-`onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw)`,
+`onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw, dividers)`,
 `classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0).
 
-`commit(rects, draw)` runs before every layout change. It receives the rectangles
-on the device's pixel grid. The host calls `draw()` after preparing its views.
+`commit(rects, draw, dividers)` runs before every layout change. It receives the
+rectangles on the device's pixel grid, and the dividers of the layout with the
+rectangles that the draw gives their grab areas on that grid, which are none in
+fullscreen. A host whose own views cover the cards gives the grab areas the
+pointer over them. The host calls `draw()` after preparing its views.
 Each callback draws the layout it received, once; a later grid change cannot
 replace that layout before it is drawn, and a device pixel ratio that changes
 before the draw does not change the rectangles it writes. The view draws again

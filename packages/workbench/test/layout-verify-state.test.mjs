@@ -46,12 +46,12 @@ function layoutWith(state) {
 test("a presentation after a failed presentation ends the failure of the page layout", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   assert.equal(await page.presented(), false, "the failed layout must not be presented");
   assert.equal(page.failure()?.message, TIMEOUT, "the failed layout must be the failure of the page layout");
 
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   assert.equal(await page.presented(), true, "the layout after the failure must be presented");
   page.clearFailure();
   assert.equal(page.failure(), null, "a later presentation must end the failure of the page layout");
@@ -64,11 +64,11 @@ test("a presentation after a failed presentation withdraws the error of that fai
   wire = selectPageWire("layout-verify-state-banner-withdrawn");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   page.clearFailure();
   await drained();
@@ -81,12 +81,12 @@ test("a presentation after a failed presentation leaves another error in the ban
   wire = selectPageWire("layout-verify-state-other-error-kept");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   const showError = createErrorDisplay({ document, changed: () => {} });
   showError("another failure");
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   page.clearFailure();
   await drained();
@@ -100,10 +100,10 @@ test("while a surface has not presented, the presentation of another render leav
   wire = selectPageWire("layout-verify-state-surface-held");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.drawn();
   page.clearFailure();
   // The wait for the surface is held until the release, so the banner keeps the failure after clearFailure.
@@ -122,7 +122,7 @@ test("a wait for the surfaces that fails leaves the failure, and the next presen
   const waits = () => wire.calls.filter(({ name }) => name === "waitPresented").length;
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   state.fail = false;
   page.clearFailure();
@@ -142,10 +142,10 @@ test("a layout that fails during the wait keeps its failure", async () => {
   wire = selectPageWire("layout-verify-state-layout-fails-in-wait");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   page.clearFailure();
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.drawn();
   wire.release();
   await drained();
@@ -160,7 +160,7 @@ test("a failure that repeats stays in the banner", async () => {
   const state = { fail: true };
   const page = layoutWith(state);
   for (let round = 0; round < 2; round++) {
-    page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+    page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
     await page.presented();
   }
   assert.match(document.getElementById("applicationError")?.textContent ?? "", /surface presentation failed/);
@@ -173,7 +173,7 @@ test("an error of another source with the text of the failure stays in the banne
   wire = selectPageWire("layout-verify-state-same-text-other-source");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   const text = document.getElementById("applicationError").textContent;
   createErrorDisplay({ document, changed: () => {} })(text);
@@ -189,10 +189,10 @@ test("with no plane shown, a cleared failure leaves no failed row in the verific
   wire = selectPageWire("layout-verify-state-no-plane-cleared");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   state.fail = false;
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   page.clearFailure();
   await drained();
@@ -207,7 +207,7 @@ test("with no plane shown, a failure that is still current is the only row", asy
   wire = selectPageWire("layout-verify-state-no-plane-current");
   const state = { fail: true };
   const page = layoutWith(state);
-  page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   await page.presented();
   const rows = verificationRows({ drawn: false, rows: () => { throw new Error("rows must not be read without a plane"); }, failure: page.failure() });
   assert.deepEqual(rows, [{ name: "Surface presentation", ok: false, note: TIMEOUT }],
