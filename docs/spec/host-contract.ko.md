@@ -1425,6 +1425,23 @@ fn invalid_json_closes_connection() {
 | `surface.sync.closed-window-creates-nothing` | 창이 닫힐 때 진행 중인 배치나 modal 요청은 표면이나 modal view를 만들지 않고 `project window is closed`로 실패한다. 창을 닫을 때 모든 표면을 이미 닫았으므로 그 뒤에 만든 표면은 닫는 곳이 없기 때문이다. | all |
 | `exposure.reply.error-member-names-code-and-message` | document reply의 `error` member에 `code`나 `message`가 없으면 `error has no code` 또는 `error has no message`로 거부하며, 기다리는 요청에 code 0이나 빈 message를 전달하지 않는다. | all |
 | `sok.endpoint.error-member-names-code-and-message` | endpoint 응답의 error member에 `code`나 `message`가 없으면 `invalid frame from endpoint: error has no code` 또는 `... error has no message`로 거부하며, code 0이나 빈 message로 대신하지 않는다. | all |
+| `conversation.does-not-follow-symbolic-links` | 세션 folder의 symbolic link는 따라가지도 후보로 세지도 않으므로, 위쪽 tree로 돌아가는 link가 folder를 반복하지 못한다. | all |
+| `conversation.refuses-a-text-that-is-not-a-string` | `claude-code` text 블록의 `text`, 또는 `codex` 입력이나 출력 text 항목의 `text`가 문자열이 아니면 줄 번호와 함께 거부한다. | all |
+| `conversation.refuses-a-message-content-of-the-wrong-type` | `claude-code` 메시지의 content가 문자열도 목록도 아니거나, `codex` 메시지의 content가 목록이 아니면 줄 번호와 함께 거부한다. | all |
+| `conversation.refuses-a-content-item-that-is-not-an-object` | 메시지의 content 항목이 문자열 `type`을 가진 JSON 객체가 아니면 줄 번호와 함께 거부한다. | all |
+| `conversation.claude-code.names-the-folder-by-the-recorded-pairs` | `claude-code` session folder는 작업 디렉터리에서 agent 대화 명세가 밝히는 대로 Claude Code가 기록한 인코딩 쌍으로 이름 붙는다. | all |
+| `conversation.codex.keeps-an-image-only-message` | 텍스트 없이 이미지 항목만 있는 `codex` user 또는 assistant 메시지는 건너뛰지 않고 그 이미지 항목과 함께 유지한다. | all |
+| `conversation.claude-code.keeps-an-image-only-message` | 텍스트 없이 이미지 블록만 있는 `claude-code` user 또는 assistant 메시지는 건너뛰지 않고 그 이미지 항목과 함께 유지한다. | all |
+| `conversation.claude-code.selects-the-file-by-cwd` | `claude-code` 읽기는 첫 `cwd` 레코드가 작업 디렉터리인 세션 파일을 고른다. | all |
+| `conversation.codex.selects-the-file-by-payload-cwd` | `codex` 읽기는 첫 레코드가 `session_meta`이고 `payload.cwd`가 작업 디렉터리와 같은 세션 파일을 고른다. | all |
+| `conversation.reads-an-unchosen-file-only-to-its-session-record` | 선택되지 않은 후보 파일은 세션 레코드까지만 읽으므로, 그 뒤의 잘못된 줄은 읽지 않는다. | all |
+| `conversation.refuses-a-relative-cwd` | `--cwd`가 절대 경로가 아니면 `cwd is not an absolute path: <cwd>`로 거부한다. | all |
+| `conversation.refuses-a-session-working-directory-that-is-not-a-string` | 세션 파일의 작업 디렉터리가 없거나 문자열이 아니면 작업 디렉터리 메시지로 거부한다. | all |
+| `conversation.refuses-an-unknown-agent` | agent가 `claude-code`도 `codex`도 아니면 `unknown agent <agent>`로 거부한다. | all |
+| `conversation.refuses-an-unreadable-file-with-its-reason` | 읽을 수 없는 후보 또는 선택된 파일은 경로와 소문자 운영체제 사유와 함께 거부한다. | all |
+| `conversation.refuses-when-no-file-matches` | 작업 디렉터리와 일치하는 후보가 없으면 `no <agent> session file has the working directory <cwd>`로 거부한다. | all |
+| `conversation.selects-the-most-recently-modified-file` | 둘 이상의 후보가 일치하면 가장 최근에 수정된 파일을 고른다. | all |
+| `sidecars.environment.sok-folder-first-on-path` | sidecar 프로세스는 sok 애플리케이션의 folder를 PATH의 첫 항목으로 시작하며, 그 folder는 다른 PATH 항목에 나타나지 않는다. | all |
 
 ## Workbench cases
 

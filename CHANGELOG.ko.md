@@ -3,9 +3,18 @@
 
 [English](CHANGELOG.md)
 
-## 2026-11-18
+## 2026-11-19
 
 - F898: sok가 Codex agent를 지원한다. `~/.codex`가 폴더이면 skill을 `~/.agents/skills/soksak/SKILL.md`에 쓰고, `sok mcp install`은 `PATH`에 `codex` 명령이 있으면 sok를 그 명령에 등록한다.
+- F905-4: Codex 계약 시험이 호출하지 않는 공유 `policy` helper를 include하지 않는다. 이 include가 F898 CI 검사에서 경고를 거부하는 clippy 검사를 실패시켰다(`packages/sok/rust/tests/codex_test.rs`).
+- F899-6: 호스팅하는 agent의 파괴적 셸 명령을 실행 전에 거부하는 계약은 persistent services 사양에 있다. 구현은 sidecar 저장소에 있다(alacritty S121, vt S181).
+- F899-2: `sok conversation read`가 디스크의 session file에서 agent 대화를 읽고, 읽은 file을 함께 보고한다(Claude Code, Codex). 계약은 `docs/spec/agent-conversation.md`에 있고, Rust 읽기 구현은 `packages/sok/rust/src/conversation.rs`, Go 읽기 구현은 `packages/sok/go/src/conversation.go`에 있다.
+- F899-2.1: Go sok가 F899-2 계약으로 `sok conversation read`를 실행한다. `packages/sok/go/tests/conversation_test.go`의 시험은 Rust 시험과 이름이 같다.
+- F899-2.2: main을 branch에 merge한 뒤 Rust 대화 읽기 시험은 22/22, Go 대화 읽기 시험은 17/17 통과한다.
+- F889-1: 사이드카 환경 시험(Rust `a_sidecar_environment_puts_the_sok_folder_first_on_path`, Go `TestASidecarEnvironmentPutsTheSokFolderFirstOnPath`)이 main에 있고 반복 실행 target을 통과한다.
+
+## 2026-11-18
+
 - F897: unwatch 상한 Rust 호스트 테스트가 페이지 호출 목록을 즉시 읽는 대신 상한을 두고 호출을 기다리도록 바꿨다. 페이지 호출이 아직 기록되지 않았을 때 실패하던 문제를 고친다.
 - F895: 카드 자동 정렬 명령은 설정 `cardArrange`(기본값 `resize`는 구조를 유지하고, `even`은 `arrange("even")`을 실행한다)의 값을 따른다. 설정 창에서 선택하며, 명령의 툴바 아이콘은 설정 값에 따라 바뀐다.
 - F894: 레이아웃 모델에 균등 배치 `arrange("even")`을 추가한다. 현재 카드를 같은 크기의 격자로 바꾸고, 맞는 격자가 없으면 빈 카드 하나를 더한다. 각 셀이 `minSize` 이상인 격자만 고른다.
