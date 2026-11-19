@@ -57,4 +57,6 @@ sidecar 는 wheel 동작 `scroll {lines, col, row, shift}` 를 이 순서로 보
 
 ## 열린 결정
 
-- Program scroll 의 그리기: program 은 scroll 에 redraw 로, 내용의 끝에서는 출력 없이, 또는 여러 번의 write 로 답할 수 있고, sidecar 는 출력만 본다. program 이 입력에 대한 답을 마쳤다고 말하는 session 의 이벤트는 없다. 결정은 답하지 않는 program 을 포함해 기다림을 끝내는 이벤트를 정하며, program scroll 을 구현하기 전에 adversarial review 로 정한다.
+- Program scroll 의 그리기. 제안 규칙: (1) 동기 출력(DECSET 과 DECRST 2026)을 쓰는 program 은 reset 으로 frame 을 끝내므로, scroll 입력 뒤의 첫 reset 이 기다림을 끝내고 답은 `settledBy: "sync"` 를 말한다. sidecar 는 동기 frame 이 끝날 때마다 session 이벤트를 발행한다. (2) 동기 출력이 없는 program 에서는 redraw 의 끝을 알리는 이벤트가 없으므로, 그때에만 입력 뒤의 마지막 출력 다음에 session 의 출력이 없는 조용한 간격이 지나면 기다림이 끝난다. 간격은 millisecond 가 아니라 창의 display frame 으로 세므로 규칙은 모든 refresh rate 에서 성립한다. 답은 `settledBy: "quiet"` 와 간격을 말하고, 간격은 frame 단위의 기본값을 가진 선언된 설정이다. (3) 입력 뒤 간격 안에 출력이 없으면 screen 은 바뀌지 않은 채 `changed: false` 이다. (4) 되돌리기 단계의 기다림도 같은 규칙으로 끝난다. 이유: 2026 의 reset 은 program 이 frame 의 끝에 보내는 유일한 이벤트이고, frame 수는 refresh rate 를 가정하지 않는 척도이다.
+  - 반론, 열림: 창의 display frame 은 sidecar 의 frame 요청에 답하는 tick 으로만 sidecar 에 닿는다([image region](native-surfaces.ko.md#그림-영역)). sidecar 의 surface 는 아직 frame 을 요청하지 않고, 가려진 창이나 그리지 않는 region 은 tick 을 주지 않으므로, (2) 의 조용한 간격에는 숨은 tab 이나 가려진 창의 터미널을 위한 시계가 없다. 답에는 region 이 그리지 않는 동안에도 있는 session 의 frame 원천이나, region 이 그리지 않는 터미널의 program scroll 을 거절하는 규칙이 필요하다.
+  - 반론, 열림: (2) 의 조용한 간격은 출력이 없음으로 program 을 판정하므로, disk 나 network 에서 내용을 읽는 program 처럼 간격 뒤에 답하는 program 에는 그 답 이전의 screen 을 이름하는 답을 준다. 답에는 `settledBy: "quiet"` 가 그리기의 증명이 아니라는 서술이나, 근거와 함께 측정한 기본 간격이 필요하다.

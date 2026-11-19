@@ -242,7 +242,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [ ] F899-8.3 — sidecar 가 alternate screen 이 활성일 때 primary 행을 읽는다. 입력: 두 engine 이 활성 grid 를 읽으므로 `screen.read {from, count}` 가 `dropped` 부터 번호 매긴 alternate screen 을 읽는다.
     - [ ] F899-8.4 — session 상태가 `alternate.active`, `scrollback.dropped`, `alternate {history, dropped}` 를 담는다. foreground program 은 F899-3 을 따른다.
     - [ ] F899-8.5 — plugin 이 `*.screen.rows` 의 `screen` 을 요구하고 명령 설명에 읽기 mode 를 말한다.
-    - [ ] F899-8.6 — program scroll 의 그리기 기다림을 끝내는 이벤트(`spec/terminal-read.md` 의 열린 결정)를 adversarial review 로 정하고 spec 에 쓴다.
+    - [~] F899-8.6 — program scroll 의 그리기 기다림을 끝내는 이벤트(`spec/terminal-read.md` 의 열린 결정)를 adversarial review 로 정하고 spec 에 쓴다. 진행: 제안 규칙(DECSET 2026 의 reset, 없으면 창의 display frame 으로 센 조용한 간격, 되돌리기에도 같은 규칙)과 그 이유가 열린 반론 두 개와 함께 spec 에 쓰였다. display frame 은 sidecar 의 frame 요청의 tick 으로만 sidecar 에 닿고(F906-1, 보류된 alacritty S192), 가려진 창이나 그리지 않는 region 은 그것을 주지 않는다. 그리고 조용한 간격은 느린 program 의 답 이전의 screen 을 이름한다. 남은 것: 두 반론의 답과 반론 없는 review 한 차례.
     - [ ] F899-8.7 — F899-8.6 뒤에 두 쌍의 명령 `*.screen.scroll.read {by}`. 각 sidecar 의 PTY 시험에서 번호 매긴 file 의 `less` 로 Red/Green: +50 의 읽기는 51 행 이후를 돌려주고, 같은 offset 의 두 읽기는 같은 글을 돌려주며, 각 읽기 뒤의 screen 은 그 앞의 screen 과 같다(`restored: true`). mouse tracking 을 켠 program 은 SGR wheel report 를 받는다.
   - 계획: docs/plans/terminal-plan.ko.md (5부). 미정 항목 V1~V8과 결정 D1~D7이 있으며, 아직 구현하지 않았다.
 - [~] F909 — P1, F899-7 후속: 메시지에 보낸 terminal이 없어서 reader에게 응답 주소가 없다. 입력: 메시지 파일은 text만 담으므로 reader가 보낸 terminal을 지정할 수 없다. 기대: 메시지 파일 이름이 보낸 surface를 담고, `messages_read`와 file event가 `from`을 돌려준다. `spec/messaging.ko.md`가 정한 대로다.
