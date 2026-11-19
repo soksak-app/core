@@ -667,15 +667,13 @@ export class GroupTree {
   }
 
   /**
-   * The balance of the grid (docs/spec/groups.md#card-commands-on-a-group-card): in a space without groups the balance of the layout
-   * library, or with arrange its even arrangement (cardArrange even); in a space with groups every line index stays and every slot of
-   * each axis that no card with a size in px holds takes an equal share of the free length, a slot on the y axis with the heads of the
-   * group cards that start on its upper line on top of its share.
+   * The balance of the grid (docs/spec/groups.md#card-commands-on-a-group-card): every child of every cut takes an equal share, with
+   * each group card as a box of the layout library (even); in a space without groups, arrange runs the even arrangement of the library
+   * instead (cardArrange even).
    */
   share(arrange) {
-    if (this.groups.length === 0) {
-      if (arrange && !this.grid.arrange("even")) throw new Error("the layout cannot balance: no equal grid keeps every card at its minimum size");
-      if (!arrange && !this.grid.balance()) throw new Error("the layout cannot balance: the grid is not a slicing arrangement");
+    if (this.groups.length === 0 && arrange) {
+      if (!this.grid.arrange("even")) throw new Error("the layout cannot balance: no equal grid keeps every card at its minimum size");
       // The even arrangement can add an empty card, and lastCard stays the largest issued card number (docs/spec/groups.md#storage).
       for (const card of this.grid.cards) {
         const n = cardNumber(card.id);
@@ -683,14 +681,14 @@ export class GroupTree {
       }
       return;
     }
-    const heads = new Array(this.grid.lines("y").length - 1).fill(0);
-    for (const card of this.grid.cards) {
-      const found = this.find(card.id);
-      if (found) heads[card.r0] = Math.max(heads[card.r0], this.headersAbove(found.path, card.r0) * this.headStep());
-    }
+    // Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
+    const box = (node) => ({
+      id: node.card,
+      head: this.headStep(),
+      members: node.members.map((member) => (typeof member === "string" ? member : box(member))),
+    });
     try {
-      this.grid.shareLines("x");
-      this.grid.shareLines("y", heads);
+      this.grid.even(this.groups.map(box));
     } catch (error) {
       throw new Error(`the layout cannot balance: ${error.message}`);
     }

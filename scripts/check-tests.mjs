@@ -14224,7 +14224,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/layout-change-drag.test.mjs", id: "a divider drag stores its result through core.boundary.move, which is one workbench.layout.change" },
       { file: "packages/workbench/test/layout-change-keys.test.mjs", id: "an arrow key, Enter and a double click on a divider are each one workbench.layout.change of their command" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "eventAdmits judges an event as the writers do: the events that pass every gate are admitted under a closed policy" },
-      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.balance in a space with groups keeps every line index and gives the cards of a row equal shares" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.balance in a space with groups gives every child of every cut an equal share, a group card as one child" },
       { file: "packages/soksak/test/lines.test.mjs", id: "shareLines keeps every line index and gives each slot its corridor, its extra and an equal share of the free length" },
       { file: "packages/plugin-api/test/log-batch-gated.test.mjs", id: "admits answers as the writers judge an event, the events that pass every gate included, and counts nothing" },
       { file: "packages/workbench/test/group-divider.test.mjs", id: "a centring that would draw the card below the header below its minimum leaves the line" },

@@ -419,7 +419,8 @@ func (g *Grid) Even(boxes []Member) error {
 		placeCuts(root, root.old, 0)
 		xs, ys, cards := cellsOf(root, kept.Cards)
 		if err := g.Replace(State{Xs: xs, Ys: ys, Cards: cards, PaidBy: kept.PaidBy}); err != nil {
-			_ = g.Replace(kept) // silent: kept is the state the grid held, which its checks accepted.
+			// kept is the state that the grid held, which its checks accepted, so restore loads it without a check.
+			g.restore(kept)
 			return err
 		}
 		return nil

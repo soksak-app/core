@@ -245,7 +245,7 @@ test("core.grid lists the content cards with their tabs in cards and the group c
   assert.deepEqual({ x, y, w, h }, plane.currentTree().rect("card-4"));
 });
 
-test("core.layout.balance in a space with groups keeps every line index and gives the cards of a row equal shares", { timeout: 5000 }, async () => {
+test("core.layout.balance in a space with groups gives every child of every cut an equal share, a group card as one child", { timeout: 5000 }, async () => {
   plane.closePicker("fixture reset");
   plane.adopt({ focusedId: "card-9", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 13, leader: "card-12",
     groups: [{ card: "card-12", name: "그룹 1", leader: "browser", members: ["browser", "card-13"] },
@@ -254,13 +254,20 @@ test("core.layout.balance in a space with groups keeps every line index and give
       content("terminal", 2, 3, 1, 3, [view("tab-bbbbb1", PLAIN)]), content("browser", 0, 2, 0, 1, [view("tab-bbbbb2", PLAIN)]),
       content("card-9", 0, 1, 1, 2, [view("tab-bbbbb3", PLAIN)]), content("card-11", 1, 2, 1, 2, [view("tab-bbbbb4", PLAIN)]),
       content("card-7", 0, 2, 2, 3, [view("tab-bbbbb5", PLAIN)]), content("card-13", 2, 3, 0, 1, [view("tab-bbbbb6", PLAIN)])] } }, "spc-aaaaaa");
-  const place = () => plane.currentGrid().cards.map(({ id, c0, c1, r0, r1 }) => [id, c0, c1, r0, r1]);
-  const before = place();
   await run("core.layout.balance", {});
-  assert.deepEqual(place(), before, "the balance keeps every line index");
   const tree = plane.currentTree();
-  const heights = ["browser", "card-9", "card-7"].map((id) => tree.rect(id).h);
-  for (const h of heights) assert.ok(Math.abs(h - heights[0]) < 1e-6, `the rows are drawn ${heights}, not one height`);
-  const widths = ["card-9", "card-11", "card-13"].map((id) => tree.rect(id).w);
-  for (const w of widths) assert.ok(Math.abs(w - widths[0]) < 1e-6, `the columns are drawn ${widths}, not one width`);
+  const same = (ids, key) => {
+    const sizes = ids.map((id) => tree.rect(id)[key]);
+    for (const size of sizes) assert.ok(Math.abs(size - sizes[0]) < 1e-6, `${ids} are drawn ${key} ${sizes}, not one size`);
+  };
+  // The plane is a column of the group card card-12 and a row of the column of card-10 and card-7 beside terminal; the header of
+  // card-12 is inside its share.
+  const head = tree.rect("browser").y - tree.rect("card-12").y;
+  assert.ok(Math.abs(tree.rect("browser").h + head - tree.rect("terminal").h) < 1e-6,
+    `card-12 is drawn ${tree.rect("browser").h} below a header of ${head} beside terminal at ${tree.rect("terminal").h}, not one size`);
+  same(["card-10", "terminal"], "w");
+  assert.ok(Math.abs(tree.rect("card-9").h + head - tree.rect("card-7").h) < 1e-6,
+    `card-10 is drawn ${tree.rect("card-9").h} below a header of ${head} above card-7 at ${tree.rect("card-7").h}, not one size`);
+  same(["browser", "card-13"], "w");
+  same(["card-9", "card-11"], "w");
 });

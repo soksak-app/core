@@ -1385,10 +1385,10 @@ func (t *GroupTree) Move(id, target, side string) error {
 	})
 }
 
-// balance runs the balance of the layout library in a space without groups and refuses a grid that is not a slicing arrangement, or with
-// arrange its even arrangement (cardArrange even), which refuses when no equal grid keeps every card at its minimum size and raises
-// lastCard to the empty card that it adds. In a space with groups it keeps every line index and shares the lines of each axis (Grid.ShareLines), the slots of the y axis with the
-// heads of the group cards that start on their upper line (docs/spec/groups.md#card-commands-on-a-group-card).
+// balance gives every child of every cut an equal share, with each group card as a box of the layout library (Grid.Even), and refuses a
+// grid that is not a slicing arrangement; in a space without groups, arrange runs the even arrangement of the library instead
+// (cardArrange even), which refuses when no equal grid keeps every card at its minimum size and raises lastCard to the empty card that it
+// adds (docs/spec/groups.md#card-commands-on-a-group-card).
 func (t *GroupTree) balance(arrange bool) error {
 	if len(t.roots) == 0 && arrange {
 		arranged, err := t.grid.Arrange("even")
@@ -1405,26 +1405,23 @@ func (t *GroupTree) balance(arrange bool) error {
 		}
 		return nil
 	}
-	if len(t.roots) == 0 {
-		balanced, err := t.grid.Balance()
-		if err != nil {
-			return err
+	// Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
+	var box func(n *node) Member
+	box = func(n *node) Member {
+		if !n.group {
+			return Member{Card: n.card}
 		}
-		if !balanced {
-			return errors.New("the layout cannot balance: the grid is not a slicing arrangement")
+		b := &Box{ID: n.card, Head: t.headStep(), Members: []Member{}}
+		for _, m := range n.members {
+			b.Members = append(b.Members, box(m))
 		}
-		return nil
+		return Member{Box: b}
 	}
-	heads := make([]float64, len(t.grid.Lines("y"))-1)
-	for _, card := range t.grid.Cards() {
-		if path, _, ok := t.find(card.ID); ok {
-			heads[card.R0] = math.Max(heads[card.R0], float64(t.heads(path, card.R0))*t.headStep())
-		}
+	boxes := []Member{}
+	for _, n := range t.roots {
+		boxes = append(boxes, box(n))
 	}
-	if err := t.grid.ShareLines("x", nil); err != nil {
-		return fmt.Errorf("the layout cannot balance: %w", err)
-	}
-	if err := t.grid.ShareLines("y", heads); err != nil {
+	if err := t.grid.Even(boxes); err != nil {
 		return fmt.Errorf("the layout cannot balance: %w", err)
 	}
 	return nil
