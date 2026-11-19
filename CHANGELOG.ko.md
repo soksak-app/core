@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F933: View bridge가 surface view의 plugin record를 `fields.surface` 없이 보내므로, view channel에 묶인 surface를 더하고 surface를 이름으로 가진 record를 거부하는 host가 그 record를 저장한다. 이전에는 host가 view page의 모든 plugin record를 거부했다. `packages/plugin-api/test/view.test.mjs`가 surface 없는 record를 지킨다.
 - F932: `sok` usage text, agent skill, command reference가 선언된 submit command의 계약(text는 input 하나, Enter는 별도 key input, CR이나 LF는 거부)을 말한다. `scripts/test/submit-guidance.test.mjs`가 네 곳의 문장이 같음을 지킨다.
 - F927: native layout 커밋은 누름이나 key event가 트랜잭션을 커밋한 표시에, 창의 더 새 배치가 시작된 뒤에도 한 번 답한다: `native/darwin/src/surface_layout.m`이 각 창의 input-ended ticket을 커밋이나 취소까지 집합으로 두고, `startLayout`은 그것을 더는 지우지 않는다. 전에는 입력과 표시의 커밋 단계 사이에 배치를 연 mygo shell의 frame이 그 표시를 `surface preparation <ticket> is no longer current`로 실패시켰고, mygo shell은 그것을 `surface presentation failed: ...`로 보였다. Red: `surface_layout_observe_test`의 `checkInputEndedTicketCommitsAfterANewerLayout`가 `the presentation of ticket 91, whose transaction the key committed, commits after ticket 92 began`으로 실패했다. Green: 이 check가 통과하고, `surface_layout_test`와 `packages/host/go/src/view_join_test.go`의 test가 통과한다.
 - F925-1: Rust page-wire producer가 Go producer처럼 선언된 case 멤버 `filter`를 읽고 `notificationState`, `setTheme`, `setMenuLanguage` 외의 이름을 거부한다. `every_page_wire_case_with_replay_true_gives_its_recorded_reply`는 `party-watch-composition`에서 모르는 멤버를 거부해 실패했고 이제 통과한다.
