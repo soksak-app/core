@@ -49,10 +49,10 @@ fn reserve_rejects_empty_sidecar() {
 
     // Try reserve with an empty sidecar.
     let result = images.reserve(&key, "owner", "");
-    assert!(result.is_err(), "expected error for empty sidecar");
-    assert!(
-        result.unwrap_err().contains("requires a sidecar"),
-        "expected 'requires a sidecar' error"
+    assert_eq!(
+        result,
+        Err(r#"image "view": reserve requires a sidecar"#.to_string()),
+        "the reservation without a sidecar"
     );
 
     // Check that the image was not registered.
