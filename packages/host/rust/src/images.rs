@@ -1887,11 +1887,22 @@ fn decide_screen(screen: &serde_json::Value) -> Decision {
     if let Some((member, text)) = failures.into_iter().next() {
         return Decision::Malformed { member, text, echo };
     }
+    // Each of the four members without a failure is Some, so this pattern fails only when the validation above missed a member.
+    let (Some(request), Some(name), Some(generation), Some(raster)) =
+        (request, name, generation, raster)
+    else {
+        return Decision::Malformed {
+            member: "screen".to_string(),
+            text: "image screen message has a member that the validation did not report"
+                .to_string(),
+            echo,
+        };
+    };
     Decision::ScreenMessage {
-        request: request.unwrap_or_default().to_string(),
-        name: name.unwrap_or_default().to_string(),
-        generation: generation.unwrap_or_default(),
-        raster: raster.unwrap_or_default(),
+        request: request.to_string(),
+        name: name.to_string(),
+        generation,
+        raster,
     }
 }
 
@@ -2197,11 +2208,21 @@ where
                 "image screen",
                 format!("surface={surface} sender={sender} {text}"),
             );
-            let name = echo
+            // The answer is routed by the image name. A message without a valid name names no image, so the error is logged
+            // and no answer is sent.
+            let Some(name) = echo
                 .get("name")
                 .and_then(serde_json::Value::as_str)
-                .unwrap_or_default()
-                .to_string();
+                .map(str::to_string)
+            else {
+                log_error(
+                    "image screen",
+                    format!(
+                        "surface={surface} sender={sender} image name is missing, so the malformed answer is not sent"
+                    ),
+                );
+                return true;
+            };
             let mut screen = echo;
             screen.insert("error".to_string(), "malformed".into());
             screen.insert("member".to_string(), member.into());

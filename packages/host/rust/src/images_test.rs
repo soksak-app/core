@@ -1598,12 +1598,9 @@ fn screen_message_refusals_name_the_reason_and_keep_the_request() {
 #[test]
 fn malformed_screen_message_names_its_member() {
     // (case, member, change of the valid message)
-    let cases: [(&str, &str, fn(&mut serde_json::Value)); 6] = [
+    let cases: [(&str, &str, fn(&mut serde_json::Value)); 5] = [
         ("missing request", "request", |m| {
             m.as_object_mut().unwrap().remove("request");
-        }),
-        ("missing name", "name", |m| {
-            m.as_object_mut().unwrap().remove("name");
         }),
         ("string generation", "generation", |m| {
             m["generation"] = serde_json::json!("2");
@@ -1644,4 +1641,26 @@ fn malformed_screen_message_names_its_member() {
             "{case}: a malformed screen message ended the unanswered request"
         );
     }
+}
+
+// contract: images.copy-path.screen-without-name-is-not-answered
+// A screen message without a valid image name is consumed and sends no answer, because the answer is routed by the image name.
+#[test]
+fn screen_message_without_name_is_not_answered() {
+    let (images, key, generation, raster, first) = screen_fixture();
+    let message = serde_json::json!({
+        "request": first.request, "generation": generation, "raster": raster,
+        "rows": [{ "row": 0, "cells": "row-0" }],
+    });
+    let body = serde_json::json!({ "image": { "screen": message } });
+    let (handled, answers) = handle_screen_message(&images, &body, "sidecar-a", &key.0);
+    assert!(handled, "the screen message without a name is consumed");
+    assert!(
+        answers.is_empty(),
+        "the screen message without a name sends no answer, got {answers:?}"
+    );
+    assert!(
+        images.screen_requests().is_empty(),
+        "the screen message without a name ended the unanswered request"
+    );
 }
