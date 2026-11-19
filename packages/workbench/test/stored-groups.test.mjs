@@ -33,6 +33,12 @@ test("the stored check refuses a layout without groups and a group that is not o
   checkStoredLayout(grouped());
 });
 
+test("the stored check refuses a layout with groups whose two lines stand at one coordinate", { timeout: 5000 }, () => {
+  const flat = grouped();
+  flat.state.xs = [0, 0.25, 0.25, 1];
+  assert.throws(() => checkStoredLayout(flat), { message: "layout with groups stores the x lines 1 and 2 at one coordinate; a layout with groups keeps none" });
+});
+
 test("a new space stores no groups, the first content card as its leader and a lastCard", { timeout: 5000 }, () => {
   const fresh = plane.fresh();
   assert.deepEqual([fresh.groups, fresh.leader, fresh.lastCard], [[], "main", 1]);
