@@ -255,11 +255,11 @@ const TWO_TABLES = `## Allowed differences
 
 ### Framework table
 
-| ID | Wails | Tauri | mygo | Reason |
-| --- | --- | --- | --- | --- |
-| H3 | \`src/bridge.js\` | none | \`src/workbench.go\` | Call channel |
-| A2 | none | \`build.rs\` | none | Build script |
-| A6 | \`runtime/\` | content differs | none | Main page runtime |
+| ID | Wails | Tauri | mygo | gpuikit | Reason |
+| --- | --- | --- | --- | --- | --- |
+| H3 | \`src/bridge.js\` | none | \`src/workbench.go\` | \`src/frontend.rs\` | Call channel |
+| A2 | none | \`build.rs\` | none | none | Build script |
+| A6 | \`runtime/\` | content differs | none | content differs | Main page runtime |
 
 ## Memory pressure
 `;
@@ -274,12 +274,13 @@ test("host structure audit compares the language host libraries, the framework a
     "packages/sok/rust/Cargo.toml", "packages/sok/rust/src/sok.rs", "packages/sok/rust/src/main.rs",
     "apps/wailsv3/src/main.go", "apps/wailsv3/runtime/index.js", "apps/tauriv2/src/main.rs", "apps/tauriv2/runtime/index.js", "apps/tauriv2/build.rs",
     "packages/host/mygo/src/host.go", "packages/host/mygo/src/workbench.go", "apps/mygo/src/main.go",
+    "packages/host/gpuikit/src/host.rs", "packages/host/gpuikit/src/frontend.rs", "apps/gpuikit/src/main.rs", "apps/gpuikit/runtime/index.js",
   ];
   assert.deepEqual(auditHostPairs(tracked, undefined, TWO_TABLES), []);
   assert.deepEqual(auditHostPairs([...tracked, "packages/host/go/src/extra.go"], undefined, TWO_TABLES),
     ["packages/host/go/src/extra: no counterpart in packages/host/rust"]);
   assert.deepEqual(auditHostPairs([...tracked, "packages/host/wailsv3/src/extra.go"], undefined, TWO_TABLES),
-    ["packages/host/wailsv3/src/extra: no counterpart in packages/host/tauriv2", "packages/host/wailsv3/src/extra: no counterpart in packages/host/mygo"]);
+    ["packages/host/wailsv3/src/extra: no counterpart in packages/host/tauriv2", "packages/host/wailsv3/src/extra: no counterpart in packages/host/mygo", "packages/host/wailsv3/src/extra: no counterpart in packages/host/gpuikit"]);
   assert.deepEqual(auditHostPairs([...tracked, "packages/host/tauriv2/build.rs"], undefined, TWO_TABLES),
     ["packages/host/tauriv2/build: no counterpart in packages/host/wailsv3"]);
   assert.throws(() => auditHostPairs(tracked, undefined, TWO_TABLES.replace("| A2 |", "| H1 |")),
