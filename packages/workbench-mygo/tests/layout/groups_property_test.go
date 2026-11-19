@@ -97,7 +97,12 @@ func subset(a, b []string) bool {
 // the drops and the drags of the workbench call them, and checks the invariants after every step.
 func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 	sides := []string{"left", "right", "top", "bottom"}
+	// The seeds after the first thousand are those that a longer run found broken.
+	seeds := []uint64{16258}
 	for seed := uint64(1); seed <= 1000; seed++ {
+		seeds = append(seeds, seed)
+	}
+	for _, seed := range seeds {
 		gap, minimum, width, height := 12.0, 96.0, 1400.0, 900.0
 		grid, err := layout.New(nil, layout.Options{Gap: &gap, MinSize: &minimum, Width: &width, Height: &height})
 		if err != nil {
