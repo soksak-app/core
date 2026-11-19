@@ -5,6 +5,8 @@
 
 ## 2026-11-19
 
+- F916-1: 체크리스트 번역 검사는 각 항목의 식별자, 들여쓰기, 상태를 비교하므로 kit 0.0.15의 `label` 필드가 번역된 체크리스트를 실패시키지 않는다. Red: 새 test와 다른 10개 test가 고정된 kit에서 실패했다. Green: `scripts/test/checklist.test.mjs`가 41/41 통과한다.
+- F916: core는 kit 0.0.15를 pin하며, 이 kit의 docs 규칙에는 제거된 kit 0.0.14 로컬 patch의 줄이 들어 있다.
 - F911-5: `sok message send FOLDER TEXT`가 `SOKSAK_SURFACE`가 밝히는 surface의 message를 FOLDER에 쓴다. Text는 임시 이름으로 쓴 뒤 `<surface>.<token>.txt`로 rename하며, 64 KiB를 넘는 text는 파일을 만들기 전에 거부한다. Rust 명령은 `packages/sok/rust/src/message.rs`, Go 명령은 `packages/sok/go/src/message.go`에 있고, 시험은 `message_test.rs`와 `message_test.go`다.
 - F909-1, F910-1, F911-1: 보낸 surface 규칙, cursor epoch로서의 registration, 임시 이름과 rename은 `docs/spec/messaging.md`와 한국어 번역이 정의한다. 이 규칙의 sidecar 구현은 alacritty-core 저장소에 있다.
 - F831-1 정정: agent skill 원본은 `packages/sok/go/src/agents/SKILL.md`이고, `packages/sok/go/src/agents/mcp.json`은 MCP tool을 열세 개 나열한다. 아래 F831 항목은 열한 개와 `packages/sok/agents/SKILL.md`라고 적었다. 코드와 `docs/spec/cli.md`는 여기 적은 값을 따른다.

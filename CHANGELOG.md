@@ -5,6 +5,8 @@
 
 ## 2026-11-19
 
+- F916-1: The checklist translation check compares the identifier, indent and state of each entry, so the `label` field of kit 0.0.15 does not fail a translated checklist. Red: the new test and 10 other tests failed on the pinned kit. Green: `scripts/test/checklist.test.mjs` passes 41 of 41.
+- F916: Core pins the kit 0.0.15, whose docs rule has the line of the removed local patch of kit 0.0.14.
 - F911-5: `sok message send FOLDER TEXT` writes TEXT as a message of the surface in `SOKSAK_SURFACE` into FOLDER. The text is written under a temporary name and renamed to `<surface>.<token>.txt`; a text over 64 KiB is refused before any file is created. The Rust command is `packages/sok/rust/src/message.rs` and the Go command is `packages/sok/go/src/message.go`; their tests are `message_test.rs` and `message_test.go`.
 - F909-1, F910-1, F911-1: The sender rule, the registration as the cursor epoch and the temporary name with the rename are defined in `docs/spec/messaging.md` and its Korean translation; the sidecar implementation of these rules is in the alacritty-core repository.
 - F831-1 correction: the agent skill source is `packages/sok/go/src/agents/SKILL.md`, and `packages/sok/go/src/agents/mcp.json` lists thirteen MCP tools. The entry of F831 below says eleven tools and `packages/sok/agents/SKILL.md`; the code and `docs/spec/cli.md` state the values stated here.
