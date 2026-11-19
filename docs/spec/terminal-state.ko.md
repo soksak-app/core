@@ -10,7 +10,7 @@
 
 | 상태 | 의미 | source |
 | --- | --- | --- |
-| `idle` | shell이 prompt에 있다: 마지막 mark가 OSC 133의 prompt 시작 `A` 또는 prompt 끝 `B`다 | `osc133` |
+| `idle` | shell이 prompt에 있다: 마지막 mark가 OSC 133의 prompt 시작 `A`, 명시적 prompt 시작 `P` 또는 prompt 끝 `B`다 | `osc133` |
 | `running` | 명령이 실행 중이다: 마지막 mark가 명령 시작 `C`다 | `osc133` |
 | `exited` | 명령이 끝났다: 마지막 mark가 명령 종료 mark `D`이며, 그 exit code를 함께 가진다 | `osc133` |
 | `waiting` | program이 사람의 입력을 기다린다 | 보류([보류된 상태](#보류된-상태)) |
@@ -21,9 +21,23 @@ shell이 OSC 133 mark를 보내지 않는 session에는 상태가 없다: sideca
 
 ## Mark
 
-sidecar는 session의 출력에서 OSC 133 mark를 읽는다(`ESC ] 133 ; <mark> [; <parameter>]… BEL` 또는 `ST`). mark `A`와 `B`는 `idle`을, `C`는 `running`을, `D`는 `exited`를 준다. `D`의 첫 parameter는, 있고 `<name>=<value>` 형태의 named parameter가 아니면, 명령의 exit code다. 이것은 shell exit status의 범위인 0부터 255까지의 10진 정수다. 그 parameter가 없는 `D`는 exit code `null`인 `exited`를 준다. 첫 parameter가 named parameter도 아니고 0부터 255까지의 10진 정수도 아닌 `D`는 잘못된 mark다: engine은 다른 모든 잘못된 sequence처럼 `sequence.rejected`로 그것을 거부하며, 상태는 바뀌지 않는다.
+sidecar는 session의 출력에서 OSC 133 mark를 읽는다(`ESC ] 133 ; <mark> [; <parameter>]… BEL` 또는 `ST`). mark `A`, `P`, `B`는 `idle`을, `C`는 `running`을, `D`는 `exited`를 준다. `P`는 prompt의 한 줄을 명시적으로 시작한다. 그 parameter `k`는 그 줄의 종류를 정한다: `i`는 prompt의 첫 줄이며 `k`가 없을 때의 종류이고, `c`나 `s`는 이어지는 줄, `r`은 오른쪽 prompt다. 다른 종류의 `P`는 잘못된 mark다. `D`의 첫 parameter는, 있고 `<name>=<value>` 형태의 named parameter가 아니면, 명령의 exit code다. 이것은 shell exit status의 범위인 0부터 255까지의 10진 정수다. 그 parameter가 없는 `D`는 exit code `null`인 `exited`를 준다. 첫 parameter가 named parameter도 아니고 0부터 255까지의 10진 정수도 아닌 `D`는 잘못된 mark다: engine은 다른 모든 잘못된 sequence처럼 `sequence.rejected`로 그것을 거부하며, 상태는 바뀌지 않는다.
 
 mark는 현재 상태와 다른 상태를 줄 때만 상태를 바꾼다. `A` 뒤의 `B`처럼 반복된 mark는 변화를 주지 않는다.
+
+## Prompt region
+
+각 sidecar의 engine은 primary screen의 mark를 행의 사실로 유지하여, 크기 조정이 shell이 `SIGWINCH` 뒤 다시 그리는 prompt를 유지하게 한다. 크기 조정의 순서는 kitty의 순서다: engine은 reflow 전에 prompt를 reflow에서 빼고 reflow 뒤에 되돌려 놓는다.
+
+- 기록된 행: `A`는 커서가 0열에 있지 않으면 먼저 커서를 다음 줄의 시작으로 옮기고, 기록된 모든 행을 지우고, 커서 행을 기록한다. 종류 `i`, `c`, `s`의 `P`는 커서 행을 기록하고, 종류 `r`의 `P`는 아무 행도 기록하지 않는다. `C`와 `D`는 기록된 모든 행을 지운다. 기록된 행은 절대 행이다: history 한도를 넘어 버려진 행 수, 더하기 history 행 수, 더하기 screen 행이다. 그래서 출력이 행을 history로 밀어 올리는 동안에도, history가 가장 오래된 행을 버리는 동안에도 행의 번호는 같다. prompt에서의 ED 2는 기록된 행을 맨 위 행으로 바꾼다. shell은 새 `A` 없이 그곳에 prompt를 다시 그리기 때문이다.
+- Redraw: mark의 parameter `redraw`는 shell이 다시 그리는 region을 정한다: `1`은 prompt 전체, `last`는 커서가 있는 논리적 행만(readline은 prompt의 마지막 줄만 다시 그린다), `0`은 region 없음이다. `redraw` 없는 `A`는 `1`을 정하므로 각 `A`가 `redraw=0`을 끝낸다. `redraw` 없는 `P`와 `B`는 현재 값을 유지한다. 다른 값은 잘못된 mark다.
+- Region: prompt에서(마지막 mark가 `A`, `P`, `B`) `redraw`가 `0`이 아니면, region은 커서 또는 그 위의 가장 가까운 기록된 행부터 screen의 맨 아래까지의 행이다. `redraw=last`이면 커서의 논리적 행의 첫 행이 기록된 행보다 아래에 있을 때 그 행에서 시작한다. `C`나 `D` 뒤, `redraw=0`, 기록된 행이 없을 때, alternate screen에서는 region이 없다.
+- Region이 있는 크기 조정: engine은 region의 행을 복사한다. 그 행을 지워서, reflow가 region의 첫 행부터 커서 행까지 지운 각 행을 어떤 행도 잇지 않는 한 행으로 유지하고 커서 아래의 행을 빈 행으로 유지하게 한다. 커서를 0열로 옮긴다. screen과 history를 새 크기로 reflow한다. 그다음 크기 조정 전 region의 첫 행이 커서 위에 있던 만큼 커서 위에 있는 행부터 복사본을 새 폭에서 잘라 되돌려 놓는다. 잘림이 가르는 넓은 문자와 감싼 넓은 문자의 spacer는 빈 칸으로 남고, 되돌려 놓은 어떤 행도 다른 행을 잇지 않는다. region의 기록된 행은 자기 복사본과 함께 옮겨 간다. region 위의 기록된 행은 reflow가 그 행을 바꿨으므로 지운다. zsh와 readline은 자기가 커서 위에 그린 행 수만큼 커서를 올리고 그곳부터 다시 그린다. 그곳은 되돌려 놓은 첫 행이므로, shell이 다시 그리기 전에 표시되는 화면은 빈 행 대신 이전 폭의 prompt를 보이고, shell은 그 위에 쓴다.
+- Region이 없는 크기 조정: engine은 reflow만 하고 아무것도 지우지 않으며, 기록된 모든 행을 지운다.
+- 오류: 가장 가까운 기록된 행이 screen 위에, 즉 history에 있거나 그 너머로 버려졌으면, engine은 screen 행과 함께 `terminal resize: the prompt start row <row> lies above the screen`을 보고하고 region 없이 크기를 바꾼다. 기록된 행이 있지만 어느 것도 커서 또는 그 위에 없으면 `terminal resize: no prompt row is recorded at or above the cursor row`를 보고하고 region 없이 크기를 바꾼다. screen의 행 수가 region보다 적어 reflow 뒤 region의 첫 행이 screen 위에 있으면, 복사본은 맨 위 행부터 선다. shell은 그 위로 올라갈 수 없어 그곳부터 그리기 때문이다. 그리고 engine은 `terminal resize: the prompt region starts at the screen row <row> after the reflow, above the screen`을 보고한다.
+- 현재 크기로의 크기 조정은 아무것도 바꾸지 않는다. PTY가 그때 `SIGWINCH`를 보내지 않기 때문이다. engine은 크기 조정도, 그 뒤의 `SIGWINCH`도 늦추지 않는다.
+
+각 sidecar의 shell integration은 region이 필요로 하는 mark를 보낸다: zsh는 `precmd` hook에서 `A`를 보내고 `PS1`의 시작에 `P;k=i`, 끝에 `B`를, `PS2`의 시작에 `P;k=s`, 끝에 `B`를 더하므로, zsh가 다시 그리는 각 prompt가 자기 행을 기록한다. bash는 각 prompt 앞에 `A;redraw=last`를 보내고 `PS1`의 각 줄바꿈 뒤에 `P;k=s`를 더하므로, region은 readline이 다시 그리는 prompt의 마지막 줄이다.
 
 ## 변화 event
 
@@ -55,3 +69,5 @@ page는 session을 열거나 session에 attach한 뒤 상태를 읽는다. persi
 ## 공유 case
 
 `docs/spec/cases/terminal-state/osc133.json`은 mark의 case를 담는다: 각 case는 session의 출력, 그 출력이 순서대로 주는 변화 event, 출력 뒤의 상태 읽기, 그리고 출력이 거부된 mark를 담는지를 가진다. sidecar는 그 파일을 자기 fixture로 복사하고 각 case를 자기 실제 engine과 상태 tracker로 실행한다. plugin은 그것을 복사하여 각 case의 변화 event와 읽기 답을 자기 page에 적용하고 자기 status의 값을 비교한다. contract가 바뀌면 복사본을 교체한다.
+
+`docs/spec/cases/terminal-state/prompt-region.json`은 [prompt region](#prompt-region)의 case를 담는다: 각 case는 screen의 크기와 step을 가지며, 각 step은 engine이 읽는 출력이거나 크기 조정이고, step이 그것을 적을 때 step 뒤의 screen 행(각 행에서 끝의 빈칸을 뺀 것), 가장 오래된 것부터의 history 행, 커서, engine이 보고하는 오류를 가진다. 오류를 적지 않은 step은 오류가 없기를 기대한다. 각 sidecar는 그 파일을 자기 fixture로 복사하고 각 case를 자기 실제 engine으로 실행한다.

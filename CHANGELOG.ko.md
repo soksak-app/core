@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F989(터미널 sidecar의 prompt region): `docs/spec/terminal-state.md#prompt-region`은 각 터미널 sidecar의 engine이 크기 조정 때 prompt를 유지하는 방법을 정한다: `A`와 `P`가 기록하는 행, 가장 가까운 기록 행부터의 region, 복사, 지우기, reflow, 되돌려 놓기의 순서, 그리고 그 오류다. mark는 `idle`을 주는, 종류 `i`, `c`, `s`, `r`을 가진 `P`를 얻는다. 공유 case `docs/spec/cases/terminal-state/prompt-region.json`과 `osc133.json`의 새 case 두 개가 sidecar vt(S204)와 alacritty(S197)에서 실행된다.
 - F893: 두 host에서 설치된 sidecar의 channel의 시작은 level `info`로 `host.sidecar.path`를 기록한다. `folder`는 모든 sidecar의 환경이 PATH 맨 앞에 두는 host 실행 파일의 폴더이고, `sok`은 그 안의 application bundle의 sok이다(`docs/spec/sidecars.md#processes-of-a-surface`). Red: case `sidecars.environment.start-records-the-sok-folder`의 Go와 Rust test가 기록을 읽지 못했다. Green: 둘 다 통과한다.
 - F904(두 sidecar의 screen row): 네 하위 항목과 함께 닫았다. screen row의 공유 case file은 없으며, sidecar와 plugin의 소유 test가 근거다. F899-1은 term plugin 항목의 merge를 기다린다.
 - F899-4(두 터미널 쌍의 터미널 상태): sidecar vt(S195)와 alacritty(S190)가 exit code와 함께 `idle`, `running`, `exited`를 보고하고 `shell.state.read`에 답하며, plugin terminal(P165)과 term(P44)이 status `<plugin>.state`를 보여 준다. 각각 공유 case를 red로, 그다음 green으로 실행했다. 변경은 sidecar release와 plugin pin 전까지 release되지 않았다. `waiting`과 agent 상태는 보류다.
