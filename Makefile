@@ -435,22 +435,29 @@ MYGO_DEBUG    = $(MYGO_DEBUG_BUNDLE)/Contents/MacOS/sok-mygo
 MYGO_RELEASE  = $(MYGO_RELEASE_BUNDLE)/Contents/MacOS/sok-mygo
 GPUKIT_DEBUG  = $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS/sok-gpuikit
 GPUKIT_RELEASE = $(GPUKIT_RELEASE_BUNDLE)/Contents/MacOS/sok-gpuikit
+# A build writes and signs the staging bundle <folder>/.staging/<name>.app of a bundle <folder>/<name>.app and installs it with one
+# rename, so a launch finds the complete earlier bundle or the complete new one (docs/spec/hosts.md). The argument is the bundle.
+staging = $(dir $(1)).staging/$(notdir $(1))
 
-# Writes the Info.plist and the Dock icon of the bundle. The first argument is the bundle and the second is the application. The app name
+# Writes the Info.plist and the Dock icon into the staging bundle of the bundle. The first argument is the bundle and the second is the application. The app name
 # is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
 # When the name differs by language, the .lproj/InfoPlist.strings of that language is added again at that time.
-# The Contents of the bundle are created anew at each build so an earlier sidecar or other removed file cannot remain in the bundle. The Darwin
-# preparation helper checks the target before this mutation and refuses with the active process PID and bundle path when a process is executing
-# from its Contents/MacOS directory.
+# The staging bundle is created anew at each build so an earlier sidecar or other removed file cannot remain in the bundle. The Darwin
+# preparation helper checks the bundle first and refuses with the active process PID and bundle path when a process is executing from its
+# Contents/MacOS directory.
 bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs --bundle "$(1)" --app "$(2)"
 # So that the debug bundle runs beside the release application, appends .dev to the release identifier in Info.plist and uses the bundle name
 # as the executable name (docs/spec/hosts.md#frontend-and-executables). The first argument is the bundle and the second is the application.
-bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(1)/Contents/Info.plist).dev" $(1)/Contents/Info.plist \
-	&& plutil -replace CFBundleName -string sok-$(2) $(1)/Contents/Info.plist
-# Seals the executables and the Info.plist in the bundle with an ad hoc signature and registers the bundle with LaunchServices again. The Dock
-# shows the icon from the registered bundle information, and LaunchServices does not reread the registration when only files inside the bundle change.
+bundle-dev = plutil -replace CFBundleIdentifier -string "$$(plutil -extract CFBundleIdentifier raw $(call staging,$(1))/Contents/Info.plist).dev" $(call staging,$(1))/Contents/Info.plist \
+	&& plutil -replace CFBundleName -string sok-$(2) $(call staging,$(1))/Contents/Info.plist
+# Seals the executables and the Info.plist in the staging bundle of the bundle with an ad hoc signature. The argument is the bundle.
+bundle-sign = codesign --sign - --force --deep $(call staging,$(1))
+# Installs the signed staging bundle at the bundle with one rename through native/darwin/build/sok-swap-bundle, after the same check of
+# running processes and a verification of the signature, and registers the bundle with LaunchServices again. The Dock shows the icon from
+# the registered bundle information, and LaunchServices does not reread the registration when only files inside the bundle change.
 LSREGISTER = /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
+SWAP_BUNDLE = native/darwin/build/sok-swap-bundle
+bundle-install = node scripts/platform/darwin/prepare-app-bundle.mjs --install --bundle "$(1)" --swap $(SWAP_BUNDLE) && $(LSREGISTER) -f $(1)
 
 # Builds the command line sok (docs/spec/cli.md) and places it beside the executables of the bundle. The first argument is the bundle and the second is the profile.
 sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
@@ -529,69 +536,77 @@ build-tauriv2: check-cargo build-native copy-frontend-tauriv2
 	@$(call bundle-dev,$(TAURI_DEBUG_BUNDLE),tauriv2)
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) $(CARGO) build --locked -p sok-tauriv2 --features $(TAURI_DEBUG_FEATURES)
-	@cp target/debug/sok-tauriv2 $(TAURI_DEBUG)
-	@$(call sok-tauriv2,$(TAURI_DEBUG_BUNDLE),debug)
+	@cp target/debug/sok-tauriv2 $(call staging,$(TAURI_DEBUG_BUNDLE))/Contents/MacOS/sok-tauriv2
+	@$(call sok-tauriv2,$(call staging,$(TAURI_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(TAURI_DEBUG_BUNDLE))
+	@$(call bundle-install,$(TAURI_DEBUG_BUNDLE))
 
 build-tauriv2-release: check-cargo build-native build
 	@$(call bundle-info,$(TAURI_RELEASE_BUNDLE),tauriv2)
 	@$(call copy-tauriv2,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@touch apps/tauriv2/src/main.rs
 	@$(CARGO_ENV) $(CARGO) build --locked --release -p sok-tauriv2 $(if $(DIAGNOSTIC_RELEASE),--features diagnostics)
-	@cp target/release/sok-tauriv2 $(TAURI_RELEASE)
-	@$(call sok-tauriv2,$(TAURI_RELEASE_BUNDLE),release)
+	@cp target/release/sok-tauriv2 $(call staging,$(TAURI_RELEASE_BUNDLE))/Contents/MacOS/sok-tauriv2
+	@$(call sok-tauriv2,$(call staging,$(TAURI_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(TAURI_RELEASE_BUNDLE))
+	@$(call bundle-install,$(TAURI_RELEASE_BUNDLE))
 
 build-wailsv3: check-host-callbacks check-host-api build-native copy-frontend-wailsv3
 	@$(call bundle-info,$(WAILS_DEBUG_BUNDLE),wailsv3)
 	@$(call bundle-dev,$(WAILS_DEBUG_BUNDLE),wailsv3)
-	@$(GO_ENV) go build -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" -ldflags "$(GO_LINK)" -o ../../$(WAILS_DEBUG) ./src
-	@$(call sok-wailsv3,$(WAILS_DEBUG_BUNDLE),debug)
+	@$(GO_ENV) go build -C apps/wailsv3 -tags "$(WAILS_DEBUG_TAGS)" -ldflags "$(GO_LINK)" -o ../../$(call staging,$(WAILS_DEBUG_BUNDLE))/Contents/MacOS/sok-wailsv3 ./src
+	@$(call sok-wailsv3,$(call staging,$(WAILS_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(WAILS_DEBUG_BUNDLE))
+	@$(call bundle-install,$(WAILS_DEBUG_BUNDLE))
 
 build-wailsv3-release: check-host-callbacks check-host-api build-native build
 	@$(call bundle-info,$(WAILS_RELEASE_BUNDLE),wailsv3)
 	@$(call copy-wailsv3,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
-	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(WAILS_RELEASE) ./src
-	@$(call sok-wailsv3,$(WAILS_RELEASE_BUNDLE),release)
+	@$(GO_ENV) go build -C apps/wailsv3 -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_LINK)" -o ../../$(call staging,$(WAILS_RELEASE_BUNDLE))/Contents/MacOS/sok-wailsv3 ./src
+	@$(call sok-wailsv3,$(call staging,$(WAILS_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(WAILS_RELEASE_BUNDLE))
+	@$(call bundle-install,$(WAILS_RELEASE_BUNDLE))
 
 build-mygo: build-native-mygo copy-frontend-mygo
 	@$(call bundle-info,$(MYGO_DEBUG_BUNDLE),mygo)
 	@$(call bundle-dev,$(MYGO_DEBUG_BUNDLE),mygo)
-	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_INTERNAL_LINK)" -o ../../$(MYGO_DEBUG) ./src
-	@mkdir -p $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks
-	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks/
-	@$(call sok-mygo,$(MYGO_DEBUG_BUNDLE),debug)
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -tags "diagnostics dev" -ldflags "$(GO_INTERNAL_LINK)" -o ../../$(call staging,$(MYGO_DEBUG_BUNDLE))/Contents/MacOS/sok-mygo ./src
+	@mkdir -p $(call staging,$(MYGO_DEBUG_BUNDLE))/Contents/Frameworks
+	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(call staging,$(MYGO_DEBUG_BUNDLE))/Contents/Frameworks/
+	@$(call sok-mygo,$(call staging,$(MYGO_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(MYGO_DEBUG_BUNDLE))
+	@$(call bundle-install,$(MYGO_DEBUG_BUNDLE))
 
 build-gpuikit: check-cargo build-native copy-frontend-gpuikit
 	@$(call bundle-info,$(GPUKIT_DEBUG_BUNDLE),gpuikit)
 	@$(call bundle-dev,$(GPUKIT_DEBUG_BUNDLE),gpuikit)
 	@$(CARGO_ENV) $(CARGO) build --locked -p sok-gpuikit --features gpuikit,$(TAURI_DEBUG_FEATURES)
-	@cp target/debug/sok-gpuikit $(GPUKIT_DEBUG)
-	@mkdir -p $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS
-	@cp -R apps/gpuikit/frontend $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS/frontend
-	@$(call sok-gpuikit,$(GPUKIT_DEBUG_BUNDLE),debug)
+	@cp target/debug/sok-gpuikit $(call staging,$(GPUKIT_DEBUG_BUNDLE))/Contents/MacOS/sok-gpuikit
+	@mkdir -p $(call staging,$(GPUKIT_DEBUG_BUNDLE))/Contents/MacOS
+	@cp -R apps/gpuikit/frontend $(call staging,$(GPUKIT_DEBUG_BUNDLE))/Contents/MacOS/frontend
+	@$(call sok-gpuikit,$(call staging,$(GPUKIT_DEBUG_BUNDLE)),debug)
 	@$(call bundle-sign,$(GPUKIT_DEBUG_BUNDLE))
+	@$(call bundle-install,$(GPUKIT_DEBUG_BUNDLE))
 
 build-gpuikit-release: check-cargo build-native build
 	@$(call bundle-info,$(GPUKIT_RELEASE_BUNDLE),gpuikit)
 	@$(call copy-gpuikit,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
 	@$(CARGO_ENV) $(CARGO) build --locked --release -p sok-gpuikit $(if $(DIAGNOSTIC_RELEASE),--features gpuikit,diagnostics,--features gpuikit)
-	@cp target/release/sok-gpuikit $(GPUKIT_RELEASE)
-	@cp -R apps/gpuikit/frontend $(GPUKIT_RELEASE_BUNDLE)/Contents/MacOS/frontend
-	@$(call sok-gpuikit,$(GPUKIT_RELEASE_BUNDLE),release)
+	@cp target/release/sok-gpuikit $(call staging,$(GPUKIT_RELEASE_BUNDLE))/Contents/MacOS/sok-gpuikit
+	@cp -R apps/gpuikit/frontend $(call staging,$(GPUKIT_RELEASE_BUNDLE))/Contents/MacOS/frontend
+	@$(call sok-gpuikit,$(call staging,$(GPUKIT_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(GPUKIT_RELEASE_BUNDLE))
+	@$(call bundle-install,$(GPUKIT_RELEASE_BUNDLE))
 
 build-mygo-release: build-native-mygo build
 	@$(call bundle-info,$(MYGO_RELEASE_BUNDLE),mygo)
 	@$(call copy-mygo,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
-	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_INTERNAL_LINK)" -o ../../$(MYGO_RELEASE) ./src
-	@mkdir -p $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks
-	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_RELEASE_BUNDLE)/Contents/Frameworks/
-	@$(call sok-mygo,$(MYGO_RELEASE_BUNDLE),release)
+	@CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C apps/mygo -trimpath $(if $(DIAGNOSTIC_RELEASE),-tags diagnostics) -ldflags "-s -w $(GO_INTERNAL_LINK)" -o ../../$(call staging,$(MYGO_RELEASE_BUNDLE))/Contents/MacOS/sok-mygo ./src
+	@mkdir -p $(call staging,$(MYGO_RELEASE_BUNDLE))/Contents/Frameworks
+	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(call staging,$(MYGO_RELEASE_BUNDLE))/Contents/Frameworks/
+	@$(call sok-mygo,$(call staging,$(MYGO_RELEASE_BUNDLE)),release)
 	@$(call bundle-sign,$(MYGO_RELEASE_BUNDLE))
+	@$(call bundle-install,$(MYGO_RELEASE_BUNDLE))
 
 run-tauriv2: build-tauriv2
 	@./$(TAURI_DEBUG)

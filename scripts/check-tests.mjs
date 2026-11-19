@@ -40,6 +40,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
+  lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
@@ -293,6 +294,24 @@ const FEATURE_LINKS = [
       { file: "scripts/test/fixture-registry.test.mjs", id: "the plugin.json of each fixture plugin has the description of 1 to 200 characters that an installation requires" },
     ],
     expected: "Every fixture plugin.json has a description of 1 to 200 characters, so sok install accepts every fixture plugin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F975",
+    implementation: [
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "export function installBundle(" },
+      { file: "native/darwin/src/tools/swap_bundle.m", symbol: "renamex_np(staged, target, RENAME_SWAP)" },
+      { file: "Makefile", symbol: "staging = $(dir $(1)).staging/$(notdir $(1))" },
+      { file: "scripts/platform/darwin/artifacts.mjs", symbol: "export async function verifyApplicationArtifact(artifact)" },
+      { file: "scripts/test-app.mjs", symbol: "else if (item.kind === 'verify') await verifyApplicationArtifact(item.artifact, { platform: item.platform });" },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "a bundle build leaves the signed bundle unchanged until one rename installs the signed new bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "the installation refuses a staging bundle that does not verify and leaves the bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "the installation refuses a bundle that a process runs before it changes anything" },
+      { file: "scripts/test/test-app.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
+    ],
+    expected: "A bundle build writes and signs a staging bundle and installs it with one rename, so a launch finds a complete signed bundle, and a check run verifies the signature of each bundle before it starts it.",
     levels: ["unit"],
   },
   {
@@ -9075,13 +9094,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "Makefile", symbol: "bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs" },
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function runningBundleProcesses(" },
-      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "rmSync(contents, { recursive: true, force: true })" },
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "rmSync(staging, { recursive: true, force: true });" },
     ],
     tests: [
       { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation refuses a running bundle executable before removing Contents" },
-      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation recreates Contents when no process uses the bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation creates the Contents of the staging bundle anew and leaves the bundle when no process uses it" },
     ],
-    expected: "The Makefile bundle preparation refuses with the active process PID and target path before removing Contents, preserves the running bundle files, and recreates Contents when no process uses the bundle.",
+    expected: "The Makefile bundle preparation refuses with the active process PID and target path before it changes anything, preserves the running bundle files, and creates the staging bundle anew when no process uses the bundle.",
     levels: ["unit"],
   },
   {
