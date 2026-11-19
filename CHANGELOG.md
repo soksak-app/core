@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-33 (content card nodes of the window description): the page writes `parent` on a content card node only inside a group card and `leader` only on the leader of its level, as mygo does, so `sok describe` gives the same tree in both workbenches (`docs/spec/exposure.md#window-snapshot`). Verification: the description test of the page failed on the unchanged code and passes.
 - F937-30 (focus after a card move): `core.card.move` that changes the layout focuses the moved card in the page workbench, or the first content card inside a moved group card, as mygo and the drop of the only tab of a card do, and a move that changes nothing keeps the focus (`docs/spec/groups.md#focus`, workbench case `layout.move.focuses-the-moved-card`). Verification: the page test failed on the unchanged code and passes; the mygo test of the case passes.
 - F968 (fold stage of a head and the selected tab): the fold stage of a card head takes the widest tab of the card in both workbenches, so a header shows the same tabs whichever tab is selected, and the selected tab is always among them. Verification: the shared head cases and the mygo head test failed on the unchanged code and pass.
 - F937-16 (fullscreen toggle of a narrow head): a card or group header too narrow for its tools keeps the fullscreen toggle beside ⋯ in both workbenches, and the tool menu no longer holds it. Verification: the narrow head tests of both workbenches failed on the unchanged code and pass.

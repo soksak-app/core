@@ -198,13 +198,14 @@ test("the layout of the window description holds each group card as a node of it
   const shape = (node) => (node.children ? { direction: node.direction, children: node.children.map(shape) }
     : node.group ? { card: node.card, leader: node.leader, group: { name: node.group.name, level: node.group.level, leader: node.group.leader,
       root: shape(node.group.root) } }
-    : { card: node.card, parent: node.parent, leader: node.leader });
+    // A content card node carries parent only inside a group card and leader only on the leader of its level (docs/spec/exposure.md#window-snapshot).
+    : Object.fromEntries(["card", "parent", "leader"].filter((key) => key in node).map((key) => [key, node[key]])));
   assert.deepEqual(shape(root), { direction: "row", children: [
     { card: "card-4", leader: true, group: { name: "그룹 1", level: 1, leader: "card-1", root: { direction: "row", children: [
       { card: "card-1", parent: "card-4", leader: true },
       { card: "card-5", leader: false, group: { name: "그룹 2", level: 2, leader: "card-2", root: { direction: "column", children: [
-        { card: "card-2", parent: "card-5", leader: true }, { card: "card-6", parent: "card-5", leader: false }] } } }] } } },
-    { card: "card-3", parent: null, leader: false }] });
+        { card: "card-2", parent: "card-5", leader: true }, { card: "card-6", parent: "card-5" }] } } }] } } },
+    { card: "card-3" }] });
   const { x, y, w, h } = plane.currentTree().rect("card-4");
   const origin = document.getElementById("plane").getBoundingClientRect();
   assert.deepEqual(groups.map(({ card, members }) => ({ card, members })), [{ card: "card-4", members: ["card-1", "card-5"] },

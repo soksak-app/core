@@ -2469,8 +2469,10 @@ export function layoutDescription() {
         return { card: member.id, size, frame: frameOf(member.id), leader, group: { name, level: depth, leader: lead, root: level(member.node) } };
       }
       const card = grid.card(member.id);
+      // A content card node carries parent only inside a group card and leader only on the leader of its level
+      // (docs/spec/exposure.md#window-snapshot).
       return {
-        card: card.id, size, frame: frameOf(card.id), parent: parent ? parent.card : null, leader,
+        card: card.id, size, frame: frameOf(card.id), ...(parent ? { parent: parent.card } : {}), ...(leader ? { leader } : {}),
         tabs: tabsOf(card).map((t) => ({
           // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
           tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
