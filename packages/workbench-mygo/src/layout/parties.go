@@ -237,13 +237,21 @@ func (p *Parties) nextColor() (string, error) {
 	return p.palette[partyTokens[0]], nil
 }
 
-// checkCards refuses a card list that names an unknown card or a card twice, and a list of fewer than two cards.
+// checkCards refuses a card list in the order of the refusal table (docs/spec/parties.md#commands): an unknown card, a window
+// sidebar, a card listed twice, and a list of fewer than two cards.
 func checkCards(g *Grid, cards []string) error {
-	seen := map[string]bool{}
 	for _, id := range cards {
 		if _, ok := g.Card(id); !ok {
 			return fmt.Errorf("unknown card %s", id)
 		}
+	}
+	for _, id := range cards {
+		if slices.Contains(SidebarSides, id) {
+			return fmt.Errorf("card %s is a window sidebar", id)
+		}
+	}
+	seen := map[string]bool{}
+	for _, id := range cards {
 		if seen[id] {
 			return fmt.Errorf("card %s is listed more than once", id)
 		}
