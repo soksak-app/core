@@ -82,9 +82,9 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
 
 /**
  * The tests of the Rust package `packageName` built with `features`. `cargo test --no-run` builds the test executables; each
- * executable lists its tests through the runner with the limit `timeoutMs`, and every test runs as `<executable> --exact <name>`
- * in the folder of its manifest. Returns the same `{tests, failures}` as discoverGo; a list that fails or reaches its limit is a
- * failure that names the executable, and a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, every
+ * executable lists its tests through the runner without a runner limit (see the comment at the listing), and every test runs as
+ * `<executable> --exact <name>` in the folder of its manifest. Returns the same `{tests, failures}` as discoverGo; a list that fails
+ * is a failure that names the executable, and a test that is `#[ignore]` is listed and its result is `skip`. With `listOnly`, every
  * executable is removed once all of them listed their tests, so a check that only lists the tests of several runs holds the executables
  * of one run on the disk; its tests are not run. Only an executable that cargo named and that lies in the target folder of
  * cargo is removed: the run fails, and removes nothing, when one lies elsewhere.
@@ -105,10 +105,10 @@ export async function discoverRust({ packageName, features, cwd, env, id, write,
       return { tests: [], failures: outside.map(({ executable }) => `${id}: the executable ${executable} is not in the target folder ${targetDir}`) };
     }
   }
-  // Each executable lists its tests as a step of the runner under the limit of a test, so a list that waits reports its start and
-  // its elapsed time, and a list that does not end fails at that limit with the executable named.
+  // Each executable lists its tests as a step of the runner. A listing has no time bound of its own: its step ends when its process
+  // exits, and a listing that fails reports its exit status and output. The limit of a test applies to the test process only.
   const lists = executables.map(({ executable, dir, target }) => ({
-    name: `list ${id} ${target} (${executable})`, command: executable, args: ['--list', '--format', 'terse'], cwd: dir, timeoutMs,
+    name: `list ${id} ${target} (${executable})`, command: executable, args: ['--list', '--format', 'terse'], cwd: dir,
   }));
   const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists, concurrency: 1, write });
   const tests = [];
