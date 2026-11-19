@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+
+	"github.com/egoist/mygo/ui"
 )
 
 // The activities of a window (docs/spec/activity.md): the activity of each tab from the statuses of its plugin that declare activity,
@@ -370,6 +372,47 @@ func (a *ActivityFollow) Sync() {
 	}
 	a.syncing = false
 	a.derive()
+}
+
+// shownActivities are the activities that the window draws: those of the tabs and of the group cards of the shown space, and those of
+// the projects and the spaces of the shown project (docs/spec/activity.md#drawing).
+func (s *Shell) shownActivities() (tabs, groups, projects, spaces map[string]string) {
+	state := s.activity.State()
+	tabs, groups, projects, spaces = state.Tabs, map[string]string{}, map[string]string{}, map[string]string{}
+	for id, project := range state.Projects {
+		projects[id] = project.Activity
+	}
+	if shown, ok := state.Projects[s.active]; ok && !s.inLibrary() {
+		for id, space := range shown.Spaces {
+			spaces[id] = space.Activity
+		}
+		if project := s.opened(); project != nil {
+			groups = shown.Spaces[project.ActiveSpaceID].Groups
+		}
+	}
+	return tabs, groups, projects, spaces
+}
+
+// activityColor is the color of the icon of activity; none is the error color, which belongs to the display of errors.
+func (s *Shell) activityColor(activity string) ui.Color {
+	switch activity {
+	case "attention":
+		return s.palette.Focus
+	case "failed":
+		return s.palette.Fg
+	case "running":
+		return s.palette.Rail
+	}
+	return s.palette.Muted
+}
+
+// drawActivity draws the icon of activity, size wide, as the element name of item: an image with the declared name of the activity as
+// its label and tooltip, as drawActivity of packages/workbench/activity.js.
+func (s *Shell) drawActivity(c *ui.Context, name, item, activity string, size float32) ui.Element {
+	paint := fmt.Sprintf(`fill="none" stroke="currentColor" stroke-width="%g"`, s.metrics.activityStroke)
+	label := s.options.Declared.ActivityNames[activity]
+	return ui.Icon(s.binder.Name(c, name, item), s.declaredIcon("0 0 16 16", paint, s.options.Declared.Icons["activity-"+activity])).
+		Size(size, size).Shrink(0).TextColor(s.activityColor(activity)).Role(ui.RoleImage).Label(label).Tooltip(label)
 }
 
 // activityError shows the error text of the activity values of the tab in the error banner of the window with the source

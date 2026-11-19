@@ -4596,6 +4596,26 @@
         "description": "The window chrome row."
       },
       {
+        "name": "core.activity.project",
+        "description": "The activity icons before the names of the project tabs that have an activity, in workbench order; each is an image named by its activity (docs/spec/activity.md#drawing).",
+        "many": true
+      },
+      {
+        "name": "core.activity.space",
+        "description": "The activity icons before the names of the space tabs that have an activity, in workbench order; each is an image named by its activity.",
+        "many": true
+      },
+      {
+        "name": "core.activity.group",
+        "description": "The activity icons before the names of the group headers that have an activity, in workbench order; each is an image named by its activity.",
+        "many": true
+      },
+      {
+        "name": "core.activity.tab",
+        "description": "The activity icons before the names of the tabs of the cards that have an activity, in workbench order; each is an image named by its activity.",
+        "many": true
+      },
+      {
         "name": "core.chrome.balance",
         "description": "The card auto-arrange button after the project library button."
       },

@@ -52,7 +52,7 @@ The projects of a window are the projects that the window opened, whose tabs sta
 
 Each workbench draws the icon of the activity immediately before the name of each tab of a card (`core.activity.tab`), of each group header (`core.activity.group`), of each space tab (`core.activity.space`) and of each project tab (`core.activity.project`) that has an activity, and draws nothing where there is none; a content card shows the activities of its tabs and draws no icon of its own. Each icon is an image of the element name above, one element per drawn icon in workbench order, with the Korean name of its activity as its accessible name and tooltip; it runs no command, and `core.activity` holds its activity.
 
-The icons are the declared icons `activity-attention`, `activity-failed`, `activity-running` and `activity-idle` of `packages/workbench/workbench.json` on a 16 point view box, drawn in strokes of the chrome value `activity-stroke` at the size `activity-icon`, with the gap `tab-gap` to the name:
+The icons are the declared icons `activity-attention`, `activity-failed`, `activity-running` and `activity-idle` of `packages/workbench/workbench.json` on a 16 point view box, drawn in strokes of the chrome value `activity-stroke` at the size `activity-icon`, with the gap of its holder to the name: `tab-gap` in a tab, `card-head-gap` in a group header and `bar-tab-gap` in a space or project tab. The names of the activities are `activities` of the same file. A space tab and a project tab follow the frame text scale as their names do; a project tab in the column shows its icon and its name centred together:
 
 | Activity | Icon | Color | Name |
 | --- | --- | --- | --- |

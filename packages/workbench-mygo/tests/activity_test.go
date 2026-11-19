@@ -9,7 +9,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
@@ -188,5 +191,93 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	}
 	if changes != 3 {
 		t.Fatalf("core.activity changed %d times, want 3", changes)
+	}
+}
+
+// activityIcon is a drawn element: its item, its role and its label.
+type activityIcon struct {
+	item  string
+	role  ui.Role
+	label string
+}
+
+// activityIcons returns each element of name in tree order.
+func activityIcons(nodes []ui.ElementNode, name string) []activityIcon {
+	icons := []activityIcon{}
+	for _, node := range nodes {
+		if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == name {
+			icons = append(icons, activityIcon{exposed.Item, node.Role, node.Label})
+		}
+		icons = append(icons, activityIcons(node.Children, name)...)
+	}
+	return icons
+}
+
+// The icon of an activity stands on the tab, the group header, the space tab and the project tab that hold it, as an image named by the
+// activity, and leaves with the activity (docs/spec/activity.md#drawing).
+func TestTheIconsOfAnActivityStandOnItsHolders(t *testing.T) {
+	declared := strings.Replace(installedDocument, `{"name": "textprobe.screen", "description": "the screen", "schema": {"type": "object", "properties": {}}}`,
+		`{"name": "textprobe.screen", "description": "the screen", "schema": {"type": ["string", "null"]}, "activity": true}`, 1)
+	if declared == installedDocument {
+		t.Fatal("the test document declares no textprobe.screen")
+	}
+	r := newViewRelayWith(t, &surfaceHost{storedHost: storedHost{installed: declared}}, declared)
+	surface := r.surface()
+	var card string
+	for _, entry := range status[gridRead](t, r.f, "core.grid").Cards {
+		for _, tab := range entry.Tabs {
+			if tab.ID == surface {
+				card = entry.ID
+			}
+		}
+	}
+	r.f.run("core.group.create", map[string]any{"card": card, "side": "right", "plugin": "boxprobe"})
+	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	// The registration starts the watch of the activities, which reaches the view.
+	var watch map[string]any
+	r.f.until(func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for _, each := range r.pushed {
+			if data, ok := each["data"].(map[string]any); ok && data["method"] == "status.watch" {
+				watch = data
+			}
+		}
+		return watch != nil
+	})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": watch["id"]}})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": "attention", "version": 1}})
+	r.f.settle()
+	state := status[workbench.ActivityState](t, r.f, "core.activity")
+	project := status[map[string]any](t, r.f, "core.project")
+	projectID, spaceID := project["id"].(string), project["activeSpaceId"].(string)
+	groups := state.Projects[projectID].Spaces[spaceID].Groups
+	if state.Tabs[surface] != "attention" || len(groups) != 1 {
+		t.Fatalf("core.activity is %+v", state)
+	}
+	var group string
+	for id := range groups {
+		group = id
+	}
+	tree := r.f.tester.ElementTree()
+	for name, item := range map[string]string{"core.activity.tab": surface, "core.activity.group": group, "core.activity.space": spaceID, "core.activity.project": projectID} {
+		if got := activityIcons(tree, name); !slices.Equal(got, []activityIcon{{item, ui.RoleImage, "응답 대기"}}) {
+			t.Errorf("the icons of %s are %v, want the image of %s named 응답 대기", name, got, item)
+		}
+	}
+	// The project tabs in the column keep the icon of the project.
+	r.f.run("core.settings.set", map[string]any{"patch": map[string]any{"projectTabs": "left"}})
+	if got := activityIcons(r.f.tester.ElementTree(), "core.activity.project"); !slices.Equal(got, []activityIcon{{projectID, ui.RoleImage, "응답 대기"}}) {
+		t.Errorf("the icons of the column are %v, want the image of %s named 응답 대기", got, projectID)
+	}
+	// A null value ends the activity, so every icon leaves.
+	r.call(surface, "runtime.native.call", map[string]any{"name": "changed", "payload": map[string]any{"name": "textprobe.screen", "value": nil, "version": 2}})
+	r.f.settle()
+	tree = r.f.tester.ElementTree()
+	for _, name := range []string{"core.activity.tab", "core.activity.group", "core.activity.space", "core.activity.project"} {
+		if got := activityIcons(tree, name); len(got) != 0 {
+			t.Errorf("the icons of %s after the activity ended are %v", name, got)
+		}
 	}
 }

@@ -212,6 +212,7 @@ The declarations of `packages/workbench/exposure.json`; a description of this ta
 | element | `core.group` | The frames of the group cards in workbench order. |
 | element | `core.group.header` | The headers of the group cards in workbench order. |
 | element | `core.group.name` | The names in the group headers in workbench order; a double-click renames. |
+| element | `core.activity.group` | The activity icons before the names of the group headers that have an activity, in workbench order ([activity](activity.md#drawing)). |
 | element | `core.group.split-x` | The vertical split buttons of the group headers in workbench order. |
 | element | `core.group.split-y` | The horizontal split buttons of the group headers in workbench order. |
 | element | `core.group.group-x` | The group split buttons toward right of the group headers in workbench order, enabled while the group card can be split into a new group toward right. |

@@ -43,6 +43,8 @@ type Declarations struct {
 	Icons map[string]string
 	// CardTools are the names of the card tools and the reasons of their refusals (docs/spec/example-model.md#card-tools).
 	CardTools map[string]string
+	// ActivityNames are the names of the activities, which their icons carry (docs/spec/activity.md#drawing).
+	ActivityNames map[string]string
 	// surface holds the entries of surfaceNames under the keys of the declaration file, and params the parameter schema of each
 	// command.
 	surface map[string][]map[string]any
@@ -250,11 +252,12 @@ func ReadDeclarations() (*Declarations, error) {
 		return nil, fmt.Errorf("shortcuts.json: %w", err)
 	}
 	var values struct {
-		Icons     map[string]string `json:"icons"`
-		CardTools map[string]string `json:"cardTools"`
-		Chrome    map[string]string `json:"chrome"`
-		Plain     map[string]string `json:"plainControls"`
-		Themes    []declaredTheme   `json:"themes"`
+		Icons      map[string]string `json:"icons"`
+		CardTools  map[string]string `json:"cardTools"`
+		Activities map[string]string `json:"activities"`
+		Chrome     map[string]string `json:"chrome"`
+		Plain      map[string]string `json:"plainControls"`
+		Themes     []declaredTheme   `json:"themes"`
 	}
 	if err := json.Unmarshal(workbenchFile, &values); err != nil {
 		return nil, fmt.Errorf("workbench.json: %w", err)
@@ -262,6 +265,11 @@ func ReadDeclarations() (*Declarations, error) {
 	for _, key := range []string{"add", "split-x", "split-y", "fullscreen", "restore", "close", "close-refused", "layout-held"} {
 		if values.CardTools[key] == "" {
 			return nil, fmt.Errorf("workbench.json: cardTools declares no %s", key)
+		}
+	}
+	for _, activity := range Activities {
+		if values.Activities[activity] == "" || values.Icons["activity-"+activity] == "" {
+			return nil, fmt.Errorf("workbench.json: activities or icons declare no %s", activity)
 		}
 	}
 	names := func(entries []map[string]any) map[string]bool {
@@ -294,7 +302,7 @@ func ReadDeclarations() (*Declarations, error) {
 	}
 	return &Declarations{
 		Statuses: names(exposes["status"]), Commands: names(exposes["commands"]), Elements: names(exposes["element"]),
-		Icons: values.Icons, CardTools: values.CardTools, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, plain: values.Plain, themes: values.Themes,
+		Icons: values.Icons, CardTools: values.CardTools, ActivityNames: values.Activities, Shortcuts: shortcuts.Shortcuts, surface: surface, params: params, many: many, chrome: values.Chrome, plain: values.Plain, themes: values.Themes,
 	}, nil
 }
 

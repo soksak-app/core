@@ -52,7 +52,7 @@ workbench는 자기 창의 project들의 각 tab의 그런 status를 그 surface
 
 각 workbench는 activity가 있는 card의 각 tab(`core.activity.tab`), 각 group header(`core.activity.group`), 각 space tab(`core.activity.space`), 각 project tab(`core.activity.project`)의 이름 바로 앞에 그 activity의 icon을 그리고, activity가 없는 곳에는 아무것도 그리지 않는다. content card는 자기 tab들의 activity를 보이며 자기 icon을 그리지 않는다. 각 icon은 위 element 이름의 image로, 그린 icon마다 element 하나가 workbench 순서로 있고, 그 activity의 한국어 이름을 accessible name과 tooltip으로 가지며, command를 실행하지 않고, `core.activity`가 그 activity를 담는다.
 
-icon은 `packages/workbench/workbench.json`의 선언된 icon `activity-attention`, `activity-failed`, `activity-running`, `activity-idle`로, 16 point view box 위에 있으며, chrome 값 `activity-stroke`의 선으로 `activity-icon` 크기에 그리고, 이름과의 간격은 `tab-gap`이다:
+icon은 `packages/workbench/workbench.json`의 선언된 icon `activity-attention`, `activity-failed`, `activity-running`, `activity-idle`로, 16 point view box 위에 있으며, chrome 값 `activity-stroke`의 선으로 `activity-icon` 크기에 그리고, 이름과의 간격은 그것을 담은 요소의 간격으로, tab에서는 `tab-gap`, group header에서는 `card-head-gap`, space tab과 project tab에서는 `bar-tab-gap`이다. activity의 이름은 같은 파일의 `activities`다. space tab과 project tab은 이름처럼 frame text 배율을 따르고, column의 project tab은 icon과 이름을 함께 가운데에 둔다:
 
 | Activity | Icon | 색 | 이름 |
 | --- | --- | --- | --- |

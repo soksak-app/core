@@ -2,6 +2,8 @@
 // and the highest activity of each card, group card, space and project. The shared cases of docs/spec/cases/activity.json state them,
 // and the Go workbench of packages/workbench-mygo meets the same cases.
 import { ACTIVITIES } from "@soksak/plugin-api";
+import declaration from "./workbench.json" with { type: "json" };
+import { declaredIcons } from "./icons.js";
 
 /** The highest of the activities, or null when none is given. null stands for no activity. */
 export function highestActivity(activities) {
@@ -158,3 +160,28 @@ export function createActivity({ observe, statuses, projects, changed, failed })
   return { sync, state: () => state };
 }
 
+/**
+ * Keeps the icon of activity in holder immediately before the element before (docs/spec/activity.md#drawing): an image with the
+ * element name expose and the declared name of the activity as its label and tooltip, and none when activity is null. An unchanged
+ * activity keeps the drawn icon.
+ */
+export function drawActivity(holder, before, activity, expose) {
+  let icon = holder.querySelector(":scope > .activity");
+  if (activity === null) {
+    icon?.remove();
+    return;
+  }
+  if (!icon) {
+    icon = document.createElement("span");
+    icon.className = "activity";
+    icon.dataset.expose = expose;
+    icon.setAttribute("role", "img");
+  }
+  if (icon.nextElementSibling !== before) holder.insertBefore(icon, before);
+  if (icon.dataset.activity === activity) return;
+  const name = declaration.activities[activity];
+  icon.dataset.activity = activity;
+  icon.setAttribute("aria-label", name);
+  icon.title = name;
+  icon.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${declaredIcons[`activity-${activity}`]}</svg>`;
+}
