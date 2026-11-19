@@ -1,4 +1,4 @@
-# Party
+# Parties
 
 [English](parties.md)
 
@@ -88,7 +88,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 세 조회는 카드의 member 상태를 돌려준다. 세 조회는 한 카드 상태 형태와 한 코드 경로를 쓴다.
 
-- 카드 상태는 `{card, party, leader, activeTab, tabs}`다. `party`는 카드를 가진 party 식별자 또는 `null`, `leader`는 `true` 또는 `false`, `tabs`는 탭 순서대로 `{tab, plugin, status}`의 목록이다. `status`는 그 탭의 상태 값 객체다. plugin이 `summary: true`로 선언한 상태만 담으며([노출](exposure.ko.md#항목-필드)), `--full`이면 탭의 모든 상태를 담는다. summary를 선언하지 않은 plugin의 탭은 `status: {}`다. terminal 탭의 값은 그 상태의 값이다. core가 그 값을 복사하기 때문이다.
+- 카드 상태는 `{card, party, leader, activeTab, tabs}`다. `party`는 카드를 가진 party 식별자 또는 `null`, `leader`는 `true` 또는 `false`, `tabs`는 탭 순서대로 `{tab, plugin, status}`의 목록이다. `status`는 그 탭의 상태 값 객체다. plugin이 `summary: true`로 선언한 상태만 담으며([노출](exposure.ko.md#항목-필드)), `--full`이면 탭의 모든 상태를 담는다. summary를 선언하지 않은 plugin의 탭은 `status: {}`다. terminal 탭의 summary는 그 탭 status의 값과 같다. core가 그 값을 복사하기 때문이다.
 - `core.party.get {party}`는 `{id, cards, leader, color, leaderColor, outline, reason, members}`를 돌려준다. `members`는 카드마다의 카드 상태이며, leader가 먼저이고 나머지는 space 순서다.
 - `core.card.get {card}`는 카드 상태를 돌려준다. party에 없는 카드는 `party: null`이다.
 - `core.parties`는 party 조회 기록의 목록을 값으로 가지는 status다. 각 기록은 `id`, `cards`, `leader`, `color`, `leaderColor`, `outline`, `reason`을 담는다. `outline`은 닫힌 loop의 목록이며, 각 loop는 창 point 단위 `[x, y]` 점의 목록이다. 바깥 loop는 시계 방향, 구멍은 반시계 방향이다.
@@ -101,8 +101,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 - 감시 중인 `core.parties`의 값이 바뀌면, 그 명령의 응답 전에 페이지는 `{name, value}`를 실은 호출 `exposureChanged`를 보낸다([exposure](exposure.ko.md)). 값은 새 party 기록 목록이며, 바뀔 때마다 한 번 보낸다.
 - 거부된 명령은 아무것도 쓰지 않으며, `exposureChanged`도 배치 쓰기도 보내지 않는다.
 - 카드의 작업 상태 변화는 `core.parties`에 대한 `exposureChanged`를 보내지 않는다.
-- 현재 동작, 즉 party 저장을 쓰기 전의 기존 저장 방식: project 저장은 `{kind: "patch", id, patch}`를 실은 호출 `workspace`를 보내며(`packages/workbench/host-store.js:44`), `patch`는 `{spaces, activeSpaceId, named}`이다(`packages/workbench/projects.js:438`, `projects.js:443`에서 보낸다). `spaces`는 페이지가 가진 project의 space 객체 배열이다. 페이지의 어떤 코드도 아직 space 객체에 `parties` 멤버를 쓰지 않으며, Go와 Rust 호스트는 받은 `spaces`를 그대로 저장한다(`packages/host/go/src/workspace.go:541`, `packages/host/rust/src/workspace.rs:549`).
-- party 감시 케이스는 `workspace`, `core.parties` 및 exposure 호출의 순서만 읽는다. 케이스는 세지 않는 `log` 호출과 `notificationState`와 `setTheme` 호출(케이스의 `filter` 멤버)을 걸러낸다. reader는 `notificationState`에 `{authorization: "notDetermined", error: null}`로, `setTheme`과 `setMenuLanguage`에 `null`로 답한다. 이 답들은 각각 `docs/spec/cases/page-wire/plane-placeholder-error.json`(단계 2와 3), `docs/spec/cases/page-wire/background-sessions-context.json`(단계 14와 15), `docs/spec/cases/page-wire/library-folders-once.json`(단계 4와 5)이 기록한 reply이다.
+- project 저장은 `{kind: "patch", id, patch}`를 실은 호출 `workspace`를 보내며(`packages/workbench/host-store.js:44`), `patch`는 `{spaces, activeSpaceId, named}`이다(`packages/workbench/projects.js:438`, `projects.js:443`에서 보낸다). `spaces`는 페이지가 가진 project의 space 객체 배열이며, 각 space 객체의 `parties` 멤버는 이 배열의 일부다. Go와 Rust 호스트는 받은 `spaces`를 그대로 저장한다(`packages/host/go/src/workspace.go:541`, `packages/host/rust/src/workspace.rs:549`).
 
 ## 창 설명
 
@@ -112,12 +111,12 @@ Surface 설명, `window_describe {surface}`는 snapshot의 surface 그룹만 읽
 
 ## 저장
 
-- `projects.json`의 space 객체는 party가 있을 때 `parties` 멤버를 가지며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `leader`는 카드 식별자 또는 `null`이고, `color`는 `#rrggbb` 값이며, `leaderColor`는 `#rrggbb` 값 또는 테마 token을 따르는 `null`이다.
+- `projects.json`의 space 객체는 `parties` 멤버를 가지며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `leader`는 카드 식별자 또는 `null`이고, `color`는 `#rrggbb` 값이며, `leaderColor`는 `#rrggbb` 값 또는 테마 token을 따르는 `null`이다.
 - 저장에는 이유와 외곽선을 두지 않는다. 둘 다 파생 값이다.
-- `parties`가 없는 space 객체는 `parties: []`로 읽는다. 이는 선택 필드가 없을 때의 선언된 빈 기록 기본값이다([영속성](projects.ko.md#저장)). `parties`에 명시적 `null`이 있거나 다른 형식의 값이면 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다. `parties`가 없는 space는 `parties`를 쓰지 않는다. `parties`가 없는 space를 읽으면 빈 목록을 읽는다.
-- 리더는 규칙을 어기는 party도 거부한다. 카드 2개 미만, 두 party에 든 카드, 배치에 없는 카드, cards 밖의 leader, 잘못된 색이 여기 해당한다.
+- `parties`가 없는 space 객체는 `parties: []`로 읽는다. 이는 선택 필드가 없을 때의 선언된 빈 기록 기본값이다([영속성](projects.ko.md#저장)). space를 저장하면 항상 `parties`를 쓰며, party가 없으면 `[]`를 쓴다. `parties`에 명시적 `null`이 있거나 다른 형식의 값이면 파일 `projects.json`, project 루트, space 식별자, 발견한 내용을 적은 오류로 실패하며 파일을 바꾸지 않는다.
+- 규칙을 어기는 party 기록도 거부한다. 카드 2개 미만, 두 party에 든 카드, 배치에 없는 카드, cards 밖의 leader, 잘못된 색이 여기 해당한다.
 - [설정](settings.ko.md#값)이 거부하는 `rail`과 `railWidth` 키는 계속 거부한다.
-- 저장 규칙의 진입점은 `packages/workbench/projects.js`에 있다. `readStoredSpace(project, space)`는 `parties` 배열을 가진 space를 반환하며, 멤버가 없으면 `[]`이고, `null`이거나 배열이 아닌 값, 또는 규칙을 어기는 party 기록이면 `Error`를 던진다. 그 텍스트는 `projects.json`, project 루트, space 식별자, 발견한 값을 JSON 텍스트로 적는다: `projects.json: project <root>, space <space id>: parties <found JSON text>` (제안된 문구, [열린 결정](#열린-결정)). `writeStoredSpace(space)`는 저장할 space 객체를 반환하며, 항상 배열인 멤버 `parties`를 가진다.
+- 저장 규칙의 진입점은 `packages/workbench/projects.js`에 있다. `readStoredSpace(project, space)`는 `parties` 배열을 가진 space를 반환하며, 멤버가 없으면 `[]`이고, `null`이거나 배열이 아닌 값, 또는 규칙을 어기는 party 기록이면 `Error`를 던진다. 그 텍스트는 `projects.json: project <root>, space <space id>: parties <found JSON text>`이며, 발견한 값은 JSON 텍스트로 보인다. `writeStoredSpace(space)`는 저장할 space 객체를 반환하며, 항상 배열인 멤버 `parties`를 가진다.
 
 ## 카드 메뉴
 
@@ -136,9 +135,10 @@ take 항목은 들어갈 party를 이름으로 보여준다. take가 이전 part
 
 ## 열린 결정
 
-- 각 테마의 party 색 `party-1`부터 `party-6`까지와 leader 색 `party-leader`의 값. 사람이 보는 색이며, 이 명세는 각 색이 그 테마의 rail 색과 다르다는 것만 정한다. 값은 각 팔레트의 rail 색 hue에서 유도한다.
-  결정: `packages/workbench/workbench.json`이 각 팔레트에 준 값을 그대로 둔다. 예를 들어 midnight dark 팔레트의 `party-1`은 `#a06ce0`, `party-leader`는 `#e0da6c`이다. 이 값은 위의 유도 규칙을 따른다.
+- 각 테마의 party 색 `party-1`부터 `party-6`까지와 leader 색 `party-leader`. 사람이 보는 색이다.
+  결정: 각 테마는 이 일곱 token을 자기 팔레트에 선언하며, 각 색은 그 팔레트의 `rail` 항목과 다르다. midnight dark 팔레트는 `party-1` `#a06ce0`, `party-2` `#e06cac`, `party-3` `#e0a06c`, `party-4` `#ace06c`, `party-5` `#6ce0a0`, `party-6` `#6cace0`, `party-leader` `#e0da6c`를 선언하며, `rail`은 `#7279ff`다. 팔레트 선언은 `packages/workbench-mygo/src/workbench.json`에 있다.
 - 메뉴 항목의 이름과 take 항목의 문구, 사라지는 이전 party를 알리는 문구. 사람이 읽는다.
-  결정: 카드 도구 메뉴의 표현을 따르는 한국어 이름을 쓴다. 묶기는 `카드 묶기`이며, 고르는 레이어는 `묶을 카드 고르기`를, 확인 항목은 `카드 N개 묶기`를 쓴다. 대표는 `대표 카드로 지정` 또는 `대표 카드 해제`, 색은 `색 1`부터 `색 6`까지, 합치기는 `파티 p1에 합치기`이며, 이전 party p2가 사라지면 `, 파티 p2가 사라짐`을 붙인다. 코드의 이름은 영어(`group with b`, `make leader`)이며 제안이 이를 바꾼다.
-- 위 표의 거부 문구(`card <id> belongs to party <party>` 제외)와 저장 거부 문구의 표현. 사람이 읽는다.
-  결정: 위 표의 거부 문구를 그대로 둔다. 기존 명령 오류(`unknown card <id>`, `no menu is open`)와 같이 소문자 영어로, 마침표 없이, 대상과 식별자를 앞에 쓴다. 저장 거부 문구는 저장 절의 문구를 그대로 둔다.
+  결정: 메뉴 이름은 한국어다. 묶기는 `카드 묶기`이며, 고르는 레이어는 `묶을 카드 고르기`를, 확인 항목은 `카드 N개 묶기`를 쓴다. 대표는 `대표 카드로 지정` 또는 `대표 카드 해제`, 색은 `색 1`부터 `색 6`까지, 합치기는 `파티 p1에 합치기`이며, 이전 party p2가 사라지면 `, 파티 p2가 사라짐`을 붙인다.
+- [명령](#명령)의 표에 있는 거부 문구와 저장 거부 문구. 사람이 읽는다.
+  결정: 표의 거부 문구를 그대로 둔다. 기존 명령 오류(`unknown card <id>`, `no menu is open`)와 같이 소문자 영어로, 마침표 없이, 대상과 식별자를 앞에 쓴다. 저장 거부 문구는 `projects.json: project <root>, space <space id>: parties <found JSON text>`이다.
+
