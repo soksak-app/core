@@ -401,12 +401,14 @@ export class GroupTree {
 
   /**
    * The dividers of the grid cut where they would cross a group header (docs/spec/groups.md#drawing): a divider of a line inside a group
-   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index.
+   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index. Each part
+   * draws its grip, gripLength long, at its center while it holds the grip (grip), so no grip reaches into a header.
    */
-  drawnDividers(dividers) {
+  drawnDividers(dividers, gripLength) {
     const heads = this.headRects();
     return dividers.flatMap((divider) => clearOfHeads(divider.axis, across(divider), along(divider), heads)
-      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key })));
+      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key,
+        grip: part[1] - part[0] >= gripLength })));
   }
 
   /**

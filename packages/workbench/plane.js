@@ -9,7 +9,7 @@ import { appliedPatch, borderWidth, cardRadius, halfGap, linkedSet, pluginSettin
 import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
-import { CHROME, placeFocusMark } from "./chrome-metrics.js";
+import { CHROME, gripMetrics, placeFocusMark } from "./chrome-metrics.js";
 import { activeTab, appendTab, cardTextSize, removeTab, settleActiveTab, tabName as shownTabName, tabsOf } from "./card-data.js";
 import { fitHead } from "./head-fit.js";
 import { hasPlugin, isPlace, plugin, plugins } from "./registry.js";
@@ -1652,7 +1652,12 @@ function build(kept) {
       has: (id) => grid.card(id) !== undefined || tree.isGroup(id),
       rects: drawnRects,
       rules: () => tree.drawnRules(grid.rules()),
-      dividers: () => tree.drawnDividers(grid.dividers()),
+      dividers: () => tree.drawnDividers(grid.dividers(), gripMetrics().gripLength),
+    },
+    // A stretch of a divider too short for its grip draws none, which the stylesheet reads from data-grip (docs/spec/groups.md#drawing).
+    updateDivider: (el, divider) => {
+      const grip = String(divider.grip);
+      if (el.dataset.grip !== grip) el.dataset.grip = grip;
     },
     // A divider drag previews its steps on the line of the group tree, which draws the cards below the headers, and its result is
     // the command core.boundary.move from the layout before the drag to the position where the drag left the line

@@ -415,6 +415,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 :root[data-full-rule=over] .sp-rule[data-virtual=true]{z-index:70}
 :root[data-full-rule=none] .sp-rule[data-virtual=true]{display:none}
 .sp-divider{z-index:4}
+/* A stretch of a divider shorter than its grip draws none, so no grip reaches into a header (docs/spec/groups.md#drawing). */
+.sp-divider[data-grip=false]::after{content:none}
 
 /* The rail outline is drawn only inside the passage. A fill that covers the inside of a card would be hidden by the native surface
    in the application, so it is not drawn here either. */

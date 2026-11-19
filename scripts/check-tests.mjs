@@ -283,6 +283,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F955",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "drawnDividers(dividers, gripLength) {" },
+      { file: "packages/workbench/plane.js", symbol: "updateDivider: (el, divider) => {" },
+      { file: "packages/workbench-mygo/src/dividers.go", symbol: "if float32(length) < m.gripLength {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-drawn.test.mjs", id: "a divider draws its grip only on a drawn stretch that holds the grip" },
+      { file: "packages/workbench/test/group-divider.test.mjs", id: "each divider element of the plane says whether its stretch draws the grip" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGripStandsOnlyOnAStretchThatHoldsIt" },
+    ],
+    expected: "Each drawn stretch of a divider draws its grip at its center while it holds the grip length, and a shorter stretch draws none, so no grip reaches into a header.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-18",
     implementation: [
       { file: "packages/workbench/plane.js", symbol: "function fitGroupHead(head) {" },

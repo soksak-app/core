@@ -560,3 +560,31 @@ func TestEveryGroupCardThatHoldsTheFocusMarksItsFrame(t *testing.T) {
 	f.run(t, "core.card.focus", `{"card": "card-1"}`)
 	check("card-1 focused at the seam", map[string]color.RGBA{"outside card-6 left": marked(1), "below card-6": marked(1)})
 }
+
+// A divider draws its grip at the center of each drawn stretch that holds the grip, and a stretch shorter than the grip draws none, so
+// no grip reaches into a header: the line between the members of a group card nested at the top of another one is cut by both headers
+// and keeps a stretch of one gap between them (docs/spec/groups.md#drawing).
+func TestAGripStandsOnlyOnAStretchThatHoldsIt(t *testing.T) {
+	f := groupedShell(t)
+	f.tester.SetSize(1600, 900)
+	// A new request groups main again, inside the group card that holds it.
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": "nested"}`); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	f.tester.Frame()
+	outer, inner := f.box("core.group.header", "card-2"), f.box("core.group.header", "card-4")
+	main, born := f.box("core.card", "main"), f.box("core.card", "card-5")
+	x := (main.X + main.W + born.X) / 2
+	between := (outer.Y + outer.H + inner.Y) / 2
+	if inner.Y-(outer.Y+outer.H) >= 24 {
+		t.Fatalf("the headers stand %v apart, which holds a grip", inner.Y-(outer.Y+outer.H))
+	}
+	if got, beside := f.pixelOf(x, between), f.pixelOf(x-8, between); !near(got, beside) {
+		t.Errorf("the stretch of the line between the headers at %v,%v draws %v, not the body %v beside it", x, between, got, beside)
+	}
+	body := (main.Y + main.Y + main.H) / 2
+	if got, beside := f.pixelOf(x, body), f.pixelOf(x, body-20); near(got, beside) {
+		t.Errorf("the stretch of the line beside the bodies draws no grip at its center %v,%v: %v", x, body, got)
+	}
+}
