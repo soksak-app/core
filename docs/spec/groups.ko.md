@@ -126,7 +126,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 - `core.card.close {card: <group>}`은 group card를 그 안의 모든 card와 함께 닫는다. group card를 card 하나로 만들고 library의 close(R7)로 닫는다. `core.card.close`가 card 하나의 tab을 묻듯 수정된 각 tab을 먼저 묻고, 물은 모든 tab이 저장되거나 버려질 때까지 결과는 `closed: false`다.
 - `core.card.focus {card: <group>}`은 workbench order로 group 안의 첫 content card에 focus를 둔다.
 - `core.card.fullscreen {card: <group>}`은 group card를 작업 영역 전체에 보인다. 그 사각형을 각 축으로 늘려 plane 전체에 대응시키고, 그 안의 content card와 group card는 그 대응이 주는 사각형에 header와 함께 그려진다. 다른 모든 card는 전체 화면 content card처럼 빈 사각형으로 숨는다. grid는 바뀌지 않으며, group card의 두 번째 `core.card.fullscreen`은 배치를 되돌린다. group 안의 content card는 지금처럼 혼자 전체 화면이 된다. group card가 전체 화면인 동안 layout은 전체 화면 card의 규칙대로 group card 안에서도 밖에서도 바뀌지 않으며, 그 안 card의 focus는 전체 화면을 유지한다.
-- `core.layout.balance`와 card 자동 정렬 command(`cardArrange`)는 지금처럼 grid에 동작한다. 배치를 유지하므로 모든 group card는 자기 사각형을 유지한다.
+- `core.layout.balance`와 card 자동 정렬 command(`cardArrange`)는 지금처럼 grid에 동작한다. layout library의 balance는 card를 다른 line에 놓을 수 있으므로, workbench는 모든 operation처럼 그 결과를 검사한다: group card를 한 사각형이 아니게 하는 balance는 `the layout cannot balance: group <g> would not cover one rectangle`로, `cardSplit` `even`의 balance는 `card <id> cannot split toward <side>: cardSplit even would leave group <g> not covering one rectangle`로 거부되며 아무것도 바뀌지 않는다. boundary의 가운데 맞춤과 boundary drag의 끝은 line을 그것이 닿은 line에 합치므로 두 line이 한 좌표에 서지 않으며, content card를 최소보다 작게 그릴 가운데 맞춤은 line을 그 자리에 둔다.
 
 ### Split 설정
 
@@ -260,4 +260,5 @@ review는 다음 반론에 답했다.
 - nested group card의 테두리는 한 변을 공유하는 곳에서 한 line으로 그려져 nesting을 숨겼고, 바깥 group의 header를 가로지르는 divider를 그렸다: 각 level은 자기 채움을 가지고, header는 어떤 rule도 가로지르지 않는 한 줄이다.
 - header 아래 card의 bottom 쪽 split은 grid의 사각형을 나눠서, 위쪽 절반이 header만큼 잃고 들어맞는 card의 group이 최소 미만으로 거부되었다: split은 그리는 사각형을 새 line에서 나누므로 두 절반이 같은 높이로 그려진다.
 - header가 그 아래 card나 nested header에 바로 붙어 그려져서, 다른 모든 상자 쌍을 떼어 놓는 corridor 없이 상자가 맞닿았다: header 뒤에는 card처럼 gap이 온다.
+- layout library의 balance는 배치를 유지한다고 여겨졌지만 card를 다른 line에 놓을 수 있고, group이 있는 space의 balance가 group card를 다른 group의 cell 위에 두었다. balance와 boundary 가운데 맞춤을 포함한 grid의 모든 결과는 같은 group 사각형 검사를 거치며, seed가 정해진 무작위 operation 순서가 매 단계 뒤에 불변식을 검사한다.
 - group 안에서 split된 card의 `paidBy` 기록은 그 card가 close될 때 space를 가로질러 자리를 돌려줄 수 있다: group을 가진 space는 `paidBy` 기록을 남기지 않으므로, 그 cell을 받는 이웃만 바뀐다.
