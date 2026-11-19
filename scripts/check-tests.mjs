@@ -13916,7 +13916,7 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/test-discovery.mjs", symbol: "export async function discoverRust" }],
     tests: [
       { file: "scripts/test/test-discovery.test.mjs", id: "a Rust package lists its tests, each test runs by itself, and an ignored test is a skip" },
-      { file: "scripts/test/test-discovery.test.mjs", id: "each Rust list step reports its start and elapsed time, and a list that does not end fails at its limit with the executable" },
+      { file: "scripts/test/test-discovery.test.mjs", id: "each Rust list step reports its start and elapsed time, and a list that exits with a failure fails with its exit status and the executable" },
     ],
     expected: "Rust test builds, test lists and individual tests report their start and elapsed pass, fail, timeout, or skip results through the shared runner; a test list that fails or reaches the limit of a test is a discovery failure that names the executable.",
     levels: ["unit"],
@@ -13926,9 +13926,19 @@ const FEATURE_LINKS = [
     implementation: [{ file: "scripts/test-discovery.mjs", symbol: "const packageList = { name: `list ${id} packages ${patterns.join(' ')}`" }],
     tests: [
       { file: "scripts/test/test-discovery.test.mjs", id: "a Go package list that fails is a discovery failure that names the patterns, with the start and elapsed time of the step" },
-      { file: "scripts/test/test-discovery.test.mjs", id: "each Go test list step reports its start and elapsed time, and a binary that does not answer its list fails at its limit with the binary named" },
+      { file: "scripts/test/test-discovery.test.mjs", id: "each Go test list step reports its start and elapsed time, and a binary whose listing exits with a failure fails with its exit status and output" },
     ],
     expected: "The Go package list and the test list of each Go test binary report their start and elapsed result through the shared runner under the limit of a test; a list that fails or reaches the limit is a discovery failure that names the patterns or the binary.",
+    levels: ["unit"],
+  },
+  {
+    id: "F915-1",
+    implementation: [{ file: "scripts/test-discovery.mjs", symbol: "export async function discoverRust" }, { file: "scripts/test-discovery.mjs", symbol: "const packageList = { name: `list ${id} packages ${patterns.join(' ')}`" }],
+    tests: [
+      { file: "scripts/test/test-discovery.test.mjs", id: "a Rust test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit" },
+      { file: "scripts/test/test-discovery.test.mjs", id: "a Go test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit" },
+    ],
+    expected: "A discovery listing has no time limit of its own: a Rust or Go test binary whose listing runs past the limit of a test is still listed when its listing exits with status 0.",
     levels: ["unit"],
   },
   {
