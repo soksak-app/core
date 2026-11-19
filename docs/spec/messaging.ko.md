@@ -32,7 +32,7 @@ File event의 body는 `{registration, path, from, kind, seq}`다.
 
 Sidecar는 message 파일의 변경마다 event 하나를 보낸다. Message 파일은 이름이 `.txt`로 끝나고 sender를 담는, folder의 바로 아래 파일이다([message](messaging.md#message), [wire 결정](messaging.md#wire-decisions)). Sequence number `seq`는 registration마다 센다. 한 sidecar process 안에서 각 registration은 1부터 시작한다. Event의 source는 body가 가리키는 registration이다. [logging](logging.md#event)의 `seq` 규칙은 log record에 대해 writer process마다 counter 하나를 두며, 이 계약은 같은 counter 형식을 registration마다 적용한다. 그래야 reader가 folder 하나의 event를 counter 하나로 정렬한다. Plan은 event마다 sequence number를 요구하지만 그 범위는 정의하지 않는다([terminal plan, 3.5](../plans/terminal-plan.md#35-red-and-green-for-f899-7)).
 
-Wire에서 event 이름은 body의 member `body.event`이며 값은 `file.changed`다([wire 결정](messaging.md#wire-decisions), 항목 1). 아래 이름은 event log record의 이름이다. Sidecar catalog의 event 이름은 `sidecar.alacritty.file.changed`다. 감시와 전달을 맡는 sidecar는 `alacritty`다. agent의 terminal session을 가진 terminal sidecar이며, 리더가 정했고 저장소는 이미 있다. Catalog 형식은 모든 sidecar event에 그 prefix를 요구하므로([logging](logging.md#sidecar-catalogs)), prefix 없이 주어진 이름은 유효한 catalog 이름이 아니다. Gate level은 `debug`이고 class는 `io`다. Sidecar message가 이 class에 속한다([logging](logging.md#classes-and-policy)). 기본 policy는 `error`만 저장하므로([logging](logging.md#policy)), file event는 사람이 그 class의 `debug` level을 켠 경우에만 저장된다.
+Wire에서 event 이름은 body의 member `body.event`이며 값은 `file.changed`다([wire 결정](messaging.md#wire-decisions), 항목 1). 아래 이름은 event log record의 이름이다. 각 terminal sidecar는 자기 surface의 folder를 감시하고 그 message를 전달한다: plugin `term`에는 `alacritty`, plugin `terminal`에는 `vt`다. 각자 자기 plugin의 terminal session을 가지기 때문이며, 둘 다 이 contract를 구현하고 그 [공유 case](messaging.md#shared-cases)를 실행한다. sidecar catalog의 event 이름은 `sidecar.<sidecar>.file.changed`(`sidecar.alacritty.file.changed`, `sidecar.vt.file.changed`)다. Catalog 형식은 모든 sidecar event에 그 prefix를 요구하므로([logging](logging.md#sidecar-catalogs)), prefix 없이 주어진 이름은 유효한 catalog 이름이 아니다. Gate level은 `debug`이고 class는 `io`다. Sidecar message가 이 class에 속한다([logging](logging.md#classes-and-policy)). 기본 policy는 `error`만 저장하므로([logging](logging.md#policy)), file event는 사람이 그 class의 `debug` level을 켠 경우에만 저장된다.
 
 ## Message
 
@@ -40,11 +40,11 @@ Message는 등록된 folder 안에 바로 쓰인 파일이다. 하위 folder에 
 
 Writer는 message를 `.txt`로 끝나지 않는 임시 이름, 예를 들면 같은 folder의 `.tmp-<random>`으로 먼저 만들고, text를 쓴 뒤 file을 닫은 다음, `<from>.<token>.txt` 이름으로 rename한다. Rename만이 message가 보이는 유일한 시점이다. 새 파일은 생성될 때 보고되며, 그 시점은 쓰기가 끝나기 전일 수 있다. Sidecar는 `.txt`로 끝나는 이름만 읽는다. `sok`의 send command는 이 방식으로 message를 쓴다. [cli](cli.md#commands)가 그 command를 정의하며, 이 규칙이 그 계약이다. `sok`이 아닌 writer도 같은 규칙을 따라야 한다. Sidecar는 완성된 파일과 쓰는 중인 파일을 구별할 수 없기 때문이다([wire 결정](messaging.md#wire-decisions), 항목 17). 미측정: 임시 이름에 대한 sidecar의 반응은 `notify`의 생성 event(파일이 생성되면 보고함)에서 추론한 것이며 측정하지 않았다. 측정은 checklist 항목으로 추적한다(임시 이름으로 쓰는 동안 event 0개, rename에서 `created` 1개).
 
-Message는 소비되지 않는다. `messages_read`는 `after`보다 큰 sequence number를 가진 message를 `seq` 증가 순서로 돌려준다. 같은 `after`로 반복해서 읽으면 folder가 바뀌지 않는 한 같은 message를 돌려준다. 이 operation은 idempotent하기 때문이다([AGENTS](../../AGENTS.md#implementation)). 같은 파일을 다시 쓰면 새 `created` 또는 `modified` file event가 새 `seq`로 생기며, 이것은 새 message로 그 `seq`와 함께 돌려준다. 이전 event를 대체하지 않는다. Message의 text는 reply를 만들 때 읽는다.
+Message는 소비되지 않는다. `messages_read`는 `after`보다 큰 sequence number를 가진 message를 `seq` 증가 순서로 돌려준다. 같은 `after`로 반복해서 읽으면 folder가 바뀌지 않는 한 같은 message를 돌려준다. 이 operation은 idempotent하기 때문이다([AGENTS](../../AGENTS.md#implementation)). 같은 파일을 다시 쓰면 새 `created` 또는 `modified` file event가 새 `seq`로 생기며, 이것은 새 message로 그 `seq`와 함께 돌려준다. 이전 event를 대체하지 않는다. Message의 text는 reply를 만들 때 읽는다. `removed` event는 message가 아니다: reply의 message는 reply를 만들 때 파일이 있는 `created`와 `modified` event이며, `last`는 registration의 모든 event 중 가장 큰 `seq`다.
 
 ## Folder 제거 또는 이름 변경
 
-등록된 folder가 제거되거나 이름이 바뀌면 sidecar는 `{registration, reason: "folder-removed"}`를 담은 `sidecar.alacritty.registration.closed` event를 gate level `info`로 보내고, 그 registration의 watch를 끝낸다. Event는 명시적이며, sidecar는 folder를 polling하지 않는다([AGENTS](../../AGENTS.md#implementation)). 같은 path에 folder를 다시 만들어도 watch는 재개되지 않는다. Agent가 folder를 다시 등록하며, 새 registration의 `seq`는 1에서 시작한다.
+등록된 folder가 제거되거나 이름이 바뀌면 sidecar는 `{registration, reason: "folder-removed"}`를 담은 `sidecar.<sidecar>.registration.closed` event를 gate level `info`로 보내고, 그 registration의 watch를 끝낸다. Event는 명시적이며, sidecar는 folder를 polling하지 않는다([AGENTS](../../AGENTS.md#implementation)). 같은 path에 folder를 다시 만들어도 watch는 재개되지 않는다. Agent가 folder를 다시 등록하며, 새 registration의 `seq`는 1에서 시작한다.
 
 ## 재시작 뒤 cursor
 
@@ -83,9 +83,13 @@ Wait는 도착하거나 registration을 닫는 event가 올 때 끝난다. Wait�
 
 Agent는 그 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다([terminal plan, 3.3](../plans/terminal-plan.md#33-delivery-channel-to-the-agent-decision-d4)). MCP tool을 받는 agent는 Claude Code와 Codex이며, `sok mcp install`이 등록하는 두 agent다. Test가 이 집합을 그 등록과 대조한다([wire 결정](messaging.md#wire-decisions), 항목 15).
 
+## 공유 case
+
+`docs/spec/cases/messaging/names.json`은 [message](messaging.md#message)의 이름 규칙의 case를 담는다: 각 case는 folder 바로 안의 파일 이름과 그 결과를 가진다. 결과는 message가 아닌 이름에는 `ignored`, `from`이나 `token`을 주지 않는 `.txt` 이름에는 `invalid-sender`, message에는 그 `from`이다. 각 terminal sidecar는 그 파일을 자기 fixture로 복사하고 각 case를 자기 이름 규칙으로 실행하며, 그 contract test는 이 문서의 동작을 실제 folder와 파일로 실행한다.
+
 ## Wire decisions
 
-각 결정은 terminal sidecar의 기존 wire를 따르며, 출처는 그 repository의 `main` branch다. `protocol.rs`는 `alacritty-core/src/protocol.rs`, `pty.rs`는 `alacritty-core/src/pty.rs`, `file_watch.rs`는 `alacritty-core/src/platform/darwin/file_watch.rs`다. 각 결정은 한 문장이며, 이유와 출처가 뒤따른다.
+각 결정은 terminal sidecar들의 기존 wire를 따르며, 출처는 sidecar `alacritty`의 `main` branch다. sidecar `vt`는 `vt-core/src/protocol.rs`, `vt-core/src/pty.rs`, `vt-core/src/platform/darwin/file_watch.rs`에 같은 wire를 가진다. `protocol.rs`는 `alacritty-core/src/protocol.rs`, `pty.rs`는 `alacritty-core/src/pty.rs`, `file_watch.rs`는 `alacritty-core/src/platform/darwin/file_watch.rs`다. 각 결정은 한 문장이며, 이유와 출처가 뒤따른다.
 
 1. **Event 이름.** Sidecar event는 `body`의 member `event`에 점 표기 이름으로 자신을 밝힌다. 따라서 file event는 `{surface, body: {event: "file.changed", registration, path, from, kind, seq}}`다. 이유: host는 `body`를 읽지 않고 전달하며([sidecars](sidecars.md#messages)), 기존 wire event는 모두 이렇게 이름을 밝힌다. 출처: `protocol.rs:3630`(`session`), `protocol.rs:3469`(`clipboard.store`), `protocol.rs:4923`(`screen.rows`) 카탈로그와 log 형식은 접두사를 유지하고(`events.json:162`, `sidecar.alacritty.shell.state`), wire는 짧은 이름을 쓴다(`protocol.rs:2225`, `selection.copy`).
 2. **Operation parameter.** Request는 `body`의 member `operation`에 점 표기 operation 이름 `messages.register`, `messages.read`, `messages.wait`를 밝히며, 각 parameter는 `operation` 옆의 `body` member다. Registration은 `folder`, read와 wait는 `after`와 `registration`을 쓴다. Terminal은 envelope member `surface`이므로 tool 인자 `terminal`은 `surface`로 보낸다. 절대 경로가 아닌 `folder`는 `invalidParams`로 실패한다. 이유: 기존 점 표기 operation `screen.read`와 `screen.watch`가 이 형식을 쓰고, envelope이 이미 surface를 담는다. 출처: `protocol.rs:5837`(`body.operation`으로 분기), `protocol.rs:6212`(`screen.watch`), `protocol.rs:6229`(`screen.read`), `protocol.rs:5867`(`open directory must be an absolute path`).
@@ -125,9 +129,9 @@ Agent는 그 client가 MCP tool을 지원하는 곳에서만 MCP tool을 쓴다(
 - Message 형식: 등록된 folder의 `<from>.<token>.txt` 파일, UTF-8, 64 KiB 이하. 더 큰 파일은 `message-too-large`로 거부한다. 이유: text 파일은 terminal agent가 쓰기 가장 단순한 형식이며, 상한은 bounded buffer에 대한 [AGENTS](../../AGENTS.md#implementation)를 따른다.
 - 소비: message는 소비되지 않는다. `messages_read`는 `after`와 `registration`을 받아 더 큰 `seq`의 message를 돌려주며, 같은 `after`로 반복 읽으면 같은 결과를 준다. 이유: [AGENTS](../../AGENTS.md#implementation)는 idempotent operation을 요구한다.
 - 순서와 다시 쓴 파일: message는 `seq` 증가 순서로 전달된다. 다시 쓴 파일은 새 `seq`를 가진 새 file event이며, 이전 event의 대체가 아니다. 이유: [logging](logging.md#event)의 `seq` 규칙은 한 counter의 event를 정렬하며, 대체하면 [AGENTS](../../AGENTS.md#implementation)의 idempotent 요구를 깨뜨린다.
-- 제거 또는 이름 변경된 folder: sidecar는 `reason: "folder-removed"`를 담은 `sidecar.alacritty.registration.closed`를 보내며, 다시 만든 folder는 watch를 재개하지 않는다. 이유: [AGENTS](../../AGENTS.md#implementation)는 event source가 있는 곳에서 polling을 금지하며, folder 제거는 watch가 받는 event다.
+- 제거 또는 이름 변경된 folder: sidecar는 `reason: "folder-removed"`를 담은 `sidecar.<sidecar>.registration.closed`를 보내며, 다시 만든 folder는 watch를 재개하지 않는다. 이유: [AGENTS](../../AGENTS.md#implementation)는 event source가 있는 곳에서 polling을 금지하며, folder 제거는 watch가 받는 event다.
 - 대기 call: `messages_wait`는 `{terminal, after, registration}`를 받고 시간 제한이 없다. 이유: wait는 도착, 호출자 취소, registration 종료 중 하나로 끝나는 event 대기이므로 timer가 필요 없다([AGENTS](../../AGENTS.md#implementation)). 대기 call의 시간 제한 항목은 이 결정으로 닫힌다.
-- Event 이름과 gate level: `sidecar.alacritty.file.changed`는 `debug`, class `io`; `sidecar.alacritty.messages.registered`와 `sidecar.alacritty.registration.closed`는 `info`, class `lifecycle`. 이유: sidecar event는 sidecar prefix를 가진다([logging](logging.md#sidecar-catalogs)). `info`는 object lifetime의 변경이고 `debug`는 boundary 통과다([logging](logging.md#event)). Class는 [logging](logging.md#classes-and-policy)의 표를 따른다.
+- Event 이름과 gate level: `sidecar.<sidecar>.file.changed`는 `debug`, class `io`; `sidecar.<sidecar>.messages.registered`와 `sidecar.<sidecar>.registration.closed`는 `info`, class `lifecycle`이며, `<sidecar>`는 `alacritty` 또는 `vt`다. 이유: sidecar event는 sidecar prefix를 가진다([logging](logging.md#sidecar-catalogs)). `info`는 object lifetime의 변경이고 `debug`는 boundary 통과다([logging](logging.md#event)). Class는 [logging](logging.md#classes-and-policy)의 표를 따른다.
 - Agent의 MCP 지원: agent 집합은 [wire 결정](messaging.md#wire-decisions) 항목 15에서 정한다. 근거는 `sok` command의 MCP 등록([cli](cli.md#mcp-registration))이다.
 - Tool 이름: 두 MCP tool은 [cli](cli.md#mcp-server)의 모든 tool과 같이 밑줄로 이름 붙인다(`messages_read`, `messages_wait`). 이 문서의 tool table은 이 이름을 쓴다.
 - Guard: 주입된 message는 입력된 줄과 같은 `input` operation으로 제출되므로, destructive command guard가 다른 제출 줄과 같이 판단한다([persistent services](persistent-services.md#destructive-command-guard)). 거부된 message는 `rule`과 `reason`을 담은 `guardRefused` reply를 받는다.
