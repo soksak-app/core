@@ -5403,6 +5403,10 @@ mod lock_test;
 mod stop_test;
 
 #[cfg(test)]
+#[path = "sidecars_environment_test.rs"]
+mod environment_test;
+
+#[cfg(test)]
 #[path = "sidecars_session_retention_test.rs"]
 pub(crate) mod session_retention_test;
 
