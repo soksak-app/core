@@ -958,3 +958,29 @@ test("moveLinePast moves a line past the lines it reaches where no card lies bet
   assert.equal(onto.lines("x").length, 3, "the line that stops on another line merges onto it");
   assert.equal(onto.card("a").c1, onto.card("c").c1);
 });
+
+test("shareLines keeps every line index and gives each slot its corridor, its extra and an equal share of the free length", () => {
+  const cards = (width) => [
+    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, ...(width === undefined ? {} : { width }) },
+    { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
+  ];
+  const grid = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards() }, { width: 1000, height: 600, gap: 10 });
+  grid.shareLines("x");
+  assert.deepEqual(grid.cards.map((card) => [card.id, card.c0, card.c1]), [["a", 0, 1], ["b", 1, 2], ["c", 2, 3]], "the line indices stay");
+  const share = (1000 - 20) / 3;
+  for (const id of ["a", "b", "c"]) assert.ok(Math.abs(grid.rect(id).w - share) < 1e-9, `${id} is ${grid.rect(id).w} wide, not ${share}`);
+
+  grid.shareLines("x", [0, 30, 0]);
+  const less = (1000 - 20 - 30) / 3;
+  assert.ok(Math.abs(grid.rect("a").w - less) < 1e-9 && Math.abs(grid.rect("c").w - less) < 1e-9, "a and c take the share");
+  assert.ok(Math.abs(grid.rect("b").w - (less + 30)) < 1e-9, `b takes the share and its extra: ${grid.rect("b").w}`);
+
+  const held = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards(200) }, { width: 1000, height: 600, gap: 10 });
+  held.shareLines("x");
+  assert.equal(held.rect("b").w, 200, "a slot that a card with a size in px holds keeps that size");
+  assert.ok(Math.abs(held.rect("a").w - held.rect("c").w) < 1e-9, "the other slots share the rest equally");
+
+  assert.throws(() => grid.shareLines("z"), { message: "unknown axis z" });
+  assert.throws(() => grid.shareLines("x", [0, 1]), { message: "shareLines takes one extra for each of the 3 slots of x, found 2" });
+});

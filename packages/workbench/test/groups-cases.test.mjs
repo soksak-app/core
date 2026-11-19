@@ -44,7 +44,7 @@ function difference(actual, expected, where) {
 /**
  * Runs one step on the tree and returns the value of the call. create, split, close, dissolve, rename, leader and move answer as the
  * commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move
- * without tabs.
+ * without tabs, and boundary as core.boundary.move.
  */
 function call(tree, grid, { call: name, args = {} }) {
   switch (name) {
@@ -68,6 +68,7 @@ function call(tree, grid, { call: name, args = {} }) {
     case "level": return tree.level(args.card);
     case "drop": return tree.dropAt(args.x, args.y, {});
     case "balance": tree.balance(); return null;
+    case "boundary": return { position: tree.moveBoundary(args.axis, args.line, args.position, false) };
   }
   throw new Error(`unknown call ${name}`);
 }
