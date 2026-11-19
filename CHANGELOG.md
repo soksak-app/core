@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-41 (place of a group name): the mygo workbench draws the name of a group at the start of its header, where the first tab of a content card stands, as the page draws it, instead of in the middle; the groups specification states the place (`docs/spec/groups.md#headers`). Verification: the mygo test failed on the unchanged code and passes.
 - F937-40 (rule through a nested group header): the page workbench cuts a rule of one point at every group header that it runs through, also at the header of a nested group card; a line beside a header that touches its end by 1 px or less is still not cut (`docs/spec/groups.md#drawing`). Verification: the page test failed on the unchanged code and passes.
 - F937-31 (drag of a group header): in the page workbench a press and drag on the header of a group card outside its buttons drags the group card as in mygo: the drop resolves without the group card and the cards inside it, the preview shows where the move puts it, `core.drag` reports it with `tab` `""`, and the release runs `core.card.move` (`docs/spec/groups.md#moving-and-dropping`). Verification: the page test failed on the unchanged code and passes.
 - F937-39 (rename of a group in its header): in the page workbench a double-click on the name of a group card runs `core.rename.begin {kind: "group", id}`, the header shows the rename field in the place of the name, and `core.rename.commit` renames the group, as in mygo (`docs/spec/groups.md#headers`). Verification: the page test failed on the unchanged code and passes.

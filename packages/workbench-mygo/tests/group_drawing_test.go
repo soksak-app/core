@@ -574,3 +574,43 @@ func TestEveryGroupCardThatHoldsTheFocusMarksItsFrame(t *testing.T) {
 	f.run(t, "core.card.focus", `{"card": "card-1"}`)
 	check("card-1 focused at the seam", map[string]color.RGBA{"outside card-6 left": marked(1), "below card-6": marked(1)})
 }
+
+// The name of a group stands at the start of the header, in the place of the tab strip where the first tab of a content card stands,
+// and not in the middle of the room that the buttons leave (docs/spec/groups.md#headers).
+func TestAGroupNameStandsAtTheStartOfItsHeader(t *testing.T) {
+	f := groupedShell(t)
+	f.settle()
+	var label *ui.ElementNode
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for i := range nodes {
+			if exposed, ok := nodes[i].Key.(workbench.Exposed); ok && exposed.Name == "core.group.name" && exposed.Item == "card-2" {
+				label = &nodes[i]
+			}
+			walk(nodes[i].Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	if label == nil {
+		t.Fatal("the group card card-2 shows no name")
+	}
+	// The ink of the name is every point of its middle row whose color differs from the end of the name, which no text reaches.
+	box := label.Bounds
+	y := box.Y + box.H/2
+	ground := f.pixelOf(box.X+box.W-1, y)
+	first, last := float32(-1), float32(-1)
+	for x := box.X; x < box.X+box.W; x++ {
+		if !near(f.pixelOf(x, y), ground) {
+			if first < 0 {
+				first = x
+			}
+			last = x
+		}
+	}
+	if first < 0 {
+		t.Fatalf("the name %+v shows no text", box)
+	}
+	if left, right := first-box.X, box.X+box.W-last; left >= right {
+		t.Fatalf("the name text runs from %v to %v in the name %+v: %v from its start and %v from its end", first, last, box, left, right)
+	}
+}

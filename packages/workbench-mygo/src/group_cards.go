@@ -343,7 +343,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			ui.Row(c).Grow(1).Children(func() { s.drawRenameField(c, max(0, nameWidth)) })
 		} else {
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
-			label.KeepFocus().Grow(1).Shrink(1).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
+			// The name stands at the start of the place of the tab strip, where the first tab of a content card stands; a button centres its
+			// content otherwise (docs/spec/groups.md#headers).
+			label.KeepFocus().Grow(1).Shrink(1).Row().Justify(ui.Start).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
 			s.renameOnDoubleClick(label, target)
 			// The name grows over the room that the buttons leave, so a press on the header outside its buttons drags the group card. The
 			// buttons take their own presses, so only the name starts the drag, and its release ends it.
