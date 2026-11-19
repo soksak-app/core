@@ -1,5 +1,5 @@
 {
-  "description": "The party cases of the layout model (docs/spec/parties.md#commands). Each case builds a grid of content cards from state, then runs its steps in order: each step calls one party command with params. A step that returns names the reply that the command gives, with color_token naming the theme token party-1 to party-6 that the first party takes (docs/spec/parties.md#commands). A step that errors names the exact text of the refusal (docs/spec/parties.md#commands). The owning test in packages/workbench runs these cases against the party module.",
+  "description": "The party cases of the layout model (docs/spec/parties.md#commands). Each case builds a grid of content cards from state, then runs its steps in order: each step calls one party command with params. A step that returns names the reply that the command gives, with color_token naming the theme token party-1 to party-6 that the first party takes (docs/spec/parties.md#commands). A step that errors names the exact text of the refusal (docs/spec/parties.md#commands). The owning test in packages/workbench runs these cases against the party module. A case may state `drawing`, an object with `theme-rail-w` (the rail width of the theme, which the party border takes), `unit` (the points of one grid line value) and `gap` (the grid gap in points). The grid line values of the state are multiplied by `unit`, and each outline in `returns` is in points (docs/spec/parties.md#drawing).",
   "cases": [
     {
       "name": "two touching cards make one party with the first color",
@@ -1807,6 +1807,72 @@
                 "leader": null,
                 "deleted": false
               }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "a party outline is inset by half the rail width inside the grid lines",
+      "drawing": {
+        "theme-rail-w": "4px",
+        "unit": 100,
+        "gap": 6
+      },
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "id": "p1",
+            "outline": [
+              [
+                [
+                  2,
+                  2
+                ],
+                [
+                  198,
+                  2
+                ],
+                [
+                  198,
+                  98
+                ],
+                [
+                  2,
+                  98
+                ]
+              ]
             ]
           }
         }
