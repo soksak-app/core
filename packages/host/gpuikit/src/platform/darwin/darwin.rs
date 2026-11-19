@@ -162,8 +162,10 @@ fn screen(window: *mut c_void) -> Retained<objc2_app_kit::NSScreen> {
 // The web view operations of the port.
 
 pub(crate) fn evaluate_webview(view: *mut WebView, script: &str) {
-    // default: a script that the view cannot run reports nothing to a caller that reads no completion.
-    let _ = unsafe { (*view).evaluate_script(script) };
+    // A script that the view refuses is an error record: the page waits for its delivery.
+    if let Err(error) = unsafe { (*view).evaluate_script(script) } {
+        soksak_host::application_log::log_error("page delivery", format!("script: {error}"));
+    }
 }
 
 pub(crate) fn navigate(view: *mut WebView, url: &str) {
@@ -369,16 +371,19 @@ fn build_webview(
             );
         })
         .with_asynchronous_custom_protocol("app".into(), move |_id, request, responder| {
-            let path = request.uri().path();
-            // The address of the start file of a directory is the directory with a trailing separator.
-            let path = if path == "/" {
-                "index.html"
-            } else {
-                path.trim_start_matches('/')
-            };
-            let response = page_response(path);
-            let _ = page_app;
-            responder.respond(response);
+            let path = request.uri().path().to_string();
+            // WebKit asks the scheme task on the main thread, so the file is read and answered on a
+            // thread of its own, as the start document is (docs/spec/hosts.md#mygo-host).
+            soksak_host::routine::spawn_named("page-file", move || {
+                // The address of the start file of a directory is the directory with a trailing separator.
+                let path = if path == "/" {
+                    "index.html"
+                } else {
+                    path.trim_start_matches('/')
+                };
+                let response = page_response(path);
+                responder.respond(response);
+            });
         })
         .with_ipc_handler(move |request| {
             crate::bindings::route(&page_app, &label_text, request.body().to_string());

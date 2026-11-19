@@ -32,8 +32,8 @@ pub(crate) fn application() -> AppHandle {
 #[derive(Clone, Debug, PartialEq, Eq, gpui::Action)]
 pub(crate) struct DockNewWindow;
 
-/// The new window item of the dock menu, which install_dock holds on the main thread that the
-/// dock menu of GPUI runs its items on.
+// The new window item of the dock menu, which install_dock holds on the main thread that the
+// dock menu of GPUI runs its items on.
 thread_local! {
     pub(crate) static DOCK_NEW_WINDOW: std::cell::RefCell<Option<Box<dyn Fn()>>> =
         const { std::cell::RefCell::new(None) };
