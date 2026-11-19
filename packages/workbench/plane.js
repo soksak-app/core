@@ -694,9 +694,7 @@ function beginTabDrag(e, cardId, tabId) {
     // a press that did not move (a click) keeps fullscreen (docs/spec/example-model.md#card-fullscreen).
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
-    tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
-      { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
+    tabDrag.hit = dropHit(ev.clientX - host.left, ev.clientY - host.top, tabDrag.cardId, band);
     // A drop with no zone is rejected by the layout even if released. That position is not taken.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
     dragChanged();
@@ -922,20 +920,39 @@ let dropShown = false;
 /**
  * The rectangle of the card that this drop produces. It returns undefined when the layout rejects the operation.
  *
- * The operation runs on a copy of the plane and the result is read. Because it is a copy, the live plane does not change.
- * Computing half of the target card differs from the drawn position: the two cut pieces share the gap between them, so
- * each is not half of the rect, and a move closes first and cuts afterward, so the size of the target differs from before the cut.
+ * The operation runs on the group tree and the tree puts the grid back (probe), so the live plane does not change. Computing half of
+ * the target card differs from the drawn position: the two cut pieces share the gap between them, so each is not half of the rect, and
+ * a move closes first and cuts afterward, so the size of the target differs from before the cut. A target may be a group card
+ * (docs/spec/groups.md#moving-and-dropping).
  */
 function dropRect(fromId, hit) {
-  const copy = new Soksak(grid.toJSON(),
-    { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
-  if (hit.zone === "centre") return copy.rect(hit.id);
-  // T5 — a card with only one tab moves as a whole card.
-  if (tabsOf(grid.card(fromId)).length === 1) {
-    return copy.move(fromId, hit.id, hit.zone) ? copy.rect(fromId) : undefined;
-  }
-  const born = copy.splitToward(hit.id, hit.zone, {});
-  return born === null ? undefined : copy.rect(born);
+  if (hit.zone === "centre" && !tree.isGroup(hit.id)) return tree.rect(hit.id);
+  const only = tabsOf(grid.card(fromId)).length === 1;
+  return tree.probe(() => {
+    try {
+      // T5 — a card with only one tab moves as a whole card.
+      if (only) {
+        tree.move(fromId, hit.id, hit.zone);
+        return tree.rect(fromId);
+      }
+      const born = hit.zone === "centre" ? tree.addCard(hit.id, undefined, splitsEven()) : tree.split(hit.id, hit.zone, undefined, splitsEven());
+      return tree.rect(born);
+    } catch {
+      // A refused operation is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
+      return undefined;
+    }
+  });
+}
+
+/**
+ * The drop target of a point of the plane in a drag of a tab of the card fromId, {id, zone}, or null: the group tree resolves it on the
+ * rectangles of the group cards from the root level inward and ends in zoneAt of the grid (docs/spec/groups.md#moving-and-dropping).
+ * band is the head and foot height that dropBands measured.
+ */
+export function dropHit(x, y, fromId, band) {
+  const only = tabsOf(grid.card(fromId)).length === 1 ? fromId : undefined;
+  const hit = tree.dropAt(x, y, { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
+  return hit && { id: hit.card, zone: hit.zone };
 }
 
 /**
@@ -986,12 +1003,13 @@ function hideDrop() {
  */
 function dropTab(fromId, tabId, hit) {
   const from = grid.card(fromId);
-  const target = grid.card(hit.id);
-  if (!from || !target || isPlace(hit.id)) return settle();
+  const group = tree.isGroup(hit.id);
+  const target = group ? null : grid.card(hit.id);
+  if (!from || (!group && !target) || isPlace(hit.id)) return settle();
   const moving = tabsOf(from).find((t) => t.id === tabId);
   if (!moving) return settle();
 
-  if (hit.zone === "centre") {                                  // T3
+  if (hit.zone === "centre" && !group) {                        // T3
     if (target.id === fromId) { from.data.activeId = tabId; return settle(); }
     removeTab(from, tabId);
     appendTab(target, moving);
@@ -1008,9 +1026,12 @@ function dropTab(fromId, tabId, hit) {
     return settle();
   }
 
-  removeTab(from, tabId);                                        // T4 — the slot stays and only the tab moves
+  // T4 — the slot stays and only the tab moves; the centre of a group card is a new card inside it at the right edge of its rectangle.
+  const slot = dropRect(fromId, hit) !== undefined;
+  removeTab(from, tabId);
   settleActiveTab(from);
-  const born = tree.canSplit(hit.id, hit.zone, splitsEven()) ? tree.split(hit.id, hit.zone, { tabs: [moving], activeId: moving.id }, splitsEven()) : null;
+  const data = { tabs: [moving], activeId: moving.id };
+  const born = !slot ? null : hit.zone === "centre" ? tree.addCard(hit.id, data, splitsEven()) : tree.split(hit.id, hit.zone, data, splitsEven());
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
   } else {
@@ -2333,10 +2354,11 @@ const ZONES = ["centre", "left", "right", "top", "bottom"];
 /** Moves a tab to the center or an edge of a card. It is the same as the result of releasing a drag. */
 export function moveTab(tabId, cardId, zone) {
   const from = cardOfTab(tabId);
-  paneCard(cardId);
+  const group = tree?.isGroup(cardId);
+  if (!group) paneCard(cardId);
   if (!ZONES.includes(zone)) throw new Error(`unknown zone ${zone}`);
   const hit = { id: cardId, zone };
-  if (zone !== "centre" && dropRect(from.id, hit) === undefined) {
+  if ((zone !== "centre" || group) && dropRect(from.id, hit) === undefined) {
     throw new Error(`tab ${tabId} cannot move to the ${zone} of ${cardId}`);
   }
   restoreFullscreen();

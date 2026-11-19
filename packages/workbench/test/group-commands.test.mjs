@@ -165,7 +165,8 @@ test("a drop resolves on the rectangles of the group cards and core.tab.move put
   // The header of a group card is its centre, the outer quarter of its rectangle a side, and a point inside goes on to its members.
   assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, "card-3", band), { id: "card-4", zone: "centre" });
   assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, "card-3", band), { id: "card-4", zone: "left" });
-  assert.deepEqual(plane.dropHit(first.x + first.w / 2, first.y + first.h / 2, "card-3", band), { id: "card-1", zone: "centre" });
+  // A point of card-1 outside the outer quarter of the group card resolves on card-1 by zoneAt.
+  assert.deepEqual(plane.dropHit(group.x + group.w * 0.4, first.y + first.h / 2, "card-3", band), { id: "card-1", zone: "right" });
   // A drop on the centre of a group card puts the tab into a new content card inside it; the only tab of a card moves its card.
   const { tab } = await run("core.card.add-tab", { card: "card-3", plugin: PLAIN });
   await run("core.tab.move", { tab, card: "card-4", zone: "centre" });

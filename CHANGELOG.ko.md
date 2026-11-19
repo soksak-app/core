@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F937-3 (drop on group cards): page의 tab drag는 group tree로 drop을 결정한다(`dropHit`). group card의 header는 그 centre이고, 그 사각형의 바깥 사분의 일은 변이며, 안쪽 점은 그 member로 넘어가 grid의 `zoneAt`에서 끝난다. `core.tab.move`와 drop은 group card를 받는다. 그 centre는 tab을 그 안의 새 content card에 넣고, 변은 그것을 담은 level에서 사각형 옆에 놓으며, card의 유일한 tab은 그 card를 옮긴다. drop 사각형은 grid 사본 대신 group tree의 probe로 계산한다. group drop의 preview 그리기는 group 그리기를 기다린다. Red: `plane.dropHit is not a function`. Green: `group-commands.test.mjs`가 통과한다.
 - F937-3 (group colours): `packages/workbench/workbench.json`과 그 host 사본이 모든 theme의 dark와 light에 theme token `group-1`, `group-2`, `group-3`(배경을 전경 쪽으로 6, 12, 18 percent 섞은 색)을, 그리고 기본값 100과 범위 0부터 100의 설정 `group.tint`를 선언한다. 설정 창은 그것을 표시의 카드 분할 뒤에 그룹 색으로 보이며, page는 범위 밖의 값을 거부한다.
 - F937-3 (layout open on a group card): page의 `core.layout.open`이 group card를 받는다. 그 안의 content card 가운데 workbench order로 첫 같은 tab을 고르고, 없으면 그 안에 content card를 더하며, `side`가 있으면 그것을 담은 level에서 그 사각형을 split한다. `side` 쪽 이웃은 card의 level의 content card이며, 답은 tab을 가진 card를 말한다. 이전 open의 grid 이웃(`neighbourToward`)은 지운다. Red: `card card-4 is not in the layout of window main`. Green: `group-commands.test.mjs`가 통과한다.
 - F937-3 (groups keep no records, page): page의 group tree는 group을 가진 space의 모든 operation을 `tidy`로 끝내고 `paidBy` 기록을 지우며, plane이 window sidebar를 배치한 뒤에도 그렇게 한다. 저장된 읽기는 `paidBy` 기록이나 어떤 card도 쓰지 않는 line을 가진 group이 있는 layout을 거부한다. Green: `docs/spec/cases/layout/groups.json`의 case 39개가 통과한다.
