@@ -106,6 +106,9 @@ test("core.group.dissolve, rename and leader change the tree and answer again wi
   assert.deepEqual(await run("core.group.rename", { group: "card-4", name: "  작업  " }), { group: "card-4", name: "작업" });
   await refuses(run("core.group.rename", { group: "card-1", name: "x" }), "card card-1 is not a group");
   assert.deepEqual(await run("core.group.leader", { card: "card-2" }), { card: "card-2", group: "card-4" });
+  // The declaration of the result names the members that the command answers.
+  const declared = JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes.commands.find(({ name }) => name === "core.group.leader");
+  assert.deepEqual(Object.keys(declared.result.properties), ["card", "group"]);
   assert.deepEqual(await run("core.group.leader", { card: "card-3" }), { card: "card-3", group: null });
   assert.equal((await stored()).groups[0].leader, "card-2");
   assert.deepEqual(await run("core.group.dissolve", { group: "card-4" }), { dissolved: true });
