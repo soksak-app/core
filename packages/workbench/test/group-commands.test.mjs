@@ -221,7 +221,7 @@ test("core.grid reports the group card of each card, the leaders and the group c
   ]);
   assert.deepEqual(Object.keys(cards[0]).filter((key) => ["parent", "leader", "group"].includes(key)), ["parent", "leader"]);
   const { x, y, w, h, ...group } = cards[3];
-  assert.deepEqual(group, { id: "card-4", parent: null, leader: false, group: { name: "그룹 1", level: 1, leader: "card-1" } });
+  assert.deepEqual(group, { fullscreen: false, id: "card-4", parent: null, leader: false, group: { name: "그룹 1", level: 1, leader: "card-1" } });
   assert.deepEqual({ x, y, w, h }, plane.currentTree().rect("card-4"));
 });
 

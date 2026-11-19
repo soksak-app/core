@@ -21,7 +21,7 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
+  drawnCardRects, focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
   openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
   cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
@@ -189,7 +189,8 @@ function gridState() {
   const grid = currentGrid();
   if (!grid) return null;
   const tree = currentTree();
-  const rects = grid.rects();
+  // The rectangles that the plane draws: below the headers of the group cards, and the fullscreen layout of a fullscreen group card.
+  const rects = drawnCardRects();
   const fullscreen = fullscreenCard();
   let pane = 0;
   // The cards of the grid in workbench order (docs/spec/groups.md#status-and-queries); a card that has no element yet is not reported.
@@ -197,7 +198,7 @@ function gridState() {
     const card = grid.card(id);
     const el = plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
     if (!card || !el) return null;
-    const rect = fullscreen === null ? rects.get(card.id) : presentedCardRect(card.id);
+    const rect = rects.get(card.id);
     const tabs = tabsOf(card);
     return {
       fullscreen: card.id === fullscreen,
@@ -218,8 +219,8 @@ function gridState() {
   }).filter(Boolean);
   // The group cards follow the cards of the grid in workbench order, each with its drawn rectangle and no tabs (docs/spec/groups.md#status-and-queries).
   const groups = tree.nodes().map((node) => {
-    const { x, y, w, h } = tree.rect(node.card);
-    return { id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
+    const { x, y, w, h } = rects.get(node.card);
+    return { fullscreen: node.card === fullscreen, id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
       group: { name: node.name, level: tree.level(node.card) + 1, leader: node.leader } };
   });
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));

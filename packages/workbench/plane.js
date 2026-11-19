@@ -1870,6 +1870,11 @@ function drawnRects(fullscreen) {
   return new Map(tree.order().map(({ id }) => [id, isPlace(id) ? grid.rect(id) : tree.rect(id)]));
 }
 export const presentedCardRect = (id) => view?.painted(id);
+/** The drawn rectangle of each card and group card of the space by id as the plane draws it now, an empty rectangle for a hidden one. */
+export function drawnCardRects() {
+  const rects = drawnRects(view.fullscreenCard);
+  return new Map(tree.order().map(({ id }) => [id, rects.get(id) ?? { x: 0, y: 0, w: 0, h: 0 }]));
+}
 
 /**
  * Refuses a change of the layout from the card tools while a card is fullscreen (docs/spec/example-model.md#card-fullscreen):
