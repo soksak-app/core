@@ -21,6 +21,20 @@ import type { Axis, Card, Divider, Rect, Rule } from './soksak.js';
 
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
 
+/**
+ * The boundary operations that the divider gestures run. A host whose model
+ * draws the cards at other rectangles than the grid, and keeps rules of its own
+ * for a line, supplies them; the default is the grid's own.
+ */
+export interface BoundaryModel {
+  /** A drag step and an arrow key: as `moveBoundary(axis, line, px)` of the grid. Returns where the boundary stands. */
+  move(axis: Axis, line: number, px: number): number;
+  /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
+  center(axis: Axis, line: number): number;
+  /** The end of a drag: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. */
+  merge(axis: Axis, line: number): boolean;
+}
+
 export interface ViewOptions {
   /**
    * Build the element for a card. Called once per card. The element is reused
@@ -57,6 +71,8 @@ export interface ViewOptions {
    * not move absolutely positioned children. Default 0.
    */
   bleed?: number;
+  /** The boundary operations of the divider gestures. Default: those of the grid. */
+  boundary?: BoundaryModel;
 }
 
 /**
@@ -120,6 +136,7 @@ export class SoksakView {
   private host: HTMLElement;
   private grid: Soksak;
   private options: ViewOptions;
+  private boundary: BoundaryModel;
   private fullscreenId: string | null = null;
 
   /** The chosen fullscreen presentation; it does not change the grid. */
@@ -249,6 +266,12 @@ export class SoksakView {
     this.options = options;
     // default: `classPrefix` is optional and documented as `sp`.
     this.prefix = options.classPrefix ?? 'sp';
+    // default: `boundary` is optional and documented as the grid's own operations.
+    this.boundary = options.boundary ?? {
+      move: (axis, line, px) => grid.moveBoundary(axis, line, px),
+      center: (axis, line) => grid.centerBoundary(axis, line),
+      merge: (axis, line) => grid.mergeCoincident(axis, line),
+    };
     this.observeResolution();
 
     // The start waits for an animation frame, which runs before that frame's
@@ -782,7 +805,7 @@ export class SoksakView {
     // merge addresses; a drag that stood where it stood keeps it.
     let merged = false;
     this.carry(() => {
-      merged = this.grid.mergeCoincident(drag.axis, drag.line);
+      merged = this.boundary.merge(drag.axis, drag.line);
       return 0;
     }, null);
     this.draw(merged ? 'merge' : 'drag');
@@ -803,7 +826,7 @@ export class SoksakView {
     // merge addresses; a drag that stood where it stood keeps it.
     let merged = false;
     this.carry(() => {
-      merged = this.grid.mergeCoincident(drag.axis, drag.line);
+      merged = this.boundary.merge(drag.axis, drag.line);
       return 0;
     }, null);
     this.draw(merged ? 'merge' : 'drag');
@@ -854,7 +877,7 @@ export class SoksakView {
       // finger, not the second press of a pair.
       if (this.drags.get(tapId)?.on !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
         lastTap = -Infinity;
-        this.carry(() => this.grid.centerBoundary(axis, line), el);
+        this.carry(() => this.boundary.center(axis, line), el);
         this.draw('center');
         return;
       }
@@ -897,7 +920,7 @@ export class SoksakView {
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
       this.commit('drag', () =>
         this.carry(
-          () => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
+          () => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)),
           el,
         ),
       );
@@ -938,7 +961,7 @@ export class SoksakView {
       if (stale?.moved) this.disarm(stale.on);
       if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
         lastPress = -Infinity;
-        this.carry(() => this.grid.centerBoundary(axis, line), el);
+        this.carry(() => this.boundary.center(axis, line), el);
         this.draw('center');
         return;
       }
@@ -968,7 +991,7 @@ export class SoksakView {
       if (Math.abs(now - drag.from) > 2) drag.moved = true;
       this.commit('drag', () =>
         this.carry(
-          () => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)),
+          () => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)),
           el,
         ),
       );
@@ -1018,7 +1041,7 @@ export class SoksakView {
         e.preventDefault();
         this.pressed = held;
         try {
-          this.carry(() => this.grid.centerBoundary(axis, line), el);
+          this.carry(() => this.boundary.center(axis, line), el);
           this.draw('center');
         } finally {
           this.pressed = null;
@@ -1032,7 +1055,7 @@ export class SoksakView {
       try {
         this.commit('drag', () =>
           this.carry(
-            () => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8),
+            () => this.boundary.move(axis, line, this.grid.boundaryPos(axis, line) + step * 8),
             el,
           ),
         );

@@ -16,8 +16,21 @@
  * absolutely inside it.
  */
 import { Soksak } from './soksak.js';
-import type { Card, Divider, Rect } from './soksak.js';
+import type { Axis, Card, Divider, Rect } from './soksak.js';
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
+/**
+ * The boundary operations that the divider gestures run. A host whose model
+ * draws the cards at other rectangles than the grid, and keeps rules of its own
+ * for a line, supplies them; the default is the grid's own.
+ */
+export interface BoundaryModel {
+    /** A drag step and an arrow key: as `moveBoundary(axis, line, px)` of the grid. Returns where the boundary stands. */
+    move(axis: Axis, line: number, px: number): number;
+    /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
+    center(axis: Axis, line: number): number;
+    /** The end of a drag: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. */
+    merge(axis: Axis, line: number): boolean;
+}
 export interface ViewOptions {
     /**
      * Build the element for a card. Called once per card. The element is reused
@@ -54,11 +67,14 @@ export interface ViewOptions {
      * not move absolutely positioned children. Default 0.
      */
     bleed?: number;
+    /** The boundary operations of the divider gestures. Default: those of the grid. */
+    boundary?: BoundaryModel;
 }
 export declare class SoksakView {
     private host;
     private grid;
     private options;
+    private boundary;
     private fullscreenId;
     /** The chosen fullscreen presentation; it does not change the grid. */
     get fullscreenCard(): string | null;

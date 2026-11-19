@@ -547,7 +547,8 @@ constructor runs; call it to reject a stale saved layout before installing one.
 `SoksakView(host, grid, options)` — `render(reason?)`, `element(id)`,
 `painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw)`,
-`classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0).
+`classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0),
+`boundary` (default the grid's operations).
 
 `commit(rects, draw)` runs before every layout change. It receives the rectangles
 on the device's pixel grid. The host calls `draw()` after preparing its views.
@@ -585,6 +586,15 @@ a card is left where it stops, because the card is the edge it reaches.
 
 It is writable on the view — `view.bleed = px` — because a host that lets a
 person change its gap changes this with it.
+
+`boundary` is a `BoundaryModel`, the boundary operations that every divider
+gesture runs: `move(axis, line, px)` for a drag step and an arrow key,
+`center(axis, line)` for the second press of a pair and Enter, and
+`merge(axis, line)` at the end of a drag, which returns whether a line merged.
+Without it the view runs `moveBoundary`, `centerBoundary` and
+`mergeCoincident` of the grid. A host whose cards are drawn at other
+rectangles than the grid's, and which holds rules of its own for a line,
+supplies its own.
 `reason` is one of `drag`, `center`, `merge`, `resize`, `render`.
 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius)`,

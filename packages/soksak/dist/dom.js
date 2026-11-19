@@ -89,7 +89,7 @@ export class SoksakView {
         this.resolution.addEventListener('change', this.resolutionChanged);
     }
     constructor(host, grid, options) {
-        var _a;
+        var _a, _b;
         this.fullscreenId = null;
         this.cardEls = new Map();
         /** The device-pixel rects the last paint wrote to the card elements. */
@@ -163,6 +163,12 @@ export class SoksakView {
         this.options = options;
         // default: `classPrefix` is optional and documented as `sp`.
         this.prefix = (_a = options.classPrefix) !== null && _a !== void 0 ? _a : 'sp';
+        // default: `boundary` is optional and documented as the grid's own operations.
+        this.boundary = (_b = options.boundary) !== null && _b !== void 0 ? _b : {
+            move: (axis, line, px) => grid.moveBoundary(axis, line, px),
+            center: (axis, line) => grid.centerBoundary(axis, line),
+            merge: (axis, line) => grid.mergeCoincident(axis, line),
+        };
         this.observeResolution();
         // The start waits for an animation frame, which runs before that frame's
         // observation round: an observation that starts during the round defers its
@@ -707,7 +713,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            merged = this.boundary.merge(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -729,7 +735,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            merged = this.boundary.merge(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -781,7 +787,7 @@ export class SoksakView {
             // finger, not the second press of a pair.
             if (((_a = this.drags.get(tapId)) === null || _a === void 0 ? void 0 : _a.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
                 lastTap = -Infinity;
-                this.carry(() => this.grid.centerBoundary(axis, line), el);
+                this.carry(() => this.boundary.center(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -827,7 +833,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
+            this.commit('drag', () => this.carry(() => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         });
         const stop = (e) => {
             var _a;
@@ -869,7 +875,7 @@ export class SoksakView {
                 this.disarm(stale.on);
             if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
                 lastPress = -Infinity;
-                this.carry(() => this.grid.centerBoundary(axis, line), el);
+                this.carry(() => this.boundary.center(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -901,7 +907,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
+            this.commit('drag', () => this.carry(() => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         };
         const mouseUp = (e) => {
             var _a;
@@ -955,7 +961,7 @@ export class SoksakView {
                 e.preventDefault();
                 this.pressed = held;
                 try {
-                    this.carry(() => this.grid.centerBoundary(axis, line), el);
+                    this.carry(() => this.boundary.center(axis, line), el);
                     this.draw('center');
                 }
                 finally {
@@ -969,7 +975,7 @@ export class SoksakView {
             e.preventDefault();
             this.pressed = held;
             try {
-                this.commit('drag', () => this.carry(() => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
+                this.commit('drag', () => this.carry(() => this.boundary.move(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
             }
             finally {
                 this.pressed = null;

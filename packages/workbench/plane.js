@@ -1556,6 +1556,13 @@ function build(kept) {
     // The plane is inset inside the stage by this value. Only the host knows the value, so it must be passed to the view so
     // that lines touching the plane edge continue to the stage boundary.
     bleed: stagePad(),
+    // A divider moves the line of the group tree, which draws the cards below the headers and merges the lines that meet
+    // (docs/spec/groups.md#minimum-size).
+    boundary: {
+      move: (axis, line, px) => tree.placeBoundary(axis, line, px, true),
+      center: (axis, line) => tree.centerBoundary(axis, line),
+      merge: (axis, line) => tree.mergeBoundary(axis, line),
+    },
     // Drawing writes the frame scale of the current settings into the document. Preparation includes the first-row height at
     // that scale, so the host decides the window title bar in the same transaction (docs/spec/native-surfaces.md#title-bar-height).
     commit: (made, draw) => {

@@ -396,6 +396,34 @@ export class GroupTree {
     return at;
   }
 
+  /**
+   * The centring of a boundary as centerBoundary of the grid does; a centring that would draw a content card that it changes below its
+   * minimum leaves the line where it stands, and in a space with groups the line merges onto a line that it reaches
+   * (docs/spec/groups.md#commands). Returns where the boundary stands.
+   */
+  centerBoundary(axis, line) {
+    const before = this.drawnCards();
+    const kept = this.snapshot();
+    const at = this.grid.centerBoundary(axis, line);
+    if (this.belowMinimum(before)) {
+      this.restore(kept);
+      return this.grid.boundaryPos(axis, line);
+    }
+    this.keepForm();
+    return at;
+  }
+
+  /**
+   * The end of a boundary drag: in a space with groups the lines that meet merge as after every operation, and in a space without groups
+   * the line of the drag merges onto a line that it reaches, as the layout library merges it. Returns whether a line merged.
+   */
+  mergeBoundary(axis, line) {
+    if (this.groups.length === 0) return this.grid.mergeCoincident(axis, line);
+    const lines = this.grid.lines("x").length + this.grid.lines("y").length;
+    this.keepForm();
+    return this.grid.lines("x").length + this.grid.lines("y").length !== lines;
+  }
+
   /** moveBoundary without the merge of the lines that meet. */
   placeBoundary(axis, line, px, allowSnap) {
     const from = this.grid.boundaryPos(axis, line);
