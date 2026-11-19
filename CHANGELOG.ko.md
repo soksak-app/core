@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F988: 사람 action의 Go diagnostic method가 type check의 결과를 버리지 않고 action이 text인지 검사하며, `node scripts/check-fallbacks.mjs`가 다시 통과한다.
 - F990(터미널의 activity): `spec/terminal-state.md`가 status `<plugin>.activity`를 정의한다. 그것은 각 terminal plugin이 자기 상태와 exit code에서 얻어 `activity: true`로 선언하는 core activity level 또는 null이다. F987과 F988을 등록했다.
 - F893: 두 host에서 설치된 sidecar의 channel의 시작은 level `info`로 `host.sidecar.path`를 기록한다. `folder`는 모든 sidecar의 환경이 PATH 맨 앞에 두는 host 실행 파일의 폴더이고, `sok`은 그 안의 application bundle의 sok이다(`docs/spec/sidecars.md#processes-of-a-surface`). Red: case `sidecars.environment.start-records-the-sok-folder`의 Go와 Rust test가 기록을 읽지 못했다. Green: 둘 다 통과한다.
 - F904(두 sidecar의 screen row): 네 하위 항목과 함께 닫았다. screen row의 공유 case file은 없으며, sidecar와 plugin의 소유 test가 근거다. F899-1은 term plugin 항목의 merge를 기다린다.

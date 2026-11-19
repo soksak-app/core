@@ -26,6 +26,7 @@ func TestInputPersonRefusesParametersOutOfTheirForm(t *testing.T) {
 	for _, test := range []struct{ params, want string }{
 		{`{"window":"w","action":"drag","x":1,"y":2}`, "action must be press, move or scroll"},
 		{`{"window":"w","x":1,"y":2}`, "action must be press, move or scroll"},
+		{`{"window":"w","action":7,"x":1,"y":2}`, "action must be press, move or scroll"},
 		{`{"window":"w","action":"move","y":2}`, "x and y must be numbers"},
 		{`{"window":"w","action":"move","x":"1","y":2}`, "x and y must be numbers"},
 		{`{"window":"w","action":"scroll","x":1,"y":null}`, "x and y must be numbers"},
