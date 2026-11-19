@@ -517,14 +517,21 @@ func InstalledAssets(configDir string, frontend fs.FS) Middleware {
 
 // NewInstalledSidecars creates the sidecar channel of a host start with the installed sidecars of configDir. When the
 // installation cannot be read, it records the error at the place installed plugins and declares no sidecar, so the host
-// starts; /installed-plugins.json carries the same error to the page (docs/spec/sidecars.md#declaration-and-startup).
+// starts; /installed-plugins.json carries the same error to the page (docs/spec/sidecars.md#declaration-and-startup). It records
+// host.sidecar.path with the folder that the environment of every sidecar puts first on PATH.
 func NewInstalledSidecars(configDir string) (*Sidecars, error) {
 	declarations, err := InstalledSidecars(configDir)
 	if err != nil {
 		LogError("installed plugins", err)
 		declarations = nil
 	}
-	return NewSidecars(declarations, configDir)
+	sidecars, err := NewSidecars(declarations, configDir)
+	if err != nil {
+		return nil, err
+	}
+	// The start records the folder that the environment of every sidecar puts first on PATH (docs/spec/sidecars.md#processes-of-a-surface).
+	EmitHost(LevelInfo, "host.sidecar.path", map[string]any{"folder": sidecars.sokFolder, "sok": filepath.Join(sidecars.sokFolder, "sok")})
+	return sidecars, nil
 }
 
 // InstalledSidecars returns the sidecars that the plugin.json dependencies of the enabled installed plugins specify, together with the folder that the installation recorded.

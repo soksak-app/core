@@ -362,6 +362,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F893",
+    implementation: [
+      { file: "packages/host/go/src/installed.go", symbol: "EmitHost(LevelInfo, \"host.sidecar.path\"" },
+      { file: "packages/host/rust/src/installed.rs", symbol: "\"host.sidecar.path\"," },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/installed_test.go", id: "TestTheStartRecordsTheFolderThatTheSidecarsPutFirstOnPath" },
+      { file: "packages/host/rust/tests/sidecar_path_test.rs", id: "the_start_records_the_folder_that_the_sidecars_put_first_on_path" },
+    ],
+    expected: "The start of the channel of the installed sidecars records host.sidecar.path at the level info with the folder of the host executable and the sok in it.",
+    levels: ["unit"],
+  },
+  {
     id: "F894",
     implementation: [{ file: "packages/soksak/src/soksak.ts", symbol: "  arrange(mode: 'even'): boolean {" }],
     tests: [
