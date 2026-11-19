@@ -19,8 +19,9 @@ use serde_json::{Map, Value, json};
 use crate::application_log::log_error;
 use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint::{
-    BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NO_INPUT,
-    NOT_ACTIVE, POINTER_HELD, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME, missing_window,
+    BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INTERRUPTED, INVALID_PARAMS, MISSING_DOCUMENT,
+    NO_INPUT, NOT_ACTIVE, POINTER_HELD, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME,
+    missing_window,
 };
 use crate::event_log::Level;
 use crate::event_record::emit_host;
@@ -3415,6 +3416,7 @@ impl Host {
                 Err(Failure::new(POINTER_HELD, pointer_held_message(&held)))
             }
             Delivery::ResizeEdge(message) => Err(Failure::new(INVALID_PARAMS, message)),
+            Delivery::Interrupted(message) => Err(Failure::new(INTERRUPTED, message)),
         }
     }
 

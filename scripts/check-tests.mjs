@@ -14013,6 +14013,34 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F962-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector)" },
+      { file: "native/darwin/src/input_inject.m", symbol: "static void handleEventInDelivery(id self, SEL selector, NSEvent *event, void (^completion)(BOOL))" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "outside a delivery an open press is not in the mask that AppKit answers" },
+      { file: "native/darwin/tests/input_pointers_test.m", id: "outside a delivery AppKit answers the buttons of a person, not of the pointers" },
+    ],
+    expected: "Outside the delivery of a synthetic event the pressed buttons that AppKit answers are the buttons of the person.",
+    levels: ["unit"],
+  },
+  {
+    id: "F962-2",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void interruptGestures(NSEvent *event)" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held))" },
+      { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_person_press_test.m", id: "the press of the person releases the gesture of pointer a before it reaches the view" },
+      { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestAnInterruptionCarriesTheMessageOfTheLibrary" },
+      { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "an_interruption_carries_the_message_of_the_library" },
+    ],
+    expected: "A press of a person ends every open synthetic gesture at once, and the next drag or release of an ended gesture answers the interruption in both hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F936",
     implementation: [
       { file: "packages/workbench/projects.js", symbol: "obsolete member parties" },

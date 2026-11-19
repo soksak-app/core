@@ -62,6 +62,8 @@ func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld
 		done(platform.PointerHeld, pointerHeld(held))
 	case abi.SP_INPUT_RESIZE_EDGE:
 		done(platform.PointerResizeEdge, resizeEdge(held))
+	case abi.SP_INPUT_INTERRUPTED:
+		done(platform.PointerInterrupted, interruption(held))
 	default:
 		done(platform.PointerRejected, platform.ButtonHeld{})
 	}
@@ -97,6 +99,15 @@ func pointerHeld(held *abi.SpInputHeld) platform.ButtonHeld {
 func resizeEdge(held *abi.SpInputHeld) platform.ButtonHeld {
 	if held == nil || held.Reason == nil {
 		panic("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its message")
+	}
+	return platform.ButtonHeld{Reason: native.GoString(held.Reason)}
+}
+
+// interruption reads the message of an SP_INPUT_INTERRUPTED refusal from sp_input_held. A notification of this result without it is
+// a contract violation of the library, so it stops and names the violation.
+func interruption(held *abi.SpInputHeld) platform.ButtonHeld {
+	if held == nil || held.Reason == nil {
+		panic("sp_input_pointer_then reported SP_INPUT_INTERRUPTED without its message")
 	}
 	return platform.ButtonHeld{Reason: native.GoString(held.Reason)}
 }

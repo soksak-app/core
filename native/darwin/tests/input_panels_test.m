@@ -60,6 +60,7 @@ static const char *resultText(sp_input_result result) {
         case SP_INPUT_PRESS_OPEN: return "press open";
         case SP_INPUT_POINTER_HELD: return "pointer held";
         case SP_INPUT_RESIZE_EDGE: return "resize edge";
+        case SP_INPUT_INTERRUPTED: return "interrupted";
     }
     return "unknown";
 }

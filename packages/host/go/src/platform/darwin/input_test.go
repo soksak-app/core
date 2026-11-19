@@ -67,3 +67,18 @@ func TestAResizeEdgeRefusalCarriesTheMessageOfTheLibrary(t *testing.T) {
 		t.Fatalf("the refusal answered %v with %+v, want PointerResizeEdge with the message %q", result, held, message)
 	}
 }
+
+// A drag or a release of a gesture that the press of a person ended is refused by the library with a message that names that press
+// and the point where the gesture was released, and the host answers that message unchanged (docs/spec/exposure.md#named-pointers).
+// contract: endpoint.input.interruption
+func TestAnInterruptionCarriesTheMessageOfTheLibrary(t *testing.T) {
+	message := "a person's down of the left button at (100, 80) in the window of the gesture ended the synthetic gesture of pointer a, whose press was released at (60, 50)"
+	reason := append([]byte(message), 0)
+	var result platform.PointerResult
+	var held platform.ButtonHeld
+	handle := handles.NewHandle(func(got platform.PointerResult, state platform.ButtonHeld) { result, held = got, state })
+	goHost_input_delivered(uintptr(handle), abi.SP_INPUT_INTERRUPTED, &abi.SpInputHeld{Pid: -1, Reason: &reason[0]})
+	if result != platform.PointerInterrupted || held.Reason != message {
+		t.Fatalf("the interruption answered %v with %+v, want PointerInterrupted with the message %q", result, held, message)
+	}
+}

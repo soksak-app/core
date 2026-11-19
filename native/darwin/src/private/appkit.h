@@ -15,3 +15,10 @@
 // resize tracking of the window.
 - (NSInteger)_resizeDirectionForMouseLocation:(NSPoint)location;
 @end
+
+@interface NSTextInputContext (SPPrivate)
+// Gives a mouse event of a view to the input method of the context and calls completion with whether the input method handled
+// it. WebKit makes the page event of a mouse event in the completion, which runs after the call has returned when the input method
+// of the system serves the context.
+- (void)handleEvent:(NSEvent *)event completionHandler:(void (^)(BOOL handled))completion;
+@end

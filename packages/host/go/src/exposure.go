@@ -1108,6 +1108,8 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		return rpcError(codePointerHeld, "%s", PointerHeldMessage(got.held))
 	case platform.PointerResizeEdge:
 		return rpcError(codeInvalidParams, "%s", got.held.Reason)
+	case platform.PointerInterrupted:
+		return rpcError(codeInterrupted, "%s", got.held.Reason)
 	}
 	if pressed != 0 {
 		s.press(pressed)

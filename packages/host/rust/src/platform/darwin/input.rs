@@ -64,6 +64,7 @@ const SP_INPUT_BUTTON_HELD: i32 = 4;
 const SP_INPUT_PRESS_OPEN: i32 = 5;
 const SP_INPUT_POINTER_HELD: i32 = 6;
 const SP_INPUT_RESIZE_EDGE: i32 = 7;
+const SP_INPUT_INTERRUPTED: i32 = 8;
 
 /// sp_input_held of native/darwin. The state of the attempt that was rejected with SP_INPUT_BUTTON_HELD,
 /// SP_INPUT_POINTER_HELD or SP_INPUT_RESIZE_EDGE.
@@ -107,6 +108,9 @@ pub(super) fn delivery(result: i32, held: Option<&SpInputHeld>) -> Delivery {
         SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(
             held.expect("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its state"),
         )),
+        SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(
+            held.expect("sp_input_pointer_then reported SP_INPUT_INTERRUPTED without its state"),
+        )),
         _ => Delivery::Rejected,
     }
 }
@@ -116,6 +120,17 @@ pub(super) fn delivery(result: i32, held: Option<&SpInputHeld>) -> Delivery {
 fn resize_edge(held: &SpInputHeld) -> String {
     if held.reason.is_null() {
         panic!("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its message");
+    }
+    unsafe { std::ffi::CStr::from_ptr(held.reason) }
+        .to_string_lossy()
+        .into_owned()
+}
+
+/// Reads the message of an SP_INPUT_INTERRUPTED refusal from sp_input_held. A notification without it is a contract violation
+/// of the library, so it stops and names the violation.
+fn interruption(held: &SpInputHeld) -> String {
+    if held.reason.is_null() {
+        panic!("sp_input_pointer_then reported SP_INPUT_INTERRUPTED without its message");
     }
     unsafe { std::ffi::CStr::from_ptr(held.reason) }
         .to_string_lossy()
