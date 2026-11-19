@@ -44,6 +44,7 @@ The current Linux and Windows platform implementations report that process exit 
 | `sok plugin list` | Lists the installed plugins |
 | `sok registry use <index>` | Sets the registry index that installation reads |
 | `sok registry build <directory>` | Validates a registry and writes its `index.json` |
+| `sok message send <folder> <text>` | Writes one message into the folder `<folder>`, an absolute path, for the surface that `SOKSAK_SURFACE` names: the text is UTF-8 and at most 64 KiB, and a larger text fails with an explicit error that names the limit, with no file written. The command writes the text under the temporary name `.tmp-<random>` in the folder, closes the file, and then renames it to `<from>.<token>.txt`, the rename being the point at which the message becomes visible ([message](messaging.md#message)). It does not connect to an application; without `SOKSAK_SURFACE` it fails with an explicit error. It prints `{path}`, the name of the message file, and a folder that does not exist fails as a file operation does ([output and exit status](#output-and-exit-status)) |
 
 A declared command name contains a dot (`core.card.split`, `terminal.input`), so it never collides with the command words above.
 
