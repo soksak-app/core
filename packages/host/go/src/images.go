@@ -9,6 +9,7 @@ package host
 // envelope (image envelope) that a sidecar sent, and the host verifies the authenticity of the sidecar.
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -18,8 +19,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
+
+// inputDrawWindow is the age of a user input at which the screen request of the input is sent at once, without waiting for a tick
+// (docs/spec/native-surfaces.md#copy-path-frames).
+const inputDrawWindow = 200 * time.Millisecond
 
 // imageStore is the name of the persistent data store of an image region.
 const imageStore = "soksak-images"
@@ -102,7 +108,9 @@ type Images struct {
 	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
 	nextGeneration  uint64
-	changed         chan struct{}
+	// clockSequence counts the ticks of the window clock; each Tick call is one tick.
+	clockSequence uint64
+	changed       chan struct{}
 	// waitEnds counts the ends of the layout transactions of the window, and endedSidecars the ends of the connections of the
 	// sidecars of its regions, each with the name of the last one, so a raster wait ends with the event that ends it
 	// (docs/spec/native-surfaces.md#layout-transaction).
@@ -140,6 +148,11 @@ type ImageRasterState struct {
 	Drawing     bool
 	Hidden      bool
 	DrawingSent bool
+	// ScreenRequest is the screen request that the region has not had answered; its Request is empty when none is unanswered.
+	// ScreenAccepted and ScreenGeneration, ScreenRaster are the screen that the host accepted last, the baseline of the rows.
+	ScreenRequest                  ImageScreenRequest
+	ScreenAccepted                 bool
+	ScreenGeneration, ScreenRaster uint64
 }
 
 // ImageConfigure is the new raster configuration to send to the authorized sidecar.
@@ -166,6 +179,128 @@ type ImageDrawing struct {
 	Key       ImageKey        `json:"-"`
 	Sidecar   string          `json:"-"`
 	Owner     SidecarOwner    `json:"-"`
+}
+
+// ImageScreenRequest is the request for the current screen of a drawing region (docs/spec/native-surfaces.md#copy-path-frames).
+// Full is true when the host holds no accepted screen of the same generation and raster, so the supplier sends every row.
+type ImageScreenRequest struct {
+	Request    string `json:"request"`
+	Name       string `json:"name"`
+	Generation uint64 `json:"generation"`
+	Raster     uint64 `json:"raster"`
+	Full       bool   `json:"full"`
+	// Cids are the correlation identifiers of the inputs that the request continues, present when the request was sent for an input.
+	Cids    []string     `json:"cids,omitempty"`
+	Key     ImageKey     `json:"-"`
+	Sidecar string       `json:"-"`
+	Owner   SidecarOwner `json:"-"`
+}
+
+// ScreenRequests returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
+// records each returned request as unanswered. A request is not sent again while the region has an unanswered one.
+func (i *Images) ScreenRequests() []ImageScreenRequest {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	requests := []ImageScreenRequest{}
+	for key, state := range i.states {
+		if request, ok := i.newScreenRequestLocked(key, state, nil); ok {
+			requests = append(requests, request)
+		}
+	}
+	sort.Slice(requests, func(a, b int) bool {
+		if requests[a].Key.Surface != requests[b].Key.Surface {
+			return requests[a].Key.Surface < requests[b].Key.Surface
+		}
+		return requests[a].Key.Name < requests[b].Key.Name
+	})
+	return requests
+}
+
+// InputScreenRequest returns the screen request that a user input sends at once to a drawing region: the input is at most inputDrawWindow old
+// at now and the region has no unanswered request. cids are the correlation identifiers of the input. It returns false when the input sends
+// no request, and the next tick sends the request of the region. An input at a time after now is not within the window.
+func (i *Images) InputScreenRequest(key ImageKey, cids []string, inputAt, now time.Time) (ImageScreenRequest, bool) {
+	age := now.Sub(inputAt)
+	if age < 0 || age > inputDrawWindow {
+		return ImageScreenRequest{}, false
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil {
+		return ImageScreenRequest{}, false
+	}
+	return i.newScreenRequestLocked(key, state, cids)
+}
+
+// newScreenRequestLocked records and returns the screen request of a drawing region that has no unanswered request. It returns false
+// when the region gets no request. Call it while holding i.mu.
+func (i *Images) newScreenRequestLocked(key ImageKey, state *ImageRasterState, cids []string) (ImageScreenRequest, bool) {
+	owner := i.owners[key]
+	if owner == nil || i.handles[key] == nil || state.ScreenRequest.Request != "" || !i.drawingLocked(key, state) {
+		return ImageScreenRequest{}, false
+	}
+	request := ImageScreenRequest{
+		Request: "screen-" + rand.Text(), Name: key.Name, Generation: state.Generation, Raster: state.Raster,
+		Full: !(state.ScreenAccepted && state.ScreenGeneration == state.Generation && state.ScreenRaster == state.Raster),
+		Cids: cids, Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
+	}
+	state.ScreenRequest = request
+	return request, true
+}
+
+// AnswerScreen ends the unanswered screen request of a region. An accepted answer makes the rows of the request the baseline of the next
+// screen request of the same generation and raster. It returns an error when the region has no unanswered request with that identifier.
+func (i *Images) AnswerScreen(key ImageKey, request ImageScreenRequest, accepted bool) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil || request.Request == "" || state.ScreenRequest.Request != request.Request {
+		return fmt.Errorf("image %s of surface %s has no unanswered screen request %q", key.Name, key.Surface, request.Request)
+	}
+	state.ScreenRequest = ImageScreenRequest{}
+	if accepted {
+		state.ScreenAccepted, state.ScreenGeneration, state.ScreenRaster = true, request.Generation, request.Raster
+	}
+	return nil
+}
+
+// ImageTick is the clock tick of a drawing region (docs/spec/native-surfaces.md#copy-path-frames). Sequence counts the ticks of the window
+// clock from 1, and RefreshRate is the refresh rate that the caller read at the tick.
+type ImageTick struct {
+	Name        string       `json:"name"`
+	Generation  uint64       `json:"generation"`
+	Sequence    uint64       `json:"sequence"`
+	RefreshRate int          `json:"refreshRate"`
+	Key         ImageKey     `json:"-"`
+	Sidecar     string       `json:"-"`
+	Owner       SidecarOwner `json:"-"`
+}
+
+// Tick advances the window clock by one tick and returns the tick of each drawing region, sorted by surface and name.
+// refreshRate is the refresh rate of the screen of the window that the caller read for this tick.
+func (i *Images) Tick(refreshRate int) []ImageTick {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.clockSequence++
+	ticks := []ImageTick{}
+	for key, state := range i.states {
+		owner := i.owners[key]
+		if owner == nil || i.handles[key] == nil || !i.drawingLocked(key, state) {
+			continue
+		}
+		ticks = append(ticks, ImageTick{
+			Name: key.Name, Generation: state.Generation, Sequence: i.clockSequence, RefreshRate: refreshRate,
+			Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
+		})
+	}
+	sort.Slice(ticks, func(a, b int) bool {
+		if ticks[a].Key.Surface != ticks[b].Key.Surface {
+			return ticks[a].Key.Surface < ticks[b].Key.Surface
+		}
+		return ticks[a].Key.Name < ticks[b].Key.Name
+	})
+	return ticks
 }
 
 // SetOnScreen records whether the window is neither occluded nor minimized.

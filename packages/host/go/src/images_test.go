@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -811,5 +813,131 @@ func TestTheEndOfItsRequestEndsTheWaitOfTheCurrentRasters(t *testing.T) {
 	close(stop)
 	if err := <-done; !errors.Is(err, errRasterWaitStopped) {
 		t.Fatalf("the wait of the current rasters ended with %v, want the end of its request", err)
+	}
+}
+
+// contract: images.copy-path.screen-request
+// A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
+// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-1", Name: "copy"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	raster, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || raster == nil {
+		t.Fatalf("configure image: %+v, %v", raster, err)
+	}
+	requests := images.ScreenRequests()
+	if len(requests) != 1 {
+		t.Fatalf("a drawing region got %d screen requests, want 1", len(requests))
+	}
+	first := requests[0]
+	if !first.Full || first.Generation != raster.Generation || first.Raster != raster.Raster {
+		t.Fatalf("first screen request %+v: want full for generation %d raster %d", first, raster.Generation, raster.Raster)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"screen": first}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(`{"image":{"screen":{"request":%q,"name":"copy","generation":%d,"raster":%d,"full":true}}}`,
+		first.Request, raster.Generation, raster.Raster)
+	if string(body) != want {
+		t.Fatalf("screen request body = %s, want %s", body, want)
+	}
+	if again := images.ScreenRequests(); len(again) != 0 {
+		t.Fatalf("a region with an unanswered screen request got another one: %+v", again)
+	}
+	if err := images.AnswerScreen(key, first, true); err != nil {
+		t.Fatalf("answer screen request: %v", err)
+	}
+	next := images.ScreenRequests()
+	if len(next) != 1 || next[0].Full || next[0].Request == first.Request {
+		t.Fatalf("after an accepted screen the next request is %+v: want one request with full false and a new identifier", next)
+	}
+}
+
+// contract: images.copy-path.clock-tick
+// The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate that
+// the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).
+func TestWindowClockTicksEachDrawingRegionWithItsSequence(t *testing.T) {
+	images := NewImages()
+	if ticks := images.Tick(120); len(ticks) != 0 {
+		t.Fatalf("a window without image regions got ticks: %+v", ticks)
+	}
+	var handle int
+	for _, region := range []struct {
+		name    string
+		visible bool
+	}{{"copy", true}, {"idle", false}} {
+		key := ImageKey{Surface: "tab-1", Name: region.name}
+		if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+			t.Fatal(err)
+		}
+		if !images.Set(key, unsafe.Pointer(&handle)) {
+			t.Fatal("image was not attached")
+		}
+		if _, err := images.ConfigureRaster(key, 800, 600, 2, region.visible); err != nil {
+			t.Fatalf("configure image %s: %v", region.name, err)
+		}
+	}
+	ticks := images.Tick(120)
+	if len(ticks) != 1 || ticks[0].Name != "copy" || ticks[0].Sequence != 2 || ticks[0].RefreshRate != 120 {
+		t.Fatalf("tick after one earlier tick = %+v, want one tick of copy with sequence 2 and refresh rate 120", ticks)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"tick": ticks[0]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(`{"image":{"tick":{"name":"copy","generation":%d,"sequence":2,"refreshRate":120}}}`, ticks[0].Generation)
+	if string(body) != want {
+		t.Fatalf("tick body = %s, want %s", body, want)
+	}
+}
+
+// contract: images.copy-path.input-draw
+// A user input that reaches a drawing region sends the screen request at once when the input is at most 200 ms old and the region has no
+// unanswered request. The request carries the correlation identifiers of the input (docs/spec/native-surfaces.md#copy-path-frames).
+func TestInputSendsTheScreenRequestAtOnceWithItsCorrelationIdentifiers(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-1", Name: "copy"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	raster, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || raster == nil {
+		t.Fatalf("configure image: %+v, %v", raster, err)
+	}
+	inputAt := time.Unix(100, 0)
+	request, sent := images.InputScreenRequest(key, []string{"cid-1"}, inputAt, inputAt.Add(150*time.Millisecond))
+	if !sent || !reflect.DeepEqual(request.Cids, []string{"cid-1"}) {
+		t.Fatalf("input 150 ms old: sent %t request %+v, want a request with cids [cid-1]", sent, request)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"screen": request}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(`{"image":{"screen":{"request":%q,"name":"copy","generation":%d,"raster":%d,"full":true,"cids":["cid-1"]}}}`,
+		request.Request, raster.Generation, raster.Raster)
+	if string(body) != want {
+		t.Fatalf("input screen request body = %s, want %s", body, want)
+	}
+	if _, sent := images.InputScreenRequest(key, []string{"cid-2"}, inputAt, inputAt.Add(10*time.Millisecond)); sent {
+		t.Fatal("an input sent a screen request while the region had an unanswered one")
+	}
+	if err := images.AnswerScreen(key, request, false); err != nil {
+		t.Fatalf("answer screen request: %v", err)
+	}
+	if _, sent := images.InputScreenRequest(key, []string{"cid-3"}, inputAt, inputAt.Add(201*time.Millisecond)); sent {
+		t.Fatal("an input 201 ms old sent a screen request at once")
 	}
 }

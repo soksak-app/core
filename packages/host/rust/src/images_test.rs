@@ -1330,3 +1330,148 @@ fn a_release_that_fails_in_an_open_window_reports_the_failure() {
         Err("sidecars are stopped".to_string())
     );
 }
+
+// contract: images.copy-path.screen-request
+// A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
+// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn drawing_region_receives_one_screen_request_until_it_is_answered() {
+    let images = super::Images::default();
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    let key = (surface.to_string(), "copy".to_string());
+    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+    assert!(images.set(&key, 1));
+    let configure = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("a drawing region with a size has a raster configuration");
+    let requests = images.screen_requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "a drawing region gets one screen request"
+    );
+    let first = &requests[0];
+    assert!(
+        first.full && first.generation == configure.generation && first.raster == configure.raster,
+        "the first screen request is full for the configured raster: {first:?}"
+    );
+    let body = serde_json::to_value(serde_json::json!({ "image": { "screen": first } })).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({ "image": { "screen": {
+            "request": first.request,
+            "name": "copy",
+            "generation": configure.generation,
+            "raster": configure.raster,
+            "full": true,
+        } } })
+    );
+    assert!(
+        images.screen_requests().is_empty(),
+        "a region with an unanswered screen request gets no other one"
+    );
+    images.answer_screen(&key, first, true).unwrap();
+    let next = images.screen_requests();
+    assert!(
+        next.len() == 1 && !next[0].full && next[0].request != first.request,
+        "after an accepted screen the next request is {next:?}: one request, full false, new identifier"
+    );
+}
+
+// contract: images.copy-path.clock-tick
+// The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate
+// that the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn window_clock_ticks_each_drawing_region_with_its_sequence() {
+    let images = super::Images::default();
+    assert!(
+        images.tick(120).is_empty(),
+        "a window without image regions gets no ticks"
+    );
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    for (name, visible) in [("copy", true), ("idle", false)] {
+        let key = (surface.to_string(), name.to_string());
+        images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+        assert!(images.set(&key, 1));
+        images
+            .configure_raster(&key, 800, 600, 2.0, visible)
+            .unwrap();
+    }
+    let ticks = images.tick(120);
+    assert_eq!(
+        ticks.len(),
+        1,
+        "only the drawing region receives the tick: {ticks:?}"
+    );
+    assert_eq!(
+        (
+            ticks[0].name.as_str(),
+            ticks[0].sequence,
+            ticks[0].refresh_rate
+        ),
+        ("copy", 2, 120),
+        "the tick after one earlier tick carries sequence 2 and refresh rate 120"
+    );
+    let body = serde_json::to_value(serde_json::json!({ "image": { "tick": &ticks[0] } })).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({ "image": { "tick": {
+            "name": "copy",
+            "generation": ticks[0].generation,
+            "sequence": 2,
+            "refreshRate": 120,
+        } } })
+    );
+}
+
+// contract: images.copy-path.input-draw
+// A user input that reaches a drawing region sends the screen request at once when the input is at most 200 ms old and the region has no
+// unanswered request. The request carries the correlation identifiers of the input (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn input_sends_the_screen_request_at_once_with_its_correlation_identifiers() {
+    let images = super::Images::default();
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    let key = (surface.to_string(), "copy".to_string());
+    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+    assert!(images.set(&key, 1));
+    images.configure_raster(&key, 800, 600, 2.0, true).unwrap();
+    let input_at = std::time::Instant::now();
+    let ms = std::time::Duration::from_millis;
+    let request = images
+        .input_screen_request(
+            &key,
+            vec!["cid-1".to_string()],
+            input_at,
+            input_at + ms(150),
+        )
+        .expect("an input 150 ms old sends its screen request at once");
+    assert_eq!(request.cids, ["cid-1"]);
+    let body =
+        serde_json::to_value(serde_json::json!({ "image": { "screen": &request } })).unwrap();
+    assert_eq!(
+        body["image"]["screen"]["cids"],
+        serde_json::json!(["cid-1"])
+    );
+    assert!(
+        images
+            .input_screen_request(&key, vec!["cid-2".to_string()], input_at, input_at + ms(10))
+            .is_none(),
+        "an input sends no request while the region has an unanswered one"
+    );
+    images.answer_screen(&key, &request, false).unwrap();
+    assert!(
+        images
+            .input_screen_request(
+                &key,
+                vec!["cid-3".to_string()],
+                input_at,
+                input_at + ms(201)
+            )
+            .is_none(),
+        "an input 201 ms old sends no request at once"
+    );
+}
