@@ -2706,6 +2706,26 @@
       },
       "description": "A command request that the workbench answered; `error` names a failed command."
     },
+    "workbench.layout.change": {
+      "layer": "workbench",
+      "class": "call",
+      "level": ["debug"],
+      "result": false,
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "params": { "type": "string" },
+          "paramsTruncated": { "type": "boolean" },
+          "result": { "type": "string" },
+          "layout": { "type": "string" },
+          "layoutTruncated": { "type": "boolean" }
+        },
+        "required": ["command", "params", "paramsTruncated", "result", "layout", "layoutTruncated"]
+      },
+      "description": "A command that changed the layout of the active space; `params` and `result` are the JSON text of its parameters and of its answer cut to 1024 bytes, `layout` is the JSON text of the stored layout of the space after it, {state, groups, leader, lastCard}, cut to 61440 bytes so that the fields stay within the bound of an event."
+    },
     "workbench.background.session": {
       "layer": "workbench",
       "class": "lifecycle",

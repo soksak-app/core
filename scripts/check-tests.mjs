@@ -321,6 +321,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-2.1",
+    implementation: [
+      { file: "packages/window-check/core-events.json", symbol: "\"workbench.layout.change\": {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/catalog.test.mjs", id: "the core catalog that the package ships is docs/spec/events.json" },
+    ],
+    expected: "The catalog copy of the window checks equals docs/spec/events.json.",
+    levels: ["unit"],
+  },
+  {
     id: "F973-1",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },
