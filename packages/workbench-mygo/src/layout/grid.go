@@ -3,6 +3,7 @@ package layout
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"math"
 	"slices"
@@ -359,6 +360,71 @@ func (g *Grid) SetSize(id string, axis Axis, px *float64) bool {
 	}
 	g.changed()
 	return true
+}
+
+// ShareLines keeps every line index of axis and gives every slot that no card with a size in px holds its corridor, extra[slot] px and
+// an equal share of the free length: the extent less the corridors, the held sizes and the extras. A slot that a card with a size in
+// px holds keeps its span, and a plane too small for its corridors shares nothing. It refuses an unknown axis, an extra list of another
+// length than the slots, and an axis whose shared slots take no length; nil gives no slot an extra.
+func (g *Grid) ShareLines(axis Axis, extra []float64) error {
+	if noAxis(axis) {
+		return errors.New("unknown axis " + string(axis))
+	}
+	p := g.plane()
+	a := slices.Clone(g.arr(axis))
+	count := len(a) - 1
+	if extra == nil {
+		extra = make([]float64, count)
+	}
+	if len(extra) != count {
+		return fmt.Errorf("shareLines takes one extra for each of the %d slots of %s, found %d", count, axis, len(extra))
+	}
+	read := linesRead(p, axis)
+	held := heldSizes(p, axis)
+	want := make([]float64, count)
+	free, shared, sharedSpan := g.size(axis), 0, 0.0
+	for i := range count {
+		want[i] = corridorOf(p, axis, i, read)
+		free -= want[i]
+		if held[i].ok {
+			free -= held[i].v
+			continue
+		}
+		want[i] += extra[i]
+		free -= extra[i]
+		shared++
+		sharedSpan += a[i+1] - a[i]
+	}
+	if shared == 0 {
+		return nil
+	}
+	free = math.Max(0, free)
+	total := 0.0
+	for i := range count {
+		if !held[i].ok {
+			want[i] += free / float64(shared)
+			total += want[i]
+		}
+	}
+	if total <= 0 {
+		return fmt.Errorf("the %s axis of the plane has no length", axis)
+	}
+	next := make([]float64, count+1)
+	for i := range count {
+		span := a[i+1] - a[i]
+		if !held[i].ok {
+			span = sharedSpan * want[i] / total
+		}
+		next[i+1] = next[i] + span
+	}
+	next[count] = 1
+	state := g.ToJSON()
+	if axis == "x" {
+		state.Xs = next
+	} else {
+		state.Ys = next
+	}
+	return g.Replace(state)
 }
 
 // SetFrames sets the frames of each card by id (R5): a card without an entry has none. It rejects an id that is no card of the grid

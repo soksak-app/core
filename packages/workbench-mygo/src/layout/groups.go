@@ -3,6 +3,7 @@ package layout
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -1308,75 +1309,33 @@ func (t *GroupTree) Move(id, target, side string) error {
 	})
 }
 
-// balance runs the balance of the layout library in a space without groups. In a space with groups it keeps every line index and
-// gives every slot of each axis that no card with a size in px holds an equal share of the free length, the extent less the corridors
-// and the held sizes; a slot on the y axis takes the heads of the group cards that start on its upper line on top of its share.
+// balance runs the balance of the layout library in a space without groups and refuses a grid that is not a slicing arrangement. In a
+// space with groups it keeps every line index and shares the lines of each axis (Grid.ShareLines), the slots of the y axis with the
+// heads of the group cards that start on their upper line (docs/spec/groups.md#card-commands-on-a-group-card).
 func (t *GroupTree) balance() error {
 	if len(t.roots) == 0 {
-		_, err := t.grid.Balance()
-		return err
+		balanced, err := t.grid.Balance()
+		if err != nil {
+			return err
+		}
+		if !balanced {
+			return errors.New("the layout cannot balance: the grid is not a slicing arrangement")
+		}
+		return nil
 	}
-	p := t.grid.plane()
-	state := t.grid.ToJSON()
-	for _, axis := range axes {
-		a := p.lines(axis)
-		count := len(a) - 1
-		read := linesRead(p, axis)
-		held := heldSizes(p, axis)
-		heads := make([]float64, count)
-		if axis == "y" {
-			for _, card := range t.grid.Cards() {
-				path, _, ok := t.find(card.ID)
-				if ok {
-					heads[card.R0] = math.Max(heads[card.R0], float64(t.heads(path, card.R0))*t.headStep())
-				}
-			}
-		}
-		want := make([]float64, count)
-		free, shared, sharedSpan := p.extent(axis), 0, 0.0
-		for i := range count {
-			want[i] = corridorOf(p, axis, i, read)
-			free -= want[i]
-			if held[i].ok {
-				free -= held[i].v
-				continue
-			}
-			want[i] += heads[i]
-			free -= heads[i]
-			shared++
-			sharedSpan += a[i+1] - a[i]
-		}
-		if shared == 0 {
-			continue
-		}
-		// A plane too small for its corridors shares nothing; the check of the minimum size then refuses the balance.
-		free = math.Max(0, free)
-		total := 0.0
-		for i := range count {
-			if !held[i].ok {
-				want[i] += free / float64(shared)
-				total += want[i]
-			}
-		}
-		if total <= 0 {
-			return fmt.Errorf("the layout cannot balance: the %s axis of the plane has no length", axis)
-		}
-		lines := make([]float64, count+1)
-		for i := range count {
-			span := a[i+1] - a[i]
-			if !held[i].ok {
-				span = sharedSpan * want[i] / total
-			}
-			lines[i+1] = lines[i] + span
-		}
-		lines[count] = 1
-		if axis == "x" {
-			state.Xs = lines
-		} else {
-			state.Ys = lines
+	heads := make([]float64, len(t.grid.Lines("y"))-1)
+	for _, card := range t.grid.Cards() {
+		if path, _, ok := t.find(card.ID); ok {
+			heads[card.R0] = math.Max(heads[card.R0], float64(t.heads(path, card.R0))*t.headStep())
 		}
 	}
-	return t.grid.Replace(state)
+	if err := t.grid.ShareLines("x", nil); err != nil {
+		return fmt.Errorf("the layout cannot balance: %w", err)
+	}
+	if err := t.grid.ShareLines("y", heads); err != nil {
+		return fmt.Errorf("the layout cannot balance: %w", err)
+	}
+	return nil
 }
 
 // Balance balances the grid (docs/spec/groups.md#card-commands-on-a-group-card) and keeps the result only when no content card that it
