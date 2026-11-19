@@ -13982,6 +13982,9 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/sok/rust/tests/mcp_server_test.rs", symbol: "let many = &rows[4];" }],
     tests: [{ file: "packages/sok/rust/tests/mcp_server_test.rs", id: "an_oversized_row_is_a_page_and_pages_follow_a_changing_window" }],
     expected: "The Rust MCP paging test expects the core.parties row of the describe pages case, as the Go test does.",
+    levels: ["unit"],
+  },
+  {
     id: "F923",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "export function halfGap() {" },
@@ -13994,6 +13997,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/gap_test.go", id: "TestSliderDragWritesOnce" },
     ],
     expected: "The gap setting is the full distance between two adjacent cards in both workbenches, live in the mygo host, with one shared line at 0.",
+    levels: ["unit"],
+  },
+  {
     id: "F923-1",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "if (settings.gap > 0) return settings.gap / 2;" },
@@ -14004,14 +14010,23 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapChangeSetsPlaneGap" },
     ],
     expected: "A stored gap is the full distance between two adjacent cards, and the margin of the stage is half of it.",
+    levels: ["unit"],
+  },
+  {
     id: "F923-2",
     implementation: [{ file: "packages/workbench-mygo/src/settings_modal.go", symbol: "s.plane.SetGap(palette.PlaneGap())" }],
     tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapChangeSetsPlaneGap" }],
     expected: "A change of the gap setting reaches the plane of the shown space of the mygo host at once.",
+    levels: ["unit"],
+  },
+  {
     id: "F923-3",
     implementation: [{ file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) CardBorder() float32 {" }],
     tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapZeroCardsShareOneLine" }],
     expected: "At gap 0 the mygo plane gap is the border width and a card draws no border and no radius of its own.",
+    levels: ["unit"],
+  },
+  {
     id: "F923-4",
     implementation: [{ file: "packages/workbench-mygo/src/settings_draw.go", symbol: "type sliderDrag struct {" }],
     tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestSliderDragWritesOnce" }],
