@@ -82,7 +82,7 @@ A layout change is a close, a move, a split, or a resize that changes which card
 
 ## Drawing
 
-- The whole party is drawn as one outer outline, built by `outline` of `packages/soksak` from the presented rectangles of its cards. Adjacent cards join at half the gap, and the outline is inset by half the border width.
+- The whole party is drawn as one outer outline, built by `outline` of `packages/soksak` from the presented rectangles of its cards. Adjacent cards join across the gap between them, each card padded by half of it, and the outline is inset by half the border width.
 - A layout case that states `drawing` (`docs/spec/cases/layout/parties.json`) gives its plane the size of its grid in points: the width is `unit` times the largest line value of the x axis, and the height is `unit` times the largest line value of the y axis. The grid divides the plane by the layout rules, so a line lies at `unit` times its value only when the grid divides the plane into equal parts. The outline of the case is in points.
 - The leader card's border segments on the outline are drawn in the leader color, and the leader mark is drawn in its header.
 - When a party outline overlaps the rail, the rail is outside and the party outline is inside, separated by the rail width. The two lines never coincide. The focus indication is independent of the party outline.

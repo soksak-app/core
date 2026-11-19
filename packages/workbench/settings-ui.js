@@ -255,10 +255,10 @@ function swatch(theme) {
   el.dataset.on = String(theme.name === themeName());
   const c = theme[modeName()];
   const gap = parseFloat(theme.shape.gap);
-  // The swatch is 42px, so using the actual value as it is would let the gap fill the box. The gap is halved, but
+  // The swatch is 42px, so using the actual value as it is would let the gap fill the box. The gap is quartered, but
   // a theme with gap 0 keeps 1px and paints it with the boundary line color. That 1px is the line that the two
   // cards share.
-  const slit = gap === 0 ? 1 : Math.max(2, Math.round(gap / 2));
+  const slit = gap === 0 ? 1 : Math.max(2, Math.round(gap / 4));
   const between = gap === 0 ? c.rule : c.bg;
   const r = Math.min(parseFloat(theme.shape.r) / 2, 5);
   el.innerHTML =

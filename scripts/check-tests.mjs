@@ -13964,6 +13964,55 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F923",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "export function halfGap() {" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) HalfGap() float32 {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-gap.test.mjs", id: "the gap setting is the distance between two adjacent cards" },
+      { file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapChangeSetsPlaneGap" },
+      { file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapZeroCardsShareOneLine" },
+      { file: "packages/workbench-mygo/tests/gap_test.go", id: "TestSliderDragWritesOnce" },
+    ],
+    expected: "The gap setting is the full distance between two adjacent cards in both workbenches, live in the mygo host, with one shared line at 0.",
+    levels: ["unit"],
+  },
+  {
+    id: "F923-1",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "if (settings.gap > 0) return settings.gap / 2;" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) PlaneGap() float64 { return float64(2 * p.HalfGap()) }" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/settings-gap.test.mjs", id: "the gap setting is the distance between two adjacent cards" },
+      { file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapChangeSetsPlaneGap" },
+    ],
+    expected: "A stored gap is the full distance between two adjacent cards, and the margin of the stage is half of it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F923-2",
+    implementation: [{ file: "packages/workbench-mygo/src/settings_modal.go", symbol: "s.plane.SetGap(palette.PlaneGap())" }],
+    tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapChangeSetsPlaneGap" }],
+    expected: "A change of the gap setting reaches the plane of the shown space of the mygo host at once.",
+    levels: ["unit"],
+  },
+  {
+    id: "F923-3",
+    implementation: [{ file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) CardBorder() float32 {" }],
+    tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestGapZeroCardsShareOneLine" }],
+    expected: "At gap 0 the mygo plane gap is the border width and a card draws no border and no radius of its own.",
+    levels: ["unit"],
+  },
+  {
+    id: "F923-4",
+    implementation: [{ file: "packages/workbench-mygo/src/settings_draw.go", symbol: "type sliderDrag struct {" }],
+    tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestSliderDragWritesOnce" }],
+    expected: "A drag of a settings slider of the mygo host writes the setting once, at its release.",
+    levels: ["unit"],
+  },
+  {
     id: "F920",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Reconcile(g *Grid, change LayoutChange) ([]partyChange, error) {" },

@@ -125,7 +125,7 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	drag.moved = true
 	s.fullscreen = ""
 	origin := s.planeOrigin()
-	edge := float64(s.palette.BorderWidth)
+	edge := float64(s.palette.CardBorder())
 	header, footer := float64(s.metrics.headH)+edge, float64(s.metrics.footH)+edge
 	options := layout.ZoneOptions{HeaderPx: &header, FooterPx: &footer}
 	data, err := s.cardData(drag.card)

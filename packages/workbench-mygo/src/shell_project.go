@@ -448,7 +448,7 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	}
 	s.planeSpace = space.ID
 	s.tabsNamed = stored.Named
-	gap := float64(2 * s.palette.Gap) // The gap of a theme is the half width of the passage between two cards.
+	gap := s.palette.PlaneGap()
 	width, height := 0.0, 0.0
 	if s.plane != nil {
 		width, height = s.plane.Width(), s.plane.Height()

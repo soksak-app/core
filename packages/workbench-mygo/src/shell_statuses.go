@@ -335,7 +335,7 @@ func (s *Shell) focusMark() *layout.Rect {
 		return nil
 	}
 	const out = 1 // The chrome metric focus-mark-t.
-	edge := float64(s.palette.BorderWidth)
+	edge := float64(s.palette.CardBorder())
 	shrunkHead, shrunkFoot := cardRows(float32(rect.H-2*edge), s.metrics.headH, s.metrics.footH)
 	head, foot := float64(shrunkHead), float64(shrunkFoot)
 	return &layout.Rect{X: rect.X + edge - out, Y: rect.Y + edge + head - out, W: rect.W - 2*edge + 2*out, H: rect.H - 2*edge - head - foot + 2*out}
