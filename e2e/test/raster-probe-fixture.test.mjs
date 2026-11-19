@@ -92,7 +92,7 @@ test("the sidecar catalog composes with the core catalog and declares the lines 
       line(5, "info", "lifecycle", "log.open", { schema: 3, pid: 20, role: "rasterprobe", boot: "1791500000-20" }),
       line(6, "debug", "io", "sidecar.rasterprobe.request", { operation: "open", bytes: 80 }, { surface: "tab-1", cids: ["b.1"] }),
       line(9, "debug", "frame", "sidecar.rasterprobe.frame", { event: "frame", name: REGION, generation: 2, raster: 5, sequence: 1, width: 160, height: 96,
-        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, color: "#0050b4", marker: "#020001", surface: 7, draw_us: 41, inputs: [1] }, { surface: "tab-1", session: "s1" }),
+        scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3, scrollback: { offset: 0, history: 0 }, color: "#0050b4", marker: "#020001", surface: 7, draw_us: 41, inputs: [1] }, { surface: "tab-1", session: "s1" }),
     ].join("\n") + "\n");
     assert.deepEqual(auditLogDirectories(BASE, [folder]), []);
     writeFileSync(join(folder, "logs", "rasterprobe-1791500000-20.debug.jsonl"),
@@ -293,6 +293,35 @@ test("a primary press on the region gives it the focus and the pointer list reco
   assert.deepEqual((await probe.status("rasterprobe.input")).pointer,
     [{ type: "pointerdown", button: 2, trusted: false }, { type: "pointerdown", button: 0, trusted: false }, { type: "pointerup", button: 0, trusted: false }]);
   assert.equal((await probe.status("rasterprobe.input")).pressFocus, 1, "the answer of the focus call of the press is counted");
+  await probe.view.close();
+});
+
+test("a wheel over the region scrolls the retained lines by the cells of the last frame and the session names the answered wheel", { timeout: 5000 }, async () => {
+  const probe = await openProbe("raster-probe-fixture-scrollback");
+  const { window } = probe.view;
+  // A wheel that the view handles is cancelled, so the page does not scroll under the region.
+  const wheel = (deltaY, deltaMode = 0) => probe.element.dispatchEvent(new window.WheelEvent("wheel", { deltaY, deltaMode, cancelable: true }));
+  assert.equal(wheel(-32), false);
+  await turn();
+  assert.deepEqual(probe.errors(), ["rasterprobe: a wheel reached the region before its first frame, so its distance has no cell"]);
+  await probe.answer({ event: "session", session: "s1", created: true, mode: "image", rows: 3, scrollback: { offset: 0, history: 0 } });
+  await probe.answer({ event: "frame", generation: 1, raster: 1, sequence: 1, scale: 2, grid: { rows: 3, cols: 10, cellWidth: 16, cellHeight: 32 }, rows: 3,
+    scrollback: { offset: 0, history: 0 }, inputs: [] });
+  await probe.view.run("rasterprobe.history", { count: 250 });
+  await probe.answer({ event: "scrollback", offset: 0, history: 250 });
+  // A cell of the grid is 16 CSS pixels at the scale 2: 40 pixels toward the top are two lines and half a line, which the next
+  // wheel completes; a wheel in lines and one in pages of the grid rows move by their own unit, toward the newest line.
+  for (const [deltaY, deltaMode] of [[-40, 0], [-8, 0], [3, 1], [1, 2]]) assert.equal(wheel(deltaY, deltaMode), false);
+  await turn();
+  assert.deepEqual(probe.sent().slice(1).map(({ body }) => body), [{ operation: "history", count: 250 },
+    { operation: "scroll", sequence: 1, lines: 2 }, { operation: "scroll", sequence: 2, lines: 1 }, { operation: "scroll", sequence: 3, lines: -3 },
+    { operation: "scroll", sequence: 4, lines: -3 }]);
+  await probe.answer({ event: "scrollback", sequence: 2, offset: 3, history: 250 });
+  assert.deepEqual((await probe.status("rasterprobe.session")).scrollback, { offset: 3, history: 250, sequence: 2 });
+  // A state event of the sidecar keeps the number of the last answered wheel.
+  await probe.answer({ event: "state", session: "s1", created: false, mode: "image", rows: 3, scrollback: { offset: 3, history: 250 } });
+  assert.deepEqual((await probe.status("rasterprobe.session")).scrollback, { offset: 3, history: 250, sequence: 2 });
+  assert.equal(probe.errors().length, 1);
   await probe.view.close();
 });
 
