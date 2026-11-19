@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-terminal-input measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -133,6 +133,15 @@ measure-terminal-text:
 	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-text requires CONFIG_DIR=DIR PLUGIN=ID [LINES=1000,10000,100000] [FRAMES=600] [KEYS=40] [SOK=PATH]" >&2; exit 2;; esac
 	@case "$(PLUGIN)" in '') echo "measure-terminal-text requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
 	@node scripts/measure-terminal-text.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" $(if $(LINES),--lines "$(LINES)") $(if $(FRAMES),--frames "$(FRAMES)") $(if $(KEYS),--keys "$(KEYS)")
+
+# Reports the CPU time and the footprint of each process of the running application of CONFIG_DIR while the input of a program in one
+# tab of PLUGIN grows (scripts/measure-terminal-input.mjs, docs/operations/examples.md#terminal-input-measurement): the line of the shell
+# and the input box of scripts/fixtures/input-box.mjs at each length of LENGTHS, idle over FRAMES display periods and over KEYS typed
+# keys, and a bracketed paste of each length of PASTES. SOK defaults to the sok binary of target/debug. PLUGIN has no default.
+measure-terminal-input:
+	@case "$(CONFIG_DIR)" in '') echo "measure-terminal-input requires CONFIG_DIR=DIR PLUGIN=ID [LENGTHS=0,1000,10000,50000] [PASTES=10000,50000] [FRAMES=600] [KEYS=40] [SOK=PATH]" >&2; exit 2;; esac
+	@case "$(PLUGIN)" in '') echo "measure-terminal-input requires PLUGIN=ID, a plugin of the installed environment with PLUGIN.input and PLUGIN.screen" >&2; exit 2;; esac
+	@node scripts/measure-terminal-input.mjs --sok $(or $(SOK),target/debug/sok) --config-dir "$(CONFIG_DIR)" --plugin "$(PLUGIN)" $(if $(LENGTHS),--lengths "$(LENGTHS)") $(if $(PASTES),--pastes "$(PASTES)") $(if $(FRAMES),--frames "$(FRAMES)") $(if $(KEYS),--keys "$(KEYS)")
 
 # Measures the share of the diagnostics in the memory of a running host: in the trace state TRACE=1 and then TRACE=0 it runs five repetitions of
 # measure-object-counts and prints the entry of the last repetition, which holds the footprint of the host process (docs/operations/examples.md).
