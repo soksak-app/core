@@ -394,6 +394,17 @@ pub fn with_host_entries(listed: &RawValue) -> Result<Box<RawValue>, Failure> {
     serde_json::value::to_raw_value(&lists).map_err(|error| Failure::new(-32603, error.to_string()))
 }
 
+/// Reads the {width, height} of host.window.resize, which the endpoint checked against its params schema. A width or a height
+/// below 1 point is refused (docs/spec/exposure.md#host-entries).
+pub fn content_size(arguments: &Map<String, Value>) -> Result<(f64, f64), Failure> {
+    let width = number(arguments, "width")?;
+    let height = number(arguments, "height")?;
+    if width < 1.0 || height < 1.0 {
+        return Err(Failure::params("width and height must be at least 1"));
+    }
+    Ok((width, height))
+}
+
 fn number(params: &Map<String, Value>, name: &str) -> Result<f64, Failure> {
     params
         .get(name)
@@ -3237,14 +3248,8 @@ impl Host {
                 Some(Value::Bool(false)) => fullscreen(window, false),
                 Some(_) => Err(Failure::params("on must be a boolean")),
             },
-            "host.window.resize" => (|| {
-                let width = number(arguments, "width")?;
-                let height = number(arguments, "height")?;
-                if width <= 0.0 || height <= 0.0 {
-                    return Err(Failure::params("width and height must be positive"));
-                }
-                done(window.set_size(LogicalSize::new(width, height)))
-            })(),
+            "host.window.resize" => content_size(arguments)
+                .and_then(|(width, height)| done(window.set_size(LogicalSize::new(width, height)))),
             "host.window.reload" => reload(self, window, reply),
             "host.window.presented" => window_presented(self, window, reply)
                 .map(|displayed| json!({"displayed": displayed})),
