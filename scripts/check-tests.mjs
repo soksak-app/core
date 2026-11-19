@@ -14201,7 +14201,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/group-tree.js", symbol: "fullscreen(id, area)" },
       { file: "packages/workbench/group-tree.js", symbol: "drawnRules(rules)" },
       { file: "packages/workbench/settings.js", symbol: "export function groupFill(level)" },
-      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused })" },
+      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused, renaming, renameField })" },
       { file: "packages/workbench/plane.js", symbol: "export function drawnCardRects()" },
       { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroup, leads, leader, fullscreen })" },
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
