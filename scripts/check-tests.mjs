@@ -14037,10 +14037,13 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "export function dropHit(x, y, fromId, band)" },
       { file: "packages/workbench/plane.js", symbol: "return { space: heldSpace, focused: focusedId, root, groups: tree.tree().map(describe) };" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.group.create\"" },
+      { file: "packages/workbench/core-exposure.js", symbol: "function watchLayout(name, params)" },
+      { file: "packages/workbench/exposure.js", symbol: "const ended = watcher ? watcher(name, params) : null;" },
     ],
     tests: [
       { file: "packages/workbench/test/groups-cases.test.mjs", id: "groups: ${kase.name}" },
       { file: "packages/workbench/test/group-divider.test.mjs", id: "a divider drag in a space with groups stops where the card below the header is drawn at its minimum" },
+      { file: "packages/workbench/test/layout-change.test.mjs", id: "a command that changes the layout is the event workbench.layout.change with the layout that it left" },
       { file: "packages/workbench/test/group-divider.test.mjs", id: "a centring that would draw the card below the header below its minimum leaves the line" },
       { file: "packages/workbench/test/stored-groups.test.mjs", id: "the stored check refuses a layout without groups and a group that is not one rectangle" },
       { file: "packages/workbench/test/stored-groups.test.mjs", id: "the stored check refuses a layout with groups whose two lines stand at one coordinate" },

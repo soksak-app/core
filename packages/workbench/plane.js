@@ -2468,6 +2468,13 @@ export const currentGrid = () => grid;
 /** The group tree of the shown space, or null while the plane holds no layout. */
 export const currentTree = () => tree;
 
+/** The JSON text of the stored layout of the active space, {state, groups, leader, lastCard}, or null while the window shows none. */
+export function storedLayoutText() {
+  if (!grid) return null;
+  const { groups, leader, lastCard } = tree.stored();
+  return JSON.stringify({ state: grid.toJSON(), groups, leader, lastCard });
+}
+
 /**
  * Closes the group card id with every card inside it after each modified tab of those cards is saved or discarded in turn
  * (docs/spec/groups.md#card-commands-on-a-group-card).

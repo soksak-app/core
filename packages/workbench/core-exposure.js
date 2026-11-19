@@ -24,8 +24,10 @@ import {
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
   openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
-  cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup,
+  cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
 } from "./plane.js";
+import { emitEvent, eventAdmits } from "./page-log.js";
+import { boundedJson, cutBytes } from "@soksak/plugin-api/bounded-json.js";
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
@@ -335,6 +337,34 @@ function need(project, id) {
 /**
  * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
  */
+// The bounds of the texts of workbench.layout.change in UTF-8 bytes: the parameters and the answer, and the layout, which keeps the
+// fields within the bound of an event (docs/spec/events.json).
+const LAYOUT_CALL_BYTES = 1024;
+const LAYOUT_BYTES = 61440;
+
+/**
+ * Observes the command name with params: when it succeeded and the stored layout of the active space differs from the one before it,
+ * the command is the event workbench.layout.change with its parameters, its answer and the layout that it left (docs/spec/events.json).
+ * The layout is read only while the gate stores the event.
+ */
+function watchLayout(name, params) {
+  if (!eventAdmits("debug", "workbench.layout.change")) return null;
+  const before = storedLayoutText();
+  return (result) => {
+    const after = storedLayoutText();
+    if (after === before) return;
+    emitEvent("debug", "workbench.layout.change", () => {
+      const given = boundedJson(params, LAYOUT_CALL_BYTES);
+      // default: a command that answers nothing replies null, as the endpoint answers it.
+      const answered = boundedJson(result ?? null, LAYOUT_CALL_BYTES);
+      // default: the window shows no layout after the command, and its layout is the JSON text null.
+      const layout = cutBytes(after ?? "null", LAYOUT_BYTES);
+      return { command: name, params: given.text, paramsTruncated: given.truncated, result: answered.text,
+        layout: layout.text, layoutTruncated: layout.truncated };
+    });
+  };
+}
+
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
   // before any entry is registered.
@@ -342,6 +372,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     throw new TypeError("installCoreExposure requires memorySaver, the memory saver of the page (memory-saver.js)");
   }
   memory = memorySaver;
+  registry.watch(watchLayout);
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
   status("core.window.workbench", () => ({
     start: pageIdentity,

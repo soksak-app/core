@@ -214,13 +214,19 @@ export function createRegistry({ call = null, report = null } = {}) {
     if (!shared) await forward(watch.surface, "status.unwatch", { name }, origin);
   }
 
+  // What observes each command request from its start to its answer (watch), or null.
+  let watcher = null;
+
   // Every command request is the event `workbench.command` (docs/spec/logging.md#entrances), whether or not the
-  // trace is on.
-  async function recorded(name, run) {
+  // trace is on. The watcher receives the name and the parameters when the command starts and the answer when it succeeded, before
+  // that event, for a command that answers at once and for one that answers later.
+  async function recorded(name, params, run) {
     const started = performance.now();
     const micros = () => Math.round((performance.now() - started) * 1000);
+    const ended = watcher ? watcher(name, params) : null;
     try {
       const result = await run();
+      ended?.(result);
       emitEvent("debug", "workbench.command", { name, micros: micros(), ok: true });
       return result;
     } catch (error) {
@@ -235,7 +241,8 @@ export function createRegistry({ call = null, report = null } = {}) {
   /** Answers one request. origin is the id of the exposure-request that it answers, or undefined for a request of this document. */
   function answer(method, params, origin) {
     return method === "command.run" && typeof params?.name === "string"
-      ? recorded(params.name, () => timed(params.name, () => dispatch(method, params, origin))) : dispatch(method, params, origin);
+      // default: a request without parameters runs the command with none, as dispatch gives it.
+      ? recorded(params.name, params.params ?? {}, () => timed(params.name, () => dispatch(method, params, origin))) : dispatch(method, params, origin);
   }
 
   async function dispatch(method, params, origin) {
@@ -510,6 +517,15 @@ export function createRegistry({ call = null, report = null } = {}) {
      * Runs one core command of this document. It is validated by the params schema of the declaration. The UI of the document performs operations through this path, so a human operation and an external request go through the same command. cids are the correlation identifiers of the operation that causes the run; a command of a view receives them (docs/spec/native-surfaces.md#view-surfaces).
      */
     run: (name, params = {}, surface, cids) => answer("command.run", commandRequest(name, params, surface, cids)),
+
+    /**
+     * Installs what observes each command request of this document and of the host: watch(name, params) is called when the command
+     * starts and returns null or a function that receives the answer of the command when it succeeded.
+     */
+    watch: (watch) => {
+      if (typeof watch !== "function") throw new TypeError("watch requires a function");
+      watcher = watch;
+    },
 
     /**
      * Returns the surface that a request of this document uses for the entry (see target): wanted when it registered the name, otherwise the preferred surface, or null when no surface registered. With exact, only wanted is accepted.

@@ -176,6 +176,7 @@ pub fn class_of(name: &str) -> Option<Class> {
         "workbench.fixture.step" => Some(Class::Lifecycle),
         "workbench.input.shortcut.failed" => Some(Class::Input),
         "workbench.keyboard.follow" => Some(Class::Input),
+        "workbench.layout.change" => Some(Class::Call),
         "workbench.log.clock" => Some(Class::Lifecycle),
         "workbench.log.dropped" => Some(Class::Lifecycle),
         "workbench.log.gated" => Some(Class::Lifecycle),

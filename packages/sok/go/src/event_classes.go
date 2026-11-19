@@ -134,6 +134,7 @@ var eventClasses = map[string]Class{
 	"workbench.fixture.step":                 ClassLifecycle,
 	"workbench.input.shortcut.failed":        ClassInput,
 	"workbench.keyboard.follow":              ClassInput,
+	"workbench.layout.change":                ClassCall,
 	"workbench.log.clock":                    ClassLifecycle,
 	"workbench.log.dropped":                  ClassLifecycle,
 	"workbench.log.gated":                    ClassLifecycle,
