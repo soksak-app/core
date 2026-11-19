@@ -18,7 +18,7 @@ const STORED_LAYOUT = {
   state: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, data: {
     tabs: [{ id: "tab-aaaaaa", plugin: owner, title: "shown", origin: { directory: "/work/session" } },
     { id: "tab-bbbbbb", plugin: owner, title: "hidden", origin: { directory: "/work/session" } }], activeId: "tab-aaaaaa" } }] },
-  focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
+  groups: [], leader: "main", lastCard: 1, focusedId: "main", windowSidebars: {}, named: 0, sidebars: {},
 };
 // The replies of the host settle in the turns that follow the call.
 const settled = () => new Promise((resolve) => setImmediate(resolve));

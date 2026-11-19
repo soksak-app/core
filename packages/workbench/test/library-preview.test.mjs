@@ -24,7 +24,7 @@ const project = (plugin) => ({
   activeSpaceId: "space",
   spaces: [{ id: "space", layout: { focusedId: "main", named: 1, state: { xs: [0, 1], ys: [0, 1], cards: [
     { id: "main", c0: 0, c1: 1, r0: 0, r1: 1, data: { activeId: "tab-a", tabs: [{ id: "tab-a", plugin, title: "a" }] } },
-  ] } } }],
+  ] }, groups: [], leader: "main", lastCard: 1 } }],
 });
 
 test("a library preview of a layout in an earlier form names projects.json and what it found", () => {

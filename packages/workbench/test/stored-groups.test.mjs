@@ -9,12 +9,15 @@ const page = await openVerifyPlane();
 const { checkStoredLayout } = await import("../stored-layout.js");
 const { plane } = page;
 
-/** A content card of a stored layout with one tab of the plugin of the verification page. */
-const content = (id, c0, c1, r0, r1) => ({ id, c0, c1, r0, r1, data: { tabs: [{ id: `tab-${id}`, plugin: "fixture-verify", title: id }], activeId: `tab-${id}` } });
+/** A content card of a stored layout with the tabs, each of the plugin of the verification page, named by its id and the suffixes. */
+const content = (id, c0, c1, r0, r1, suffixes = [""]) => {
+  const tabs = suffixes.map((suffix) => ({ id: `tab-${id}${suffix}`, plugin: "fixture-verify", title: `${id}${suffix}` }));
+  return { id, c0, c1, r0, r1, data: { tabs, activeId: tabs[0].id } };
+};
 
 /** A stored layout of three cards in a row whose first two are the group card-4, as docs/spec/cases/layout/groups.json writes them. */
 const grouped = () => ({
-  state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1), content("card-2", 1, 2, 0, 1), content("card-3", 2, 3, 0, 1)] },
+  state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1), content("card-2", 1, 2, 0, 1, ["", "-b"]), content("card-3", 2, 3, 0, 1)] },
   groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
   leader: "card-4", lastCard: 4, focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {},
 });
@@ -40,9 +43,10 @@ test("the plane writes back the group tree it opened and issues a split card fro
   plane.adopt(grouped(), "spc-aaaaaa");
   const kept = plane.capture();
   assert.deepEqual([kept.groups, kept.leader, kept.lastCard], [grouped().groups, "card-4", 4]);
-  const made = plane.splitCard("card-2", "bottom", "probe");
-  assert.equal(made.card, "card-5");
+  // A tab moved to a side of a card of two tabs splits that card (dropTab of plane.js).
+  plane.moveTab("tab-card-2-b", "card-2", "bottom");
   const after = plane.capture();
+  assert.deepEqual(after.state.cards.map((card) => card.id), ["card-1", "card-2", "card-3", "card-5"]);
   assert.equal(after.lastCard, 5);
   assert.deepEqual(after.groups, [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2", "card-5"] }]);
   plane.adopt(plane.fresh(), "spc-aaaaaa");

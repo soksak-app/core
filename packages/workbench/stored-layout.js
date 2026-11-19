@@ -1,6 +1,8 @@
 // Checks a stored space layout. Opening a layout and the library preview use the same check, so the preview
 // filters out a layout that cannot be opened and does not draw it (docs/spec/projects.md).
+import { Soksak } from "soksak";
 import { pluginUnits } from "./environment.js";
+import { readGroupTree } from "./group-tree.js";
 import { reportError, restoreOrigin } from "./tab-reports.js";
 import { windowSidebar } from "./window-sidebars.js";
 
@@ -25,7 +27,11 @@ export function recordStoredOrigins(kept, isViewTab = viewPlugin) {
   return refused;
 }
 
-/** Throws an exception with the reason if the stored layout kept cannot be opened in the current environment. */
+/**
+ * Throws an exception with the reason if the stored layout kept cannot be opened in the current environment. After the cards and the
+ * sidebar choices, the grid and the group tree are read with the refusals of docs/spec/groups.md#storage on a grid of their own, so the
+ * check changes no shown grid.
+ */
 export function checkStoredLayout(kept) {
   if (Object.hasOwn(kept, "sidebars") && (!kept.sidebars || typeof kept.sidebars !== "object" || Array.isArray(kept.sidebars)))
     throw new Error("invalid stored sidebar choices");
@@ -58,4 +64,5 @@ export function checkStoredLayout(kept) {
     if (id.startsWith("rail-") || id.startsWith("window:")) throw new Error(`obsolete stored sidebar ${id}`);
     if (content.has(id)) throw new Error(`sidebar choice ${id} names card ${id}, an earlier form of ${id}:left`);
   }
+  readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());
 }

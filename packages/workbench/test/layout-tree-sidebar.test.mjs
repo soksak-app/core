@@ -72,7 +72,9 @@ test("the lines and cards of each arrangement of tree.json with a window sidebar
     : { direction: node.direction, size: node.size, children: node.children.map(strip) });
   for (const { name, layout: { xs, ys, cards }, root } of withSidebar) {
     const content = cards.filter(({ id }) => !SIDES.includes(id));
-    plane.adopt({ focusedId: content[0].id, named: 0, sidebars: {},
+    const first = [...content].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0))[0];
+    const numbers = cards.map(({ id }) => Number(/^card-(\d+)$/.exec(id)?.[1] ?? 0));
+    plane.adopt({ focusedId: content[0].id, named: 0, sidebars: {}, groups: [], leader: first.id, lastCard: Math.max(1, ...numbers),
       // The plane keeps the size of a window sidebar as it is drawn, so the record holds the extent that the lines of the case give it.
       windowSidebars: Object.fromEntries(cards.filter(({ id }) => SIDES.includes(id)).map(({ id, c0, c1, r0, r1 }) =>
         [id, id === "left" || id === "right" ? { width: (xs[c1] - xs[c0]) * 1600 } : { height: (ys[r1] - ys[r0]) * 1200 }])),

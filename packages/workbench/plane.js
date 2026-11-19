@@ -22,6 +22,7 @@ import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resol
 import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
+import { cardNumber, readGroupTree } from "./group-tree.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
 import { layoutTree, neighbourToward, sameJson } from "./layout-tree.js";
@@ -123,6 +124,15 @@ const pickerEl = document.getElementById("picker");
 let windowSidebars = {};
 
 let grid, view, focusedId;
+/* The group tree of the shown space over grid (group-tree.js): the groups, the leader of each level and lastCard, from which every new
+   card takes its identifier (docs/spec/groups.md#model). */
+let tree = null;
+
+/** The options of the group tree: the gap and the smallest edge of the grid and the head height of a group header. */
+const treeOptions = () => ({ gap: grid.gap, minSize: grid.minSize, head: HEADER });
+
+/** Whether a split balances the grid in the same change (cardSplit even, docs/spec/groups.md#split-setting). */
+const splitsEven = () => value("cardSplit") === "even";
 
 // The name of the window of this page, which its start document carries and the errors of the layout operations name
 // (docs/spec/native-host.md#page-start). It is null until the start names it.
@@ -612,7 +622,7 @@ async function closeTab(cardId, tabId) {
   if (card.data.tabs.length === 0) {
     // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first
     // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
-    if (grid.canClose(cardId)) grid.close(cardId);
+    if (tree.canClose(cardId)) tree.close(cardId);
     // default: as the comment above says, when no plugin is focused, a tab of the first registered plugin is opened.
     // The closed tab leaves no source tab, so the new tab records null, as the released workbench does (docs/spec/projects.md#tab-origin).
     else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null, "card refill")];
@@ -894,14 +904,13 @@ function splitWith(cardId, side, plugin, params) {
   if (!card?.data) return;
   // A split without space is refused before the tab of the new card is made, so a refused split issues no tab id, records no
   // origin and leaves the tab-name counter.
-  if (!grid.canSplit(cardId, splitAxis(side))) {
+  if (!tree.canSplit(cardId, side, splitsEven())) {
     settle();
     return null;
   }
   // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null, "split");
-  const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
-  if (!born) throw new Error(`card ${cardId} could split toward ${side}, and the split toward ${side} made no card`);
+  const born = tree.split(cardId, side, { tabs: [t], activeId: t.id }, splitsEven());
   focusOn(born);
   settle();
   return { card: born, tab: t.id };
@@ -988,22 +997,21 @@ function dropTab(fromId, tabId, hit) {
     removeTab(from, tabId);
     appendTab(target, moving);
     focusOn(target.id);
-    if (tabsOf(from).length === 0 && grid.canClose(fromId)) grid.close(fromId);
+    if (tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
     else settleActiveTab(from);
     return settle();
   }
 
   if (tabsOf(from).length === 1) {                               // T5 — nothing is left to keep
     if (fromId === hit.id) return settle();
-    grid.move(fromId, hit.id, hit.zone);
+    if (tree.canMove(fromId, hit.id, hit.zone)) tree.move(fromId, hit.id, hit.zone);
     focusOn(fromId);
     return settle();
   }
 
   removeTab(from, tabId);                                        // T4 — the slot stays and only the tab moves
   settleActiveTab(from);
-  const born = grid.splitToward(hit.id, hit.zone,
-    { data: { tabs: [moving], activeId: moving.id } });
+  const born = tree.canSplit(hit.id, hit.zone, splitsEven()) ? tree.split(hit.id, hit.zone, { tabs: [moving], activeId: moving.id }, splitsEven()) : null;
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
   } else {
@@ -1519,6 +1527,7 @@ function build(kept) {
   windowSidebars = restored;
   const half = halfGap();
   grid = new Soksak(kept.state, { gap: half * 2 });
+  tree = readGroupTree(kept, treeOptions(), grid);
   focusOn(kept.focusedId);
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
@@ -1638,6 +1647,7 @@ configureSystemNotifications({
 export function setGap(half) {
   if (!grid) return;
   grid.gap = half * 2;
+  tree.setOptions(treeOptions());
   view.bleed = stagePad();
   // The gap is also the inner margin of the stage, so the plane size changes when the gap changes. If the code waited for the
   // observer, a render in the meantime would draw with the previous size and pass that value to the surface too.
@@ -1663,9 +1673,10 @@ export const capture = (path = null) => {
   const displayed = grid.toJSON();
   // A write names its writing path, and each view tab that it stores without an origin member is recorded (docs/spec/projects.md#tab-origin).
   for (const text of missingOriginRecords(displayed, path)) report(text);
+  const { groups, leader, lastCard } = tree.stored();
   return {
     // Each content-card tab stores its origin with the layout (docs/spec/projects.md#tab-origin).
-    state: storedLayoutState(displayed), focusedId,
+    state: storedLayoutState(displayed), groups, leader, lastCard, focusedId,
     windowSidebars: structuredClone(windowSidebars),
     named, sidebars: sidebarChoices(),
   };
@@ -1680,7 +1691,7 @@ export function adopt(kept, space) {
   if (!grid) return build(kept);
   const restored = restoreWindowState(kept);
   logRefusals(recordStoredOrigins(kept));
-  grid.replace(kept.state);
+  tree = readGroupTree(kept, treeOptions(), grid);
   focusOn(kept.focusedId);
   windowSidebars = restored;
   named = kept.named;
@@ -1690,17 +1701,24 @@ export function adopt(kept, space) {
 }
 
 /** Returns an empty space state. A new space starts with this value. `random` is the random source of its tab ids (ids.js), the platform source by default. */
-export const fresh = (random) => ({
-  state: initial(random),
-  focusedId: environment().workspace.focus,
-  windowSidebars: Object.fromEntries(environment().workspace.grid.cards
-    .filter(card => windowSidebar(card.id))
-    // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
-    // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
-    .map(card => [card.id, { [sizeKey(card.id)]: card[sizeKey(card.id)] ?? value("sidebarWidth") }])),
-  named: 0,
-  sidebars: {},
-});
+export function fresh(random) {
+  const state = initial(random);
+  // A new space has no groups; its leader is the first card of the root level in reading order that is not a window sidebar, and
+  // lastCard is the largest card number of its cards or 1 (docs/spec/groups.md#leader).
+  const first = [...state.cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0)).find((card) => !isPlace(card.id));
+  return {
+    state, groups: [], leader: first ? first.id : null,
+    lastCard: Math.max(1, ...state.cards.map((card) => cardNumber(card.id) ?? 0)),
+    focusedId: environment().workspace.focus,
+    windowSidebars: Object.fromEntries(environment().workspace.grid.cards
+      .filter(card => windowSidebar(card.id))
+      // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
+      // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
+      .map(card => [card.id, { [sizeKey(card.id)]: card[sizeKey(card.id)] ?? value("sidebarWidth") }])),
+    named: 0,
+    sidebars: {},
+  };
+}
 
 export function clear() {
   keepCardScope(() => false);
@@ -1710,6 +1728,7 @@ export function clear() {
   view?.destroy();
   view = null;
   grid = null;
+  tree = null;
   keyboardOwed();
   railPath.setAttribute("d", "");
   document.getElementById("focusMark").hidden = true;
@@ -1946,7 +1965,7 @@ export function splitCard(id, side, kind) {
 export function closeCard(id) {
   paneCard(id);
   layoutChangeable(id);
-  if (!grid.canClose(id)) throw new Error(`card ${id} cannot close`);
+  if (!tree.canClose(id)) throw new Error(`card ${id} cannot close`);
   const unsaved = tabsOf(grid.card(id)).find((t) => tabModified(t.id));
   if (unsaved) {
     // Asks about the modified tab first; once it is closed, closing the card asks about the next one or closes it.
@@ -1955,7 +1974,7 @@ export function closeCard(id) {
   }
   restoreFullscreen();
   recordClosedTabs(tabsOf(grid.card(id)).map((t) => t.id));
-  grid.close(id);
+  tree.close(id);
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   settle();

@@ -678,6 +678,19 @@ export class GroupTree {
     });
   }
 
+  /** Whether move of the card id to side of target would succeed. */
+  canMove(id, target, side) {
+    return this.probe(() => {
+      try {
+        this.move(id, target, side);
+        return true;
+      } catch {
+        // silent: the probe answers whether the move succeeds; the refusal is the answer false.
+        return false;
+      }
+    });
+  }
+
   /**
    * The content card that a focus of the card id gives: the card itself, or for a group card the first content card inside it in
    * workbench order.

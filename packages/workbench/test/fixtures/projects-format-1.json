@@ -30,7 +30,10 @@
                   }
                 }
               ]
-            }
+            },
+            "groups": [],
+            "leader": "main",
+            "lastCard": 1
           }
         }
       ]
@@ -63,7 +66,10 @@
                   }
                 }
               ]
-            }
+            },
+            "groups": [],
+            "leader": "main",
+            "lastCard": 1
           }
         }
       ]
