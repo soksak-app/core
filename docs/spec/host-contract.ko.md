@@ -477,6 +477,7 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
 | `exposure.command.ends-by-reply-or-peer-end` | command.run에는 시간 제한이 없다. 그 답, 그것을 실행하는 문서의 끝, 그것을 보낸 endpoint 연결의 끝으로 끝난다. | all |
 | `exposure.command-params.checked-before-the-run` | page의 registry, mygo workbench의 registry, Go와 Rust host의 endpoint는 `docs/spec/cases/command-params.json`의 각 case의 params를 command 실행 전에 그 case의 text로 거부하고, error가 없는 case의 command는 실행한다. | all |
+| `exposure.window-resize.bound-and-text` | host.window.resize는 `docs/spec/cases/window-resize.json`의 각 case의 params를 콘텐츠 크기로 읽고, 1 point보다 작은 너비나 높이를 -32602와 `width and height must be at least 1`로 거부한다. | all |
 | `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 요청을 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. | all |
 | `exposure.relay.forward-lives-while-its-origin-is-open` | `origin`이 있는 `exposureForward`는 그 origin 요청이 메인 페이지의 답, 1003, 또는 그 endpoint 연결의 끝으로 끝날 때 결과 없이 끝나고, 그 뒤의 답은 끝난 요청의 관찰로 쓴다. `origin`이 열린 요청을 가리키지 않는 전달은 표면에 보내지 않고 곧바로 1003 `the origin request <origin> has ended`로 거절한다. `origin`이 없는 전달은 어떤 연결의 끝으로도 끝나지 않는다. | all |
 | `exposure.command.declaration-refuses-a-time-limit` | `timeout`을 가진 명령 선언은 manifest 검사와 registry가 `<where>: timeout is not a member of a command declaration`로 거절한다. | all |

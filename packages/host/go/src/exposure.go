@@ -953,16 +953,11 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		}
 		return nil, s.fullscreen(p.On == nil || *p.On)
 	case "host.window.resize":
-		var p struct {
-			Width, Height *float64
+		width, height, err := contentSize(params)
+		if err != nil {
+			return nil, err
 		}
-		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, rpcError(codeInvalidParams, "%v", err)
-		}
-		if *p.Width < 1 || *p.Height < 1 {
-			return nil, rpcError(codeInvalidParams, "width and height must be positive numbers")
-		}
-		s.window.SetSize(*p.Width, *p.Height)
+		s.window.SetSize(width, height)
 	case "host.window.move":
 		var p struct {
 			X, Y *float64
@@ -2263,4 +2258,19 @@ func (s *Surfaces) pageProcessStarted() {
 		s.waitsEnded = ""
 	}
 	s.mu.Unlock()
+}
+
+// contentSize reads the {width, height} of host.window.resize, which the endpoint checked against its params schema. A width
+// or a height below 1 point is refused (docs/spec/exposure.md#host-entries).
+func contentSize(params json.RawMessage) (float64, float64, error) {
+	var p struct {
+		Width, Height float64
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return 0, 0, rpcError(codeInvalidParams, "%v", err)
+	}
+	if p.Width < 1 || p.Height < 1 {
+		return 0, 0, rpcError(codeInvalidParams, "width and height must be at least 1")
+	}
+	return p.Width, p.Height, nil
 }

@@ -344,8 +344,11 @@ func TestALayoutOpenSelectsTheFirstEqualTab(t *testing.T) {
 	if got := layout.tabs(t, "main"); !slices.Equal(got, []string{"tab-dddddd", "tab-aaaaaa", "tab-bbbbbb*", "tab-cccccc"}) {
 		t.Fatalf("main holds %v", got)
 	}
-	// An omitted params and a null are no params.
-	for _, params := range []string{`{"card":"main","plugin":"notes"}`, `{"card":"main","plugin":"notes","params":null}`} {
+	// An omitted params is no params; a null is no object and is refused by the params schema (docs/spec/exposure.md#command-parameters).
+	if _, err := f.apply("core.layout.open", `{"card":"main","plugin":"notes","params":null}`); err == nil || err.Error() != "invalid params for core.layout.open" {
+		t.Fatalf("a null params answered %v", err)
+	}
+	for _, params := range []string{`{"card":"main","plugin":"notes"}`} {
 		answer, layout = f.twice("core.layout.open", params)
 		if answer["tab"] != "tab-aaaaaa" || len(layout.tabs(t, "main")) != 4 {
 			t.Fatalf("%s answered %v with the tabs %v", params, answer, layout.tabs(t, "main"))
@@ -521,7 +524,7 @@ func TestARefusedLayoutOpenChangesNothing(t *testing.T) {
 		{`{"card":"main","plugin":"notes","path":"a.md"}`, "core.layout.open takes plugin or path, not both"},
 		{`{"card":"main"}`, "core.layout.open needs plugin or path"},
 		{`{"card":"main","path":"a.md","params":{"path":"a.md"}}`, "core.layout.open takes params only with plugin"},
-		{`{"card":"main","side":"middle","plugin":"notes"}`, "unknown side middle; use left, right, top or bottom"},
+		{`{"card":"main","side":"middle","plugin":"notes"}`, "invalid params for core.layout.open"},
 	}
 	check := func(params, want string) {
 		t.Helper()

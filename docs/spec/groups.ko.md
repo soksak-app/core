@@ -94,7 +94,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 | `core.group.create` | `card`가 window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
 | `core.group.create` | layout이 어떤 최소에서도 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, `top`, `bottom` 쪽이면 `<w>x0` |
 | `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 workbench order로 그런 첫 card, `<m>`은 `minSize` |
-| `core.group.create` | `request`가 1에서 128자의 문자열이 아님 | `core.group.create: request must be a string of 1 to 128 characters` |
+| `core.group.create` | `request`가 1자보다 짧거나 128자보다 긴 문자열임. 문자열이 아닌 `request`는 params schema가 `invalid params for core.group.create`로 거부한다(`docs/spec/exposure.md#command-parameters`) | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin`이나 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) |
 | `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group`이 content card나 window sidebar | `card <id> is not a group` |
 | `core.group.rename` | 양끝 공백을 지운 이름이 Unicode scalar value 1개 미만이거나 40개 초과 | `group name must be 1 to 40 characters: <name>` |

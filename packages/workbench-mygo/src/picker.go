@@ -591,8 +591,9 @@ type menuParam struct {
 }
 
 type pointParam struct {
-	Surface string  `json:"surface"`
-	Tab     string  `json:"tab"`
+	// Surface and Tab are omitted when empty, so a run of the workbench gives a command only the members that it declares.
+	Surface string  `json:"surface,omitempty"`
+	Tab     string  `json:"tab,omitempty"`
 	X       float64 `json:"x"`
 	Y       float64 `json:"y"`
 }

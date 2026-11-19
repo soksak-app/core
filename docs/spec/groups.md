@@ -94,7 +94,7 @@ The refusals, in the order in which each command checks them:
 | `core.group.create` | `card` is a window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
 | `core.group.create` | the layout refuses the split of `card` toward `side` at any minimum | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, or `<w>x0` toward `top` or `bottom` |
 | `core.group.create` | a content card would be drawn below its minimum | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`, with `<c>` the first such card in workbench order and `<m>` `minSize` |
-| `core.group.create` | `request` is no string of 1 to 128 characters | `core.group.create: request must be a string of 1 to 128 characters` |
+| `core.group.create` | `request` is a string of fewer than 1 or more than 128 characters; a `request` that is no string is refused by the params schema with `invalid params for core.group.create` (`docs/spec/exposure.md#command-parameters`) | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin` or `params` is refused | the text of `core.card.split` for that plugin or those parameters ([acting on a layout](cli.md#acting-on-a-layout)) |
 | `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group` names a content card or a window sidebar | `card <id> is not a group` |
 | `core.group.rename` | the name has fewer than 1 or more than 40 Unicode scalar values after the white space at both ends is removed | `group name must be 1 to 40 characters: <name>` |
