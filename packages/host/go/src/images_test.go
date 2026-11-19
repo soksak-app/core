@@ -1072,15 +1072,16 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 	}
 	cases := []struct {
 		name   string
+		member string
 		change func(map[string]any)
 		want   string
 	}{
-		{"missing request", func(m map[string]any) { delete(m, "request") }, "image screen message has no request"},
-		{"missing name", func(m map[string]any) { delete(m, "name") }, "image screen message has no image name"},
-		{"string generation", func(m map[string]any) { m["generation"] = "2" }, "image screen message has no valid generation"},
-		{"negative raster", func(m map[string]any) { m["raster"] = -1 }, "image screen message has no valid raster"},
-		{"missing rows", func(m map[string]any) { delete(m, "rows") }, "image screen message has no rows array"},
-		{"row without cells", func(m map[string]any) { m["rows"] = []any{map[string]any{"row": 0}} }, "image screen message row 0 has no cells"},
+		{"missing request", "request", func(m map[string]any) { delete(m, "request") }, "image screen message has no request"},
+		{"missing name", "name", func(m map[string]any) { delete(m, "name") }, "image screen message has no image name"},
+		{"string generation", "generation", func(m map[string]any) { m["generation"] = "2" }, "image screen message has no valid generation"},
+		{"negative raster", "raster", func(m map[string]any) { m["raster"] = -1 }, "image screen message has no valid raster"},
+		{"missing rows", "rows", func(m map[string]any) { delete(m, "rows") }, "image screen message has no rows array"},
+		{"row without cells", "rows.0.cells", func(m map[string]any) { m["rows"] = []any{map[string]any{"row": 0}} }, "image screen message row 0 has no cells"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1093,8 +1094,22 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 				t.Fatalf("decision of the malformed screen message = %T %v, want an error that names %q", decision, decision, tc.want)
 			}
 			handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
-			if err != nil || !handled || len(answers) != 0 {
-				t.Fatalf("malformed screen message handled %t, answers %v, error %v; want handled with no answer", handled, answers, err)
+			if err != nil || !handled || len(answers) != 1 {
+				t.Fatalf("malformed screen message handled %t, answers %v, error %v; want handled with one answer", handled, answers, err)
+			}
+			var answer struct {
+				Image struct {
+					Screen map[string]any `json:"screen"`
+				} `json:"image"`
+			}
+			if err := json.Unmarshal([]byte(answers[0]), &answer); err != nil {
+				t.Fatalf("malformed answer %s: %v", answers[0], err)
+			}
+			if answer.Image.Screen["error"] != "malformed" || answer.Image.Screen["member"] != tc.member {
+				t.Fatalf("malformed answer %s, want error malformed naming member %q", answers[0], tc.member)
+			}
+			if again := images.ScreenRequests(); len(again) != 0 {
+				t.Fatalf("a malformed screen message ended the unanswered request: next request %+v", again)
 			}
 		})
 	}
