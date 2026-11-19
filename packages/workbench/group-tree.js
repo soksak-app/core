@@ -124,6 +124,11 @@ export class GroupTree {
     this.last = last;
     /** The frames of each content card by id that reframe gave the grid. */
     this.frames = {};
+    /** The number of trial operations that probe ran. */
+    this.probes = 0;
+    /** The answers of canSplit, canGroup and canClose by key for the layout that answersToken describes. */
+    this.answers = new Map();
+    this.answersToken = null;
   }
 
   /** Changes the gap, the smallest edge and the head height. The grid keeps its proportions (R5). */
@@ -364,7 +369,7 @@ export class GroupTree {
 
   /** Whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would succeed. */
   canGroup(id, even) {
-    return this.probe(() => {
+    return this.answer(`group:${id}:${even}`, () => this.probe(() => {
       try {
         this.create(id, this.groupSide(id), undefined, even);
         return true;
@@ -372,7 +377,7 @@ export class GroupTree {
         // silent: the probe answers whether the group succeeds; the refusal is the answer false.
         return false;
       }
-    });
+    }));
   }
 
   /** The number of members of the level of parent, null for the root level, that can lead it: every member but a window sidebar. */
@@ -695,8 +700,39 @@ export class GroupTree {
     }
   }
 
+  /**
+   * The kept answer of key for the current layout, or the answer of ask, which it keeps: the head buttons ask canSplit, canGroup and
+   * canClose for every head in each draw, and a draw without a layout change runs no trial operation.
+   */
+  answer(key, ask) {
+    const token = this.layoutToken();
+    if (token !== this.answersToken) {
+      this.answers = new Map();
+      this.answersToken = token;
+    }
+    if (this.answers.has(key)) return this.answers.get(key);
+    const answer = ask();
+    // An answer asked inside the trial operation describes the layout of that trial and replaced the kept answers.
+    if (this.answersToken !== token) {
+      this.answers = new Map();
+      this.answersToken = token;
+    }
+    this.answers.set(key, answer);
+    return answer;
+  }
+
+  /**
+   * Everything that an answer of canSplit, canGroup or canClose reads: the arrangement of the grid with its paidBy records, the size,
+   * gap, smallest edge and fill order of the plane, the head height and the group cards with their members.
+   */
+  layoutToken() {
+    const { grid } = this;
+    return JSON.stringify([grid.toJSON(), grid.width, grid.height, grid.gap, grid.minSize, grid.fillOrder, this.options, this.groups]);
+  }
+
   /** Runs change and puts everything back, and returns what change returned or throws what it threw. */
   probe(change) {
+    this.probes += 1;
     const kept = this.snapshot();
     try {
       return change();
@@ -891,7 +927,7 @@ export class GroupTree {
 
   /** Whether split of the card id toward side would succeed. */
   canSplit(id, side, even) {
-    return this.probe(() => {
+    return this.answer(`split:${id}:${side}:${even}`, () => this.probe(() => {
       try {
         this.split(id, side, undefined, even);
         return true;
@@ -899,7 +935,7 @@ export class GroupTree {
         // silent: the probe answers whether the split succeeds; the refusal is the answer false.
         return false;
       }
-    });
+    }));
   }
 
   /**
@@ -1005,7 +1041,7 @@ export class GroupTree {
 
   /** Whether close of the card id would succeed. */
   canClose(id) {
-    return this.probe(() => {
+    return this.answer(`close:${id}`, () => this.probe(() => {
       try {
         this.close(id);
         return true;
@@ -1013,7 +1049,7 @@ export class GroupTree {
         // silent: the probe answers whether the close succeeds; the refusal is the answer false.
         return false;
       }
-    });
+    }));
   }
 
   /** The group node of id; an id that is no group card is refused. */

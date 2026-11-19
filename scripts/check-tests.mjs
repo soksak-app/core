@@ -283,6 +283,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-10",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) answer(key string, change func() error) bool" },
+      { file: "packages/workbench/group-tree.js", symbol: "answer(key, ask) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout/split_probes_test.go", id: "TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges" },
+      { file: "packages/workbench/test/group-answers.test.mjs", id: "the head answers of a group tree hold until the layout changes" },
+    ],
+    expected: "The group tree of both workbenches answers the split, group and close buttons of the heads once per layout, so a draw without a layout change runs no trial operation.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-7",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) Neighbour(card, side string) string" },

@@ -32,6 +32,12 @@ type GroupTree struct {
 	leader string
 	// last is the largest card number that the space issued (lastCard).
 	last int
+	// probes is the number of trial operations that Probe ran.
+	probes int
+	// answers holds the answers of CanSplit, CanGroup and CanClose for the layout that answersToken describes, so the headers of a
+	// draw without a layout change run no trial operation.
+	answers      map[string]bool
+	answersToken string
 }
 
 // node is a member of a level: a group card with its name, its leader and its members, or a content card, which has no members.
@@ -505,9 +511,13 @@ func (t *GroupTree) reframe() {
 	t.grid.changed()
 }
 
+// Probes is the number of trial operations that Probe ran: an answer of CanSplit, CanGroup or CanClose that the tree kept runs none.
+func (t *GroupTree) Probes() int { return t.probes }
+
 // Probe runs change on the tree and puts the tree back, and returns what change returned: the drop preview asks what a drop would
 // make without making it.
 func (t *GroupTree) Probe(change func() error) error {
+	t.probes++
 	kept := t.snapshot()
 	defer t.restore(kept)
 	return change()
@@ -1040,10 +1050,59 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool)
 
 // CanSplit tells whether Split of the card id toward side would succeed.
 func (t *GroupTree) CanSplit(id string, side Side) bool {
-	return t.Probe(func() error {
+	return t.answer("split:"+id+":"+string(side), func() error {
 		_, err := t.Split(id, side, nil, false)
 		return err
-	}) == nil
+	})
+}
+
+// answer is the kept answer of key for the current layout, or whether the trial operation change succeeds, which it keeps.
+func (t *GroupTree) answer(key string, change func() error) bool {
+	token := t.layoutToken()
+	if token != t.answersToken || t.answers == nil {
+		t.answers, t.answersToken = map[string]bool{}, token
+	}
+	if known, ok := t.answers[key]; ok {
+		return known
+	}
+	ok := t.Probe(change) == nil
+	// An answer asked inside the trial operation describes the layout of that trial and replaced the kept answers.
+	if t.answersToken != token {
+		t.answers, t.answersToken = map[string]bool{}, token
+	}
+	t.answers[key] = ok
+	return ok
+}
+
+// layoutToken describes everything that an answer of CanSplit, CanGroup or CanClose reads: the lines, the cards with their spans and
+// sizes, the paidBy records, the size, gap, minimum size, fill order and head of the plane, and the group cards with their members.
+func (t *GroupTree) layoutToken() string {
+	g := t.grid
+	var b strings.Builder
+	fmt.Fprintf(&b, "%v|%v|%v|%v|%v|%v|%s|%v|%v|", g.xs, g.ys, g.w, g.h, g.gap, g.min, g.order, t.head, g.paidBy)
+	size := func(px *float64) string {
+		if px == nil {
+			return "-"
+		}
+		return strconv.FormatFloat(*px, 'g', -1, 64)
+	}
+	for _, c := range g.list {
+		fmt.Fprintf(&b, "%s:%d,%d,%d,%d,%s,%s,%t;", c.ID, c.C0, c.C1, c.R0, c.R1, size(c.Width), size(c.Height), c.Fixed)
+	}
+	var nodes func([]*node)
+	nodes = func(level []*node) {
+		for _, n := range level {
+			b.WriteString(n.card)
+			if n.group {
+				b.WriteByte('(')
+				nodes(n.members)
+				b.WriteByte(')')
+			}
+			b.WriteByte(',')
+		}
+	}
+	nodes(t.roots)
+	return b.String()
 }
 
 // AddCard puts a new content card with data into the group card id at the right edge of its rectangle and returns its id.
@@ -1155,10 +1214,10 @@ func (t *GroupTree) closeCell(id, op string) error {
 
 // CanClose tells whether Close of the card id would succeed.
 func (t *GroupTree) CanClose(id string) bool {
-	return t.Probe(func() error {
+	return t.answer("close:"+id, func() error {
 		_, err := t.Close(id)
 		return err
-	}) == nil
+	})
 }
 
 // CheckMove is the refusal of a move of the card id to side of target before the layout is asked, or nil
@@ -1442,10 +1501,10 @@ func (t *GroupTree) GroupSide(id string) Side {
 // CanGroup tells whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would
 // succeed (docs/spec/groups.md#headers).
 func (t *GroupTree) CanGroup(id string) bool {
-	return t.Probe(func() error {
+	return t.answer("group:"+id, func() error {
 		_, _, err := t.CreateGroup(id, t.GroupSide(id), nil, false)
 		return err
-	}) == nil
+	})
 }
 
 // DropAt resolves a drop at x, y on the innermost box that holds the point (docs/spec/groups.md#moving-and-dropping): a content card
