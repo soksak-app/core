@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-20
+
+- F943: Both hosts treat an endpoint of a persistent service as stale unless its pid names the process that published it: a process that the kernel lists, that belongs to the user of the host, that is no zombie and whose start time is not later than the modification time of `endpoint.json`, which the host reads through the descriptor of the endpoint read (`docs/spec/persistent-services.md#endpoint-publisher`). Before, the hosts judged the pid alone, so after a machine restart an endpoint whose pid belonged to an unrelated process was kept and every send of the sidecar failed with `connect authenticated service` on the removed socket. The Go host reads the process with the `kern.proc.pid` sysctl and the Rust host with `proc_pidinfo`, which replaces `kill` and `ps`; the Go host checks only the endpoint that it read from the file, as the Rust host does. A process of another user is no longer counted as the service (contract case `sidecars-transport.endpoint.foreign-process-is-not-the-publisher`). Red: `TestPersistentTransportReplacesTheEndpointOfAReusedPID`, `TestPersistentTransportReplacesTheEndpointOfAProcessOfAnotherUser` and their Rust cases in `sidecars_transport_test.rs` failed on the unchanged hosts with `connect authenticated service`. Green: the same cases, the persistent service tests of both hosts and `service_process_test` pass.
+
 ## 2026-11-19
 
 - F938: A goroutine panic of the Go host that happens while no start of the host runs and no writer is attached writes its record with the stack to the standard error and ends the process at once, so a test of the host packages whose goroutine panics fails at that test. Before, the record waited for a writer that no start attaches, so the test passed and the process ended with status 2 at a later test that attached a writer. `Prepare` records the begin of the start (`NotifyStartBegan`), and only a panic after it waits for the writer (`docs/spec/hosts.md#process-lifecycle`, contract case `log.panic.without-start-ends-the-process-at-the-panic`). Red and Green: `TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic`.

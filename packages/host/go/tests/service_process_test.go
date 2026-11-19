@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os/exec"
 	"testing"
+	"time"
 
 	platform "github.com/soksak-app/core/packages/host/go/src/platform"
 )
@@ -28,7 +29,7 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 	if ended, err := current.WaitServiceProcessEnd(sleep.Process.Pid, nil); err != nil || !ended {
 		t.Fatalf("the killed sleep did not end: ended %v, %v", ended, err)
 	}
-	exists, err := current.ServiceProcessExists(sleep.Process.Pid)
+	exists, err := current.ServiceProcessExists(sleep.Process.Pid, time.Now())
 	if err != nil {
 		t.Fatalf("inspect the zombie: %v", err)
 	}
@@ -40,21 +41,21 @@ func TestAZombieServiceProcessDoesNotExist(t *testing.T) {
 	}
 }
 
-// The signal check is refused for a process of another user. A refusal (EPERM) means that a process with that number exists, so that service
-// process exists.
-// contract: sidecars-transport.endpoint.foreign-service-process-exists
-func TestAServiceProcessOfAnotherUserExists(t *testing.T) {
+// A process of another user did not publish the endpoint, although it started before the publication, because the service runs as
+// the user of the host.
+// contract: sidecars-transport.endpoint.foreign-process-is-not-the-publisher
+func TestAProcessOfAnotherUserIsNotThePublisher(t *testing.T) {
 	current, err := platform.Current()
 	if err != nil {
 		t.Fatalf("platform failed: %v", err)
 	}
 	// 1 is launchd, which root runs.
-	exists, err := current.ServiceProcessExists(1)
+	exists, err := current.ServiceProcessExists(1, time.Now())
 	if err != nil {
 		t.Fatalf("inspect process 1: %v", err)
 	}
-	if !exists {
-		t.Fatal("process 1 of another user must exist")
+	if exists {
+		t.Fatal("process 1 of another user is not the publisher of an endpoint")
 	}
 }
 

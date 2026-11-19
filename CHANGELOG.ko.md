@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-20
+
+- F943: 두 host는 persistent service의 endpoint를, 그 pid가 그것을 게시한 process를 가리키지 않으면 낡은 것으로 본다. 게시한 process는 kernel이 나열하고, host의 사용자에게 속하고, zombie가 아니며, 시작 시각이 `endpoint.json`의 수정 시각보다 늦지 않은 process이고, 수정 시각은 host가 endpoint를 읽은 descriptor에서 읽는다(`docs/spec/persistent-services.md#endpoint-publisher`). 전에는 host가 pid만 판단했으므로, machine 재시작 뒤 pid가 무관한 process의 것인 endpoint가 유지되었고 sidecar의 모든 send가 지워진 socket에 대해 `connect authenticated service`로 실패했다. Go host는 `kern.proc.pid` sysctl로, Rust host는 `proc_pidinfo`로 process를 읽으며 이것이 `kill`과 `ps`를 대신한다. Go host는 Rust host처럼 파일에서 읽은 endpoint만 확인한다. 다른 사용자의 process는 더 이상 service로 치지 않는다(contract case `sidecars-transport.endpoint.foreign-process-is-not-the-publisher`). Red: `TestPersistentTransportReplacesTheEndpointOfAReusedPID`, `TestPersistentTransportReplacesTheEndpointOfAProcessOfAnotherUser`와 `sidecars_transport_test.rs`의 Rust case가 바꾸지 않은 host에서 `connect authenticated service`로 실패했다. Green: 같은 case, 두 host의 persistent service test와 `service_process_test`가 통과한다.
+
 ## 2026-11-19
 
 - F938: host의 시작이 돌지 않고 writer가 붙지 않은 동안 일어난 Go host의 goroutine panic은 record와 stack을 표준 오류에 쓰고 프로세스를 바로 끝내므로, goroutine이 panic한 host package의 test는 그 test에서 실패한다. 전에는 record가 어떤 시작도 붙이지 않는 writer를 기다렸으므로, test는 통과하고 프로세스는 writer를 붙인 나중 test에서 상태 2로 끝났다. `Prepare`가 시작의 시작(`NotifyStartBegan`)을 기록하고, 그 뒤의 panic만 writer를 기다린다(`docs/spec/hosts.md#process-lifecycle`, contract case `log.panic.without-start-ends-the-process-at-the-panic`). Red와 Green: `TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic`.
