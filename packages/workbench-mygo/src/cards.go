@@ -808,10 +808,21 @@ type LayoutNode struct {
 	// (docs/spec/groups.md#status-and-queries).
 	Leader bool
 	Parent string
+	// Group is the group of a group card node, with the tree of its members, and nil for a content card.
+	Group *LayoutGroupNode
 }
 
-// LayoutGroup is a group card of the group tree of a layout description: its id, name, frame, the level and the leader of its members,
-// and its members, each the id of a content card or a group card node. Leading tells that the group card leads its own level.
+// LayoutGroupNode is the group of a group card node of a layout description: its name, the level and the leader of its members, and
+// Root, the tree of its members inside its rectangle.
+type LayoutGroupNode struct {
+	Name   string      `json:"name"`
+	Level  int         `json:"level"`
+	Leader string      `json:"leader"`
+	Root   *LayoutNode `json:"root"`
+}
+
+// LayoutGroup is a group card of the list of the group cards of a layout description: its id, name, frame, the level and the leader of
+// its members, and the identifiers of its members. Leading tells that the group card leads its own level.
 type LayoutGroup struct {
 	Card    string      `json:"card"`
 	Name    string      `json:"name"`
@@ -819,7 +830,7 @@ type LayoutGroup struct {
 	Leader  string      `json:"leader"`
 	Leading bool        `json:"leading,omitempty"`
 	Frame   LayoutFrame `json:"frame"`
-	Members []any       `json:"members"`
+	Members []string    `json:"members"`
 }
 
 // LayoutFrame is the frame of a card in window points.
@@ -848,6 +859,16 @@ func (n LayoutNode) MarshalJSON() ([]byte, error) {
 			Children  []LayoutNode `json:"children"`
 		}{n.Direction, n.Size, n.Children})
 	}
+	if n.Group != nil {
+		return json.Marshal(struct {
+			Card   string           `json:"card"`
+			Size   float64          `json:"size"`
+			Frame  LayoutFrame      `json:"frame"`
+			Leader bool             `json:"leader,omitempty"`
+			Parent string           `json:"parent,omitempty"`
+			Group  *LayoutGroupNode `json:"group"`
+		}{n.Card, n.Size, n.Frame, n.Leader, n.Parent, n.Group})
+	}
 	tabs := n.Tabs
 	if tabs == nil {
 		tabs = []LayoutTab{}
@@ -874,24 +895,39 @@ func (s *Shell) LayoutDescription() (*LayoutDescription, error) {
 		focused := s.focused
 		description.Focused = &focused
 	}
-	tree, err := layout.Tree(s.plane.ToJSON())
+	root, err := s.describeLevel("")
 	if err != nil {
 		return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
 	}
-	if tree != nil {
-		root, err := s.describeNode(*tree)
-		if err != nil {
-			return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
-		}
-		description.Root = &root
-	}
-	description.Groups = s.describeGroups("")
+	description.Root = root
+	description.Groups = s.describeGroups("", []LayoutGroup{})
 	return description, nil
 }
 
-// describeGroups is the group cards of the level key in reading order, each with its frame and its members.
-func (s *Shell) describeGroups(key string) []LayoutGroup {
-	out := []LayoutGroup{}
+// describeLevel is the tree of the members of the level key, content cards and group cards, from the lines of the grid inside the
+// rectangle of the level (layout.Tree), and nil for a level without a card.
+func (s *Shell) describeLevel(key string) (*LayoutNode, error) {
+	state := s.plane.ToJSON()
+	var members []layout.Card
+	for _, id := range s.planes.Members(key) {
+		if card, ok := s.planes.Card(id); ok {
+			members = append(members, card)
+		}
+	}
+	tree, err := layout.Tree(layout.State{Xs: state.Xs, Ys: state.Ys, Cards: members})
+	if err != nil || tree == nil {
+		return nil, err
+	}
+	node, err := s.describeNode(*tree)
+	if err != nil {
+		return nil, err
+	}
+	return &node, nil
+}
+
+// describeGroups appends to out the group cards of the level key and of the levels inside them in workbench order, each with its
+// frame and the identifiers of its members.
+func (s *Shell) describeGroups(key string, out []LayoutGroup) []LayoutGroup {
 	origin := s.planeOrigin()
 	lead, _ := s.planes.Leader(key) // silent: a level without a leader has no member that carries the mark.
 	for _, id := range s.planes.Members(key) {
@@ -900,20 +936,9 @@ func (s *Shell) describeGroups(key string) []LayoutGroup {
 			continue
 		}
 		rect, _ := s.cardRect(id) // silent: a group card has a rectangle.
-		members := []any{}
-		inner := map[string]LayoutGroup{}
-		for _, group := range s.describeGroups(id) {
-			inner[group.Card] = group
-		}
-		for _, member := range record.Members {
-			if group, ok := inner[member]; ok {
-				members = append(members, group)
-			} else {
-				members = append(members, member)
-			}
-		}
 		out = append(out, LayoutGroup{Card: id, Name: record.Name, Level: record.Level, Leader: record.Leader, Leading: lead == id,
-			Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}, Members: members})
+			Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}, Members: s.planes.Members(id)})
+		out = s.describeGroups(id, out)
 	}
 	return out
 }
@@ -937,6 +962,14 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	leader, _ := s.planes.Leader(parent) // silent: a level without a leader has no card that carries the mark.
 	described := LayoutNode{Card: node.Card, Size: node.Size, Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H},
 		Leader: leader == node.Card, Parent: parent}
+	if record, ok := s.planes.Group(node.Card); ok {
+		inside, err := s.describeLevel(node.Card)
+		if err != nil {
+			return LayoutNode{}, err
+		}
+		described.Group = &LayoutGroupNode{Name: record.Name, Level: record.Level, Leader: record.Leader, Root: inside}
+		return described, nil
+	}
 	data, err := s.cardData(node.Card)
 	if err != nil {
 		return LayoutNode{}, err

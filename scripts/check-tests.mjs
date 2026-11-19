@@ -283,6 +283,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-9",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) describeLevel(key string) (*LayoutNode, error)" },
+      { file: "packages/workbench/plane.js", symbol: "export function layoutDescription()" },
+      { file: "packages/sok/go/src/agents/SKILL.md", symbol: "read `layout` again right before each step" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheDescriptionHoldsTheGroupCardsInItsTree" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+    ],
+    expected: "The layout of the window description in both workbenches is the tree of the root level with each group card as a node of its group and the tree of its members, and groups lists every group card once with the identifiers of its members; the skill says to read the layout again before each step.",
+    levels: ["unit"],
+  },
+  {
     id: "F953",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "func leaderMark(tools []headTool) (headTool, bool)" },
@@ -14151,7 +14166,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.move moves a card into a group and the add, split and close of a group card act on its rectangle" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card" },
-      { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description carries parent and leader on each card and the group tree with frames" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.get reads a content card with its group path and a group card with its node" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid reports the group card of each card, the leaders and the group cards after the cards" },
       { file: "packages/soksak/test/layout-cases.test.mjs", id: "grid: ${kase.name}" },

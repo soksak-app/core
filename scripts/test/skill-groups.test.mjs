@@ -28,6 +28,8 @@ const PHRASES = [
   "`core.layout.open {card: <a card of the group>, side, plugin}`",
   "`core.card.add-tab {card: <group>, plugin}`",
   "looks for the neighbour toward `side` only among the cards of that plane",
+  "lists every group card once",
+  "read `layout` again right before each step",
   "`core.group.dissolve {group}`",
   "`core.card.move {card, target, side}`",
   "A split never creates a group",

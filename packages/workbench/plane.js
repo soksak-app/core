@@ -2433,9 +2433,10 @@ export async function closeInLayout({ tab: tabId }) {
 
 /**
  * The layout of the window description (docs/spec/exposure.md#window-snapshot): the shown space, the focused card, the tree of the
- * content cards with the frame of each card in window points, its group card (parent, null at the root level), whether it leads its level
- * and its tabs, and the group tree as core.layout reports it with the frame of each group card and whether it leads its own level
- * (docs/spec/groups.md#status-and-queries). It is null while the plane shows no space.
+ * members of the root level, in which a group card is a node of its group with the tree of its members, each content card with its
+ * frame in window points, its group card (parent, null at the root level), whether it leads its level and its tabs, and the list of every
+ * group card once with its frame and the identifiers of its members (docs/spec/groups.md#status-and-queries). It is null while the
+ * plane shows no space.
  */
 export function layoutDescription() {
   if (!grid) return null;
@@ -2443,30 +2444,38 @@ export function layoutDescription() {
   // The drawn rectangles: a card below the headers of its group cards is drawn below them (docs/spec/groups.md#drawn-rectangles), and a
   // fullscreen group card shows the fullscreen layout.
   const rects = drawnCardRects();
-  const root = layoutTree(contentCards(), grid.lines("x"), grid.lines("y"), (card, size) => {
-    const rect = rects.get(card.id);
-    const parent = tree.parentOf(card.id);
-    return {
-      card: card.id, size,
-      frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
-      parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === card.id,
-      tabs: tabsOf(card).map((t) => ({
-        // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
-        tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
-        // default: a tab stored without params has the params null.
-        params: t.params ?? null,
-      })),
-    };
-  });
-  const describe = (node) => {
-    const rect = rects.get(node.card);
-    return {
-      card: node.card, name: node.name, level: node.level, leader: node.leader, leading: tree.leaderOf(tree.parentOf(node.card)) === node.card,
-      frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
-      members: node.members.map((member) => (typeof member === "string" ? member : describe(member))),
-    };
+  const frameOf = (id) => {
+    const rect = rects.get(id);
+    return { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h };
   };
-  return { space: heldSpace, focused: focusedId, root, groups: tree.tree().map(describe) };
+  // The tree of the members of the level of the group node parent, null for the root level, over the lines of the grid.
+  const level = (parent) => {
+    const members = tree.levelMembers(parent).filter((member) => !isPlace(memberId(member)))
+      .map((member) => ({ id: memberId(member), node: typeof member === "string" ? null : member, ...tree.box(member) }));
+    return layoutTree(members, grid.lines("x"), grid.lines("y"), (member, size) => {
+      const leader = tree.leaderOf(parent) === member.id;
+      if (member.node) {
+        const { name, level: depth, leader: lead } = tree.groupRecord(member.id);
+        return { card: member.id, size, frame: frameOf(member.id), leader, group: { name, level: depth, leader: lead, root: level(member.node) } };
+      }
+      const card = grid.card(member.id);
+      return {
+        card: card.id, size, frame: frameOf(card.id), parent: parent ? parent.card : null, leader,
+        tabs: tabsOf(card).map((t) => ({
+          // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
+          tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
+          // default: a tab stored without params has the params null.
+          params: t.params ?? null,
+        })),
+      };
+    });
+  };
+  const groups = tree.order().filter(({ node }) => node).map(({ id, node, parent }) => {
+    const { name, level: depth, leader } = tree.groupRecord(id);
+    return { card: id, name, level: depth, leader, leading: tree.leaderOf(parent) === id, frame: frameOf(id),
+      members: tree.readingOrder(node.members).map(memberId) };
+  });
+  return { space: heldSpace, focused: focusedId, root: level(null), groups };
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];

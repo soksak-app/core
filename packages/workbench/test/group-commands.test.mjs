@@ -190,20 +190,27 @@ test("a drop resolves on the rectangles of the group cards and core.tab.move put
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
 });
 
-test("the layout of the window description carries parent and leader on each card and the group tree with frames", { timeout: 5000 }, () => {
+test("the layout of the window description holds each group card as a node of its tree and lists every group once", { timeout: 5000 }, async () => {
   arrange();
+  // card-2 becomes the group card card-5 with card-6 below it, nested in card-4 (docs/spec/groups.md#status-and-queries).
+  await run("core.group.create", { card: "card-2", side: "bottom", plugin: PLAIN });
   const { root, groups } = plane.layoutDescription();
-  const cards = [];
-  const walk = (node) => (node.card ? cards.push(node) : node.children.forEach(walk));
-  walk(root);
-  assert.deepEqual(cards.map(({ card, parent, leader }) => ({ card, parent, leader })), [
-    { card: "card-1", parent: "card-4", leader: true }, { card: "card-2", parent: "card-4", leader: false },
-    { card: "card-3", parent: null, leader: false },
-  ]);
+  const shape = (node) => (node.children ? { direction: node.direction, children: node.children.map(shape) }
+    : node.group ? { card: node.card, leader: node.leader, group: { name: node.group.name, level: node.group.level, leader: node.group.leader,
+      root: shape(node.group.root) } }
+    : { card: node.card, parent: node.parent, leader: node.leader });
+  assert.deepEqual(shape(root), { direction: "row", children: [
+    { card: "card-4", leader: true, group: { name: "그룹 1", level: 1, leader: "card-1", root: { direction: "row", children: [
+      { card: "card-1", parent: "card-4", leader: true },
+      { card: "card-5", leader: false, group: { name: "그룹 2", level: 2, leader: "card-2", root: { direction: "column", children: [
+        { card: "card-2", parent: "card-5", leader: true }, { card: "card-6", parent: "card-5", leader: false }] } } }] } } },
+    { card: "card-3", parent: null, leader: false }] });
   const { x, y, w, h } = plane.currentTree().rect("card-4");
   const origin = document.getElementById("plane").getBoundingClientRect();
-  assert.deepEqual(groups, [{ card: "card-4", name: "그룹 1", level: 1, leader: "card-1", leading: true,
-    frame: { x: origin.left + x, y: origin.top + y, width: w, height: h }, members: ["card-1", "card-2"] }]);
+  assert.deepEqual(groups.map(({ card, members }) => ({ card, members })), [{ card: "card-4", members: ["card-1", "card-5"] },
+    { card: "card-5", members: ["card-2", "card-6"] }], "the description does not list every group card once with the identifiers of its members");
+  assert.deepEqual(groups[0], { card: "card-4", name: "그룹 1", level: 1, leader: "card-1", leading: true,
+    frame: { x: origin.left + x, y: origin.top + y, width: w, height: h }, members: ["card-1", "card-5"] });
 });
 
 test("core.card.get reads a content card with its group path and a group card with its node", { timeout: 5000 }, async () => {

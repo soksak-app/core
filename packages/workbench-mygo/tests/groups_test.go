@@ -133,23 +133,49 @@ func TestTheGridListsTheCardsWithTheGroupThatHoldsThemAndTheLeaders(t *testing.T
 	}
 }
 
-func TestTheDescriptionHoldsTheGridAndTheGroupTree(t *testing.T) {
+// The layout of the description is the tree of the members of the root level with each group card as a node of its group and the tree
+// of its members, and groups lists every group card once with its members by identifier (docs/spec/groups.md#status-and-queries).
+func TestTheDescriptionHoldsTheGroupCardsInItsTree(t *testing.T) {
 	f := groupedShell(t)
+	f.tester.SetSize(1600, 900)
+	f.settle()
+	if _, err := f.apply("core.group.create", `{"card": "card-3", "side": "bottom", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
 	var described map[string]any
 	if err := json.Unmarshal([]byte(f.described()), &described); err != nil {
 		t.Fatal(err)
 	}
 	root := described["root"].(map[string]any)
-	children := root["children"].([]any)
-	if root["direction"] != "row" || len(children) != 2 || children[0].(map[string]any)["card"] != "main" ||
+	outer, _ := root["group"].(map[string]any)
+	if root["card"] != "card-2" || outer == nil || outer["name"] != "그룹 1" || outer["level"] != float64(1) || outer["leader"] != "main" {
+		t.Fatalf("the root of the description is not the group card card-2 with its group: %v", root)
+	}
+	row := outer["root"].(map[string]any)
+	children, _ := row["children"].([]any)
+	if row["direction"] != "row" || len(children) != 2 || children[0].(map[string]any)["card"] != "main" ||
 		children[0].(map[string]any)["parent"] != "card-2" || children[0].(map[string]any)["leader"] != true {
-		t.Fatalf("the description holds the root %v", root)
+		t.Fatalf("the group card-2 holds the tree %v", row)
+	}
+	inner := children[1].(map[string]any)
+	nested, _ := inner["group"].(map[string]any)
+	if inner["card"] != "card-4" || nested == nil || nested["name"] != "그룹 2" || nested["level"] != float64(2) ||
+		nested["root"].(map[string]any)["direction"] != "column" {
+		t.Fatalf("the group card-2 holds the node %v, not the group card card-4 with a column", inner)
 	}
 	groups := described["groups"].([]any)
-	group := groups[0].(map[string]any)
-	if len(groups) != 1 || group["card"] != "card-2" || group["name"] != "그룹 1" || group["level"] != float64(1) || group["leading"] != true ||
-		!reflect.DeepEqual(group["members"], []any{"main", "card-3"}) || group["frame"].(map[string]any)["width"].(float64) <= 0 {
-		t.Fatalf("the description holds the groups %v", groups)
+	var listed []string
+	for _, entry := range groups {
+		group := entry.(map[string]any)
+		listed = append(listed, group["card"].(string))
+		for _, member := range group["members"].([]any) {
+			if _, ok := member.(string); !ok {
+				t.Fatalf("the group %v lists the member %v, which is no identifier", group["card"], member)
+			}
+		}
+	}
+	if !slices.Equal(listed, []string{"card-2", "card-4"}) {
+		t.Fatalf("the description lists the groups %v, not card-2 and card-4 once each", listed)
 	}
 }
 

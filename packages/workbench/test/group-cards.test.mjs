@@ -216,7 +216,8 @@ test("the layout of the window snapshot gives each card and group card the frame
   const shown = plane.currentTree().fullscreen("card-4", { x: 0, y: 0, w: grid.width, h: grid.height });
   const { root, groups } = plane.layoutDescription();
   const frame = ({ x, y, width, height }) => ({ x, y, w: width, h: height });
-  const leaves = (node) => ("children" in node ? node.children.flatMap(leaves) : [node]);
+  // A group card is a node of the tree that holds the tree of its members (docs/spec/groups.md#status-and-queries).
+  const leaves = (node) => ("children" in node ? node.children.flatMap(leaves) : node.group ? leaves(node.group.root) : [node]);
   const frames = new Map(leaves(root).map((leaf) => [leaf.card, frame(leaf.frame)]));
   for (const id of ["card-1", "card-2"]) near(frames.get(id), shown.get(id), `the snapshot frame of ${id}`);
   near(frames.get("card-3"), { x: 0, y: 0, w: 0, h: 0 }, "the snapshot frame of card-3 outside the fullscreen group card");
