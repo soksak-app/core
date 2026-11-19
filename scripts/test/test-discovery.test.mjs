@@ -87,6 +87,21 @@ test("a Go test over its limit prints the stacks of its goroutines before its gr
   assert.match(result.output, /hangs\.waitInTheFixture\(/, result.output);
 });
 
+test("a Go test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit", { timeout: 120_000 }, async (t) => {
+  const root = folder();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "go.mod"), "module slowlist\n\ngo 1.21\n");
+  writeFileSync(join(root, "a_test.go"), [
+    "package slowlist", "", 'import ("os"; "slices"; "testing"; "time")', "",
+    '// The listing of this binary ends successfully after 3s, which is longer than the 2s limit of a test.',
+    'func TestMain(m *testing.M) { if slices.Contains(os.Args, "-test.list") { time.Sleep(3 * time.Second) }; os.Exit(m.Run()) }', "",
+    "func TestSlow(t *testing.T) {}", "",
+  ].join("\n"));
+  const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, buildDir: join(root, "bin"), id: "slowlist", write() {}, concurrency: 1, timeoutMs: 2000 });
+  assert.deepEqual(failures, []);
+  assert.deepEqual(tests.map((item) => item.testName), ["TestSlow"]);
+});
+
 test("a Go package that does not build is a failure that names the package", async (t) => {
   const root = folder();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -109,34 +124,35 @@ test("a Go package list that fails is a discovery failure that names the pattern
   assert.deepEqual(tests, []);
   assert.equal(failures.length, 1, JSON.stringify(failures));
   assert.match(failures[0], /^missing: go list of \.\/\.\.\. \.\/absent ended fail after \d+\.\d{3}s: exit 1$/);
-  assert.ok(lines.some((line) => /^RUN  list missing packages \.\/\.\.\. \.\/absent .*limit 20\.000s/.test(line)), `no list start line: ${text}`);
+  assert.ok(lines.some((line) => /^RUN  list missing packages \.\/\.\.\. \.\/absent .*no runner limit/.test(line)), `no list start line: ${text}`);
   assert.ok(lines.some((line) => /^FAIL list missing packages \.\/\.\.\. \.\/absent \d+\.\d{3}s exit 1$/.test(line)), `no list failure line: ${text}`);
   assert.ok(lines.some((line) => /absent: directory not found/.test(line)), `the failure output does not name the folder: ${text}`);
 });
 
-test("each Go test list step reports its start and elapsed time, and a binary that does not answer its list fails at its limit with the binary named", { timeout: 240_000 }, async (t) => {
+test("each Go test list step reports its start and elapsed time, and a binary whose listing exits with a failure fails with its exit status and output", { timeout: 120_000 }, async (t) => {
   const root = folder();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "go.mod"), "module listing\n\ngo 1.21\n");
   mkdirSync(join(root, "answers"));
-  mkdirSync(join(root, "silent"));
+  mkdirSync(join(root, "refused"));
   writeFileSync(join(root, "answers", "a_test.go"), 'package answers\n\nimport "testing"\n\nfunc TestOne(t *testing.T) {}\n');
-  // The test binary of `silent` waits instead of answering -test.list.
-  writeFileSync(join(root, "silent", "a_test.go"), [
-    "package silent", "", 'import ("os"; "slices"; "testing"; "time")', "",
-    'func TestMain(m *testing.M) { if slices.Contains(os.Args, "-test.list") { time.Sleep(time.Hour) }; os.Exit(m.Run()) }', "",
+  // The test binary of `refused` writes a message and exits with status 3 instead of answering -test.list.
+  writeFileSync(join(root, "refused", "a_test.go"), [
+    "package refused", "", 'import ("os"; "slices"; "testing")', "",
+    'func TestMain(m *testing.M) { if slices.Contains(os.Args, "-test.list") { os.Stderr.WriteString("listing refused\\n"); os.Exit(3) }; os.Exit(m.Run()) }', "",
     "func TestTwo(t *testing.T) {}", "",
   ].join("\n"));
   const lines = [];
   const { tests, failures } = await discoverGo({ patterns: ["./..."], cwd: root, env: { ...process.env, GOWORK: "off" }, buildDir: join(root, "bin"), id: "listing", write: (l) => lines.push(l), concurrency: 2, timeoutMs: 20000 });
   const text = JSON.stringify(lines);
   assert.deepEqual(tests.map((item) => item.testName), ["TestOne"]);
-  assert.ok(lines.some((line) => /^RUN  list listing listing\/answers \(.*\/listing-0\.test\) .*limit 20\.000s/.test(line)), `no list start line: ${text}`);
+  assert.ok(lines.some((line) => /^RUN  list listing listing\/answers \(.*\/listing-0\.test\) .*no runner limit/.test(line)), `no list start line: ${text}`);
   assert.ok(lines.some((line) => /^PASS list listing listing\/answers \(.*\/listing-0\.test\) \d+\.\d{3}s$/.test(line)), `no list pass line: ${text}`);
-  assert.ok(lines.some((line) => /^RUN  list listing listing\/silent \(.*\/listing-1\.test\) .*limit 20\.000s/.test(line)), `no list start line: ${text}`);
-  assert.ok(lines.some((line) => /^TIME list listing listing\/silent \(.*\/listing-1\.test\) \d+\.\d{3}s /.test(line)), `no list limit line: ${text}`);
+  assert.ok(lines.some((line) => /^RUN  list listing listing\/refused \(.*\/listing-1\.test\) .*no runner limit/.test(line)), `no list start line: ${text}`);
+  assert.ok(lines.some((line) => /^FAIL list listing listing\/refused \(.*\/listing-1\.test\) \d+\.\d{3}s exit 3$/.test(line)), `no list failure line: ${text}`);
+  assert.ok(lines.some((line) => /listing refused/.test(line)), `the failure output of the listing is missing: ${text}`);
   assert.equal(failures.length, 1, JSON.stringify(failures));
-  assert.match(failures[0], /^listing: the list of listing\/silent \(.*\/listing-1\.test\) ended timeout after \d+\.\d{3}s/);
+  assert.match(failures[0], /^listing: the list of listing\/refused \(.*\/listing-1\.test\) ended fail after \d+\.\d{3}s: exit 3/);
 });
 
 test("a Rust package lists its tests, each test runs by itself, and an ignored test is a skip", async (t) => {

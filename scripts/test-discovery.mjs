@@ -24,17 +24,18 @@ const seconds = (ms) => (ms / 1000).toFixed(3);
  * The tests of the Go packages that match `patterns` (relative to `cwd`). `tags` is a build tag list and `ldflags` the link
  * flags; `buildDir` receives the test binaries. Each test runs with `-test.timeout` of `timeoutMs`, so `t.Deadline` reports
  * its limit, and a test that does not end panics at that limit with the stacks of every goroutine (`stacksAtLimit`). The package
- * list and the test list of each binary run through the runner with the limit `timeoutMs`. Returns `{tests, failures}`: `tests`
- * are runner items with `testName` (the name `go test -json` gives) and `failures` name the patterns whose package list failed
- * or reached its limit, the packages whose build failed and the binaries whose test list failed or reached its limit.
+ * list and the test list of each binary run through the runner without a runner limit (see the comment at the listing). Returns
+ * `{tests, failures}`: `tests` are runner items with `testName` (the name `go test -json` gives) and `failures` name the patterns
+ * whose package list failed, the packages whose build failed and the binaries whose test list failed.
  */
 export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, write, concurrency, timeoutMs, env = process.env }) {
   const { env: selectedEnv } = resolveGoNativeInputs({ patterns, tags, cwd, env });
   mkdirSync(buildDir, { recursive: true });
   const tagArgs = tags ? ['-tags', tags] : [];
-  // The package list and the test list of each binary run as steps of the runner under the limit of a test, so a list that waits
-  // reports its start and its elapsed time, and a list that fails or does not end is a failure that names its patterns or binary.
-  const packageList = { name: `list ${id} packages ${patterns.join(' ')}`, command: 'go', cwd, env: selectedEnv, timeoutMs,
+  // The package list and the test list of each binary run as steps of the runner. A listing has no time bound of its own: its step
+  // ends when its process exits, and a listing that fails reports its exit status and output. The limit of a test is `-test.timeout`
+  // of the test process, so a test that does not end is ended by its own limit, and a listing never is.
+  const packageList = { name: `list ${id} packages ${patterns.join(' ')}`, command: 'go', cwd, env: selectedEnv,
     args: ['list', ...tagArgs, '-f', '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}} {{.Dir}}{{end}}', ...patterns] };
   const packageResult = (await runTests({ tests: [packageList], concurrency: 1, write })).results.get(packageList.name);
   if (packageResult.status !== 'pass') {
@@ -61,7 +62,7 @@ export async function discoverGo({ patterns, cwd, tags, ldflags, buildDir, id, w
       continue;
     }
     const binary = join(buildDir, `${id}-${index}.test`);
-    lists.push({ pkg, binary, item: { name: `list ${id} ${pkg.importPath} (${binary})`, command: binary, args: ['-test.list', '.'], cwd: pkg.dir, env: selectedEnv, timeoutMs } });
+    lists.push({ pkg, binary, item: { name: `list ${id} ${pkg.importPath} (${binary})`, command: binary, args: ['-test.list', '.'], cwd: pkg.dir, env: selectedEnv } });
   }
   const listed = lists.length === 0 ? { results: new Map() } : await runTests({ tests: lists.map((list) => list.item), concurrency, write });
   const tests = [];
