@@ -500,6 +500,43 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-2.1",
+    implementation: [
+      { file: "packages/window-check/core-events.json", symbol: "\"workbench.layout.change\": {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/catalog.test.mjs", id: "the core catalog that the package ships is docs/spec/events.json" },
+    ],
+    expected: "The catalog copy of the window checks equals docs/spec/events.json.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983-1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
+    ],
+    expected: "A commit during the return of earlier keys gives no later key back ahead of them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983-2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
+      { file: "native/darwin/src/image_region.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1);" },
+      { file: "native/darwin/src/document_view.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of another surface leaves the keyboard with the hidden surface that holds it" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of a region of another surface leaves the keyboard with the hidden surface that holds it" },
+    ],
+    expected: "A hide of a surface, an image region or a document view leaves the keyboard with a surface that holds it for its region, shown or hidden.",
+    levels: ["unit"],
+  },
+  {
     id: "F973-1",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },

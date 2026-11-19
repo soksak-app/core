@@ -7,6 +7,14 @@ void sp_log_error(const char *where, const char *text);
 // each callback of the input method, each report to the page and the state of the document at that time.
 void sp_log_info(const char *where, const char *text);
 
+#ifdef __OBJC__
+@class NSString;
+// The frames that called the caller of this function, as `<image> <symbol>` joined by ` < `, at most count of them after the
+// first skip frames above that caller. A record that names who caused a state change carries it, so the cause is read from the
+// record and not searched for.
+NSString *sp_log_callers(unsigned long skip, unsigned long count);
+#endif
+
 // Installs the handlers of the fatal signals and of the uncaught exception of the process. Each writes one record
 // `<time> error native fatal: <signal name>` or `<time> error native fatal: uncaught exception <name>: <reason>` to the standard error, and the
 // process then ends by the signal that it had received or by the abort that follows the exception

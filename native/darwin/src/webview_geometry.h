@@ -113,3 +113,10 @@ void sp_webview_count_objects(void *webview, bool document, sp_page_objects_done
 // Sets the CSS pixel margins and visibility of the declared DOM overlay. values holds five values per item, in the order
 // left, top, right, bottom, visible.
 void webviewSetSurfaceOverlays(void *webview, const double *values, size_t count);
+#ifdef __OBJC__
+@class NSView;
+// Sets the hidden state of a view of a window. AppKit gives the keyboard to the window when a hide leaves the first responder in a
+// hidden view, the hide of another view included; a surface that holds the keyboard for its region takes it back, so the keys typed
+// while it waits reach that region (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+void sp_view_set_hidden(NSView *view, bool hidden);
+#endif

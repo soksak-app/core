@@ -686,8 +686,13 @@ static NSString *responderClassName(id responder) {
     return [responder isKindOfClass:NSResponder.class] ? NSStringFromClass([responder class]) : @"";
 }
 
+// The record names the frames that made the change in callers: key-value observing reports it inside -[NSWindow
+// makeFirstResponder:], so the frames above the observer name the code that moved the keyboard, AppKit's own move at the hide or
+// the removal of a view included. The frames are read only when the gate stores the record.
 static void emitResponderChange(NSInteger windowNumber, id from, id to) {
-    NSDictionary *fields = @{@"window": @(windowNumber), @"from": responderClassName(from), @"to": responderClassName(to)};
+    if (!sp_event_gate(SP_CLASS_INPUT, SP_EVENT_INFO)) return;
+    NSDictionary *fields = @{@"window": @(windowNumber), @"from": responderClassName(from), @"to": responderClassName(to),
+        @"callers": sp_log_callers(1, 12)};
     NSError *error = nil;
     NSData *json = [NSJSONSerialization dataWithJSONObject:fields options:0 error:&error];
     if (!json) {
