@@ -828,12 +828,14 @@ static void checkButtonsReachPage(BOOL focused) {
     // The input method of a focused field passes each event to WebKit later, so the next step waits for the page like a person's hand.
     check(sp_input_pointer(window, 50, 50, 1, 0, 0, 0) == SP_INPUT_DELIVERED, @"the press of a drag is delivered");
     awaitPage(view, @"the page receives the mousedown", @"mousedown", @"(seen.mousedown||[]).length > 0");
-    check((NSEvent.pressedMouseButtons & 1) != 0 && sp_input_physical_buttons() == 0,
-        @"an open press is in the mask of AppKit that WebKit reads and not in the mask of a person");
+    check(sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 1 && NSEvent.pressedMouseButtons == sp_input_physical_buttons(),
+        [NSString stringWithFormat:@"outside a delivery an open press is not in the mask that AppKit answers (pointer %lu, mask %lu, person %lu)",
+            sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN), (unsigned long)NSEvent.pressedMouseButtons, sp_input_physical_buttons()]);
     check(sp_input_pointer(window, 90, 50, 2, 0, 0, 0) == SP_INPUT_DELIVERED, @"the drag is delivered");
     awaitPage(view, @"the page receives the mousemove", @"mousemove", @"(seen.mousemove||[]).length > 0");
     check(sp_input_pointer(window, 90, 50, 3, 0, 0, 0) == SP_INPUT_DELIVERED, @"the release of a drag is delivered");
-    check(NSEvent.pressedMouseButtons == sp_input_physical_buttons(), @"a release takes the button out of the mask");
+    check(sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 0 && NSEvent.pressedMouseButtons == sp_input_physical_buttons(),
+        @"a release ends the press of the pointer");
     awaitPage(view, @"the page receives the mouseup", @"mouseup", @"(seen.mouseup||[]).length > 0");
     NSString *seen = evaluate(view, @"JSON.stringify(seen)");
     fprintf(stdout, "measured %s: mask after the release %lu, page %s\n", mode.UTF8String, (unsigned long)NSEvent.pressedMouseButtons, seen.UTF8String);
@@ -861,8 +863,11 @@ static void checkButtonsByWindow(void) {
     first.contentView = [[[SPPointerTarget alloc] initWithFrame:NSMakeRect(0, 0, 200, 100)] autorelease];
     [first orderBack:nil];
     NSWindow *second = nil;
-    check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 2,
+    check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 2,
         @"a right press has the bit of the right button");
+    check(NSEvent.pressedMouseButtons == sp_input_physical_buttons(), [NSString stringWithFormat:
+        @"outside a delivery AppKit answers the buttons of a person while a synthetic press is open (%lu, person %lu)",
+        (unsigned long)NSEvent.pressedMouseButtons, sp_input_physical_buttons()]);
     @autoreleasepool {
         second = [[NSWindow alloc] initWithContentRect:awayFromPointer(NSMakeSize(200, 100))
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
@@ -872,16 +877,16 @@ static void checkButtonsByWindow(void) {
         check(sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_PRESS_OPEN,
             @"a press of a button whose press the pointer holds in another window answers press open");
         check(sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(second, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED
-            && sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && NSEvent.pressedMouseButtons == 3,
+            && sp_input_pointer(second, 20, 20, 1, 0, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 3,
             @"after the release the pointer presses both buttons in the second window");
         // A window off the screen is not held by the list of windows, so the release lets it go.
         [second orderOut:nil];
         [second release];
     }
-    eventWait(@"the released window ends its open presses", ^BOOL { return NSEvent.pressedMouseButtons == 0; });
-    check(NSEvent.pressedMouseButtons == 0, @"a window that goes away ends its open presses");
+    eventWait(@"the released window ends its open presses", ^BOOL { return sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 0; });
+    check(sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 0, @"a window that goes away ends its open presses");
     check(sp_input_pointer(first, 20, 20, 1, 1, 0, 0) == SP_INPUT_DELIVERED && sp_input_pointer(first, 20, 20, 3, 1, 0, 0) == SP_INPUT_DELIVERED
-        && NSEvent.pressedMouseButtons == 0, @"the pointer presses again after the window went away, and the last release leaves no button");
+        && sp_input_pointer_buttons(SP_INPUT_POINTER_MAIN) == 0, @"the pointer presses again after the window went away, and the last release leaves no button");
 }
 
 // A key of an application that is not really active passes no -[NSApplication sendEvent:], which drops it and leaves no trace, also

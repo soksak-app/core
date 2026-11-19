@@ -57,6 +57,9 @@ mod input_reference_test;
 #[cfg(feature = "diagnostics")]
 #[path = "input_source.rs"]
 mod input_source;
+#[cfg(test)]
+#[path = "input_test.rs"]
+mod input_test;
 #[path = "layout.rs"]
 mod layout;
 #[path = "link.rs"]

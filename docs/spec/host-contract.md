@@ -412,6 +412,8 @@ Items:
 | `endpoint.input.pointer-button-held-message` | The 1007 message reports the `NSEvent.pressedMouseButtons` mask in hexadecimal and the frontmost application's bundle identifier and pid, an application without a bundle identifier by its pid, or that no application is frontmost, in the same text on both hosts. | all |
 | `endpoint.input.pointer-name` | `pointer` defaults to `main`, a name of 1 to 32 characters of `a-z`, `0-9` and `-` is passed through, and an empty name, a name with another character, a longer name and a value that is not a string return -32602. | all |
 | `endpoint.input.pointer-held-message` | The 1011 message names the pointer that holds the press and the state that the press holds, in the same text on both hosts. | all |
+| `endpoint.input.resize-edge-refusal` | A `down` on a resize edge of the window returns -32602 with the message of the native library, which names the point and the edge, unchanged on both hosts. | all |
+| `endpoint.input.interruption` | A `drag` or `up` of a gesture that the press of a person ended returns 1013 with the message of the native library, which names that press and the point where the gesture was released, unchanged on both hosts. | all |
 | `endpoint.input.key-unknown-modifier-rejected` | An unknown key modifier returns -32602. | all |
 | `endpoint.input.key-shift-command-mask` | The shift and command modifiers become the bit mask 9, with the key and phase passed through. | all |
 | `endpoint.input.key-control-option-and-text` | The control and option modifiers become 6, and text is passed through. | all |

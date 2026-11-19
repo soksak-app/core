@@ -1106,6 +1106,10 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		return rpcError(codePressOpen, "pointer %s holds an open press of this button; send up before the next down", input.Pointer)
 	case platform.PointerHeld:
 		return rpcError(codePointerHeld, "%s", PointerHeldMessage(got.held))
+	case platform.PointerResizeEdge:
+		return rpcError(codeInvalidParams, "%s", got.held.Reason)
+	case platform.PointerInterrupted:
+		return rpcError(codeInterrupted, "%s", got.held.Reason)
 	}
 	if pressed != 0 {
 		s.press(pressed)
