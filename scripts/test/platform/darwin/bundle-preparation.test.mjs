@@ -2,7 +2,7 @@
 // output that a reader with the signature of spawnSync returns, so the preparation is checked on any system.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,4 +87,43 @@ test("bundle preparation reads the whole process table while other processes car
   const bundle = join(temporary, "sok-tauriv2.app");
   prepare(bundle, "tauriv2", large);
   assert.ok(existsSync(join(bundle, "Contents", "Info.plist")), "preparation did not write Info.plist");
+});
+
+test("bundle preparation attributes a relative executable path by the working directory of its process", { timeout: 10000 }, () => {
+  // Two checkouts build the same relative bundle path; a process of the other checkout was started with that relative path.
+  // lsof reports the resolved path of a working directory, as the working directory of this process is.
+  const temporary = realpathSync(mkdtempSync(join(tmpdir(), "soksak-bundle-preparation-relative-")));
+  const here = join(temporary, "here");
+  const other = join(temporary, "other");
+  const relative = "target/debug/sok-mygo.app";
+  const command = `${relative}/Contents/MacOS/sok-mygo --config-dir /tmp/check`;
+  // The process table and the working directory of each process, as `lsof -a -p <pid> -d cwd -Fn` reports it.
+  const cwds = { 31: other, 32: here };
+  const reader = (rows, calls) => {
+    const ps = table(rows, calls);
+    return (file, args, options) => {
+      if (file !== "lsof") return ps(file, args, options);
+      calls.push([file, args]);
+      const pid = Number(args[args.indexOf("-p") + 1]);
+      return { status: 0, stdout: `p${pid}\nfcwd\nn${cwds[pid]}\n`, stderr: "" };
+    };
+  };
+  const previous = process.cwd();
+  mkdirSync(here, { recursive: true });
+  process.chdir(here);
+  try {
+    const calls = [];
+    prepareBundle(relative, "mygo", { platform: "darwin", run: reader([[31, command]], calls) });
+    assert.ok(existsSync(join(here, relative, "Contents", "Info.plist")), "the process of the other checkout blocked the preparation");
+    assert.deepEqual(calls.filter(([file]) => file === "lsof"), [["lsof", ["-a", "-p", "31", "-d", "cwd", "-Fn"]]]);
+    assert.throws(() => prepareBundle(relative, "mygo", { platform: "darwin", run: reader([[31, command], [32, command]], []) }),
+      (error) => {
+        assert.match(error.message, /process PID 32 is executing/);
+        assert.ok(error.message.includes(join(here, relative)), error.message);
+        return true;
+      }, "the process of this checkout did not block the preparation");
+  } finally {
+    process.chdir(previous);
+    rmSync(temporary, { recursive: true, force: true });
+  }
 });
