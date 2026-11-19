@@ -129,17 +129,86 @@ ESM only. There is no CommonJS build.
 
 ## The model
 
+The state of a grid is its slicing tree, and the tree is the stored form: the
+lines and the cells are derived from it, and the tree is never read back from
+them.
+
 ```
-xs   vertical grid lines,   normalised 0..1 over the sharing slots
-ys   horizontal grid lines
+state  {root, paidBy}
+root   a node
+node   {card, data?, fixed?, width?, height?}     a card
+       {box, data?, inner}                        a box of the host around a node
+       {cut, kids: [{share, node}, ...]}          a cut along the axis cut ("x" or "y")
 ```
 
-A card is `{ id, c0, c1, r0, r1 }`: the slots it occupies. Moving a line moves
-every card referencing it. A card spanning across the line is unaffected, and
-for that card the line is unreferenced. A later split snaps to it, so splits in
-different rows line up.
+A cut divides the rectangle of its node along its axis into its kids in their
+order, each kid taking `share` of the extent of the cut: the shares are positive
+and sum to 1. The tree is canonical: a cut has at least two kids, and no kid of
+a cut is a cut along the same axis, so a row of five cards is one cut of five
+kids however it was built. A box is a rectangle that the host draws around the
+node `inner`, such as a group card of a workbench, with the data of the host in
+`data`; the layout keeps it one child of its cut, so no operation lays a card
+across it, and `setHeads({id: px})` gives the px that the host draws inside the
+top of a box above its inner node, which the drawn sizes and the minimum count.
+The heads, like the frames, are no part of the state. Every card and every box
+has an id that names it once in the tree.
 
-There is no tree and no grouping.
+The lines are the coordinates at which the rectangles of the nodes start and
+end, from 0 to 1 over the sharing slots of an axis: `xs` the vertical ones and
+`ys` the horizontal ones. Coordinates within a billionth are one line, so the
+rectangles of two cuts that end at one coordinate draw one line, and a card is
+`{id, c0, c1, r0, r1}`, the cells between the lines that its rectangle starts
+and ends at, as the geometry of the rules reads it (R1, R5). Two seams of two
+cuts that stand at one line are still two seams: an operation of the tree reads
+the cut that a card or a box belongs to from the tree, so a line that two rows
+share by chance changes no result. A boundary drag moves a line that the person
+sees, so it moves every seam that stands on that line, and each moves in its own
+cut ([boundaries](#boundaries)).
+
+`paidBy` maps a card to the card that it took its space from: a split records
+the card that it split, and a close gives the space of a card to that card when
+it is a neighbouring kid of the same cut, and otherwise by the fill order (R7).
+
+`Soksak.from(state, options?)`, the constructor, `replace(state)` and
+`checkState(state)` read only this form. A state that holds `xs`, `ys` or
+`cards`, which is the form of the earlier releases, throws `soksak: the state
+holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}`;
+a node of another form throws `soksak: the node <json> is not a card, a box or a
+cut`; a cut with fewer than two kids, a kid cut along the axis of its cut, or
+shares that are not positive or do not sum to 1 within a billionth throw
+`soksak: the cut <path> is not canonical: <reason>`; and an id that names two
+nodes throws `soksak: card <id> is stored twice`. Nothing is converted.
+
+### Why the tree is the state
+
+The earlier state was the lines and the cells, and each operation rebuilt the
+slicing tree from them. Two cuts whose lines stood at one coordinate by chance
+read as one cut, so an operation of one row changed the other: over 32 seeds of
+40 generated operations, the invariants I7, I8 and I10 of
+`docs/plans/layout-sizes.md#invariants` failed 63 times, each on a layout whose
+lines read as more than one tree, and none on another layout
+(`docs/spec/cases/layout/invariants.json`).
+
+Objections and answers:
+
+- *The lines are the contract of the geometry (R1, R5), and a tree is a second
+  description of the same layout.* The tree is the only description that is
+  stored; the lines are computed from it on every change, as the rectangles are
+  computed from the lines, so no reader holds two forms.
+- *A later split in another row that snaps to a line no longer joins the rows.*
+  A split still lands on a line that stands within its snap distance, and the
+  two rows draw one line; the rows stay two cuts, so a later operation of one
+  row does not move the other. A boundary drag of that line moves both, because
+  the person drags the line that is drawn.
+- *A close can no longer give the space of a card to neighbours that line up
+  with it by chance.* Such neighbours are no kids of the cut of the card, so
+  giving them the space would cross the structure of another cut; the close
+  gives it to a kid of its own cut, which R7 always finds, since every cut has
+  at least two kids.
+- *The stored layouts of the earlier releases stop opening.* While the release
+  is 0.0.x no stored format is settled: the reader refuses the earlier form
+  with an error that names the file, and the release states which file the
+  person creates again ([persistence](../../../docs/spec/projects.md#persistence)).
 
 ## A sidebar is a card
 

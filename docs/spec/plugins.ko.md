@@ -282,7 +282,7 @@ plugin 저장소의 catalog 검사(`sok-check events`)는 `runtime.log.<level>(`
 | 필드 | 의미 |
 | --- | --- |
 | `runtime` | 선택. 런타임 모듈 `index.js`를 포함한 애플리케이션 안의 디렉터리. Main page를 stage하려면 필요하고, host에 main page가 없는 애플리케이션에는 없다([스테이징 배치](#스테이징-배치)) |
-| `workspace.grid` | 새 스페이스의 격자선과 카드. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다. 선택 필드인 card `width`(`top`, `bottom` 외의 카드)와 `height`(`top`, `bottom`만)는 point 단위의 유한한 양수이며, 변 이름의 창 sidebar card는 그 크기로 시작하고 생략하면 `sidebarWidth`를 쓰며 `tabs`를 선언하지 않는다 |
+| `workspace.grid` | 새 스페이스의 slicing tree로, layout library의 state 형태 `{root}`다([모델](../../packages/soksak/docs/layout.ko.md#모델)). card node는 `{card, tabs?, width?, height?, fixed?}`다. `tabs`가 있는 카드는 `{ plugin, title }` 항목을 나열한다. 선택 필드인 card `width`(`top`, `bottom` 외의 카드)와 `height`(`top`, `bottom`만)는 point 단위의 유한한 양수이며, 변 이름의 창 sidebar card는 그 크기로 시작하고 생략하면 `sidebarWidth`를 쓰며 `tabs`를 선언하지 않는다 |
 | `workspace.focus` | 새 스페이스에서 포커스할 카드. 탭이 있어야 한다 |
 | `sidebars.sets` | 플러그인 기본값의 선택적 명시적 덮어쓰기: 섹션 세트 `{id, title, sections, layout}`. `layout`은 `list` 또는 `tabs`다 |
 | `sidecars` | 선택. `false`는 런타임이 [사이드카](sidecars.ko.md)를 실행할 수 없다는 뜻이며 브라우저 예제가 그렇다. 기본값은 `true`다 |

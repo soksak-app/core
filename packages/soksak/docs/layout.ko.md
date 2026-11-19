@@ -120,17 +120,76 @@ ESM 전용이다. CommonJS 빌드는 없다.
 
 ## 모델
 
+grid의 state는 그 slicing tree이며, tree가 저장 형태다. line과 cell은 tree에서
+도출되고, tree를 그것들에서 다시 읽지 않는다.
+
 ```
-xs   세로 격자선, 지분을 가진 슬롯 위에서 0..1 로 정규화된다
-ys   가로 격자선
+state  {root, paidBy}
+root   node 하나
+node   {card, data?, fixed?, width?, height?}     카드
+       {box, data?, inner}                        host가 node 둘레에 그리는 box
+       {cut, kids: [{share, node}, ...]}          축 cut("x" 또는 "y")을 따라가는 cut
 ```
 
-카드는 `{ id, c0, c1, r0, r1 }`, 즉 자신이 점유한 슬롯이다. 선을 옮기면 그 선을
-참조하는 모든 카드가 움직인다. 그 선을 가로질러 걸친 카드는 영향을 받지 않고, 그
-카드에게 그 선은 참조되지 않은 선이다. 이후의 쪼개기가 그 선에 붙으므로 서로 다른
-행의 쪼개기가 한 줄로 맞는다.
+cut은 그 node의 사각형을 그 축을 따라 kid의 순서대로 나누며, 각 kid는 cut 범위의
+`share`를 받는다. share는 양수이고 합이 1이다. tree는 canonical이다. cut은 kid를
+둘 이상 가지며, cut의 어떤 kid도 같은 축의 cut이 아니므로, 다섯 카드의 row는 어떻게
+만들었든 다섯 kid를 가진 cut 하나다. box는 host가 node `inner` 둘레에 그리는
+사각형이며(workbench의 group card 등), host의 data를 `data`에 둔다. layout은 box를
+그 cut의 child 하나로 유지하므로 어떤 operation도 카드를 그것을 가로질러 놓지 않으며,
+`setHeads({id: px})`는 host가 box 안쪽 위, inner node 위에 그리는 px를 주고, 그려진
+크기와 최소가 그것을 센다. head는 frame처럼 state의 일부가 아니다. 모든 카드와 box는
+tree에서 한 번만 가리키는 id를 가진다.
 
-트리도 그룹도 없다.
+line은 node의 사각형이 시작하고 끝나는 좌표로, 한 축의 지분을 가진 slot 위에서
+0부터 1까지다. `xs`는 세로 line, `ys`는 가로 line이다. 10억분의 1 안의 좌표는 한
+line이므로, 한 좌표에서 끝나는 두 cut의 사각형은 한 line을 그리고, 카드는 그
+사각형이 시작하고 끝나는 line 사이의 cell `{id, c0, c1, r0, r1}`이며, 규칙의
+geometry가 그것을 읽는다(R1, R5). 한 line에 선 두 cut의 두 seam은 여전히 두
+seam이다. tree의 operation은 카드나 box가 속한 cut을 tree에서 읽으므로, 두 row가
+우연히 함께 쓰는 line은 어떤 결과도 바꾸지 않는다. 경계 drag는 사람이 보는 line을
+옮기므로 그 line에 선 모든 seam을 옮기며, 각 seam은 자기 cut 안에서 움직인다
+([경계](#경계)).
+
+`paidBy`는 카드를 그것이 자리를 받아 온 카드에 대응시킨다. split은 나눈 카드를
+기록하고, close는 그 카드가 같은 cut의 이웃한 kid일 때 카드의 자리를 그 카드에
+주며, 그렇지 않으면 fill 순서를 따른다(R7).
+
+`Soksak.from(state, options?)`, 생성자, `replace(state)`와 `checkState(state)`는 이
+형태만 읽는다. 이전 release의 형태인 `xs`, `ys` 또는 `cards`를 가진 state는
+`soksak: the state holds xs, ys and cards, which is the earlier form; the state is
+{root, paidBy}`를 던지고, 다른 형태의 node는 `soksak: the node <json> is not a card, a
+box or a cut`을, kid가 둘 미만인 cut, 그 cut의 축을 따라가는 kid cut, 양수가 아니거나
+합이 10억분의 1 안에서 1이 아닌 share는 `soksak: the cut <path> is not canonical:
+<reason>`을, 두 node를 가리키는 id는 `soksak: card <id> is stored twice`를 던진다.
+아무것도 변환하지 않는다.
+
+### tree가 state인 이유
+
+이전 state는 line과 cell이었고, 각 operation이 그것들에서 slicing tree를 다시
+만들었다. line이 우연히 한 좌표에 선 두 cut은 한 cut으로 읽혔으므로, 한 row의
+operation이 다른 row를 바꿨다. 생성한 operation 40개의 seed 32개에서
+`docs/plans/layout-sizes.ko.md#불변식`의 불변식 I7, I8, I10이 63번 실패했고, 모두
+line이 둘 이상의 tree로 읽히는 layout에서였으며 다른 layout에서는 없었다
+(`docs/spec/cases/layout/invariants.json`).
+
+반론과 답:
+
+- *line은 geometry의 contract(R1, R5)이고, tree는 같은 layout의 두 번째 기술이다.*
+  저장되는 기술은 tree뿐이다. line은 사각형이 line에서 계산되듯 변경마다 tree에서
+  계산되므로, 어떤 reader도 두 형태를 갖지 않는다.
+- *다른 row에서 line에 붙는 이후의 split이 더 이상 row를 잇지 않는다.* split은 여전히
+  snap 거리 안의 line에 놓이고 두 row는 한 line을 그린다. row는 두 cut으로 남으므로
+  한 row의 이후 operation은 다른 row를 옮기지 않는다. 그 line의 경계 drag는 사람이
+  그려진 line을 끌므로 둘 다 옮긴다.
+- *close가 더 이상 카드의 자리를 우연히 줄이 맞는 이웃에게 줄 수 없다.* 그런 이웃은
+  카드의 cut의 kid가 아니므로 그들에게 자리를 주면 다른 cut의 구조를 가로지른다.
+  close는 자리를 자기 cut의 kid에게 주며, 모든 cut이 kid를 둘 이상 가지므로 R7은
+  언제나 그것을 찾는다.
+- *이전 release의 저장된 layout이 열리지 않는다.* release가 0.0.x인 동안 어떤 저장
+  형태도 정해지지 않았다. reader는 이전 형태를 file을 밝히는 error로 거부하고,
+  release는 사람이 어떤 file을 다시 만드는지 밝힌다
+  ([persistence](../../../docs/spec/projects.ko.md#저장)).
 
 ## 사이드바도 카드다
 
