@@ -414,7 +414,7 @@ const FEATURE_LINKS = [
   {
     id: "F956",
     implementation: [
-      { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX+inset, shiftY+inset" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX-shareLeft+inset, shiftY-shareTop+inset" },
       { file: "packages/workbench/text-size.js", symbol: "export function pressesFrame(target)" },
       { file: "native/darwin/src/host_api_input.m", symbol: "NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;" },
     ],
