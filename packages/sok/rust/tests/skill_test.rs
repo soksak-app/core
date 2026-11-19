@@ -243,3 +243,40 @@ fn skill_install_reports_a_failed_write() {
         Vec::<String>::new()
     );
 }
+
+/// The skill and the instructions of the MCP server name the plan and the apply of an arrangement and the move of a
+/// tab beside the other layout operations, and state that the layout is read again and compared with the request
+/// after a change (docs/spec/cli.md#agent-skill).
+#[test]
+fn the_skill_and_the_instructions_name_the_arrangement_commands() {
+    let skill = soksak_sok::agents::SKILL;
+    let server: serde_json::Value =
+        serde_json::from_str(soksak_sok::agents::MCP).expect("mcp.json");
+    let instructions = server["instructions"].as_str().expect("instructions");
+    for command in [
+        "core.layout.plan",
+        "core.layout.apply",
+        "core.layout.move",
+        "core.layout.open",
+        "core.layout.select",
+        "core.layout.close",
+    ] {
+        assert!(
+            skill.contains(&format!("`{command} ")),
+            "the skill does not name {command}"
+        );
+        assert!(
+            instructions.contains(command),
+            "the instructions of the MCP server do not name {command}"
+        );
+    }
+    assert!(
+        skill.contains("read `layout` again and compare the `frame` of each card with the request"),
+        "the skill does not state the comparison of the frames with the request"
+    );
+    assert!(
+        instructions
+            .contains("read the frames of the layout again and compare them with the request"),
+        "the instructions of the MCP server do not state the comparison of the frames with the request"
+    );
+}

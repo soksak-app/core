@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -209,5 +210,32 @@ func TestSkillInstallReportsAFailedWrite(t *testing.T) {
 	}
 	if names := folderNames(t, filepath.Dir(written)); fmt.Sprint(names) != "[SKILL.md]" {
 		t.Fatalf("the skill folder holds %v", names)
+	}
+}
+
+// TestTheSkillAndTheInstructionsNameTheArrangementCommands checks that the skill and the instructions of the MCP server name the plan
+// and the apply of an arrangement and the move of a tab beside the other layout operations, and state that the layout is read again and
+// compared with the request after a change (docs/spec/cli.md#agent-skill).
+func TestTheSkillAndTheInstructionsNameTheArrangementCommands(t *testing.T) {
+	skill := skillSource(t)
+	var server struct {
+		Instructions string `json:"instructions"`
+	}
+	if err := json.Unmarshal([]byte(fileText(t, repositoryFile(t, "packages/sok/go/src/agents/mcp.json"))), &server); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []string{"core.layout.plan", "core.layout.apply", "core.layout.move", "core.layout.open", "core.layout.select", "core.layout.close"} {
+		if !strings.Contains(skill, "`"+command+" ") {
+			t.Errorf("the skill does not name %s", command)
+		}
+		if !strings.Contains(server.Instructions, command) {
+			t.Errorf("the instructions of the MCP server do not name %s", command)
+		}
+	}
+	if !strings.Contains(skill, "read `layout` again and compare the `frame` of each card with the request") {
+		t.Error("the skill does not state the comparison of the frames with the request")
+	}
+	if !strings.Contains(server.Instructions, "read the frames of the layout again and compare them with the request") {
+		t.Error("the instructions of the MCP server do not state the comparison of the frames with the request")
 	}
 }

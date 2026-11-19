@@ -24,11 +24,29 @@ soksak is a desktop application whose windows hold a layout of cards with tabs; 
 
 ## Acting on a layout
 
-The description holds the `layout` of the active space as a tree: inner nodes are splits with a `direction` and the `size` of each child, and the leaves are cards. A card holds its tabs in tab order with the active one marked; a tab is a surface with its plugin, its `params` (the opened resource, such as a path or an address) and its title, and its identifier is the identifier of its surface, whose rows are its exposure. `agent` names the agent's own surface, space and card. A split has no identifier.
+The description holds the `layout` of the active space as a tree: inner nodes are splits with a `direction` (`row` from left to right, `column` from top to bottom), the `size` of each child and the `frame` that holds the children, and the leaves are cards with their `frame` in window points. A card holds its tabs in tab order with the active one marked; a tab is a surface with its plugin, its `params` (the opened resource, such as a path or an address) and its title, and its identifier is the identifier of its surface, whose rows are its exposure. `agent` names the agent's own surface, space and card. A split has no identifier.
 
-Every request about the arrangement of a window is a composition of three idempotent operations. A target is the identifier of a card or a tab, or `current` (the focused card, the active tab of that card).
+### Planning a whole arrangement
+
+A request that names an arrangement of several cards, such as "open five terminals" or "five terminals in each of two rows, the browser kept as a tab", is planned first and then built in one command.
+
+- `core.layout.plan {tree, close?}` or `{count, plugin, params?, close?}` changes nothing and answers `{feasible, tree, cards, plane, minimum, kept, closed, reason, needed, proposal}`. A tree is a split `{direction, children}`, whose two or more children take equal shares and are no split of the same direction, or a card `{tabs, active?}`, whose entries are an existing tab `{tab}` or a tab `{plugin, params?}`. `count` stands for the most even grid of `count` cards of `plugin` that fits the plane. `cards` lists the planned cards in reading order with their `frame`, and `kept` the tabs that the tree does not hold, which stay as inactive tabs of the first card; with `close: true` they close instead and `closed` lists them.
+- An entry `{plugin, params}` takes an existing tab of that plugin with equal `params` before it opens a new one, so an existing tab moves with its surface and never closes to move.
+- When `feasible` is true, run `core.layout.apply {tree, close?}` with the `tree` of the plan. It builds the plan, answers `{tree, cards, kept, closed}` with every tab by its identifier, and a repetition changes nothing.
+- When `feasible` is false, apply nothing: report `reason` to the person, with `needed` (the plane that the tree needs) and `proposal` (the nearest arrangement that fits, `{tree, cards}`), and apply the proposal only when the person agrees to it.
+- After an apply, read `layout` again and compare the `frame` of each card with the request: the number of rows and of cards in each row, and equal widths within a row.
+
+Examples, each after a description:
+
+- Open five terminals: `core.layout.plan {count: 5, plugin: <process plugin>}`; apply its `tree`.
+- Five terminals in each of two rows with the browser kept as a tab: `core.layout.plan {tree: {direction: "column", children: [R, R]}}` with `R` = `{direction: "row", children: [five cards {tabs: [{plugin: <process plugin>}]}]}`; the browser tab stays in the first card; apply the `tree` of the plan.
+
+### Changing one card or tab
+
+Every other request about the arrangement of a window is a composition of four idempotent operations. A target is the identifier of a card or a tab, or `current` (the focused card, the active tab of that card).
 
 - `core.layout.open {card, plugin, params?, side?}` or `{card, path, side?}` returns `{card, tab}`. Without `side` it selects the first tab of `plugin` with equal `params` in `card`, or adds one. With `side` (`left`, `right`, `top`, `bottom`) it uses the neighbour of `card` toward `side`, or splits `card` toward `side` into a new card with the tab. `path` chooses the plugin that opens the extension of the path.
+- `core.layout.move {tab, card, side?}` returns `{card, tab}`: it moves an existing tab with its surface into `card`, or with `side` into the neighbour toward `side` or a new card there. Move a tab instead of closing it and opening another.
 - `core.layout.select {tab}` returns `{card, tab}`: it makes the tab active and focuses its card.
 - `core.layout.close {tab}` returns `{closed}`. A tab with unsaved changes opens the question of its close control and answers `closed: false`; the person answers it.
 
@@ -36,6 +54,7 @@ A repeated operation with the returned identifiers gives the same identifiers an
 
 - Split the card on the right of your card and show a process session below and an address above: find the card `R` right of `agent.card`; `core.layout.open {card: R, side: "bottom", plugin: <process plugin>}`; `core.layout.open {card: R, plugin: <address plugin>, params: {<address parameter>: "http://localhost:3366"}}`.
 - Open a file as a new tab in the card of a process session: find the card `C` whose tabs hold the process plugin; `core.layout.open {card: C, path: "aaa.html"}`.
+- Put the browser tab `T` into the card `C`: `core.layout.move {tab: T, card: C}`.
 - Switch to a tab: find the tab `T` in `layout`; `core.layout.select {tab: T}`.
 
 After a step, find the commands of the plugin of a tab with `exposure_search` or `window_describe {surface}` and run them with `command_run {surface}`. A request can name any window and any surface.
@@ -54,7 +73,7 @@ A tab that runs an agent CLI with a role is one `core.layout.open` of the plugin
 
 ## Groups
 
-A group card is a card whose body holds a plane of its own with two or more cards, below a header with the name of the group. In `layout` it is a node with `group: {name, level, leader, root}`, where `root` is the tree of its plane, and `layout.groups` lists every group card once with its name and the identifiers of its members, so find a group by its name there; the cards of the plane are content cards and group cards, and every operation above takes a card of any plane. A split never creates a group: a split puts its new card into the plane of the card that it splits.
+A group card is a card whose body holds a plane of its own with two or more cards, below a header with the name of the group. Rows and columns of cards need no group; create a group only when the person asks for one. In `layout` it is a node with `group: {name, level, leader, root}`, where `root` is the tree of its plane, and `layout.groups` lists every group card once with its name and the identifiers of its members, so find a group by its name there; the cards of the plane are content cards and group cards, and every operation above takes a card of any plane. A split never creates a group: a split puts its new card into the plane of the card that it splits.
 
 - `core.group.create {card, side, plugin, params?}` returns `{group, card, tab}`: it turns `card` into a group card that holds `card` and a new card with a tab of `plugin` toward `side`. Run on a card that is already inside a group, it nests a new group inside that plane, so run it once per group. A repetition with the same parameters changes nothing only while the group holds exactly those two cards.
 - Add a card to the plane of a group with `core.layout.open {card: <a card of the group>, side, plugin}`, which looks for the neighbour toward `side` only among the cards of that plane and splits that card inside the plane when it has none there, also beside a card outside the group on the same line, or with `core.card.add-tab {card: <group>, plugin}`, which adds a content card at the right edge of the plane. `core.layout.open {card: <group>, plugin}` selects the first tab of `plugin` with equal `params` in the plane and adds a card only when none exists.
