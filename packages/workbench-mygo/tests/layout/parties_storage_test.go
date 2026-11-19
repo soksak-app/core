@@ -77,6 +77,21 @@ func TestSpacePartiesOfAnotherFormAreRefused(t *testing.T) {
 	}
 }
 
+// The refusal of a party that breaks a rule carries the storage error text of docs/spec/parties.md#storage and no rule reason.
+func TestSpacePartiesBreakingARuleNameOnlyTheStorageText(t *testing.T) {
+	cases := map[string]string{
+		"fewer than 2 cards": `[{"id":"p1","cards":["a"],"leader":null,"color":"#112233","leaderColor":null}]`,
+		"an invalid color":   `[{"id":"p1","cards":["a","b"],"leader":null,"color":"red","leaderColor":null}]`,
+	}
+	for name, text := range cases {
+		_, err := layout.ReadStoredParties(spaceWith(text), "root-1", "s1", []string{"a", "b"})
+		want := "projects.json: project root-1, space s1: parties " + text
+		if err == nil || err.Error() != want {
+			t.Fatalf("%s: error = %v, want exactly %q", name, err, want)
+		}
+	}
+}
+
 func TestSpacePartiesBreakingARuleAreRefused(t *testing.T) {
 	cases := map[string]string{
 		"fewer than 2 cards":       `[{"id":"p1","cards":["a"],"leader":null,"color":"#112233","leaderColor":null}]`,
