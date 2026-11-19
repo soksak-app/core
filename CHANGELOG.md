@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-47 (group header inside its frame, mygo): mygo draws the header of a group card inside the border of its frame, as the page does and as the header of a content card stands, so `core.group.header` and `core.group.name` have the same rectangles on every host. Verification: the mygo test failed on the unchanged code and passes.
 - F937-46 (full screen menu item, Wails host): the View menu of the Wails host holds the toggle full screen item of the framework with `ctrl+cmd+f`, as the other hosts do, instead of an item titled `Fullscreen` without a shortcut that only enters full screen. Verification: the host menu test failed on the unchanged code and passes.
 - F937-45 (order of `exposes` in `core.surfaces`, page): the page lists the entries that a surface registered in sorted order, as mygo does, so the timing of the registrations does not decide the order. Verification: the page test failed on the unchanged code and passes.
 - F937-44 (cards hidden by fullscreen in `core.grid`, page): the page reports `acts` and `pane` null for a card that a fullscreen card hides and counts the panes of the shown cards without it, as mygo does (`docs/spec/example-model.md#card-fullscreen`). Verification: the page test failed on the unchanged code and passes.

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-47 (frame 안의 group header, mygo): mygo는 group card의 header를 page처럼, 그리고 content card의 header처럼 frame의 border 안에 그리므로, `core.group.header`와 `core.group.name`이 모든 host에서 같은 사각형을 가진다. 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-46 (전체 화면 menu 항목, Wails host): Wails host의 보기 menu는 전체 화면에 들어가기만 하고 단축키가 없는 `Fullscreen` 항목 대신, 다른 host처럼 `ctrl+cmd+f`를 가진 framework의 전체 화면 토글 항목을 담는다. 검증: host menu test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-45 (`core.surfaces`의 `exposes` 순서, page): page는 표면이 등록한 항목을 mygo처럼 정렬된 순서로 나열하므로, 등록의 시점이 순서를 정하지 않는다. 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-44 (`core.grid`에서 fullscreen이 숨긴 card, page): page는 fullscreen card가 숨긴 card의 `acts`와 `pane`을 mygo처럼 null로 알리고 보이는 card의 pane을 그것 없이 센다(`docs/spec/example-model.md#card-fullscreen`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
