@@ -54,7 +54,8 @@ export function checkChecklistTranslations(english, korean) {
   const first = checklist(english, "docs/features.md", errors);
   const second = checklist(korean, "docs/features.ko.md", errors);
   if (!first.length || !second.length) errors.push("canonical feature checklist is missing");
-  if (JSON.stringify(first) !== JSON.stringify(second)) errors.push("checklist translations differ in identifiers, ordering, nesting, or state");
+  const shape = (entries) => entries.map(({ id, indent, state }) => ({ id, indent, state }));
+  if (JSON.stringify(shape(first)) !== JSON.stringify(shape(second))) errors.push("checklist translations differ in identifiers, ordering, nesting, or state");
   return errors;
 }
 
