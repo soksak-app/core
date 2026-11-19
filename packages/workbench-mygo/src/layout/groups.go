@@ -487,6 +487,14 @@ func (t *GroupTree) keepLines() {
 	}
 	clear(t.grid.paidBy)
 	t.grid.Tidy()
+	// Two lines at one coordinate, which a space without groups can hold, become one line.
+	for _, axis := range axes {
+		for k := len(t.grid.arr(axis)) - 2; k >= 1; k-- {
+			if a := t.grid.arr(axis); k < len(a)-1 && math.Abs(a[k]-a[k-1]) < eps {
+				t.grid.MergeCoincident(axis, k)
+			}
+		}
+	}
 }
 
 // issue returns the next card id of the space.
