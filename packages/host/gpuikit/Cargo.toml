@@ -59,7 +59,7 @@ raw-window-handle = "0.6"
 
 [dev-dependencies]
 tempfile = "3"
-soksak-host = { path = "../rust" }
+soksak-host = { path = "../rust", features = ["test-seam"] }
 objc2-app-kit = { version = "0.3", features = ["NSEvent"] }
 
 [lints]

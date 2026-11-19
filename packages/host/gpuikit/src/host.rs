@@ -235,17 +235,15 @@ pub fn run(frontend: Arc<dyn Assets>) {
         });
         platform::register_deep_links(startup_app.clone());
         // A platform that cannot provide this step ends with status 1 before it opens a window.
-        // default: a failed step ended the process inside exit_on_failure, so the answer states its success.
-        let _ = soksak_host::startup::exit_on_failure(soksak_host::start_endpoint(&startup_app));
+        report_setup(soksak_host::startup::exit_on_failure(soksak_host::start_endpoint(&startup_app)));
         // The main window of the configuration comes from the framework: the application of GPUI has no
         // configuration that declares it, so the adapter creates it before the setup of the library.
-        let _ = soksak_host::startup::exit_on_failure(
+        report_setup(soksak_host::startup::exit_on_failure(
             framework::create_main_window(&startup_app, cx)
                 .map(|_| ())
                 .map_err(|error| Box::<dyn std::error::Error>::from(error)),
-        );
-        // default: a failed step ended the process inside exit_on_failure, so the answer states its success.
-        let _ = soksak_host::startup::exit_on_failure(soksak_host::setup(
+        ));
+        report_setup(soksak_host::startup::exit_on_failure(soksak_host::setup(
             &startup_app,
             Setup {
                 frontend,
@@ -254,11 +252,21 @@ pub fn run(frontend: Arc<dyn Assets>) {
                 // and every link that arrives while it runs.
                 deep_links: Box::new(|_host| {}),
             },
-        ));
+        )));
         soksak_host::run_event(&startup_app, RunEvent::Ready);
     });
+}
+
+/// Receives the setup result of a step after exit_on_failure returned it. exit_on_failure ends the process on a failure, so only
+/// a returned failure reaches this function.
+fn report_setup(result: Result<(), Box<dyn std::error::Error>>) {
+    drop(result);
 }
 
 #[cfg(test)]
 #[path = "../tests/page_files/page_files_test.rs"]
 mod page_files_test;
+
+#[cfg(test)]
+#[path = "../tests/startup/startup_test.rs"]
+mod startup_test;

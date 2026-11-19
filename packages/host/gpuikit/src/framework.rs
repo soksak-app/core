@@ -234,7 +234,7 @@ fn open_window(
                 &options.label,
                 options.background,
             );
-            let window = crate::platform::ns_window_of(window);
+            let window = crate::platform::ns_window_of(window).unwrap_or(std::ptr::null_mut());
             (view, window)
         })
         .map_err(|_| port::Error::from("the window ended before it opened"))?;

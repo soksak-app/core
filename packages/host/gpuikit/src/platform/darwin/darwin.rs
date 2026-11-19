@@ -35,20 +35,25 @@ fn ns_window(handle: *mut c_void) -> &'static NSWindow {
 }
 
 /// The raw NSWindow of a GPUI window, whose content view holds the web views of the host.
-pub(crate) fn ns_window_of(window: &gpui::Window) -> *mut c_void {
+pub(crate) fn ns_window_of(window: &gpui::Window) -> Result<*mut c_void, String> {
     unsafe {
         let handle =
             HasWindowHandle::window_handle(window).expect("the GPUI window has a raw handle");
         let view = handle.as_raw();
         let RawWindowHandle::AppKit(handle) = view else {
-            return std::ptr::null_mut();
+            return Ok(std::ptr::null_mut());
         };
         let view: &objc2_app_kit::NSView = &*handle.ns_view.as_ptr().cast();
-        let window: Option<Retained<NSWindow>> = msg_send![view, window];
-        window
-            .map(|window| Retained::into_raw(window) as *mut c_void)
-            .unwrap_or(std::ptr::null_mut())
+        window_pointer(view)
     }
+}
+
+/// The raw NSWindow of a view. Red state: a view without a window still yields a null pointer.
+fn window_pointer(view: &objc2_app_kit::NSView) -> Result<*mut c_void, String> {
+    let window: Option<Retained<NSWindow>> = unsafe { msg_send![view, window] };
+    Ok(window
+        .map(|window| Retained::into_raw(window) as *mut c_void)
+        .unwrap_or(std::ptr::null_mut()))
 }
 
 // The window operations of the port.
@@ -235,7 +240,7 @@ pub(crate) fn main_webview(
     label: &str,
     background: port::Color,
 ) -> Result<*mut WebView, String> {
-    let ns_window = ns_window_of(window);
+    let ns_window = ns_window_of(window).unwrap_or(std::ptr::null_mut());
     let parent = ParentView(content_view(ns_window)?);
     let view = build_webview(parent, app, label, None, Some(background), true, None)?;
     let platform = soksak_host::platform::current()?;
@@ -570,3 +575,4 @@ pub(crate) fn home_dir() -> Result<std::path::PathBuf, String> {
         .map(std::path::PathBuf::from)
         .ok_or_else(|| "the home directory of the user is not set".to_string())
 }
+
