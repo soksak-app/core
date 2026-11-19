@@ -978,7 +978,7 @@ test("shareLines keeps every line index and gives each slot its corridor, its ex
 
   const held = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards(200) }, { width: 1000, height: 600, gap: 10 });
   held.shareLines("x");
-  assert.equal(held.rect("b").w, 200, "a slot that a card with a size in px holds keeps that size");
+  assert.ok(Math.abs(held.rect("b").w - 200) < 1e-9, `a slot that a card with a size in px holds keeps that size: ${held.rect("b").w}`);
   assert.ok(Math.abs(held.rect("a").w - held.rect("c").w) < 1e-9, "the other slots share the rest equally");
 
   assert.throws(() => grid.shareLines("z"), { message: "unknown axis z" });

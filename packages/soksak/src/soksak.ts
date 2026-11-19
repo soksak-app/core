@@ -1165,6 +1165,62 @@ export class Soksak {
   }
 
   /**
+   * Keeps every line index of `axis` and gives every slot that no card with a
+   * size in px holds its corridor, `extra[slot]` px and an equal share of the
+   * free length: the extent less the corridors, the held sizes and the extras.
+   * A slot that a card with a size in px holds keeps its span. A plane too
+   * small for its corridors shares nothing. Throws for an unknown axis, an
+   * extra list of another length than the slots, and an axis whose shared
+   * slots take no length.
+   */
+  shareLines(axis: Axis, extra: readonly number[] = []): void {
+    if (this.noAxis(axis)) throw new Error(`unknown axis ${String(axis)}`);
+    const plane = this.plane;
+    const a = this.arr(axis);
+    const count = a.length - 1;
+    // default: no extra list gives no slot an extra.
+    const extras = extra.length === 0 ? new Array<number>(count).fill(0) : extra;
+    if (extras.length !== count) {
+      throw new Error(`shareLines takes one extra for each of the ${count} slots of ${axis}, found ${extras.length}`);
+    }
+    const read = linesRead(plane, axis);
+    const held = heldSizes(plane, axis);
+    const want = new Array<number>(count).fill(0);
+    let free = this.size(axis);
+    let shared = 0;
+    let sharedSpan = 0;
+    for (let i = 0; i < count; i++) {
+      want[i] = corridorOf(plane, axis, i, read);
+      free -= want[i];
+      if (held[i] !== null) {
+        free -= held[i] as number;
+        continue;
+      }
+      want[i] += extras[i];
+      free -= extras[i];
+      shared++;
+      sharedSpan += a[i + 1] - a[i];
+    }
+    if (shared === 0) return;
+    free = Math.max(0, free);
+    let total = 0;
+    for (let i = 0; i < count; i++) {
+      if (held[i] !== null) continue;
+      want[i] += free / shared;
+      total += want[i];
+    }
+    if (total <= 0) throw new Error(`the ${axis} axis of the plane has no length`);
+    const next = new Array<number>(count + 1).fill(0);
+    for (let i = 0; i < count; i++) {
+      const span = held[i] !== null ? a[i + 1] - a[i] : (sharedSpan * want[i]) / total;
+      next[i + 1] = next[i] + span;
+    }
+    next[count] = 1;
+    const state = this.toJSON();
+    this.replace(axis === 'x' ? { ...state, xs: next } : { ...state, ys: next });
+  }
+
+  /**
    * Merges a line onto a neighbour at the same coordinate.
    *
    * Returns false when a card spans both lines, which would leave it zero size.

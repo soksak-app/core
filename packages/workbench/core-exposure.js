@@ -755,13 +755,10 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // The setting cardArrange chooses the operation: resize keeps the layout and gives every card a fair share
   // (packages/soksak/docs/layout.md#balancing), even replaces it with an equal grid (packages/soksak/docs/layout.md#even-arrangement).
   registry.command("core.layout.balance", () => {
-    const grid = currentGrid();
-    if (!grid) throw new Error("the window shows no layout");
-    if (value("cardArrange") === "even") {
-      if (!grid.arrange("even")) throw new Error("no equal grid keeps every card at its minimum size");
-    } else if (!grid.balance()) {
-      throw new Error("the layout is not slicing");
-    }
+    if (!currentGrid()) throw new Error("the window shows no layout");
+    // The group tree balances a space with groups by equal shares, which keep every group card on its rectangle
+    // (docs/spec/groups.md#card-commands-on-a-group-card).
+    currentTree().balance(value("cardArrange") === "even");
     settle();
   });
 

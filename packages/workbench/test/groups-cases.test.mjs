@@ -56,8 +56,9 @@ function call(tree, grid, { call: name, args = {} }) {
     case "leader": return { card: args.card, group: tree.setLeader(args.card) };
     case "move": tree.move(args.card, args.target, args.side); return { card: args.card };
     case "grid": {
+      // The cards of the grid with their place and whether they are fixed, as the cases write them.
       const { xs, ys, cards } = grid.toJSON();
-      return { xs, ys, cards };
+      return { xs, ys, cards: cards.map(({ id, c0, c1, r0, r1, fixed }) => ({ id, c0, c1, r0, r1, fixed })) };
     }
     case "stored": {
       const { groups, leader, lastCard } = tree.stored();
@@ -90,6 +91,8 @@ for (const kase of file.cases) {
         return;
       }
       const value = call(tree, grid, structuredClone(step));
+      // A step without returns, such as balance, answers no value.
+      if (!Object.hasOwn(step, "returns")) return;
       const found = difference(JSON.parse(JSON.stringify(value)), step.returns, where);
       assert.equal(found, null, found);
     });

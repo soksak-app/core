@@ -341,6 +341,16 @@ export declare class Soksak {
      */
     private middleOf;
     /**
+     * Keeps every line index of `axis` and gives every slot that no card with a
+     * size in px holds its corridor, `extra[slot]` px and an equal share of the
+     * free length: the extent less the corridors, the held sizes and the extras.
+     * A slot that a card with a size in px holds keeps its span. A plane too
+     * small for its corridors shares nothing. Throws for an unknown axis, an
+     * extra list of another length than the slots, and an axis whose shared
+     * slots take no length.
+     */
+    shareLines(axis: Axis, extra?: readonly number[]): void;
+    /**
      * Merges a line onto a neighbour at the same coordinate.
      *
      * Returns false when a card spans both lines, which would leave it zero size.

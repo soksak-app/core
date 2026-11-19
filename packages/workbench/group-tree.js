@@ -436,24 +436,48 @@ export class GroupTree {
   }
 
   /**
-   * Balances the grid; it keeps the arrangement, so every group card keeps its rectangle. A balance that draws a content card that it
-   * changes below its minimum, or that breaks the form of the space, is refused and changes nothing.
+   * The balance of the grid (docs/spec/groups.md#card-commands-on-a-group-card): in a space without groups the balance of the layout
+   * library, or with arrange its even arrangement (cardArrange even); in a space with groups every line index stays and every slot of
+   * each axis that no card with a size in px holds takes an equal share of the free length, a slot on the y axis with the heads of the
+   * group cards that start on its upper line on top of its share.
    */
-  balance() {
+  share(arrange) {
+    if (this.groups.length === 0) {
+      if (arrange && !this.grid.arrange("even")) throw new Error("the layout cannot balance: no equal grid keeps every card at its minimum size");
+      if (!arrange && !this.grid.balance()) throw new Error("the layout cannot balance: the grid is not a slicing arrangement");
+      return;
+    }
+    const heads = new Array(this.grid.lines("y").length - 1).fill(0);
+    for (const card of this.grid.cards) {
+      const found = this.find(card.id);
+      if (found) heads[card.r0] = Math.max(heads[card.r0], this.headersAbove(found.path, card.r0) * this.headStep());
+    }
+    try {
+      this.grid.shareLines("x");
+      this.grid.shareLines("y", heads);
+    } catch (error) {
+      throw new Error(`the layout cannot balance: ${error.message}`);
+    }
+  }
+
+  /**
+   * Balances the grid with share, arrange as there, and keeps the result only when no content card that it changed is drawn below its
+   * minimum (docs/spec/groups.md#card-commands-on-a-group-card).
+   */
+  balance(arrange = false) {
     const before = this.drawnCards();
     const kept = this.snapshot();
-    const refused = (why) => {
+    try {
+      this.share(arrange);
+    } catch (error) {
       this.restore(kept);
-      return new Error(`the layout cannot balance: ${why}`);
-    };
-    if (!this.grid.balance()) throw refused("the grid is not a slicing arrangement");
-    this.keepForm();
-    const broken = this.nodes().find((node) => !this.covers(node));
-    if (broken) throw refused(`group ${broken.card} would not cover one rectangle`);
+      throw error;
+    }
     const below = this.belowMinimum(before);
-    if (below) throw refused(this.minimumText(below));
-    const breach = this.formBreach();
-    if (breach) throw refused(this.breachText(breach));
+    if (below) {
+      this.restore(kept);
+      throw new Error(`the layout cannot balance: ${this.minimumText(below)}`);
+    }
   }
 
   /** Runs change and puts everything back, and returns what change returned or throws what it threw. */
@@ -587,13 +611,11 @@ export class GroupTree {
    * a content card that it changed below its minimum (docs/spec/groups.md#split-setting).
    */
   balanceEven(id, side, before) {
-    let balanced;
     try {
-      balanced = this.grid.balance();
+      this.share(false);
     } catch (error) {
       throw new Error(`card ${id} cannot split toward ${side}: cardSplit even cannot balance the grid: ${error.message}`);
     }
-    if (!balanced) throw new Error(`card ${id} cannot split toward ${side}: cardSplit even cannot balance the grid: the grid is not a slicing arrangement`);
     const below = this.belowMinimum(before);
     if (below) {
       throw new Error(`card ${id} cannot split toward ${side}: cardSplit even would draw card ${below.id} at ${sizeText(below.rect.w, below.rect.h)}, ` +
