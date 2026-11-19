@@ -2431,9 +2431,11 @@ export async function closeInLayout({ tab: tabId }) {
 export function layoutDescription() {
   if (!grid) return null;
   const origin = plane.getBoundingClientRect();
+  // The drawn rectangles: a card below the headers of its group cards is drawn below them (docs/spec/groups.md#drawn-rectangles), and a
+  // fullscreen group card shows the fullscreen layout.
+  const rects = drawnCardRects();
   const root = layoutTree(contentCards(), grid.lines("x"), grid.lines("y"), (card, size) => {
-    // The drawn rectangle: a card below the headers of its group cards is drawn below them (docs/spec/groups.md#drawn-rectangles).
-    const rect = tree.rect(card.id);
+    const rect = rects.get(card.id);
     const parent = tree.parentOf(card.id);
     return {
       card: card.id, size,
@@ -2448,7 +2450,7 @@ export function layoutDescription() {
     };
   });
   const describe = (node) => {
-    const rect = tree.rect(node.card);
+    const rect = rects.get(node.card);
     return {
       card: node.card, name: node.name, level: node.level, leader: node.leader, leading: tree.leaderOf(tree.parentOf(node.card)) === node.card,
       frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },

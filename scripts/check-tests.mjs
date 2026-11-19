@@ -14092,6 +14092,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu group opens the plugin menu whose item groups the card with a new card toward its longer axis" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "core.card.menu on a group card opens the menu of its header, whose items act on the group card" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "core.grid reports the drawn rectangle of each card and group card, and the fullscreen layout of a group card" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "the layout of the window snapshot gives each card and group card the frame that the plane draws" },
     ],
     expected: "The group tree of the page workbench holds the groups of a space beside its one grid and passes every case of the group layout cases, the page reads, writes and issues the cards of the group tree of a stored space layout, and its registry runs the group commands, the card query of any level, core.layout.open on a group card, the drop resolution on group cards and the group members of core.layout and core.grid.",
     levels: ["unit"],
