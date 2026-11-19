@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// The geometry of a party in the Shell, read from the statuses core.parties and core.rail. The stroke of an outline is not read here:
-// a unit test has no painter that records strokes, so the stroke is verified by the window check F908-9.
+// The geometry of a party in the Shell, read from the statuses core.parties and core.rail. The stroke of an outline is read from the
+// pixels of the frame by party_drawing_test.go.
 
 type partyOutlineRead struct {
 	ID      string         `json:"id"`
@@ -67,9 +67,8 @@ func tabAndSidebarShell(t *testing.T) *shellFixture {
 }
 
 // TestPartyOutlineNeverCoincidesWithTheRail checks the rule of docs/spec/parties.md#drawing: the outline of a party and the rail never
-// coincide, so no vertex of the party outline lies on a segment of the rail outline. The stroke is not read here: a unit test has no
-// painter that records strokes, and the leader border is not in any status, so the leader border rule is verified by the window check
-// F908-9 only.
+// coincide, so no vertex of the party outline lies on a segment of the rail outline. The stroke and the leader border are read from the
+// pixels of the frame by party_drawing_test.go.
 func TestPartyOutlineNeverCoincidesWithTheRail(t *testing.T) {
 	f := tabAndSidebarShell(t)
 	left := f.tabbedCards()[0]

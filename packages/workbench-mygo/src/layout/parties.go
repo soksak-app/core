@@ -677,16 +677,116 @@ func (p *Parties) Outline(g *Grid, partyID string) ([][]Point, error) {
 	if target == nil {
 		return nil, fmt.Errorf("unknown party %s", partyID)
 	}
-	rects := make([]Rect, 0, len(target.Cards))
-	for _, id := range target.Cards {
+	outline, err := p.outline(g, target.Cards)
+	if err != nil {
+		return nil, err
+	}
+	return outline.Loops, nil
+}
+
+// outline returns the outline of the presented rectangles of cards, with adjacent cards joined at half the gap and the outline inset
+// by half the border width.
+func (p *Parties) outline(g *Grid, cards []string) (Outline, error) {
+	rects := make([]Rect, 0, len(cards))
+	for _, id := range cards {
 		rect, ok := g.Rect(id)
 		if !ok {
-			return nil, fmt.Errorf("unknown card %s", id)
+			return Outline{}, fmt.Errorf("unknown card %s", id)
 		}
 		rects = append(rects, rect)
 	}
 	pad, inset := g.Gap()/2, p.rail/2
-	return ComputeOutline(rects, OutlineOptions{Pad: &pad, Inset: &inset}).Loops, nil
+	return ComputeOutline(rects, OutlineOptions{Pad: &pad, Inset: &inset}), nil
+}
+
+// Drawing is what the window draws for a party (docs/spec/parties.md#drawing): its outer outline in its color, and the sides of
+// that outline on the border of its leader card in the leader color. Width is the border width, the rail width of the theme.
+type Drawing struct {
+	Party       string
+	Outline     Outline
+	Color       string
+	Leader      [][2]Point
+	LeaderColor string
+	Width       float64
+}
+
+// Drawings returns the drawing of each party, in the order of the parties. A party with no leader has no leader sides, and a party
+// with no leader color draws its leader sides in the theme token party-leader.
+func (p *Parties) Drawings(g *Grid) ([]Drawing, error) {
+	out := []Drawing{}
+	for _, item := range p.list {
+		outline, err := p.outline(g, item.Cards)
+		if err != nil {
+			return nil, fmt.Errorf("party %s: %w", item.ID, err)
+		}
+		drawing := Drawing{Party: item.ID, Outline: outline, Color: item.Color, Width: p.rail}
+		if item.Leader != nil {
+			own, err := p.outline(g, []string{*item.Leader})
+			if err != nil {
+				return nil, fmt.Errorf("party %s: %w", item.ID, err)
+			}
+			drawing.Leader = leaderBorder(outline.Loops, own.Loops)
+			if item.LeaderColor != nil {
+				drawing.LeaderColor = *item.LeaderColor
+			} else if value, ok := p.palette["party-leader"]; ok {
+				drawing.LeaderColor = value
+			} else {
+				return nil, fmt.Errorf("party %s: the palette has no party-leader", item.ID)
+			}
+		}
+		out = append(out, drawing)
+	}
+	return out, nil
+}
+
+// loopSides returns the sides of loops, each from a point to the next point of its loop.
+func loopSides(loops [][]Point) [][2]Point {
+	sides := [][2]Point{}
+	for _, loop := range loops {
+		for i, point := range loop {
+			sides = append(sides, [2]Point{point, loop[(i+1)%len(loop)]})
+		}
+	}
+	return sides
+}
+
+// leaderBorder returns the parts of the party outline that lie on the outline of the leader card: the overlap of each side of the
+// party outline with each side of the leader card's own outline on the same line.
+func leaderBorder(loops, leaderLoops [][]Point) [][2]Point {
+	borders := loopSides(leaderLoops)
+	out := [][2]Point{}
+	for _, side := range loopSides(loops) {
+		for _, border := range borders {
+			if shared, ok := sharedPart(side, border); ok {
+				out = append(out, shared)
+			}
+		}
+	}
+	return out
+}
+
+// sharedPart returns the overlap of two axis-aligned sides on the same line, and false when they do not overlap.
+func sharedPart(a, b [2]Point) ([2]Point, bool) {
+	horizontal := a[0].Y == a[1].Y && b[0].Y == b[1].Y && a[0].Y == b[0].Y
+	vertical := a[0].X == a[1].X && b[0].X == b[1].X && a[0].X == b[0].X
+	if !horizontal && !vertical {
+		return [2]Point{}, false
+	}
+	along := func(p Point) float64 {
+		if horizontal {
+			return p.X
+		}
+		return p.Y
+	}
+	lo := max(min(along(a[0]), along(a[1])), min(along(b[0]), along(b[1])))
+	hi := min(max(along(a[0]), along(a[1])), max(along(b[0]), along(b[1])))
+	if !(lo < hi) {
+		return [2]Point{}, false
+	}
+	if horizontal {
+		return [2]Point{{X: lo, Y: a[0].Y}, {X: hi, Y: a[0].Y}}, true
+	}
+	return [2]Point{{X: a[0].X, Y: lo}, {X: a[0].X, Y: hi}}, true
 }
 
 // Restore replaces the parties of the space with the stored parties. Each party must hold cards of the grid that touch, and a

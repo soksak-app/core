@@ -86,6 +86,7 @@ A layout change is a close, a move, a split, or a resize that changes which card
 - The leader card's border segments on the outline are drawn in the leader color, and the leader mark is drawn in its header.
 - When a party outline overlaps the rail, the rail is outside and the party outline is inside, separated by the rail width. The two lines never coincide. The focus indication is independent of the party outline.
 - Element names. The outer outline of party `<id>` is the SVG element `path[data-party="<id>"]`. Its leader border segments are the element `path[data-party-leader="<id>"]`, whose `stroke` is the leader color. The rail outline is the element `#railPath` of the workbench document. A test that checks the rule above compares the `d` value of `#railPath` with the `d` value of the party outline.
+- The mygo host paints the same outline and leader sides on the painter of the stage, under the rail, from the outline that the layout model computes for the status `core.parties`; its element names are those of the page workbench only. A full screen card shows no party outline, as it shows no rail.
 - The party outline is drawn with the card chrome and the native screens in the same draw and the same transaction, as the acceptance criteria of [native surfaces](native-surfaces.md#acceptance-criteria) require for the rail.
 
 ## Queries
