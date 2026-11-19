@@ -13964,6 +13964,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F925-2",
+    implementation: [{ file: "packages/host/rust/tests/endpoint_cases_test.rs", symbol: "\"sok-commands-query-party\"," }],
+    tests: [{ file: "packages/host/rust/tests/endpoint_cases_test.rs", id: "every_replayed_case_is_played_or_excluded" }],
+    expected: "The Rust endpoint runner lists the party endpoint cases that a page answers outside it, as the Go runner does.",
+    levels: ["unit"],
+  },
+  {
     id: "F920",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Reconcile(g *Grid, change LayoutChange) ([]partyChange, error) {" },
