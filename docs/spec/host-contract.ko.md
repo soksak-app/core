@@ -414,6 +414,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | all |
 | `endpoint.input.pointer-name` | `pointer`의 기본값은 `main`이고, `a-z`, `0-9`, `-`로 된 1~32자 이름은 그대로 전달하며, 빈 이름, 다른 문자가 있는 이름, 더 긴 이름, 문자열이 아닌 값은 -32602를 반환한다. | all |
 | `endpoint.input.pointer-held-message` | 1011 메시지는 누름을 쥔 pointer와 그 누름이 쥔 상태를 두 host에서 같은 문장으로 밝힌다. | all |
+| `endpoint.input.resize-edge-refusal` | 창의 resize edge 위 `down`은 -32602와 점과 edge를 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |

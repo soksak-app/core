@@ -3414,6 +3414,7 @@ impl Host {
             Delivery::PointerHeld(held) => {
                 Err(Failure::new(POINTER_HELD, pointer_held_message(&held)))
             }
+            Delivery::ResizeEdge(message) => Err(Failure::new(INVALID_PARAMS, message)),
         }
     }
 

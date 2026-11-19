@@ -344,6 +344,9 @@ pub enum Delivery {
     PressOpen,
     /// An open press of another pointer would share the state that the input changes, so it was not delivered.
     PointerHeld(PointerHeld),
+    /// The press lies on a resize edge of the window, where AppKit tracks a press as a window resize, so it was not delivered.
+    /// The value is the message of the refusal, which names the point and the edge.
+    ResizeEdge(String),
 }
 
 /// One step of a composition of `input.text`, as the input method of the system gives it to the text input client of the key

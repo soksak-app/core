@@ -895,10 +895,13 @@ const (
 	PointerPressOpen
 	// PointerHeld means that an open press of another pointer would share the state that the input changes, so it was not delivered.
 	PointerHeld
+	// PointerResizeEdge means that the press lies on a resize edge of the window, where AppKit tracks a press as a window resize, so it
+	// was not delivered. Reason of ButtonHeld is the message of the refusal, which names the point and the edge.
+	PointerResizeEdge
 )
 
 // ButtonHeld is the state of a rejection: for PointerButtonHeld what AppKit reported at the time of the rejection, for PointerHeld
-// the pointer whose press rejected the input and the reason.
+// the pointer whose press rejected the input and the reason, and for PointerResizeEdge the message of the refusal.
 type ButtonHeld struct {
 	// Mask is the value of NSEvent.pressedMouseButtons.
 	Mask uint64
@@ -906,7 +909,7 @@ type ButtonHeld struct {
 	Frontmost *FrontmostApplication
 	// Pointer is the pointer that holds the press of a PointerHeld rejection.
 	Pointer string
-	// Reason is the state that the press of Pointer holds.
+	// Reason is the state that the press of Pointer holds, or the message of a PointerResizeEdge refusal.
 	Reason string
 }
 

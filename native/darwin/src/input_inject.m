@@ -28,6 +28,7 @@
 #import "webview_input.h"
 #import "webview_geometry.h"
 #import "window_facts.h"
+#import "private/appkit.h"
 #import "private/coregraphics.h"
 #import "private/webkit.h"
 
@@ -604,6 +605,23 @@ static NSView *pageAt(NSWindow *window, NSPoint point) {
     return hit ? pageOf(hit) : nil;
 }
 
+// The resize edge of window that holds the window point point, or NULL. AppKit decides a press there in
+// -[NSWindow _hitTestWithHysteresisCheck:forEvent:allowWindowDragging:]: for a point at which the private
+// -[NSWindow _resizeDirectionForMouseLocation:] names a direction it calls +[NSWindow _mouseHysteresisCheck:withExpiration:andDistance:
+// finalMouseLocation:] with no expiration, which reads the next mouse events of the application on the main thread before the press
+// returns (docs/operations/private-native-apis.md). The release of a synthetic gesture is sent only after its press returns, so the
+// press would never return. No public interface states the resize edges, which reach about three points into the content view.
+static const char *resizeEdgeAt(NSWindow *window, NSPoint point) {
+    static const char *const names[] = {"right", "top right", "top", "top left", "left", "bottom left", "bottom", "bottom right"};
+    NSCAssert([window respondsToSelector:@selector(_resizeDirectionForMouseLocation:)],
+        @"-[NSWindow _resizeDirectionForMouseLocation:] is unavailable");
+    NSInteger direction = [window _resizeDirectionForMouseLocation:point];
+    if (direction == -1) return NULL;
+    NSCAssert(direction >= 0 && direction < 8, @"-[NSWindow _resizeDirectionForMouseLocation:] answered the unknown direction %ld",
+        (long)direction);
+    return names[direction];
+}
+
 // Delivers an input of pointer while +[NSEvent pressedMouseButtons] answers the buttons of that pointer. When the result is
 // SP_INPUT_BUTTON_HELD, held receives the mask of the rejected turn and the frontmost application; when it is
 // SP_INPUT_POINTER_HELD, held names the pointer whose press rejected it.
@@ -627,6 +645,14 @@ static sp_input_result deliverPointer(SPPointer *pointer, NSWindow *window, doub
         sp_input_virtual_set_point(handle, point.x, point.y);
         if (!moveTo(window, point)) { held->why = "no tracking area at the point"; return SP_INPUT_REJECTED; }
         return SP_INPUT_DELIVERED;
+    }
+    // A person's press on a resize edge resizes the window and reaches no view, and a synthetic press there would stop the main
+    // thread in the tracking of AppKit, so it is refused on both delivery paths.
+    const char *edge = phase == 1 ? resizeEdgeAt(window, point) : NULL;
+    if (edge) {
+        held->why = [NSString stringWithFormat:@"the point (%g, %g) lies on the %s resize edge of the window, where AppKit tracks a "
+            "press as a window resize; the synthetic press was not delivered", x, y, edge].UTF8String;
+        return SP_INPUT_RESIZE_EDGE;
     }
     if (phase == 4) {
         // The public API has no way to create a scroll event that carries window information. Setting the window number
@@ -819,6 +845,7 @@ static const char *resultName(sp_input_result result) {
         case SP_INPUT_BUTTON_HELD: return "button held";
         case SP_INPUT_PRESS_OPEN: return "press open";
         case SP_INPUT_POINTER_HELD: return "pointer held";
+        case SP_INPUT_RESIZE_EDGE: return "resize edge";
     }
     return "unknown";
 }
@@ -863,9 +890,15 @@ sp_input_result sp_input_pointer_clicks(void *handle, double x, double y, int ph
     return pointerAt(handle, x, y, phase, button, 0, 0, clicks);
 }
 
-// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD or
-// SP_INPUT_POINTER_HELD.
+// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD,
+// SP_INPUT_POINTER_HELD or SP_INPUT_RESIZE_EDGE.
 static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held) {
+    if (result == SP_INPUT_RESIZE_EDGE) {
+        sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = NULL, .reason = held.why };
+        [held.front release];
+        done(context, result, &report);
+        return;
+    }
     if (result == SP_INPUT_POINTER_HELD) {
         sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = held.holder->name.UTF8String, .reason = held.why };
         [held.front release];

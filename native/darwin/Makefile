@@ -284,6 +284,7 @@ NATIVE_TESTS = observe_test \
   host_api_process_footprint_test \
   window_motion_test \
   input_inject_test \
+  input_resize_edge_test \
   input_virtual_test \
   input_activate_test \
   input_virtual_key_equivalent_test \
