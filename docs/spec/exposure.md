@@ -36,7 +36,7 @@ A name has the form `<owner>.<name>`. `owner` is `core`, `host`, or a plugin id.
 | status | `description` | One-sentence description |
 | status | `schema` | Value schema |
 | status | `summary` | Optional boolean. `true` marks the status as a tab summary: the value appears in the tab summary of each tab whose plugin declares it in the [window description](cli.md#window-description). A status without `summary` appears only in the full description (`--full`). Core copies the value and names no plugin. The default is `false`. |
-| status | `activity` | Optional object that maps values of the status to the activities `attention`, `failed`, `running` and `idle`. Core derives the activity of each tab, card, group card, space and project from it and draws its icon ([activity](activity.md#declaration)), which defines the form and the refusals of another form. Core names no plugin. |
+| status | `activity` | Optional `true` that marks a status whose value is the activity of its surface, one of `attention`, `failed`, `running` and `idle`, or `null` for none. Core derives the activity of each tab, card, group card, space and project from it and draws its icon ([activity](activity.md#declaration)), which defines the refusal of another form and of another value. Core names no plugin. |
 | command | `name` | Entry name |
 | command | `description` | One-sentence description |
 | command | `params` | Parameter schema |

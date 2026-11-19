@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F982-4 (표시된 status의 activity): status 항목은 값이 activity 자체이거나 null인 status를 `activity: true`로 표시한다. 이것은 값을 activity로 대응시키던 map을 대신하는데, map은 object 상태의 status 0 종료와 실패를 구별하지 못하기 때문이다. reader는 다른 형식을 `<plugin> exposes <status>: activity must be true`로 거부하고, 두 workbench는 activity도 null도 아닌 값을 출처 `activity <tab>`로 오류 banner에 보이고 activity를 주지 않는다(`docs/spec/activity.md#declaration`). 검증: 이전 코드에서 manifest case가 세 reader에서, tab case가 두 workbench에서 실패했고, case, follow test와 함께 통과한다.
 - F982-2 (창의 activity): 두 workbench가 창의 project들의 각 tab의 surface에서 `activity`를 선언한 각 status를 watch로 따르고, `docs/spec/cases/activity.json`의 공유 case대로 각 tab, card, group card, space, project의 activity를 얻어 `core.activity`로 보고한다(`docs/spec/activity.md#status`). 검증: 두 workbench의 case와 follow test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F982-1 (status의 activity): plugin의 status 항목이 status 값에서 activity `attention`, `failed`, `running`, `idle`로의 map인 `activity`를 선언할 수 있다. `packages/plugin-api`, `packages/sok/go`, `packages/sok/rust`의 manifest 검사가 이를 받아들이고 다른 형식을 `docs/spec/activity.md#declaration`의 문구로 거부한다. 검증: manifest case `exposes.status-activity-*`가 바뀌지 않은 코드의 세 reader에서 `unknown field activity`로 실패했고 통과한다.
 - F937-20 (group header의 fit, page): page가 group header의 이름을 그 글자의 폭으로 재므로, 버튼을 담을 자리가 있는 header가 모든 폭에서 접지 않고 버튼을 한 줄에 보인다(`docs/spec/groups.md#headers`). 검증: fit test가 이전 fit에서 실패했고 통과한다.

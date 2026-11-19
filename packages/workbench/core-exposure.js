@@ -84,6 +84,8 @@ function activityProjects() {
 
 /* The receivers of a change of the activities: the drawings of the icons. */
 const activityListeners = new Set();
+/* The receiver of the error of the activity values of a tab, which the error display of the page shows (docs/spec/activity.md). */
+let activityFailed = null;
 
 /* The activities of this window, which follow the statuses of the plugins that declare activity on each surface. */
 const activity = createActivity({
@@ -91,6 +93,7 @@ const activity = createActivity({
   // default: a tab of a plugin that is not loaded, and a plugin record without activity, follow no status.
   statuses: (id) => (hasPlugin(id) ? plugin(id).activity ?? [] : []),
   projects: activityProjects,
+  failed: (tab, text) => activityFailed(tab, text),
   changed: () => {
     for (const listener of activityListeners) listener();
     coreChanged();
@@ -102,6 +105,11 @@ export const syncActivity = () => activity.sync();
 
 /** The activities of this window, the value of core.activity. */
 export const activityState = () => activity.state();
+
+/** Sets the receiver of the error text of the activity values of a tab, null when it is withdrawn. */
+export function onActivityError(receiver) {
+  activityFailed = receiver;
+}
 
 /** Calls listener after the activities of this window changed. */
 export function onActivity(listener) {

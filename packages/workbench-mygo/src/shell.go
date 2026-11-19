@@ -560,7 +560,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	s.activity = NewActivityFollow(func(name, surface string, fn func(value any)) func() {
 		return s.registry.Observe(name, &surface, true, fn)
 	},
-		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.fail)
+		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.activityError, s.fail)
 	s.contributions = NewContributions()
 	if err := s.contributions.Install(s.installed); err != nil {
 		return nil, err

@@ -275,7 +275,7 @@ func (s *Shell) layoutTabs() ([]MemorySurface, map[string]bool, error) {
 }
 
 // activityStatuses are the statuses of the plugin id that declare activity, and none for a plugin that is not loaded.
-func (s *Shell) activityStatuses(id string) []ActivityDeclaration {
+func (s *Shell) activityStatuses(id string) []string {
 	if unit := s.units[id]; unit != nil {
 		return unit.Activity
 	}

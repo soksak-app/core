@@ -2,7 +2,7 @@
 
 [English](activity.md)
 
-tab의 activity는 사람이 tab을 열지 않고도 그 surface가 무언가를 실행하는지, 사람을 기다리는지, 실패로 끝났는지 알게 한다. plugin은 surface의 activity를 자기 status에 선언하고, core는 모든 card, group card, space, project의 activity를 그 tab들의 activity에서 얻어 status로 보고하고 두 workbench에서 icon으로 그린다. core는 plugin을 이름으로 알지 않는다.
+tab의 activity는 사람이 tab을 열지 않고도 그 surface가 무언가를 실행하는지, 사람을 기다리는지, 실패로 끝났는지 알게 한다. plugin은 surface의 activity를 status로 보고하고, core는 모든 card, group card, space, project의 activity를 그 tab들의 activity에서 얻어 status로 보고하고 두 workbench에서 icon으로 그린다. core는 plugin을 이름으로 알지 않는다.
 
 ## Activity의 종류
 
@@ -17,19 +17,19 @@ activity는 높은 것부터 낮은 것 순서로 다음과 같다:
 
 ## 선언
 
-plugin의 status 항목은 멤버 `activity`로 surface의 activity를 선언한다([항목 필드](exposure.ko.md#항목-필드)). 이는 멤버가 하나 이상인 object로, 각 멤버 이름은 status의 값, 곧 status의 `schema`가 받아들이는 string이고, 각 멤버 값은 activity다. 각 reader의 manifest 검사는 다른 형식을 다음 문구로 거부한다. `<at>`은 `<plugin> exposes <status>`이고, `<value>`와 `<activity>`는 멤버 이름과 그 값의 JSON 문구이며, 멤버는 이름의 code point 순서로 검사하고 각 멤버는 값보다 activity를 먼저 검사한다:
+plugin의 status 항목은 surface의 activity를 보고하는 status를 멤버 `activity: true`로 표시한다([항목 필드](exposure.ko.md#항목-필드)). 그런 status의 값은 activity 자체로, string `attention`, `failed`, `running`, `idle` 중 하나이거나 activity가 없음을 뜻하는 `null`이다. terminal의 상태처럼 상태가 object인 plugin은 이 string을 별도 status로 내보내므로, 자기 상태 중 어느 것이 실패인지는 core가 아니라 plugin이 정한다. 각 reader의 manifest 검사는 다른 형식을 다음 문구로 거부한다. `<at>`은 `<plugin> exposes <status>`다:
 
 | 찾은 것 | 문구 |
 | --- | --- |
-| object가 아니거나 멤버가 없는 object인 `activity` | `<at>: activity must be an object of values and activities with at least one member` |
-| 값이 activity가 아닌 멤버 | `<at>: activity <value> names <activity>, which is not one of attention, failed, running, idle` |
-| status의 schema가 받아들이지 않는 멤버 이름 | `<at>: activity <value> is not a value of the schema of the status` |
+| `true`가 아닌 `activity` | `<at>: activity must be true` |
 
 `docs/spec/cases/manifest-validation.json`의 case가 `packages/plugin-api`, `packages/sok/go`, `packages/sok/rust`의 reader에 대해 이 문구를 담는다.
 
 ## Tab의 activity
 
-tab의 activity는 그 plugin의 status 가운데 `activity`를 선언한 것들을 각각 그 tab의 surface에서 읽어 얻은 activity 중 가장 높은 것이다. 값이 그 `activity`의 멤버를 가리키는 string인 status는 그 멤버의 activity를 주고, 값이 어떤 멤버도 가리키지 않는 status는 `null`을 포함해 아무것도 주지 않는다. surface가 등록하지 않은 status는 아무것도 주지 않으므로, surface가 시작하지 않았거나, unload되었거나([메모리 절약](plugins.ko.md#메모리-절약)) 끝난 tab은 activity가 없다. 어떤 status도 activity를 주지 않는 tab은 activity가 없다.
+tab의 activity는 그 plugin의 status 가운데 `activity`를 선언한 것들을 각각 그 tab의 surface에서 읽어 얻은 activity 중 가장 높은 것이다. 값이 activity인 status는 그 activity를 주고, 값이 `null`인 status는 아무것도 주지 않는다. surface가 등록하지 않은 status는 아무것도 주지 않으므로, surface가 시작하지 않았거나, unload되었거나([메모리 절약](plugins.ko.md#메모리-절약)) 끝난 tab은 activity가 없다. 어떤 status도 activity를 주지 않는 tab은 activity가 없다.
+
+activity도 `null`도 아닌 값은 plugin의 오류다. 그 값은 activity를 주지 않고, workbench는 문구 `<plugin> exposes <status> on tab <tab>: activity value <value> is not one of attention, failed, running, idle`을 오류 표시 경로로 창의 오류 banner에 출처 `activity <tab>`로 보인다. `<value>`는 그 값의 JSON 문구다. 문구는 tab의 status 가운데 선언 순서로 처음인 그런 status가 정하고, 오류는 tab의 status들이 다시 올바른 값을 보고하거나 tab이 창을 떠나면 거두어진다.
 
 workbench는 자기 창의 project들의 각 tab의 그런 status를 그 surface의 watch로 따른다([전달](exposure.ko.md#전달)). watch는 값의 변화마다 보낸다. workbench는 timer로 값을 읽지 않는다. layout, project, surface의 등록이 바뀔 때 watch를 시작하고 끝내며, watch가 값을 보낼 때마다 activity를 다시 얻는다.
 

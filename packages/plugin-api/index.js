@@ -1306,7 +1306,8 @@ export function validateExposes(owner, exposes) {
       if (entry.many !== undefined && typeof entry.many !== "boolean") throw new Error(`${at}: many must be a boolean`);
       // A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
       if (entry.summary !== undefined && typeof entry.summary !== "boolean") throw new Error(`${at}: summary must be a boolean`);
-      if (entry.activity !== undefined) checkActivity(at, entry.schema, entry.activity);
+      // A status with activity true reports the activity of its surface as its value (docs/spec/activity.md#declaration).
+      if (entry.activity !== undefined && entry.activity !== true) throw new Error(`${at}: activity must be true`);
     }
   }
   return exposes;
@@ -1314,22 +1315,6 @@ export function validateExposes(owner, exposes) {
 
 /** The activities from the highest to the lowest (docs/spec/activity.md#activities). */
 export const ACTIVITIES = Object.freeze(["attention", "failed", "running", "idle"]);
-
-/**
- * Checks the activity map of a status (docs/spec/activity.md#declaration): an object with at least one member, each a value of the
- * status that its schema admits and naming an activity, the members checked in code point order of their names.
- */
-function checkActivity(at, schema, activity) {
-  if (!isObject(activity) || Object.keys(activity).length === 0) {
-    throw new Error(`${at}: activity must be an object of values and activities with at least one member`);
-  }
-  for (const [value, named] of sortedEntries(activity)) {
-    if (!ACTIVITIES.includes(named)) {
-      throw new Error(`${at}: activity ${JSON.stringify(value)} names ${JSON.stringify(named)}, which is not one of ${ACTIVITIES.join(", ")}`);
-    }
-    if (!matchesSchema(schema, value)) throw new Error(`${at}: activity ${JSON.stringify(value)} is not a value of the schema of the status`);
-  }
-}
 
 /**
  * Validates the diagnostics.json of a plugin together with the manifest. It is `{module, exposes}`; module is the

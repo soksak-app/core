@@ -13,11 +13,21 @@ export function highestActivity(activities) {
 }
 
 /**
- * The activity of a tab from the statuses of its plugin that declare activity, each {activity, value} with the value that its surface
- * reports, value absent while the surface has not registered the status: a string value that names a member gives that activity.
+ * The activity of the tab tab of plugin from the statuses of the plugin that declare activity, each {name, value} with the value that
+ * the surface of the tab reports, value absent while the surface has not registered the status: a status whose value is an activity
+ * gives it, and null gives none. Returns {activity, error}: error is the text of the first status in the order of statuses whose value
+ * is neither an activity nor null, which gives no activity (docs/spec/activity.md#activity-of-a-tab), or null.
  */
-export function tabActivity(statuses) {
-  return highestActivity(statuses.map(({ activity, value }) => (typeof value === "string" && Object.hasOwn(activity, value) ? activity[value] : null)));
+export function tabActivity(plugin, tab, statuses) {
+  let error = null;
+  const activities = statuses.map(({ name, value }) => {
+    // default: a status that the surface has not registered gives no activity.
+    if (value === undefined || value === null) return null;
+    if (ACTIVITIES.includes(value)) return value;
+    error ??= `${plugin} exposes ${name} on tab ${tab}: activity value ${JSON.stringify(value)} is not one of ${ACTIVITIES.join(", ")}`;
+    return null;
+  });
+  return { activity: highestActivity(activities), error };
 }
 
 /**
@@ -64,24 +74,37 @@ export function windowActivity(projects, tabs) {
  *
  *   observe(name, surface, fn)  follows the status name of surface; fn receives each value, null while the surface has not
  *                               registered it, and the function returns the function that ends it
- *   statuses(plugin)            the statuses of the plugin that declare activity, each {name, activity}
+ *   statuses(plugin)            the names of the statuses of the plugin that declare activity, in the order of its declaration
  *   projects()                  the projects of the window, each {id, spaces} with the stored layout of each space
  *   changed()                   called after the value of core.activity changed
+ *   failed(tab, text)           shows the error text of the activity values of the tab, or withdraws it with null
  *
  * sync() starts and ends the watches after a layout, a project or the plugins changed; state() is the value of core.activity.
  */
-export function createActivity({ observe, statuses, projects, changed }) {
-  // Each followed status of a tab by the key [tab, name]: its declared activity, its value and the function that ends the watch.
+export function createActivity({ observe, statuses, projects, changed, failed }) {
+  // The followed tabs by id: the plugin, and each followed status by name with its value and the function that ends its watch.
   const followed = new Map();
+  // The tabs whose error is shown, with its text.
+  const errors = new Map();
   let state = { projects: {}, tabs: {} };
   let syncing = false;
 
   function derive() {
     if (syncing) return;
     const tabs = {};
-    for (const [key, follow] of followed) {
-      const [tab] = JSON.parse(key);
-      tabs[tab] = highestActivity([Object.hasOwn(tabs, tab) ? tabs[tab] : null, tabActivity([follow])]);
+    for (const [tab, { plugin, watches }] of followed) {
+      const { activity, error } = tabActivity(plugin, tab, [...watches].map(([name, { value }]) => ({ name, value })));
+      if (activity !== null) tabs[tab] = activity;
+      if (error !== (errors.get(tab) ?? null)) {
+        if (error === null) errors.delete(tab);
+        else errors.set(tab, error);
+        failed(tab, error);
+      }
+    }
+    for (const tab of [...errors.keys()]) {
+      if (followed.has(tab)) continue;
+      errors.delete(tab);
+      failed(tab, null);
     }
     const next = windowActivity(projects(), tabs);
     if (JSON.stringify(next) === JSON.stringify(state)) return;
@@ -90,35 +113,41 @@ export function createActivity({ observe, statuses, projects, changed }) {
   }
 
   function sync() {
+    // The wanted tabs by id: the plugin and the names of its statuses that declare activity.
     const wanted = new Map();
     for (const project of projects()) {
       for (const space of project.spaces) {
         for (const card of space.layout.state.cards) {
           // default: a seat card has null data, so it holds no tabs.
           for (const tab of card.data?.tabs ?? []) {
-            for (const status of statuses(tab.plugin)) wanted.set(JSON.stringify([tab.id, status.name]), status.activity);
+            const names = statuses(tab.plugin);
+            if (names.length) wanted.set(tab.id, { plugin: tab.plugin, names });
           }
         }
       }
     }
     syncing = true;
     try {
-      for (const [key, follow] of [...followed]) {
-        if (wanted.get(key) === follow.activity) continue;
-        followed.delete(key);
-        follow.stop();
+      for (const [tab, follow] of [...followed]) {
+        const want = wanted.get(tab);
+        if (want?.plugin === follow.plugin && want.names.join("\n") === [...follow.watches.keys()].join("\n")) continue;
+        followed.delete(tab);
+        for (const { stop } of follow.watches.values()) stop();
       }
-      for (const [key, activity] of wanted) {
-        if (followed.has(key)) continue;
-        const [tab, name] = JSON.parse(key);
-        const follow = { activity, value: null, stop: null };
-        followed.set(key, follow);
-        follow.stop = observe(name, tab, (value) => {
-          if (followed.get(key) !== follow) return;
-          // A surface that has not registered the status gives null, which names no activity.
-          follow.value = value;
-          derive();
-        });
+      for (const [tab, { plugin, names }] of wanted) {
+        if (followed.has(tab)) continue;
+        const follow = { plugin, watches: new Map() };
+        followed.set(tab, follow);
+        for (const name of names) {
+          const watch = { value: null, stop: null };
+          follow.watches.set(name, watch);
+          watch.stop = observe(name, tab, (value) => {
+            if (followed.get(tab) !== follow) return;
+            // A surface that has not registered the status gives null, which gives no activity.
+            watch.value = value;
+            derive();
+          });
+        }
       }
     } finally {
       syncing = false;
@@ -128,3 +157,4 @@ export function createActivity({ observe, statuses, projects, changed }) {
 
   return { sync, state: () => state };
 }
+

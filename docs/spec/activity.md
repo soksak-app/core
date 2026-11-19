@@ -2,7 +2,7 @@
 
 [한국어](activity.ko.md)
 
-The activity of a tab tells a person, without opening the tab, whether its surface runs something, waits for the person or ended with a failure. A plugin declares the activity of its surfaces on its statuses; core derives the activity of every card, group card, space and project from the activity of their tabs, reports it as a status and draws it as an icon in both workbenches. Core names no plugin.
+The activity of a tab tells a person, without opening the tab, whether its surface runs something, waits for the person or ended with a failure. A plugin reports the activity of its surfaces as a status; core derives the activity of every card, group card, space and project from the activity of their tabs, reports it as a status and draws it as an icon in both workbenches. Core names no plugin.
 
 ## Activities
 
@@ -17,19 +17,19 @@ The activities, from the highest to the lowest:
 
 ## Declaration
 
-A status entry of a plugin declares the activity of a surface with the member `activity` ([entry fields](exposure.md#entry-fields)): an object with at least one member, in which each member name is a value of the status, a string that the `schema` of the status admits, and each member value is an activity. The manifest check of each reader refuses another form with these texts, where `<at>` is `<plugin> exposes <status>` and `<value>` and `<activity>` are the JSON texts of the member name and of its value, the members checked in code point order of their names and each member for its activity before its value:
+A status entry of a plugin marks the status that reports the activity of a surface with the member `activity: true` ([entry fields](exposure.md#entry-fields)). The value of such a status is the activity itself: one of the strings `attention`, `failed`, `running` and `idle`, or `null` for no activity. A plugin whose state is an object, such as the state of a terminal, publishes this string as a separate status, so the plugin and not core decides which of its states is a failure. The manifest check of each reader refuses another form with this text, where `<at>` is `<plugin> exposes <status>`:
 
 | Found | Text |
 | --- | --- |
-| `activity` that is not an object, or an object without members | `<at>: activity must be an object of values and activities with at least one member` |
-| a member whose value is no activity | `<at>: activity <value> names <activity>, which is not one of attention, failed, running, idle` |
-| a member name that the schema of the status does not admit | `<at>: activity <value> is not a value of the schema of the status` |
+| `activity` that is not `true` | `<at>: activity must be true` |
 
-The cases of `docs/spec/cases/manifest-validation.json` hold these texts for the readers of `packages/plugin-api`, `packages/sok/go` and `packages/sok/rust`.
+The cases of `docs/spec/cases/manifest-validation.json` hold this text for the readers of `packages/plugin-api`, `packages/sok/go` and `packages/sok/rust`.
 
 ## Activity of a tab
 
-The activity of a tab is the highest activity among the statuses of its plugin that declare `activity`, each read on the surface of the tab: a status whose value is a string that names a member of its `activity` gives the activity of that member, and a status whose value names no member, `null` included, gives none. A status that the surface has not registered gives none, so a tab whose surface has not started, is unloaded ([memory saver](plugins.md#memory-saver)) or ended has no activity. A tab that no status gives an activity has none.
+The activity of a tab is the highest activity among the statuses of its plugin that declare `activity`, each read on the surface of the tab: a status whose value is an activity gives that activity, and a status whose value is `null` gives none. A status that the surface has not registered gives none, so a tab whose surface has not started, is unloaded ([memory saver](plugins.md#memory-saver)) or ended has no activity. A tab that no status gives an activity has none.
+
+A value that is neither an activity nor `null` is an error of the plugin: it gives no activity, and the workbench shows the text `<plugin> exposes <status> on tab <tab>: activity value <value> is not one of attention, failed, running, idle`, where `<value>` is the JSON text of the value, in the error banner of the window through the error display path, with the source `activity <tab>`; the first such status of the tab in the order of its declaration gives the text, and the error is withdrawn when the statuses of the tab report valid values again or the tab leaves the window.
 
 The workbench follows each such status of each tab of the projects of its window by a watch of that surface ([relay](exposure.md#relay)), which sends each change of the value; it reads no value on a timer. It starts and ends the watches when a layout, a project or the registration of a surface changes, and derives the activities again at each value that a watch delivers.
 

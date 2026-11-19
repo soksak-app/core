@@ -1331,34 +1331,10 @@ func checkExposes(owner string, raw any) error {
 					return fmt.Errorf("%s: summary must be a boolean", at)
 				}
 			}
-			if raw, has := entry["activity"]; has {
-				schema, _ := entry["schema"].(map[string]any)
-				if err := checkActivity(at, schema, raw); err != nil {
-					return err
-				}
+			// A status with activity true reports the activity of its surface as its value (docs/spec/activity.md#declaration).
+			if raw, has := entry["activity"]; has && raw != true {
+				return fmt.Errorf("%s: activity must be true", at)
 			}
-		}
-	}
-	return nil
-}
-
-// activities are the activities from the highest to the lowest (docs/spec/activity.md#activities).
-var activities = []string{"attention", "failed", "running", "idle"}
-
-// checkActivity checks the activity map of a status (checkActivity of the reader, docs/spec/activity.md#declaration): an object with at
-// least one member, each a value of the status that its schema admits and naming an activity, the members checked in code point order.
-func checkActivity(at string, schema map[string]any, raw any) error {
-	activity, ok := raw.(map[string]any)
-	if !ok || len(activity) == 0 {
-		return fmt.Errorf("%s: activity must be an object of values and activities with at least one member", at)
-	}
-	for _, value := range sortedKeys(activity) {
-		named, isText := activity[value].(string)
-		if !isText || !slices.Contains(activities, named) {
-			return fmt.Errorf("%s: activity %s names %s, which is not one of %s", at, quote(value), quote(activity[value]), strings.Join(activities, ", "))
-		}
-		if !MatchesSchema(schema, value) {
-			return fmt.Errorf("%s: activity %s is not a value of the schema of the status", at, quote(value))
 		}
 	}
 	return nil

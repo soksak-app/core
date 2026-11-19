@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 )
 
 // The activities of a window (docs/spec/activity.md): the activity of each tab from the statuses of its plugin that declare activity,
@@ -28,20 +29,33 @@ func HighestActivity(activities ...string) string {
 // ActivityStatus is a status of a plugin that declares activity, with the value that the surface of a tab reports, nil while the
 // surface has not registered it.
 type ActivityStatus struct {
-	Activity map[string]string `json:"activity"`
-	Value    any               `json:"value"`
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
-// TabActivity is the activity of a tab from the statuses of its plugin that declare activity: a string value that names a member gives
-// that activity.
-func TabActivity(statuses []ActivityStatus) string {
+// TabActivity is the activity of the tab tab of plugin from the statuses of the plugin that declare activity: a status whose value is
+// an activity gives it, and nil gives none. The error names the first status in the order of statuses whose value is neither an
+// activity nor nil, which gives no activity (docs/spec/activity.md#activity-of-a-tab).
+func TabActivity(plugin, tab string, statuses []ActivityStatus) (string, error) {
 	highest := ""
+	var failure error
 	for _, status := range statuses {
-		if value, ok := status.Value.(string); ok {
-			highest = HighestActivity(highest, status.Activity[value])
+		if status.Value == nil {
+			continue
+		}
+		if value, ok := status.Value.(string); ok && slices.Contains(Activities, value) {
+			highest = HighestActivity(highest, value)
+			continue
+		}
+		if failure == nil {
+			text, err := json.Marshal(status.Value)
+			if err != nil {
+				return "", fmt.Errorf("%s exposes %s on tab %s: activity value: %w", plugin, status.Name, tab, err)
+			}
+			failure = fmt.Errorf("%s exposes %s on tab %s: activity value %s is not one of %s", plugin, status.Name, tab, text, strings.Join(Activities, ", "))
 		}
 	}
-	return highest
+	return highest, failure
 }
 
 // ActivityProject is a project of a window for its activities: its id and the stored layout of each of its spaces.
@@ -175,40 +189,35 @@ func WindowActivity(projects []ActivityProject, tabs map[string]string) (Activit
 	return out, nil
 }
 
-// ActivityDeclaration is a status of a plugin that declares activity: its name and its map.
-type ActivityDeclaration struct {
-	Name     string            `json:"name"`
-	Activity map[string]string `json:"activity"`
-}
-
-// activityDeclarations reads the statuses of a plugin that declare activity from its status entries.
-func activityDeclarations(plugin string, entries []json.RawMessage) ([]ActivityDeclaration, error) {
-	var out []ActivityDeclaration
+// readActivityStatuses reads the names of the statuses of a plugin that declare activity from its status entries, in their order.
+func readActivityStatuses(plugin string, entries []json.RawMessage) ([]string, error) {
+	var out []string
 	for _, raw := range entries {
-		var entry ActivityDeclaration
+		var entry struct {
+			Name     string `json:"name"`
+			Activity bool   `json:"activity"`
+		}
 		if err := json.Unmarshal(raw, &entry); err != nil {
 			return nil, fmt.Errorf("plugin %s status: %w", plugin, err)
 		}
-		if entry.Activity != nil {
-			out = append(out, entry)
+		if entry.Activity {
+			out = append(out, entry.Name)
 		}
 	}
 	return out, nil
 }
 
-// ActivityTab is a tab of the layouts of a window whose statuses the activities follow.
-type ActivityTab struct {
-	ID, Plugin string
+// activityWatch is a followed status of a tab: its value and the function that ends its watch.
+type activityWatch struct {
+	value any
+	stop  func()
 }
 
-// activityKey is a followed status of a tab.
-type activityKey struct{ tab, name string }
-
-// activityFollow is a followed status: its declared map, its value and the function that ends its watch.
-type activityFollow struct {
-	activity map[string]string
-	value    any
-	stop     func()
+// activityTab is a followed tab: its plugin and its followed statuses in the order of their declaration.
+type activityTab struct {
+	plugin  string
+	names   []string
+	watches map[string]*activityWatch
 }
 
 // ActivityFollow follows the statuses that declare activity on the surface of each tab of the projects of a window by a watch of each
@@ -217,37 +226,65 @@ type ActivityFollow struct {
 	// observe follows the status name of surface: fn receives each value, nil while the surface has not registered it, and the returned
 	// function ends it.
 	observe func(name, surface string, fn func(value any)) (stop func())
-	// statuses are the statuses of a plugin that declare activity.
-	statuses func(plugin string) []ActivityDeclaration
+	// statuses are the names of the statuses of a plugin that declare activity, in the order of its declaration.
+	statuses func(plugin string) []string
 	// projects are the projects of the window, each with the stored layout of each space.
 	projects func() ([]ActivityProject, error)
-	// changed is called after the value of core.activity changed, and failed with an error of a read.
+	// changed is called after the value of core.activity changed, shown with the error text of the activity values of a tab or "" when
+	// it is withdrawn, and failed with an error of a read.
 	changed func()
+	shown   func(tab, text string)
 	failed  func(error)
 
-	followed map[activityKey]*activityFollow
+	followed map[string]*activityTab
+	errors   map[string]string
 	state    ActivityState
 	syncing  bool
 }
 
 // NewActivityFollow makes the follow of the activities of a window, which reports nothing until its first Sync.
-func NewActivityFollow(observe func(name, surface string, fn func(value any)) func(), statuses func(plugin string) []ActivityDeclaration,
-	projects func() ([]ActivityProject, error), changed func(), failed func(error)) *ActivityFollow {
-	return &ActivityFollow{observe: observe, statuses: statuses, projects: projects, changed: changed, failed: failed,
-		followed: map[activityKey]*activityFollow{}, state: ActivityState{Projects: map[string]ActivityProjectState{}, Tabs: map[string]string{}}}
+func NewActivityFollow(observe func(name, surface string, fn func(value any)) func(), statuses func(plugin string) []string,
+	projects func() ([]ActivityProject, error), changed func(), shown func(tab, text string), failed func(error)) *ActivityFollow {
+	return &ActivityFollow{observe: observe, statuses: statuses, projects: projects, changed: changed, shown: shown, failed: failed,
+		followed: map[string]*activityTab{}, errors: map[string]string{}, state: ActivityState{Projects: map[string]ActivityProjectState{}, Tabs: map[string]string{}}}
 }
 
 // State is the value of core.activity.
 func (a *ActivityFollow) State() ActivityState { return a.state }
 
-// derive derives the activities again and announces a change.
+// derive derives the activities again, shows and withdraws the errors of the values and announces a change.
 func (a *ActivityFollow) derive() {
 	if a.syncing {
 		return
 	}
 	tabs := map[string]string{}
-	for key, follow := range a.followed {
-		tabs[key.tab] = HighestActivity(tabs[key.tab], TabActivity([]ActivityStatus{{Activity: follow.activity, Value: follow.value}}))
+	for tab, follow := range a.followed {
+		statuses := make([]ActivityStatus, 0, len(follow.names))
+		for _, name := range follow.names {
+			statuses = append(statuses, ActivityStatus{Name: name, Value: follow.watches[name].value})
+		}
+		activity, err := TabActivity(follow.plugin, tab, statuses)
+		if activity != "" {
+			tabs[tab] = activity
+		}
+		text := ""
+		if err != nil {
+			text = err.Error()
+		}
+		if text != a.errors[tab] {
+			if text == "" {
+				delete(a.errors, tab)
+			} else {
+				a.errors[tab] = text
+			}
+			a.shown(tab, text)
+		}
+	}
+	for tab := range a.errors {
+		if a.followed[tab] == nil {
+			delete(a.errors, tab)
+			a.shown(tab, "")
+		}
 	}
 	projects, err := a.projects()
 	if err != nil {
@@ -273,7 +310,7 @@ func (a *ActivityFollow) Sync() {
 		a.failed(err)
 		return
 	}
-	wanted := map[activityKey]map[string]string{}
+	wanted := map[string]*activityTab{}
 	for _, project := range projects {
 		for _, space := range project.Spaces {
 			var stored activityLayout
@@ -287,57 +324,62 @@ func (a *ActivityFollow) Sync() {
 					continue
 				}
 				for _, tab := range card.Data.Tabs {
-					for _, status := range a.statuses(tab.Plugin) {
-						wanted[activityKey{tab.ID, status.Name}] = status.Activity
+					if names := a.statuses(tab.Plugin); len(names) > 0 {
+						wanted[tab.ID] = &activityTab{plugin: tab.Plugin, names: names}
 					}
 				}
 			}
 		}
 	}
 	a.syncing = true
-	for key, follow := range a.followed {
-		if activity, ok := wanted[key]; ok && sameActivity(activity, follow.activity) {
+	for tab, follow := range a.followed {
+		if want := wanted[tab]; want != nil && want.plugin == follow.plugin && slices.Equal(want.names, follow.names) {
 			continue
 		}
-		delete(a.followed, key)
-		follow.stop()
+		delete(a.followed, tab)
+		for _, watch := range follow.watches {
+			watch.stop()
+		}
 	}
-	for key, activity := range wanted {
-		if a.followed[key] != nil {
+	for tab, want := range wanted {
+		if a.followed[tab] != nil {
 			continue
 		}
-		follow := &activityFollow{activity: activity}
-		a.followed[key] = follow
-		follow.stop = a.observe(key.name, key.tab, func(value any) {
-			if a.followed[key] != follow {
-				return
-			}
-			// A surface delivers the JSON text of its value; a read of the status gives the decoded value.
-			if raw, isText := value.(json.RawMessage); isText {
-				var decoded any
-				if err := json.Unmarshal(raw, &decoded); err != nil {
-					a.failed(fmt.Errorf("activity: status %s of surface %s: %w", key.name, key.tab, err))
+		follow := &activityTab{plugin: want.plugin, names: want.names, watches: map[string]*activityWatch{}}
+		a.followed[tab] = follow
+		for _, name := range want.names {
+			watch := &activityWatch{}
+			follow.watches[name] = watch
+			watch.stop = a.observe(name, tab, func(value any) {
+				if a.followed[tab] != follow {
 					return
 				}
-				value = decoded
-			}
-			follow.value = value
-			a.derive()
-		})
+				// A surface delivers the JSON text of its value; a read of the status gives the decoded value.
+				if raw, isText := value.(json.RawMessage); isText {
+					var decoded any
+					if err := json.Unmarshal(raw, &decoded); err != nil {
+						a.failed(fmt.Errorf("activity: status %s of surface %s: %w", name, tab, err))
+						return
+					}
+					value = decoded
+				}
+				watch.value = value
+				a.derive()
+			})
+		}
 	}
 	a.syncing = false
 	a.derive()
 }
 
-// sameActivity tells whether two declared maps are equal.
-func sameActivity(a, b map[string]string) bool {
-	if len(a) != len(b) {
-		return false
+// activityError shows the error text of the activity values of the tab in the error banner of the window with the source
+// `activity <tab>`, and withdraws it for "" (docs/spec/activity.md#activity-of-a-tab).
+func (s *Shell) activityError(tab, text string) {
+	if text == "" {
+		// silent: an error that another source showed since then stays in the banner.
+		s.errors.HideFrom(workbenchErrorPlace, "activity "+tab)
+	} else {
+		s.errors.ShowFrom(workbenchErrorPlace, "activity "+tab, text, "")
 	}
-	for value, activity := range a {
-		if b[value] != activity {
-			return false
-		}
-	}
-	return true
+	s.options.Invalidate()
 }

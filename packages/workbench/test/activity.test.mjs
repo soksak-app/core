@@ -9,7 +9,7 @@ const table = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/activity
 
 for (const kase of table.tabs) {
   test(`activity of a tab: ${kase.name}`, { timeout: 5000 }, () => {
-    assert.equal(tabActivity(kase.statuses), kase.returns);
+    assert.deepEqual(tabActivity(kase.plugin, kase.tab, kase.statuses), kase.returns);
   });
 }
 

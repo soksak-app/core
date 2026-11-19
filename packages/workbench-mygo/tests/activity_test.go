@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
@@ -16,8 +17,13 @@ import (
 // activityCases reads the case table of the activities.
 func activityCases(t *testing.T) (tabs []struct {
 	Name     string                     `json:"name"`
+	Plugin   string                     `json:"plugin"`
+	Tab      string                     `json:"tab"`
 	Statuses []workbench.ActivityStatus `json:"statuses"`
-	Returns  *string                    `json:"returns"`
+	Returns  struct {
+		Activity *string `json:"activity"`
+		Error    *string `json:"error"`
+	} `json:"returns"`
 }, windows []struct {
 	Name     string                      `json:"name"`
 	Projects []workbench.ActivityProject `json:"projects"`
@@ -33,8 +39,13 @@ func activityCases(t *testing.T) (tabs []struct {
 		Description string `json:"description"`
 		Tabs        []struct {
 			Name     string                     `json:"name"`
+			Plugin   string                     `json:"plugin"`
+			Tab      string                     `json:"tab"`
 			Statuses []workbench.ActivityStatus `json:"statuses"`
-			Returns  *string                    `json:"returns"`
+			Returns  struct {
+				Activity *string `json:"activity"`
+				Error    *string `json:"error"`
+			} `json:"returns"`
 		} `json:"tabs"`
 		Windows []struct {
 			Name     string                      `json:"name"`
@@ -58,12 +69,20 @@ func TestActivityCases(t *testing.T) {
 	tabs, windows := activityCases(t)
 	for _, kase := range tabs {
 		t.Run("tab: "+kase.Name, func(t *testing.T) {
-			want := ""
-			if kase.Returns != nil {
-				want = *kase.Returns
+			want, failure := "", ""
+			if kase.Returns.Activity != nil {
+				want = *kase.Returns.Activity
 			}
-			if got := workbench.TabActivity(kase.Statuses); got != want {
-				t.Fatalf("the activity is %q, want %q", got, want)
+			if kase.Returns.Error != nil {
+				failure = *kase.Returns.Error
+			}
+			got, err := workbench.TabActivity(kase.Plugin, kase.Tab, kase.Statuses)
+			text := ""
+			if err != nil {
+				text = err.Error()
+			}
+			if got != want || text != failure {
+				t.Fatalf("the activity is %q with the error %q, want %q with %q", got, text, want, failure)
 			}
 		})
 	}
@@ -111,16 +130,18 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	f.register("tab-a", "status", "textprobe.screen")
 	projects := activityWindow("tab-a", "tab-b")
 	changes := 0
+	var shown [][2]string
 	follow := workbench.NewActivityFollow(func(name, surface string, fn func(value any)) func() {
 		return f.registry.Observe(name, &surface, true, fn)
 	},
-		func(plugin string) []workbench.ActivityDeclaration {
+		func(plugin string) []string {
 			if plugin != "textprobe" {
 				return nil
 			}
-			return []workbench.ActivityDeclaration{{Name: "textprobe.screen", Activity: map[string]string{"busy": "running", "ask": "attention"}}}
+			return []string{"textprobe.screen"}
 		},
-		func() ([]workbench.ActivityProject, error) { return projects, nil }, func() { changes++ }, func(err error) { t.Error(err) })
+		func() ([]workbench.ActivityProject, error) { return projects, nil }, func() { changes++ },
+		func(tab, text string) { shown = append(shown, [2]string{tab, text}) }, func(err error) { t.Error(err) })
 	follow.Sync()
 	if len(f.forwards) != 1 || f.forwards[0]["method"] != "status.watch" || f.forwards[0]["surface"] != "tab-a" {
 		t.Fatalf("the sync forwarded %v", f.forwards)
@@ -136,19 +157,28 @@ func TestTheActivityOfATabFollowsTheWatchOfItsSurface(t *testing.T) {
 	if got := state(); got != `{"projects":{},"tabs":{}}` {
 		t.Fatalf("core.activity before a value is %s", got)
 	}
-	f.deliver("tab-a", "textprobe.screen", `"busy"`, 1)
+	f.deliver("tab-a", "textprobe.screen", `"running"`, 1)
 	if got := state(); got != `{"projects":{"p1":{"activity":"running","spaces":{"s1":{"activity":"running","cards":{"card-1":"running"},"groups":{}}}}},"tabs":{"tab-a":"running"}}` {
-		t.Fatalf("core.activity after busy is %s", got)
+		t.Fatalf("core.activity after running is %s", got)
 	}
 	// tab-b registers after the sync; its registration starts its watch, and its value raises the project to attention.
 	f.register("tab-b", "status", "textprobe.screen")
 	if last := f.last(); last["method"] != "status.watch" || last["surface"] != "tab-b" {
 		t.Fatalf("the registration forwarded %v", last)
 	}
-	f.deliver("tab-b", "textprobe.screen", `"ask"`, 1)
-	f.deliver("tab-a", "textprobe.screen", `null`, 2)
+	f.deliver("tab-b", "textprobe.screen", `"attention"`, 1)
+	// A value that is no activity gives tab-a none and shows its error until a valid value withdraws it.
+	f.deliver("tab-a", "textprobe.screen", `"busy"`, 2)
+	want := "textprobe exposes textprobe.screen on tab tab-a: activity value \"busy\" is not one of attention, failed, running, idle"
+	if !slices.Equal(shown, [][2]string{{"tab-a", want}}) {
+		t.Fatalf("the shown errors are %q", shown)
+	}
+	f.deliver("tab-a", "textprobe.screen", `null`, 3)
+	if !slices.Equal(shown, [][2]string{{"tab-a", want}, {"tab-a", ""}}) {
+		t.Fatalf("the shown errors after null are %q", shown)
+	}
 	if got := state(); got != `{"projects":{"p1":{"activity":"attention","spaces":{"s1":{"activity":"attention","cards":{"card-1":"attention"},"groups":{}}}}},"tabs":{"tab-b":"attention"}}` {
-		t.Fatalf("core.activity after ask and null is %s", got)
+		t.Fatalf("core.activity after attention and null is %s", got)
 	}
 	// tab-a leaves the layouts, so its watch ends and nothing that core.activity reports changes.
 	projects = activityWindow("tab-b")

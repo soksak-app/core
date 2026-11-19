@@ -36,7 +36,7 @@
 | status | `description` | 한 문장 설명 |
 | status | `schema` | 값 스키마 |
 | status | `summary` | 선택적 boolean. `true`이면 이 status를 탭 요약으로 표시한다. 값은 plugin이 선언한 각 탭의 [창 설명](cli.ko.md#창-설명) 탭 요약에 나타난다. `summary`가 없는 status는 전체 설명(`--full`)에만 나타난다. core는 값을 복사할 뿐 plugin을 이름으로 알지 않는다. 기본값은 `false`다. |
-| status | `activity` | 선택적 object로, status의 값을 activity `attention`, `failed`, `running`, `idle`에 대응시킨다. core는 이것으로 각 tab, card, group card, space, project의 activity를 얻고 그 icon을 그린다([activity](activity.ko.md#선언)). 그 문서가 형식과 다른 형식의 거부를 정한다. core는 plugin을 이름으로 알지 않는다. |
+| status | `activity` | 값이 그 surface의 activity, 곧 `attention`, `failed`, `running`, `idle` 중 하나이거나 없음을 뜻하는 `null`인 status를 표시하는 선택적 `true`. core는 이것에서 각 tab, card, group card, space, project의 activity를 얻고 그 icon을 그리며([activity](activity.ko.md#선언)), 그 문서가 다른 형식과 다른 값의 거부를 정한다. core는 plugin을 이름으로 알지 않는다. |
 | command | `name` | 항목 이름 |
 | command | `description` | 한 문장 설명 |
 | command | `params` | 매개변수 스키마 |
