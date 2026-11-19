@@ -169,7 +169,7 @@ func exposedAll(nodes []ui.ElementNode, name string) map[string]ui.Rect {
 	return out
 }
 
-// A group header is one bar across the whole width inside the frame of its group card, and no divider crosses a header by more than 1 point: the divider
+// A group header is one bar across the whole width of its group card, and no divider crosses a header by more than 1 point: the divider
 // of the line between the nested group and the card beside it starts below the header of the outer group (docs/spec/groups.md#drawing).
 func TestNoDividerCrossesAGroupHeader(t *testing.T) {
 	f := nestedSideShell(t)
@@ -180,8 +180,7 @@ func TestNoDividerCrossesAGroupHeader(t *testing.T) {
 	}
 	for group, head := range heads {
 		frame := f.gridCards()[group]
-		// The frame has a border of 1 point on each side, inside which the header stands.
-		if math.Abs(float64(head.W)-(frame["w"].(float64)-2)) > 0.01 {
+		if math.Abs(float64(head.W)-frame["w"].(float64)) > 1 {
 			t.Fatalf("the header of %s is %v wide and its group card %v", group, head.W, frame["w"])
 		}
 		for item, divider := range dividers {
@@ -628,22 +627,6 @@ func TestAGripStandsOnlyOnAStretchThatHoldsIt(t *testing.T) {
 	body := (main.Y + main.Y + main.H) / 2
 	if got, beside := f.pixelOf(x, body), f.pixelOf(x, body-20); near(got, beside) {
 		t.Errorf("the stretch of the line beside the bodies draws no grip at its center %v,%v: %v", x, body, got)
-	}
-}
-
-// The header of a group card is the top band inside its frame, as the header of a content card stands inside the border of its card,
-// so it starts one border inside the group card and is two borders narrower (docs/spec/groups.md#drawing).
-func TestAGroupHeaderStandsInsideTheFrameOfItsGroupCard(t *testing.T) {
-	f := groupedShell(t)
-	f.settle()
-	frame, head := f.box("core.group", "card-2"), f.box("core.group.header", "card-2")
-	card, cardHead := f.box("core.card", "main"), f.box("core.card.header", "main")
-	border := cardHead.X - card.X
-	if border <= 0 || cardHead.Y-card.Y != border {
-		t.Fatalf("the header %+v of the content card main does not stand inside the border of its card %+v", cardHead, card)
-	}
-	if want := (ui.Rect{X: frame.X + border, Y: frame.Y + border, W: frame.W - 2*border, H: head.H}); head != want {
-		t.Fatalf("the header of the group card card-2 is %+v in its frame %+v, want %+v inside the border %v", head, frame, want, border)
 	}
 }
 

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-52 (group header 띠, mygo): group 명세의 drawn rectangles와 달리 mygo group header를 frame 안으로 border 하나만큼 옮긴 F937-47의 변경을 없애므로, header 아래 card가 다시 gap 하나 떨어진다. 검증: mygo의 gap test가 F937-47의 code에서 실패했고 통과한다.
 - F986 (group header의 이름 입력 칸): group 이름을 바꾸는 칸은 mygo, Wails, Tauri에서 project나 space tab의 이름 입력 칸이다; 이름의 자리를 차지하고 그 글자는 이름의 글자가 시작한 곳에서 시작하며, header 높이를 지키고, 새 token `rename-selection-mix`만큼 `bg`에 섞은 focus 색으로 선택한다; page는 mygo처럼 group 이름의 글자를 `tab-pad-x`만큼 들인다. 검증: mygo와 page test가 바뀌지 않은 code에서 실패했고 통과한다; 세 debug build의 사각형과 still이 dark와 light에서 일치한다.
 - F937-48 (group card가 있는 plane 검증, page): page plane의 검증은 다시 만든 사본에 group card의 frame을 주고, 한 line에서 같은 frame을 가진 card의 가장자리끼리 비교하므로, group card가 있는 layout이 더는 application log에 `V1`과 `V4` 실패를 기록하지 않는다. 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-47 (frame 안의 group header, mygo): mygo는 group card의 header를 page처럼, 그리고 content card의 header처럼 frame의 border 안에 그리므로, `core.group.header`와 `core.group.name`이 모든 host에서 같은 사각형을 가진다. 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
