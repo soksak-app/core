@@ -14001,6 +14001,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F947",
+    implementation: [
+      { file: "packages/workbench/app.css", symbol: ":root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}" },
+      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "border = s.palette.BorderWidth" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/drop-seam.test.mjs", id: "the drop zone at the seam draws no radius and a border of the border width" },
+      { file: "packages/workbench-mygo/tests/tab_drag_test.go", id: "TestThePreviewOfADropAtTheSeamIsSquareWithTheBorderWidth" },
+    ],
+    expected: "At gap 0 the drop zone of a tab drag draws no radius and a border of the border width in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F944",
     implementation: [{ file: "packages/workbench-mygo/src/layout/sidebars.go", symbol: "refused := g.dockRefused != nil && g.dockToken == planeToken(g) && slices.Equal(arranged, g.dockRefused)" }],
     tests: [{ file: "packages/workbench-mygo/tests/layout/window_sidebars_test.go", id: "TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff" }],
