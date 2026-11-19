@@ -583,6 +583,7 @@ func (s *Shell) registerStatuses() {
 		}
 		return entry
 	})
+	s.registry.Status("core.activity", func() any { return s.activity.State() })
 	s.registry.Status("core.layout", func() any {
 		value, err := s.layoutState()
 		if err != nil {

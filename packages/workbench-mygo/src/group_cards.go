@@ -314,6 +314,13 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	tools := s.groupHeadTools(id)
 	size, family := s.tabText()
 	nameWidth := spanWidth(c, ui.Span{Text: name, Size: size, Font: family}) + 2*m.tabPadX
+	// The icon of the activity of the group card stands before its name, so the name takes its width and the gap of the header with it
+	// (docs/spec/activity.md#drawing).
+	_, groupActivities, _, _ := s.shownActivities()
+	activity := groupActivities[id]
+	if activity != "" {
+		nameWidth += m.activityIcon + m.cardHeadGap
+	}
 	buttons := float32(len(tools))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
 	kept := keptTools(tools)
@@ -343,6 +350,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		if s.renaming != nil && s.renaming.renameTarget == target {
 			ui.Row(c).Grow(1).Children(func() { s.drawRenameField(c, max(0, nameWidth)) })
 		} else {
+			if activity != "" {
+				s.drawActivity(c, "core.activity.group", id, activity, m.activityIcon)
+			}
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
 			label.KeepFocus().Grow(1).Shrink(1).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
 			s.renameOnDoubleClick(label, target)

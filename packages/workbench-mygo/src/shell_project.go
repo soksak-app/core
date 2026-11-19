@@ -771,6 +771,7 @@ func (s *Shell) dropProject(id string) {
 	}
 	s.forgetSurfaces(tabs)
 	delete(s.windowProjects, id)
+	defer s.activity.Sync()
 	for i := range s.projects {
 		if s.projects[i].ID == id {
 			s.projects = append(s.projects[:i:i], s.projects[i+1:]...)

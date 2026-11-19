@@ -249,12 +249,16 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	mark := spanWidth(c, ui.Span{Text: tabCloseMark, Size: size, Font: family})
 	chrome := 2*m.tabPadX + m.tabGap + mark + 2*m.tabXPad
 	widths := make([]float64, len(tabs))
+	tabActivities, _, _, _ := s.shownActivities()
 	activeWidth, activeLeft, left := 0.0, 0.0, 0.0
 	for i, tab := range tabs {
 		measured := spanWidth(c, ui.Span{Text: s.tabName(tab), Size: size, Font: family})
 		spare := chrome
 		if s.tabNoticeText(tab.ID) != "" {
 			spare += m.noticeDot + m.tabGap
+		}
+		if tabActivities[tab.ID] != "" {
+			spare += m.activityIcon + m.tabGap
 		}
 		widths[i] = float64(min(measured+spare, m.tabMaxW))
 		if active != nil && tab.ID == active.ID {
@@ -577,6 +581,12 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 		if noticed {
 			start += m.noticeDot + m.tabGap
 		}
+		// The icon of the activity of the tab stands after the notice and before the name (docs/spec/activity.md#drawing).
+		tabs, _, _, _ := s.shownActivities()
+		activity, iconAt := tabs[tab.ID], start
+		if activity != "" {
+			start += m.activityIcon + m.tabGap
+		}
 		pill.Children(func() {
 			ui.Row(c).Padding(0, m.tabGap+mark+2*m.tabXPad+m.tabPadX, 0, start).Children(func() {
 				ui.Text(c, name).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(size).MaxWidth(width).TextColor(color)
@@ -584,6 +594,11 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 		})
 		if noticed {
 			ui.Box(c).Absolute().Left(m.tabPadX).Top(m.tabPadY + (line-m.noticeDot)/2).Children(func() { s.noticeMark(c, tab.ID) })
+		}
+		if activity != "" {
+			ui.Box(c).Absolute().Left(iconAt).Top(m.tabPadY + (line-m.activityIcon)/2).Children(func() {
+				s.drawActivity(c, "core.activity.tab", tab.ID, activity, m.activityIcon)
+			})
 		}
 		closing := s.binder.Press(c, "core.card.tab-close", "core.tab.close", tab.ID, tabParam{tab.ID})
 		closing.Absolute().Top(m.tabPadY + (line-lineBox(size, m.lineHeightTight))/2).Right(m.tabPadX).PaddingX(m.tabXPad).Radius(s.radiusSmall()).Label("닫기").Tooltip("닫기")

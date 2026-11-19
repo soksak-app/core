@@ -21,6 +21,7 @@ const registeredSections = [];
  *        @param {string} plugin.svg   icon path on a 16×16 viewBox
  *        @param {string|null} plugin.ink theme token name of the library preview color; the default color if absent
  *        @param {object|null} plugin.background declaration of the persistent background session
+ *        @param {string[]} [plugin.activity] the names of the statuses that declare activity (docs/spec/activity.md)
  *        @param {(tabId: string) => {module: string, composition: object}} plugin.surface document that the surface shows
  *        and the validated composition permission declaration. One surface is one tab, so
  *        the argument is the id of the tab

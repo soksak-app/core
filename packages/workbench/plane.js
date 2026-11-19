@@ -33,6 +33,7 @@ import { followRing, keyboardOwed } from "./keyboard.js";
 import { native, onSurfaceInput, overlay, report, shapes, windowSidecar } from "./host.js";
 import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
+import { drawActivity } from "./activity.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
 import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
@@ -1387,7 +1388,10 @@ function fitGroupHead(head) {
   head.dataset.measure = "";
   const name = head.querySelector(".group__name").getBoundingClientRect().width;
   delete head.dataset.measure;
-  foldHead(head, { lead: 0, tabWidths: [name], tabGap: 0 });
+  // The icon of an activity stands before the name, so the name takes its width and the gap of the header with it.
+  const icon = head.querySelector(":scope > .activity");
+  const lead = icon ? icon.getBoundingClientRect().width + (parseFloat(getComputedStyle(head).columnGap) || 0) : 0;
+  foldHead(head, { lead: 0, tabWidths: [lead + name], tabGap: 0 });
 }
 
 /**
@@ -1427,6 +1431,33 @@ const keptTools = (acts) => [...acts.querySelectorAll(".chrome__act[data-do=lead
 
 /** The kept tools that the head row shows beside ⋯: those of keptTools in the menu stage, none in the stage all, where ⋯ holds them. */
 const shownKept = (row, acts) => (row.dataset.tools === "menu" ? keptTools(acts) : []);
+
+/* The reader of the activities of the shown space: {tabs, groups} by tab and group card identifier (docs/spec/activity.md#drawing). */
+let readActivities = () => ({ tabs: {}, groups: {} });
+
+/** Sets the reader of the activities of the shown space, which the drawing of the plane reads. */
+export function setActivityReader(read) {
+  readActivities = read;
+}
+
+/** Draws the activity icons of the tabs of the cards and of the group headers of the plane. */
+function drawActivities() {
+  const { tabs, groups } = readActivities();
+  for (const b of plane.querySelectorAll(".chrome__tabs .tab[data-tab-id]")) {
+    drawActivity(b, b.querySelector(".tab__name"), Object.hasOwn(tabs, b.dataset.tabId) ? tabs[b.dataset.tabId] : null, "core.activity.tab");
+  }
+  for (const head of plane.querySelectorAll(".group[data-group-card] > .group__head")) {
+    const id = head.parentElement.dataset.groupCard;
+    drawActivity(head, head.querySelector(".group__name"), Object.hasOwn(groups, id) ? groups[id] : null, "core.activity.group");
+  }
+}
+
+/** Draws the activity icons again after the activities changed and fits the heads to their new widths. */
+export function redrawActivities() {
+  if (!grid) return;
+  drawActivities();
+  centreTabs();
+}
 
 /* It measures after the render completes. Measuring before the width is updated computes a wrong position.
    It does not scroll during a tab drag. The coordinates of the dragged tab would be misaligned. */
@@ -1695,6 +1726,7 @@ function build(kept) {
       keepHiddenSidebars();
       const fullscreen = view.fullscreenCard;
       drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId });
+      drawActivities();
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
@@ -1813,6 +1845,15 @@ export const capture = (path = null) => {
     named, sidebars: sidebarChoices(),
   };
 };
+
+/**
+ * The cards and the group tree of the drawn layout in the stored form, each card with its tabs as {id, plugin}, and null before the plane
+ * is built: the layout of the shown space whose activities core.activity reports (docs/spec/activity.md).
+ */
+export const activityLayout = () => (grid ? {
+  state: { cards: grid.cards.map((card) => ({ id: card.id, data: card.data ? { tabs: tabsOf(card).map(({ id, plugin }) => ({ id, plugin })) } : null })) },
+  groups: tree.stored().groups,
+} : null);
 
 /** Applies one stored set of state to the plane. */
 export function adopt(kept, space) {

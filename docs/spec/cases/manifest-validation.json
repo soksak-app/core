@@ -4729,6 +4729,183 @@
       ]
     },
     {
+      "id": "exposes.status-activity-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": true
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-false",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": false
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be true",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-map",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": {
+                "busy": "running"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be true",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-text",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "attention",
+                  "failed",
+                  "running",
+                  "idle",
+                  null
+                ]
+              },
+              "activity": "running"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be true",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "exposes.description-missing",
       "manifest": {
         "id": "probe",
