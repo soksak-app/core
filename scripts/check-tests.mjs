@@ -300,6 +300,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F992",
+    implementation: [
+      { file: "scripts/check-comment-language.mjs", symbol: "const ZSH_START = /(^|\\/)\\.?z(shenv|shrc|profile|login)$/;" },
+    ],
+    tests: [
+      { file: "scripts/test/comment-language.test.mjs", id: "bash and zsh scripts are checked by their extension or the name of a zsh start file" },
+    ],
+    expected: "The comment language check reports the Hangul comment lines of bash and zsh scripts, by the extensions .bash and .zsh and the names of the zsh start files.",
+    levels: ["unit"],
+  },
+  {
     id: "F987",
     implementation: [
       { file: "packages/sok/go/src/conversation.go", symbol: "return fmt.Errorf(\"HOME is not UTF-8: %s\", escapedBytes(home))" },
