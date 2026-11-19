@@ -344,6 +344,12 @@ pub enum Delivery {
     PressOpen,
     /// An open press of another pointer would share the state that the input changes, so it was not delivered.
     PointerHeld(PointerHeld),
+    /// The press lies on a resize edge of the window, where AppKit tracks a press as a window resize, so it was not delivered.
+    /// The value is the message of the refusal, which names the point and the edge.
+    ResizeEdge(String),
+    /// The press of a person ended the gesture of that pointer and button, so the drag or release was not delivered. The value
+    /// is the message of the interruption, which names the press of the person and the point where the gesture was released.
+    Interrupted(String),
 }
 
 /// One step of a composition of `input.text`, as the input method of the system gives it to the text input client of the key
@@ -1142,6 +1148,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         document: Option<&str>,
         done: Box<dyn Fn(Result<Value, String>)>,
     );
+    #[cfg(feature = "diagnostics")]
+    /// Dispatches in window the event that the window server gives the application for a press, a move or a scroll of a person
+    /// at x, y in the content (docs/spec/endpoint.md). Call it on the main thread.
+    fn dispatch_person_input(
+        &self,
+        window: Handle,
+        action: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<(), String>;
     #[cfg(feature = "diagnostics")]
     /// Ends the pending wait of the input reference of window, naming reason in its failure. Call it on the main thread.
     fn end_input_reference_wait(&self, window: Handle, reason: &str);

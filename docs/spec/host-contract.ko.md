@@ -144,6 +144,8 @@ fn invalid_json_closes_connection() {
 | `notifications.request.rejects-invalid-fields` | 비었거나 너무 길거나 제어 문자가 있는 표면, 제목, 본문은 그 필드를 적은 오류로 거부한다. | all |
 | `notifications.event.records-each-event-and-failure` | host가 해석하는 알림 센터의 사건마다 `type`, 상태의 `authorization`, 알림의 `window`와 `surface`를 가진 event `host.notification.event`가 있고, 실패(읽을 수 없거나 알 수 없는 종류의 사건, 창과 표면이 없는 알림, 닫힌 창, 알림 센터가 알린 실패)마다 장소 `notification`의 `error` 기록이 있다. Go 시험은 전체 경로를, Rust 시험은 이벤트를 읽는 부분까지를 다룬다. 창 조회에는 application handle이 필요하기 때문이다. | all |
 | `diagnostics.input-reference.declared` | Diagnostic endpoint는 같은 window의 input reference method를 선언한다. | all |
+| `diagnostics.input-person.declared` | 진단 build는 `diagnostics.input.person`을 선언한다. | all |
+| `diagnostics.input-person.validates-parameters` | `diagnostics.input.person`은 native 호출 전에 `press`, `move`, `scroll`이 아닌 `action`을 -32602 `action must be press, move or scroll`로, 없거나 숫자가 아닌 `x`나 `y`를 -32602 `x and y must be numbers`로 거부한다. | all |
 | `diagnostics.input-reference.validates-document` | Input reference action은 wait-document와 wait에서만 빈 문자열을 포함한 document 문자열을 받으며 없거나 잘못된 값을 거부한다. | all |
 | `diagnostics.input-reference.rejects-nul` | Native input reference adapter는 action이나 document의 NUL을 거부하고 오류로 한 번 완료한다. | all |
 | `diagnostics.input-source.selects-a-role` | `diagnostics.input.source`는 role `latin`, `korean`, `japanese`가 아닌 `select`, `restore`와 함께 온 `select`, 빈 `restore`를 각각 invalid-params 오류로 거부한다. Role은 role 그대로 platform에 전달되며, 응답은 platform이 보고한 role을 `current`(role이 없는 input source는 null)로, 그 platform 식별자를 `source`로 담는다. | all |
@@ -415,6 +417,8 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-button-held-message` | 1007 메시지는 `NSEvent.pressedMouseButtons` 마스크를 16진수로, frontmost 애플리케이션을 bundle identifier와 pid로 보고하며, bundle identifier가 없는 애플리케이션은 pid로, frontmost 애플리케이션이 없으면 그 사실을 두 host에서 같은 문장으로 보고한다. | all |
 | `endpoint.input.pointer-name` | `pointer`의 기본값은 `main`이고, `a-z`, `0-9`, `-`로 된 1~32자 이름은 그대로 전달하며, 빈 이름, 다른 문자가 있는 이름, 더 긴 이름, 문자열이 아닌 값은 -32602를 반환한다. | all |
 | `endpoint.input.pointer-held-message` | 1011 메시지는 누름을 쥔 pointer와 그 누름이 쥔 상태를 두 host에서 같은 문장으로 밝힌다. | all |
+| `endpoint.input.resize-edge-refusal` | 창의 resize edge 위 `down`은 -32602와 점과 edge를 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
+| `endpoint.input.interruption` | 사람의 누름, 이동, scroll이 끝낸 gesture의 `drag`나 `up`은 1013과 그 동작과 gesture를 놓은 점을 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |
 | `endpoint.input.key-control-option-and-text` | control과 option 수정자는 6이 되고 text는 그대로 전달된다. | all |

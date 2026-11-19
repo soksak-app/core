@@ -666,6 +666,16 @@ impl Platform for Windows {
     #[cfg(feature = "diagnostics")]
     fn end_input_reference_wait(&self, _window: Handle, _reason: &str) {}
     #[cfg(feature = "diagnostics")]
+    fn dispatch_person_input(
+        &self,
+        _window: Handle,
+        _action: &str,
+        _x: f64,
+        _y: f64,
+    ) -> Result<(), String> {
+        Err("the action of a person is not implemented on windows".into())
+    }
+    #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {
         unsupported::input_source()
     }

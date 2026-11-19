@@ -40,6 +40,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
+  lane("macOS application bundle exchange", "objective-c", ["native/darwin/src/tools/swap_bundle.m"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
@@ -127,6 +128,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("application usage measurement", "js-ts", ["scripts/measure-app-usage.mjs"], ["scripts/test/measure-app-usage.test.mjs", "scripts/test/platform/darwin/system/measure-app-usage.test.mjs", "scripts/test/fixtures/measure-app-usage/**/*"], { sharedTests: true, testExtensions: new Set([".mjs", ".json"]) }),
   lane("measurement tools and waits", "js-ts", ["scripts/measure-tools.mjs"], ["scripts/test/measure-tools.test.mjs", "scripts/test/platform/darwin/system/measure-app-usage.test.mjs"], { sharedTests: true }),
   lane("terminal redraw measurement", "js-ts", ["scripts/measure-terminal-redraw.mjs", "scripts/fixtures/status-redraw.mjs"], ["scripts/test/measure-terminal-redraw.test.mjs"]),
+  lane("terminal text measurement", "js-ts", ["scripts/measure-terminal-text.mjs"], ["scripts/test/measure-terminal-text.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("measurement trace state", "js-ts", ["scripts/measure-trace.mjs"], ["scripts/test/measure-trace.test.mjs"]),
   lane("B3 measurement output", "js-ts", ["scripts/b3-out.mjs"], ["scripts/test/b3-out.test.mjs"]),
@@ -167,11 +169,11 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("GPUI environment declaration", "declaration", ["apps/gpuikit/environment.json"], ["apps/gpuikit/test/environment.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Wails runtime", "js-ts", ["apps/wailsv3/runtime/**/*.js"], ["apps/wailsv3/test/**/*.mjs"], { sharedTests: true }),
 
-  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/event_log_native_test.rs", "packages/host/rust/src/stall_watch_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecars_environment_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_new_window_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/window_cursor_test.rs", "packages/host/rust/src/window_sheet_test.rs", "packages/host/rust/src/dialog_test.rs", "packages/host/rust/src/window_order_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/platform/darwin/child_process_test.rs", "packages/host/rust/src/platform/darwin/login_shell_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/sidecars_stop_test.rs", "packages/host/rust/src/windows_removal_end_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
+  lane("Rust language host library", "rust", ["packages/host/rust/src/**/*.rs", "packages/host/rust/build.rs"], ["packages/host/rust/tests/**/*.rs", "packages/host/rust/src/endpoint_response_test.rs", "packages/host/rust/src/event_log_native_test.rs", "packages/host/rust/src/stall_watch_test.rs", "packages/host/rust/src/quit_owner_test.rs", "packages/host/rust/src/sidecars_environment_test.rs", "packages/host/rust/src/sidecar_root_admission_test.rs", "packages/host/rust/src/view_sidecar_cids_test.rs", "packages/host/rust/src/view_sidecar_enqueue_test.rs", "packages/host/rust/src/view_sidecar_project_test.rs", "packages/host/rust/src/view_sidecar_send_test.rs", "packages/host/rust/src/window_sidecar_admission_test.rs", "packages/host/rust/src/exposure_menu_executor_test.rs", "packages/host/rust/src/exposure_settled_test.rs", "packages/host/rust/src/documents_test.rs", "packages/host/rust/src/windows_front_test.rs", "packages/host/rust/src/sidecars_route_test.rs", "packages/host/rust/src/document_post_test.rs", "packages/host/rust/src/images_test.rs", "packages/host/rust/src/images_relay_test.rs", "packages/host/rust/src/object_counts_test.rs", "packages/host/rust/src/composition_overlay_test.rs", "packages/host/rust/src/platform/darwin/webview_overlay_test.rs", "packages/host/rust/src/platform/darwin/capture_layout_test.rs", "packages/host/rust/src/platform/darwin/document_test.rs", "packages/host/rust/src/sidecar_reply_test.rs", "packages/host/rust/src/surfaces_test.rs", "packages/host/rust/src/modals_readiness_test.rs", "packages/host/rust/src/exposure_webviews_test.rs", "packages/host/rust/src/exposure_status_test.rs", "packages/host/rust/src/notifications_test.rs", "packages/host/rust/src/project_removal_test.rs", "packages/host/rust/src/endpoint_lock_test.rs", "packages/host/rust/src/windows_records_test.rs", "packages/host/rust/src/page_end_test.rs", "packages/host/rust/src/responder_test.rs", "packages/host/rust/src/sidecars_lock_test.rs", "packages/host/rust/src/image_detach_test.rs", "packages/host/rust/src/start_test.rs", "packages/host/rust/src/performance_lock_test.rs", "packages/host/rust/src/workspace_lock_test.rs", "packages/host/rust/src/view_lifecycle_test.rs", "packages/host/rust/src/view_origin_test.rs", "packages/host/rust/src/view_responsiveness_test.rs", "packages/host/rust/src/view_theme_test.rs", "packages/host/rust/src/surface_close_test.rs", "packages/host/rust/src/presentation_end_test.rs", "packages/host/rust/src/view_start_test.rs", "packages/host/rust/src/log_policy_levels_test.rs", "packages/host/rust/src/view_call_peer_test.rs", "packages/host/rust/src/presentation_wait_test.rs", "packages/host/rust/src/view_join_test.rs", "packages/host/rust/benches/**/*.rs", "packages/host/rust/tests/fixtures/**/*.json", "packages/host/rust/src/diagnostics_lock_test.rs", "packages/host/rust/src/diagnostics_input_reference_test.rs", "packages/host/rust/src/diagnostics_input_person_test.rs", "packages/host/rust/src/diagnostics_input_source_test.rs", "packages/host/rust/src/diagnostics_new_window_test.rs", "packages/host/rust/src/diagnostics_test.rs", "packages/host/rust/src/window_activation_observation_test.rs", "packages/host/rust/src/window_pageless_processes_test.rs", "packages/host/rust/src/window_cursor_test.rs", "packages/host/rust/src/window_sheet_test.rs", "packages/host/rust/src/dialog_test.rs", "packages/host/rust/src/window_order_test.rs", "packages/host/rust/src/platform/darwin/input_reference_test.rs", "packages/host/rust/src/platform/darwin/input_test.rs", "packages/host/rust/src/platform/darwin/child_process_test.rs", "packages/host/rust/src/platform/darwin/login_shell_test.rs", "packages/host/rust/src/log_policy_watch_hook_lock_test.rs", "packages/host/rust/src/process_lock_hook_lock_test.rs", "packages/host/rust/src/assets_lock_test.rs", "packages/host/rust/src/deep_link_lock_test.rs", "packages/host/rust/src/log_query_lock_test.rs", "packages/host/rust/src/debug_follow_lock_test.rs", "packages/host/rust/src/source_origins_test.rs", "packages/host/rust/src/sidecar_routes_test.rs", "packages/host/rust/src/sidecars_session_retention_test.rs", "packages/host/rust/src/installed_reads_test.rs", "packages/host/rust/src/routine/async_runtime_test.rs", "packages/host/rust/src/platform/windows/devtools_input_test.rs", "packages/host/rust/src/platform/windows/show_test.rs", "packages/host/rust/src/platform/windows/mouse_watch_test.rs", "packages/host/rust/src/platform/windows/ui_queue_test.rs", "packages/host/rust/src/platform/windows/process_failure_test.rs", "packages/host/rust/src/sidecars_stop_test.rs", "packages/host/rust/src/windows_removal_end_test.rs", "packages/host/rust/src/windows_ends_test.rs", "packages/host/rust/src/exposure_fullscreen_test.rs"], { testExtensions: new Set([".rs", ".json"]) }),
   lane("Tauri framework adapter", "rust", ["packages/host/tauriv2/src/**/*.rs"], ["packages/host/tauriv2/tests/**/*.rs", "packages/host/tauriv2/src/plugins_starter_test.rs", "packages/host/tauriv2/tests/fixtures/window-race/Cargo.toml", "packages/host/tauriv2/tests/fixtures/window-race/tauri.conf.json", "packages/host/tauriv2/tests/fixtures/window-race/frontend/index.html", "packages/host/tauriv2/tests/fixtures/window-race/icons/icon.png"], { testExtensions: new Set([".rs", ".toml", ".json", ".html", ".png"]) }),
   lane("Tauri application bootstrap", "rust", ["apps/tauriv2/src/main.rs", "apps/tauriv2/build.rs"], ["e2e/**/*.mjs", "e2e/platform/platform.js", "e2e/fixtures/*/*/plugin.json", "e2e/fixtures/*/*/ui/*.js", "e2e/fixtures/*/*/ui/*.html", "e2e/fixtures/sidecars/*/sidecar.json", "e2e/fixtures/sidecars/*/build.rs", "e2e/fixtures/sidecars/*/src/*.rs", "e2e/fixtures/sidecars/*/tests/*.rs"], { testLanguage: "js-ts", testExtensions: FIXTURE_TEST_EXTENSIONS, sharedTests: true }),
 
-  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/endpoint_response_test.go", "packages/host/go/src/endpoint_input_test.go", "packages/host/go/src/event_native_test.go", "packages/host/go/src/diagnostics_view_fault_test.go", "packages/host/go/src/endpoint_presses_test.go", "packages/host/go/src/endpoint_ended_test.go", "packages/host/go/src/quit_owner_test.go", "packages/host/go/src/sidecars_environment_test.go", "packages/host/go/src/sidecar_root_admission_test.go", "packages/host/go/src/view_sidecar_cids_test.go", "packages/host/go/src/view_sidecar_enqueue_test.go", "packages/host/go/src/view_sidecar_project_test.go", "packages/host/go/src/view_sidecar_send_test.go", "packages/host/go/src/window_sidecar_admission_test.go", "packages/host/go/src/main_test.go", "packages/host/go/src/main_thread_step_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_pageless_processes_test.go", "packages/host/go/src/window_cursor_test.go", "packages/host/go/src/window_sheet_test.go", "packages/host/go/src/dialog_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/fatal_exit_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/open_layout_test.go", "packages/host/go/src/surface_created_bounds_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/surfaces_layout_trace_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_hold_end_test.go", "packages/host/go/src/diagnostics_hold_window_test.go", "packages/host/go/src/diagnostics_native_wait_test.go", "packages/host/go/src/diagnostics_new_window_test.go", "packages/host/go/src/diagnostics_recording_e2e_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_input_source_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/capture_layout_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/platform/darwin/input_test.go", "packages/host/go/src/platform/darwin/child_process_test.go", "packages/host/go/src/platform/darwin/login_shell_test.go", "packages/host/go/src/page_end_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go", "packages/host/go/src/windows_removal_end_test.go", "packages/host/go/src/sidecars_stop_test.go", "packages/host/go/src/exposure_wait_ends_test.go", "packages/host/go/src/exposure_request_ends_test.go", "packages/host/go/src/layout_watch_test.go", "packages/host/go/src/page_start_main_thread_test.go", "packages/host/go/src/window_order_test.go", "packages/host/go/src/stall_watch_test.go", "packages/host/go/src/view_probe_test.go", "packages/host/go/src/exposure_settled_failure_test.go", "packages/host/go/src/view_reply_fault_test.go", "packages/host/go/src/view_wire_test.go", "packages/host/go/src/window_native_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
+  lane("Go language host library", "go", ["packages/host/go/src/**/*.go"], ["packages/host/go/tests/**/*.go", "packages/host/go/src/endpoint_response_test.go", "packages/host/go/src/endpoint_input_test.go", "packages/host/go/src/event_native_test.go", "packages/host/go/src/diagnostics_view_fault_test.go", "packages/host/go/src/endpoint_presses_test.go", "packages/host/go/src/endpoint_ended_test.go", "packages/host/go/src/quit_owner_test.go", "packages/host/go/src/sidecars_environment_test.go", "packages/host/go/src/sidecar_root_admission_test.go", "packages/host/go/src/view_sidecar_cids_test.go", "packages/host/go/src/view_sidecar_enqueue_test.go", "packages/host/go/src/view_sidecar_project_test.go", "packages/host/go/src/view_sidecar_send_test.go", "packages/host/go/src/window_sidecar_admission_test.go", "packages/host/go/src/main_test.go", "packages/host/go/src/main_thread_step_test.go", "packages/host/go/src/platform/darwin/main_test.go", "packages/host/go/src/platform/darwin/main_diagnostics_test.go", "packages/host/go/src/platform/darwin/native_startup_test.go", "packages/host/go/src/platform/darwin/abi/memory_test.go", "packages/host/go/tests/fixtures/**/*.json", "packages/host/go/src/platform/windows/devtools_input_test.go", "packages/host/go/src/platform/windows/mouse_watch_test.go", "packages/host/go/src/platform/windows/process_failure_test.go", "packages/host/go/src/platform/windows/show_test.go", "packages/host/go/src/platform/windows/ui_queue_test.go", "packages/host/go/src/step_records_test.go", "packages/host/go/src/diagnostics_gc_loop_test.go", "packages/host/go/src/diagnostics_cpu_profile_test.go", "packages/host/go/src/diagnostics_no_main_page_test.go", "packages/host/go/src/exposure_settled_test.go", "packages/host/go/src/modals_workbench_test.go", "packages/host/go/src/window_frames_test.go", "packages/host/go/src/window_page_process_test.go", "packages/host/go/src/window_pageless_processes_test.go", "packages/host/go/src/window_cursor_test.go", "packages/host/go/src/window_sheet_test.go", "packages/host/go/src/dialog_test.go", "packages/host/go/src/window_activation_observation_test.go", "packages/host/go/src/event_log_wake_test.go", "packages/host/go/src/projects_test.go", "packages/host/go/src/windows_main_page_test.go", "packages/host/go/src/fatal_exit_test.go", "packages/host/go/src/surface_elements_test.go", "packages/host/go/src/open_layout_test.go", "packages/host/go/src/surface_created_bounds_test.go", "packages/host/go/src/surfaces_test.go", "packages/host/go/src/surfaces_layout_trace_test.go", "packages/host/go/src/document_post_test.go", "packages/host/go/src/images_relay_test.go", "packages/host/go/src/image_detach_test.go", "packages/host/go/src/responder_test.go", "packages/host/go/src/start_test.go", "packages/host/go/src/diagnostics_test.go", "packages/host/go/src/diagnostics_hold_end_test.go", "packages/host/go/src/diagnostics_hold_window_test.go", "packages/host/go/src/diagnostics_native_wait_test.go", "packages/host/go/src/diagnostics_new_window_test.go", "packages/host/go/src/diagnostics_recording_e2e_test.go", "packages/host/go/src/diagnostics_input_reference_test.go", "packages/host/go/src/diagnostics_input_person_test.go", "packages/host/go/src/diagnostics_input_source_test.go", "packages/host/go/src/diagnostics_clock_test.go", "packages/host/go/src/composition_overlay_test.go", "packages/host/go/src/platform/darwin/webview_overlay_test.go", "packages/host/go/src/platform/darwin/capture_layout_test.go", "packages/host/go/src/platform/darwin/document_test.go", "packages/host/go/src/platform/darwin/input_reference_test.go", "packages/host/go/src/platform/darwin/input_test.go", "packages/host/go/src/platform/darwin/child_process_test.go", "packages/host/go/src/platform/darwin/login_shell_test.go", "packages/host/go/src/page_end_test.go", "packages/host/go/src/exposure_status_test.go", "packages/host/go/src/exposure_webviews_test.go", "packages/host/go/src/modals_readiness_test.go", "packages/host/go/src/object_counts_test.go", "packages/host/go/src/view_lifecycle_test.go", "packages/host/go/src/view_responsiveness_test.go", "packages/host/go/src/view_theme_test.go", "packages/host/go/src/view_start_test.go", "packages/host/go/src/log_policy_levels_test.go", "packages/host/go/src/view_call_peer_test.go", "packages/host/go/src/view_call_record_test.go", "packages/host/go/src/view_error_test.go", "packages/host/go/src/view_binary_test.go", "packages/host/go/src/documents_test.go", "packages/host/go/src/presentation_wait_test.go", "packages/host/go/src/view_join_test.go", "packages/host/go/src/sidecar_reply_test.go", "packages/host/go/src/view_origin_test.go", "packages/host/go/src/source_origins_test.go", "packages/host/go/src/sidecar_routes_test.go", "packages/host/go/src/sidecars_session_retention_test.go", "packages/host/go/src/plugins_starter_test.go", "packages/host/go/src/images_test.go", "packages/host/go/src/windows_front_test.go", "packages/host/go/src/windows_show_test.go", "packages/host/go/src/windows_removal_end_test.go", "packages/host/go/src/sidecars_stop_test.go", "packages/host/go/src/exposure_wait_ends_test.go", "packages/host/go/src/exposure_request_ends_test.go", "packages/host/go/src/layout_watch_test.go", "packages/host/go/src/page_start_main_thread_test.go", "packages/host/go/src/window_order_test.go", "packages/host/go/src/stall_watch_test.go", "packages/host/go/src/view_probe_test.go", "packages/host/go/src/exposure_settled_failure_test.go", "packages/host/go/src/view_reply_fault_test.go", "packages/host/go/src/view_wire_test.go", "packages/host/go/src/window_native_test.go"], { sharedTests: true, testExtensions: new Set([".go", ".json"]) }),
   lane("Wails framework adapter", "go", ["packages/host/wailsv3/src/**/*.go"], ["packages/host/wailsv3/tests/**/*.go"], { sharedTests: true }),
   lane("mygo framework adapter", "go", ["packages/host/mygo/src/**/*.go"], ["packages/host/mygo/tests/**/*.go", "packages/host/mygo/src/frames_test.go", "packages/host/mygo/src/frontend_test.go", "packages/host/mygo/src/workbench_test.go"], { sharedTests: true }),
   lane("empty mygo window benchmark", "go", ["packages/host/mygo/benchmark/empty_window.go", "packages/host/mygo/benchmark/platform/darwin/main.go"], ["packages/host/mygo/benchmark/empty_window_test.go"], { sharedTests: true }),
@@ -211,11 +213,13 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
     "native/darwin/src/input_virtual.m",
     "native/darwin/src/input_source.m",
     "native/darwin/src/input_reference.m",
+    "native/darwin/src/input_person.m",
     "native/darwin/src/webview_input.m",
   ], [
     "native/darwin/tests/image_region_ime_test.m",
     "native/darwin/tests/input_activate_test.m",
     "native/darwin/tests/input_reference_test.m",
+    "native/darwin/tests/input_person_test.m",
     "native/darwin/tests/input_inject_test.m",
     "native/darwin/tests/input_virtual_test.m",
     "native/darwin/tests/input_cursor_rect_test.m",
@@ -261,7 +265,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("Darwin host document diagnostic bridges", "objective-c", ["native/darwin/src/host_api_document_draw_covered.m", "native/darwin/src/host_api_document_viewport_marker.m"], ["native/darwin/tests/document_draw_covered_test.m", "native/darwin/tests/document_viewport_marker_test.m", "e2e/design-hosts.test.mjs", "e2e/view-display.test.mjs"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host view and layout bridges", "objective-c", ["native/darwin/src/host_api_webview.m", "native/darwin/src/host_api_window.m", "native/darwin/src/host_api_layout.m", "native/darwin/src/host_api_shapes.m", "native/darwin/src/host_api_system.m", "native/darwin/src/webview.m"], ["e2e/projects.test.mjs", "e2e/modal.test.mjs", "e2e/controls.test.mjs", "e2e/view-restart.test.mjs", "e2e/native-window-color-space.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host image bridge", "objective-c", ["native/darwin/src/host_api_image.m"], ["e2e/view-display.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
-  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
+  lane("Darwin host input bridges", "objective-c", ["native/darwin/src/host_api_input.m", "native/darwin/src/host_api_input_reference.m", "native/darwin/src/host_api_input_person.m", "native/darwin/src/host_api_input_source.m", "native/darwin/src/host_api_mouse_buttons.m"], ["e2e/two-pointers.test.mjs", "e2e/native-drag.test.mjs", "e2e/input-person.test.mjs", "e2e/activation/view-focus.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host capture bridge", "objective-c", ["native/darwin/src/host_api_capture.m"], ["e2e/capture-display-link.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("Darwin host clipboard bridge", "objective-c", ["native/darwin/src/host_api_clipboard.m"], ["native/darwin/tests/clipboard_test.m"], { testLanguage: "objective-c", testExtensions: new Set([".m", ".mjs"]), sharedTests: true }),
   lane("Darwin host link bridge", "objective-c", ["native/darwin/src/host_api_link.m"], ["native/darwin/tests/link_test.m"], { testLanguage: "objective-c", sharedTests: true }),
@@ -335,6 +339,35 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkKeyUpLeavesTheHold" },
     ],
     expected: "A press or a key down ends the layout hold; a key up or a modifier change ends none.",
+    levels: ["unit"],
+  },
+  {
+    id: "F974",
+    implementation: [
+      { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },
+    ],
+    tests: [
+      { file: "scripts/test/fixture-registry.test.mjs", id: "the plugin.json of each fixture plugin has the description of 1 to 200 characters that an installation requires" },
+    ],
+    expected: "Every fixture plugin.json has a description of 1 to 200 characters, so sok install accepts every fixture plugin.",
+    levels: ["unit"],
+  },
+  {
+    id: "F975",
+    implementation: [
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "export function installBundle(" },
+      { file: "native/darwin/src/tools/swap_bundle.m", symbol: "renamex_np(staged, target, RENAME_SWAP)" },
+      { file: "Makefile", symbol: "staging = $(dir $(1)).staging/$(notdir $(1))" },
+      { file: "scripts/platform/darwin/artifacts.mjs", symbol: "export async function verifyApplicationArtifact(artifact)" },
+      { file: "scripts/test-app.mjs", symbol: "else if (item.kind === 'verify') await verifyApplicationArtifact(item.artifact, { platform: item.platform });" },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "a bundle build leaves the signed bundle unchanged until one rename installs the signed new bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "the installation refuses a staging bundle that does not verify and leaves the bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "the installation refuses a bundle that a process runs before it changes anything" },
+      { file: "scripts/test/test-app.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
+    ],
+    expected: "A bundle build writes and signs a staging bundle and installs it with one rename, so a launch finds a complete signed bundle, and a check run verifies the signature of each bundle before it starts it.",
     levels: ["unit"],
   },
   {
@@ -1044,7 +1077,7 @@ const FEATURE_LINKS = [
   {
     id: "F762",
     implementation: [
-      { file: "native/darwin/src/surface_layout.m", symbol: "if (key) return identity;" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "static NSString *actionContent(NSEvent *event)" },
     ],
     tests: [
       { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the kept key is told once, also after it came back" },
@@ -9270,13 +9303,13 @@ const FEATURE_LINKS = [
     implementation: [
       { file: "Makefile", symbol: "bundle-info = node scripts/platform/darwin/prepare-app-bundle.mjs" },
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function runningBundleProcesses(" },
-      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "rmSync(contents, { recursive: true, force: true })" },
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "rmSync(staging, { recursive: true, force: true });" },
     ],
     tests: [
       { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation refuses a running bundle executable before removing Contents" },
-      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation recreates Contents when no process uses the bundle" },
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation creates the Contents of the staging bundle anew and leaves the bundle when no process uses it" },
     ],
-    expected: "The Makefile bundle preparation refuses with the active process PID and target path before removing Contents, preserves the running bundle files, and recreates Contents when no process uses the bundle.",
+    expected: "The Makefile bundle preparation refuses with the active process PID and target path before it changes anything, preserves the running bundle files, and creates the staging bundle anew when no process uses the bundle.",
     levels: ["unit"],
   },
   {
@@ -14204,6 +14237,79 @@ const FEATURE_LINKS = [
     ],
     expected: "A presentation whose layout transaction a press or key event committed answers that commit once, also after a newer layout of the window began.",
     levels: ["unit"],
+  },
+  {
+    id: "F965",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static const char *resizeEdgeAt(NSWindow *window, NSPoint point)" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held))" },
+      { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_resize_edge_test.m", id: "is refused with the %s resize edge" },
+      { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestAResizeEdgeRefusalCarriesTheMessageOfTheLibrary" },
+      { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "a_resize_edge_refusal_carries_the_message_of_the_library" },
+    ],
+    expected: "A synthetic press on a resize edge of a window is refused with a message that names the point and the edge and returns, on both delivery paths and in both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F962-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static NSUInteger pressedButtonsWithSynthetic(id self, SEL selector)" },
+      { file: "native/darwin/src/input_inject.m", symbol: "static void handleEventInDelivery(id self, SEL selector, NSEvent *event, void (^completion)(BOOL))" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_inject_test.m", id: "outside a delivery an open press is not in the mask that AppKit answers" },
+      { file: "native/darwin/tests/input_pointers_test.m", id: "outside a delivery AppKit answers the buttons of a person, not of the pointers" },
+    ],
+    expected: "Outside the delivery of a synthetic event the pressed buttons that AppKit answers are the buttons of the person.",
+    levels: ["unit"],
+  },
+  {
+    id: "F962-2",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "static void interruptGestures(NSEvent *event)" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held))" },
+      { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_person_press_test.m", id: "the press of the person releases the gesture of pointer a before it reaches the view" },
+      { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestAnInterruptionCarriesTheMessageOfTheLibrary" },
+      { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "an_interruption_carries_the_message_of_the_library" },
+    ],
+    expected: "A press of a person ends every open synthetic gesture at once, and the next drag or release of an ended gesture answers the interruption in both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F962-3",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "void surfaceInputPointerObserve(void (^observer)(NSEvent *event))" },
+      { file: "native/darwin/src/input_inject.m", symbol: "surfaceInputPointerObserve(^(NSEvent *event) { interruptGestures(event); });" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the kept move and scroll are told once, also after they came back" },
+      { file: "native/darwin/tests/input_person_press_test.m", id: "the move of the person releases the gesture of pointer a" },
+    ],
+    expected: "A move or a scroll of a person ends every open synthetic gesture at once without ending the layout hold.",
+    levels: ["unit"],
+  },
+  {
+    id: "F962-4",
+    implementation: [
+      { file: "native/darwin/src/input_person.m", symbol: "bool sp_input_person(void *handle, const char *action, double x, double y, char **error)" },
+      { file: "packages/host/go/src/diagnostics.go", symbol: "func diagnosticInputPerson(" },
+      { file: "packages/host/rust/src/diagnostics.rs", symbol: "fn input_person(" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/input_person_test.m", id: "each action reaches -[NSApplication sendEvent:] at its point" },
+      { file: "packages/host/go/src/diagnostics_input_person_test.go", id: "TestInputPersonRefusesParametersOutOfTheirForm" },
+      { file: "packages/host/rust/src/diagnostics_input_person_test.rs", id: "input_person_refuses_parameters_out_of_their_form" },
+      { file: "packages/window-check/test/pointer-presses.test.mjs", id: "a gesture that an action of a person ended leaves no open press" },
+      { file: "e2e/input-person.test.mjs", id: "an action of a person ends the synthetic gesture and the next drag answers 1013" },
+    ],
+    expected: "A window check makes a press, a move and a scroll of a person in its own application, and the next drag of the open synthetic gesture answers 1013 in every host.",
+    levels: ["unit", "native", "application"],
   },
   {
     id: "F937-2",
