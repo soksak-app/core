@@ -14003,6 +14003,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) keepLines" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) closeCell" },
       { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func clearOfHeads" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) levelSplit" },
       { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
     ],
     tests: [

@@ -1075,7 +1075,8 @@ func (g *Grid) Tidy() int {
 
 // cutAt is the position to cut a card at: the unreferenced line nearest the card's centre that leaves both halves their minimum, or a
 // new line at the centre (line -1), clamped to the range where both halves fit. It is false when the card cannot be cut.
-func (g *Grid) cutAt(card *Card, axis Axis) (int, float64, bool) {
+// A fresh cut takes no existing line: it cuts at the middle of the card.
+func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	if card.Fixed {
 		return 0, 0, false
 	}
@@ -1104,7 +1105,7 @@ func (g *Grid) cutAt(card *Card, axis Axis) (int, float64, bool) {
 	}
 	mid := (a[card.get(lo)] + a[card.get(hi)]) / 2
 	line := -1
-	for i := card.get(lo) + 1; i < card.get(hi); i++ {
+	for i := card.get(lo) + 1; i < card.get(hi) && !fresh; i++ {
 		if a[i] < lowest || a[i] > highest {
 			continue
 		}
@@ -1188,7 +1189,7 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 	card := g.find(id)
 	ok := false
 	if card != nil {
-		if _, _, cuts := g.cutAt(card, axis); cuts {
+		if _, _, cuts := g.cutAt(card, axis, false); cuts {
 			before := g.ToJSON()
 			seq := g.seq
 			g.probing = true
@@ -1206,6 +1207,11 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 // Split cuts one card in two and returns the new card's id. The original keeps its id and the near half; the new card takes the far
 // half. It is false when the halves do not fit.
 func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
+	return g.split(id, axis, init, false)
+}
+
+// split is Split, with a fresh cut that inserts a new line instead of taking an existing line.
+func (g *Grid) split(id string, axis Axis, init SplitInit, newLine bool) (string, bool) {
 	if noAxis(axis) {
 		return "", false
 	}
@@ -1216,7 +1222,7 @@ func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
 	if card == nil {
 		return "", false
 	}
-	cutLine, cutValue, cuts := g.cutAt(card, axis)
+	cutLine, cutValue, cuts := g.cutAt(card, axis, newLine)
 	if !cuts {
 		return "", false
 	}
@@ -1288,6 +1294,11 @@ func isSide(side Side) bool {
 
 // SplitToward cuts a card and puts the new one on a named side. The ids are not swapped.
 func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) {
+	return g.splitToward(id, side, init, false)
+}
+
+// splitToward is SplitToward, with the fresh cut of split.
+func (g *Grid) splitToward(id string, side Side, init SplitInit, newLine bool) (string, bool) {
 	if !isSide(side) {
 		return "", false
 	}
@@ -1300,9 +1311,9 @@ func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) 
 		return "", false
 	}
 	if !isAhead(side) {
-		return g.Split(id, axis, init)
+		return g.split(id, axis, init, newLine)
 	}
-	born, ok := g.Split(id, axis, init)
+	born, ok := g.split(id, axis, init, newLine)
 	if !ok {
 		return "", false
 	}

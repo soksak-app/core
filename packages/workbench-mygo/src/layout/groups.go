@@ -763,13 +763,42 @@ func (t *GroupTree) requireCard(id string) error {
 }
 
 // splitCard puts the new card id with data beside the card target toward side: the split of the layout for a content card, or the
-// split of its rectangle for a group card. It is false when the layout refuses.
-func (t *GroupTree) splitCard(target string, side Side, id string, data json.RawMessage) (bool, error) {
+// split of its rectangle for a group card. A split toward top or bottom whose upper card is drawn below headers, which a group always
+// is, cuts at a new line (docs/spec/groups.md#split-setting). It is false when the layout refuses.
+func (t *GroupTree) splitCard(target string, side Side, id string, data json.RawMessage, grouping bool) (bool, error) {
 	if n := t.groupNode(target); n != nil {
 		return true, t.splitRect(n, side, id, data)
 	}
-	_, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data})
+	fresh := false
+	if axisOf(side) == "y" {
+		drawn, _ := t.Rect(target) // silent: requireCard found the card.
+		grid, _ := t.grid.Rect(target)
+		fresh = grouping || drawn.Y > grid.Y
+	}
+	_, ok := t.grid.splitToward(target, side, SplitInit{ID: &id, Data: data}, fresh)
 	return ok, nil
+}
+
+// level moves the line between the card target and the new card id of a split toward top or bottom, so that both are drawn at one
+// height below the headers that the upper one stands under (docs/spec/groups.md#split-setting). A split across does not change it.
+func (t *GroupTree) levelSplit(target string, side Side, id string) {
+	if axisOf(side) != "y" {
+		return
+	}
+	upper, lower := target, id
+	if side == "top" {
+		upper, lower = id, target
+	}
+	up, _ := t.Rect(upper) // silent: both cards are in the tree after the split.
+	down, _ := t.Rect(lower)
+	_, n, _ := t.find(lower)
+	if n == nil {
+		n = &node{card: lower}
+	}
+	_, _, line, _ := t.span(n)
+	if delta := (down.H - up.H) / 2; math.Abs(delta) > eps {
+		t.grid.MoveBoundary("y", line, t.grid.BoundaryPos("y", line)+delta, false)
+	}
 }
 
 // balanced runs the balance of cardSplit even after the split of the card id toward side (docs/spec/groups.md#split-setting) and keeps
@@ -812,7 +841,7 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 	err := t.try(id, "hold a group toward "+side, func() error {
 		name := t.groupName()
 		group, born = t.issue(), t.issue()
-		if ok, err := t.splitCard(id, side, born, data); err != nil || !ok {
+		if ok, err := t.splitCard(id, side, born, data, true); err != nil || !ok {
 			if err == nil {
 				err = fmt.Errorf("card %s cannot hold a group toward %s", id, side)
 			}
@@ -828,6 +857,7 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 		if lead, _ := t.Leader(key); lead == id {
 			t.setLeader(key, group)
 		}
+		t.levelSplit(id, side, born)
 		return nil
 	})
 	if err == nil && even {
@@ -912,13 +942,14 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool)
 	var born string
 	err := t.try(id, "split toward "+side, func() error {
 		born = t.issue()
-		if ok, err := t.splitCard(id, side, born, data); err != nil || !ok {
+		if ok, err := t.splitCard(id, side, born, data, false); err != nil || !ok {
 			if err == nil {
 				err = fmt.Errorf("card %s cannot split toward %s", id, side)
 			}
 			return err
 		}
 		t.attach(t.Parent(id), &node{card: born})
+		t.levelSplit(id, side, born)
 		return nil
 	})
 	if err == nil && even {
@@ -1175,7 +1206,7 @@ func (t *GroupTree) Move(id, target, side string) error {
 			if err := t.splitRect(t.groupNode(target), "right", id, data); err != nil {
 				return err
 			}
-		} else if ok, err := t.splitCard(target, side, id, data); err != nil || !ok {
+		} else if ok, err := t.splitCard(target, side, id, data, false); err != nil || !ok {
 			if err == nil {
 				err = refused
 			}
