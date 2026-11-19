@@ -941,13 +941,17 @@ export class GroupTree {
 
   /** Whether split of the card id toward side would succeed. */
   canSplit(id, side, even) {
+    return this.splitRefusal(id, side, even) === null;
+  }
+
+  /** The text with which split of the card id toward side would be refused, or null when it would succeed. */
+  splitRefusal(id, side, even) {
     return this.answer(`split:${id}:${side}:${even}`, () => this.probe(() => {
       try {
         this.split(id, side, undefined, even);
-        return true;
-      } catch {
-        // silent: the probe answers whether the split succeeds; the refusal is the answer false.
-        return false;
+        return null;
+      } catch (error) {
+        return error.message;
       }
     }));
   }
@@ -999,7 +1003,16 @@ export class GroupTree {
       return true;
     }
     const newLine = (side === "top" || side === "bottom") && (grouping || this.rect(target).y > this.grid.rect(target).y + EPSILON);
-    return this.grid.splitToward(target, side, { id, data, newLine }) !== null;
+    if (this.grid.splitToward(target, side, { id, data, newLine }) !== null) return true;
+    // The library refuses a split whose halves fall below its minimum. The split is made again without the minimum, so the check of
+    // attempt names the content card that would be drawn below it and the size it would get (docs/spec/groups.md#commands).
+    const min = this.grid.minSize;
+    this.grid.minSize = 0;
+    try {
+      return this.grid.splitToward(target, side, { id, data, newLine }) !== null;
+    } finally {
+      this.grid.minSize = min;
+    }
   }
 
   /**

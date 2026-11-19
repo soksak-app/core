@@ -649,7 +649,7 @@
    ]
   },
   {
-   "name": "a group that the layout cannot split is refused",
+   "name": "a group that the layout cannot split is refused with the size that the card would get",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -690,7 +690,7 @@
       "card": "card-1",
       "side": "right"
      },
-     "throws": "card card-1 cannot hold a group toward right"
+     "throws": "card card-1 cannot hold a group toward right: card card-1 would be 64x520, below its minimum 96x96"
     }
    ]
   },
@@ -6835,6 +6835,102 @@
       "lastCard": 3
      },
      "args": {}
+    }
+   ]
+  },
+  {
+   "name": "a split or a group that the halves of a card cannot hold names the card that would be drawn below its minimum and the size it would get",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1240,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.85,
+      1
+     ],
+     "ys": [
+      0,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [],
+    "leader": "card-1",
+    "lastCard": 2
+   },
+   "steps": [
+    {
+     "call": "split",
+     "args": {
+      "card": "card-2",
+      "side": "right"
+     },
+     "throws": "card card-2 cannot split toward right: card card-2 would be 69x600, below its minimum 96x96"
+    },
+    {
+     "call": "create",
+     "args": {
+      "card": "card-2",
+      "side": "left"
+     },
+     "throws": "card card-2 cannot hold a group toward left: card card-4 would be 45x520, below its minimum 96x96"
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.85,
+       1
+      ],
+      "ys": [
+       0,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
     }
    ]
   },

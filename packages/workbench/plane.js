@@ -911,9 +911,10 @@ function splitWith(cardId, side, plugin, params) {
   if (!card?.data) return;
   // A split without space is refused before the tab of the new card is made, so a refused split issues no tab id, records no
   // origin and leaves the tab-name counter.
-  if (!tree.canSplit(cardId, side, splitsEven())) {
+  const refusal = tree.splitRefusal(cardId, side, splitsEven());
+  if (refusal !== null) {
     settle();
-    return null;
+    throw new Error(refusal);
   }
   // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null, "split");

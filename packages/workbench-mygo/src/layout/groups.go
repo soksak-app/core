@@ -881,6 +881,14 @@ func (t *GroupTree) splitCard(target string, side Side, id string, data json.Raw
 		grid, _ := t.grid.Rect(target)
 		fresh = grouping || drawn.Y > grid.Y
 	}
+	if _, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data, NewLine: fresh}); ok {
+		return true, nil
+	}
+	// The library refuses a split whose halves fall below its minimum. The split is made again without the minimum, so the check of try
+	// names the content card that would be drawn below it and the size it would get (docs/spec/groups.md#commands).
+	min := t.grid.MinSize()
+	t.grid.SetMinSize(0)
+	defer t.grid.SetMinSize(min)
 	_, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data, NewLine: fresh})
 	return ok, nil
 }

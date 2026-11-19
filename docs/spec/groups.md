@@ -92,7 +92,7 @@ The refusals, in the order in which each command checks them:
 | Command | Condition | Text |
 | --- | --- | --- |
 | `core.group.create` | `card` is a window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
-| `core.group.create` | the layout refuses the split of `card` toward `side` | `card <id> cannot hold a group toward <side>` |
+| `core.group.create` | the layout refuses the split of `card` toward `side` for a cause other than its minimum | `card <id> cannot hold a group toward <side>` |
 | `core.group.create` | a content card would be drawn below its minimum | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`, with `<c>` the first such card in workbench order and `<m>` `minSize` |
 | `core.group.create` | `request` is no string of 1 to 128 characters | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin` or `params` is refused | the text of `core.card.split` for that plugin or those parameters ([acting on a layout](cli.md#acting-on-a-layout)) |
@@ -107,7 +107,7 @@ The refusals, in the order in which each command checks them:
 | every operation | the result leaves a group card without one rectangle | `card <id> cannot <operation>: group <g> would not cover one rectangle`, with `<g>` the first such group card in workbench order |
 | every operation | a content card would be drawn below its minimum | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
 
-`<operation>` is the text of the operation in the refusals of the layout: `split toward <side>`, `close`, `move to <side> of <target>`.
+`<operation>` is the text of the operation in the refusals of the layout: `split toward <side>`, `close`, `move to <side> of <target>`. A split that the layout library refuses because a half of the card would fall below `minSize` is made again on the trial copy without that bound, so the refusal names the content card that the split would draw below its minimum and the size it would get, `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`, in both workbenches; the plain refusal `card <id> cannot split toward <side>` remains only for a split that the library refuses at any minimum.
 
 ### Idempotency
 
@@ -265,4 +265,5 @@ The review answered these objections:
 - A header was drawn directly on the card or the nested header below it, so boxes touched without the corridor that separates every other pair of boxes: a header is followed by the gap, as a card is.
 - The balance of the layout library was taken to keep the arrangement, but it can lay cards on other lines, and a balance in a space with groups left a group card over cells of another group; the equal share of every slot that replaced it kept every line index, so a row built by halves stayed in halves of its lines and a group card with a header drew its members shorter than its siblings. The balance gives every child of every cut an equal share on the tree whose children are the cards and the group cards, so no cut crosses a group card, the header of a group card is inside its share, and the result depends on the arrangement, not on the order of the operations that built it. Every result of the grid, a balance and the centring of a boundary included, passes the same check of the group rectangles, and a seeded sequence of random operations checks the invariants after every step.
 - Objection: an equal share of every child draws a card inside nested group cards shorter than a card beside the outer group, because each header is inside the share of its group card. Answer: the share is the share of the child of the cut, which the person sees as the rectangle of the group card; a balance that would draw a content card below its minimum is refused and names it, as every operation is.
+- Objection: making the refused split again without the minimum is a second operation. Answer: it runs on the trial copy that every operation already runs on and is put back with it; it measures the size that the split would draw, which the library refusal does not report, so the text names the card and its size in both workbenches.
 - The `paidBy` record of a card split inside a group could return its room across the space when it closes: a space with groups keeps no `paidBy` record, so the neighbours that take its cells are the only cards that change.

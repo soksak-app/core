@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"math"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -138,7 +139,8 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	for range 4 {
 		card := f.tabbedCards()[len(f.tabbedCards())-1]
 		if _, err := f.answer("core.card.split", map[string]string{"card": card, "side": "right", "plugin": "textprobe"}); err != nil {
-			if want := "card " + card + " cannot split toward right"; err.Error() != want {
+			// The refusal names the card that a half would draw below the minimum and the size that it would get.
+			if want := regexp.MustCompile(`^card ` + regexp.QuoteMeta(card) + ` cannot split toward right: card \S+ would be \d+x\d+, below its minimum 96x96$`); !want.MatchString(err.Error()) {
 				t.Fatalf("the split failed with %v, want %s", err, want)
 			}
 			return
@@ -147,6 +149,9 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	t.Fatal("no split was refused")
 }
 
+// thinRefusal is the refusal of a split of the card thin, which names the card that a half would draw below the minimum and its size.
+var thinRefusal = regexp.MustCompile(`^card thin cannot split toward right: card \S+ would be \d+x\d+, below its minimum 96x96$`)
+
 // A split that the minimum size refuses names no tab, so the number of the next new tab of the layout is the number that it would have had
 // without the refused split, and the stored project does not change.
 func TestARefusedSplitLeavesTheTabNumberUnchanged(t *testing.T) {
@@ -154,7 +159,7 @@ func TestARefusedSplitLeavesTheTabNumberUnchanged(t *testing.T) {
 	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.44, 0.56, 1}, []float64{0, 1}, gridCard("main", 0, 1, 0, 1, tab("tab-bbbbbb", "notes")),
 		gridCard("thin", 1, 2, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("rest", 2, 3, 0, 1, tab("tab-cccccc", "notes"))))
 	stored := f.stored()
-	if _, err := f.apply("core.card.split", `{"card":"thin","side":"right","plugin":"notes"}`); err == nil || err.Error() != "card thin cannot split toward right" {
+	if _, err := f.apply("core.card.split", `{"card":"thin","side":"right","plugin":"notes"}`); err == nil || !thinRefusal.MatchString(err.Error()) {
 		t.Fatalf("the split of thin failed with %v", err)
 	}
 	if f.stored() != stored {
