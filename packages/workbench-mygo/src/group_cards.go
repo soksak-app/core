@@ -3,6 +3,7 @@ package workbench
 import (
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/egoist/mygo/ui"
 
@@ -64,14 +65,119 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	head, _ := s.groupHeadRect(id)  // silent: a group card has a header.
 	line := s.palette.CardBorder()
 	out := float32(s.plane.Gap()/2) + line/2
+	// Below the header of a group card that holds it, the frame starts at the bottom of that header, which no corridor separates from it.
+	top := out
+	if s.planes.UnderHeads(id) {
+		top = 0
+	}
 	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
 	s.anchored("core.group/"+id, card)
-	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset-out).Top(float32(rect.Y)+inset-out).
-		Size(float32(rect.W)+2*out, float32(rect.H)+2*out).Border(line, s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
+	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset-out).Top(float32(rect.Y)+inset-top).
+		Size(float32(rect.W)+2*out, float32(rect.H)+out+top).Border(line, s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
 	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).
 		Background(s.palette.Card).Radius(s.palette.CardRadius()).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
 	})
+}
+
+// headTolerance is how far a line may reach into a header across the line, in points: a divider at the side of a group card touches the
+// end of its header by less than this.
+const headTolerance = 1
+
+// headRects are the drawn headers of the shown group cards, in the coordinates of the plane.
+func (s *Shell) headRects() []layout.Rect {
+	out := []layout.Rect{}
+	for _, id := range s.planes.Cards() {
+		if !s.planes.IsGroup(id) || !s.shownFullscreen(id) {
+			continue
+		}
+		if head, ok := s.groupHeadRect(id); ok {
+			out = append(out, head)
+		}
+	}
+	return out
+}
+
+// clearOfHeads is the parts of the stretch [from, to] along a line of axis, which spans [a0, a1] across it, that cross no header: a
+// header that the line reaches into by more than headTolerance across it takes its own stretch out of the line
+// (docs/spec/groups.md#drawing).
+func clearOfHeads(axis layout.Axis, a0, a1, from, to float64, heads []layout.Rect) [][2]float64 {
+	parts := [][2]float64{{from, to}}
+	for _, head := range heads {
+		h0, h1, s0, s1 := head.X, head.X+head.W, head.Y, head.Y+head.H
+		if axis == "y" {
+			h0, h1, s0, s1 = head.Y, head.Y+head.H, head.X, head.X+head.W
+		}
+		if min(a1, h1)-max(a0, h0) <= headTolerance {
+			continue
+		}
+		next := [][2]float64{}
+		for _, part := range parts {
+			if part[1] <= s0 || part[0] >= s1 {
+				next = append(next, part)
+				continue
+			}
+			if part[0] < s0 {
+				next = append(next, [2]float64{part[0], s0})
+			}
+			if part[1] > s1 {
+				next = append(next, [2]float64{s1, part[1]})
+			}
+		}
+		parts = next
+	}
+	return parts
+}
+
+// planeDividers are the dividers of the grid cut where they would cross a group header: a divider of a line inside a group starts
+// below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index.
+func (s *Shell) planeDividers() []layout.Divider {
+	heads := s.headRects()
+	out := []layout.Divider{}
+	for _, divider := range s.plane.Dividers() {
+		a0, a1, from, to := divider.X, divider.X+divider.W, divider.Y, divider.Y+divider.H
+		if divider.Axis == "y" {
+			a0, a1, from, to = divider.Y, divider.Y+divider.H, divider.X, divider.X+divider.W
+		}
+		for k, part := range clearOfHeads(divider.Axis, a0, a1, from, to, heads) {
+			piece := divider
+			if k > 0 {
+				piece.Key = divider.Key + ":" + strconv.Itoa(k)
+			}
+			if divider.Axis == "y" {
+				piece.X, piece.W = part[0], part[1]-part[0]
+			} else {
+				piece.Y, piece.H = part[0], part[1]-part[0]
+			}
+			out = append(out, piece)
+		}
+	}
+	return out
+}
+
+// planeRules are the rules of the grid cut where they would cross a group header.
+func (s *Shell) planeRules() []layout.Rule {
+	heads := s.headRects()
+	out := []layout.Rule{}
+	for _, rule := range s.plane.Rules() {
+		a0, a1, from, to := rule.X, rule.X+rule.W, rule.Y, rule.Y+rule.H
+		if rule.Axis == "y" {
+			a0, a1, from, to = rule.Y, rule.Y+rule.H, rule.X, rule.X+rule.W
+		}
+		for k, part := range clearOfHeads(rule.Axis, a0, a1, from, to, heads) {
+			piece := rule
+			if k > 0 {
+				piece.Key = rule.Key + ":" + strconv.Itoa(k)
+			}
+			if rule.Axis == "y" {
+				piece.X, piece.W = part[0], part[1]-part[0]
+			} else {
+				piece.Y, piece.H = part[0], part[1]-part[0]
+			}
+			out = append(out, piece)
+		}
+	}
+	return out
 }
 
 // shownFullscreen tells whether the card id is drawn while a card is fullscreen: the fullscreen card and the cards inside it, or every

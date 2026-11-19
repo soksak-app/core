@@ -171,7 +171,7 @@ func (s *Shell) drawnRules() []layout.Rect {
 	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
 	inset := s.stageInset()
 	rules := []layout.Rect{}
-	for _, rule := range s.plane.Rules() {
+	for _, rule := range s.planeRules() {
 		if rule.Virtual && place == "none" {
 			continue
 		}

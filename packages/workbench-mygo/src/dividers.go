@@ -95,7 +95,7 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		views[i] = DevicePixels(box, window.Scale)
 	}
 	origin := s.planeOrigin()
-	dividers := s.plane.Dividers()
+	dividers := s.planeDividers()
 	items := s.items(dividers)
 	grips := make([]dividerGrip, 0, len(dividers))
 	m := s.metrics

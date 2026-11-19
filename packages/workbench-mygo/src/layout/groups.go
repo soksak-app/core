@@ -312,9 +312,9 @@ func (t *GroupTree) heads(path []*node, r0 int) int {
 	return k
 }
 
-// Rect is the drawn rectangle of the card id (docs/spec/groups.md#drawn-rectangles): for a content card its rectangle in the grid moved
-// down and shortened by the headers of the group cards that hold it and start on its first row line, and for a group card the union of
-// the rectangles of the content cards inside it.
+// Rect is the drawn rectangle of the card id (docs/spec/groups.md#drawn-rectangles): its rectangle in the grid, for a group card the
+// union of the rectangles of the content cards inside it, moved down and shortened by the headers of the group cards that hold it and
+// start on its first row line.
 func (t *GroupTree) Rect(id string) (Rect, bool) {
 	path, n, ok := t.find(id)
 	if !ok {
@@ -328,7 +328,13 @@ func (t *GroupTree) Rect(id string) (Rect, bool) {
 		rect.H -= k * t.head
 		return rect, ok
 	}
-	return t.union(n), true
+	// A group card is drawn below the headers of the group cards that hold it and start on its first row line, as a content card is.
+	rect := t.union(n)
+	_, _, r0, _ := t.span(n)
+	k := float64(t.heads(path, r0))
+	rect.Y += k * t.head
+	rect.H -= k * t.head
+	return rect, true
 }
 
 // union is the union of the rectangles in the grid of the content cards inside the node.
@@ -341,16 +347,25 @@ func (t *GroupTree) union(n *node) Rect {
 	return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
 }
 
+// UnderHeads tells whether the group card id stands below the header of a group card that holds it, which starts on its first row line.
+func (t *GroupTree) UnderHeads(id string) bool {
+	path, n, _ := t.find(id) // silent: an id that is no card has no node.
+	if n == nil || !n.group {
+		return false
+	}
+	_, _, r0, _ := t.span(n)
+	return t.heads(path, r0) > 0
+}
+
 // HeadRect is the header of the group card id: a row of the head height at the top of its rectangle, below the headers of the group
 // cards that hold it and start on the same row line.
 func (t *GroupTree) HeadRect(id string) (Rect, bool) {
-	path, n, _ := t.find(id) // silent: an id that is no card has no node.
+	_, n, _ := t.find(id) // silent: an id that is no card has no node.
 	if n == nil || !n.group {
 		return Rect{}, false
 	}
-	_, _, r0, _ := t.span(n)
-	rect := t.union(n)
-	return Rect{X: rect.X, Y: rect.Y + float64(t.heads(path, r0))*t.head, W: rect.W, H: t.head}, true
+	rect, _ := t.Rect(id) // silent: find found the group card.
+	return Rect{X: rect.X, Y: rect.Y, W: rect.W, H: t.head}, true
 }
 
 // drawn is the drawn rectangle of each content card.

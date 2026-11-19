@@ -44,7 +44,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	}
 	origin := s.planeOrigin()
 	originX, originY := float32(origin.X), float32(origin.Y)
-	rules := s.plane.Rules()
+	rules := s.planeRules()
 	var grips []dividerGrip
 	ui.Box(c).Size(width, stage).Children(func() {
 		ui.Box(c).Absolute().Left(shiftX).Top(shiftY).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
