@@ -283,6 +283,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F968",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/head.go", symbol: "widest = math.Max(widest, w)" },
+      { file: "packages/workbench/head-fit.js", symbol: "const widest = Math.max(0, ...head.tabWidths);" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-cases.test.mjs", id: "head: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestTheStageOfAHeadIsTheSameForEverySelectedTab" },
+    ],
+    expected: "The fold stage of a card head takes the widest tab in both workbenches, so it is the same whichever tab is selected.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-16",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "func keptTools(tools []headTool) []headTool" },

@@ -7,17 +7,18 @@
  * The head folds in this order: the other tabs, the tools (into the ⋯ menu) down to the minimum width of the title, then the title. The
  * first stage whose condition holds is used. head gives the width of the head, its paddingLeft and paddingRight, the width of its leading
  * button (lead), the gap between its elements, the width of its tools (toolsWidth) and of its ⋯ button (moreWidth), the widths of its tabs
- * (tabWidths) and the gap between them (tabGap), the width of the active tab (activeWidth, 0 without one), and the chrome metrics
- * tab-peek-w (peek: the spare width beside the active tab that keeps every tab) and tab-min-w (minTab: the width under which the active
- * tab drops). Returns fit (strip: every tab, one: the active tab, ham: no tab) and tools (bar or menu).
+ * (tabWidths) and the gap between them (tabGap), and the chrome metrics tab-peek-w (peek: the spare width beside the widest tab that keeps
+ * every tab) and tab-min-w (minTab: the width under which the active tab drops). Each condition takes the widest tab in place of the active
+ * tab, so the stage is the same whichever tab is active (docs/spec/example-model.md#card-tabs). Returns fit (strip: every tab, one: the active tab, ham: no tab) and tools (bar or menu).
  */
 export function fitHead(head) {
   const inner = head.width - head.paddingLeft - head.paddingRight - (head.lead + head.gap);
   const whole = head.tabWidths.reduce((n, w) => n + w, 0) + Math.max(0, head.tabWidths.length - 1) * head.tabGap;
   const withTools = inner - head.toolsWidth - head.gap;
   const withMenu = inner - head.moreWidth - head.gap;
-  if (withTools >= Math.min(whole, head.activeWidth + head.peek)) return { fit: "strip", tools: "bar" };
-  if (withTools >= head.activeWidth) return { fit: "one", tools: "bar" };
-  if (withMenu >= Math.min(head.activeWidth, head.minTab)) return { fit: "one", tools: "menu" };
+  const widest = Math.max(0, ...head.tabWidths);
+  if (withTools >= Math.min(whole, widest + head.peek)) return { fit: "strip", tools: "bar" };
+  if (withTools >= widest) return { fit: "one", tools: "bar" };
+  if (withMenu >= Math.min(widest, head.minTab)) return { fit: "one", tools: "menu" };
   return { fit: "ham", tools: "menu" };
 }

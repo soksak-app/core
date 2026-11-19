@@ -1359,7 +1359,7 @@ function centreTab(strip, activeId) {
  * If the tools do not fit with the current tab title, the tool row folds into the ⋯ menu (F81). The title stays longer
  * than the tools. fitHead decides the stage from the measured widths.
  */
-// PEEK    the spare width other than the active tab that is needed to keep the strip stage: the chrome metric tab-peek-w
+// PEEK    the spare width beside the widest tab that is needed to keep the strip stage: the chrome metric tab-peek-w
 // MIN_TAB the minimum width of an active tab that is truncated with an ellipsis. Narrower than this, it drops to the ham stage: the chrome
 //         metric tab-min-w
 const PEEK = parseFloat(CHROME["tab-peek-w"]), MIN_TAB = parseFloat(CHROME["tab-min-w"]);
@@ -1381,7 +1381,6 @@ function fitChrome(chrome, strip) {
   const apps = chrome.querySelector(".chrome__apps");
   const lead = parseFloat(getComputedStyle(chrome.closest(".card")?.dataset.fullscreen === "true" && apps
     ? apps : chrome.querySelector(".chrome__ham")).width);
-  const active = strip.querySelector(".tab[data-active=true]");
   // The head keeps the leader mark and the fullscreen toggle beside ⋯ in the menu stage, so the menu stage needs the room of each
   // (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tools).
   const mark = leaderMark(acts);
@@ -1396,7 +1395,6 @@ function fitChrome(chrome, strip) {
     // The gap between tabs is a value that the tab list holds.
     // default: the computed value normal of columnGap is not a number and is 0 in flex.
     tabGap: parseFloat(getComputedStyle(strip).columnGap) || 0,
-    activeWidth: active ? active.getBoundingClientRect().width : 0,
     peek: PEEK, minTab: MIN_TAB,
   });
   chrome.dataset.fit = fit;

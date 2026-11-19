@@ -250,7 +250,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	kept := keptTools(s.headTools(id))
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
 		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(s.moreWidth(kept)),
-		TabWidths: widths, TabGap: float64(m.cardTabsGap), ActiveWidth: activeWidth, Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
+		TabWidths: widths, TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
 	s.heads[id] = fit
 	tools := s.moreWidth(kept)
 	if fit.Tools == "bar" {

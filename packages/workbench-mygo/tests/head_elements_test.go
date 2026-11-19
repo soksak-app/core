@@ -278,3 +278,30 @@ func TestAToolOfACardHeadShowsItsCursor(t *testing.T) {
 		t.Errorf("the cursor over the restore of a full screen card is %v, want the hand %v", got, ui.CursorPointer)
 	}
 }
+
+// The stage of a head follows from its width and its tabs alone: at every width the head shows the same tabs whichever tab is
+// active, and the active tab among them (docs/spec/example-model.md#card-tabs).
+func TestTheStageOfAHeadIsTheSameForEverySelectedTab(t *testing.T) {
+	long, short := tab("t1", "notes"), tab("t2", "notes")
+	long["title"], short["title"] = "www 문서", "탭 4"
+	f := layoutShell(t, oneCard(long, short))
+	fit := func(selected string) (string, bool) {
+		if _, err := f.apply("core.tab.select", `{"tab": "`+selected+`"}`); err != nil {
+			t.Fatal(err)
+		}
+		main := f.gridCards()["main"]
+		return main["acts"].(map[string]any)["fit"].(string), f.has("core.card.tab", selected)
+	}
+	for width := 400; width <= 1000; width += 2 {
+		f.tester.SetSize(width, 600)
+		f.settle()
+		withLong, longShown := fit("t1")
+		withShort, shortShown := fit("t2")
+		if withLong != withShort {
+			t.Fatalf("at a window of %d the head shows the stage %s with t1 selected and %s with t2 selected", width, withLong, withShort)
+		}
+		if withLong != "ham" && (!longShown || !shortShown) {
+			t.Fatalf("at a window of %d in the stage %s the selected tab is not shown: t1 %v, t2 %v", width, withLong, longShown, shortShown)
+		}
+	}
+}

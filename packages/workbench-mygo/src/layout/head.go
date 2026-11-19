@@ -17,10 +17,10 @@ type Head struct {
 	// ToolsWidth is the width of the tools, and MoreWidth is the width of the ⋯ button that holds them in the menu stage.
 	ToolsWidth float64 `json:"toolsWidth"`
 	MoreWidth  float64 `json:"moreWidth"`
-	// TabWidths are the widths of the tabs, TabGap is the gap between them, and ActiveWidth is the width of the active tab, 0 without one.
-	TabWidths   []float64 `json:"tabWidths"`
-	TabGap      float64   `json:"tabGap"`
-	ActiveWidth float64   `json:"activeWidth"`
+	// TabWidths are the widths of the tabs and TabGap is the gap between them. The stage takes the widest tab in place of the active
+	// tab, so it is the same whichever tab is active (docs/spec/example-model.md#card-tabs).
+	TabWidths []float64 `json:"tabWidths"`
+	TabGap    float64   `json:"tabGap"`
 	// Peek is the chrome metric tab-peek-w: the spare width beside the active tab that keeps every tab. MinTab is the chrome metric
 	// tab-min-w: the width under which the active tab drops.
 	Peek   float64 `json:"peek"`
@@ -37,20 +37,21 @@ type HeadFit struct {
 // minimum width of the title, then the title. The first stage whose condition holds is used.
 func FitHead(head Head) HeadFit {
 	inner := head.Width - head.PaddingLeft - head.PaddingRight - (head.Lead + head.Gap)
-	whole := 0.0
+	whole, widest := 0.0, 0.0
 	for _, w := range head.TabWidths {
 		whole += w
+		widest = math.Max(widest, w)
 	}
 	// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
 	whole += float64(float64(max(0, len(head.TabWidths)-1)) * head.TabGap)
 	withTools := inner - head.ToolsWidth - head.Gap
 	withMenu := inner - head.MoreWidth - head.Gap
 	switch {
-	case withTools >= math.Min(whole, head.ActiveWidth+head.Peek):
+	case withTools >= math.Min(whole, widest+head.Peek):
 		return HeadFit{Fit: "strip", Tools: "bar"}
-	case withTools >= head.ActiveWidth:
+	case withTools >= widest:
 		return HeadFit{Fit: "one", Tools: "bar"}
-	case withMenu >= math.Min(head.ActiveWidth, head.MinTab):
+	case withMenu >= math.Min(widest, head.MinTab):
 		return HeadFit{Fit: "one", Tools: "menu"}
 	}
 	return HeadFit{Fit: "ham", Tools: "menu"}
