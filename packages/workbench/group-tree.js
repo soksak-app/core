@@ -368,7 +368,8 @@ export class GroupTree {
 
   /**
    * Splits the rectangle of the group node toward side (docs/spec/groups.md#the-rectangle-of-a-group-card): the card id with data takes
-   * the half toward side, and the content cards inside the node are laid into the other half; the cards outside keep their lines.
+   * the half toward side after the other cards of the grid, and the content cards inside the node are laid into the other half; the cards
+   * outside keep their lines.
    */
   splitRectangle(node, side, id, data) {
     const state = this.grid.toJSON();
@@ -384,9 +385,9 @@ export class GroupTree {
     const [lo, hi] = x ? ["x0", "x1"] : ["y0", "y1"];
     const placed = withCoordinates(state).map((item) => (inside.has(item.card.id)
       ? { ...item, [lo]: mapped(item[lo], span, own), [hi]: mapped(item[hi], span, own) } : item));
-    const last = placed.reduce((at, item, i) => (inside.has(item.card.id) ? i : at), -1);
     const other = x ? { y0: state.ys[box.r0], y1: state.ys[box.r1] } : { x0: state.xs[box.c0], x1: state.xs[box.c1] };
-    placed.splice(last + 1, 0, { card: { id, fixed: false, data }, ...other, [lo]: born[0], [hi]: born[1] });
+    // The new card follows the other cards of the grid, as a split of the library appends its card.
+    placed.push({ card: { id, fixed: false, data }, ...other, [lo]: born[0], [hi]: born[1] });
     this.grid.replace(fromCoordinates(placed, state.paidBy, inside));
   }
 
