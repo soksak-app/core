@@ -58,7 +58,7 @@ pub(crate) fn set_menu(app: &AppHandle, menus: Vec<Menu>) -> Result<(), String> 
             &submenu.title.unwrap_or_else(|| name.to_string()),
         ));
         for item in submenu.items {
-            let item = menu_item(app, mtm, name, item)?;
+            let item = menu_item(app, &application, mtm, name, item)?;
             menu.addItem(&item);
         }
         let item = NSMenuItem::new(mtm);
@@ -73,6 +73,7 @@ pub(crate) fn set_menu(app: &AppHandle, menus: Vec<Menu>) -> Result<(), String> 
 /// One item of the menu model as an NSMenuItem.
 fn menu_item(
     app: &AppHandle,
+    application: &NSApplication,
     mtm: MainThreadMarker,
     name: &str,
     item: MenuItem,
@@ -105,6 +106,14 @@ fn menu_item(
                 }
             });
             let selector: objc2::runtime::Sel = match &role[..] {
+                "services" => {
+                    // The system fills the services menu; the item holds the menu that the application
+                    // names as its services menu.
+                    let menu = NSMenu::new(mtm);
+                    application.setServicesMenu(Some(&menu));
+                    view.setSubmenu(Some(&menu));
+                    return Ok(view);
+                }
                 "about" => objc2::sel!(orderFrontStandardAboutPanel:),
                 "hide" => objc2::sel!(hide:),
                 "hide-others" => objc2::sel!(hideOtherApplications:),

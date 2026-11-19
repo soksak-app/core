@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const APPLICATIONS = new Set(["mygo", "tauriv2", "wailsv3"]);
+const APPLICATIONS = new Set(["gpuikit", "mygo", "tauriv2", "wailsv3"]);
 
 /** Parses the process table format used by `ps -axww -o pid=,command=`. */
 function parseProcessTable(text) {
@@ -75,7 +75,7 @@ function main(args) {
     strict: true,
   });
   if (positionals.length > 0 || !values.bundle || !values.app) {
-    throw new Error("usage: prepare-app-bundle.mjs --bundle PATH --app tauriv2|wailsv3");
+    throw new Error("usage: prepare-app-bundle.mjs --bundle PATH --app gpuikit|tauriv2|wailsv3");
   }
   prepareBundle(values.bundle, values.app);
 }

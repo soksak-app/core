@@ -28,6 +28,17 @@ pub(crate) fn application() -> AppHandle {
         .clone()
 }
 
+/// The item of the dock menu of GPUI, which opens a new window.
+#[derive(Clone, Debug, PartialEq, Eq, gpui::Action)]
+pub(crate) struct DockNewWindow;
+
+/// The new window item of the dock menu, which install_dock holds on the main thread that the
+/// dock menu of GPUI runs its items on.
+thread_local! {
+    pub(crate) static DOCK_NEW_WINDOW: std::cell::RefCell<Option<Box<dyn Fn()>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 /// The GPUI application as the Framework port.
 pub struct Framework;
 
@@ -98,9 +109,19 @@ impl port::Framework for Framework {
     }
 
     fn install_dock(&self, new_window: Box<dyn Fn()>) -> port::Result<()> {
-        soksak_host::platform::current()?
-            .install_dock_menu(new_window)
-            .map_err(port::Error::from)
+        // The application delegate of GPUI answers the dock menu request, so the menu goes through the
+        // dock menu of GPUI and its action runs the new window item.
+        DOCK_NEW_WINDOW.with(|item| *item.borrow_mut() = Some(new_window));
+        service::post(Box::new(|cx: &mut App| {
+            cx.set_dock_menu(vec![gpui::MenuItem::Action {
+                name: "새 창".into(),
+                action: Box::new(DockNewWindow),
+                os_action: None,
+                checked: false,
+                disabled: false,
+            }]);
+        }))
+        .map_err(port::Error::from)
     }
 
     fn new_window(&self, options: WindowOptions) -> port::Result<Arc<dyn port::Frontend>> {
@@ -139,6 +160,27 @@ impl port::Framework for Framework {
         }
         None
     }
+}
+
+/// Creates the main window of the application on the main thread of the launch, before the setup of the library
+/// registers it. A failure ends the process with its error.
+pub(crate) fn create_main_window(
+    app: &AppHandle,
+    cx: &mut App,
+) -> Result<Arc<dyn port::Frontend>, String> {
+    open_window(
+        app,
+        WindowOptions {
+            label: "main".into(),
+            url: String::new(),
+            title: "soksak / GPUI".into(),
+            width: 1200.0,
+            height: 760.0,
+            background: port::Color(0x10, 0x11, 0x17, 0xff),
+        },
+        cx,
+    )
+    .map_err(|error| error.to_string())
 }
 
 /// Opens one window of the host: the GPUI window, its main wry web view and the record of the port.

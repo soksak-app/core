@@ -382,7 +382,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit build-gpuikit build-gpuikit-release test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -425,12 +425,16 @@ WAILS_DEBUG_BUNDLE   = target/debug/sok-wailsv3.app
 WAILS_RELEASE_BUNDLE = target/release/wailsv3/soksak.app
 MYGO_DEBUG_BUNDLE    = target/debug/sok-mygo.app
 MYGO_RELEASE_BUNDLE  = target/release/mygo/soksak.app
+GPUKIT_DEBUG_BUNDLE  = target/debug/sok-gpuikit.app
+GPUKIT_RELEASE_BUNDLE = target/release/gpuikit/soksak.app
 TAURI_DEBUG   = $(TAURI_DEBUG_BUNDLE)/Contents/MacOS/sok-tauriv2
 TAURI_RELEASE = $(TAURI_RELEASE_BUNDLE)/Contents/MacOS/sok-tauriv2
 WAILS_DEBUG   = $(WAILS_DEBUG_BUNDLE)/Contents/MacOS/sok-wailsv3
 WAILS_RELEASE = $(WAILS_RELEASE_BUNDLE)/Contents/MacOS/sok-wailsv3
 MYGO_DEBUG    = $(MYGO_DEBUG_BUNDLE)/Contents/MacOS/sok-mygo
 MYGO_RELEASE  = $(MYGO_RELEASE_BUNDLE)/Contents/MacOS/sok-mygo
+GPUKIT_DEBUG  = $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS/sok-gpuikit
+GPUKIT_RELEASE = $(GPUKIT_RELEASE_BUNDLE)/Contents/MacOS/sok-gpuikit
 
 # Writes the Info.plist and the Dock icon of the bundle. The first argument is the bundle and the second is the application. The app name
 # is set by CFBundleDisplayName of Info.plist (the supported languages are declared in CFBundleLocalizations of the same plist).
@@ -452,6 +456,7 @@ bundle-sign = codesign --sign - --force --deep $(1) && $(LSREGISTER) -f $(1)
 sok-wailsv3 = $(call go-env) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_LINK)" $(if $(filter debug,$(2)),-tags "$(WAILS_DEBUG_TAGS)",$(if $(DIAGNOSTIC_RELEASE),-tags diagnostics)) -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-mygo = CGO_ENABLED=0 MACOSX_DEPLOYMENT_TARGET=$(MACOS_MINIMUM) go build -C packages/sok/go $(if $(filter release,$(2)),-trimpath) -ldflags "$(if $(filter release,$(2)),-s -w )$(GO_INTERNAL_LINK)" $(if $(filter debug,$(2)),-tags "diagnostics dev mygo",-tags "$(if $(DIAGNOSTIC_RELEASE),diagnostics )mygo") -o ../../../$(1)/Contents/MacOS/sok ./src/cmd/sok
 sok-tauriv2 = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features $(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features diagnostics)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
+sok-gpuikit = $(CARGO_ENV) $(CARGO) build --locked -p soksak-sok $(if $(filter release,$(2)),--release) $(if $(filter debug,$(2)),--features gpuikit,$(TAURI_DEBUG_FEATURES),$(if $(DIAGNOSTIC_RELEASE),--features gpuikit,diagnostics,--features gpuikit)) && cp target/$(2)/sok $(1)/Contents/MacOS/sok
 
 # The native library build reads only the native sources. The Go bindings that the checks of the callback and host API declarations
 # hold are compiled by the Go hosts, so those checks run with the builds and tests of the Go hosts, which install Go; the Rust host and
@@ -501,6 +506,8 @@ copy-wailsv3 = pnpm -F @soksak/wailsv3 exec sok-copy-frontend src/frontend $(1)
 copy-tauriv2 = pnpm -F @soksak/tauriv2 exec sok-copy-frontend src/frontend $(1)
 # No page runs the workbench on the mygo host, so its staging is the view root.
 copy-mygo = pnpm -F @soksak/mygo exec sok-copy-frontend src/frontend --no-main-page $(1)
+# The gpuikit application reads the staged page files beside its executable, so its staging folder is the bundle folder.
+copy-gpuikit = pnpm -F @soksak/gpuikit exec sok-copy-frontend frontend $(1)
 
 # Staging does not touch the bundle. The bundle is rebuilt only by the build targets. This keeps the executable of the debug app that checks use
 # from being removed by the staging of a check target such as test-native.
@@ -512,6 +519,9 @@ copy-frontend-tauriv2: build
 
 copy-frontend-mygo: build
 	@$(call copy-mygo,--diagnostics)
+
+copy-frontend-gpuikit: build
+	@$(call copy-gpuikit,--diagnostics)
 
 # generate_context! includes the frontend, so this rebuilds the crate.
 build-tauriv2: check-cargo build-native copy-frontend-tauriv2
@@ -554,6 +564,25 @@ build-mygo: build-native-mygo copy-frontend-mygo
 	@cp native/darwin/build/mygo/libsoksak-darwin.dylib $(MYGO_DEBUG_BUNDLE)/Contents/Frameworks/
 	@$(call sok-mygo,$(MYGO_DEBUG_BUNDLE),debug)
 	@$(call bundle-sign,$(MYGO_DEBUG_BUNDLE))
+
+build-gpuikit: check-cargo build-native copy-frontend-gpuikit
+	@$(call bundle-info,$(GPUKIT_DEBUG_BUNDLE),gpuikit)
+	@$(call bundle-dev,$(GPUKIT_DEBUG_BUNDLE),gpuikit)
+	@$(CARGO_ENV) $(CARGO) build --locked -p sok-gpuikit --features gpuikit,$(TAURI_DEBUG_FEATURES)
+	@cp target/debug/sok-gpuikit $(GPUKIT_DEBUG)
+	@mkdir -p $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS
+	@cp -R apps/gpuikit/frontend $(GPUKIT_DEBUG_BUNDLE)/Contents/MacOS/frontend
+	@$(call sok-gpuikit,$(GPUKIT_DEBUG_BUNDLE),debug)
+	@$(call bundle-sign,$(GPUKIT_DEBUG_BUNDLE))
+
+build-gpuikit-release: check-cargo build-native build
+	@$(call bundle-info,$(GPUKIT_RELEASE_BUNDLE),gpuikit)
+	@$(call copy-gpuikit,$(if $(DIAGNOSTIC_RELEASE),--diagnostics))
+	@$(CARGO_ENV) $(CARGO) build --locked --release -p sok-gpuikit $(if $(DIAGNOSTIC_RELEASE),--features gpuikit,diagnostics,--features gpuikit)
+	@cp target/release/sok-gpuikit $(GPUKIT_RELEASE)
+	@cp -R apps/gpuikit/frontend $(GPUKIT_RELEASE_BUNDLE)/Contents/MacOS/frontend
+	@$(call sok-gpuikit,$(GPUKIT_RELEASE_BUNDLE),release)
+	@$(call bundle-sign,$(GPUKIT_RELEASE_BUNDLE))
 
 build-mygo-release: build-native-mygo build
 	@$(call bundle-info,$(MYGO_RELEASE_BUNDLE),mygo)

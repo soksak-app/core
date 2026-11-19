@@ -151,10 +151,24 @@ pub fn run(frontend: Arc<dyn Assets>) {
     let startup_app = app.clone();
     gpui::application().run(move |cx: &mut App| {
         service::start(cx);
+        cx.on_action::<crate::framework::DockNewWindow>(|_action, _cx| {
+            crate::framework::DOCK_NEW_WINDOW.with(|item| {
+                if let Some(new_window) = item.borrow().as_ref() {
+                    new_window();
+                }
+            });
+        });
         platform::register_deep_links(startup_app.clone());
         // A platform that cannot provide this step ends with status 1 before it opens a window.
         // default: a failed step ended the process inside exit_on_failure, so the answer states its success.
         let _ = soksak_host::startup::exit_on_failure(soksak_host::start_endpoint(&startup_app));
+        // The main window of the configuration comes from the framework: the application of GPUI has no
+        // configuration that declares it, so the adapter creates it before the setup of the library.
+        let _ = soksak_host::startup::exit_on_failure(
+            framework::create_main_window(&startup_app, cx)
+                .map(|_| ())
+                .map_err(|error| Box::<dyn std::error::Error>::from(error)),
+        );
         // default: a failed step ended the process inside exit_on_failure, so the answer states its success.
         let _ = soksak_host::startup::exit_on_failure(soksak_host::setup(
             &startup_app,
