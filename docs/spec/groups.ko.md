@@ -140,7 +140,7 @@ grid card의 close는, 그 자체로든, 한 card로 만든 group card의 close�
 
 ## 이동과 drop
 
-tab drag와 `core.tab.move`는 어느 level의 target card든 받는다. drop은 root level에서 안쪽으로 결정된다. 한 level에서 group card의 그리는 사각형 안의 점은 그 group card에서 결정된다. 그 header 위의 점은 group card의 `centre`다. 사각형의 한 side 쪽 바깥 4분의 1(`zoneAt`이 card body를 재듯 사각형의 `edge` 0.25) 안의 점은 group card의 그 side다. 다른 점은 group card의 member로 넘어간다. level의 어떤 group card에도 없는 점은 그 아래의 content card에서 grid의 `zoneAt`으로 다섯 zone을 가지고 결정된다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 content card의 모든 side와 centre, 그리고 모든 group card의 모든 side와 centre에 닿는다.
+tab drag와 `core.tab.move`는 어느 level의 target card든 받는다. drop은 점을 담는 가장 안쪽 box, 곧 사람이 겨누는 box에서 결정되며, 그 box의 zone만 쓰인다. content card의 그리는 사각형 안의 점은 그 card가 그것을 담은 group card의 바깥 4분의 1에 있어도 그 card에서 grid의 `zoneAt`으로 다섯 zone을 가지고 결정된다. content card에는 없지만 group card의 테두리 안, 곧 그 header 위나 테두리와 그 안 card 사이 gap에 있는 점은 그런 group card 중 가장 안쪽의 것에서 결정된다. 그 header 위나 테두리 가운데의 점은 group card의 `centre`이고, 테두리의 한 side 쪽 바깥 4분의 1(`zoneAt`이 card body를 재듯 테두리의 `edge` 0.25) 안의 점은 group card의 그 side다. 어떤 box에도 없는 점은 zone이 아니다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 content card의 모든 side와 centre, 그리고 모든 group card의 모든 side와 centre에 닿는다.
 
 - content card의 `centre` 위 drop은 지금처럼 tab을 그 card로 옮긴다.
 - content card의 side 위 drop은 library의 split으로 tab을 그 옆 새 card에 넣고, 새 card는 target을 담은 group의 member가 된다. card의 유일한 tab은 `move`로 그 card를 그리로 옮기고, card는 그 group의 member가 된다.
@@ -239,7 +239,7 @@ group card는 기존 card 디자인의 container 하나로 그린다. 그 테두
 - card 식별자는 기존 형태 `card-<n>`으로 남고, layout이 저장하는 `lastCard`에서 workbench가 낸다. 그래서 재시작을 지나도 식별자는 두 번 나오지 않는다. 무작위 식별자는 content card 식별자의 형태를 바꾸므로 거부되었다. 저장된 식별자에서 도출한 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 거부되었다.
 - `cardSplit` `even`은 grid를 balance한다. grid가 space의 line 집합 하나이기 때문이다. `exact`는 기본값으로 남으며, R4와 그 사각형 일반화의 동작이다. balance가 card를 최소보다 작게 그리면 `even`은 split을 거부한다. `exact` 결과로 돌아가면 말없이 고른 설정을 다른 값으로 바꾸게 되기 때문이다.
 - group을 가진 space는 `paidBy` 기록과 어떤 card도 쓰지 않는 line을 남기지 않는다. `paidBy` 기록은 library가 close된 card의 자리를, 그 card를 split해 낸 card에게 둘 사이의 line을 옮겨 돌려주게 하며, group을 가진 space에서 그 line은 두 card 사이에 있는 group의 card들의 line이므로, operation이 이름을 대지 않은 card가 움직인다. 어떤 card도 쓰지 않는 line은 나중 split의 목표가 되어, split이 card의 가운데 대신 다른 group의 이음매에 놓인다. library는 바뀌지 않으며, group이 없는 space는 library가 남기는 대로 기록과 line을 남긴다.
-- drop은 `zoneAt`의 edge 비율로 group card의 사각형 위에서 root level부터 안쪽으로 결정되고 grid의 `zoneAt`에서 끝나므로, 모든 level의 모든 card의 다섯 zone에 닿고 새 종류의 zone은 더해지지 않는다.
+- drop은 점을 담는 가장 안쪽 box에서 결정된다: content card는 grid의 `zoneAt`으로, 그 밖에는 가장 안쪽 group 테두리가 `zoneAt`의 edge 비율로 결정한다. 사람은 pointer 아래의 box를 겨누므로, group card의 바깥 4분의 1은 그 안의 card나 테두리 안에 있는 점을 가져가지 않는다. group card의 side는 그 테두리와 그 card 사이 gap에서 닿으며, 새 종류의 zone은 더해지지 않는다.
 - group card는 group으로서 전체 화면이 된다. 사람은 card 하나를 보이듯 작업의 상자 하나를 보이므로, 그 사각형이 그 안의 모든 card와 header와 함께 작업 영역을 덮는다. 전체 화면인 동안 layout은 전체 화면 card의 규칙 하나대로 그 안에서도 밖에서도 바뀌지 않는다.
 - group card는 focus ring을 받지 않는다. ring은 surface의 keyboard를 쥐는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
 
