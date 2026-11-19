@@ -224,3 +224,23 @@ test("core.grid reports the group card of each card, the leaders and the group c
   assert.deepEqual(group, { id: "card-4", parent: null, leader: false, group: { name: "그룹 1", level: 1, leader: "card-1" } });
   assert.deepEqual({ x, y, w, h }, plane.currentTree().rect("card-4"));
 });
+
+test("core.layout.balance in a space with groups keeps every line index and gives the cards of a row equal shares", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  plane.adopt({ focusedId: "card-9", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 13, leader: "card-12",
+    groups: [{ card: "card-12", name: "그룹 1", leader: "browser", members: ["browser", "card-13"] },
+      { card: "card-10", name: "그룹 3", leader: "card-9", members: ["card-9", "card-11"] }],
+    state: { xs: [0, 0.3319982198486871, 0.6680017801513128, 1], ys: [0, 0.33085808580858084, 0.6691419141914192, 1], cards: [
+      content("terminal", 2, 3, 1, 3, [view("tab-bbbbb1", PLAIN)]), content("browser", 0, 2, 0, 1, [view("tab-bbbbb2", PLAIN)]),
+      content("card-9", 0, 1, 1, 2, [view("tab-bbbbb3", PLAIN)]), content("card-11", 1, 2, 1, 2, [view("tab-bbbbb4", PLAIN)]),
+      content("card-7", 0, 2, 2, 3, [view("tab-bbbbb5", PLAIN)]), content("card-13", 2, 3, 0, 1, [view("tab-bbbbb6", PLAIN)])] } }, "spc-aaaaaa");
+  const place = () => plane.currentGrid().cards.map(({ id, c0, c1, r0, r1 }) => [id, c0, c1, r0, r1]);
+  const before = place();
+  await run("core.layout.balance", {});
+  assert.deepEqual(place(), before, "the balance keeps every line index");
+  const tree = plane.currentTree();
+  const heights = ["browser", "card-9", "card-7"].map((id) => tree.rect(id).h);
+  for (const h of heights) assert.ok(Math.abs(h - heights[0]) < 1e-6, `the rows are drawn ${heights}, not one height`);
+  const widths = ["card-9", "card-11", "card-13"].map((id) => tree.rect(id).w);
+  for (const w of widths) assert.ok(Math.abs(w - widths[0]) < 1e-6, `the columns are drawn ${widths}, not one width`);
+});
