@@ -241,11 +241,11 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   await refuses(run("core.layout.open", { card: "a", plugin: SESSION, zone: "left" }), "command core.layout.open: unknown parameter zone");
   await refuses(run("core.layout.move", { card: "a" }), "command core.layout.move: parameter tab is required");
   assert.deepEqual(layout(), before);
-  // A card narrower than two cards of the minimum size cannot split across.
+  // A card narrower than two cards of the minimum size cannot split across, and the refusal names the size that a half would get.
   arrange([0, 0.97, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
     { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
   const narrow = layout();
-  await refuses(run("core.layout.open", { card: "b", side: "right", plugin: SESSION }), "card b cannot split toward right");
+  await refuses(run("core.layout.open", { card: "b", side: "right", plugin: SESSION }), "card b cannot split toward right: card b would be 12x1200, below its minimum 96x96");
   assert.deepEqual(layout(), narrow);
   // A card of a fullscreen arrangement does not change the layout.
   plane.toggleCardFullscreen("a");
@@ -377,7 +377,7 @@ test("a refused split of a card leaves the number of the next tab name unchanged
   arrange([0, 0.97, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
     { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
   const before = layout();
-  assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right" });
+  assert.throws(() => plane.splitCard("b", "right", SESSION), { message: "card b cannot split toward right: card b would be 12x1200, below its minimum 96x96" });
   assert.deepEqual(layout(), before);
   const { tab } = await run("core.layout.open", { card: "a", plugin: SESSION });
   assert.equal(cardNode(layout().root, "a").tabs.find((item) => item.tab === tab).title, "f 탭 1");

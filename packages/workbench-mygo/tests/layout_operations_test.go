@@ -522,8 +522,6 @@ func TestARefusedLayoutOpenChangesNothing(t *testing.T) {
 		{`{"card":"main"}`, "core.layout.open needs plugin or path"},
 		{`{"card":"main","path":"a.md","params":{"path":"a.md"}}`, "core.layout.open takes params only with plugin"},
 		{`{"card":"main","side":"middle","plugin":"notes"}`, "unknown side middle; use left, right, top or bottom"},
-		// The neighbour rest holds no tab with these params, so the open splits thin.
-		{`{"card":"thin","side":"right","plugin":"notes","params":{"path":"x.md"}}`, "card thin cannot split toward right"},
 	}
 	check := func(params, want string) {
 		t.Helper()
@@ -537,6 +535,15 @@ func TestARefusedLayoutOpenChangesNothing(t *testing.T) {
 	}
 	for _, refusal := range refusals {
 		check(refusal.params, refusal.want)
+	}
+	// The neighbour rest holds no tab with these params, so the open splits thin, which a half would draw below the minimum.
+	before, stored := f.described(), f.stored()
+	if _, err := f.apply("core.layout.open", `{"card":"thin","side":"right","plugin":"notes","params":{"path":"x.md"}}`); err == nil ||
+		!thinRefusal.MatchString(err.Error()) {
+		t.Fatalf("the open beside thin failed with %v, want %s", err, thinRefusal)
+	}
+	if f.described() != before || f.stored() != stored {
+		t.Fatal("the refused open beside thin changed the layout")
 	}
 	// A card of a fullscreen arrangement does not change.
 	f.run(t, "core.card.fullscreen", `{"card":"main"}`)
