@@ -1703,8 +1703,8 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [-] F900-3 — F900-1과 F900-2에서 push한 commit ID를 각 저장소 changelog에 기록한다. 커밋 메시지는 바꾸지 않는다. Closed: 기록은 commit id를 적지 않으므로, 어떤 changelog도 push한 commit id를 기록하지 않는다.
 - [ ] F901 — P1: 실행 중인 애플리케이션에서 S175와 S117의 dim 수정을 검증한다. 입력: 엔진 테스트는 통과했으나 dim TUI 추천 텍스트의 캡처 frame을 측정하지 않았다. F901-2와 F901-3은 lead가 실행한다.
   - [ ] F901-1 — `git worktree add`로 core 검증 checkout `core-dim-F901`을 만든다. 빌드된 애플리케이션은 이 checkout 밖에 둔다.
-  - [ ] F901-2 — Red (lead): `065fef9^`와 `014ebac^`의 sidecar를 빌드하고, `SGR 2` 텍스트를 출력하는 fixture TUI를 `diagnostics.capture.still`로 캡처해 추천 글자의 전경색을 기록한다.
-  - [ ] F901-3 — Green (lead): 수정된 commit의 sidecar를 빌드해 같은 fixture를 캡처하고, 측정한 색이 엔진 테스트의 혼합값(`#1e1e1e` 위의 `#949494`)인지 기록한다.
+  - [ ] F901-2 — Red (lead): S175와 S117 앞의 vt release 0.0.27과 alacritty release 0.0.7의 sidecar로, `SGR 2` 텍스트를 출력하는 fixture TUI를 `diagnostics.capture.still`로 캡처해 추천 글자의 전경색을 기록한다.
+  - [ ] F901-3 — Green (lead): S175와 그 혼합 고침 S179를 담은 vt release 0.0.29와, S117을 담고 아직 어느 release에도 없는 alacritty main build로 같은 fixture를 캡처하고, 측정한 색이 엔진 테스트의 혼합값(`#1e1e1e` 위의 `#949494`)인지 기록한다.
 - [ ] F902 — P1: sidecar 0.0.28(vt)과 다음 alacritty 버전의 릴리즈 후보를 publish하지 않고 준비한다. 입력: `sidecars/vt-release-0028`에 0.0.28을 선언한 the vt 0.0.28 version declaration가 있고, alacritty 릴리즈 후보는 없다. 빌드는 lead가 실행한다.
   - [ ] F902-1 — vt의 `docs/operations/local-native-package.md`와 alacritty의 릴리즈 목표를 읽고 명령과 출력 폴더를 기록한다.
   - [ ] F902-2 — Lead가 `sidecars/vt-release-0028`에서 `make release OUT=<새 폴더>`로 vt 0.0.28 후보를 빌드하고, 패키지가 S175 dim 수정을 담는지 확인한다.
