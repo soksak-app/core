@@ -193,10 +193,18 @@ test("core.card.get reads a content card with its group path and a group card wi
 
 test("core.grid reports the group card of each card, the leaders and the group cards after the cards", { timeout: 5000 }, async () => {
   arrange();
+  // The cards of the grid come in workbench order, then the group cards, each with parent, null at the root level, and leader a boolean.
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-3",
+    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
+    state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [content("card-3", 0, 1, 0, 1, [view("tab-aaaaa3", PLAIN)]),
+      content("card-1", 1, 2, 0, 1, [view("tab-aaaaa1", PLAIN)]), content("card-2", 2, 3, 0, 1, [view("tab-aaaaa2", PLAIN)])] } }, "spc-aaaaaa");
   const { cards } = await status("core.grid");
   assert.deepEqual(cards.map(({ id, parent, leader }) => ({ id, parent, leader })), [
-    { id: "card-1", parent: "card-4", leader: true }, { id: "card-2", parent: "card-4", leader: undefined },
-    { id: "card-3", parent: undefined, leader: undefined }, { id: "card-4", parent: null, leader: true },
+    { id: "card-3", parent: null, leader: true }, { id: "card-1", parent: "card-4", leader: true },
+    { id: "card-2", parent: "card-4", leader: false }, { id: "card-4", parent: null, leader: false },
   ]);
-  assert.deepEqual(cards[3].group, { name: "그룹 1", level: 1, leader: "card-1" });
+  assert.deepEqual(Object.keys(cards[0]).filter((key) => ["parent", "leader", "group"].includes(key)), ["parent", "leader"]);
+  const { x, y, w, h, ...group } = cards[3];
+  assert.deepEqual(group, { id: "card-4", parent: null, leader: false, group: { name: "그룹 1", level: 1, leader: "card-1" } });
+  assert.deepEqual({ x, y, w, h }, plane.currentTree().rect("card-4"));
 });
