@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -481,6 +482,39 @@ func TestTheThemeOfTheViewsPrecedesTheirPlacement(t *testing.T) {
 	}
 	if !stored.themeFirst || theme.Scheme != "dark" || theme.Tokens["--bg"] == "" || theme.Tokens["--font"] == "" || theme.Tokens["--half-gap"] != "6px" {
 		t.Fatalf("the first placement %v met the theme %+v", stored.themeFirst, theme)
+	}
+}
+
+// The theme of the views holds the card background of the theme as --card, the same for every surface, so each plugin paints the
+// background of core; a group card changes no token of the surfaces inside it (docs/spec/native-surfaces.md#view-surfaces,
+// docs/spec/groups.md#drawing).
+func TestTheThemeOfTheViewsCarriesTheCardBackground(t *testing.T) {
+	_, stored := surfaceShell(t)
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Themes []struct {
+			Dark map[string]string `json:"dark"`
+		} `json:"themes"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	var theme map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(stored.theme), &theme); err != nil {
+		t.Fatalf("setTheme took %q: %v", stored.theme, err)
+	}
+	var tokens map[string]string
+	if err := json.Unmarshal(theme["tokens"], &tokens); err != nil {
+		t.Fatal(err)
+	}
+	if tokens["--card"] != declared.Themes[0].Dark["card"] {
+		t.Fatalf("the theme of the views carries --card %q, want the card background %q", tokens["--card"], declared.Themes[0].Dark["card"])
+	}
+	if _, ok := theme["surfaces"]; ok {
+		t.Fatalf("the theme of the views carries tokens of single surfaces: %s", stored.theme)
 	}
 }
 

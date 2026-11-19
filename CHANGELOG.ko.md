@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-4 (view의 card 배경): 계약은 view의 테마가 모든 view에서 같은 창 테마이고, plugin이 페이지 배경으로 칠하는 card 배경 `--card`를 담는다고 적는다. group card는 토큰을 바꾸지 않으므로 `setTheme`은 surface 하나하나의 토큰을 담지 않는다. 검증: 이미 `--card`를 보내던 두 workbench에서 두 workbench의 테마 test가 통과한다.
 - F945 (세트 없는 창 사이드바): 두 workbench에서 `core.sidebars`는 세트를 보이지 않고 상태 줄만 그리는 고정 창 사이드바를 세트와 layout `null`, 빈 섹션, 그 사각형으로 보고한다. 검증: 두 workbench의 sidebar test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F954 (좁은 card footer의 오류): 두 workbench에서 surface의 오류와 tab의 작업 오류는 card footer의 한 줄에 머물러 줄임표로 잘리고 글 전체를 tooltip으로 가진다. 오류 표시는 여전히 각 오류가 나타날 때 애플리케이션 로그에 쓴다. 검증: 두 workbench의 status row test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F968 (head의 접힘 단계와 선택된 tab): 두 workbench에서 card head의 접힘 단계는 card에서 가장 넓은 tab을 쓰므로, header는 어느 tab이 선택되든 같은 tab을 보이고 선택된 tab은 언제나 그 가운데 있다. 검증: 공유 head case와 mygo head test가 바뀌지 않은 code에서 실패했고 통과한다.

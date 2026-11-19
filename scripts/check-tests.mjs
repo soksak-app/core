@@ -310,6 +310,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-4",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });" },
+      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *SettingsStore) pageTheme() (map[string]any, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheThemeOfTheViewsCarriesTheCardBackground" },
+      { file: "packages/workbench/test/view-theme-card.test.mjs", id: "the theme of the views carries the card background of the theme as --card" },
+    ],
+    expected: "The theme of the views is the window theme with --card, the same for every view, and carries no tokens of single surfaces.",
+    levels: ["unit"],
+  },
+  {
     id: "F945",
     implementation: [
       { file: "packages/workbench-mygo/src/sidebars.go", symbol: "drawn := &drawnSidebar{frame: frame, owner: owner}" },

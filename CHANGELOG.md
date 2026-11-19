@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-4 (card background of the views): the contract states that the theme of the views is the window theme, the same for every view, and holds `--card`, the card background, which a plugin paints as the background of its page; a group card changes no token, so `setTheme` carries no tokens of single surfaces. Verification: the theme tests of both workbenches pass on the workbenches, which already sent `--card`.
 - F945 (window sidebar without a set): `core.sidebars` reports a fixed window sidebar that shows no set and draws only its status line, with the set and the layout `null`, no sections and its rectangle, in both workbenches. Verification: the sidebar tests of both workbenches failed on the unchanged code and pass.
 - F954 (errors of a narrow card footer): the error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, and carry their whole text as their tooltip; the error display still writes each to the application log when it appears. Verification: the status row tests of both workbenches failed on the unchanged code and pass.
 - F968 (fold stage of a head and the selected tab): the fold stage of a card head takes the widest tab of the card in both workbenches, so a header shows the same tabs whichever tab is selected, and the selected tab is always among them. Verification: the shared head cases and the mygo head test failed on the unchanged code and pass.
