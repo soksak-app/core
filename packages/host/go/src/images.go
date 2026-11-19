@@ -482,12 +482,13 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 	i.changedLocked()
 }
 
-// Reserve takes a name. It returns an error when owner is nil.
+// Reserve takes a name. It returns an error when owner names no supplier sidecar or no window that receives its messages, because
+// a region without a supplier would send its drawing state and configurations to no one.
 func (i *Images) Reserve(key ImageKey, owner *ImageOwner) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	if owner == nil {
-		return fmt.Errorf("image %q: owner is required", key.Name)
+	if owner == nil || owner.SidecarName == "" || owner.SidecarOwner == nil {
+		return fmt.Errorf("image %q: reserve requires a sidecar", key.Name)
 	}
 	if _, ok := i.handles[key]; ok {
 		return fmt.Errorf("image %q is already attached", key.Name)

@@ -741,7 +741,7 @@ fn invalid_json_closes_connection() {
 | `images.present.stale-native-raster-requests-reconfiguration` | native raster가 그림과 달라 거부된 표시는 stale로 응답하고, 그 전에 native raster의 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
 | `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
-| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
+| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없거나, Go host에서 그 사이드카의 메시지를 받는 창이 없는 이미지 예약을 `image "<name>": reserve requires a sidecar`로 거부하고 아무것도 등록하지 않는다. | all |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | all |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | all |

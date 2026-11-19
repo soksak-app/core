@@ -13975,6 +13975,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F934",
+    implementation: [{ file: "packages/host/go/src/images.go", symbol: "if owner == nil || owner.SidecarName == \"\" || owner.SidecarOwner == nil {" }],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestReserveRejectsAnOwnerWithoutASupplier" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "reserve_rejects_empty_sidecar" },
+    ],
+    expected: "The Go host refuses an image reservation whose owner has no supplier sidecar or no window, with the text of the Rust host.",
+    levels: ["unit"],
+  },
+  {
     id: "F929",
     implementation: [
       { file: "packages/host/go/src/images.go", symbol: "return ok && string(raw) != \"null\" && json.Unmarshal(raw, target) == nil" },
