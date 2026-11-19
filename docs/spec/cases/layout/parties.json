@@ -1138,6 +1138,72 @@
           }
         }
       ]
+    },
+    {
+      "name": "a card that is not in the layout is refused",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "zz"
+            ]
+          },
+          "error": "unknown card zz"
+        }
+      ]
+    },
+    {
+      "name": "a card listed twice is refused before the size check",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "a"
+            ]
+          },
+          "error": "card a is listed more than once"
+        }
+      ]
     }
   ]
 }
