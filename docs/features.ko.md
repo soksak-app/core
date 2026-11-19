@@ -208,7 +208,14 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
     - [~] F899-2.3 — P1, F899-2의 후속: agent 대화 읽기는 타입이 문자열인 JSON 객체가 아닌 content 항목을 거절하고, 저장소 규칙이 거부하는 reader의 기본값에는 명시적 check나 이유를 둔다. 진행 중: spec 행은 작성했고 Red와 Green 시험은 아직 없다. 이 항목의 Red와 Green commit을 기다린다.
     - [~] F913 — P1, main에서 실패한 release 실행의 CI 실패 후속: `make check-preflight`가 CI 순서대로 linux-node, equivalence, macOS host job이 make로 실행하는 정적 검사와 시험 target을 실행한다. 목록은 `ci.yml`의 job step에서 읽고, 첫 실패 target에서 멈춘다. 진행 중: target과 소유 시험을 작성했다. 남은 작업: 전체 실행의 종료 코드 0 기록이며, 로컬에서 수행하지 않은 sok 실행 파일 build를 기다린다.
   - [ ] F899-3 — 각 터미널의 전경 프로그램과 백그라운드 작업, 그리고 그것을 이름으로 알려 주는 명령.
-  - [ ] F899-4 — 터미널 상태 event(idle, running, exited, waiting, agent-busy, agent-waiting).
+  - [~] F899-4 — 두 터미널 쌍의 터미널 상태 event(idle, running, exited, waiting, agent-busy, agent-waiting)([터미널 상태](spec/terminal-state.md)). 진행 중: 아래 sidecar와 plugin 항목은 각 저장소에 등록되었다. `waiting`, `agent-busy`, `agent-waiting`은 보류다.
+    - [o] F899-4.1 — Spec: `spec/terminal-state.md`와 `spec/terminal-state.ko.md`가 상태, `D`의 exit code를 포함한 OSC 133 mark, `exit`를 가진 변화 event `shell.state`, 읽기 `shell.state.read`, plugin status `<plugin>.state`, 보류된 상태, 공유 case `spec/cases/terminal-state/osc133.json`을 정의한다.
+    - [~] F899-4.2 — sidecar vt가 상태 변화를 publish하고 상태 읽기에 답한다(vt S195). 진행 중: sidecar vt에서 구현하며, 그 Red와 Green을 기다린다.
+    - [ ] F899-4.3 — sidecar alacritty가 변화 event에 `exit`를 더하고 상태 읽기에 답한다. S123의 변화 event에는 `exit`가 없고 읽기가 없다(alacritty S190).
+    - [ ] F899-4.4 — plugin terminal이 `terminal.state`를 선언하고 읽기와 변화 event를 따른다(terminal P165).
+    - [ ] F899-4.5 — plugin term이 `term.state`를 선언하고 읽기와 변화 event를 따른다(term P44).
+    - [!] F899-4.6 — 상태 `waiting`. 보류: 정적 window의 길이가 측정되지 않았고 prompt나 질문의 pattern이 선언되지 않았다([보류된 상태](spec/terminal-state.md#held-states)). 원인: 계획은 `waiting`을 값 없는 heuristic으로 정의하며, 고정된 window는 timer다. 재시도 조건: `spec/terminal-state.md`가 window와 pattern을 그 근거와 함께 정한다.
+    - [!] F899-4.7 — 상태 `agent-busy`와 `agent-waiting`(alacritty S125). 보류: Codex hook event(계획 V4)와 Claude Code `Notification` event(계획 V5)의 payload field가 실제 session에서 기록되지 않았고, hook event가 sidecar에 닿는 경로가 정의되지 않았다. 원인: 어느 agent의 기록된 payload도 없다. 재시도 조건: 각 event의 payload가 실제 session에서 기록되고 `spec/terminal-state.md`가 경로와 field를 정의한다.
   - [!] F899-5 — TUI 키 adapter(D6)와 대화상자 처리(D5). F899-4 뒤에 한다. sidecar alacritty의 S120으로 구현했다: 키 adapter와 대화상자 supervisor. 보류: TUI 키 table이 비어 있어서 agent 동작이 TUI 키에 도달하지 않는다(alacritty S122). 원인: 어떤 agent TUI의 키도 agent 버전과 함께 관찰되어 기록되지 않았다. 재시도 조건: agent TUI의 키가 버전과 함께 관찰되어 `TUI_KEYS`에 기록되고, `key_for`의 red-green 테스트가 그것을 덮는다.
   - [o] F899-6 — 호스팅하는 모든 agent의 파괴적 셸 명령을 실행 전에 막는다. fail-closed(D7). sidecar alacritty의 S121과 sidecar vt의 S181로 구현했다. 거부 계약은 persistent services 사양에 있다. 두 sidecar 모두 Red와 Green을 기록했다.
   - [~] F899-7 — 터미널 간 메시징: sidecar가 등록한 폴더를 감시해 file event를 보내고, 메시지는 입력 주입으로, agent가 지원하면 MCP 도구 `messages.read`와 `messages.wait`로 전달한다(D3, D4). 진행 중: spec과 `sok message send` 명령은 완료했다. sidecar의 감시, event와 그 test는 alacritty-core 저장소에 있으며 이 worktree에는 없다.
