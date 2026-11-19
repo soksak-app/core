@@ -657,6 +657,65 @@ func (p *Parties) cardGet(g *Grid, id string) (cardState, error) {
 	return state, nil
 }
 
+// GroupCandidates returns the touching cards that a card in no party can group with: the cards in no party that are not window
+// sidebars, in the space order (docs/spec/parties.md#card-menu). A card in a party has no candidates.
+func (p *Parties) GroupCandidates(g *Grid, card string) []string {
+	own, ok := g.Card(card)
+	if !ok || p.partyOf(card) != nil {
+		return nil
+	}
+	out := []string{}
+	for _, other := range g.Cards() {
+		if other.ID != card && p.partyOf(other.ID) == nil && !slices.Contains(SidebarSides, other.ID) && Touches(own, other) {
+			out = append(out, other.ID)
+		}
+	}
+	return out
+}
+
+// MenuItem is a party item of the card menu: its element name, its label, and the command it runs with its params.
+type MenuItem struct {
+	Element, Label, Command string
+	Params                  map[string]any
+}
+
+// MenuItems returns the party items of the card menu of a card (docs/spec/parties.md#card-menu), as partyMenuItems of
+// packages/workbench/parties.js builds them. A card in a party gets the leader item, one color item per theme token party-1 to
+// party-6, and a take item per other party that touches the card. The group item is the chooser of GroupCandidates.
+func (p *Parties) MenuItems(g *Grid, card string) []MenuItem {
+	own, ok := g.Card(card)
+	holder := p.partyOf(card)
+	if !ok || holder == nil {
+		return nil
+	}
+	items := []MenuItem{}
+	if holder.Leader != nil && *holder.Leader == card {
+		items = append(items, MenuItem{"core.party.menu.leader", "대표 카드 해제", "core.party.update", map[string]any{"party": holder.ID, "leader": nil}})
+	} else {
+		items = append(items, MenuItem{"core.party.menu.leader", "대표 카드로 지정", "core.party.update", map[string]any{"party": holder.ID, "leader": card}})
+	}
+	for _, token := range partyTokens {
+		items = append(items, MenuItem{"core.party.menu.color", "색 " + strings.TrimPrefix(token, "party-"), "core.party.update",
+			map[string]any{"party": holder.ID, "color": p.palette[token]}})
+	}
+	for _, other := range p.list {
+		if other == holder || !slices.ContainsFunc(other.Cards, func(member string) bool {
+			rect, held := g.Card(member)
+			return held && Touches(own, rect)
+		}) {
+			continue
+		}
+		// A take that leaves its former party with fewer than 2 cards deletes that party, and the label states it.
+		note := ""
+		if len(holder.Cards) == 2 {
+			note = ", 파티 " + holder.ID + "가 사라짐"
+		}
+		items = append(items, MenuItem{"core.party.menu.take", "파티 " + other.ID + "에 합치기" + note, "core.party.add",
+			map[string]any{"party": other.ID, "card": card, "take": true}})
+	}
+	return items
+}
+
 // sameSet tells whether two card lists hold the same cards.
 func sameSet(a, b []string) bool {
 	if len(a) != len(b) {
