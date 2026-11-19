@@ -47,6 +47,22 @@ page는 session을 열거나 session에 attach한 뒤 상태를 읽는다. persi
 
 각 terminal plugin은 각 terminal surface에 status `<plugin>.state`(`terminal.state`, `term.state`)를 선언한다. 그 값은 [상태 읽기](#상태-읽기)의 의미를 가진 `{state, source, sequence, exit}`다: 첫 읽기의 답 전에는 `{state: null, source: null, sequence: 0, exit: null}`, 그다음 읽기의 답, 그 뒤 각 변화 event의 member `to`, `source`, `sequence`, `exit`다. 이 형태가 아닌 변화 event나 읽기 답은 sidecar error다: page는 그것을 session의 error 경로로 보고하고 이전 값을 유지한다. surface의 새 session은 첫 읽기 전의 값에서 다시 시작한다.
 
+## Activity
+
+각 terminal plugin은 각 terminal surface에 status `<plugin>.activity`(`terminal.activity`, `term.activity`)도 선언하며, core가 tab, 그 card, space, project의 activity를 모으도록 `activity: true`로 core에 선언한다(core F982). 그 값은 core activity level이거나 activity가 없음을 뜻하는 `null`이다. plugin이 상태와 exit code를 알기 때문에 level은 plugin이 정하며, core는 level을 모으기만 한다. 값은 `<plugin>.state`의 각 값을 따른다:
+
+| `<plugin>.state`의 `state` | `<plugin>.activity` |
+| --- | --- |
+| 첫 변화 전의 `null` | `null` |
+| `idle` | `idle` |
+| `running` | `running` |
+| 0이 아닌 `exit`를 가진 `exited` | `failed` |
+| `exit` 0 또는 `exit` `null`을 가진 `exited` | `null` |
+| `waiting`, `agent-waiting`(보류) | `attention` |
+| `agent-busy`(보류) | `running` |
+
+mark가 exit code를 주지 않은 `exited` 상태는 실패를 보고하지 않는다. 실패를 보여 주는 code가 없기 때문이다. 보류된 상태의 행은 그 상태가 정의될 때 적용된다([보류된 상태](#보류된-상태)). status는 값이 바뀔 때만 바뀌며, surface의 새 session은 다시 `null`에서 시작한다.
+
 ## 보류된 상태
 
 - `waiting`: 계획은 이것을 한 window 동안의 출력 정적과 prompt나 질문을 보여 주는 화면의 조합으로 정의한다([terminal plan, 2.3](../plans/terminal-plan.md#23-states)). window의 길이는 측정되지 않았고 prompt나 질문의 pattern도 선언되지 않았으며, mark와 agent signal이 event source인 곳에서 고정된 정적 window는 timer다. window와 pattern이 그 근거와 함께 이 문서에서 정해질 때까지 보류한다.

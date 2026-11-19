@@ -1,6 +1,7 @@
 //! The text of file errors (docs/spec/cli.md). Both implementations report the same failure with the same text.
 
 use std::fmt::Display;
+use std::path::PathBuf;
 
 /// Writes the failure of a file operation on path as "<path>: <reason>". The reason is the operating system error text and starts with a lowercase letter.
 /// It omits the "(os error N)" that the standard library appends.
@@ -33,5 +34,28 @@ pub(crate) fn with_cleanup(
         Ok(()) => error,
         Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => error,
         Err(cleanup) => format!("{error}; cleanup {}", file_error(temp.display(), &cleanup)),
+    }
+}
+
+/// Writes bytes for a message: each byte from 0x20 to 0x7e other than `\` as itself, `\` as `\\`, and every other byte as `\x`
+/// with two lowercase hexadecimal digits (docs/spec/agent-conversation.md#refusals).
+pub(crate) fn escaped(bytes: &[u8]) -> String {
+    let mut text = String::with_capacity(bytes.len());
+    for &byte in bytes {
+        match byte {
+            b'\\' => text.push_str("\\\\"),
+            0x20..=0x7e => text.push(byte as char),
+            _ => text.push_str(&format!("\\x{byte:02x}")),
+        }
+    }
+    text
+}
+
+/// Returns the path when its bytes are UTF-8, so that every later message writes it as it is, and otherwise its escaped bytes.
+pub(crate) fn utf8_path(path: PathBuf) -> Result<PathBuf, String> {
+    if path.to_str().is_some() {
+        Ok(path)
+    } else {
+        Err(escaped(path.as_os_str().as_encoded_bytes()))
     }
 }

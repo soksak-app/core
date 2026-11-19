@@ -5,12 +5,16 @@
 
 ## 2026-11-20
 
+- F899-3, F899-7.4, F912: 항목들이 그 경로의 결정을 적는다. process list의 여덟 열린 결정은 contract, 표준, 측정으로 정하고, MCP 도구의 `messages_wait`는 relay `timeout`을 가진 long poll이며 터미널의 folder는 그 project와 surface에서 오고, hand-off record는 messaging이 소유한다.
+- F987: `sok conversation read`와 Rust sok의 configuration folder가 UTF-8이 아닌 `HOME`을 `HOME is not UTF-8: <escaped>`로 거부하고, reader는 이름이 UTF-8이 아닌 folder 항목을 거부하며, path를 바뀐 문자로 쓰지 않는다.
+- F988: 사람 action의 Go diagnostic method가 type check의 결과를 버리지 않고 action이 text인지 검사하며, `node scripts/check-fallbacks.mjs`가 다시 통과한다.
+- F990(터미널의 activity): `spec/terminal-state.md`가 status `<plugin>.activity`를 정의한다. 그것은 각 terminal plugin이 자기 상태와 exit code에서 얻어 `activity: true`로 선언하는 core activity level 또는 null이다. F987과 F988을 등록했다.
 - F893: 두 host에서 설치된 sidecar의 channel의 시작은 level `info`로 `host.sidecar.path`를 기록한다. `folder`는 모든 sidecar의 환경이 PATH 맨 앞에 두는 host 실행 파일의 폴더이고, `sok`은 그 안의 application bundle의 sok이다(`docs/spec/sidecars.md#processes-of-a-surface`). Red: case `sidecars.environment.start-records-the-sok-folder`의 Go와 Rust test가 기록을 읽지 못했다. Green: 둘 다 통과한다.
 - F904(두 sidecar의 screen row): 네 하위 항목과 함께 닫았다. screen row의 공유 case file은 없으며, sidecar와 plugin의 소유 test가 근거다. F899-1은 term plugin 항목의 merge를 기다린다.
 - F899-4(두 터미널 쌍의 터미널 상태): sidecar vt(S195)와 alacritty(S190)가 exit code와 함께 `idle`, `running`, `exited`를 보고하고 `shell.state.read`에 답하며, plugin terminal(P165)과 term(P44)이 status `<plugin>.state`를 보여 준다. 각각 공유 case를 red로, 그다음 green으로 실행했다. 변경은 sidecar release와 plugin pin 전까지 release되지 않았다. `waiting`과 agent 상태는 보류다.
 - F899-4.1(터미널 상태 contract): `docs/spec/terminal-state.md`가 두 터미널 쌍의 터미널 상태를 정의한다: OSC 133 mark에서 온 `idle`, `running`, `exited`, `D`의 exit code(0부터 255; named parameter가 아닌 다른 첫 parameter는 거부되는 mark), `exit`를 가진 변화 event `shell.state`, 답 `shell.state.current`를 가진 읽기 `shell.state.read`, plugin status `<plugin>.state`. `waiting`, `agent-busy`, `agent-waiting`은 그 조건과 함께 보류다. `docs/spec/cases/terminal-state/osc133.json`은 각 sidecar와 각 plugin이 실행하는 공유 case를 담는다.
 - F912(hand-off record): 명세 부분은 `spec/messaging.md`에서 완료되었다. 항목이 record의 소유자로 적은 party 기능을 F936이 닫았고 어떤 명세도 그 소유 module과 저장을 정의하지 않으므로 test는 보류다.
-- F899-7.3(sidecar vt의 messaging): vt S196이 같은 serve test와 공유 이름 case로 같은 messaging contract를 구현하며, 그것들은 변경하지 않은 sidecar에서 실패했고 이제 통과한다. 쓰기 규칙은 두 sidecar에 대해 측정되었다. vt S200 전까지 release되지 않았다.
+- F899-7.3(sidecar vt의 messaging): vt S196이 같은 serve test와 공유 이름 case로 같은 messaging contract를 구현하며, 그것들은 변경하지 않은 sidecar에서 실패했고 이제 통과한다. 쓰기 규칙은 두 sidecar에 대해 측정되었다. vt S201 전까지 release되지 않았다.
 - F899-7.2, F909, F910, F911(sidecar alacritty의 messaging): alacritty S188이 registration, `notify`로 하는 감시, `from`을 가진 file event, cursor epoch `registration`을 가진 읽기, 쓰기 규칙을 구현한다. 그 serve test와 공유 이름 case는 변경하지 않은 sidecar에서 실패했고 이제 통과한다. `spec/messaging.md`는 UTF-8이 아닌 message의 거부 `invalid-text`를 더하고 쓰기 규칙의 측정을 적는다. 변경은 alacritty S194 전까지 release되지 않았다.
 - F899-7.1(두 terminal sidecar의 messaging): `docs/spec/messaging.md`가 sidecar `alacritty`와 `vt`가 각자 자기 surface에 대해 event 이름 `sidecar.<sidecar>.file.changed`, `sidecar.<sidecar>.messages.registered`, `sidecar.<sidecar>.registration.closed`로 messaging을 구현한다고 적는다. `removed` event는 read의 message가 아니다. `docs/spec/cases/messaging/names.json`은 이름 규칙의 공유 case를 담는다.
 - F899-2.3(conversation read의 content item): 변경 전 reader에서 한 Red 실행은 네 test에서 실패했으며 item을 status 0의 skipped로 읽었고, Green 실행은 Rust conversation test(24개)와 Go conversation test(16개)를 통과한다.

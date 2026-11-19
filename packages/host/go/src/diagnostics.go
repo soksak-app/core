@@ -327,8 +327,8 @@ func diagnosticInputPerson(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	if err := decode(params, &p); err != nil {
 		return nil, err
 	}
-	action, _ := p.Action.(string)
-	if action != "press" && action != "move" && action != "scroll" {
+	action, isText := p.Action.(string)
+	if !isText || (action != "press" && action != "move" && action != "scroll") {
 		return nil, rpcError(codeInvalidParams, "action must be press, move or scroll")
 	}
 	x, xNumber := p.X.(float64)

@@ -1458,6 +1458,7 @@ fn invalid_json_closes_connection() {
 | `conversation.reads-an-unchosen-file-only-to-its-session-record` | 선택되지 않은 후보 파일은 세션 레코드까지만 읽으므로, 그 뒤의 잘못된 줄은 읽지 않는다. | all |
 | `conversation.refuses-a-relative-cwd` | `--cwd`가 절대 경로가 아니면 `cwd is not an absolute path: <cwd>`로 거부한다. | all |
 | `conversation.refuses-a-session-working-directory-that-is-not-a-string` | 세션 파일의 작업 디렉터리가 없거나 문자열이 아니면 작업 디렉터리 메시지로 거부한다. | all |
+| `conversation.refuses-a-home-that-is-not-utf-8` | byte가 UTF-8이 아닌 `HOME`은 그 byte를 escape하여 보여 주는 `HOME is not UTF-8: <escaped>`로 거부한다. | all |
 | `conversation.refuses-an-unknown-agent` | agent가 `claude-code`도 `codex`도 아니면 `unknown agent <agent>`로 거부한다. | all |
 | `conversation.refuses-an-unreadable-file-with-its-reason` | 읽을 수 없는 후보 또는 선택된 파일은 경로와 소문자 운영체제 사유와 함께 거부한다. | all |
 | `conversation.refuses-when-no-file-matches` | 작업 디렉터리와 일치하는 후보가 없으면 `no <agent> session file has the working directory <cwd>`로 거부한다. | all |
