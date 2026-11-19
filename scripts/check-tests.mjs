@@ -283,6 +283,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F956",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX+inset, shiftY+inset" },
+      { file: "packages/workbench/text-size.js", symbol: "export function pressesFrame(target)" },
+      { file: "native/darwin/src/host_api_input.m", symbol: "NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/text_size_test.go", id: "TestAPressOnTheOutlineKeepsTheFrameScopeForTwoChanges" },
+      { file: "packages/workbench/test/text-size.test.mjs", id: "a press on the stage around the plane or on a bar presses the frame, and a press inside the plane does not" },
+      { file: "native/darwin/tests/surface_monitor_test.m", id: "a key down whose first responder is in a surface reports no press" },
+    ],
+    expected: "A press on the stage around the plane makes the frame the scope of the text size in both workbenches, and the native input monitor reports no press for a key input.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-14",
     implementation: [
       { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "Groups []gridGroupCardStatus `json:\"groups\"`" },

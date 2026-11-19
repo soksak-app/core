@@ -46,7 +46,15 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	originX, originY := float32(origin.X), float32(origin.Y)
 	rules := s.planeRules()
 	var grips []dividerGrip
-	ui.Box(c).Size(width, stage).Children(func() {
+	// The stage around the plane is the frame: a press there makes the frame the scope of the text size, and a press inside the plane
+	// leaves it to the cards (docs/spec/text-size.md#scope).
+	planeX, planeY := shiftX+inset, shiftY+inset
+	ui.Box(c).Size(width, stage).ObserveInput(func(ev ui.InputEvent) {
+		inside := ev.X >= planeX && ev.X < planeX+float32(s.planeBox.W) && ev.Y >= planeY && ev.Y < planeY+float32(s.planeBox.H)
+		if ev.Kind == ui.InputPointerDown && !inside {
+			s.pressPlace(FrameScope())
+		}
+	}).Children(func() {
 		ui.Box(c).Absolute().Left(shiftX).Top(shiftY).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			s.drawRail(p, r, inset)
 			paintGrips(p, r, inset, grips)

@@ -16,7 +16,7 @@ import (
 // watchers are the input receiver handles of each monitor number. They are read and changed only in main-thread steps.
 var watchers = map[uintptr]handles.Handle{}
 
-// goHost_surface_pressed receives the surface host that a press or a key input passed through. The library already decided that
+// goHost_surface_pressed receives the surface host that a press passed through; a key input is no press. The library already decided that
 // the view is a surface host, so the answer of Press is not returned.
 func goHost_surface_pressed(owner uintptr, view unsafe.Pointer) {
 	handles.Handle(owner).Value().(platform.Input).Press(uintptr(view))

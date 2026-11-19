@@ -1,5 +1,6 @@
-// Checks that the surface input monitor of a window answers from native state: a key down whose first responder is no surface
-// enters no Go step, and one in a surface reports the press with one callback (docs/spec/hosts.md#main-thread-of-the-wails-host).
+// Checks that the surface input monitor of a window answers from native state: a key down enters no Go step, also when its first
+// responder is in a surface, because a key input is not a press (docs/spec/text-size.md#scope), and it reports no press
+// (docs/spec/hosts.md#main-thread-of-the-wails-host).
 #import <Cocoa/Cocoa.h>
 #include <stdio.h>
 #include "host_api_input.h"
@@ -43,11 +44,17 @@ static int stepsOfKeyDown(NSWindow *window) {
     return steps;
 }
 
+// The press callback counts the presses that the monitor reports.
+static int presses;
+static void countedPress(uintptr_t owner, void *view) { (void)owner; (void)view; presses++; }
+
+
 int main(void) { @autoreleasepool {
     sp_host_callbacks callbacks = {0};
 #define ENTRY(mode, result, name, parameters, arguments) callbacks.name = unused_##name;
     SP_HOST_CALLBACKS(ENTRY)
 #undef ENTRY
+    callbacks.surface_pressed = countedPress;
     if (sp_host_callbacks_install(&callbacks) != NULL) {
         fprintf(stderr, "FAIL: the callback table is not installed\n");
         return 1;
@@ -80,9 +87,10 @@ int main(void) { @autoreleasepool {
         @"a key down whose first responder is in no surface enters no Go step (%d steps)", plainSteps]);
 
     [window makeFirstResponder:inSurface];
+    presses = 0;
     int surfaceSteps = stepsOfKeyDown(window);
-    check(surfaceSteps == 1, [NSString stringWithFormat:
-        @"a key down whose first responder is in a surface reports the press in one Go step (%d steps)", surfaceSteps]);
+    check(surfaceSteps == 0 && presses == 0, [NSString stringWithFormat:
+        @"a key down whose first responder is in a surface reports no press (%d steps, %d presses)", surfaceSteps, presses]);
 
     surfaceUnwatchMouse(monitor);
     [window close];
