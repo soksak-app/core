@@ -1911,6 +1911,67 @@
           "error": "card left is a window sidebar"
         }
       ]
+    },
+    {
+      "name": "a split that leaves fewer than 2 cards lists every card as removed",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c"
+            ]
+          }
+        },
+        {
+          "call": "core.party.remove",
+          "params": {
+            "party": "p1",
+            "card": "b"
+          },
+          "returns": {
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "a",
+                  "b",
+                  "c"
+                ],
+                "leader": null,
+                "deleted": true
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
