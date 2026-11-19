@@ -53,7 +53,7 @@ session 상태(`<plugin>.session`)는 호출자가 mode 를 고르는 데 필요
 | `alternate` | `{active, history, dropped}`: alternate screen 이 활성인지, alternate screen 위에 보존된 행의 수, 그리고 한도가 버린 보존 행의 수. 이 수는 가장 오래 보존된 alternate 행의 번호다 |
 | `foreground` | `{pid, command, cwd}`: session 의 terminal 의 foreground process group 의 leader, 그 실행 파일의 경로와 작업 directory. terminal 에 foreground process group 이 없으면 `null` |
 
-- 출처: sidecar 는 `scrollback` 과 `alternate` 를 각 `view` 이벤트에 담으므로 이 둘은 사람이 보는 화면을 따른다. `foreground` 는 session 이 열릴 때와 session 의 각 출력 뒤에 session 의 terminal(PTY 의 foreground process group, 그리고 그 leader 의 경로와 작업 directory)에서 읽고, 그 값이 마지막으로 보낸 값과 다르면 이벤트 `{event: "foreground", foreground}` 를 보낸다.
+- 출처: sidecar 는 `scrollback` 과 `alternate` 를 각 `view` 이벤트에 담으므로 이 둘은 사람이 보는 화면을 따른다. `foreground` 는 session 의 각 출력 뒤에(그 첫 출력은 shell 의 prompt 다) session 의 terminal(PTY 의 foreground process group, 그리고 그 leader 의 경로와 작업 directory)에서 읽고, 그 값이 마지막으로 보낸 값과 다르면 이벤트 `{event: "foreground", foreground}` 를 보낸다.
 - 거절된 읽기: 다른 사용자의 process 처럼 system 이 leader 의 실행 파일이나 작업 directory 를 이름하기를 거절하면 member 는 `{pid, command: null, cwd: null, error}` 이고, `error` 는 그 읽기와 이유를 이름한다. 어떤 값도 추측하지 않는다.
 - 한계: foreground 를 잡고 출력을 쓰지 않는 program 은 session 의 다음 출력에서 이름이 붙는다. system 의 어떤 이벤트도 foreground process group 의 변경을 알리지 않고, full-screen program 은 그리므로 그 출력이 그것을 이름한다. 보존된 alternate 행과 program scroll 중 무엇을 쓸지는 `foreground` 가 아니라 `alternate.active` 가 정한다.
 
