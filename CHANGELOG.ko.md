@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-31 (group header drag): page workbench에서 group card header의 버튼 밖을 누르고 끌면 mygo처럼 group card를 끈다. drop은 group card와 그 안의 card를 빼고 정해지고, preview는 move가 놓는 자리를 보이며, `core.drag`는 `tab` `""`로 알리고, 놓으면 `core.card.move`를 실행한다(`docs/spec/groups.md#moving-and-dropping`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-39 (header에서 group 이름 바꾸기): page workbench에서 group card 이름의 double-click은 mygo처럼 `core.rename.begin {kind: "group", id}`를 실행하고, header는 이름 자리에 이름 바꾸기 field를 보이며, `core.rename.commit`은 group 이름을 바꾼다(`docs/spec/groups.md#headers`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-33 (window description의 content card node): page는 mygo처럼 content card node에 group card 안에서만 `parent`를, level의 leader에만 `leader`를 써서 `sok describe`가 두 workbench에서 같은 tree를 준다(`docs/spec/exposure.md#window-snapshot`). 검증: page의 description test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-30 (card move 뒤의 focus): page workbench에서 layout을 바꾸는 `core.card.move`는 mygo와 card의 유일한 tab 놓기처럼 옮긴 card에, group card를 옮기면 그 안의 첫 content card에 focus를 주고, 아무것도 바꾸지 않는 move는 focus를 그대로 둔다(`docs/spec/groups.md#focus`, workbench case `layout.move.focuses-the-moved-card`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다. 이 case의 mygo test가 통과한다.

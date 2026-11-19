@@ -149,7 +149,7 @@ tab drag와 `core.tab.move`는 어느 level의 target card든 받는다. drop은
 - group card의 `centre` 위 drop은 `core.card.add-tab`처럼 tab을 group 안, 그 사각형의 오른쪽 가장자리의 새 content card에 넣는다. card의 유일한 tab은 그 card를 그리로 옮긴다.
 - group card의 side 위 drop은 사각형의 split으로 tab을 group card 사각형 옆, 그 group card를 담은 level의 새 card에 넣는다. card의 유일한 tab은 `core.card.move`가 옮기듯 그 card를 그리로 옮긴다.
 
-card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다. group card header의 control 밖을 누르고 끌면 group card를 옮긴다. drop은 tab처럼 결정되고, 놓으면 `core.card.move {card, target, side}`를 실행한다. group card를 끄는 동안 결정은 오늘 tab drag가 자기 card의 centre를 빼듯(`centreOnly`) 끌리는 group card와 그 안의 card를 뺀다. zone 없이 놓으면 아무것도 바꾸지 않고 오류를 보이지 않는다.
+card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다. group card header의 control 밖을 누르고 끌면 group card를 옮긴다. drop은 tab처럼 결정되고, 놓으면 `core.card.move {card, target, side}`를 실행한다. 끄는 동안 `core.drag`는 그 drag를 `tab` `""`, `card`인 group card, 정해진 `target`, move가 group card에 주는 rectangle인 `preview`로 알린다. group card를 끄는 동안 결정은 오늘 tab drag가 자기 card의 centre를 빼듯(`centreOnly`) 끌리는 group card와 그 안의 card를 뺀다. zone 없이 놓으면 아무것도 바꾸지 않고 오류를 보이지 않는다.
 
 ## Focus
 

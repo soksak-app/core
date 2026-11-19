@@ -149,7 +149,7 @@ A tab drag and `core.tab.move` take a target card of any level. A drop resolves 
 - A drop on the `centre` of a group card puts the tab into a new content card inside the group at the right edge of its rectangle, as `core.card.add-tab` does; the only tab of a card moves its card there.
 - A drop on a side of a group card puts the tab into a new card beside the rectangle of the group card in the level that holds it, by the split of the rectangle; the only tab of a card moves its card there, as `core.card.move` moves it.
 
-A tab that is the only tab of its card moves its card, which keeps its identifier, as today. A press and drag on the header of a group card outside its controls moves the group card: the drop resolves as for a tab, and the release runs `core.card.move {card, target, side}`. While a group card is dragged, the resolution leaves out the dragged group card and the cards inside it, as a tab drag leaves out the centre of its own card today (`centreOnly`); a release with no zone changes nothing and shows no error.
+A tab that is the only tab of its card moves its card, which keeps its identifier, as today. A press and drag on the header of a group card outside its controls moves the group card: the drop resolves as for a tab, and the release runs `core.card.move {card, target, side}`. While it is dragged, `core.drag` reports the drag with `tab` `""`, the group card as `card`, the resolved `target` and as `preview` the rectangle that the move gives the group card. While a group card is dragged, the resolution leaves out the dragged group card and the cards inside it, as a tab drag leaves out the centre of its own card today (`centreOnly`); a release with no zone changes nothing and shows no error.
 
 ## Focus
 

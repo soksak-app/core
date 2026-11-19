@@ -115,3 +115,36 @@ test("a double-click on the name of a group card begins its rename, and the comm
   await refuses(run("core.rename.begin", { kind: "group", id: "card-1" }), "no group card-1");
 });
 
+test("a drag of a group header previews its move, reports the drag and runs core.card.move at the release", { timeout: 5000 }, async () => {
+  arrange();
+  await settled();
+  const header = groupElement("card-4").querySelector(".group__head");
+  const tree = plane.currentTree();
+  const head = tree.headRect("card-4");
+  const target = tree.rect("card-3");
+  const [x0, y0] = [head.x + 8, head.y + head.h / 2];
+  const [x1, y1] = [target.x + target.w - 4, target.y + target.h / 2];
+  pointer(header, "pointerdown", x0, y0);
+  pointer(header, "pointermove", x1, y1);
+  const drag = await status("core.drag");
+  assert.equal(drag?.card, "card-4", "a drag of the header of card-4 reports no drag of the group card");
+  assert.deepEqual({ tab: drag.tab, moved: drag.moved, target: drag.target }, { tab: "", moved: true, target: { card: "card-3", zone: "right" } });
+  pointer(header, "pointerup", x1, y1);
+  await settled();
+  assert.equal(await status("core.drag"), null);
+  const placed = Object.fromEntries(plane.currentGrid().cards.map(({ id, c0, c1 }) => [id, [c0, c1]]));
+  assert.ok(placed["card-1"][0] >= placed["card-3"][1] && placed["card-2"][0] >= placed["card-3"][1],
+    `the release did not move card-4 to the right of card-3: ${JSON.stringify(placed)}`);
+  assert.equal(plane.focused(), "card-1", "the move of the group card did not focus the first card inside it");
+  assert.deepEqual(drag.preview, plane.currentTree().rect("card-4"), "the preview is not the rectangle that the move gave the group card");
+  // A release with no zone changes nothing.
+  const before = JSON.stringify(plane.currentGrid().toJSON());
+  const moved = groupElement("card-4").querySelector(".group__head");
+  const again = plane.currentTree().headRect("card-4");
+  pointer(moved, "pointerdown", again.x + 8, again.y + again.h / 2);
+  pointer(moved, "pointermove", again.x + 40, again.y + again.h / 2);
+  assert.equal((await status("core.drag"))?.target ?? null, null, "a point inside the dragged group card resolved a zone");
+  pointer(moved, "pointerup", again.x + 40, again.y + again.h / 2);
+  await settled();
+  assert.equal(JSON.stringify(plane.currentGrid().toJSON()), before, "a release with no zone changed the layout");
+});

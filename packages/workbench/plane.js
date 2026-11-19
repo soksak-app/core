@@ -726,8 +726,78 @@ function beginTabDrag(e, cardId, tabId) {
   el.addEventListener("pointercancel", onUp);
 }
 
-// A double-click on the name of a group card renames the group (docs/spec/groups.md#headers); the plane takes it for every group
-// header, which group-cards.js draws.
+/**
+ * The rectangle that the move of the dragged group card groupId to hit gives it, or undefined when the layout refuses the move; the
+ * move runs on the group tree and the tree puts the grid back (probe).
+ */
+function groupDropRect(groupId, hit) {
+  if (tree.checkMove(groupId, hit.id, hit.zone)) return undefined;
+  return tree.probe(() => {
+    try {
+      tree.move(groupId, hit.id, hit.zone);
+      return tree.rect(groupId);
+    } catch {
+      // A refused move is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
+      return undefined;
+    }
+  });
+}
+
+/**
+ * Starts the drag of the group card groupId by a press on its header (docs/spec/groups.md#moving-and-dropping). The drop resolves
+ * without the group card and the cards inside it, the preview is the rectangle that the move gives the group card, core.drag reports
+ * the drag with the tab "", and the release runs core.card.move toward the drop; a release with no zone changes nothing.
+ */
+function beginGroupDrag(e, header, groupId) {
+  e.preventDefault();
+  const band = dropBands();
+  tabDrag = { cardId: groupId, tabId: "", from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
+  header.setPointerCapture(e.pointerId);
+  dragChanged();
+  const onMove = (ev) => {
+    if (!tabDrag) return;
+    if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
+    if (!tabDrag.moved) return;
+    if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
+    const host = plane.getBoundingClientRect();
+    const hit = tree.dropAt(ev.clientX - host.left, ev.clientY - host.top, { headerPx: band.headerPx, footerPx: band.footerPx, without: groupId });
+    tabDrag.hit = hit && !isPlace(hit.card) ? { id: hit.card, zone: hit.zone } : null;
+    const rect = tabDrag.hit ? groupDropRect(groupId, tabDrag.hit) : undefined;
+    if (!rect) {
+      tabDrag.hit = null;
+      hideDrop();
+    } else {
+      showDropRect(rect);
+    }
+    dragChanged();
+  };
+  const onUp = (ev) => {
+    if (!tabDrag) return;
+    if (header.hasPointerCapture(ev.pointerId)) header.releasePointerCapture(ev.pointerId);
+    const drag = tabDrag;
+    tabDrag = null;
+    hideDrop();
+    if (drag.stood) standIn(false);
+    header.removeEventListener("pointermove", onMove);
+    header.removeEventListener("pointerup", onUp);
+    header.removeEventListener("pointercancel", onUp);
+    dragChanged();
+    if (drag.moved && drag.hit) return run("core.card.move", { card: groupId, target: drag.hit.id, side: drag.hit.zone });
+    settle();
+  };
+  header.addEventListener("pointermove", onMove);
+  header.addEventListener("pointerup", onUp);
+  header.addEventListener("pointercancel", onUp);
+}
+
+// A press on the header of a group card outside its buttons drags the group card, and a double-click on its name renames the group
+// (docs/spec/groups.md#headers). The plane takes both for every group header, which group-cards.js draws.
+plane.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || !tree) return;
+  const header = e.target.closest?.(".group__head");
+  if (!header || e.target.closest(".chrome__acts, .chrome__more, input")) return;
+  beginGroupDrag(e, header, header.closest(".group").dataset.groupCard);
+});
 plane.addEventListener("dblclick", (e) => {
   const name = e.target.closest?.(".group__name");
   if (name) run("core.rename.begin", { kind: "group", id: name.closest(".group").dataset.groupCard });
@@ -999,6 +1069,11 @@ export function dropHit(x, y, fromId, band) {
 function showDrop(fromId, hit) {
   const half = hit && !isPlace(hit.id) ? dropRect(fromId, hit) : undefined;
   if (!half) { hideDrop(); return null; }
+  return showDropRect(half);
+}
+
+/** Draws the drop preview at the rectangle half of the plane and returns it. */
+function showDropRect(half) {
   dropPreview = { x: half.x, y: half.y, w: half.w, h: half.h };
   // The preview must be drawn over the surface. When there is a host, it is drawn as a native shape — the fill is
   // translucent, so a web view cannot compose it over a surface. The CSS of this document decides the shape, and its computed
