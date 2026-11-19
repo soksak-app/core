@@ -306,3 +306,29 @@ test("core.card.move focuses the moved card, the first card inside a moved group
     assert.deepEqual(await run("core.card.move", { card: "card-4", target: "card-3", side: "right" }), { card: "card-4" });
     assert.equal(plane.focused(), "card-1", "the move of a group card did not focus the first card inside it");
   });
+
+// The document of the plane holds the cards in workbench order, each group card before the cards inside it, whatever the order in which
+// the grid holds the cards, so the lists of the elements and the Tab key follow the workbench order (docs/spec/groups.md#model,
+// docs/spec/exposure.md#workbench-statuses). The grid holds card-5 and card-3 of the group card card-6 first and card-2 before card-1
+// of the group card card-4, and a move of card-1 below card-5 puts it after card-5.
+test("the plane holds the cards and the group cards in workbench order", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 6, leader: "card-4",
+    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] },
+      { card: "card-6", name: "그룹 2", leader: "card-3", members: ["card-3", "card-5"] }],
+    state: { xs: [0, 0.375, 0.75, 1], ys: [0, 0.5, 1], cards: [content("card-5", 2, 3, 1, 2, [view("tab-aaaaa5", PLAIN)]),
+      content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)]), content("card-2", 1, 2, 0, 2, [view("tab-aaaaa2", PLAIN)]),
+      content("card-1", 0, 1, 0, 2, [view("tab-aaaaa1", PLAIN)])] } }, "spc-aaaaaa");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const documentOrder = () => [...document.querySelectorAll("#plane > .card, #plane > .group")]
+    .map((el) => el.dataset.cardId ?? el.dataset.groupCard);
+  assert.deepEqual(documentOrder(), ["card-4", "card-1", "card-2", "card-6", "card-3", "card-5"],
+    "the document does not hold the plane in workbench order");
+  assert.deepEqual([...document.querySelectorAll("#plane [data-expose='core.card.add']")].map((el) => el.dataset.exposeItem ?? el.closest(".card").dataset.cardId),
+    ["card-1", "card-2", "card-3", "card-5"], "core.card.add is not listed in workbench order");
+  await run("core.card.move", { card: "card-2", target: "card-5", side: "bottom" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const order = plane.currentTree().order().map(({ id }) => id);
+  assert.ok(order.indexOf("card-2") > order.indexOf("card-5"), `the move did not put card-2 after card-5: ${order.join(", ")}`);
+  assert.deepEqual(documentOrder(), order, "after the move the document does not hold the plane in workbench order");
+});

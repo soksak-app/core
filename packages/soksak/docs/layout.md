@@ -622,7 +622,24 @@ constructor runs; call it to reject a stale saved layout before installing one.
 `painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. Options: `createCard` (required), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules` (default on), `commit(rects, draw, dividers)`,
 `classPrefix` (default `sp`), `observeResize` (default on), `bleed` (default 0),
-`boundary` (default the grid's operations), `drawn` (default the grid's arrangement).
+`boundary` (default the grid's operations), `drawn` (default the grid's arrangement),
+`order(cards)` (default the reading order of the grid).
+
+`order(cards)` returns every card id of the grid once, in the order in which the
+host element holds the card elements; another list throws
+`order gave <n> cards for the <m> cards of the grid` with the missing, unknown or
+repeated cards. Without it the order is the reading order of the grid: by the
+first row line, then by the first column line. The keyboard and a reader of the
+document meet the cards in the order of the document, so the view keeps the
+document in the order of the arrangement instead of the order of creation, which
+follows the history of the splits and closes. A host that arranges the cards in
+a structure of its own, as boxes that hold several cards, gives the order of
+that structure and places its own elements beside the cards. A change of the
+order moves the card elements whose places no longer agree with it, as few as
+the order allows, and never the element that holds the focus, which keeps the
+focus. A moved element keeps its children and their state, except a frame
+(`iframe`) inside it, which the browser loads again; a host whose cards hold
+such frames keeps them outside the card elements.
 
 `commit(rects, draw, dividers)` runs before every layout change. It receives the
 rectangles on the device's pixel grid, and the dividers of the layout with the

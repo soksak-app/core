@@ -142,21 +142,28 @@ function markHeldFocus(el, d) {
  * Draws the group cards of the tree on the plane element planeEl (docs/spec/groups.md#drawing): rects is the drawn rectangle of each
  * shown group card by id, which a fullscreen group card gives the group cards inside it, head the height of a header and focused the
  * focused content card, whose group cards mark their frames. A group card that rects does not hold is hidden; the element of a group
- * card that the tree no longer holds is removed. The frames stand below the cards, so they are inserted before the first card.
+ * card that the tree no longer holds is removed. Each group card stands in the document right before the first box inside it, so the
+ * document holds the plane in workbench order, as the layout library holds the cards, and the frame stands below its cards.
  * renaming is the rename in progress of core.rename: the header of the group card that it names shows the field that renameField
  * creates in the place of its name (docs/spec/groups.md#headers).
  */
 export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused, renaming, renameField }) {
   const live = new Set();
-  const first = planeEl.querySelector(":scope > .card");
-  for (const { id, node } of tree.order()) {
+  const order = tree.order();
+  const elementOf = (id, node) => planeEl.querySelector(node ? `:scope > .group[data-group-card="${CSS.escape(id)}"]` : `:scope > .card[data-card-id="${CSS.escape(id)}"]`);
+  // From the last entry to the first, so the box after each group card already stands at its place.
+  for (let index = order.length - 1; index >= 0; index--) {
+    const { id, node } = order[index];
+    if (!node) continue;
+    let el = elementOf(id, node);
+    if (!el) el = createGroupCard(id);
+    const next = elementOf(order[index + 1].id, order[index + 1].node);
+    if (el.nextElementSibling !== next) planeEl.insertBefore(el, next);
+  }
+  for (const { id, node } of order) {
     if (!node) continue;
     live.add(id);
-    let el = planeEl.querySelector(`:scope > .group[data-group-card="${CSS.escape(id)}"]`);
-    if (!el) {
-      el = createGroupCard(id);
-      planeEl.insertBefore(el, first);
-    }
+    const el = elementOf(id, node);
     const rect = rects.get(id);
     el.hidden = rect === undefined;
     if (!rect) continue;

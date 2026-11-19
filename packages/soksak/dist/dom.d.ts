@@ -79,6 +79,15 @@ export interface ViewOptions {
     boundary?: BoundaryModel;
     /** The drawn arrangement of a host that draws the cards elsewhere than the grid's rects. Default: that of the grid. */
     drawn?: DrawnModel;
+    /**
+     * The order of the card elements in the host element, every card id of the
+     * grid once: the order in which the keyboard and a reader of the document
+     * meet the cards. A host that arranges the cards in a structure of its own,
+     * as boxes that hold several cards, gives the order of that structure.
+     * Default: the reading order of the grid, by the first row line and then by
+     * the first column line.
+     */
+    order?(cards: readonly Card[]): readonly string[];
 }
 /** A rule as a host draws it: `bleed` false keeps it off the frame around the plane. */
 export interface DrawnRule extends Rule {
@@ -232,6 +241,18 @@ export declare class SoksakView {
      */
     render(reason?: ChangeReason): void;
     private paint;
+    /**
+     * Put the card elements in the order of `order`, the reading order of the
+     * grid by default.
+     *
+     * The elements of the cards whose places agree with the order keep their
+     * place, and only the others move: the longest run of elements that already
+     * stand in that order stays, and it always holds the element that holds the
+     * focus. Moving that element would take the focus from it, and moving any
+     * element tears down a frame or a plugin document inside it, so the view
+     * moves as few as the order allows.
+     */
+    private arrange;
     /**
      * The first rule or divider element in the host, or null when there is none.
      *

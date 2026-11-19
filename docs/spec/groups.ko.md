@@ -6,7 +6,7 @@ group card는 space grid의 사각형 하나를 가리키고 그 안의 card를 
 
 ## 범위
 
-card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab의 command, status, element, 그리고 저장되는 grid는 계약을 유지하며, `packages/soksak`은 바뀌지 않는다. space는 line 집합 하나를 가진 grid 하나를 유지한다. 더해지는 것은 group card 하나다. group card는 grid 옆에 저장되는 tree의 node이며, cell이 그 grid의 사각형 하나를 이루는 card 집합을 가리킨다. 이 명세는 group card가 더하는 것과 기존 command가 group 안의 card에 닿는 방법만 말한다. group 안의 content card는 다른 card와 같은 grid의 content card다.
+card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab의 command, status, element, 그리고 저장되는 grid는 계약을 유지하며, layout library `packages/soksak`의 규칙은 그대로다. library는 group tree가 그것에 필요로 하는 것만 더하고, 문서 안 card element의 순서(`SoksakView`의 `order`)처럼 각 추가를 그 이유와 함께 자기 문서에 적는다. space는 line 집합 하나를 가진 grid 하나를 유지한다. 더해지는 것은 group card 하나다. group card는 grid 옆에 저장되는 tree의 node이며, cell이 그 grid의 사각형 하나를 이루는 card 집합을 가리킨다. 이 명세는 group card가 더하는 것과 기존 command가 group 안의 card에 닿는 방법만 말한다. group 안의 content card는 다른 card와 같은 grid의 content card다.
 
 ## 모델
 
@@ -17,7 +17,7 @@ card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab
 - space가 group card를 가진 동안 workbench가 grid에 하는 모든 operation은 `tidy`로 끝나며 `paidBy` 기록을 남기지 않는다. 따라서 close하거나 move하는 card는 [닫기](#닫기)가 고르는 이웃에게 자기 cell을 주고, 남은 card가 쓰는 모든 line은 자기 좌표를 유지한다. group을 가진 layout은 이 형태로 저장된다.
 - card의 식별자는 그 space에서 card 하나를 가리킨다. content card와 group card는 식별자를 한 sequence에서 받는다. 곧 `card-<n>`이며, `n`은 layout이 저장하는([저장](#저장)) 그 space가 낸 가장 큰 card 번호 `lastCard`보다 1 크다. 그래서 space는 끝난 식별자를 재시작 뒤에도 다시 내지 않는다. card는 group 안팎으로 옮겨도 식별자를 유지하며, card를 가리키는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.*`, `core.tab.move`, `core.group.*`)는 활성 space의 어느 level의 card든 받는다.
 - group이라는 낱말 하나는 이름 `core.group.*`, `core.card.group-x`, `core.card.group-y`와 이 명세의 기록의 member `group`에서만 group card를 가리킨다. `core.picker` item의 member `group`과 창 snapshot의 groups는 원래 뜻을 유지한다.
-- level의 reading order는 member를 card 또는 group card 사각형의 첫 row line `r0`, 다음으로 첫 column line `c0` 순으로 정렬한다. 이 순서는 layout library의 R2가 요구하듯 배열 순서가 아니라 line으로 정해진다. card의 workbench order는 root level의 reading order이며, 각 group card는 그 member의 reading order 앞에 선다.
+- level의 reading order는 member를 card 또는 group card 사각형의 첫 row line `r0`, 다음으로 첫 column line `c0` 순으로 정렬한다. 이 순서는 layout library의 R2가 요구하듯 배열 순서가 아니라 line으로 정해진다. card의 workbench order는 root level의 reading order이며, 각 group card는 그 member의 reading order 앞에 선다. page의 문서는 card element와 group card element를 workbench order로 담고, mygo는 그 순서로 element tree를 그리므로, element의 목록과 `Tab` key는 모든 host에서 그 순서를 따른다. layout library는 workbench가 주는 순서로 card element를 유지하고, 각 group card element는 그 안의 첫 상자 바로 앞에 선다.
 
 ### 그리는 사각형
 
@@ -231,7 +231,7 @@ group card는 기존 card 디자인의 container 하나로 그린다. 그 테두
 - 모든 group card는 grid의 사각형 하나를 정확히 덮는다. group card의 header, 테두리, drop 결정, 전체 화면은 사각형 하나를 필요로 하며, 그것을 깨는 operation은 깨는 group과 함께 거부되므로, tree는 상자 하나가 아닌 cell을 가리키지 않는다.
 - group card는 container 하나다: 그 테두리가 header와 member를 담고, 모든 상자는 옆 상자에서 gap 하나만큼 떨어진다. 양쪽 card에서 gap 절반씩 떨어진 corridor 가운데의 테두리는 모든 content card의 변을 grid의 line 위에 두었지만, group을 상자가 아니라 card 사이의 선으로 그렸고, nested 테두리와 그것을 담은 테두리가 한 line에 겹쳤다. layout library는 frame을 각각 line의 corridor 안 gap 하나로 가지므로(R5), 거리는 gap으로 남고 slot의 합은 여전히 plane이다. 한 line에서 이웃보다 적은 frame 안에 선 card는 그 line에 더 가까이 서며, 이것이 고른 gap의 값이다.
 - group card는 몸통에 card를 담은 card로 그린다: 그 header는 card의 head와 그 선이고, 그 몸통은 group card가 focus를 담은 표시가 `group-focus-fade`로 한 걸음씩 옮기듯 level마다 `group-fill-fade`만큼 stage에서 card 쪽으로 옮긴다. level마다 따로 둔 theme 색과 그것을 stage에 섞는 설정은 group의 title bar와 몸통을 자기만의 한 회색으로 그리고 그 사이에 얇은 선을 그어, group이 다른 종류의 물체로 보였고 nested group은 회색을 되풀이했다. 이제 group card의 색은 card의 token에서 나오므로, 어느 깊이에서도 모든 theme과 mode에서 group과 그 card가 한 디자인으로 보이고, 어떤 theme도 group의 색을 따로 선언하지 않는다. plane의 모든 header가 한 종류의 control이므로 header는 모든 level에서 card head의 색을 지키고, 몸통은 member가 서는 표면이므로 한 걸음을 받는다. header는 폭 전체에 걸치고 rule이나 divider는 header를 가로지르지 않는다: header를 가로지른 rule이나 divider는 bar를 두 header로 보이는 조각으로 잘랐다. nested 테두리는 그것을 담은 테두리 안쪽으로 gap 하나만큼 선다.
-- group card 사각형에 대한 operation은 layout library를 쓴다. 사각형의 split은 card 여러 개의 상자에 대한 R4이며, 안의 card는 절반을 받아 비율을 유지하고 밖의 card는 자기 line을 유지한다. close와 move는 사각형을 card 하나로 만들고, library가 그것을 닫거나 옮긴다. 그래서 library는 바뀌지 않고 모든 결과는 `checkState`가 받는 상태다.
+- group card 사각형에 대한 operation은 layout library를 쓴다. 사각형의 split은 card 여러 개의 상자에 대한 R4이며, 안의 card는 절반을 받아 비율을 유지하고 밖의 card는 자기 line을 유지한다. close와 move는 사각형을 card 하나로 만들고, library가 그것을 닫거나 옮긴다. 그래서 library의 규칙은 그대로이고 모든 결과는 `checkState`가 받는 상태다.
 - 그리는 최소는 library의 option이 아니라 workbench가 drop 미리보기가 drop을 검사하듯 grid와 tree의 복사본에서 검사한다. header를 아는 것은 workbench뿐이기 때문이다.
 - group은 언제나 member를 둘 이상 담는다. `core.group.create`는 card를 한 side 쪽 새 card와 묶으므로 group은 command 하나로 두 번째 card와 함께 만들어진다. member 하나가 남으면 그것이 group card를 대신한다. split 버튼처럼 group split 버튼은 그 방향을 이름으로 가지므로, 사람이 새 card의 쪽을 고르고 그 이름이 card가 나뉜다고 말한다. 상자의 긴 축을 쓰던 group 버튼 하나는 방향을 숨겼다. 이름은 결과의 배치, 좌우(나란히)와 상하(위아래)를 말한다: 세로와 가로는 자르는 선의 방향으로도 card의 배치로도 읽혀, 한 이름이 두 split을 뜻했다.
 - group card는 새 식별자를 받고, 그것이 묶는 card는 식별자와 tab을 유지한다. 그 card를 가리키는 모든 저장 참조, tab session, command가 계속 그것을 가리키기 때문이다. group card는 그 level에서 card의 자리와 leader mark를 받는다. card가 서 있던 자리에 서기 때문이다.
@@ -268,3 +268,4 @@ review는 다음 반론에 답했다.
 - 반론: 모든 child의 같은 몫은 중첩된 group card 안의 card를 바깥 group 옆의 card보다 짧게 그린다. 각 header가 자기 group card의 몫 안에 있기 때문이다. 답: 몫은 cut의 child의 몫이고, 사람은 그것을 group card의 사각형으로 본다. content card를 최소 아래로 그릴 balance는 모든 operation처럼 거부되며 그 card를 밝힌다.
 - 반론: 거부된 split을 최소 없이 다시 실행하는 것은 두 번째 operation이다. 답: 그것은 모든 operation이 이미 실행되는 trial 사본에서 실행되고 그것과 함께 되돌려진다. 그것은 library의 거부가 알리지 않는, split이 그릴 크기를 재므로 문구가 두 workbench에서 card와 그 크기를 밝힌다.
 - group 안에서 split된 card의 `paidBy` 기록은 그 card가 close될 때 space를 가로질러 자리를 돌려줄 수 있다: group을 가진 space는 `paidBy` 기록을 남기지 않으므로, 그 cell을 받는 이웃만 바뀐다.
+- page는 card의 element를 layout library가 만든 순서로 나열하고 모든 group card element를 모든 card 앞에 두었으므로, `core.card.*` element의 목록과 `Tab` key가 배치가 아니라 split의 이력을 따랐고, mygo는 workbench order를 따랐다. 원인은 library의 card element 삽입이므로, library는 host가 주는 순서, 기본으로 grid의 reading order로 card element를 유지하고, workbench는 workbench order를 준다. 반론: 순서를 바꾸면 element를 옮기므로 focus를 잃고 frame을 다시 load한다. 답: library는 자리가 순서와 맞지 않는 element만 옮기며 focus를 가진 element는 옮기지 않고, page의 card는 frame이 아니라 native view를 담는다.

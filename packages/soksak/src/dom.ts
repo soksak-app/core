@@ -83,6 +83,15 @@ export interface ViewOptions {
   boundary?: BoundaryModel;
   /** The drawn arrangement of a host that draws the cards elsewhere than the grid's rects. Default: that of the grid. */
   drawn?: DrawnModel;
+  /**
+   * The order of the card elements in the host element, every card id of the
+   * grid once: the order in which the keyboard and a reader of the document
+   * meet the cards. A host that arranges the cards in a structure of its own,
+   * as boxes that hold several cards, gives the order of that structure.
+   * Default: the reading order of the grid, by the first row line and then by
+   * the first column line.
+   */
+  order?(cards: readonly Card[]): readonly string[];
 }
 
 /** A rule as a host draws it: `bleed` false keeps it off the frame around the plane. */
@@ -497,6 +506,7 @@ export class SoksakView {
       // default: `updateCard` is an optional hook; without it the view only places the card.
       this.options.updateCard?.(held.el, card, rect);
     }
+    this.arrange(snapshot.cards);
     // The card is gone from the grid, so `destroyCard` receives the last copy
     // the view held.
     for (const [id, held] of this.cardEls) {
@@ -555,6 +565,49 @@ export class SoksakView {
 
     // default: `onChange` is an optional listener.
     this.options.onChange?.(reason);
+  }
+
+  /**
+   * Put the card elements in the order of `order`, the reading order of the
+   * grid by default.
+   *
+   * The elements of the cards whose places agree with the order keep their
+   * place, and only the others move: the longest run of elements that already
+   * stand in that order stays, and it always holds the element that holds the
+   * focus. Moving that element would take the focus from it, and moving any
+   * element tears down a frame or a plugin document inside it, so the view
+   * moves as few as the order allows.
+   */
+  private arrange(cards: readonly Card[]): void {
+    const order = this.options.order
+      ? this.options.order(cards)
+      : [...cards].sort((a, b) => a.r0 - b.r0 || a.c0 - b.c0).map((card) => card.id);
+    const ids = new Set(cards.map((card) => card.id));
+    const listed = new Set(order);
+    if (order.length !== ids.size || listed.size !== ids.size || order.some((id) => !ids.has(id))) {
+      const missing = [...ids].filter((id) => !listed.has(id));
+      const unknown = [...listed].filter((id) => !ids.has(id));
+      throw new Error(
+        `order gave ${order.length} cards for the ${ids.size} cards of the grid` +
+          (missing.length ? `: missing ${missing.join(', ')}` : '') +
+          (unknown.length ? `${missing.length ? ';' : ':'} unknown ${unknown.join(', ')}` : '') +
+          (order.length !== listed.size ? `${missing.length || unknown.length ? ';' : ':'} a card given twice` : ''),
+      );
+    }
+    const rank = new Map(order.map((id, index) => [id, index]));
+    const standing = [...this.host.children].filter(
+      (el): el is HTMLElement => this.cardEls.get((el as HTMLElement).dataset?.cardId ?? '')?.el === el,
+    );
+    const ranks = standing.map((el) => rank.get(el.dataset.cardId as string) as number);
+    const active = this.host.ownerDocument.activeElement;
+    const pinned = standing.findIndex((el) => active !== null && el.contains(active));
+    const kept = new Set(keptRun(ranks, pinned).map((index) => standing[index]));
+    let next: Element | null = this.firstOverlay();
+    for (let index = order.length - 1; index >= 0; index--) {
+      const el = (this.cardEls.get(order[index]) as { el: HTMLElement }).el;
+      if (!kept.has(el) && el.nextElementSibling !== next) this.host.insertBefore(el, next);
+      next = el;
+    }
   }
 
   /**
@@ -1228,4 +1281,33 @@ function place(el: HTMLElement, rect: Rect): void {
   if (s.top !== top) s.top = top;
   if (s.width !== width) s.width = width;
   if (s.height !== height) s.height = height;
+}
+
+/**
+ * The indexes of a longest increasing run of `ranks`, in order, that holds the
+ * index `pinned` when it is 0 or above: the elements that keep their place
+ * while the others move around them.
+ */
+function keptRun(ranks: readonly number[], pinned: number): number[] {
+  const fits = (index: number): boolean =>
+    pinned < 0 || index === pinned || (index < pinned ? ranks[index] < ranks[pinned] : ranks[index] > ranks[pinned]);
+  const length: number[] = [];
+  const before: number[] = [];
+  let best = -1;
+  for (let index = 0; index < ranks.length; index++) {
+    length[index] = 0;
+    before[index] = -1;
+    if (!fits(index)) continue;
+    length[index] = 1;
+    for (let earlier = 0; earlier < index; earlier++) {
+      if (length[earlier] > 0 && ranks[earlier] < ranks[index] && length[earlier] + 1 > length[index]) {
+        length[index] = length[earlier] + 1;
+        before[index] = earlier;
+      }
+    }
+    if (best < 0 || length[index] > length[best]) best = index;
+  }
+  const run: number[] = [];
+  for (let index = best; index >= 0; index = before[index]) run.unshift(index);
+  return run;
 }

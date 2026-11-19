@@ -579,7 +579,20 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 `painted(id)`, `fullscreen(id)`, `fullscreenCard`, `destroy()`. 옵션: `createCard`(필수), `updateCard`, `destroyCard`,
 `onChange(reason)`, `updateDivider`, `rules`(기본 켜짐), `commit(rects, draw, dividers)`,
 `classPrefix`(기본 `sp`), `observeResize`(기본 켜짐), `bleed`(기본 0),
-`boundary`(기본 grid 의 operation), `drawn`(기본 grid 의 배치).
+`boundary`(기본 grid 의 operation), `drawn`(기본 grid 의 배치),
+`order(cards)`(기본 grid 의 reading order).
+
+`order(cards)`는 grid 의 모든 card id 를 한 번씩, host element 가 card element 를 담는
+순서로 돌려준다. 다른 목록은 빠진, 알 수 없는, 반복된 card 와 함께
+`order gave <n> cards for the <m> cards of the grid`를 던진다. 없으면 순서는 grid 의
+reading order 다: 첫 row line 순, 다음으로 첫 column line 순. 키보드와 문서를 읽는 쪽은
+문서 순서로 card 를 만나므로, 뷰는 split 과 close 의 이력을 따르는 생성 순서 대신 배치의
+순서로 문서를 유지한다. 여러 card 를 담는 상자처럼 자기 구조로 card 를 배치하는 호스트는
+그 구조의 순서를 주고 자기 element 를 card 곁에 둔다. 순서가 바뀌면 자리가 순서와 더는
+맞지 않는 card element 를 순서가 허락하는 만큼 적게 옮기며, focus 를 가진 element 는
+옮기지 않으므로 그 focus 는 남는다. 옮긴 element 는 자식과 그 상태를 유지하지만 그 안의
+frame(`iframe`)은 browser 가 다시 load 하므로, card 에 그런 frame 을 담는 호스트는 그것을
+card element 밖에 둔다.
 
 `commit(rects, draw, dividers)`는 모든 레이아웃 변경 전에 실행되고 장치 픽셀 격자에 맞춘
 사각형과, 그리기가 그 격자에서 grab area에 주는 사각형을 가진 레이아웃의 divider를 받는다.

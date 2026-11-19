@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-32 (plane의 문서 순서): layout library는 card element를 생성 순서 대신 view option `order`가 주는 순서, 기본으로 grid의 reading order로 유지하고, 자리를 벗어난 element만 옮기며 focus를 가진 element는 옮기지 않는다. page는 workbench order를 주고 각 group card element를 그 안의 첫 상자 앞에 두므로, element 목록과 `Tab` key가 mygo처럼 workbench order를 따른다(`docs/spec/groups.md#model`). 검증: library와 page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-41 (group 이름의 자리): mygo workbench는 group 이름을 가운데가 아니라 page처럼 content card의 첫 tab이 서는 header의 시작에 그린다. groups 명세가 그 자리를 적는다(`docs/spec/groups.md#headers`). 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-40 (nested group header를 지나는 rule): page workbench는 1 point의 rule을 그것이 지나는 모든 group header에서, nested group card의 header에서도 자른다. header 끝에 1 px 이하로 닿는 옆의 line은 여전히 자르지 않는다(`docs/spec/groups.md#drawing`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-31 (group header drag): page workbench에서 group card header의 버튼 밖을 누르고 끌면 mygo처럼 group card를 끈다. drop은 group card와 그 안의 card를 빼고 정해지고, preview는 move가 놓는 자리를 보이며, `core.drag`는 `tab` `""`로 알리고, 놓으면 `core.card.move`를 실행한다(`docs/spec/groups.md#moving-and-dropping`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.

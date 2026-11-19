@@ -2825,3 +2825,56 @@ test("the drawn option places the cards, rules and dividers of the host and show
   assert.equal(host.querySelectorAll(".sp-divider").length, 0);
   assert.throws(() => view.fullscreen("none"), { message: "unknown fullscreen card none" });
 });
+
+/** The cards of the host in the order of its children. */
+const cardOrder = (host) => [...host.children].filter((el) => el.dataset.cardId !== undefined).map((el) => el.dataset.cardId);
+
+/**
+ * The plane of mount() with the right card split toward the bottom and the left card then split toward the bottom, so the cards were
+ * created in the order card, right top, right bottom, left bottom and stand in the reading order card, right top, left bottom, right
+ * bottom.
+ */
+function crossed(options) {
+  const mounted = mount(options);
+  const { grid, view } = mounted;
+  const [right] = grid.cards.filter((card) => card.id !== "card").map((card) => card.id);
+  const below = grid.split(right, "y");
+  const left = grid.split("card", "y");
+  view.render();
+  return { ...mounted, right, below, left };
+}
+
+test("the card elements stand in the reading order of the grid, not in the order of their creation", () => {
+  const { host, view, right, below, left, made } = crossed();
+  assert.deepEqual(made, ["card", right, below, left], "the cards were not created in the order the test arranges");
+  assert.deepEqual(cardOrder(host), ["card", right, left, below], "the host does not hold the cards in reading order");
+  view.destroy();
+});
+
+test("the card elements stand in the order that the host gives, and a reorder leaves the element that holds the focus in place", () => {
+  let order = null;
+  const { window, host, grid, view, right, below, left } = crossed({ order: (cards) => order ?? cards.map((card) => card.id) });
+  order = [below, left, right, "card"];
+  view.render();
+  assert.deepEqual(cardOrder(host), order, "the host does not hold the cards in the order of the host");
+  const focused = view.element(left);
+  const field = window.document.createElement("input");
+  focused.append(field);
+  field.focus();
+  const moved = [];
+  const observer = new window.MutationObserver((records) => {
+    for (const record of records) for (const node of record.removedNodes) moved.push(node.dataset?.cardId);
+  });
+  observer.observe(host, { childList: true });
+  order = ["card", right, left, below];
+  view.render();
+  observer.takeRecords().forEach((record) => record.removedNodes.forEach((node) => moved.push(node.dataset?.cardId)));
+  observer.disconnect();
+  assert.deepEqual(cardOrder(host), order, "the reorder did not reach the order of the host");
+  assert.ok(!moved.includes(left), `the reorder moved the element of ${left} that holds the focus: ${moved.join(", ")}`);
+  assert.equal(window.document.activeElement, field, "the reorder took the focus from the field");
+  order = ["card", right];
+  assert.throws(() => view.render(), (error) => error.message === `order gave 2 cards for the 4 cards of the grid: missing ${below}, ${left}`);
+  assert.ok(grid.cards.length === 4);
+  view.destroy();
+});

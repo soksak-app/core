@@ -1743,6 +1743,9 @@ function build(kept) {
       rules: () => tree.drawnRules(grid.rules()),
       dividers: () => tree.drawnDividers(grid.dividers(), gripMetrics().gripLength),
     },
+    // The document holds the cards in workbench order, so the lists of the elements and the Tab key follow it; drawGroupCards puts
+    // each group card before the cards inside it (docs/spec/groups.md#model).
+    order: () => tree.order().filter(({ node }) => !node).map(({ id }) => id),
     // A stretch of a divider too short for its grip draws none, which the stylesheet reads from data-grip (docs/spec/groups.md#drawing).
     updateDivider: (el, divider) => {
       const grip = String(divider.grip);

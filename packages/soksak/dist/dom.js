@@ -357,6 +357,7 @@ export class SoksakView {
             // default: `updateCard` is an optional hook; without it the view only places the card.
             (_b = (_a = this.options).updateCard) === null || _b === void 0 ? void 0 : _b.call(_a, held.el, card, rect);
         }
+        this.arrange(snapshot.cards);
         // The card is gone from the grid, so `destroyCard` receives the last copy
         // the view held.
         for (const [id, held] of this.cardEls) {
@@ -413,6 +414,45 @@ export class SoksakView {
         this.renumbered = false;
         // default: `onChange` is an optional listener.
         (_h = (_g = this.options).onChange) === null || _h === void 0 ? void 0 : _h.call(_g, reason);
+    }
+    /**
+     * Put the card elements in the order of `order`, the reading order of the
+     * grid by default.
+     *
+     * The elements of the cards whose places agree with the order keep their
+     * place, and only the others move: the longest run of elements that already
+     * stand in that order stays, and it always holds the element that holds the
+     * focus. Moving that element would take the focus from it, and moving any
+     * element tears down a frame or a plugin document inside it, so the view
+     * moves as few as the order allows.
+     */
+    arrange(cards) {
+        const order = this.options.order
+            ? this.options.order(cards)
+            : [...cards].sort((a, b) => a.r0 - b.r0 || a.c0 - b.c0).map((card) => card.id);
+        const ids = new Set(cards.map((card) => card.id));
+        const listed = new Set(order);
+        if (order.length !== ids.size || listed.size !== ids.size || order.some((id) => !ids.has(id))) {
+            const missing = [...ids].filter((id) => !listed.has(id));
+            const unknown = [...listed].filter((id) => !ids.has(id));
+            throw new Error(`order gave ${order.length} cards for the ${ids.size} cards of the grid` +
+                (missing.length ? `: missing ${missing.join(', ')}` : '') +
+                (unknown.length ? `${missing.length ? ';' : ':'} unknown ${unknown.join(', ')}` : '') +
+                (order.length !== listed.size ? `${missing.length || unknown.length ? ';' : ':'} a card given twice` : ''));
+        }
+        const rank = new Map(order.map((id, index) => [id, index]));
+        const standing = [...this.host.children].filter((el) => { var _a, _b; var _c; return ((_b = this.cardEls.get((_c = (_a = el.dataset) === null || _a === void 0 ? void 0 : _a.cardId) !== null && _c !== void 0 ? _c : '')) === null || _b === void 0 ? void 0 : _b.el) === el; });
+        const ranks = standing.map((el) => rank.get(el.dataset.cardId));
+        const active = this.host.ownerDocument.activeElement;
+        const pinned = standing.findIndex((el) => active !== null && el.contains(active));
+        const kept = new Set(keptRun(ranks, pinned).map((index) => standing[index]));
+        let next = this.firstOverlay();
+        for (let index = order.length - 1; index >= 0; index--) {
+            const el = this.cardEls.get(order[index]).el;
+            if (!kept.has(el) && el.nextElementSibling !== next)
+                this.host.insertBefore(el, next);
+            next = el;
+        }
     }
     /**
      * The first rule or divider element in the host, or null when there is none.
@@ -1112,4 +1152,34 @@ function place(el, rect) {
         s.width = width;
     if (s.height !== height)
         s.height = height;
+}
+/**
+ * The indexes of a longest increasing run of `ranks`, in order, that holds the
+ * index `pinned` when it is 0 or above: the elements that keep their place
+ * while the others move around them.
+ */
+function keptRun(ranks, pinned) {
+    const fits = (index) => pinned < 0 || index === pinned || (index < pinned ? ranks[index] < ranks[pinned] : ranks[index] > ranks[pinned]);
+    const length = [];
+    const before = [];
+    let best = -1;
+    for (let index = 0; index < ranks.length; index++) {
+        length[index] = 0;
+        before[index] = -1;
+        if (!fits(index))
+            continue;
+        length[index] = 1;
+        for (let earlier = 0; earlier < index; earlier++) {
+            if (length[earlier] > 0 && ranks[earlier] < ranks[index] && length[earlier] + 1 > length[index]) {
+                length[index] = length[earlier] + 1;
+                before[index] = earlier;
+            }
+        }
+        if (best < 0 || length[index] > length[best])
+            best = index;
+    }
+    const run = [];
+    for (let index = best; index >= 0; index = before[index])
+        run.unshift(index);
+    return run;
 }
