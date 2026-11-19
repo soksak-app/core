@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F899-8.1(터미널 읽기): `docs/spec/terminal-read.md` 가 터미널의 읽기 mode 를 mode 마다 명령 하나(`*.screen.read`, `*.screen.rows {screen, from, count}`, `*.screen.scroll.read {by}`)로, alternate screen 의 보존 행, 되돌리기와 사람의 입력에서의 거절을 가진 program scroll, mode 를 고르기 위한 session 상태를 정한다. `docs/spec/cases/terminal-read/alternate-rows.json` 이 case 일곱 개를 담는다. program scroll 의 그리기 기다림을 끝내는 이벤트는 열린 결정이다(F899-8.6).
 - F992(shell script의 주석 언어): `scripts/check-comment-language.mjs`가 `*.bash`, `*.zsh`, zsh 시작 파일 `zshenv`, `.zshrc`, `zprofile`, `zlogin`을 `#` 주석 script로 읽고 한글 주석 줄을 보고한다. 전에는 `.sh` 확장자나 `#!` 줄이 없으면 건너뛰었다.
 - F989(터미널 sidecar의 prompt region): `docs/spec/terminal-state.md#prompt-region`은 각 터미널 sidecar의 engine이 크기 조정 때 prompt를 유지하는 방법을 정한다: `A`와 `P`가 기록하는 행, 가장 가까운 기록 행부터의 region, 복사, 지우기, reflow, 되돌려 놓기의 순서, 그리고 그 오류다. mark는 `idle`을 주는, 종류 `i`, `c`, `s`, `r`을 가진 `P`를 얻는다. 공유 case `docs/spec/cases/terminal-state/prompt-region.json`과 `osc133.json`의 새 case 두 개가 sidecar vt(S204)와 alacritty(S197)에서 실행된다.
 - F893-1: sidecar PATH 폴더 기록의 Go test를 Rust test 파일 `sidecar_path_test.rs`의 짝인 `packages/host/go/tests/sidecar_path_test.go`로 옮겼으므로 `make check-host-files`가 다시 통과한다. F893 뒤에 그것은 `packages/host/rust/tests/sidecar_path_test: no counterpart in packages/host/go`로 실패했다.

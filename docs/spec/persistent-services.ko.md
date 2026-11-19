@@ -83,7 +83,7 @@ sidecar의 입력 경로는 `input`과 `paste` 작업이 세션에 제출하는 
 
 각 칸은 `grapheme`(칸의 텍스트: 빈 칸과 넓은 문자의 이어지는 칸은 빈 문자열, 그 밖에는 grapheme cluster 하나), `width`(`1`, 넓은 문자의 첫 칸은 `2`, 이어지는 칸은 `0`), `fg`와 `bg`(테마, 반전 속성, dim 속성, 선택 강조를 적용해 정해진 색. dim 칸의 전경색은 배경 쪽으로 2 대 1로 섞는다: 기본색은 `null`, 인덱스 색은 0에서 255까지의 정수, 트루컬러는 소문자 `"#rrggbb"`), `attributes`(화면 hash가 정한 플래그의 0에서 255까지의 정수: bold `01`, dim `02`, italic `04`, underline `08`, blink `10`, inverse `20`, hidden `40`, strikethrough `80`)를 가진다. 칸은 hash가 덮지 않는 `link`를 가질 수 있다. 위의 모든 멤버는 필수다. 메시지에는 생략된 색도 빠진 멤버의 기본값도 없으며, 사이드카는 기본색을 `null`로 적는다.
 
-`screen.read`를 인자 없이 호출하면 전과 같이 viewport를 돌려준다. `from`과 `count`를 함께 주면(둘은 함께 필요하다) 보유한 행 중 `from`부터 `from + count - 1`까지를 돌려준다. 번호는 엔진의 절대 행 번호(`dropped + history + line`; 가장 오래 보유한 history 행은 `dropped`)다. `count`는 1에서 200까지의 정수이며, 상한을 넘는 요청, 둘 중 하나만 준 요청, 보유 범위 밖의 행 구간은 명시적 오류로 실패하고 행을 돌려주지 않는다. 응답은 `from`, `count`, `rows`를 담은 event `screen.rows`이며 `screen` 메시지를 보내지 않는다.
+`screen.read`를 인자 없이 호출하면 전과 같이 viewport를 돌려준다. `from`과 `count`를 함께 주면(둘은 함께 필요하다) 보유한 행 중 `from`부터 `from + count - 1`까지를 돌려준다. 번호는 엔진의 절대 행 번호(`dropped + history + line`; 가장 오래 보유한 history 행은 `dropped`)다. `count`는 1에서 200까지의 정수이며, 상한을 넘는 요청, 둘 중 하나만 준 요청, 보유 범위 밖의 행 구간은 명시적 오류로 실패하고 행을 돌려주지 않는다. 응답은 `from`, `count`, `rows`를 담은 event `screen.rows`이며 `screen` 메시지를 보내지 않는다. 요청과 응답의 member `screen`(`primary` 나 `alternate`), sidecar 가 보존하는 alternate screen 의 행, 호출자의 읽기 mode 는 [터미널 읽기](terminal-read.ko.md)에서 정한다.
 
 화면을 만드는 모든 사이드카가 같은 규칙을 따른다. 사이드카가 페이지에 확정 cell grid를 싣는 메시지는 화면 hash의 멤버와 자신의 frame 기록의 `sequence`를 담으므로 페이지의 frame 기록과 사이드카의 frame 기록을 비교할 수 있다. Provider-specific presentation overlay와 그 caret은 확정 cell이나 engine cursor를 대신하거나 바꾸지 않는 추가 runtime 상태다. 멤버와 frame 기록은 사이드카가 쓰며, 페이지는 메시지에 없는 멤버를 만들어 내지 않는다.
 
