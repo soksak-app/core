@@ -211,7 +211,7 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 		map[string]any{"owner": "surface", "surface": "tab-a", "plugin": "textprobe", "kind": "tab", "state": "loaded", "visible": true,
 			"status": []any{map[string]any{"name": "textprobe.screen", "value": []any{"x"}}}, "commands": []any{},
 			"element": []any{map[string]any{"name": "textprobe.view", "items": []any{map[string]any{"index": float64(0), "role": nil, "text": "x",
-				"rect": map[string]any{"x": float64(112), "y": float64(74), "width": float64(80), "height": float64(30)},
+				"rect":  map[string]any{"x": float64(112), "y": float64(74), "width": float64(80), "height": float64(30)},
 				"inert": true, "command": nil, "params": nil}}}}},
 		map[string]any{"owner": "surface", "surface": "tab-b", "plugin": "textprobe", "kind": "tab", "state": "loaded", "visible": false,
 			"error": float64(workbench.Gone), "status": []any{}, "commands": []any{}, "element": []any{}},
