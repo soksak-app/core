@@ -58,7 +58,7 @@ func TestStoredPartyNotTouchingIsRefusedWithItsIdentifier(t *testing.T) {
 	}
 	parties := layout.NewParties(shownPalette(t))
 	err = parties.Restore(grid, []layout.StoredParty{{ID: "p1", Cards: []string{"a", "b"}, Color: "#112233"}})
-	if err == nil || err.Error() != "party p1: cards are not touching: a, b" {
+	if err == nil || err.Error() != "party p1: cards are not touching: b" {
 		t.Fatalf("restore error %v, want the party identifier and the touching refusal", err)
 	}
 	if got := parties.Stored(); len(got) != 0 {

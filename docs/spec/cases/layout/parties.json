@@ -116,7 +116,7 @@
               "c"
             ]
           },
-          "error": "cards are not touching: a, c"
+          "error": "cards are not touching: c"
         }
       ]
     },
@@ -379,6 +379,53 @@
               }
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "add of a card that touches no member is refused",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.add",
+          "params": {
+            "party": "p1",
+            "card": "d"
+          },
+          "error": "cards are not touching: d"
         }
       ]
     },
