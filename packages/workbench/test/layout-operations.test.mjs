@@ -60,19 +60,25 @@ plane.nameWindow(WINDOW);
 
 // The project of the window has the shown space and a space that is not active, which holds the card other and the tab tab-ooooo1.
 const view = (id, plugin, params) => ({ id, plugin, title: id, origin: { directory: null }, ...(params === undefined ? {} : { params }) });
-const OTHER_SPACE = { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "other", named: 0, windowSidebars: {}, sidebars: {}, state: {
+const OTHER_SPACE = { id: "spc-bbbbbb", title: "SPACE2", layout: { focusedId: "other", named: 0, windowSidebars: {}, sidebars: {}, groups: [], leader: "other", lastCard: 1, state: {
   xs: [0, 1], ys: [0, 1], cards: [{ id: "other", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [view("tab-ooooo1", PLAIN)], activeId: "tab-ooooo1" } }] } } };
 begin({ common: {}, open: [], projects: [{ id: "prj-aaaaaa", root: "/work/project", spaces: [
-  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, state: {
+  { id: "spc-aaaaaa", title: "SPACE1", layout: { focusedId: "main", named: 0, windowSidebars: {}, sidebars: {}, groups: [], leader: "main", lastCard: 1, state: {
     xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [view("tab-aaaaa1", PLAIN)], activeId: "tab-aaaaa1" } }] } } },
   OTHER_SPACE,
 ], activeSpaceId: "spc-aaaaaa", named: 2 }] });
+
+/** The members of a stored layout without groups over cards: the first card in reading order leads, and lastCard is the largest card number or 1. */
+const emptyTree = (cards) => ({
+  groups: [], leader: [...cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0))[0].id,
+  lastCard: Math.max(1, ...cards.map(({ id }) => Number(/^card-(\d+)$/.exec(id)?.[1] ?? 0))),
+});
 
 /** Shows the layout of cards ({id, c0, c1, r0, r1, tabs, active}) over the lines xs and ys with the card focused in the shown space. */
 function arrange(xs, ys, cards, focused) {
   plane.closePicker("fixture reset");
   if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
-  plane.adopt({ focusedId: focused, named: 0, windowSidebars: {}, sidebars: {}, state: { xs, ys, cards: cards.map(({ tabs, active, ...card }) =>
+  plane.adopt({ focusedId: focused, named: 0, windowSidebars: {}, sidebars: {}, ...emptyTree(cards), state: { xs, ys, cards: cards.map(({ tabs, active, ...card }) =>
     ({ ...card, data: { tabs, activeId: active ?? tabs[0].id } })) } }, "spc-aaaaaa");
 }
 const single = (tabs) => arrange([0, 1], [0, 1], [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs }], "main");

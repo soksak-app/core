@@ -16,8 +16,26 @@
  * absolutely inside it.
  */
 import { Soksak } from './soksak.js';
-import type { Card, Divider, Rect } from './soksak.js';
+import type { Axis, Card, Divider, Rect, Rule } from './soksak.js';
 export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
+/**
+ * The boundary operations that the divider gestures run. A host whose model
+ * draws the cards at other rectangles than the grid, and keeps rules of its own
+ * for a line, supplies them; the default is the grid's own.
+ */
+export interface BoundaryModel {
+    /** A drag step: as `moveBoundary(axis, line, px)` of the grid. Returns where the boundary stands. */
+    move(axis: Axis, line: number, px: number): number;
+    /** An arrow key: as `moveBoundary(axis, line, px)` of the grid, one step away. Returns where the boundary stands. */
+    step(axis: Axis, line: number, px: number): number;
+    /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
+    center(axis: Axis, line: number): number;
+    /**
+     * The end of a drag that moved the boundary: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. A host
+     * that stores the result of a drag through an operation of its own runs it here, from where the drag left the boundary.
+     */
+    end(axis: Axis, line: number): boolean;
+}
 export interface ViewOptions {
     /**
      * Build the element for a card. Called once per card. The element is reused
@@ -54,11 +72,39 @@ export interface ViewOptions {
      * not move absolutely positioned children. Default 0.
      */
     bleed?: number;
+    /** The boundary operations of the divider gestures. Default: those of the grid. */
+    boundary?: BoundaryModel;
+    /** The drawn arrangement of a host that draws the cards elsewhere than the grid's rects. Default: that of the grid. */
+    drawn?: DrawnModel;
+}
+/** A rule as a host draws it: `bleed` false keeps it off the frame around the plane. */
+export interface DrawnRule extends Rule {
+    bleed: boolean;
+}
+/**
+ * The arrangement the view draws: the rect of each card, the rules and the
+ * dividers, and the boxes it may show fullscreen. A host whose cards stand
+ * elsewhere than the grid's rects, as below headers of its own, supplies its own.
+ */
+export interface DrawnModel {
+    /** Whether the view may show `id` fullscreen: a card of the grid or a box of the host. */
+    has(id: string): boolean;
+    /**
+     * The rect of each card to draw. With `fullscreen` only the cards shown with
+     * it; every other card is hidden.
+     */
+    rects(fullscreen: string | null): ReadonlyMap<string, Rect>;
+    /** The rules to draw while nothing is fullscreen. */
+    rules(): readonly DrawnRule[];
+    /** The dividers to draw while nothing is fullscreen. */
+    dividers(): readonly Divider[];
 }
 export declare class SoksakView {
     private host;
     private grid;
     private options;
+    private boundary;
+    private drawn;
     private fullscreenId;
     /** The chosen fullscreen presentation; it does not change the grid. */
     get fullscreenCard(): string | null;

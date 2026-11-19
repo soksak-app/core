@@ -645,6 +645,19 @@ export const linkedSet = (place, plugin) => resolveSidebar(settings.links, setti
 
 /** Returns the current theme name and mode. */
 export const themeName = () => settings.theme;
+
+/**
+ * The fill of a group card whose members stand on level (docs/spec/groups.md#drawing): the theme color bg mixed with the theme color
+ * group-<level> by group.tint in percent, each channel rounded, group-3 for a level above 3.
+ */
+export function groupFill(level) {
+  const colors = themeOf(settings.theme)[settings.mode];
+  const share = settings["group.tint"] / 100;
+  const rgb = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  const group = rgb(colors[`group-${Math.min(Math.max(level, 1), 3)}`]);
+  const bg = rgb(colors.bg);
+  return `#${group.map((c, i) => Math.round(c * share + bg[i] * (1 - share)).toString(16).padStart(2, "0")).join("")}`;
+}
 export const modeName = () => settings.mode;
 
 /**

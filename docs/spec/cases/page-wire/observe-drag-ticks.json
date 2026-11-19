@@ -1,6 +1,6 @@
 {
   "name": "observe-drag-ticks",
-  "description": "The page asks the host for the notification state when it starts; the host then delivers the steps of a native drag as the notice diagnostics-tick: two steps that each end a leg, then a step that the host could not pace with its error text.",
+  "description": "The page asks the host for the notification state when it starts; the host then delivers the steps of a native drag as the notice diagnostics-tick: two steps that each end a leg, then a step that the host could not pace with its error text. The release of the drag runs core.boundary.move, whose event workbench.command the gate counts at the level debug of the class call.",
   "replay": false,
   "reason": "diagnostics-tick is a notice that the host sends for a drag of a window, and the Go producer runs without a window and cannot deliver it (docs/spec/cases/page-wire/README.md#producer-runs).",
   "variables": {
@@ -79,6 +79,16 @@
       "source": "page"
     },
     "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000787,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000454,
+      "source": "page"
+    },
+    "mono-ns-3": {
       "type": "integer",
       "example": 5000000787,
       "source": "page"
@@ -229,6 +239,18 @@
               "event": "workbench.log.gated",
               "fields": {
                 "class": "input",
+                "level": "debug",
+                "count": 1
+              }
+            },
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "call",
                 "level": "debug",
                 "count": 1
               }

@@ -21,10 +21,13 @@ import * as projects from "./projects.js";
 import {
   activeTab, addTabTo, assignSidebar, openFile, capture, cardActs, cardTextSizes, changeTextSize, closeCard, closePicker, closeTabById,
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
-  focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
+  drawnCardRects, focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
   openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
+  cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
 } from "./plane.js";
+import { emitEvent, eventAdmits } from "./page-log.js";
+import { boundedJson, cutBytes } from "@soksak/plugin-api/bounded-json.js";
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
 } from "./settings.js";
@@ -185,13 +188,17 @@ function preferred() {
 function gridState() {
   const grid = currentGrid();
   if (!grid) return null;
-  const rects = grid.rects();
+  const tree = currentTree();
+  // The rectangles that the plane draws: below the headers of the group cards, and the fullscreen layout of a fullscreen group card.
+  const rects = drawnCardRects();
   const fullscreen = fullscreenCard();
   let pane = 0;
-  const cards = [...plane.querySelectorAll(".card[data-card-id]")].map((el) => {
-    const card = grid.card(el.dataset.cardId);
-    if (!card) return null;
-    const rect = fullscreen === null ? rects.get(card.id) : presentedCardRect(card.id);
+  // The cards of the grid in workbench order (docs/spec/groups.md#status-and-queries); a card that has no element yet is not reported.
+  const cards = tree.order().filter(({ node }) => !node).map(({ id }) => {
+    const card = grid.card(id);
+    const el = plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
+    if (!card || !el) return null;
+    const rect = rects.get(card.id);
     const tabs = tabsOf(card);
     return {
       fullscreen: card.id === fullscreen,
@@ -207,14 +214,27 @@ function gridState() {
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
       sidebars: cardSidebars(card, presentedCardRect(card.id)),
+      ...levelMembers(tree, card.id),
     };
   }).filter(Boolean);
+  // The group cards follow the cards of the grid in workbench order, each with its drawn rectangle and no tabs (docs/spec/groups.md#status-and-queries).
+  const groups = tree.nodes().map((node) => {
+    const { x, y, w, h } = rects.get(node.card);
+    return { fullscreen: node.card === fullscreen, id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
+      group: { name: node.name, level: tree.level(node.card) + 1, leader: node.leader } };
+  });
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
   return {
     fullscreen,
     width: grid.width, height: grid.height, gap: grid.gap, plane: planeOrigin(),
-    lines: { x: lines("x"), y: lines("y") }, cards,
+    lines: { x: lines("x"), y: lines("y") }, cards: [...cards, ...groups],
   };
+}
+
+/** The members of a card of core.grid for its level: parent, the group card that holds it or null in the root level, and leader, whether it leads its level. */
+function levelMembers(tree, id) {
+  const parent = tree.parentOf(id);
+  return { parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === id };
 }
 
 /* The memory saver of the page (memory-saver.js), given at installCoreExposure. */
@@ -318,6 +338,34 @@ function need(project, id) {
 /**
  * drawn returns a promise that is fulfilled when the plane has finished all scheduled drawing. A core command waits for that drawing after it ran and then replies. When a command changes the layout, the receiver of the reply reads the layout that is already drawn.
  */
+// The bounds of the texts of workbench.layout.change in UTF-8 bytes: the parameters and the answer, and the layout, which keeps the
+// fields within the bound of an event (docs/spec/events.json).
+const LAYOUT_CALL_BYTES = 1024;
+const LAYOUT_BYTES = 61440;
+
+/**
+ * Observes the command name with params: when it succeeded and the stored layout of the active space differs from the one before it,
+ * the command is the event workbench.layout.change with its parameters, its answer and the layout that it left (docs/spec/events.json).
+ * The layout is read only while the gate stores the event.
+ */
+function watchLayout(name, params) {
+  if (!eventAdmits("debug", "workbench.layout.change")) return null;
+  const before = storedLayoutText();
+  return (result) => {
+    const after = storedLayoutText();
+    if (after === before) return;
+    emitEvent("debug", "workbench.layout.change", () => {
+      const given = boundedJson(params, LAYOUT_CALL_BYTES);
+      // default: a command that answers nothing replies null, as the endpoint answers it.
+      const answered = boundedJson(result ?? null, LAYOUT_CALL_BYTES);
+      // default: the window shows no layout after the command, and its layout is the JSON text null.
+      const layout = cutBytes(after ?? "null", LAYOUT_BYTES);
+      return { command: name, params: given.text, paramsTruncated: given.truncated, result: answered.text,
+        layout: layout.text, layoutTruncated: layout.truncated };
+    });
+  };
+}
+
 export async function installCoreExposure({ library, renames, chrome, drawn, memorySaver }) {
   // The core entries read the memory saver (core.tab.memory, core.surfaces, the tab commands), so a page without it is refused
   // before any entry is registered.
@@ -325,6 +373,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     throw new TypeError("installCoreExposure requires memorySaver, the memory saver of the page (memory-saver.js)");
   }
   memory = memorySaver;
+  registry.watch(watchLayout);
   // On this host the workbench is the main page: a start is its page identity, and it started at its time origin.
   status("core.window.workbench", () => ({
     start: pageIdentity,
@@ -352,7 +401,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     const project = projects.active();
     return project && !projects.inLibrary() ? withOpen(project) : null;
   });
-  status("core.layout", () => (currentGrid() ? capture() : null));
+  // The stored form of the layout with the level of each group node (docs/spec/groups.md#status-and-queries).
+  status("core.layout", () => (currentGrid() ? { ...capture(), groups: currentTree().tree() } : null));
   status("core.grid", gridState);
   status("core.sidebars", sidebarsState);
   onSectionsChange(coreChanged);
@@ -601,6 +651,24 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => closeCard(card));
+  // The group commands and the card query of any level (docs/spec/groups.md#commands).
+  registry.command("core.group.create", ({ card, side, plugin: kind, params }) => createGroup(card, side, kind, params));
+  registry.command("core.group.dissolve", ({ group }) => dissolveGroup(group));
+  registry.command("core.group.rename", ({ group, name }) => renameGroup(group, name));
+  registry.command("core.group.leader", ({ card }) => leadLevel(card));
+  registry.command("core.group.menu", ({ group }) => openGroupMenu(group));
+  registry.command("core.card.move", ({ card, target, side }) => moveCard(card, target, side));
+  registry.command("core.card.get", async ({ card }) => {
+    // The card is checked before the window is read, so a refused card reads nothing.
+    cardState(card, new Map());
+    const reply = await registry.handle({ id: null, method: "exposure.snapshot", params: {} });
+    if (reply.error) throw new Error(`core.card.get ${card}: exposure.snapshot: ${reply.error.message}`);
+    // The statuses that each surface declares with summary true are the status of its tab (docs/spec/exposure.md#entry-fields).
+    // default: a status whose read failed has no value, which is written as null.
+    const summary = new Map(reply.result.groups.filter((group) => group.owner === "surface")
+      .map((group) => [group.surface, Object.fromEntries(group.status.filter((entry) => entry.summary === true).map((entry) => [entry.name, entry.value ?? null]))]));
+    return cardState(card, summary);
+  });
   // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
   registry.command("core.layout.open", (params) => openInLayout(params));
   registry.command("core.layout.select", (params) => selectInLayout(params));
@@ -668,21 +736,30 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.boundary.move", ({ axis, line, position }) => {
     const grid = currentGrid();
     if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);
-    const moved = grid.moveBoundary(axis, line, position, false);
+    // The group tree moves the whole line and stops where a card would be drawn below its minimum or the groups would lose their form
+    // (docs/spec/groups.md#minimum-size).
+    const moved = currentTree().moveBoundary(axis, line, position, false);
     settle();
     return { position: moved };
+  });
+
+  registry.command("core.boundary.center", ({ axis, line }) => {
+    const grid = currentGrid();
+    if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);
+    // The group tree centres the line, leaves it where a card would be drawn below its minimum and merges the lines that meet
+    // (docs/spec/groups.md#commands).
+    const centred = currentTree().centerBoundary(axis, line);
+    settle();
+    return { position: centred };
   });
 
   // The setting cardArrange chooses the operation: resize keeps the layout and gives every card a fair share
   // (packages/soksak/docs/layout.md#balancing), even replaces it with an equal grid (packages/soksak/docs/layout.md#even-arrangement).
   registry.command("core.layout.balance", () => {
-    const grid = currentGrid();
-    if (!grid) throw new Error("the window shows no layout");
-    if (value("cardArrange") === "even") {
-      if (!grid.arrange("even")) throw new Error("no equal grid keeps every card at its minimum size");
-    } else if (!grid.balance()) {
-      throw new Error("the layout is not slicing");
-    }
+    if (!currentGrid()) throw new Error("the window shows no layout");
+    // The group tree balances a space with groups by equal shares, which keep every group card on its rectangle
+    // (docs/spec/groups.md#card-commands-on-a-group-card).
+    currentTree().balance(value("cardArrange") === "even");
     settle();
   });
 

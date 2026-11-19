@@ -222,3 +222,18 @@ test("a console argument that JSON cannot serialize is recorded as a marker with
   assert.deepEqual(events().map((event) => event.fields.text), ['state {"unserializable":"Converting circular structure to JSON"}']);
   wire.finish();
 });
+
+test("eventAdmits judges an event as the writers do: the events that pass every gate are admitted under a closed policy", async () => {
+  wire = selectPageWire("page-log-admits");
+  const { eventAdmits } = await import("../page-log.js");
+  logGate.set({ lifecycle: "error", input: "error", call: "error", io: "error", frame: "error" });
+  try {
+    assert.deepEqual(["workbench.start", "workbench.log.clock", "workbench.fixture.step"].map((event) => eventAdmits("info", event)),
+      [true, true, true]);
+    assert.equal(eventAdmits("debug", "workbench.layout.change"), false);
+    assert.equal(eventAdmits("error", "workbench.command"), true);
+  } finally {
+    logGate.set({ lifecycle: "trace", input: "trace", call: "trace", io: "trace", frame: "trace" });
+  }
+  wire.finish();
+});

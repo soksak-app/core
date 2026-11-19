@@ -24,14 +24,15 @@ test("the tooltip of a card tool is its name and a refusal states its reason", a
     const tools = await import("../card-tools.js");
     const toolbar = tools.createCardTools("fixture");
     const titles = () => Object.fromEntries([...toolbar.children].map((button) => [button.dataset.do, button.title]));
-    tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, fullscreen: false });
-    assert.deepEqual(titles(), { add: names.add, x: names["split-x"], y: names["split-y"], fullscreen: names.fullscreen, close: names.close });
+    tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, canGroup: true, leads: true, leader: false, fullscreen: false });
+    assert.deepEqual(titles(), { add: names.add, x: names["split-x"], y: names["split-y"], group: names.group, leader: names.leader,
+      fullscreen: names.fullscreen, close: names.close });
     for (const button of toolbar.children) assert.equal(button.getAttribute("aria-label"), button.title);
-    tools.updateCardTools(toolbar, { canClose: false, canSplitX: true, canSplitY: true, fullscreen: false });
+    tools.updateCardTools(toolbar, { canClose: false, canSplitX: true, canSplitY: true, canGroup: true, leads: true, leader: false, fullscreen: false });
     assert.equal(titles().close, names["close-refused"]);
-    tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, fullscreen: true });
+    tools.updateCardTools(toolbar, { canClose: true, canSplitX: true, canSplitY: true, canGroup: true, leads: true, leader: false, fullscreen: true });
     const held = names["layout-held"];
-    assert.deepEqual(titles(), { add: held, x: held, y: held, fullscreen: names.restore, close: held });
+    assert.deepEqual(titles(), { add: held, x: held, y: held, group: held, leader: held, fullscreen: names.restore, close: held });
   } finally { dom.window.close(); }
   // The ⋯ menu names an item by the title of its tool and cuts nothing from it.
   const plane = readFileSync(new URL("../plane.js", import.meta.url), "utf8");

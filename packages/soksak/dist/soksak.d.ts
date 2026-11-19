@@ -15,7 +15,7 @@
  * coordinates.
  */
 import type { Axis, Card, CardInit, Rect, Side } from './card.js';
-import type { Divider, Rule, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
@@ -109,6 +109,8 @@ export declare class Soksak {
     private order;
     /** The axis a close tries first. */
     get fillOrder(): FillOrder;
+    /** The sides a close tries, in the order of `fillOrder`. */
+    get fillSides(): readonly Fill['side'][];
     set fillOrder(value: FillOrder);
     private grab;
     /** Smallest grab area of a boundary, in px. */
@@ -142,6 +144,15 @@ export declare class Soksak {
      * `data` is opaque to this library.
      */
     setData(id: string, data: unknown): boolean;
+    /** The frames of each card by id that `setFrames` set (R5). */
+    private cardFrames;
+    /**
+     * Sets the frames between each card and its four lines (R5): a card without an
+     * entry, and a side without a count, has none. The frames are no part of the
+     * state. Throws for an id that is no card and for a count that is no whole
+     * number from zero, and then changes nothing.
+     */
+    setFrames(frames: Readonly<Record<string, Partial<Frames>>>): void;
     /**
      * Set whether the layout may split, close or move a card.
      */
@@ -339,11 +350,29 @@ export declare class Soksak {
      */
     private middleOf;
     /**
+     * Keeps every line index of `axis` and gives every slot that no card with a
+     * size in px holds its corridor, `extra[slot]` px and an equal share of the
+     * free length: the extent less the corridors, the held sizes and the extras.
+     * A slot that a card with a size in px holds keeps its span. A plane too
+     * small for its corridors shares nothing. Throws for an unknown axis, an
+     * extra list of another length than the slots, and an axis whose shared
+     * slots take no length.
+     */
+    shareLines(axis: Axis, extra?: readonly number[]): void;
+    /**
      * Merges a line onto a neighbour at the same coordinate.
      *
      * Returns false when a card spans both lines, which would leave it zero size.
      */
     mergeCoincident(axis: Axis, line: number): boolean;
+    /**
+     * Moves a line toward `px` as `moveBoundary` does, and past each line of the
+     * axis that it reaches where no card lies between the two, by exchanging
+     * their places; a line that stops on another line merges onto it, so no two
+     * lines stand at one coordinate. A host that keeps regions of cards that a
+     * line may not cross uses it to place a line it made.
+     */
+    moveLinePast(axis: Axis, line: number, px: number): void;
     /** Removes lines no card references. Returns how many were removed. */
     tidy(): number;
     /**
@@ -351,7 +380,7 @@ export declare class Soksak {
      *
      * Prefers the unreferenced line nearest the card's centre that leaves both
      * halves at `minSize`. Otherwise returns a new line at the centre, clamped to
-     * the range where both halves fit.
+     * the range where both halves fit. `newLine` takes no existing line.
      */
     private cutAt;
     /** The smallest drawn side of every card, by id. Used to compare before and after a change. */
@@ -387,11 +416,15 @@ export declare class Soksak {
      * other axis is copied, because both halves stay in that slot. A px size on
      * the cut axis is divided between them.
      *
+     * `init.newLine` cuts at a new line at the centre even where a line that the
+     * card spans across lies inside it, for a host that places the line itself.
+     *
      * Returns the new card's id, or null when the halves do not fit.
      */
     split(id: string, axis: Axis, init?: {
         id?: string;
         data?: unknown;
+        newLine?: boolean;
     }): string | null;
     /**
      * Cut a card and put the new one on a named side.
@@ -402,15 +435,17 @@ export declare class Soksak {
     splitToward(id: string, side: Side, init?: {
         id?: string;
         data?: unknown;
+        newLine?: boolean;
     }): string | null;
     private nextId;
     /**
      * The neighbours that would expand over a card if it closed, as frozen copies.
      *
      * Returns null when no row of neighbours matches a side. `close` then removes
-     * the card's slots instead.
+     * the card's slots instead. `sides` names the sides to try in their order, the
+     * sides of `fillOrder` by default.
      */
-    fill(id: string): Fill | null;
+    fill(id: string, sides?: readonly Fill['side'][]): Fill | null;
     /** The same result holding the stored cards, so `close` can modify them. */
     private fillOf;
     /**
@@ -428,9 +463,13 @@ export declare class Soksak {
      *
      * A row of neighbours expands over the space when one matches the side.
      * Otherwise the card's slots are removed. Returns false when neither applies,
-     * when the card is `fixed`, or when it is the last card.
+     * when the card is `fixed`, or when it is the last card. `sides` names the
+     * sides whose row of neighbours may expand, tried in their order, the sides
+     * of `fillOrder` by default; an empty list only removes the slots. A host that
+     * keeps its own regions of cards passes one side at a time, because the fill
+     * order does not know which neighbours keep such a region one rectangle.
      */
-    close(id: string): boolean;
+    close(id: string, sides?: readonly Fill['side'][]): boolean;
     /**
      * Restores unreferenced lines to their previous px positions.
      *
@@ -520,9 +559,10 @@ export declare class Soksak {
      *
      * The card keeps its id and its payload, so the host's element is reused and a
      * live surface inside it is not destroyed. It keeps its px size only when it
-     * lands spanning one slot on that axis.
+     * lands spanning one slot on that axis. `sides` is the sides of the close, as
+     * `close` takes them.
      */
-    move(id: string, targetId: string, side: Side): boolean;
+    move(id: string, targetId: string, side: Side, sides?: readonly Fill['side'][]): boolean;
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
     /**

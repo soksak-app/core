@@ -2711,3 +2711,76 @@ test("fullscreen commit snapshots keep their own visibility through deferred res
     assert.deepEqual(view.painted("card"), grid.rect("card"));
   } finally { view.destroy(); dom.window.close(); }
 });
+
+test("the boundary option moves, centres and ends every divider gesture", () => {
+  const calls = [];
+  let grid = null;
+  const boundary = {
+    move: (axis, line, px) => (calls.push(["move", axis, line]), grid.moveBoundary(axis, line, px)),
+    step: (axis, line, px) => (calls.push(["step", axis, line]), grid.moveBoundary(axis, line, px)),
+    center: (axis, line) => (calls.push(["center", axis, line]), grid.centerBoundary(axis, line)),
+    end: (axis, line) => (calls.push(["end", axis, line]), grid.mergeCoincident(axis, line)),
+  };
+  const mounted = mount({ boundary });
+  grid = mounted.grid;
+  const { window, host } = mounted;
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+
+  pointer(window, el, "pointerdown", 1, 600, 300);
+  pointer(window, el, "pointermove", 1, 500, 300);
+  pointer(window, el, "pointerup", 1, 500, 300);
+  assert.deepEqual(calls, [["move", "x", 1], ["end", "x", 1]], "a pointer drag moves through the option and ends through it");
+
+  calls.length = 0;
+  el.dispatchEvent(new window.MouseEvent("mousedown", { clientX: 500, clientY: 300, button: 0, buttons: 1, bubbles: true }));
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", { clientX: 450, clientY: 300, button: 0, buttons: 1, bubbles: true }));
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", { clientX: 450, clientY: 300, button: 0, buttons: 0, bubbles: true }));
+  assert.deepEqual(calls, [["move", "x", 1], ["end", "x", 1]], "a mouse drag moves through the option and ends through it");
+
+  calls.length = 0;
+  el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.deepEqual(calls, [["step", "x", 1], ["center", "x", 1]], "a key steps and centres through the option");
+
+  calls.length = 0;
+  pointer(window, el, "pointerdown", 2, 600, 300);
+  pointer(window, el, "pointerup", 2, 600, 300);
+  pointer(window, el, "pointerdown", 3, 600, 300);
+  assert.deepEqual(calls.at(-1), ["center", "x", 1], "a double press centres through the option");
+});
+
+test("the drawn option places the cards, rules and dividers of the host and shows a host box fullscreen", () => {
+  let grid = null;
+  const drawn = {
+    has: (id) => id === "box" || grid.card(id) !== undefined,
+    rects: (fullscreen) => {
+      if (fullscreen === "box") return new Map([["card", { x: 10, y: 40, w: 500, h: 500 }]]);
+      // The first render of mount runs before the test holds the grid; the render after it draws these rects.
+      if (grid === null) return new Map();
+      return new Map(grid.cards.map((card, i) => [card.id, { x: 100 * i, y: 30, w: 90, h: 200 }]));
+    },
+    rules: () => [{ key: "vx:1", axis: "x", line: 1, virtual: true, x: 95, y: 0, w: 1, h: H, bleed: false },
+      { key: "vx:1:1", axis: "x", line: 1, virtual: true, x: 95, y: 300, w: 1, h: 300, bleed: true }],
+    dividers: () => [{ key: "x:1:0", axis: "x", line: 1, x: 90, y: 40, w: 10, h: 100 }],
+  };
+  const mounted = mount({ drawn, bleed: 5 });
+  grid = mounted.grid;
+  const { host, view } = mounted;
+  view.render();
+  const style = (el) => [el.style.left, el.style.top, el.style.width, el.style.height];
+  const [first, second] = grid.cards.map((card) => host.querySelector(`[data-card-id="${card.id}"]`));
+  assert.deepEqual(style(first), ["0px", "30px", "90px", "200px"], "a card stands at the rectangle of the host");
+  assert.deepEqual(style(second), ["100px", "30px", "90px", "200px"]);
+  const rules = [...host.querySelectorAll(".sp-rule")];
+  assert.deepEqual(rules.map(style), [["95px", "0px", "1px", "600px"], ["95px", "300px", "1px", "305px"]],
+    "only a rule with bleed reaches past the plane");
+  const dividers = [...host.querySelectorAll(".sp-divider")];
+  assert.deepEqual(dividers.map(style), [["90px", "40px", "10px", "100px"]], "the divider of the host is drawn");
+  view.fullscreen("box");
+  assert.deepEqual(style(first), ["10px", "40px", "500px", "500px"], "a card shown in a fullscreen box takes its rectangle");
+  assert.equal(first.hidden, false);
+  assert.equal(second.hidden, true, "a card that the fullscreen box does not show is hidden");
+  assert.equal(host.querySelectorAll(".sp-rule").length, 0, "no rule is drawn while a box is fullscreen");
+  assert.equal(host.querySelectorAll(".sp-divider").length, 0);
+  assert.throws(() => view.fullscreen("none"), { message: "unknown fullscreen card none" });
+});

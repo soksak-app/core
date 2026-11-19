@@ -930,3 +930,69 @@ test("a close re-stands only the lines no card reads", () => {
   assert.equal(xs[1], xs[2], `lines 1 and 2 came apart: ${xs[1]} and ${xs[2]}`);
   assert.deepEqual(grid.rect("a"), { x: 0, y: 0, w: 40, h: 90 });
 });
+
+test("a split with newLine cuts at a new line inside the card instead of an existing line", () => {
+  const state = () => ({ xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
+    { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 }, { id: "b", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "c", c0: 1, c1: 2, r0: 1, r1: 2 },
+  ] });
+  const taken = new Soksak(state(), { width: 1000, height: 1000, gap: 0 });
+  assert.notEqual(taken.split("a", "x", { id: "n" }), null);
+  assert.equal(taken.lines("x").length, 3, "the plain split takes the line that a spans across");
+  const fresh = new Soksak(state(), { width: 1000, height: 1000, gap: 0 });
+  assert.notEqual(fresh.splitToward("a", "left", { id: "n", newLine: true }), null);
+  assert.equal(fresh.lines("x").length, 4, "the split with newLine adds a line");
+  assert.equal(fresh.card("n").c0, 0);
+});
+
+test("moveLinePast moves a line past the lines it reaches where no card lies between them and merges onto a line it stops on", () => {
+  const state = () => ({ xs: [0, 0.4, 0.6, 1], ys: [0, 0.5, 1], cards: [
+    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
+    { id: "c", c0: 0, c1: 2, r0: 1, r1: 2 }, { id: "d", c0: 2, c1: 3, r0: 1, r1: 2 },
+  ] });
+  const past = new Soksak(state(), { width: 1000, height: 1000, gap: 0, minSize: 10 });
+  past.moveLinePast("x", 1, 800);
+  assert.ok(Math.abs(past.rect("a").w - 800) < 1e-6, `a is ${past.rect("a").w} wide`);
+  assert.ok(Math.abs(past.rect("c").w - 600) < 1e-6, `c is ${past.rect("c").w} wide`);
+  const onto = new Soksak(state(), { width: 1000, height: 1000, gap: 0, minSize: 10 });
+  onto.moveLinePast("x", 1, 600);
+  assert.equal(onto.lines("x").length, 3, "the line that stops on another line merges onto it");
+  assert.equal(onto.card("a").c1, onto.card("c").c1);
+});
+
+test("shareLines keeps every line index and gives each slot its corridor, its extra and an equal share of the free length", () => {
+  const cards = (width) => [
+    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, ...(width === undefined ? {} : { width }) },
+    { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
+  ];
+  const grid = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards() }, { width: 1000, height: 600, gap: 10 });
+  grid.shareLines("x");
+  assert.deepEqual(grid.cards.map((card) => [card.id, card.c0, card.c1]), [["a", 0, 1], ["b", 1, 2], ["c", 2, 3]], "the line indices stay");
+  const share = (1000 - 20) / 3;
+  for (const id of ["a", "b", "c"]) assert.ok(Math.abs(grid.rect(id).w - share) < 1e-9, `${id} is ${grid.rect(id).w} wide, not ${share}`);
+
+  grid.shareLines("x", [0, 30, 0]);
+  const less = (1000 - 20 - 30) / 3;
+  assert.ok(Math.abs(grid.rect("a").w - less) < 1e-9 && Math.abs(grid.rect("c").w - less) < 1e-9, "a and c take the share");
+  assert.ok(Math.abs(grid.rect("b").w - (less + 30)) < 1e-9, `b takes the share and its extra: ${grid.rect("b").w}`);
+
+  const held = new Soksak({ xs: [0, 0.2, 0.5, 1], ys: [0, 1], cards: cards(200) }, { width: 1000, height: 600, gap: 10 });
+  held.shareLines("x");
+  assert.ok(Math.abs(held.rect("b").w - 200) < 1e-9, `a slot that a card with a size in px holds keeps that size: ${held.rect("b").w}`);
+  assert.ok(Math.abs(held.rect("a").w - held.rect("c").w) < 1e-9, "the other slots share the rest equally");
+
+  assert.throws(() => grid.shareLines("z"), { message: "unknown axis z" });
+  assert.throws(() => grid.shareLines("x", [0, 1]), { message: "shareLines takes one extra for each of the 3 slots of x, found 2" });
+});
+
+// A count below zero is refused as below zero before its fraction is judged, as the Go port judges it (R5 of docs/layout.md).
+test("setFrames refuses a count below zero as below zero, a fraction included, and keeps the frames it had", () => {
+  const grid = new Soksak({ xs: [0, 0.5, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 }] });
+  grid.resize(1000, 600);
+  grid.setFrames({ a: { right: 1 } });
+  const before = grid.rect("a");
+  assert.throws(() => grid.setFrames({ a: { right: -1.5 } }), { message: 'soksak: the frames of "a" count below zero' });
+  assert.throws(() => grid.setFrames({ a: { right: -Infinity } }), { message: 'soksak: the frames of "a" count below zero' });
+  assert.throws(() => grid.setFrames({ a: { right: Number.NaN } }), { message: 'soksak: the frames of "a" count no whole number' });
+  assert.deepEqual(grid.rect("a"), before);
+});

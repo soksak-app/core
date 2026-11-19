@@ -22,9 +22,11 @@ import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resol
 import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
+import { cardNumber, memberId, readGroupTree } from "./group-tree.js";
+import { drawGroupCards } from "./group-cards.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
-import { layoutTree, neighbourToward, sameJson } from "./layout-tree.js";
+import { layoutTree, sameJson } from "./layout-tree.js";
 import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { followRing, keyboardOwed } from "./keyboard.js";
@@ -123,6 +125,15 @@ const pickerEl = document.getElementById("picker");
 let windowSidebars = {};
 
 let grid, view, focusedId;
+/* The group tree of the shown space over grid (group-tree.js): the groups, the leader of each level and lastCard, from which every new
+   card takes its identifier (docs/spec/groups.md#model). */
+let tree = null;
+
+/** The options of the group tree: the gap and the smallest edge of the grid and the head height of a group header. */
+const treeOptions = () => ({ gap: grid.gap, minSize: grid.minSize, head: HEADER });
+
+/** Whether a split balances the grid in the same change (cardSplit even, docs/spec/groups.md#split-setting). */
+const splitsEven = () => value("cardSplit") === "even";
 
 // The name of the window of this page, which its start document carries and the errors of the layout operations name
 // (docs/spec/native-host.md#page-start). It is null until the start names it.
@@ -136,6 +147,8 @@ export function nameWindow(name) {
 
 /* The one move of the focus ring: the keyboard follows it (keyboard.js). */
 function focusOn(id) {
+  // A group card takes no focus ring: the first content card inside it takes it (docs/spec/groups.md#focus).
+  if (id !== null && tree?.isGroup(id)) id = tree.focusable(id);
   focusedId = id;
   keyboardOwed();
 }
@@ -438,6 +451,9 @@ function updateCard(el, card, rect) {
     canClose: grid.canClose(card.id),
     canSplitX: grid.canSplit(card.id, "x"),
     canSplitY: grid.canSplit(card.id, "y"),
+    canGroup: tree.canGroup(card.id, splitsEven()),
+    leads: tree.leadCount(tree.parentOf(card.id)) >= 2,
+    leader: tree.leaderOf(tree.parentOf(card.id)) === card.id,
     fullscreen: el.dataset.fullscreen === "true",
   });
   drawSideToggles(acts, el, card.id);
@@ -612,7 +628,7 @@ async function closeTab(cardId, tabId) {
   if (card.data.tabs.length === 0) {
     // A card that cannot be closed remains, so one tab is inserted again. Its kind is what the focus was showing, or the first
     // registered plugin if there is none. If a name were written here, this file would have to change each time a plugin is added.
-    if (grid.canClose(cardId)) grid.close(cardId);
+    if (tree.canClose(cardId)) tree.close(cardId);
     // default: as the comment above says, when no plugin is focused, a tab of the first registered plugin is opened.
     // The closed tab leaves no source tab, so the new tab records null, as the released workbench does (docs/spec/projects.md#tab-origin).
     else card.data.tabs = [newTab(focusedPlugin() ?? plugins()[0].id, null, null, "card refill")];
@@ -682,9 +698,7 @@ function beginTabDrag(e, cardId, tabId) {
     // a press that did not move (a click) keeps fullscreen (docs/spec/example-model.md#card-fullscreen).
     if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
     const host = plane.getBoundingClientRect();
-    const only = tabsOf(grid.card(tabDrag.cardId)).length === 1 ? tabDrag.cardId : undefined;
-    tabDrag.hit = grid.zoneAt(ev.clientX - host.left, ev.clientY - host.top,
-      { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
+    tabDrag.hit = dropHit(ev.clientX - host.left, ev.clientY - host.top, tabDrag.cardId, band);
     // A drop with no zone is rejected by the layout even if released. That position is not taken.
     if (!showDrop(tabDrag.cardId, tabDrag.hit)) tabDrag.hit = null;
     dragChanged();
@@ -753,6 +767,7 @@ const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "새 위치에 무엇을 띄울까",
   y: "새 위치에 무엇을 띄울까",
+  group: "새 위치에 무엇을 띄울까",
 };
 
 delegate(pickerEl);
@@ -774,7 +789,9 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
+    (k) => (what === "group" ? createGroup(cardId, tree.groupSide(cardId), k, null)
+      : tree.isGroup(cardId) ? (what === "add" ? addTabTo(cardId, k, null) : splitCard(cardId, TOOL_SPLIT_SIDE[what], k))
+      : what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
 
 /** Asks which tab to activate. It shows the tab list when the header is folded. */
@@ -885,23 +902,19 @@ function addTab(cardId, plugin, params) {
 const SPLIT_SIDES = ["left", "right", "top", "bottom"];
 const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
 
-/** The axis of the line that a split toward side cuts. */
-const splitAxis = (side) => (side === "left" || side === "right" ? "x" : "y");
-
 function splitWith(cardId, side, plugin, params) {
   restoreFullscreen();
   const card = grid.card(cardId);
   if (!card?.data) return;
   // A split without space is refused before the tab of the new card is made, so a refused split issues no tab id, records no
   // origin and leaves the tab-name counter.
-  if (!grid.canSplit(cardId, splitAxis(side))) {
+  if (!tree.canSplit(cardId, side, splitsEven())) {
     settle();
     return null;
   }
   // default: a card without an active tab has no tab to inherit.
   const t = newTab(plugin, params, activeTab(card)?.id ?? null, "split");
-  const born = grid.splitToward(cardId, side, { data: { tabs: [t], activeId: t.id } });
-  if (!born) throw new Error(`card ${cardId} could split toward ${side}, and the split toward ${side} made no card`);
+  const born = tree.split(cardId, side, { tabs: [t], activeId: t.id }, splitsEven());
   focusOn(born);
   settle();
   return { card: born, tab: t.id };
@@ -914,20 +927,39 @@ let dropShown = false;
 /**
  * The rectangle of the card that this drop produces. It returns undefined when the layout rejects the operation.
  *
- * The operation runs on a copy of the plane and the result is read. Because it is a copy, the live plane does not change.
- * Computing half of the target card differs from the drawn position: the two cut pieces share the gap between them, so
- * each is not half of the rect, and a move closes first and cuts afterward, so the size of the target differs from before the cut.
+ * The operation runs on the group tree and the tree puts the grid back (probe), so the live plane does not change. Computing half of
+ * the target card differs from the drawn position: the two cut pieces share the gap between them, so each is not half of the rect, and
+ * a move closes first and cuts afterward, so the size of the target differs from before the cut. A target may be a group card
+ * (docs/spec/groups.md#moving-and-dropping).
  */
 function dropRect(fromId, hit) {
-  const copy = new Soksak(grid.toJSON(),
-    { gap: grid.gap, minSize: grid.minSize, width: grid.width, height: grid.height });
-  if (hit.zone === "centre") return copy.rect(hit.id);
-  // T5 — a card with only one tab moves as a whole card.
-  if (tabsOf(grid.card(fromId)).length === 1) {
-    return copy.move(fromId, hit.id, hit.zone) ? copy.rect(fromId) : undefined;
-  }
-  const born = copy.splitToward(hit.id, hit.zone, {});
-  return born === null ? undefined : copy.rect(born);
+  if (hit.zone === "centre" && !tree.isGroup(hit.id)) return tree.rect(hit.id);
+  const only = tabsOf(grid.card(fromId)).length === 1;
+  return tree.probe(() => {
+    try {
+      // T5 — a card with only one tab moves as a whole card.
+      if (only) {
+        tree.move(fromId, hit.id, hit.zone);
+        return tree.rect(fromId);
+      }
+      const born = hit.zone === "centre" ? tree.addCard(hit.id, undefined, splitsEven()) : tree.split(hit.id, hit.zone, undefined, splitsEven());
+      return tree.rect(born);
+    } catch {
+      // A refused operation is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
+      return undefined;
+    }
+  });
+}
+
+/**
+ * The drop target of a point of the plane in a drag of a tab of the card fromId, {id, zone}, or null: the group tree resolves it on the
+ * rectangles of the group cards from the root level inward and ends in zoneAt of the grid (docs/spec/groups.md#moving-and-dropping).
+ * band is the head and foot height that dropBands measured.
+ */
+export function dropHit(x, y, fromId, band) {
+  const only = tabsOf(grid.card(fromId)).length === 1 ? fromId : undefined;
+  const hit = tree.dropAt(x, y, { headerPx: band.headerPx, footerPx: band.footerPx, centreOnly: only });
+  return hit && { id: hit.card, zone: hit.zone };
 }
 
 /**
@@ -978,32 +1010,35 @@ function hideDrop() {
  */
 function dropTab(fromId, tabId, hit) {
   const from = grid.card(fromId);
-  const target = grid.card(hit.id);
-  if (!from || !target || isPlace(hit.id)) return settle();
+  const group = tree.isGroup(hit.id);
+  const target = group ? null : grid.card(hit.id);
+  if (!from || (!group && !target) || isPlace(hit.id)) return settle();
   const moving = tabsOf(from).find((t) => t.id === tabId);
   if (!moving) return settle();
 
-  if (hit.zone === "centre") {                                  // T3
+  if (hit.zone === "centre" && !group) {                        // T3
     if (target.id === fromId) { from.data.activeId = tabId; return settle(); }
     removeTab(from, tabId);
     appendTab(target, moving);
     focusOn(target.id);
-    if (tabsOf(from).length === 0 && grid.canClose(fromId)) grid.close(fromId);
+    if (tabsOf(from).length === 0 && tree.canClose(fromId)) tree.close(fromId);
     else settleActiveTab(from);
     return settle();
   }
 
   if (tabsOf(from).length === 1) {                               // T5 — nothing is left to keep
     if (fromId === hit.id) return settle();
-    grid.move(fromId, hit.id, hit.zone);
+    if (tree.canMove(fromId, hit.id, hit.zone)) tree.move(fromId, hit.id, hit.zone);
     focusOn(fromId);
     return settle();
   }
 
-  removeTab(from, tabId);                                        // T4 — the slot stays and only the tab moves
+  // T4 — the slot stays and only the tab moves; the centre of a group card is a new card inside it at the right edge of its rectangle.
+  const slot = dropRect(fromId, hit) !== undefined;
+  removeTab(from, tabId);
   settleActiveTab(from);
-  const born = grid.splitToward(hit.id, hit.zone,
-    { data: { tabs: [moving], activeId: moving.id } });
+  const data = { tabs: [moving], activeId: moving.id };
+  const born = !slot ? null : hit.zone === "centre" ? tree.addCard(hit.id, data, splitsEven()) : tree.split(hit.id, hit.zone, data, splitsEven());
   if (born === null) {                                           // If there is no slot, revert
     appendTab(from, moving);
   } else {
@@ -1132,10 +1167,14 @@ function drawCardSidebars(el, card, rect) {
  */
 function settle() {
   if (!grid) return;
+  // A change of the layout ends the preview of a drag: the release runs its command from the layout that it finds then.
+  previewed = null;
   closePicker("settled");
   // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
   arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
     windowSidebars, value("sidebarWidth"), side => value(side));
+  // The window sidebars change the grid through the layout library, so a space with groups removes what they left (docs/spec/groups.md#model).
+  tree.keepForm();
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   keepCardScope((id) => grid.card(id));
@@ -1507,6 +1546,48 @@ function logRefusals(refused) {
   for (const { text } of refused) report(text);
 }
 
+// The divider drag whose steps the plane previews: the axis and the line of its first step and the layout before it, or null.
+let previewed = null;
+
+/** A step of a divider drag: the line of the group tree moves toward px without the merge of the lines that meet. */
+function previewBoundary(axis, line, px) {
+  previewed ??= { axis, line, kept: tree.snapshot() };
+  return tree.placeBoundary(axis, line, px, true);
+}
+
+/**
+ * The end of a divider drag that moved the line: the layout returns to the one before the drag and the command core.boundary.move
+ * moves the line of the first step to the position where the drag left it, so the result is that of the command, which records it.
+ * The command runs its handler before the first wait of the registry, so the plane draws its result in this change.
+ */
+function endBoundary(axis, line) {
+  const drag = previewed;
+  previewed = null;
+  // default: a release whose drag made no step leaves the layout as it is.
+  if (!drag) return false;
+  const position = grid.boundaryPos(axis, line);
+  tree.restore(drag.kept);
+  run("core.boundary.move", { axis: drag.axis, line: drag.line, position }).catch((error) => {
+    report(`boundary ${drag.axis} ${drag.line} move failed: ${error.message}`);
+  });
+  return false;
+}
+
+/**
+ * An arrow key or a centring of a divider: the command name with params, the operation that the group tree previews, runs from the
+ * layout before the gesture, which it changes as the preview does, so the position where the preview leaves the boundary is the answer
+ * for the view.
+ */
+function boundaryCommand(preview, name, params) {
+  const kept = tree.snapshot();
+  const at = preview();
+  tree.restore(kept);
+  run(name, params).catch((error) => {
+    report(`boundary ${params.axis} ${params.line} ${name} failed: ${error.message}`);
+  });
+  return at;
+}
+
 /** Rebuilds the plane from the start. */
 function build(kept) {
   const restored = restoreWindowState(kept);
@@ -1519,12 +1600,30 @@ function build(kept) {
   windowSidebars = restored;
   const half = halfGap();
   grid = new Soksak(kept.state, { gap: half * 2 });
+  tree = readGroupTree(kept, treeOptions(), grid);
   focusOn(kept.focusedId);
   view = new SoksakView(plane, grid, {
     createCard, updateCard,
     // The plane is inset inside the stage by this value. Only the host knows the value, so it must be passed to the view so
     // that lines touching the plane edge continue to the stage boundary.
     bleed: stagePad(),
+    // The cards stand at the drawn rectangles of the group tree, below the headers of their group cards, and the rules and dividers are
+    // cut at the headers and the frames (docs/spec/groups.md#drawing).
+    drawn: {
+      has: (id) => grid.card(id) !== undefined || tree.isGroup(id),
+      rects: drawnRects,
+      rules: () => tree.drawnRules(grid.rules()),
+      dividers: () => tree.drawnDividers(grid.dividers()),
+    },
+    // A divider drag previews its steps on the line of the group tree, which draws the cards below the headers, and its result is
+    // the command core.boundary.move from the layout before the drag to the position where the drag left the line
+    // (docs/spec/groups.md#minimum-size).
+    boundary: {
+      move: previewBoundary,
+      step: (axis, line, px) => boundaryCommand(() => tree.moveBoundary(axis, line, px, false), "core.boundary.move", { axis, line, position: px }),
+      center: (axis, line) => boundaryCommand(() => tree.centerBoundary(axis, line), "core.boundary.center", { axis, line }),
+      end: endBoundary,
+    },
     // Drawing writes the frame scale of the current settings into the document. Preparation includes the first-row height at
     // that scale, so the host decides the window title bar in the same transaction (docs/spec/native-surfaces.md#title-bar-height).
     commit: (made, draw) => {
@@ -1554,6 +1653,8 @@ function build(kept) {
         divider.dataset.expose = "core.divider";
       }
       keepHiddenSidebars();
+      const fullscreen = view.fullscreenCard;
+      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven() });
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
@@ -1638,6 +1739,7 @@ configureSystemNotifications({
 export function setGap(half) {
   if (!grid) return;
   grid.gap = half * 2;
+  tree.setOptions(treeOptions());
   view.bleed = stagePad();
   // The gap is also the inner margin of the stage, so the plane size changes when the gap changes. If the code waited for the
   // observer, a render in the meantime would draw with the previous size and pass that value to the surface too.
@@ -1663,9 +1765,10 @@ export const capture = (path = null) => {
   const displayed = grid.toJSON();
   // A write names its writing path, and each view tab that it stores without an origin member is recorded (docs/spec/projects.md#tab-origin).
   for (const text of missingOriginRecords(displayed, path)) report(text);
+  const { groups, leader, lastCard } = tree.stored();
   return {
     // Each content-card tab stores its origin with the layout (docs/spec/projects.md#tab-origin).
-    state: storedLayoutState(displayed), focusedId,
+    state: storedLayoutState(displayed), groups, leader, lastCard, focusedId,
     windowSidebars: structuredClone(windowSidebars),
     named, sidebars: sidebarChoices(),
   };
@@ -1680,7 +1783,7 @@ export function adopt(kept, space) {
   if (!grid) return build(kept);
   const restored = restoreWindowState(kept);
   logRefusals(recordStoredOrigins(kept));
-  grid.replace(kept.state);
+  tree = readGroupTree(kept, treeOptions(), grid);
   focusOn(kept.focusedId);
   windowSidebars = restored;
   named = kept.named;
@@ -1690,17 +1793,24 @@ export function adopt(kept, space) {
 }
 
 /** Returns an empty space state. A new space starts with this value. `random` is the random source of its tab ids (ids.js), the platform source by default. */
-export const fresh = (random) => ({
-  state: initial(random),
-  focusedId: environment().workspace.focus,
-  windowSidebars: Object.fromEntries(environment().workspace.grid.cards
-    .filter(card => windowSidebar(card.id))
-    // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
-    // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
-    .map(card => [card.id, { [sizeKey(card.id)]: card[sizeKey(card.id)] ?? value("sidebarWidth") }])),
-  named: 0,
-  sidebars: {},
-});
+export function fresh(random) {
+  const state = initial(random);
+  // A new space has no groups; its leader is the first card of the root level in reading order that is not a window sidebar, and
+  // lastCard is the largest card number of its cards or 1 (docs/spec/groups.md#leader).
+  const first = [...state.cards].sort((a, b) => (a.r0 - b.r0) || (a.c0 - b.c0)).find((card) => !isPlace(card.id));
+  return {
+    state, groups: [], leader: first ? first.id : null,
+    lastCard: Math.max(1, ...state.cards.map((card) => cardNumber(card.id) ?? 0)),
+    focusedId: environment().workspace.focus,
+    windowSidebars: Object.fromEntries(environment().workspace.grid.cards
+      .filter(card => windowSidebar(card.id))
+      // default: a fixed sidebar whose size the environment declaration omits starts with the sidebarWidth setting on its axis:
+      // the width of a left or right sidebar, the height of a top or bottom sidebar (docs/spec/external-sidebars.md).
+      .map(card => [card.id, { [sizeKey(card.id)]: card[sizeKey(card.id)] ?? value("sidebarWidth") }])),
+    named: 0,
+    sidebars: {},
+  };
+}
 
 export function clear() {
   keepCardScope(() => false);
@@ -1710,6 +1820,7 @@ export function clear() {
   view?.destroy();
   view = null;
   grid = null;
+  tree = null;
   keyboardOwed();
   railPath.setAttribute("d", "");
   document.getElementById("focusMark").hidden = true;
@@ -1740,8 +1851,30 @@ function knownPlugin(id) {
 const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
 
 // default: it is null when there is no fullscreen card.
-export const fullscreenCard = () => plane.querySelector('.card[data-fullscreen="true"]')?.dataset.cardId ?? null;
+export const fullscreenCard = () => view?.fullscreenCard ?? null;
+
+/** Whether the card id is drawn while a card is fullscreen: the fullscreen card and the cards inside it, or every card without one. */
+function shownFullscreen(id) {
+  const shown = view?.fullscreenCard ?? null;
+  return shown === null || id === shown || tree.path(id).some((group) => group.card === shown);
+}
+
+/**
+ * The drawn rectangle of each card of the space by id (docs/spec/groups.md#drawn-rectangles): with a fullscreen card only the cards it
+ * shows, a fullscreen group card laid out as the whole area with the cards inside it, and the window sidebars at the rectangles of the
+ * grid.
+ */
+function drawnRects(fullscreen) {
+  const area = { x: 0, y: 0, w: grid.width, h: grid.height };
+  if (fullscreen !== null) return tree.isGroup(fullscreen) ? tree.fullscreen(fullscreen, area) : new Map([[fullscreen, area]]);
+  return new Map(tree.order().map(({ id }) => [id, isPlace(id) ? grid.rect(id) : tree.rect(id)]));
+}
 export const presentedCardRect = (id) => view?.painted(id);
+/** The drawn rectangle of each card and group card of the space by id as the plane draws it now, an empty rectangle for a hidden one. */
+export function drawnCardRects() {
+  const rects = drawnRects(view.fullscreenCard);
+  return new Map(tree.order().map(({ id }) => [id, rects.get(id) ?? { x: 0, y: 0, w: 0, h: 0 }]));
+}
 
 /**
  * Refuses a change of the layout from the card tools while a card is fullscreen (docs/spec/example-model.md#card-fullscreen):
@@ -1757,30 +1890,35 @@ function restoreFullscreen() {
 }
 
 export function toggleCardFullscreen(id) {
-  paneCard(id);
+  if (!tree.isGroup(id)) paneCard(id);
   focusOn(id);
   closePicker("fullscreen");
   view.fullscreen(view.fullscreenCard === id ? null : id);
 }
 
 export function focusCard(id) {
+  if (tree?.isGroup(id)) id = tree.focusable(id);
   paneCard(id);
-  if (view.fullscreenCard !== id) restoreFullscreen();
+  // A focus of a card inside a fullscreen group card keeps it fullscreen (docs/spec/groups.md#card-commands-on-a-group-card).
+  if (!shownFullscreen(id)) restoreFullscreen();
   focusOn(id);
   settle();
 }
 
 /** Opens the add and split menu of a card. If the same menu is open, it closes it. */
 export function openCardMenu(id, menu) {
-  paneCard(id);
+  const group = tree?.isGroup(id);
+  if (!group) paneCard(id);
   layoutChangeable(id);
   const what = DO_OF[menu];
   if (!what) throw new Error(`unknown menu ${menu}`);
-  const anchor = cardElement(id)?.querySelector(`.chrome__act[data-do="${what}"]`);
+  // The menus of a group card open under the buttons of its header (docs/spec/groups.md#card-commands-on-a-group-card).
+  const holder = group ? plane.querySelector(`.group[data-group-card="${CSS.escape(id)}"] .group__head`) : cardElement(id);
+  const anchor = holder?.querySelector(`.chrome__act[data-do="${what}"]:not([hidden])`);
   if (!anchor) throw new Error(`card ${id} has no ${menu} button`);
   if (anchor.disabled) throw new Error(`card ${id} cannot ${menu}`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
-  focusOn(id);
+  focusOn(group ? tree.focusable(id) : id);
   settle();
   openPicker(anchor, what, id);
 }
@@ -1796,7 +1934,7 @@ export function openCardTools(id) {
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const acts = cardElement(id).querySelector(".chrome__acts");
-  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled).map((b) => ({
+  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden).map((b) => ({
     // A sidebar button has no data-do and points to a side with data-side.
     key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
     name: b.title,
@@ -1927,13 +2065,37 @@ export function openCardTabs(id) {
 }
 
 export function addTabTo(id, kind, params) {
-  paneCard(id);
+  if (!tree?.isGroup(id)) paneCard(id);
   layoutChangeable(id);
   knownPlugin(kind);
-  return addTab(id, kind, checkTabParams(kind, plugin(kind).params, params));
+  const wanted = checkTabParams(kind, plugin(kind).params, params);
+  return tree.isGroup(id) ? addToGroup(id, kind, wanted) : addTab(id, kind, wanted);
 }
 
+/**
+ * Adds a content card with a tab of kind with the checked params inside the group card id at the right edge of its rectangle and returns
+ * the tab (docs/spec/groups.md#card-commands-on-a-group-card).
+ */
+function addToGroup(id, kind, wanted) {
+  tree.probe(() => tree.addCard(id, undefined, splitsEven()));
+  restoreFullscreen();
+  const t = newTab(kind, wanted, sourceTabOf(id), "new tab");
+  focusOn(tree.addCard(id, { tabs: [t], activeId: t.id }, splitsEven()));
+  settle();
+  return t.id;
+}
+
+/** The tab that a new tab beside the card id inherits: the active tab of the card, or of the content card that a focus of a group card gives. */
+// default: a card without an active tab has no tab to inherit.
+const sourceTabOf = (id) => activeTab(grid.card(tree.focusable(id)))?.id ?? null;
+
 export function splitCard(id, side, kind) {
+  if (tree?.isGroup(id)) {
+    layoutChangeable(id);
+    knownPlugin(kind);
+    if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+    return splitGroup(id, side, kind, null);
+  }
   paneCard(id);
   layoutChangeable(id);
   knownPlugin(kind);
@@ -1943,10 +2105,22 @@ export function splitCard(id, side, kind) {
   return made;
 }
 
+/** Puts a new content card with a tab of kind with params beside the rectangle of the group card id into the level that holds it. */
+function splitGroup(id, side, kind, params) {
+  tree.probe(() => tree.split(id, side, undefined, splitsEven()));
+  restoreFullscreen();
+  const t = newTab(kind, params, sourceTabOf(id), "split");
+  const born = tree.split(id, side, { tabs: [t], activeId: t.id }, splitsEven());
+  focusOn(born);
+  settle();
+  return { card: born, tab: t.id };
+}
+
 export function closeCard(id) {
+  if (tree?.isGroup(id)) return closeGroup(id);
   paneCard(id);
   layoutChangeable(id);
-  if (!grid.canClose(id)) throw new Error(`card ${id} cannot close`);
+  if (!tree.canClose(id)) throw new Error(`card ${id} cannot close`);
   const unsaved = tabsOf(grid.card(id)).find((t) => tabModified(t.id));
   if (unsaved) {
     // Asks about the modified tab first; once it is closed, closing the card asks about the next one or closes it.
@@ -1955,7 +2129,7 @@ export function closeCard(id) {
   }
   restoreFullscreen();
   recordClosedTabs(tabsOf(grid.card(id)).map((t) => t.id));
-  grid.close(id);
+  tree.close(id);
   // default: when only place cards remain, there is no card to focus (null).
   if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
   settle();
@@ -2082,7 +2256,7 @@ export function openFile(path, cardId) {
 
 export function selectTab(tabId) {
   const card = cardOfTab(tabId);
-  if (view.fullscreenCard !== card.id) restoreFullscreen();
+  if (!shownFullscreen(card.id)) restoreFullscreen();
   card.data.activeId = tabId;
   focusOn(card.id);
   settle();
@@ -2117,7 +2291,7 @@ const contentCards = () => grid.cards.filter((card) => !isPlace(card.id));
 function inactiveSpaceOf(found) {
   const project = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
   // default: a window that shows no space has no other space, and a project without such a space has none.
-  return project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards))?.id ?? null;
+  return project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards, entry.layout))?.id ?? null;
 }
 
 /**
@@ -2172,15 +2346,18 @@ function layoutTab(id) {
 /**
  * core.layout.open: selects the first tab of the plugin whose params equal the given ones in the target card, card or its neighbour toward
  * side, or adds the tab to card or splits card toward side into a new card with the tab. path stands for the plugin that opens its
- * extension with params {path} in the normal form of the path. Returns {card, tab}; a refusal changes nothing.
+ * extension with params {path} in the normal form of the path. A group card as card selects among the content cards inside it in
+ * workbench order, adds a content card inside it and splits its rectangle (docs/spec/groups.md#card-commands-on-a-group-card); the
+ * neighbour toward side is a content card of the level of card. Returns {card, tab}, the card that holds the tab; a refusal changes nothing.
  */
 export function openInLayout({ card: cardId, plugin: kind, params, path, side }) {
   if (kind !== undefined && path !== undefined) throw new Error("core.layout.open takes plugin or path, not both");
   if (kind === undefined && path === undefined) throw new Error("core.layout.open needs plugin or path");
   if (path !== undefined && params !== undefined) throw new Error("core.layout.open takes params only with plugin");
   if (side !== undefined && !SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
-  const card = layoutCard(cardId);
-  layoutChangeable(card.id);
+  const id = treeCard(cardId);
+  if (isPlace(id)) throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+  layoutChangeable(id);
   let opener, wanted;
   if (path !== undefined) {
     const normal = checkOpenPath(path);
@@ -2191,17 +2368,29 @@ export function openInLayout({ card: cardId, plugin: kind, params, path, side })
     opener = kind;
     wanted = checkTabParams(kind, plugin(kind).params, params);
   }
-  const target = side === undefined ? card : neighbourToward(contentCards(), card, side);
-  // default: a tab stored without params has the params null.
-  const found = target ? tabsOf(target).find((t) => t.plugin === opener && sameJson(t.params ?? null, wanted)) : undefined;
-  if (found) {
-    selectTab(found.id);
-    return { card: target.id, tab: found.id };
+  let targets = [id];
+  if (side !== undefined) targets = [tree.neighbour(id, side)];
+  else if (tree.isGroup(id)) {
+    const inside = new Set(tree.contents(tree.node(id)));
+    targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));
   }
-  if (side === undefined) return { card: card.id, tab: addTab(card.id, opener, wanted) };
-  if (!grid.canSplit(card.id, splitAxis(side))) throw new Error(`card ${card.id} cannot split toward ${side}`);
-  const made = splitWith(card.id, side, opener, wanted);
-  if (!made) throw new Error(`card ${card.id} cannot split toward ${side}`);
+  for (const target of targets) {
+    if (!target || isPlace(target) || tree.isGroup(target)) continue;
+    // default: a tab stored without params has the params null.
+    const found = tabsOf(grid.card(target)).find((t) => t.plugin === opener && sameJson(t.params ?? null, wanted));
+    if (found) {
+      selectTab(found.id);
+      return { card: target, tab: found.id };
+    }
+  }
+  if (side === undefined && tree.isGroup(id)) {
+    const tab = addToGroup(id, opener, wanted);
+    return { card: focusedId, tab };
+  }
+  if (side === undefined) return { card: id, tab: addTab(id, opener, wanted) };
+  if (tree.isGroup(id)) return splitGroup(id, side, opener, wanted);
+  const made = splitWith(id, side, opener, wanted);
+  if (!made) throw new Error(`card ${id} cannot split toward ${side}`);
   return made;
 }
 
@@ -2234,17 +2423,24 @@ export async function closeInLayout({ tab: tabId }) {
 }
 
 /**
- * The layout of the window description (docs/spec/exposure.md#window-snapshot): the shown space, the focused card and the tree of the
- * content cards with the frame of each card in window points and its tabs. It is null while the plane shows no space.
+ * The layout of the window description (docs/spec/exposure.md#window-snapshot): the shown space, the focused card, the tree of the
+ * content cards with the frame of each card in window points, its group card (parent, null at the root level), whether it leads its level
+ * and its tabs, and the group tree as core.layout reports it with the frame of each group card and whether it leads its own level
+ * (docs/spec/groups.md#status-and-queries). It is null while the plane shows no space.
  */
 export function layoutDescription() {
   if (!grid) return null;
   const origin = plane.getBoundingClientRect();
+  // The drawn rectangles: a card below the headers of its group cards is drawn below them (docs/spec/groups.md#drawn-rectangles), and a
+  // fullscreen group card shows the fullscreen layout.
+  const rects = drawnCardRects();
   const root = layoutTree(contentCards(), grid.lines("x"), grid.lines("y"), (card, size) => {
-    const rect = grid.rect(card.id);
+    const rect = rects.get(card.id);
+    const parent = tree.parentOf(card.id);
     return {
       card: card.id, size,
       frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
+      parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === card.id,
       tabs: tabsOf(card).map((t) => ({
         // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
         tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
@@ -2253,7 +2449,15 @@ export function layoutDescription() {
       })),
     };
   });
-  return { space: heldSpace, focused: focusedId, root };
+  const describe = (node) => {
+    const rect = rects.get(node.card);
+    return {
+      card: node.card, name: node.name, level: node.level, leader: node.leader, leading: tree.leaderOf(tree.parentOf(node.card)) === node.card,
+      frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
+      members: node.members.map((member) => (typeof member === "string" ? member : describe(member))),
+    };
+  };
+  return { space: heldSpace, focused: focusedId, root, groups: tree.tree().map(describe) };
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];
@@ -2261,10 +2465,11 @@ const ZONES = ["centre", "left", "right", "top", "bottom"];
 /** Moves a tab to the center or an edge of a card. It is the same as the result of releasing a drag. */
 export function moveTab(tabId, cardId, zone) {
   const from = cardOfTab(tabId);
-  paneCard(cardId);
+  const group = tree?.isGroup(cardId);
+  if (!group) paneCard(cardId);
   if (!ZONES.includes(zone)) throw new Error(`unknown zone ${zone}`);
   const hit = { id: cardId, zone };
-  if (zone !== "centre" && dropRect(from.id, hit) === undefined) {
+  if ((zone !== "centre" || group) && dropRect(from.id, hit) === undefined) {
     throw new Error(`tab ${tabId} cannot move to the ${zone} of ${cardId}`);
   }
   restoreFullscreen();
@@ -2350,6 +2555,155 @@ export function railState() {
 
 export { settle, tabsOf, activeTab, plane };
 export const currentGrid = () => grid;
+
+/** The group tree of the shown space, or null while the plane holds no layout. */
+export const currentTree = () => tree;
+
+/** The JSON text of the stored layout of the active space, {state, groups, leader, lastCard}, or null while the window shows none. */
+export function storedLayoutText() {
+  if (!grid) return null;
+  const { groups, leader, lastCard } = tree.stored();
+  return JSON.stringify({ state: grid.toJSON(), groups, leader, lastCard });
+}
+
+/**
+ * Closes the group card id with every card inside it after each modified tab of those cards is saved or discarded in turn
+ * (docs/spec/groups.md#card-commands-on-a-group-card).
+ */
+function closeGroup(id) {
+  layoutChangeable(id);
+  if (!tree.canClose(id)) throw new Error(`card ${id} cannot close`);
+  const inside = tree.contents(tree.node(id));
+  const unsaved = inside.flatMap((card) => tabsOf(grid.card(card)).filter((t) => tabModified(t.id)).map((t) => ({ card, t })))[0];
+  if (unsaved) {
+    askBeforeClose(unsaved.card, unsaved.t, () => closeCard(id));
+    return { closed: false };
+  }
+  restoreFullscreen();
+  recordClosedTabs(inside.flatMap((card) => tabsOf(grid.card(card)).map((t) => t.id)));
+  tree.close(id);
+  // default: when only place cards remain, there is no card to focus (null).
+  if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  settle();
+  return { closed: true };
+}
+
+/** The identifiers of the group cards that this window dissolved since its workbench started (docs/spec/groups.md#idempotency). */
+const dissolvedGroups = new Set();
+
+/**
+ * A card of any level of the shown space named by id, a content card, a group card or a window sidebar, or current for the focused card;
+ * a card of another space or of no space is refused with the texts of docs/spec/cli.md#acting-on-a-layout.
+ */
+function treeCard(id) {
+  if (id === "current") return layoutCard("current").id;
+  if (typeof id === "string" && tree?.find(id)) return id;
+  const inGroups = (nodes) => nodes.some((node) => node.card === id || inGroups(node.members.filter((member) => typeof member !== "string")));
+  // default: a stored layout read by the check of its space holds groups; a space that never opened holds the list it was stored with.
+  const space = inactiveSpaceOf((cards, layout) => cards.some((entry) => entry.id === id) || inGroups(layout.groups ?? []));
+  if (space !== null) throw new Error(`card ${id} is in space ${space}, which is not active`);
+  throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+}
+
+/**
+ * Groups the card id, a content card or a group card, with a new content card toward side that holds a tab of kind with params and
+ * returns {group, card, tab}; the focus moves to the new card (docs/spec/groups.md#commands).
+ */
+export function createGroup(id, side, kind, params) {
+  if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  const card = treeCard(id);
+  if (isPlace(card)) throw new Error(`card ${card} is a window sidebar; a group holds content cards and group cards`);
+  layoutChangeable(card);
+  const parent = tree.parentOf(card);
+  // The same group of the same card with the same tab toward the same side changes nothing (docs/spec/groups.md#idempotency).
+  if (parent && parent.members.length === 2 && hasPlugin(kind)) {
+    const other = parent.members.map(memberId).find((member) => member !== card);
+    const wanted = checkTabParams(kind, plugin(kind).params, params);
+    // default: a tab stored without params has the params null.
+    const found = !tree.isGroup(other) && tree.neighbour(card, side) === other
+      ? tabsOf(grid.card(other)).find((t) => t.plugin === kind && sameJson(t.params ?? null, wanted)) : undefined;
+    if (found) return { group: parent.card, card: other, tab: found.id };
+  }
+  tree.probe(() => tree.create(card, side, undefined, splitsEven()));
+  knownPlugin(kind);
+  const wanted = checkTabParams(kind, plugin(kind).params, params);
+  const t = newTab(kind, wanted, sourceTabOf(card), "split");
+  const made = tree.create(card, side, { tabs: [t], activeId: t.id }, splitsEven());
+  focusOn(made.card);
+  settle();
+  return { group: made.group, card: made.card, tab: t.id };
+}
+
+/** Replaces the group card id with its members in the level that holds it; a group that this window dissolved answers again. */
+export function dissolveGroup(id) {
+  if (dissolvedGroups.has(id)) return { dissolved: true };
+  const card = treeCard(id);
+  tree.requireGroup(card);
+  layoutChangeable(card);
+  tree.dissolve(card);
+  dissolvedGroups.add(card);
+  settle();
+  return { dissolved: true };
+}
+
+/**
+ * Opens the close menu of the group card id from the close button of its header, or closes it when it is open. A group whose header
+ * holds no close button is refused.
+ */
+export function openGroupMenu(id) {
+  const card = treeCard(id);
+  tree.requireGroup(card);
+  const anchor = plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
+  if (!anchor) throw new Error(`group ${card} has no close button`);
+  if (picker?.anchor === anchor) { closePicker("toggle"); return null; }
+  openLayer(anchor, "그룹 메뉴", [{ key: "close", name: "그룹 닫기" }, { key: "dissolve", name: "그룹 풀기" }],
+    (key) => run(key === "close" ? "core.card.close" : "core.group.dissolve", key === "close" ? { card } : { group: card }));
+  return null;
+}
+
+/** Renames the group card id to name with the white space at both ends removed. */
+export function renameGroup(id, name) {
+  const card = treeCard(id);
+  if (typeof name !== "string") throw new Error(`group name must be a string, not ${JSON.stringify(name)}`);
+  const named = tree.rename(card, name);
+  settle();
+  return { group: card, name: named };
+}
+
+/** Makes the card id, a content card or a group card, the leader of its level. */
+export function leadLevel(id) {
+  const card = treeCard(id);
+  const group = tree.setLeader(card);
+  settle();
+  return { card, group };
+}
+
+/** Moves the card id, a content card or a group card, beside target on side, or into the group target with side centre. */
+export function moveCard(id, target, side) {
+  const card = treeCard(id);
+  const to = treeCard(target);
+  layoutChangeable(card);
+  tree.move(card, to, side);
+  settle();
+  return { card };
+}
+
+/**
+ * The state of the card id of any level (docs/spec/groups.md#status-and-queries): a content card with its active tab, its tabs with their
+ * summary statuses, read from summary, the statuses of each surface that its plugin declares with summary true, and its group path; a
+ * group card with its group path and its node.
+ */
+export function cardState(id, summary) {
+  const card = treeCard(id);
+  if (isPlace(card)) throw new Error(`card ${card} is a window sidebar`);
+  const groups = tree.path(card);
+  if (tree.isGroup(card)) return { card, groups, group: tree.groupRecord(card) };
+  const data = grid.card(card);
+  // default: a tab whose surface declares no summary status has the status {}.
+  const tabs = tabsOf(data).map((t) => ({ tab: t.id, plugin: t.plugin, status: summary.get(t.id) ?? {} }));
+  // default: a card without an active tab reports null.
+  return { card, activeTab: activeTab(data)?.id ?? null, tabs, groups };
+}
 /** The text size scale of a card. It is 1 when there is no value. */
 // default: as the comment above says, a card with no text size scale is 1.
 

@@ -1,0 +1,130 @@
+// The drawing of the group cards of a space (docs/spec/groups.md#drawing): each group card is one container, its frame of the card
+// border and radius on its drawn rectangle filled with the color of its level, and its header, the top band inside the frame, with
+// the name of the group and the head buttons of the group in the style of the head of a content card.
+import { bind } from "./commands.js";
+import { declaredIcons as icons } from "./icons.js";
+import { groupFill } from "./settings.js";
+import declaration from "./workbench.json" with { type: "json" };
+
+/** The names of the card tools, declared in workbench.json for both workbenches (docs/spec/example-model.md#card-tools). */
+const names = declaration.cardTools;
+const svg = (path) => `<svg viewBox="0 0 16 16" aria-hidden="true">${path}</svg>`;
+
+/**
+ * The head buttons of the group card id in the order of docs/spec/groups.md#headers: add, the two splits, the group button while the
+ * group fits, the leader button in a level of two or more members, fullscreen and close. Each is {do, expose, command, params, title,
+ * icon, enabled, pressed}. A fullscreen card holds the layout, so every button that changes it waits.
+ */
+export function groupHeadTools(tree, id, { fullscreen, even }) {
+  const held = fullscreen !== null;
+  const changes = (tool, can) => ({ ...tool, enabled: !held && can, title: held ? names["layout-held"] : tool.title, pressed: false });
+  const tools = [
+    changes({ do: "add", expose: "core.group.add", command: "core.card.menu", params: { card: id, menu: "add" }, title: names.add, icon: "card-add" }, true),
+    changes({ do: "x", expose: "core.group.split-x", command: "core.card.menu", params: { card: id, menu: "split-x" }, title: names["split-x"],
+      icon: "card-split-x" }, tree.canSplit(id, "right", even)),
+    changes({ do: "y", expose: "core.group.split-y", command: "core.card.menu", params: { card: id, menu: "split-y" }, title: names["split-y"],
+      icon: "card-split-y" }, tree.canSplit(id, "bottom", even)),
+  ];
+  if (tree.canGroup(id, even)) {
+    tools.push(changes({ do: "group", expose: "core.group.wrap", command: "core.card.menu", params: { card: id, menu: "group" }, title: names.group,
+      icon: "card-group" }, true));
+  }
+  const parent = tree.parentOf(id);
+  if (tree.leadCount(parent) >= 2) {
+    tools.push({ ...changes({ do: "leader", expose: "core.card.leader", command: "core.group.leader", params: { card: id }, title: names.leader,
+      icon: "card-leader" }, true), pressed: tree.leaderOf(parent) === id });
+  }
+  // The fullscreen button stays enabled while its group card is fullscreen, so a second press restores the arrangement.
+  const whole = fullscreen === id;
+  tools.push({ do: "fullscreen", expose: "core.group.fullscreen", command: "core.card.fullscreen", params: { card: id },
+    title: whole ? names.restore : names.fullscreen, icon: whole ? "card-restore" : "card-expand", enabled: true, pressed: whole });
+  tools.push(changes({ do: "group-menu", expose: "core.group.close", command: "core.group.menu", params: { group: id }, title: names["group-menu"],
+    icon: "card-close" }, true));
+  return tools;
+}
+
+/** Creates the element of the group card id: the frame with its header, the name and the button row. */
+function createGroupCard(id) {
+  const el = document.createElement("section");
+  el.className = "group";
+  el.dataset.expose = "core.group";
+  el.dataset.groupCard = id;
+  bind(el, "core.card.focus", { card: id });
+  const head = document.createElement("header");
+  head.className = "group__head";
+  head.dataset.expose = "core.group.header";
+  const name = document.createElement("span");
+  name.className = "group__name";
+  name.dataset.expose = "core.group.name";
+  bind(name, "core.card.focus", { card: id });
+  const acts = document.createElement("span");
+  acts.className = "chrome__acts";
+  head.append(name, acts);
+  el.append(head);
+  return el;
+}
+
+/** Draws the buttons of a group header, replacing the row only when the set of buttons changed, so a press keeps its node. */
+function drawTools(acts, tools) {
+  const key = tools.map((tool) => tool.do).join(",");
+  if (acts.dataset.tools !== key) {
+    acts.dataset.tools = key;
+    acts.replaceChildren(...tools.map((tool) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chrome__act";
+      button.dataset.do = tool.do;
+      button.dataset.expose = tool.expose;
+      bind(button, tool.command, tool.params);
+      return button;
+    }));
+  }
+  tools.forEach((tool, k) => {
+    const button = acts.children[k];
+    if (button.disabled !== !tool.enabled) button.disabled = !tool.enabled;
+    if (button.title !== tool.title) {
+      button.title = tool.title;
+      button.setAttribute("aria-label", tool.title);
+    }
+    const pressed = tool.do === "fullscreen" || tool.do === "leader" ? String(tool.pressed) : null;
+    if (pressed !== null && button.getAttribute("aria-pressed") !== pressed) button.setAttribute("aria-pressed", pressed);
+    if (button.dataset.icon !== tool.icon) {
+      button.dataset.icon = tool.icon;
+      button.innerHTML = svg(icons[tool.icon]);
+    }
+  });
+}
+
+/**
+ * Draws the group cards of the tree on the plane element planeEl (docs/spec/groups.md#drawing): rects is the drawn rectangle of each
+ * shown group card by id, which a fullscreen group card gives the group cards inside it, and head the height of a header. A group card
+ * that rects does not hold is hidden; the element of a group card that the tree no longer holds is removed. The frames stand below the
+ * cards, so they are inserted before the first card.
+ */
+export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even }) {
+  const live = new Set();
+  const first = planeEl.querySelector(":scope > .card");
+  for (const { id, node } of tree.order()) {
+    if (!node) continue;
+    live.add(id);
+    let el = planeEl.querySelector(`:scope > .group[data-group-card="${CSS.escape(id)}"]`);
+    if (!el) {
+      el = createGroupCard(id);
+      planeEl.insertBefore(el, first);
+    }
+    const rect = rects.get(id);
+    el.hidden = rect === undefined;
+    if (!rect) continue;
+    Object.assign(el.style, { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.w}px`, height: `${rect.h}px`,
+      background: groupFill(tree.level(id) + 1) });
+    const header = el.querySelector(".group__head");
+    header.style.height = `${head}px`;
+    const name = header.querySelector(".group__name");
+    if (name.textContent !== node.name) {
+      name.textContent = node.name;
+      name.title = node.name;
+    }
+    drawTools(header.querySelector(".chrome__acts"), groupHeadTools(tree, id, { fullscreen, even }));
+  }
+  for (const el of planeEl.querySelectorAll(":scope > .group")) if (!live.has(el.dataset.groupCard)) el.remove();
+}

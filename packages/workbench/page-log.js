@@ -88,6 +88,15 @@ export function eventEnabled(level) {
 }
 
 /**
+ * Whether an event of the level and the name is stored now, as the writers judge it, without counting it, so that a producer reads
+ * costly fields before the event only while the event is stored; nothing is stored in a page without a host.
+ */
+export function eventAdmits(level, event) {
+  if (!LOG_LEVELS.includes(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${LOG_LEVELS.join(", ")}`);
+  return batcher !== null && batcher.admits(level, event);
+}
+
+/**
  * Queues the event `workbench.start`, which marks the start of this document of the workbench in the timeline: a reload starts a
  * new document with a new clock, and the events that follow belong to it. `startedAt` is `performance.timeOrigin`.
  */

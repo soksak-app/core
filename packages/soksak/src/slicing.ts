@@ -86,7 +86,7 @@ const DIRECTIONS: Record<Fill['side'], Direction> = {
   left: { side: 'left', grow: 'c1', touches: (c, x) => c.c1 === x.c0, lo: 'r0', hi: 'r1' },
 };
 
-const ORDER: Record<FillOrder, readonly Fill['side'][]> = {
+export const ORDER: Record<FillOrder, readonly Fill['side'][]> = {
   v: ['below', 'above', 'right', 'left'],
   h: ['right', 'left', 'below', 'above'],
 };
@@ -103,13 +103,13 @@ const ORDER: Record<FillOrder, readonly Fill['side'][]> = {
 export function fillFor(
   cards: readonly Card[],
   closing: Card,
-  order: FillOrder,
+  sides: readonly Fill['side'][],
   memo?: Map<string, boolean>,
 ): Fill | null {
   if (closing.fixed) return null;
   if (cards.filter((c) => !c.fixed).length <= 1) return null;
 
-  for (const side of ORDER[order]) {
+  for (const side of sides) {
     const dir = DIRECTIONS[side];
     const row = cards
       .filter(

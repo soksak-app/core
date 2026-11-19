@@ -32,6 +32,7 @@ export interface Fill {
 }
 /** The axis a close tries first when redistributing the space. */
 export type FillOrder = 'v' | 'h';
+export declare const ORDER: Record<FillOrder, readonly Fill['side'][]>;
 /**
  * Returns the neighbours that take a closed card's space.
  *
@@ -41,4 +42,4 @@ export type FillOrder = 'v' | 'h';
  * A `fixed` card never fills, because the layout may not expand it. A card with
  * a px size does fill, and spanning a second slot removes that size.
  */
-export declare function fillFor(cards: readonly Card[], closing: Card, order: FillOrder, memo?: Map<string, boolean>): Fill | null;
+export declare function fillFor(cards: readonly Card[], closing: Card, sides: readonly Fill['side'][], memo?: Map<string, boolean>): Fill | null;

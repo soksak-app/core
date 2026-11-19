@@ -43,7 +43,7 @@ export class SoksakView {
     fullscreen(id) {
         if (this.disposed)
             throw new Error('cannot fullscreen a destroyed view');
-        if (id !== null && (typeof id !== 'string' || !this.grid.card(id))) {
+        if (id !== null && (typeof id !== 'string' || !this.drawn.has(id))) {
             throw new Error(`unknown fullscreen card ${String(id)}`);
         }
         if (this.drags.size > 0 || this.mouseDrag !== null) {
@@ -89,7 +89,7 @@ export class SoksakView {
         this.resolution.addEventListener('change', this.resolutionChanged);
     }
     constructor(host, grid, options) {
-        var _a;
+        var _a, _b, _c;
         this.fullscreenId = null;
         this.cardEls = new Map();
         /** The device-pixel rects the last paint wrote to the card elements. */
@@ -163,6 +163,21 @@ export class SoksakView {
         this.options = options;
         // default: `classPrefix` is optional and documented as `sp`.
         this.prefix = (_a = options.classPrefix) !== null && _a !== void 0 ? _a : 'sp';
+        // default: `boundary` is optional and documented as the grid's own operations.
+        this.boundary = (_b = options.boundary) !== null && _b !== void 0 ? _b : {
+            move: (axis, line, px) => grid.moveBoundary(axis, line, px),
+            step: (axis, line, px) => grid.moveBoundary(axis, line, px),
+            center: (axis, line) => grid.centerBoundary(axis, line),
+            end: (axis, line) => grid.mergeCoincident(axis, line),
+        };
+        // default: `drawn` is optional and documented as the grid's own arrangement: a fullscreen card covers the plane.
+        this.drawn = (_c = options.drawn) !== null && _c !== void 0 ? _c : {
+            has: (id) => grid.card(id) !== undefined,
+            rects: (fullscreen) => fullscreen === null ? grid.rects()
+                : new Map([[fullscreen, { x: 0, y: 0, w: grid.width, h: grid.height }]]),
+            rules: () => grid.rules().map((rule) => ({ ...rule, bleed: true })),
+            dividers: () => grid.dividers(),
+        };
         this.observeResolution();
         // The start waits for an animation frame, which runs before that frame's
         // observation round: an observation that starts during the round defers its
@@ -244,19 +259,19 @@ export class SoksakView {
         if (this.disposed)
             return;
         const fullscreen = this.fullscreenId;
-        if (fullscreen !== null && !this.grid.card(fullscreen)) {
+        if (fullscreen !== null && !this.drawn.has(fullscreen)) {
             throw new Error(`unknown fullscreen card ${fullscreen}`);
         }
-        const rects = fullscreen === null ? new Map(this.grid.rects())
-            : new Map(this.grid.cards.map((card) => [card.id, card.id === fullscreen
-                    ? { x: 0, y: 0, w: this.grid.width, h: this.grid.height }
-                    : { x: 0, y: 0, w: 0, h: 0 }]));
+        // A card that a fullscreen box does not show is hidden with an empty rect.
+        const shown = this.drawn.rects(fullscreen);
+        const rects = new Map(this.grid.cards.map((card) => { var _a; return [card.id, (_a = shown.get(card.id)) !== null && _a !== void 0 ? _a : { x: 0, y: 0, w: 0, h: 0 }]; }));
         const snapshot = {
             fullscreen,
             cards: [...this.grid.cards],
+            shown: new Set(shown.keys()),
             rects,
-            rules: fullscreen === null ? [...this.grid.rules()] : [],
-            dividers: fullscreen === null ? [...this.grid.dividers()] : [],
+            rules: fullscreen === null ? [...this.drawn.rules()] : [],
+            dividers: fullscreen === null ? [...this.drawn.dividers()] : [],
             width: this.grid.width,
             height: this.grid.height,
             step: this.step,
@@ -335,7 +350,7 @@ export class SoksakView {
             }
             held.card = card;
             const rect = onGrid(box.get(card.id), step);
-            held.el.hidden = snapshot.fullscreen !== null && card.id !== snapshot.fullscreen;
+            held.el.hidden = snapshot.fullscreen !== null && !snapshot.shown.has(card.id);
             held.el.dataset.fullscreen = String(card.id === snapshot.fullscreen);
             place(held.el, rect);
             this.paintedRects.set(card.id, rect);
@@ -369,8 +384,8 @@ export class SoksakView {
                     this.host.appendChild(el);
                     this.ruleEls.set(rule.key, el);
                 }
-                // default: `bleed` is optional and documented as 0.
-                place(el, onGrid(reach(rule, snapshot.width, snapshot.height, (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0), step));
+                // default: `bleed` is optional and documented as 0; a rule the host keeps off the frame takes none.
+                place(el, onGrid(reach(rule, snapshot.width, snapshot.height, rule.bleed ? (_j = this.options.bleed) !== null && _j !== void 0 ? _j : 0 : 0), step));
             }
             this.sweep(this.ruleEls, keep);
         }
@@ -707,7 +722,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            merged = this.boundary.end(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -729,7 +744,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.grid.mergeCoincident(drag.axis, drag.line);
+            merged = this.boundary.end(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -781,7 +796,7 @@ export class SoksakView {
             // finger, not the second press of a pair.
             if (((_a = this.drags.get(tapId)) === null || _a === void 0 ? void 0 : _a.on) !== el && e.timeStamp - lastTap < DOUBLE_TAP_MS) {
                 lastTap = -Infinity;
-                this.carry(() => this.grid.centerBoundary(axis, line), el);
+                this.carry(() => this.boundary.center(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -827,7 +842,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
+            this.commit('drag', () => this.carry(() => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         });
         const stop = (e) => {
             var _a;
@@ -869,7 +884,7 @@ export class SoksakView {
                 this.disarm(stale.on);
             if (e.timeStamp - lastPress < DOUBLE_TAP_MS) {
                 lastPress = -Infinity;
-                this.carry(() => this.grid.centerBoundary(axis, line), el);
+                this.carry(() => this.boundary.center(axis, line), el);
                 this.draw('center');
                 return;
             }
@@ -901,7 +916,7 @@ export class SoksakView {
             const now = drag.axis === 'x' ? e.clientX : e.clientY;
             if (Math.abs(now - drag.from) > 2)
                 drag.moved = true;
-            this.commit('drag', () => this.carry(() => this.grid.moveBoundary(drag.axis, drag.line, drag.base + (now - drag.from)), el));
+            this.commit('drag', () => this.carry(() => this.boundary.move(drag.axis, drag.line, drag.base + (now - drag.from)), el));
         };
         const mouseUp = (e) => {
             var _a;
@@ -955,7 +970,7 @@ export class SoksakView {
                 e.preventDefault();
                 this.pressed = held;
                 try {
-                    this.carry(() => this.grid.centerBoundary(axis, line), el);
+                    this.carry(() => this.boundary.center(axis, line), el);
                     this.draw('center');
                 }
                 finally {
@@ -969,7 +984,7 @@ export class SoksakView {
             e.preventDefault();
             this.pressed = held;
             try {
-                this.commit('drag', () => this.carry(() => this.grid.moveBoundary(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
+                this.commit('drag', () => this.carry(() => this.boundary.step(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
             }
             finally {
                 this.pressed = null;

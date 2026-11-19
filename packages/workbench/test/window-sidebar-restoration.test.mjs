@@ -24,9 +24,11 @@ test("saved window state rejects obsolete and unknown cards before replacing the
     { id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "missing" } }]) {
     assert.throws(() => checkStoredLayout({ state: { cards: [card] }, windowSidebars: {} }), /stored|obsolete|unknown/);
   }
-  checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t" } }] }, windowSidebars: {} });
+  checkStoredLayout({ state: { xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [{ id: "t", plugin: "pane" }], activeId: "t" } }] },
+    groups: [], leader: "a", lastCard: 1, windowSidebars: {} });
   // A tab of a plugin that is not loaded opens as a placeholder (docs/spec/plugins.md).
-  checkStoredLayout({ state: { cards: [{ id: "a", data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } }] }, windowSidebars: {} });
+  checkStoredLayout({ state: { xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, data: { tabs: [{ id: "t", plugin: "missing" }], activeId: "t" } }] },
+    groups: [], leader: "a", lastCard: 1, windowSidebars: {} });
 });
 
 test("a stored layout in an earlier form is refused with what it found", () => {
