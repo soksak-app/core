@@ -416,28 +416,54 @@ below a thousandth of a px; a corridor does not change with a span, so one
 correction lays a cut exactly and a nested cut takes one more. A card with a px
 size on the axis of its cut, and a `fixed` card, keeps its span and takes no
 share. Coordinates within a billionth are one line (R1). `even` keeps the
-`paidBy` records, as `balance` does, and does not check `minSize`: the host
-checks the result, because only the host knows the heads it draws. An
-arrangement that is not slicing throws `the grid is not a slicing
-arrangement`, a box member that is no card of the grid throws `card <id> is
-not a member of the layout`, and a throw changes nothing.
+`paidBy` records, as `balance` does. An arrangement that is not slicing throws
+`the grid is not a slicing arrangement`, a box member that is no card of the
+grid throws `card <id> is not a member of the layout`, a result below a
+minimum throws as below, and a throw changes nothing.
+
+The minimum of a node is recursive, with the heads and the corridors as fixed
+costs: a card needs `minSize` and on `y` the heads drawn inside its rectangle,
+a box needs what its members need, a cut needs on its own axis the needs of its
+children and the corridors between them and across it the largest need of its
+children, and a child that keeps its span needs the size it is drawn at. After
+an operation, every card and box whose rectangle changed is judged from the
+outside in, and the first one drawn below its need throws `card <id> would be
+<w>x<h>, below its minimum <w>x<h>`, which names that card or box.
 
 ```js
 grid.even([]);                                                        // every cut even
 grid.even([{ id: "group-1", head: 44, members: ["card-1", "card-2"] }]); // a box with its head
 ```
 
-### Pending cases
+### Add and remove
 
-The size rule of the operations that add, remove and move a card is an open
-decision. The cases of `docs/spec/cases/layout/grid.json` that state a
-candidate rule carry `pending` with the decision that they wait for; both
-runners report such a case as skipped with that text and do not run it, and
-the calls that they name (`insert`, `withdraw`) are not part of the library
-until the decision is made.
+`withdraw(boxes, id)` takes the member `id`, a card or a box, out of its cut;
+the other children of the cut take its space in proportion to their sizes, and
+a cut left with one child is replaced by that child. It returns what left,
+`{id, data?, box?, above, cards}`, which `insert` takes, so a box lands with
+its members in their proportions. The last card and a `fixed` card are
+refused.
 
-The proposal that the pending cases state is
-[layout sizes](../../../docs/plans/layout-sizes.md).
+`insert(boxes, target, side, card)` adds `card`, a new card `{id, data?}` or
+what `withdraw` returned, beside `target` toward `side` and returns its id;
+`target` is a member id or the ids that neighbouring children of one cut hold.
+Along the cut of the target, a cut whose children have one size (within half a
+px) gives the card 1/(k+1) of the cut and keeps every ratio, and a cut whose
+children differ gives the card half of the target less the new corridor and
+keeps every other size; when the target is the cut itself, the child at the
+end toward `side` is the target. Across the cut, the target is wrapped in a new
+cut of two halves. Only the cuts that the operation changes are laid again, so
+every other card keeps its rectangle. A move is a `withdraw` and an `insert`.
+
+```js
+const left = grid.withdraw([], "card-3");      // the row closes the gap in proportion
+grid.insert([], "card-1", "right", left);      // card-3 lands to the right of card-1
+grid.insert([], ["card-1", "card-2"], "bottom", { id: "card-9" }); // a new row below both
+```
+
+The proposal of this rule is [layout sizes](../../../docs/plans/layout-sizes.md),
+whose invariants `docs/spec/cases/layout/invariants.json` checks over generated
+layouts in both languages.
 
 ## Even arrangement
 
@@ -602,6 +628,8 @@ first.
 | `shareLines(axis, extra?)` | keep every line index of the axis and give every slot that no card with a size in px holds its corridor, `extra[slot]` px and an equal share of the free length, the extent less the corridors, the held sizes and the extras; a held slot keeps its span; throws for an unknown axis, an extra list of another length than the slots and an axis whose shared slots take no length |
 | `balance()` | give every card a fair share and keep the arrangement |
 | `even(boxes)` | give every child of every cut of the slicing tree an equal share, with the boxes of the host as children ([cuts](#cuts)) |
+| `withdraw(boxes, id)` | take a card or a box out of its cut; the others take its space in proportion ([add and remove](#add-and-remove)) |
+| `insert(boxes, target, side, card)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
 | `sliceTree(cards)` | the slicing tree of an arrangement (`Slice`: a card, or a cut along an axis into sides from the plane's start), or null |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | virtual lines |

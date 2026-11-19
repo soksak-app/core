@@ -1,5 +1,5 @@
 export { Soksak, checkState } from './soksak.js';
-export type { Axis, Box, Card, CardInit, Divider, Fill, FillOrder, Member, Paid, Rect, Rule, Side, SnapMode, SoksakOptions, SoksakState, Zone, ZoneHit, ZoneOptions, } from './soksak.js';
+export type { Axis, Arriving, Box, Card, CardInit, Divider, Fill, FillOrder, LeftCard, Member, Paid, Rect, Rule, Side, SnapMode, SoksakOptions, SoksakState, Zone, ZoneHit, ZoneOptions, Withdrawn, } from './soksak.js';
 export { contains, outline, roundedPath, unionLoops } from './outline.js';
 export type { Outline, OutlineOptions, Point } from './outline.js';
 export { SoksakView } from './dom.js';

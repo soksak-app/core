@@ -2,7 +2,7 @@
 
 [English](layout-sizes.md)
 
-이 제안은 plane의 layout을 바꾸는 모든 operation에 대한 크기 규칙 하나를 기술한다. 이것은 보류 중이다. 이것과 [groups](../spec/groups.ko.md)의 현재 규칙 사이의 선택은 열려 있고, 어떤 workbench도 이것을 구현하지 않는다. `pending`을 가진 `docs/spec/cases/layout/grid.json`의 case는 그 예를 기술한다([pending cases](../../packages/soksak/docs/layout.ko.md#pending-cases)). 모든 level에 같은 몫을 주는 balance와 card의 크기를 밝히는 거부는 모든 후보에서 성립하며 현재 contract의 일부다.
+이 제안은 plane의 layout을 바꾸는 모든 operation에 대한 크기 규칙 하나를 기술한다. 이것은 보류 중이다. 이것과 [groups](../spec/groups.ko.md)의 현재 규칙 사이의 선택은 열려 있고, 어떤 workbench도 이것을 구현하지 않는다. layout library가 그 두 primitive를 구현하며([add and remove](../../packages/soksak/docs/layout.ko.md#add-and-remove)), `docs/spec/cases/layout/grid.json`이 그 예를, `docs/spec/cases/layout/invariants.json`이 그 불변식을 검사한다. 모든 level에 같은 몫을 주는 balance와 card의 크기를 밝히는 거부는 모든 후보에서 성립하며 현재 contract의 일부다.
 
 ## 모델
 

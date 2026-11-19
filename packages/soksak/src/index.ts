@@ -1,12 +1,14 @@
 export { Soksak, checkState } from './soksak.js';
 export type {
   Axis,
+  Arriving,
   Box,
   Card,
   CardInit,
   Divider,
   Fill,
   FillOrder,
+  LeftCard,
   Member,
   Paid,
   Rect,
@@ -18,6 +20,7 @@ export type {
   Zone,
   ZoneHit,
   ZoneOptions,
+  Withdrawn,
 } from './soksak.js';
 
 export { contains, outline, roundedPath, unionLoops } from './outline.js';

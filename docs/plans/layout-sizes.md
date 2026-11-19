@@ -2,7 +2,7 @@
 
 [한국어](layout-sizes.ko.md)
 
-This proposal states one rule of sizes for every operation that changes the layout of a plane. It is pending: the choice between it and the current rules of [groups](../spec/groups.md) is open, and no workbench implements it. The cases of `docs/spec/cases/layout/grid.json` that carry `pending` state examples of it ([pending cases](../../packages/soksak/docs/layout.md#pending-cases)); a balance that gives every level equal shares and the refusal that names the size of a card hold under every candidate and are part of the current contract.
+This proposal states one rule of sizes for every operation that changes the layout of a plane. It is pending: the choice between it and the current rules of [groups](../spec/groups.md) is open, and no workbench implements it. The layout library implements its two primitives ([add and remove](../../packages/soksak/docs/layout.md#add-and-remove)), whose examples `docs/spec/cases/layout/grid.json` states and whose invariants `docs/spec/cases/layout/invariants.json` checks; a balance that gives every level equal shares and the refusal that names the size of a card hold under every candidate and are part of the current contract.
 
 ## Model
 

@@ -17,11 +17,11 @@
 import type { Axis, Card, CardInit, Rect, Side } from './card.js';
 import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import type { Box } from './cuts.js';
+import type { Arriving, Box, Withdrawn } from './cuts.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
-export type { Box, Member } from './cuts.js';
+export type { Arriving, Box, LeftCard, Member, Withdrawn } from './cuts.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
 /**
@@ -331,13 +331,24 @@ export declare class Soksak {
      * nothing, when no grid keeps every cell at least `minSize`.
      */
     arrange(mode: 'even'): boolean;
+    /**
+     * ADD (packages/soksak/docs/layout.md#cuts): adds `card`, a new card `{id, data?}` or what `withdraw` returned, beside `target`
+     * toward `side` and returns its id. `target` is a member id or the ids that neighbouring children of one cut hold. Throws its
+     * refusal, a result below a minimum included, and changes nothing.
+     */
+    insert(boxes: readonly Box[], target: string | readonly string[], side: Side, card: Arriving): string;
+    /**
+     * REMOVE (packages/soksak/docs/layout.md#cuts): takes the member `id`, a card or a box, out of its cut; the other children take
+     * its space in proportion to their sizes. Returns what left, which `insert` takes. Throws its refusal and changes nothing.
+     */
+    withdraw(boxes: readonly Box[], id: string): Withdrawn;
     /** Gives every child of every cut an equal share (packages/soksak/docs/layout.md#cuts). Throws for an arrangement that is not slicing. */
     even(boxes: readonly Box[]): void;
     /**
-     * Installs the plan that `make` makes of the arrangement with the paidBy records of the grid, as `balance` keeps them. The plan
-     * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a thousandth of a
-     * px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that moved. A throw
-     * puts the arrangement back.
+     * Installs the plan that `make` makes of the arrangement and its drawn rectangles with the paidBy records of the grid. The plan
+     * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a
+     * thousandth of a px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that
+     * moved. With `judged`, a result that draws a changed node below its minimum throws its text. A throw puts the arrangement back.
      */
     private byCuts;
     /**

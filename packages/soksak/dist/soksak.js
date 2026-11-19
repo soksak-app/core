@@ -18,7 +18,7 @@ import { AXES, SIDES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './
 import { cardInset, corridorOf, corridorWhenWide, crossing, declaredFor, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, sharePerSpan, slotSizes, slotWidths, zoneAt, } from './geometry.js';
 import { fillFor, isSlicing, ORDER } from './slicing.js';
 import { balanceRegions, sliceTree } from './balance.js';
-import { evenCuts } from './cuts.js';
+import { evenCuts, insertCard, withdrawMember } from './cuts.js';
 const EPS = 1e-9;
 /**
  * Slots to try when settling a change, nearest the boundary first: `from`,
@@ -981,28 +981,53 @@ export class Soksak {
         });
         return true;
     }
-    /** Gives every child of every cut an equal share (packages/soksak/docs/layout.md#cuts). Throws for an arrangement that is not slicing. */
-    even(boxes) {
-        this.byCuts((cells) => evenCuts(cells, boxes));
+    /**
+     * ADD (packages/soksak/docs/layout.md#cuts): adds `card`, a new card `{id, data?}` or what `withdraw` returned, beside `target`
+     * toward `side` and returns its id. `target` is a member id or the ids that neighbouring children of one cut hold. Throws its
+     * refusal, a result below a minimum included, and changes nothing.
+     */
+    insert(boxes, target, side, card) {
+        this.byCuts((cells, drawn) => insertCard(cells, boxes, drawn, target, side, card, this.g), true);
+        return card.id;
     }
     /**
-     * Installs the plan that `make` makes of the arrangement with the paidBy records of the grid, as `balance` keeps them. The plan
-     * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a thousandth of a
-     * px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that moved. A throw
-     * puts the arrangement back.
+     * REMOVE (packages/soksak/docs/layout.md#cuts): takes the member `id`, a card or a box, out of its cut; the other children take
+     * its space in proportion to their sizes. Returns what left, which `insert` takes. Throws its refusal and changes nothing.
      */
-    byCuts(make) {
+    withdraw(boxes, id) {
+        const prefer = this.fillOrder === 'v' ? ['x', 'y'] : ['y', 'x'];
+        let left = null;
+        this.byCuts((cells, drawn) => {
+            const out = withdrawMember(cells, boxes, drawn, id, prefer);
+            left = out.left;
+            return out.plan;
+        }, true);
+        return left;
+    }
+    /** Gives every child of every cut an equal share (packages/soksak/docs/layout.md#cuts). Throws for an arrangement that is not slicing. */
+    even(boxes) {
+        this.byCuts((cells, drawn) => evenCuts(cells, boxes, drawn), true);
+    }
+    /**
+     * Installs the plan that `make` makes of the arrangement and its drawn rectangles with the paidBy records of the grid. The plan
+     * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a
+     * thousandth of a px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that
+     * moved. With `judged`, a result that draws a changed node below its minimum throws its text. A throw puts the arrangement back.
+     */
+    byCuts(make, judged) {
         const kept = this.toJSON();
         const cells = { xs: kept.xs, ys: kept.ys, cards: this.list.map((card) => ({ ...card })) };
         try {
-            const plan = make(cells);
-            for (let pass = 0; pass < 8; pass++) {
+            const plan = make(cells, this.rects());
+            const rate = (axis) => sharePerSpan(this.plane, axis);
+            for (let pass = 0;; pass++) {
                 this.replace({ ...plan.layout(), paidBy: kept.paidBy });
-                const rate = (axis) => sharePerSpan(this.plane, axis);
-                if (plan.correct(this.rects(), rate) < 1e-3)
-                    return;
+                if (plan.correct(this.rects(), rate) < 1e-3 || pass === 7)
+                    break;
             }
-            this.replace({ ...plan.layout(), paidBy: kept.paidBy });
+            const below = judged ? plan.minimum(this.rects(), this.min) : null;
+            if (below)
+                throw new Error(below);
         }
         catch (error) {
             this.replace(kept);

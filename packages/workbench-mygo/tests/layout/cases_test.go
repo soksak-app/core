@@ -164,17 +164,12 @@ func TestGridCases(t *testing.T) {
 			Options json.RawMessage  `json:"options"`
 			State   *json.RawMessage `json:"state"`
 			Throws  *string          `json:"throws"`
-			Pending string           `json:"pending"`
 			Steps   []step           `json:"steps"`
 		} `json:"cases"`
 	}
 	caseFile(t, "grid.json", &file)
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
-			// A pending case waits for the decision that it names and does not run.
-			if kase.Pending != "" {
-				t.Skip(kase.Pending)
-			}
 			options := layout.DefaultOptions()
 			if kase.Options != nil {
 				decoder := json.NewDecoder(bytes.NewReader(kase.Options))
@@ -355,6 +350,28 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		var boxes []layout.Member
 		arg(t, s, 0, &boxes)
 		return nil, false, g.Even(boxes)
+	case "insert":
+		var (
+			boxes []layout.Member
+			to    layout.Target
+			side  layout.Side
+			piece layout.Piece
+		)
+		arg(t, s, 0, &boxes)
+		arg(t, s, 1, &to)
+		arg(t, s, 2, &side)
+		arg(t, s, 3, &piece)
+		born, err := g.Insert(boxes, to, side, piece)
+		return born, true, err
+	case "withdraw":
+		var (
+			boxes []layout.Member
+			id    string
+		)
+		arg(t, s, 0, &boxes)
+		arg(t, s, 1, &id)
+		left, err := g.Withdraw(boxes, id)
+		return left, true, err
 	case "balance":
 		balanced, err := g.Balance()
 		return balanced, true, err
