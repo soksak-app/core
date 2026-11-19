@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F904(두 sidecar의 screen row): 네 하위 항목과 함께 닫았다. screen row의 공유 case file은 없으며, sidecar와 plugin의 소유 test가 근거다. F899-1은 term plugin 항목의 merge를 기다린다.
 - F899-4(두 터미널 쌍의 터미널 상태): sidecar vt(S195)와 alacritty(S190)가 exit code와 함께 `idle`, `running`, `exited`를 보고하고 `shell.state.read`에 답하며, plugin terminal(P165)과 term(P44)이 status `<plugin>.state`를 보여 준다. 각각 공유 case를 red로, 그다음 green으로 실행했다. 변경은 sidecar release와 plugin pin 전까지 release되지 않았다. `waiting`과 agent 상태는 보류다.
 - F899-4.1(터미널 상태 contract): `docs/spec/terminal-state.md`가 두 터미널 쌍의 터미널 상태를 정의한다: OSC 133 mark에서 온 `idle`, `running`, `exited`, `D`의 exit code(0부터 255; named parameter가 아닌 다른 첫 parameter는 거부되는 mark), `exit`를 가진 변화 event `shell.state`, 답 `shell.state.current`를 가진 읽기 `shell.state.read`, plugin status `<plugin>.state`. `waiting`, `agent-busy`, `agent-waiting`은 그 조건과 함께 보류다. `docs/spec/cases/terminal-state/osc133.json`은 각 sidecar와 각 plugin이 실행하는 공유 case를 담는다.
 - F962-7: Go host는 `diagnostics.input.person`의 Windows 응답을 platform layer 밖에서 `runtime.GOOS`로 만들었고 `make check-platform-files`가 그것을 거부했다. 이제 두 host의 Windows platform은 `the action of a person is not implemented on windows`로 답하며, 변경 전에 `packages/host/go/src/diagnostics.go:345: Go runtime.GOOS outside platform/<os>/`로 실패한 check가 통과한다.
