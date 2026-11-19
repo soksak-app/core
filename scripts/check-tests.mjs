@@ -40,7 +40,7 @@ const lane = (capability, language, implementation, tests, options = {}) => ({
 const MATRIX = [
   lane("Makefile check targets", "build", ["Makefile"], ["scripts/test/repeat-rust.test.mjs", "scripts/test/platform/darwin/system/repeat-rust.test.mjs", "scripts/test/check-windows-build.test.mjs", "scripts/test/host-debug-check.test.mjs", "scripts/test/create-test-certificates.test.mjs", "scripts/test/macos-minimum-commands.test.mjs", "scripts/test/makefile-recipes.test.mjs"], { testLanguage: "js-ts", sharedTests: true }),
   lane("macOS application bundle preparation", "js-ts", ["scripts/platform/darwin/prepare-app-bundle.mjs"], ["scripts/test/platform/darwin/bundle-preparation.test.mjs"], { sharedTests: true }),
-  lane("sok submit guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs"], { testLanguage: "js-ts" }),
+  lane("sok agent guidance", "document", ["packages/sok/go/src/agents/SKILL.md", "packages/sok/go/src/agents/mcp.json", "docs/spec/cli.md"], ["scripts/test/submit-guidance.test.mjs", "scripts/test/skill-groups.test.mjs"], { testLanguage: "js-ts" }),
   lane("preflight check", "js-ts", ["scripts/check-preflight.mjs"], ["scripts/test/check-preflight.test.mjs"]),
   lane("CI workflows", "workflow", [".github/workflows/*.yml"], ["scripts/test/workflows.test.mjs", "scripts/test/test-kinds.test.mjs"], { testLanguage: "js-ts" }),
   lane("CI toolchain setup actions", "workflow", [".github/actions/setup-*/action.yml"], ["scripts/test/workflow-setup.test.mjs"], { testLanguage: "js-ts" }),
@@ -282,6 +282,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 // The inventory remains structural, and the behavior is proved by the referenced test.
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
+  {
+    id: "F952",
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "Run on a card that is already inside a group, it nests a new group inside that plane, so run it once per group." }],
+    tests: [
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the MCP instructions name the command that makes a group and its nesting" },
+    ],
+    expected: "The agent skill and the MCP instructions state that core.group.create nests a new group on a card inside a group and runs once per group, and how a card is added to the plane of a group.",
+    levels: ["unit"],
+  },
   {
     id: "F898",
     implementation: [{ file: "packages/sok/go/src/skill.go", symbol: "codexHome := false" }],
