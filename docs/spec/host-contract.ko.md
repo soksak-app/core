@@ -508,13 +508,17 @@ fn invalid_json_closes_connection() {
 | `verification.trace-switch.requires-the-test-switch` | test switch를 쥐지 않고 performance trace를 전환하는 test는 첫 호출에서 실패한다. 이 test-only case는 전환 자체를 검증하지 않는다. | tauriv2 only: 이 guard는 Rust host의 lib test에 속한다 |
 | `verification.case-player.plays-the-frames-before-the-client-close` | `sok` test의 case player는 남은 step 중 하나가 client의 close이면, client가 write와 같은 turn에 닫아도 client가 connection을 닫기 전에 쓴 frame을 재생한다. 이 test-only case는 host를 검증하지 않는다. | all |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |
-| `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답할 때까지 새 요청을 받지 않는다. | all |
+| `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답하거나 그 요청이 끝날 때까지 새 요청을 받지 않는다. | all |
+| `images.copy-path.screen-request-ends` | 응답되지 않은 screen 요청은 새 generation, 새 raster, 공급자 연결의 끝에서 답 없이 끝나며, 연결의 끝은 받아들인 화면도 버린다. 다음 요청은 `full: true`이고, 끝난 요청에 답하는 메시지는 `stale`이다. | all |
 | `images.copy-path.clock-tick` | 드로잉 region은 window 시계의 매 tick마다 sequence와 window의 refresh rate를 담은 tick을 하나씩 받는다. 드로잉 중이 아닌 region은 tick을 받지 않는다. | all |
 | `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 닿으면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
 | `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
 | `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |
 | `images.copy-path.screen-malformed-names-its-member` | 멤버가 없거나 타입이 틀린 screen 메시지, 또는 올바른 `row`나 `cells`가 없는 행은 `malformed` 오류와 첫 번째 그런 멤버의 점 경로로 답하며, 응답되지 않은 요청은 그대로 둔다. | all |
-| `images.copy-path.screen-without-name-is-not-answered` | 유효한 image `name`이 없는 screen 메시지는 답 없이 소비되며, 답은 image 이름으로 라우팅되므로 host는 이름이 없다는 오류 기록만 쓴다. | all |
+| `images.copy-path.screen-without-name-is-not-answered` | 유효한 image `name`이 없는 screen 메시지는 답 없이 소비되며, 답은 image 이름으로 라우팅되므로 host는 이름이 없고 답을 보내지 않는다는 오류 기록 하나만 쓴다. | all |
+| `images.copy-path.screen-null-is-mistyped` | 값이 `null`인 screen 멤버는 타입이 틀린 멤버이며, `null` screen은 멤버 `screen`에서 malformed이다. | all |
+| `images.copy-path.answer-of-no-request-names-it` | region이 갖지 않은 screen 요청의 답은 region 이름, 그 surface, 요청을 따옴표로 묶어 이름 붙이는 오류이다. | all |
+| `images.request-identifiers-are-random-text` | screen 요청 식별자는 `screen-`, detach 요청 식별자는 `image-detach-`이며, 그 뒤에 시스템의 random source에서 뽑은 base32 알파벳 26자가 붙는다. | all |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | all |
 | `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | all |
 | `performance.sampler.ends-with-the-switch` | 표본 추출은 trace가 켜진 동안 돌고, 꺼지면 끝나며, 다시 켜면 새로 시작한다. | all |
@@ -724,6 +728,7 @@ fn invalid_json_closes_connection() {
 | `images.wait.sidecar-end-ends-wait` | sidecar 연결의 끝은 그 sidecar 이름으로 그 region들의 raster wait를 끝낸다. 끝난 연결의 raster는 오지 않기 때문이다. window의 layout transaction의 끝은 그 안의 각 presentation 요청의 raster wait를 끝낸다. 어떤 raster wait도 시간으로 끝나지 않는다. | all |
 | `images.wait.ended-generation-does-not-block` | 표면 generation을 끝내면 표시 대기가 풀린다. | all |
 | `images.wait.ends-by-its-events` | 현재 raster의 presentation 대기에는 시간 제한이 없다. 필요한 각 raster의 presentation, 그 영역이나 표면의 제거, 그 supplier 연결의 끝, 기다리는 요청의 끝으로 끝난다. 요청의 끝은 presentation 요청에서는 ticket의 cancel이나 layout transaction의 끝이고, `host.window.presented`에서는 창의 close, main page process의 끝, endpoint 연결의 끝이다. layout transaction의 끝은 `host.window.presented`의 대기를 끝내지 않는다. 그 요청은 다음 layout이 보이는 raster를 기다린다. 실패는 호출자에게 돌아가고 application log에 줄을 쓰지 않는다. 기다린 요청이 실패를 알리기 때문이다. | all |
+| `images.wait.supplier-end-names-the-region` | raster를 가진 드로잉 region의 공급자 연결이 끝나면 이후의 presentation 대기는 `the supplier <sidecar> of the image region <surface>/<name> ended`로 실패하고, 다음 연결이 받는 configuration이 그 오류를 끝낸다. | all |
 | `images.visibility.survives-first-document-navigation` | 첫 문서 이동 전에 숨긴 표면은 이동 뒤에도 숨겨진 상태를 유지한다. | all |
 | `images.visibility.hidden-surface-defers-configuration` | 숨긴 표면의 이미지를 구성하면 표면이 보일 때까지 구성을 반환하지 않는다. | all |
 | `images.visibility.shown-surface-reconfigures-its-raster` | 숨겼다가 다시 보인 표면은 같은 크기라도 새 raster revision을 설정하므로, 표시 장벽은 숨긴 동안의 frame을 기다리지 않는다. | all |
@@ -737,7 +742,7 @@ fn invalid_json_closes_connection() {
 | `images.present.stale-native-raster-requests-reconfiguration` | native raster가 그림과 달라 거부된 표시는 stale로 응답하고, 그 전에 native raster의 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
 | `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
-| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
+| `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없거나, Go host에서 그 사이드카의 메시지를 받는 창이 없는 이미지 예약을 `image "<name>": reserve requires a sidecar`로 거부하고 아무것도 등록하지 않는다. | all |
 | `images.present.replaced-frame-is-logged-as-invalidated` | 더는 현재가 아닌 프레임(`stale`, `notAttached`, `staleRaster native=... frame=...`)은 `stale`로 답하고 표시 실패로 기록하지 않으며 `image frame invalidated before native presentation: ... reason=<detail>`을 남긴다. | all |
 | `images.present.frame-of-undeclared-sidecar-is-invalidated` | 어떤 plugin도 선언하지 않는 사이드카의 그림은 `stale`로 답하고 native 표시, 복구, 오류 없이 기록되며, 끝난 사이드카에 대한 답은 `not sent`로 기록된다. | all |
 | `images.present.failure-line-names-the-current-frame` | 다른 표시 실패는 그 사유(알 수 없는 상세는 `presentFailed`)로 답하고 오류 줄 `error host image present: ... reason=<detail> current <frame state>`를 남긴다. | all |

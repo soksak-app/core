@@ -417,7 +417,8 @@ fn a_rejected_detach_acknowledgement_ends_the_wait_with_the_supplier_reason() {
     );
 }
 
-// contract: images.reload.start-sends-detach-without-waiting, images.detach.surface-ends-after-its-last-detach, images.detach.ack-consumed
+// The request identifier is image-detach- and 26 characters of the base32 alphabet from the random source of the system.
+// contract: images.reload.start-sends-detach-without-waiting, images.detach.surface-ends-after-its-last-detach, images.detach.ack-consumed, images.request-identifiers-are-random-text
 #[test]
 fn a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images() {
     let fixture = fixture(
@@ -447,6 +448,10 @@ fn a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_ima
     );
 
     let first = pending_request(&fixture.sidecars, "region-one");
+    assert!(
+        crate::images::images_test::is_random_identifier(&first, "image-detach-"),
+        "detach request identifier {first:?}: image-detach- and 26 characters of the base32 alphabet"
+    );
     acknowledge(
         &fixture,
         "@fixture/sidecar-one",

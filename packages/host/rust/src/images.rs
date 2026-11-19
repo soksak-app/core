@@ -9,7 +9,6 @@
 //! thread is not awaited.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -160,6 +159,16 @@ fn answer_screen_locked(
     }
 }
 
+impl RasterState {
+    /// Ends the unanswered screen request of a region without an answer and drops its accepted screen, because no message can answer
+    /// the request any more: the generation or the raster of the region changed, or the connection of its supplier ended. The next
+    /// request of the region is then full (docs/spec/native-surfaces.md#copy-path-frames).
+    fn end_screen(&mut self) {
+        self.screen_request = None;
+        self.screen_baseline = None;
+    }
+}
+
 impl Inner {
     /// Records and returns the screen request of a drawing region that has no unanswered request, or None when the region gets none.
     fn new_screen_request(&mut self, key: &Key, cids: Vec<String>) -> Option<ScreenRequest> {
@@ -173,9 +182,8 @@ impl Inner {
         if !drawing || state.screen_request.is_some() {
             return None;
         }
-        let serial = NEXT_SCREEN_REQUEST.fetch_add(1, Ordering::Relaxed);
         let request = ScreenRequest {
-            request: format!("screen-{}-{serial}", std::process::id()),
+            request: format!("screen-{}", random_text()),
             name: key.1.clone(),
             generation: state.generation,
             raster: state.raster,
@@ -241,6 +249,7 @@ impl Inner {
                 state.last_sequence = 0;
                 state.presented_raster = 0;
                 state.presented_sequence = 0;
+                state.end_screen();
             }
         }
         generation
@@ -338,8 +347,20 @@ pub struct Tick {
 /// The age of a user input at which its screen request is sent at once (docs/spec/native-surfaces.md#copy-path-frames).
 const INPUT_DRAW_WINDOW: Duration = Duration::from_millis(200);
 
-/// The serial of the screen requests of this process.
-static NEXT_SCREEN_REQUEST: AtomicU64 = AtomicU64::new(1);
+/// The base32 alphabet of RFC 4648, the characters of random_text.
+const RANDOM_TEXT_ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+/// Returns 26 characters of the base32 alphabet drawn from the random source of the system, at least 128 random bits, so a request
+/// identifier stays unique across restarts as the request identifiers of the Go host (crypto/rand Text) do
+/// (docs/spec/native-surfaces.md#copy-path-frames). Go ends the process when the random source fails, and so does this host.
+pub(crate) fn random_text() -> String {
+    let mut bytes = [0u8; 26];
+    getrandom::fill(&mut bytes).expect("the random source of the system gives no bytes");
+    bytes
+        .iter()
+        .map(|byte| char::from(RANDOM_TEXT_ALPHABET[usize::from(byte % 32)]))
+        .collect()
+}
 
 /// The drawing state of an image region to send to its supplier (docs/spec/native-surfaces.md#image-regions).
 #[derive(Clone, Debug, Serialize)]
@@ -735,6 +756,7 @@ impl Images {
                     state.last_sequence = 0;
                     state.presented_sequence = 0;
                     state.presentation_error = None;
+                    state.end_screen();
                 }
             }
         }
@@ -949,10 +971,15 @@ impl Images {
             state.presented_sequence = 0;
             // The raster of a lost connection that a wait waits for never presents, so that wait ends here with the
             // supplier that ended; the configure of the new connection clears it.
-            state.presentation_error =
-                waited.then(|| format!("the supplier connection of {sidecar} ended"));
-            // The service of the new connection has no drawing state either.
+            state.presentation_error = waited.then(|| {
+                format!(
+                    "the supplier {sidecar} of the image region {}/{} ended",
+                    key.0, key.1
+                )
+            });
+            // The service of the new connection has no drawing state and no screen of the region either.
             state.drawing_sent = None;
+            state.end_screen();
             invalidated += 1;
         }
         if invalidated > 0 {
@@ -1011,6 +1038,7 @@ impl Images {
             state.configured = false;
             state.presented_sequence = 0;
             state.presentation_error = None;
+            state.end_screen();
             self.changed();
         }
         // A supplier opens the session of a region at the size of its configuration, so a region of a window that is off
@@ -1550,7 +1578,7 @@ mod draw_covered;
 
 #[cfg(test)]
 #[path = "images_test.rs"]
-mod images_test;
+pub(crate) mod images_test;
 
 #[cfg(test)]
 #[path = "images_relay_test.rs"]
@@ -2216,12 +2244,8 @@ where
             true
         }
         Decision::Malformed { member, text, echo } => {
-            log_error(
-                "image screen",
-                format!("surface={surface} sender={sender} {text}"),
-            );
-            // The answer is routed by the image name. A message without a valid name names no image, so the error is logged
-            // and no answer is sent.
+            // The answer is routed by the image name. A message without a valid name names no image, so its one error record
+            // says that no answer is sent.
             let Some(name) = echo
                 .get("name")
                 .and_then(serde_json::Value::as_str)
@@ -2230,11 +2254,15 @@ where
                 log_error(
                     "image screen",
                     format!(
-                        "surface={surface} sender={sender} image name is missing, so the malformed answer is not sent"
+                        "surface={surface} sender={sender} {text}; the message names no image, so no answer is sent"
                     ),
                 );
                 return true;
             };
+            log_error(
+                "image screen",
+                format!("surface={surface} sender={sender} {text}"),
+            );
             let mut screen = echo;
             screen.insert("error".to_string(), "malformed".into());
             screen.insert("member".to_string(), member.into());

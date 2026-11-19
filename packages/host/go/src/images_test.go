@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -864,9 +865,11 @@ func TestTheEndOfItsRequestEndsTheWaitOfTheCurrentRasters(t *testing.T) {
 	}
 }
 
-// contract: images.copy-path.screen-request
+// contract: images.copy-path.screen-request, images.request-identifiers-are-random-text, images.copy-path.answer-of-no-request-names-it
 // A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
-// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames). The request identifier is screen- and
+// 26 characters of the base32 alphabet from the random source of the system, and an answer of a request that the region does not hold
+// is an error that names the region, its surface and the request.
 func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
 	images := NewImages()
 	key := ImageKey{Surface: "tab-1", Name: "copy"}
@@ -886,6 +889,9 @@ func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
 		t.Fatalf("a drawing region got %d screen requests, want 1", len(requests))
 	}
 	first := requests[0]
+	if !regexp.MustCompile(`^screen-[A-Z2-7]{26}$`).MatchString(first.Request) {
+		t.Fatalf("screen request identifier %q, want screen- and 26 characters of the base32 alphabet", first.Request)
+	}
 	if !first.Full || first.Generation != raster.Generation || first.Raster != raster.Raster {
 		t.Fatalf("first screen request %+v: want full for generation %d raster %d", first, raster.Generation, raster.Raster)
 	}
@@ -901,12 +907,88 @@ func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
 	if again := images.ScreenRequests(); len(again) != 0 {
 		t.Fatalf("a region with an unanswered screen request got another one: %+v", again)
 	}
+	err = images.AnswerScreen(key, ImageScreenRequest{Request: "screen-old"}, true)
+	if want := `image "copy" of surface "tab-1" has no unanswered screen request "screen-old"`; err == nil || err.Error() != want {
+		t.Fatalf("answer of a request that the region does not hold: %v, want %s", err, want)
+	}
 	if err := images.AnswerScreen(key, first, true); err != nil {
 		t.Fatalf("answer screen request: %v", err)
 	}
 	next := images.ScreenRequests()
 	if len(next) != 1 || next[0].Full || next[0].Request == first.Request {
 		t.Fatalf("after an accepted screen the next request is %+v: want one request with full false and a new identifier", next)
+	}
+}
+
+// contract: images.copy-path.screen-request-ends
+// An unanswered screen request ends without an answer when its region moves to a new generation, when the raster of the region changes and
+// when the connection of its supplier ends; the end of the connection also drops the accepted screen. The region then receives a new request
+// with full true, and a message that answers the ended request is stale (docs/spec/native-surfaces.md#copy-path-frames).
+func TestAnUnanswerableScreenRequestEndsAndTheNextRequestIsFull(t *testing.T) {
+	images, key, _, first := screenFixture(t)
+	if err := images.AnswerScreen(key, first, true); err != nil {
+		t.Fatalf("answer screen request: %v", err)
+	}
+	baseline := images.ScreenRequests()
+	if len(baseline) != 1 || baseline[0].Full {
+		t.Fatalf("after an accepted screen the request is %+v, want one request with full false", baseline)
+	}
+	steps := []struct {
+		name string
+		end  func()
+	}{
+		{"the end of the supplier connection", func() { images.InvalidateSidecar("sidecar-a") }},
+		{"a new raster size", func() {
+			if _, err := images.ConfigureRaster(key, 1000, 600, 2, true); err != nil {
+				t.Fatalf("configure image: %v", err)
+			}
+		}},
+		{"the showing of the hidden surface", func() {
+			images.SetSurfaceVisible(key.Surface, false)
+			images.SetSurfaceVisible(key.Surface, true)
+		}},
+		{"a new generation", func() { images.BeginGeneration(key.Surface) }},
+	}
+	ended := baseline[0]
+	for _, step := range steps {
+		step.end()
+		requests := images.ScreenRequests()
+		if len(requests) != 1 || !requests[0].Full || requests[0].Request == ended.Request {
+			t.Fatalf("after %s the requests are %+v, want one request with full true and a new identifier", step.name, requests)
+		}
+		late := screenMessageBody(t, map[string]any{
+			"request": ended.Request, "name": "copy", "generation": ended.Generation, "raster": ended.Raster,
+			"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+		})
+		handled, answers, err := handleScreenMessage(images, late, "sidecar-a", key.Surface)
+		want := fmt.Sprintf(`{"image":{"screen":{"error":"stale","generation":%d,"name":"copy","raster":%d,"request":%q}}}`,
+			ended.Generation, ended.Raster, ended.Request)
+		if err != nil || !handled || !reflect.DeepEqual(answers, []string{want}) {
+			t.Fatalf("after %s the answer of the ended request: handled %t, answers %v, error %v; want [%s]", step.name, handled, answers, err, want)
+		}
+		ended = requests[0]
+	}
+}
+
+// contract: images.wait.supplier-end-names-the-region
+// The end of the supplier connection of a drawing region with a raster fails a presentation wait with the error that names the supplier
+// and the region, and the configuration that the next connection receives ends that error (docs/spec/native-surfaces.md#image-regions).
+func TestTheEndOfASupplierFailsTheWaitUntilTheRegionIsConfiguredAgain(t *testing.T) {
+	images, key, raster, _ := screenFixture(t)
+	images.InvalidateSidecar("sidecar-a")
+	err := images.WaitCurrentError(nil)
+	if want := "the supplier sidecar-a of the image region tab-1/copy ended"; err == nil || err.Error() != want {
+		t.Fatalf("the wait after the end of the supplier ended with %v, want %s", err, want)
+	}
+	configuration, err := images.ConfigureRaster(key, raster.Width, raster.Height, raster.Scale, true)
+	if err != nil || configuration == nil {
+		t.Fatalf("configure the region for the next connection: %+v, %v", configuration, err)
+	}
+	images.mu.Lock()
+	presentationError := images.states[key].PresentationError
+	images.mu.Unlock()
+	if presentationError != "" {
+		t.Fatalf("the configuration of the next connection kept the error %q", presentationError)
 	}
 }
 
@@ -1129,6 +1211,11 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 		{"negative raster", "raster", func(m map[string]any) { m["raster"] = -1 }, "image screen message has no valid raster"},
 		{"missing rows", "rows", func(m map[string]any) { delete(m, "rows") }, "image screen message has no rows array"},
 		{"row without cells", "rows.0.cells", func(m map[string]any) { m["rows"] = []any{map[string]any{"row": 0}} }, "image screen message row 0 has no cells"},
+		{"null request", "request", func(m map[string]any) { m["request"] = nil }, "image screen message has no request"},
+		{"null generation", "generation", func(m map[string]any) { m["generation"] = nil }, "image screen message has no valid generation"},
+		{"null raster", "raster", func(m map[string]any) { m["raster"] = nil }, "image screen message has no valid raster"},
+		{"null rows", "rows", func(m map[string]any) { m["rows"] = nil }, "image screen message has no rows array"},
+		{"null row number", "rows.0.row", func(m map[string]any) { m["rows"] = []any{map[string]any{"row": nil, "cells": "row-0"}} }, "image screen message row 0 has no valid row number"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1162,9 +1249,26 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 	}
 }
 
+// contract: images.copy-path.screen-null-is-mistyped
+// A screen member whose value is null is mistyped: a null screen is malformed at the member screen, as a screen that is not an object is
+// (docs/spec/native-surfaces.md#copy-path-frames). Its message names no image, so the host sends no answer.
+func TestANullScreenIsMalformedAtTheMemberScreen(t *testing.T) {
+	images, key, _, _ := screenFixture(t)
+	body := []byte(`{"image":{"screen":null}}`)
+	malformed, ok := Decide(body, "sidecar-a", key.Surface, images).(*MalformedScreen)
+	if !ok || malformed.Member != "screen" || malformed.Text != "image screen message has no screen object" {
+		t.Fatalf("decision of a null screen = %+v, want the member screen with the text image screen message has no screen object", malformed)
+	}
+	handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
+	if err != nil || !handled || len(answers) != 0 {
+		t.Fatalf("a null screen handled %t, answers %v, error %v; want handled with no answer", handled, answers, err)
+	}
+}
+
 // contract: images.copy-path.screen-without-name-is-not-answered
 // A screen message without a valid image name is consumed and sends no answer, because the answer is routed by the image name.
 func TestScreenMessageWithoutNameIsNotAnswered(t *testing.T) {
+	isolateTraceRecords(t)
 	images, key, raster, first := screenFixture(t)
 	member := map[string]any{
 		"request": first.Request, "generation": raster.Generation, "raster": raster.Raster,
@@ -1176,8 +1280,19 @@ func TestScreenMessageWithoutNameIsNotAnswered(t *testing.T) {
 	if !ok || !strings.Contains(malformed.Error(), "image screen message has no image name") {
 		t.Fatalf("decision of the screen message without a name = %T %v, want an error that names the image name", decision, decision)
 	}
-	handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
+	// The sender of its own names the records of this message among the records of the other tests.
+	handled, answers, err := handleScreenMessage(images, body, "sidecar-unnamed", key.Surface)
 	if err != nil || !handled || len(answers) != 0 {
 		t.Fatalf("screen message without a name handled %t, answers %v, error %v; want handled with no answer", handled, answers, err)
+	}
+	want := []string{"surface=tab-1 sender=sidecar-unnamed image screen message has no image name; the message names no image, so no answer is sent"}
+	var texts []string
+	for _, record := range bufferedTraces(t, "host.record.error") {
+		if text := fmt.Sprint(record["text"]); record["where"] == "image screen" && strings.Contains(text, " sender=sidecar-unnamed ") {
+			texts = append(texts, text)
+		}
+	}
+	if !reflect.DeepEqual(texts, want) {
+		t.Fatalf("error records of the screen message without a name %q, want %q", texts, want)
 	}
 }

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, TrySendError, sync_channel};
 use std::sync::{Arc, PoisonError};
 use std::thread::JoinHandle;
@@ -10,9 +9,6 @@ use serde_json::value::RawValue;
 use super::{ImageDetachWaiter, Owner, Sidecars};
 use crate::application_log::log_error;
 use crate::images::{DetachTarget, Images};
-
-/// One service can serve multiple windows, so request ids share one process-wide sequence.
-static NEXT_IMAGE_DETACH_REQUEST: AtomicU64 = AtomicU64::new(1);
 
 /// The end of one image detach request.
 #[derive(Debug, PartialEq, Eq)]
@@ -204,12 +200,7 @@ impl<O: Owner> Sidecars<O> {
         {
             return Err(format!("{text} has an incomplete target"));
         }
-        let serial = NEXT_IMAGE_DETACH_REQUEST
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-                value.checked_add(1)
-            })
-            .map_err(|_| format!("{text}: image detach request identifiers are exhausted"))?;
-        let request = format!("image-detach-{}-{serial}", std::process::id());
+        let request = format!("image-detach-{}", crate::images::random_text());
         let (sender, receiver) = sync_channel(1);
         self.core
             .state

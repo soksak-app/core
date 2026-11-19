@@ -745,22 +745,29 @@ func TestSurfaceCloseRemovesOnlyItsImages(t *testing.T) {
 }
 
 // contract: images.attach.rejects-reservation-without-sidecar
-func TestReserveRejectsNilOwner(t *testing.T) {
-	images := host.NewImages()
-	key := host.ImageKey{Surface: "tab-1", Name: "view"}
-
-	// Tries reserve with a nil owner
-	err := images.Reserve(key, nil)
-	if err == nil {
-		t.Fatal("expected error for nil owner, got nil")
-	}
-	if !strings.Contains(err.Error(), "owner is required") {
-		t.Fatalf("expected 'owner is required' error, got %v", err)
-	}
-
-	// Checks that no image was registered
-	if _, err := images.Get(key); err == nil {
-		t.Fatal("image should not be registered after failed reserve")
+// A reservation whose owner names no supplier sidecar, or has no window that receives the messages of that supplier, is
+// rejected and registers nothing: a region without a supplier would send its drawing state and configurations to no one.
+func TestReserveRejectsAnOwnerWithoutASupplier(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		owner *host.ImageOwner
+	}{
+		{"nil owner", nil},
+		{"empty owner", &host.ImageOwner{}},
+		{"no window", &host.ImageOwner{SidecarName: "sidecar-a"}},
+		{"no sidecar", &host.ImageOwner{SidecarOwner: support.NewSidecarRecorder(t, "")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			images := host.NewImages()
+			key := host.ImageKey{Surface: "tab-1", Name: "view"}
+			err := images.Reserve(key, tc.owner)
+			if want := `image "view": reserve requires a sidecar`; err == nil || err.Error() != want {
+				t.Fatalf("reserve with %s: %v, want %s", tc.name, err, want)
+			}
+			if _, err := images.Get(key); err == nil {
+				t.Fatal("image should not be registered after failed reserve")
+			}
+		})
 	}
 }
 

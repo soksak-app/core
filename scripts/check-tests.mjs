@@ -13999,6 +13999,65 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F935",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again." },
+      { file: "packages/host/rust/src/images.rs", symbol: "the supplier {sidecar} of the image region {}/{} ended" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestTheEndOfASupplierFailsTheWaitUntilTheRegionIsConfiguredAgain" },
+      { file: "packages/host/rust/src/images_test.rs", id: "the_end_of_a_supplier_fails_the_wait_until_the_region_is_configured_again" },
+    ],
+    expected: "Both hosts fail a wait after the end of a supplier connection with the error that names the supplier and the region, and end it at the next configuration.",
+    levels: ["unit"],
+  },
+  {
+    id: "F934",
+    implementation: [{ file: "packages/host/go/src/images.go", symbol: "if owner == nil || owner.SidecarName == \"\" || owner.SidecarOwner == nil {" }],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestReserveRejectsAnOwnerWithoutASupplier" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "reserve_rejects_empty_sidecar" },
+    ],
+    expected: "The Go host refuses an image reservation whose owner has no supplier sidecar or no window, with the text of the Rust host.",
+    levels: ["unit"],
+  },
+  {
+    id: "F929",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "return ok && string(raw) != \"null\" && json.Unmarshal(raw, target) == nil" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "plugin event %q cannot set its owning surface" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "if event.len() > plugin_prefix.len() && event.starts_with(&plugin_prefix) {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn random_text() -> String {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestMalformedScreenMessageNamesItsMember" },
+      { file: "packages/host/go/src/images_test.go", id: "TestANullScreenIsMalformedAtTheMemberScreen" },
+      { file: "packages/host/go/src/images_test.go", id: "TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered" },
+      { file: "packages/host/go/src/images_test.go", id: "TestScreenMessageWithoutNameIsNotAnswered" },
+      { file: "packages/host/go/src/view_wire_test.go", id: "TestViewWire" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_null_screen_is_malformed_at_the_member_screen" },
+      { file: "packages/host/rust/src/images_test.rs", id: "drawing_region_receives_one_screen_request_until_it_is_answered" },
+      { file: "packages/host/rust/src/images_test.rs", id: "screen_message_without_name_is_not_answered" },
+      { file: "packages/host/rust/src/image_detach_test.rs", id: "a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images" },
+      { file: "packages/host/rust/tests/view_wire_test.rs", id: "every_view_wire_case_with_replay_true_gives_its_recorded_reply" },
+    ],
+    expected: "Both hosts refuse a null screen member, use the view batch refusal texts of the logging specification, quote the names of an answer error, write one record for a screen message without a name, and draw request identifiers from the random source of the system.",
+    levels: ["unit"],
+  },
+  {
+    id: "F928",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func endScreenLocked(state *ImageRasterState) {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn end_screen(&mut self) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestAnUnanswerableScreenRequestEndsAndTheNextRequestIsFull" },
+      { file: "packages/host/rust/src/images_test.rs", id: "an_unanswerable_screen_request_ends_and_the_next_request_is_full" },
+    ],
+    expected: "An unanswered screen request ends at a new generation, a new raster and the end of the supplier connection, and the next request is full.",
+    levels: ["unit"],
+  },
+  {
     id: "F925",
     implementation: [
       { file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" },
