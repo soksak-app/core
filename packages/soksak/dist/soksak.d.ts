@@ -17,9 +17,11 @@
 import type { Axis, Card, CardInit, Rect, Side } from './card.js';
 import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Box } from './cuts.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
+export type { Box, Member } from './cuts.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
 /**
@@ -329,6 +331,15 @@ export declare class Soksak {
      * nothing, when no grid keeps every cell at least `minSize`.
      */
     arrange(mode: 'even'): boolean;
+    /** Gives every child of every cut an equal share (packages/soksak/docs/layout.md#cuts). Throws for an arrangement that is not slicing. */
+    even(boxes: readonly Box[]): void;
+    /**
+     * Installs the plan that `make` makes of the arrangement with the paidBy records of the grid, as `balance` keeps them. The plan
+     * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a thousandth of a
+     * px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that moved. A throw
+     * puts the arrangement back.
+     */
+    private byCuts;
     /**
      * Gives every card a fair share of the plane and keeps the arrangement.
      *
