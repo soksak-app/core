@@ -1,0 +1,522 @@
+{
+  "name": "layout-change-commands",
+  "description": "The page runs five commands: a split of a card, a focus that leaves the layout as it was, a rename of a card that is no group, which fails, a rename of the group and a command that renames the group in a later step. Each command that changed the stored layout of the space is the event workbench.layout.change with its name, its parameters, its answer and the stored layout that it left, before its event workbench.command; the focus and the failed rename write none.",
+  "replay": false,
+  "reason": "The case runs the commands of the page workbench, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "filter": [
+    "notificationState"
+  ],
+  "variables": {
+    "clock-ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "clock-ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "clock-ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "clock-ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "clock-ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "host"
+    },
+    "clock-mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "host"
+    },
+    "page-identity": {
+      "type": "string",
+      "example": "9f20fb6e-7f94-435d-8c8d-af8e028b35a1",
+      "source": "page"
+    },
+    "split-result": {
+      "type": "string",
+      "example": "{\"card\":\"card-5\",\"tab\":\"tab-aaaaaaaa\"}",
+      "source": "page"
+    },
+    "ts-us-1": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-1": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "layout-1": {
+      "type": "string",
+      "example": "{\"state\":{},\"groups\":[],\"leader\":null,\"lastCard\":1}",
+      "source": "page"
+    },
+    "ts-us-2": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-2": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "micros-1": {
+      "type": "integer",
+      "example": 12000,
+      "source": "page"
+    },
+    "ts-us-3": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-3": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "micros-2": {
+      "type": "integer",
+      "example": 12000,
+      "source": "page"
+    },
+    "ts-us-4": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-4": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "micros-3": {
+      "type": "integer",
+      "example": 12000,
+      "source": "page"
+    },
+    "ts-us-5": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-5": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "layout-2": {
+      "type": "string",
+      "example": "{\"state\":{},\"groups\":[],\"leader\":null,\"lastCard\":1}",
+      "source": "page"
+    },
+    "ts-us-6": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-6": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "micros-4": {
+      "type": "integer",
+      "example": 12000,
+      "source": "page"
+    },
+    "ts-us-7": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-7": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "layout-3": {
+      "type": "string",
+      "example": "{\"state\":{},\"groups\":[],\"leader\":null,\"lastCard\":1}",
+      "source": "page"
+    },
+    "ts-us-8": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-8": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "micros-5": {
+      "type": "integer",
+      "example": 12000,
+      "source": "page"
+    },
+    "ts-us-9": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-9": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "ts-us-10": {
+      "type": "integer",
+      "example": 1791000000000456,
+      "source": "page"
+    },
+    "mono-ns-10": {
+      "type": "integer",
+      "example": 5000000789,
+      "source": "page"
+    },
+    "trip-us": {
+      "type": "integer",
+      "example": 0,
+      "source": "page"
+    },
+    "resolution-us": {
+      "type": "integer",
+      "example": 1,
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-1",
+          "mono_ns": "$clock-mono-ns-1"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-2",
+          "mono_ns": "$clock-mono-ns-2"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-3",
+          "mono_ns": "$clock-mono-ns-3"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-4",
+          "mono_ns": "$clock-mono-ns-4"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "clock"
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": {
+          "ts_us": "$clock-ts-us-5",
+          "mono_ns": "$clock-mono-ns-5"
+        }
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-1",
+              "mono_ns": "$mono-ns-1",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.clock",
+              "fields": {
+                "trip_us": "$trip-us",
+                "resolution_us": "$resolution-us"
+              }
+            },
+            {
+              "ts_us": "$ts-us-2",
+              "mono_ns": "$mono-ns-2",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.layout.change",
+              "fields": {
+                "command": "core.card.split",
+                "params": "{\"card\":\"card-2\",\"side\":\"bottom\",\"plugin\":\"fixture-plain\"}",
+                "paramsTruncated": false,
+                "result": "$split-result",
+                "layout": "$layout-1",
+                "layoutTruncated": false
+              }
+            },
+            {
+              "ts_us": "$ts-us-3",
+              "mono_ns": "$mono-ns-3",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.command",
+              "fields": {
+                "name": "core.card.split",
+                "micros": "$micros-1",
+                "ok": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-4",
+              "mono_ns": "$mono-ns-4",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.command",
+              "fields": {
+                "name": "core.card.focus",
+                "micros": "$micros-2",
+                "ok": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-5",
+              "mono_ns": "$mono-ns-5",
+              "start": "$page-identity",
+              "level": "warn",
+              "event": "workbench.command",
+              "fields": {
+                "name": "core.group.rename",
+                "micros": "$micros-3",
+                "ok": false,
+                "error": "-32000: card card-1 is not a group"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-6",
+              "mono_ns": "$mono-ns-6",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.layout.change",
+              "fields": {
+                "command": "core.group.rename",
+                "params": "{\"group\":\"card-3\",\"name\":\"그룹 2\"}",
+                "paramsTruncated": false,
+                "result": "{\"group\":\"card-3\",\"name\":\"그룹 2\"}",
+                "layout": "$layout-2",
+                "layoutTruncated": false
+              }
+            },
+            {
+              "ts_us": "$ts-us-7",
+              "mono_ns": "$mono-ns-7",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.command",
+              "fields": {
+                "name": "core.group.rename",
+                "micros": "$micros-4",
+                "ok": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-8",
+              "mono_ns": "$mono-ns-8",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.layout.change",
+              "fields": {
+                "command": "core.fixture.rename-later",
+                "params": "{\"name\":\"그룹 3\"}",
+                "paramsTruncated": false,
+                "result": "null",
+                "layout": "$layout-3",
+                "layoutTruncated": false
+              }
+            },
+            {
+              "ts_us": "$ts-us-9",
+              "mono_ns": "$mono-ns-9",
+              "start": "$page-identity",
+              "level": "debug",
+              "event": "workbench.command",
+              "fields": {
+                "name": "core.fixture.rename-later",
+                "micros": "$micros-5",
+                "ok": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "log",
+        "payload": {
+          "action": "batch",
+          "events": [
+            {
+              "ts_us": "$ts-us-10",
+              "mono_ns": "$mono-ns-10",
+              "start": "$page-identity",
+              "level": "info",
+              "event": "workbench.log.gated",
+              "fields": {
+                "class": "input",
+                "level": "debug",
+                "count": 3
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}
