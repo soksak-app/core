@@ -1520,6 +1520,262 @@
           }
         }
       ]
+    },
+    {
+      "name": "create sets the leader and the leader color",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ],
+            "leader": "b",
+            "leaderColor": "#00ff00"
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "a",
+                "b"
+              ],
+              "leader": "b",
+              "color_token": "party-1",
+              "leaderColor": "#00ff00",
+              "reason": "created"
+            },
+            "taken": [],
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [],
+                "leader": "b",
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create refuses a leader that is not among its cards",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ],
+            "leader": "c"
+          },
+          "error": "leader c is not in the party"
+        }
+      ]
+    },
+    {
+      "name": "add of a card that is already in the party changes nothing",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.add",
+          "params": {
+            "party": "p1",
+            "card": "a"
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "a",
+                "b"
+              ],
+              "leader": null,
+              "color_token": "party-1",
+              "leaderColor": null
+            },
+            "taken": [],
+            "changed": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "a new party takes the color of a deleted party",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 4,
+            "c1": 5,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "e",
+            "c0": 6,
+            "c1": 7,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "f",
+            "c0": 7,
+            "c1": 8,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b"
+            ]
+          }
+        },
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "c",
+              "d"
+            ]
+          }
+        },
+        {
+          "call": "core.party.delete",
+          "params": {
+            "party": "p1"
+          }
+        },
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "e",
+              "f"
+            ]
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "e",
+                "f"
+              ],
+              "leader": null,
+              "color_token": "party-1",
+              "leaderColor": null,
+              "reason": "created"
+            },
+            "taken": [],
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
