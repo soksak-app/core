@@ -267,7 +267,12 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			if held == nil || held.item != item {
 				return false
 			}
-			s.planes.MergeCoincident(held.axis, held.line)
+			// The drag shows the boundary while it moves; its result is the command core.boundary.move from the start of the drag to
+			// where it ends, which gives the result of every move of a boundary and its record (docs/spec/exposure.md).
+			end := s.plane.BoundaryPos(held.axis, held.line)
+			s.planes.MoveBoundary(held.axis, held.line, held.base, false)
+			s.held = nil
+			s.binder.run("core.boundary.move", boundaryParam{Axis: held.axis, Line: held.line, Position: &end})
 			s.settle()
 			return true
 		case ui.InputKeyDown:
