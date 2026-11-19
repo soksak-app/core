@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-20
+
+- F944: mygo에서 켜진 면이 하나뿐일 때 그 면의 창 사이드바가 스위치나 접기 control로 끄면 plane을 떠난다. `packages/workbench-mygo/src/layout/sidebars.go`의 `ArrangeWindowSidebars`가 면이 없는 배치를 같은 plane 상태에서 거부된 배치로 보았고, 이제 거부 기록이 있을 때만 거부로 본다. 검증: `TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff`가 바뀌지 않은 code에서 실패하고 이제 통과한다. mygo, Wails, Tauri debug application이 네 면을 각각 스위치와 접기 control로 켜고 끄며, 그려진 사이드바가 설정과 같다.
+
 ## 2026-11-19
 
 - F938: host의 시작이 돌지 않고 writer가 붙지 않은 동안 일어난 Go host의 goroutine panic은 record와 stack을 표준 오류에 쓰고 프로세스를 바로 끝내므로, goroutine이 panic한 host package의 test는 그 test에서 실패한다. 전에는 record가 어떤 시작도 붙이지 않는 writer를 기다렸으므로, test는 통과하고 프로세스는 writer를 붙인 나중 test에서 상태 2로 끝났다. `Prepare`가 시작의 시작(`NotifyStartBegan`)을 기록하고, 그 뒤의 panic만 writer를 기다린다(`docs/spec/hosts.md#process-lifecycle`, contract case `log.panic.without-start-ends-the-process-at-the-panic`). Red와 Green: `TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic`.

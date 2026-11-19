@@ -14005,6 +14005,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F944",
+    implementation: [{ file: "packages/workbench-mygo/src/layout/sidebars.go", symbol: "refused := g.dockRefused != nil && g.dockToken == planeToken(g) && slices.Equal(arranged, g.dockRefused)" }],
+    tests: [{ file: "packages/workbench-mygo/tests/layout/window_sidebars_test.go", id: "TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff" }],
+    expected: "The window sidebar of the only side that is on leaves the plane when its switch turns off.",
+    levels: ["unit"],
+  },
+  {
     id: "F938",
     implementation: [
       { file: "packages/host/go/src/event_record.go", symbol: "func NotifyStartBegan() {" },

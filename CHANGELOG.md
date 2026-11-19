@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-20
+
+- F944: In mygo the window sidebar of the only side that is on leaves the plane when its switch or its fold control turns it off: `ArrangeWindowSidebars` of `packages/workbench-mygo/src/layout/sidebars.go` took an arrangement without any side for the refused arrangement of the same plane state, and now takes a refusal only while one is recorded. Validation: `TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff` failed on the unchanged code and passes; the mygo, Wails and Tauri debug applications turn each of the four sides on and off through the switch and the fold control with the drawn sidebars equal to the settings.
+
 ## 2026-11-19
 
 - F938: A goroutine panic of the Go host that happens while no start of the host runs and no writer is attached writes its record with the stack to the standard error and ends the process at once, so a test of the host packages whose goroutine panics fails at that test. Before, the record waited for a writer that no start attaches, so the test passed and the process ended with status 2 at a later test that attached a writer. `Prepare` records the begin of the start (`NotifyStartBegan`), and only a panic after it waits for the writer (`docs/spec/hosts.md#process-lifecycle`, contract case `log.panic.without-start-ends-the-process-at-the-panic`). Red and Green: `TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic`.
