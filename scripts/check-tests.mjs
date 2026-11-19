@@ -14006,6 +14006,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) levelSplit" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) headStep" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CenterBoundary" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) MoveBoundaryTo" },
       { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func (g *Grid) moveLinePast" },
       { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
     ],

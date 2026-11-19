@@ -257,7 +257,7 @@ func (s *Shell) register() {
 		if value.Position == nil {
 			return nil, fmt.Errorf("core.boundary.move: position is missing")
 		}
-		moved := s.planes.MoveBoundary(value.Axis, value.Line, *value.Position, false)
+		moved := s.planes.MoveBoundaryTo(value.Axis, value.Line, *value.Position)
 		s.settle()
 		return map[string]float64{"position": moved}, nil
 	})

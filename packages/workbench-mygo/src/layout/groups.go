@@ -1308,6 +1308,15 @@ func (t *GroupTree) CenterBoundary(axis Axis, line int) float64 {
 	return at
 }
 
+// MoveBoundaryTo moves the boundary line of axis toward px as a drag that ends there does: it moves the line as MoveBoundary does and
+// then merges it onto a line that it reached, so that core.boundary.move and the pointer drag give one result. It returns where the
+// boundary stands.
+func (t *GroupTree) MoveBoundaryTo(axis Axis, line int, px float64) float64 {
+	at := t.MoveBoundary(axis, line, px, false)
+	t.MergeCoincident(axis, line)
+	return at
+}
+
 // MergeCoincident merges the boundary line of axis onto a neighbour at its coordinate at the end of a drag, as Grid.MergeCoincident
 // does, and keeps no line that no card uses while the space holds a group card.
 func (t *GroupTree) MergeCoincident(axis Axis, line int) bool {
