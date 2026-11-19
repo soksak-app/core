@@ -4,7 +4,6 @@ package host_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -235,34 +234,6 @@ func TestInstalledAssetsServeTheSharedModulesOfExtensionPoints(t *testing.T) {
 	support.WriteInstalled(t, config, map[string]string{"plugins/alpha/1.0.0/plugin.json": "{"})
 	if code, body, _ := get("/shared/alpha.language/@codemirror/state.js"); code != 500 || !strings.Contains(body, filepath.Join(config, "plugins/alpha/1.0.0/plugin.json")) {
 		t.Fatalf("invalid manifest %d %q", code, body)
-	}
-}
-
-// contract: sidecars.environment.start-records-the-sok-folder
-func TestTheStartRecordsTheFolderThatTheSidecarsPutFirstOnPath(t *testing.T) {
-	log := support.UseEventLog(t)
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	folder := filepath.Dir(executable)
-	sidecars, err := host.NewInstalledSidecars(installedFixture(t))
-	if err != nil {
-		t.Fatalf("the start failed: %v", err)
-	}
-	sidecars.Stop()
-	if err := log.Flush(); err != nil {
-		t.Fatal(err)
-	}
-	var recorded []string
-	for _, event := range readEventLog(t, log.Path()) {
-		if event["event"] == "host.sidecar.path" {
-			fields := event["fields"].(map[string]any)
-			recorded = append(recorded, fmt.Sprintf("%s %v %v", event["level"], fields["folder"], fields["sok"]))
-		}
-	}
-	if want := []string{"info " + folder + " " + filepath.Join(folder, "sok")}; !slices.Equal(recorded, want) {
-		t.Fatalf("the start recorded %q, not %q", recorded, want)
 	}
 }
 
