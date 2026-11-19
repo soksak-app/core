@@ -283,6 +283,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-19",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "export const newGroupRequest = () =>" },
+      { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params, request)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "a request makes core.group.create idempotent by that request" },
+    ],
+    expected: "The page core.group.create takes request as mygo does: a repeat of an answered request answers its first answer, a new request groups again, and each press of a group menu item sends a new request.",
+    levels: ["unit"],
+  },
+  {
     id: "F970",
     implementation: [
       { file: "packages/workbench/group-look.js", symbol: "export function groupLook(colors, level, { seam, fade })" },
@@ -14237,7 +14249,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
       { file: "packages/workbench/plane.js", symbol: "tree = readGroupTree(kept, treeOptions(), grid);" },
       { file: "packages/workbench/plane.js", symbol: "const { groups, leader, lastCard } = tree.stored();" },
-      { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params)" },
+      { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params, request)" },
       { file: "packages/workbench/plane.js", symbol: "export function moveCard(id, target, side)" },
       { file: "packages/workbench/plane.js", symbol: "export function cardState(id, summary)" },
       { file: "packages/workbench/plane.js", symbol: "targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));" },

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-19 (group create의 request, page): page의 `core.group.create`가 mygo처럼 `request`를 받는다: 답한 request의 반복은 첫 답을 돌려주고 아무것도 바꾸지 않으며, 새 request는 group이 선 곳에서도 card를 묶고, group menu 항목의 각 누름이 새 request를 보낸다(`docs/spec/groups.md#idempotency`). 검증: page의 request test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F970 (group card의 색): 두 workbench가 group card를 한 규칙으로 card의 token에서 그린다: header는 content card head처럼 `card`로, 그 아래 선은 그 head 아래 선처럼, 몸통은 `bg`를 `card`에 chrome 값 `group-fill-fade`(0.6)의 member level 거듭제곱만큼 섞은 색으로 그리므로, 모든 theme과 mode에서 중첩 level마다 card에 한 걸음씩 가까워진다(`docs/spec/groups.md#drawing`, `docs/spec/cases/group-look.json`). theme 색 `group-1`부터 `group-3`과 설정 `group.tint`(그룹 색)는 없어졌다. `settings.json`에 저장된 `group.tint`는 어떤 설정의 key도 아닌 값으로 남고 효과가 없다. 검증: 공유 case, 두 workbench의 그리기 test와 설정 test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F937-17 (group header 아래 선): 두 workbench에서 group card의 header가 content card head처럼 그 아래 선을 gap이 있으면 `edge`로, seam에서는 `rule`로 그리므로, page가 gap에서 선을 빼지 않는다(`docs/spec/groups.md#drawing`, 공유 case `docs/spec/cases/group-look.json`). 검증: page header test가 바뀌지 않은 코드에서 gap의 선이 없어 실패했고 case runner는 구현을 찾지 못했으며, 모두 통과한다.
 - F968 (head의 접힘 단계와 선택된 tab): 두 workbench에서 card head의 접힘 단계는 card에서 가장 넓은 tab을 쓰므로, header는 어느 tab이 선택되든 같은 tab을 보이고 선택된 tab은 언제나 그 가운데 있다. 검증: 공유 head case와 mygo head test가 바뀌지 않은 code에서 실패했고 통과한다.

@@ -101,6 +101,24 @@ test("core.group.create groups a content card with a new card and answers the sa
   assert.equal((await stored()).lastCard, 6, "a refused group issued a card number");
 });
 
+// With request, core.group.create is idempotent by that request: a new request groups the card again where its group stands, a repeat
+// of an answered request answers its first answer and changes nothing, and a request that is no string of 1 to 128 characters is
+// refused (docs/spec/groups.md#idempotency).
+test("a request makes core.group.create idempotent by that request", { timeout: 5000 }, async () => {
+  arrange();
+  const first = await run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request: "r1" });
+  const second = await run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request: "r2" });
+  assert.notDeepEqual(second, first, "a new request answered the first answer");
+  const before = await stored();
+  assert.deepEqual(await run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request: "r1" }), first);
+  assert.deepEqual(await stored(), before, "the repeat of an answered request changed the layout");
+  // A request that is no string is refused by the declared params of the command before it runs (F967).
+  for (const request of ["", "r".repeat(129)]) {
+    await refuses(run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request }),
+      "core.group.create: request must be a string of 1 to 128 characters");
+  }
+});
+
 test("core.group.dissolve, rename and leader change the tree and answer again without a change", { timeout: 5000 }, async () => {
   arrange();
   assert.deepEqual(await run("core.group.rename", { group: "card-4", name: "  작업  " }), { group: "card-4", name: "작업" });

@@ -792,7 +792,8 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "group" ? createGroup(cardId, tree.groupSide(cardId), k, null)
+    // Each press of a group item sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
+    (k) => (what === "group" ? createGroup(cardId, tree.groupSide(cardId), k, null, newGroupRequest())
       : tree.isGroup(cardId) ? (what === "add" ? addTabTo(cardId, k, null) : splitCard(cardId, TOOL_SPLIT_SIDE[what], k))
       : what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
@@ -2636,17 +2637,33 @@ function treeCard(id) {
 }
 
 /**
- * Groups the card id, a content card or a group card, with a new content card toward side that holds a tab of kind with params and
- * returns {group, card, tab}; the focus moves to the new card (docs/spec/groups.md#commands).
+ * The answers of the requests of core.group.create by space and request while the window is open; none is stored
+ * (docs/spec/groups.md#idempotency).
  */
-export function createGroup(id, side, kind, params) {
+const groupRequests = new Map();
+
+/** A request of core.group.create that the shown space has not answered, for one press of a group split button. */
+export const newGroupRequest = () => issueId("request", (id) => groupRequests.get(heldSpace)?.has(id) ?? false);
+
+/**
+ * Groups the card id, a content card or a group card, with a new content card toward side that holds a tab of kind with params and
+ * returns {group, card, tab}; the focus moves to the new card (docs/spec/groups.md#commands). With request, the identifier of one request,
+ * a repeat of a request that the space answered returns its first answer and changes nothing, and a new request groups also where the
+ * group stands (docs/spec/groups.md#idempotency).
+ */
+export function createGroup(id, side, kind, params, request) {
+  if (request !== undefined && (typeof request !== "string" || request.length === 0 || [...request].length > 128)) {
+    throw new Error("core.group.create: request must be a string of 1 to 128 characters");
+  }
+  const answered = request === undefined ? undefined : groupRequests.get(heldSpace)?.get(request);
+  if (answered) return answered;
   if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
   const card = treeCard(id);
   if (isPlace(card)) throw new Error(`card ${card} is a window sidebar; a group holds content cards and group cards`);
   layoutChangeable(card);
   const parent = tree.parentOf(card);
   // The same group of the same card with the same tab toward the same side changes nothing (docs/spec/groups.md#idempotency).
-  if (parent && parent.members.length === 2 && hasPlugin(kind)) {
+  if (request === undefined && parent && parent.members.length === 2 && hasPlugin(kind)) {
     const other = parent.members.map(memberId).find((member) => member !== card);
     const wanted = checkTabParams(kind, plugin(kind).params, params);
     // default: a tab stored without params has the params null.
@@ -2661,7 +2678,12 @@ export function createGroup(id, side, kind, params) {
   const made = tree.create(card, side, { tabs: [t], activeId: t.id }, splitsEven());
   focusOn(made.card);
   settle();
-  return { group: made.group, card: made.card, tab: t.id };
+  const answer = { group: made.group, card: made.card, tab: t.id };
+  if (request !== undefined) {
+    if (!groupRequests.has(heldSpace)) groupRequests.set(heldSpace, new Map());
+    groupRequests.get(heldSpace).set(request, answer);
+  }
+  return answer;
 }
 
 /** Replaces the group card id with its members in the level that holds it; a group that this window dissolved answers again. */
