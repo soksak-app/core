@@ -13975,6 +13975,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F932",
+    implementation: [{ file: "packages/sok/go/src/sok.go", symbol: "A declared submit command sends its text as one input and Enter as a separate key input" }],
+    tests: [{ file: "scripts/test/submit-guidance.test.mjs", id: "the submit guidance sentence is identical in both sok usage texts, the agent skill and the command reference" }],
+    expected: "The sok usage texts, the agent skill and the command reference state the contract of a declared submit command.",
+    levels: ["unit"],
+  },
+  {
     id: "F927",
     implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "if (takeInputEnded(owner, ticket)) return true;" }],
     tests: [
