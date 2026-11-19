@@ -672,6 +672,107 @@ fn persistent_transport_replaces_endpoint_left_by_a_dead_service() {
     service.join().unwrap();
 }
 
+// An endpoint whose pid names a live process that started after the endpoint was published is stale, as the endpoint of
+// a machine restart is when its pid belongs to another program: the host removes it and starts the service
+// (docs/spec/persistent-services.md#endpoint-publisher).
+// contract: sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid
+#[test]
+fn persistent_transport_replaces_the_endpoint_of_a_reused_pid() {
+    let executable_directory = folder::Folder::new();
+    let config_directory = folder::Folder::new();
+    let service_directory = config_directory.path().join("services/echo");
+    std::fs::create_dir_all(&service_directory).unwrap();
+    let socket_path = service_directory.join("replacement.sock");
+    let listener = UnixListener::bind(&socket_path).unwrap();
+    let token = "replacement-token";
+    let replacement_endpoint = serde_json::json!({
+        "protocol": 1,
+        "pid": 1,
+        "socket": socket_path,
+        "token": token
+    });
+    // The process that holds the pid of the endpoint starts after the publication time, which the modification time of
+    // the endpoint states. It reads its input, whose write end the Child holds, so it runs until the check ends it.
+    let endpoint_path = service_directory.join("endpoint.json");
+    let published = std::time::SystemTime::now();
+    let mut other = Command::new("cat")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::fs::write(
+        &endpoint_path,
+        serde_json::to_vec(&serde_json::json!({
+            "protocol": 1,
+            "pid": other.id(),
+            "socket": service_directory.join("missing.sock"),
+            "token": "stale-token"
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&endpoint_path)
+        .unwrap()
+        .set_modified(published)
+        .unwrap();
+
+    executable_directory.fixture("echo", &format!("write {}\nexit 0\n", replacement_endpoint));
+    let fixture = files(
+        r#"{"executable":"echo","displayName":"soksak://sidecar/probe","protocol":1,"transport":"persistent"}"#,
+    );
+    let sidecars = Sidecars::new(
+        &declare(&fixture, executable_directory.path()),
+        config_directory.path().to_path_buf(),
+    )
+    .unwrap();
+    let (owner, events) = owner("reused", "/projects/reused");
+    let service = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let hello: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(hello["token"], token);
+        stream
+            .write_all(
+                br#"{"operation":"hello","protocol":1,"ok":true}
+"#,
+            )
+            .unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        stream.write_all(line.as_bytes()).unwrap();
+        line.clear();
+        reader.read_line(&mut line).unwrap();
+        let close: serde_json::Value = serde_json::from_str(&line).unwrap();
+        let reply = serde_json::json!({
+            "operation": "closed-owner",
+            "request": close["request"],
+            "ok": false,
+            "error": "test close"
+        });
+        writeln!(stream, "{reply}").unwrap();
+    });
+
+    let sent = sidecars.send_as(&owner, ECHO, "surface", &raw(r#"{"operation":"open"}"#));
+    let other_pid = other.id();
+    other.kill().unwrap();
+    other.wait().unwrap();
+    if let Err(error) = sent {
+        panic!(
+            "the endpoint of pid {other_pid}, which started after the publication, was not replaced: {error}"
+        );
+    }
+    assert_eq!(events.recv().unwrap().surface, "surface");
+    assert!(
+        !endpoint_path.exists(),
+        "the stale endpoint was not removed"
+    );
+    sidecars.stop();
+    service.join().unwrap();
+}
+
 // contract: sidecars-transport.endpoint.live-unreachable-reported-without-replacement
 #[test]
 fn persistent_transport_reports_live_but_unreachable_endpoint_without_replacement() {
