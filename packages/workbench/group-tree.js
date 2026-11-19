@@ -57,8 +57,9 @@ function mapped(t, [a0, b0], [a, b]) {
 }
 
 /** The group tree of one space over its grid. */
-/** How far a line may reach into a header or a frame across the line, in px: a divider at the side of a group card touches the end of its
- * header by less than this. */
+/** How far a line that stands beside a header may reach into it across the line, in px: a divider at the side of a group card touches the
+ * end of its header by less than this. A line inside the width of a header, a rule of one px among them, crosses the header however thin
+ * it is. */
 const HEAD_TOLERANCE = 1;
 
 /** The extent [a0, a1] across its line of a rule or a divider of axis. */
@@ -77,7 +78,8 @@ const spanOf = (axis, r) => (axis === "y" ? [r.y, r.y + r.h, r.x, r.x + r.w] : [
 function cutOut(axis, [a0, a1], parts, boxes) {
   for (const box of boxes) {
     const [h0, h1, s0, s1] = spanOf(axis, box);
-    if (Math.min(a1, h1) - Math.max(a0, h0) <= HEAD_TOLERANCE) continue;
+    const inside = a0 >= h0 && a1 <= h1;
+    if (!inside && Math.min(a1, h1) - Math.max(a0, h0) <= HEAD_TOLERANCE) continue;
     parts = parts.flatMap(([from, to]) => {
       if (to <= s0 || from >= s1) return [[from, to]];
       return [...(from < s0 ? [[from, s0]] : []), ...(to > s1 ? [[s1, to]] : [])];

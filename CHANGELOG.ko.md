@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-40 (nested group header를 지나는 rule): page workbench는 1 point의 rule을 그것이 지나는 모든 group header에서, nested group card의 header에서도 자른다. header 끝에 1 px 이하로 닿는 옆의 line은 여전히 자르지 않는다(`docs/spec/groups.md#drawing`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-31 (group header drag): page workbench에서 group card header의 버튼 밖을 누르고 끌면 mygo처럼 group card를 끈다. drop은 group card와 그 안의 card를 빼고 정해지고, preview는 move가 놓는 자리를 보이며, `core.drag`는 `tab` `""`로 알리고, 놓으면 `core.card.move`를 실행한다(`docs/spec/groups.md#moving-and-dropping`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-39 (header에서 group 이름 바꾸기): page workbench에서 group card 이름의 double-click은 mygo처럼 `core.rename.begin {kind: "group", id}`를 실행하고, header는 이름 자리에 이름 바꾸기 field를 보이며, `core.rename.commit`은 group 이름을 바꾼다(`docs/spec/groups.md#headers`). 검증: page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-33 (window description의 content card node): page는 mygo처럼 content card node에 group card 안에서만 `parent`를, level의 leader에만 `leader`를 써서 `sok describe`가 두 workbench에서 같은 tree를 준다(`docs/spec/exposure.md#window-snapshot`). 검증: page의 description test가 바뀌지 않은 code에서 실패했고 통과한다.
