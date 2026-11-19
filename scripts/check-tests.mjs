@@ -825,7 +825,7 @@ const FEATURE_LINKS = [
   {
     id: "F762",
     implementation: [
-      { file: "native/darwin/src/surface_layout.m", symbol: "if (key) return identity;" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "static NSString *actionContent(NSEvent *event)" },
     ],
     tests: [
       { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the kept key is told once, also after it came back" },
@@ -14027,6 +14027,19 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "an_interruption_carries_the_message_of_the_library" },
     ],
     expected: "A press of a person ends every open synthetic gesture at once, and the next drag or release of an ended gesture answers the interruption in both hosts.",
+    levels: ["unit"],
+  },
+  {
+    id: "F962-3",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "void surfaceInputPointerObserve(void (^observer)(NSEvent *event))" },
+      { file: "native/darwin/src/input_inject.m", symbol: "surfaceInputPointerObserve(^(NSEvent *event) { interruptGestures(event); });" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the kept move and scroll are told once, also after they came back" },
+      { file: "native/darwin/tests/input_person_press_test.m", id: "the move of the person releases the gesture of pointer a" },
+    ],
+    expected: "A move or a scroll of a person ends every open synthetic gesture at once without ending the layout hold.",
     levels: ["unit"],
   },
   {

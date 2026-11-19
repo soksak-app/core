@@ -1,4 +1,4 @@
-// Checks that the press of a person ends the synthetic gestures of the application at once: each open synthetic press is released
+// Checks that the press, the move and the scroll of a person end the synthetic gestures of the application at once: each open synthetic press is released
 // on its view at its last point before the press of the person reaches a view, the buttons that +[NSEvent pressedMouseButtons]
 // answers are those of the person outside the delivery of a synthetic event, and the next drag or release of an ended gesture
 // answers the interruption with the press of the person (docs/spec/exposure.md#named-pointers).
@@ -10,6 +10,7 @@
 #import <Cocoa/Cocoa.h>
 #import "event_ring.h"
 #import "input_inject.h"
+#import "private/coregraphics.h"
 #import "support/event_wait.h"
 #import "support/records.h"
 
@@ -110,6 +111,27 @@ static void personClicks(NSWindow *window, double x, double y) {
     }
 }
 
+// Dispatches a move of a person at the point of the content of window through -[NSApplication sendEvent:].
+static void personMoves(NSWindow *window, double x, double y) {
+    NSPoint point = [window.contentView convertPoint:NSMakePoint(x, y) toView:nil];
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeMouseMoved location:point modifierFlags:0
+        timestamp:NSProcessInfo.processInfo.systemUptime windowNumber:window.windowNumber context:nil eventNumber:0 clickCount:0
+        pressure:0]];
+}
+
+// Dispatches a scroll of a person at the point of the content of window through -[NSApplication sendEvent:], with the window that
+// the window server gives a scroll of a person.
+static void personScrolls(NSWindow *window, double x, double y) {
+    NSPoint point = [window.contentView convertPoint:NSMakePoint(x, y) toView:nil];
+    CGEventRef scroll = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitPixel, 2, -4, 0, 0);
+    NSPoint screen = [window convertPointToScreen:point];
+    CGEventSetLocation(scroll, CGPointMake(screen.x, NSMaxY(NSScreen.screens.firstObject.frame) - screen.y));
+    CGEventSetIntegerValueField(scroll, kSPEventWindowNumberField, window.windowNumber);
+    CGEventSetWindowLocation(scroll, CGPointMake(point.x, NSHeight(window.frame) - point.y));
+    [NSApp sendEvent:[NSEvent eventWithCGEvent:scroll]];
+    CFRelease(scroll);
+}
+
 static void checkSeen(SPRecordingView *view, NSArray<NSString *> *want, NSString *what) {
     check([view.seen isEqualToArray:want], [NSString stringWithFormat:@"%@: %@ (want %@)", what,
         [view.seen componentsJoinedByString:@"; "], [want componentsJoinedByString:@"; "]]);
@@ -175,6 +197,29 @@ int main(void) { @autoreleasepool {
     check(input(key, "a", 30, 30, 1).result == SP_INPUT_DELIVERED && input(key, "a", 30, 30, 3).result == SP_INPUT_DELIVERED,
         @"pointer a presses and releases again");
     checkSeen(keyView, @[@"down 30,30 buttons 1", @"up 30,30 buttons 0"], @"the new gesture reaches the view with its button");
+
+    // A move of a person ends the gesture of the window it moves over, and a scroll of a person ends the gesture of another window.
+    [keyView.seen removeAllObjects];
+    [otherView.seen removeAllObjects];
+    check(input(key, "a", 30, 30, 1).result == SP_INPUT_DELIVERED && input(key, "a", 40, 30, 2).result == SP_INPUT_DELIVERED,
+        @"pointer a presses and drags the virtual key window again");
+    personMoves(key, 120, 90);
+    checkSeen(keyView, @[@"down 30,30 buttons 1", @"dragged 40,30 buttons 1", @"up 40,30 buttons 0"],
+        @"the move of the person releases the gesture of pointer a");
+    SPAnswer moved = input(key, "a", 50, 30, 2);
+    NSString *wantMove = @"a person's move at (120, 90) in the window of the gesture ended the synthetic gesture of pointer a, whose "
+        "press was released at (40, 30)";
+    check(moved.result == SP_INPUT_INTERRUPTED && [@(moved.reason) isEqual:wantMove],
+        [NSString stringWithFormat:@"the next drag after the move answers the interruption (%d, \"%s\")", moved.result, moved.reason]);
+    check(input(other, "b", 40, 40, 1).result == SP_INPUT_DELIVERED, @"pointer b presses the other window again");
+    personScrolls(key, 100, 80);
+    checkSeen(otherView, @[@"down 40,40 buttons 1", @"up 40,40 buttons 0"], @"the scroll of the person releases the gesture of pointer b");
+    SPAnswer scrolled = input(other, "b", 40, 40, 3);
+    NSString *wantScroll = @"a person's scroll at (100, 80) in another window ended the synthetic gesture of pointer b, whose press "
+        "was released at (40, 40)";
+    check(scrolled.result == SP_INPUT_INTERRUPTED && [@(scrolled.reason) isEqual:wantScroll],
+        [NSString stringWithFormat:@"the next release after the scroll answers the interruption (%d, \"%s\")", scrolled.result,
+            scrolled.reason]);
     [key close];
     [other close];
     return failures ? 1 : 0;

@@ -1141,10 +1141,10 @@ static void releaseInterrupted(SPPress *press) {
 }
 
 // The press of a person, a mouse down of any button that reaches -[NSApplication sendEvent:] and that this library did not send,
-// ends every open synthetic gesture of the application in its turn, before any monitor or view sees it: input of the person comes
-// first. Each press is released on its view, and the pointer keeps the message for the next drag or release of the button
-// (docs/spec/exposure.md#named-pointers). The observer is the device of the actions of the user (surface_layout.h), which tells
-// each press once.
+// and a move or a scroll of a person that reaches it end every open synthetic gesture of the application in their turn, before
+// any monitor or view sees them: input of the person comes first. Each press is released on its view, and the pointer keeps the
+// message for the next drag or release of the button (docs/spec/exposure.md#named-pointers). The observers are the device of the
+// actions of the user (surface_layout.h), which tells each event once.
 static void interruptGestures(NSEvent *event) {
     NSMutableArray<SPPress *> *open = [NSMutableArray array];
     for (SPPointer *pointer in pointers.objectEnumerator) {
@@ -1152,14 +1152,17 @@ static void interruptGestures(NSEvent *event) {
     }
     if (open.count == 0) return;
     NSWindow *pressed = event.window;
-    NSPoint at = pressed ? contentPointOf(pressed, [pressed convertPointToScreen:event.locationInWindow]) : NSEvent.mouseLocation;
-    const char *which = event.type == NSEventTypeLeftMouseDown ? "left" : event.type == NSEventTypeRightMouseDown ? "right" : "other";
+    // An event without a window carries its point in screen coordinates.
+    NSPoint at = pressed ? contentPointOf(pressed, [pressed convertPointToScreen:event.locationInWindow]) : event.locationInWindow;
+    const char *action = event.type == NSEventTypeMouseMoved ? "move" : event.type == NSEventTypeScrollWheel ? "scroll"
+        : event.type == NSEventTypeLeftMouseDown ? "down of the left button" : event.type == NSEventTypeRightMouseDown
+        ? "down of the right button" : "down of the other button";
     for (SPPress *press in open) {
         SPPointer *pointer = press->pointer;
         NSString *place = pressed == press->window ? @"in the window of the gesture" : pressed ? @"in another window"
             : @"on the screen outside the windows of the application";
-        NSString *message = [NSString stringWithFormat:@"a person's down of the %s button at (%g, %g) %@ ended the synthetic gesture "
-            "of pointer %@, whose press was released at (%g, %g)", which, at.x, at.y, place, pointer->name, press->x, press->y];
+        NSString *message = [NSString stringWithFormat:@"a person's %s at (%g, %g) %@ ended the synthetic gesture of pointer %@, "
+            "whose press was released at (%g, %g)", action, at.x, at.y, place, pointer->name, press->x, press->y];
         int button = press->button;
         releaseInterrupted(press);
         [pointer->interruptions[button] release];
@@ -1182,6 +1185,9 @@ static void observePersonPresses(void) {
             if (event == sendingEvent) return;
             interruptGestures(event);
         });
+        // This library sends no move and no scroll through -[NSApplication sendEvent:]: a synthetic move goes to the owners of the
+        // tracking areas and a synthetic scroll through -[NSWindow sendEvent:], so each one that the device tells is of a person.
+        surfaceInputPointerObserve(^(NSEvent *event) { interruptGestures(event); });
     });
 }
 

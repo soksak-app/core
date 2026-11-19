@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
 #import <WebKit/WebKit.h>
+#import "private/coregraphics.h"
 #import "private/webkit.h"
 #import "surface_layout.h"
 #import "host_api_webview.h"
@@ -327,6 +328,81 @@ static void checkPressEndsHold(void) {
     [window release];
 }
 
+// A scroll of the pointer at the point of the content of window, in window coordinates, as the window server gives it to the
+// application.
+static NSEvent *scrollAt(NSWindow *window, NSPoint point) {
+    CGEventRef scroll = CGEventCreateScrollWheelEvent2(NULL, kCGScrollEventUnitPixel, 2, -4, 0, 0);
+    NSPoint screen = [window convertPointToScreen:point];
+    CGEventSetLocation(scroll, CGPointMake(screen.x, NSMaxY(NSScreen.screens.firstObject.frame) - screen.y));
+    CGEventSetIntegerValueField(scroll, kSPEventWindowNumberField, window.windowNumber);
+    CGEventSetWindowLocation(scroll, CGPointMake(point.x, NSHeight(window.frame) - point.y));
+    NSEvent *event = [NSEvent eventWithCGEvent:scroll];
+    CFRelease(scroll);
+    return event;
+}
+
+// The moves and scrolls of the pointer reach their own subscribers through the device of the actions of the user: each move and
+// each scroll that reaches -[NSApplication sendEvent:] is told once before any monitor sees it, also when the hold kept it and gave
+// it back, and it is not told to the observers of presses and keys, so it ends no hold
+// (docs/spec/native-surfaces.md#layout-transaction).
+static void checkPointerMovesAreToldOnce(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 700, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    SPGateView *gate = [[[SPGateView alloc] initWithFrame:window.contentView.bounds] autorelease];
+    [window.contentView addSubview:gate];
+    static NSMutableArray<NSNumber *> *moves, *actions;
+    static BOOL subscribed;
+    if (!moves) {
+        moves = [[NSMutableArray alloc] init];
+        actions = [[NSMutableArray alloc] init];
+    }
+    [moves removeAllObjects];
+    [actions removeAllObjects];
+    if (!subscribed) {
+        subscribed = YES;
+        surfaceInputPointerObserve(^(NSEvent *event) { [moves addObject:@(event.type)]; });
+        surfaceInputActionObserve(^(NSEvent *event) { [actions addObject:@(event.type)]; });
+    }
+    NSMutableArray<NSNumber *> *toldAtMonitor = [NSMutableArray array];
+    id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved | NSEventMaskScrollWheel
+        handler:^NSEvent *(NSEvent *event) { [toldAtMonitor addObject:@(moves.count)]; return nil; }];
+    NSPoint inside = NSMakePoint(50, 50);
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeMouseMoved location:inside modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:0 pressure:0]];
+    [NSApp sendEvent:scrollAt(window, inside)];
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:inside modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1]];
+    NSArray *want = @[@(NSEventTypeMouseMoved), @(NSEventTypeScrollWheel)];
+    check([moves isEqualToArray:want], [NSString stringWithFormat:@"a move and a scroll are told to the observers of moves, a drag is not (%@)", moves]);
+    check([toldAtMonitor isEqualToArray:@[@1, @2]], [NSString stringWithFormat:@"each move is told before the monitors see it (%@)", toldAtMonitor]);
+    check(actions.count == 0, [NSString stringWithFormat:@"a move and a scroll are not told to the observers of presses and keys (%@)", actions]);
+    [moves removeAllObjects];
+    __block int held = 0;
+    surfaceLayoutBegin(window, 72, ^(int allowed) {});
+    check(surfaceLayoutHoldCall(window, true, inside.x, inside.y, ^{ held++; }), @"a press without a target waits for the transaction");
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeMouseMoved location:NSMakePoint(60, 50) modifierFlags:0 timestamp:1
+        windowNumber:window.windowNumber context:nil eventNumber:3 clickCount:0 pressure:0]];
+    [NSApp sendEvent:scrollAt(window, NSMakePoint(60, 50))];
+    check(surfaceLayoutIsPreparing(window), @"a move and a scroll end no hold");
+    check([moves isEqualToArray:want], [NSString stringWithFormat:@"a kept move and a kept scroll are told when they arrive (%@)", moves]);
+    // A press ends the hold, waits behind the kept input and comes back with it. AppKit gives a posted event back with a location
+    // that it computes again from the screen, so the told content holds no location.
+    [actions removeAllObjects];
+    [NSApp sendEvent:[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:NSMakePoint(70, 50) modifierFlags:0 timestamp:2
+        windowNumber:window.windowNumber context:nil eventNumber:4 clickCount:1 pressure:1]];
+    check(!surfaceLayoutIsPreparing(window), @"the press ends the hold of the window");
+    runQueue();
+    check(held == 1, [NSString stringWithFormat:@"the held press runs once after the hold ended (%d)", held]);
+    check([moves isEqualToArray:want], [NSString stringWithFormat:@"the kept move and scroll are told once, also after they came back (%@)", moves]);
+    check([actions isEqualToArray:@[@(NSEventTypeLeftMouseDown)]],
+        [NSString stringWithFormat:@"the press that waited behind them is told once, also after it came back (%@)", actions]);
+    [NSEvent removeMonitor:monitor];
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
 // The actions of the user reach every subscriber through one device at the level of the application: each press and each key
 // event that reaches -[NSApplication sendEvent:], a synthetic one and a modifier change included, is told once before any monitor
 // sees it, a drag is not told, and an event that the hold kept is not told again when it comes back
@@ -506,6 +582,8 @@ int main(void) { @autoreleasepool {
     checkPressEndsHold();
     resetOwners();
     checkActionsAreToldOnce();
+    resetOwners();
+    checkPointerMovesAreToldOnce();
     resetOwners();
     checkReturnedKeyKeepsItsTurn();
     resetOwners();
