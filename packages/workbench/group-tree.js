@@ -687,6 +687,8 @@ export class GroupTree {
       }
       return;
     }
+    // The frames follow the tree first, so the drawn rectangles that the balance measures are the ones that the space draws after it.
+    this.reframe();
     // Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
     const box = (node) => ({
       id: node.card,
@@ -1023,11 +1025,13 @@ export class GroupTree {
 
   /**
    * Moves the line between the card target and the new card id of a split toward top or bottom, so that both are drawn at one height below
-   * the headers that the upper one stands under (docs/spec/groups.md#split-setting). A split across, and a line that other cards stand on,
+   * the headers that the upper one stands under and inside the frames of their level (docs/spec/groups.md#split-setting). A split across, and a line that other cards stand on,
    * do not change it, so a split moves no line of another card.
    */
   levelSplit(target, side, id) {
     if (side !== "top" && side !== "bottom") return;
+    // The new card takes the frames of its level first, so both drawn heights are the heights that the check of the split reads.
+    this.reframe();
     const [upper, lower] = side === "top" ? [id, target] : [target, id];
     const up = this.rect(upper), down = this.rect(lower);
     const inside = (card) => (this.node(card) ? this.contents(this.node(card)) : [card]);
