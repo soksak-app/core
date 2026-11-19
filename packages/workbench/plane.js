@@ -451,6 +451,9 @@ function updateCard(el, card, rect) {
     canClose: grid.canClose(card.id),
     canSplitX: grid.canSplit(card.id, "x"),
     canSplitY: grid.canSplit(card.id, "y"),
+    canGroup: tree.canGroup(card.id, splitsEven()),
+    leads: tree.leadCount(tree.parentOf(card.id)) >= 2,
+    leader: tree.leaderOf(tree.parentOf(card.id)) === card.id,
     fullscreen: el.dataset.fullscreen === "true",
   });
   drawSideToggles(acts, el, card.id);
@@ -764,6 +767,7 @@ const PICKER_ASK = {
   add: "새 탭에 무엇을 띄울까",
   x: "새 위치에 무엇을 띄울까",
   y: "새 위치에 무엇을 띄울까",
+  group: "새 위치에 무엇을 띄울까",
 };
 
 delegate(pickerEl);
@@ -785,7 +789,9 @@ const onPickerKey = (e) => {
 function openPicker(anchor, what, cardId) {
   openLayer(anchor, PICKER_ASK[what],
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
-    (k) => (what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
+    (k) => (what === "group" ? createGroup(cardId, tree.groupSide(cardId), k, null)
+      : tree.isGroup(cardId) ? (what === "add" ? addTabTo(cardId, k, null) : splitCard(cardId, TOOL_SPLIT_SIDE[what], k))
+      : what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
 
 /** Asks which tab to activate. It shows the tab list when the header is folded. */
@@ -1896,15 +1902,18 @@ export function focusCard(id) {
 
 /** Opens the add and split menu of a card. If the same menu is open, it closes it. */
 export function openCardMenu(id, menu) {
-  paneCard(id);
+  const group = tree?.isGroup(id);
+  if (!group) paneCard(id);
   layoutChangeable(id);
   const what = DO_OF[menu];
   if (!what) throw new Error(`unknown menu ${menu}`);
-  const anchor = cardElement(id)?.querySelector(`.chrome__act[data-do="${what}"]`);
+  // The menus of a group card open under the buttons of its header (docs/spec/groups.md#card-commands-on-a-group-card).
+  const holder = group ? plane.querySelector(`.group[data-group-card="${CSS.escape(id)}"] .group__head`) : cardElement(id);
+  const anchor = holder?.querySelector(`.chrome__act[data-do="${what}"]:not([hidden])`);
   if (!anchor) throw new Error(`card ${id} has no ${menu} button`);
   if (anchor.disabled) throw new Error(`card ${id} cannot ${menu}`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
-  focusOn(id);
+  focusOn(group ? tree.focusable(id) : id);
   settle();
   openPicker(anchor, what, id);
 }
@@ -1920,7 +1929,7 @@ export function openCardTools(id) {
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const acts = cardElement(id).querySelector(".chrome__acts");
-  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled).map((b) => ({
+  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden).map((b) => ({
     // A sidebar button has no data-do and points to a side with data-side.
     key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
     name: b.title,
