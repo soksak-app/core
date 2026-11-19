@@ -930,3 +930,31 @@ test("a close re-stands only the lines no card reads", () => {
   assert.equal(xs[1], xs[2], `lines 1 and 2 came apart: ${xs[1]} and ${xs[2]}`);
   assert.deepEqual(grid.rect("a"), { x: 0, y: 0, w: 40, h: 90 });
 });
+
+test("a split with newLine cuts at a new line inside the card instead of an existing line", () => {
+  const state = () => ({ xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
+    { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 }, { id: "b", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "c", c0: 1, c1: 2, r0: 1, r1: 2 },
+  ] });
+  const taken = new Soksak(state(), { width: 1000, height: 1000, gap: 0 });
+  assert.notEqual(taken.split("a", "x", { id: "n" }), null);
+  assert.equal(taken.lines("x").length, 3, "the plain split takes the line that a spans across");
+  const fresh = new Soksak(state(), { width: 1000, height: 1000, gap: 0 });
+  assert.notEqual(fresh.splitToward("a", "left", { id: "n", newLine: true }), null);
+  assert.equal(fresh.lines("x").length, 4, "the split with newLine adds a line");
+  assert.equal(fresh.card("n").c0, 0);
+});
+
+test("moveLinePast moves a line past the lines it reaches where no card lies between them and merges onto a line it stops on", () => {
+  const state = () => ({ xs: [0, 0.4, 0.6, 1], ys: [0, 0.5, 1], cards: [
+    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
+    { id: "c", c0: 0, c1: 2, r0: 1, r1: 2 }, { id: "d", c0: 2, c1: 3, r0: 1, r1: 2 },
+  ] });
+  const past = new Soksak(state(), { width: 1000, height: 1000, gap: 0, minSize: 10 });
+  past.moveLinePast("x", 1, 800);
+  assert.ok(Math.abs(past.rect("a").w - 800) < 1e-6, `a is ${past.rect("a").w} wide`);
+  assert.ok(Math.abs(past.rect("c").w - 600) < 1e-6, `c is ${past.rect("c").w} wide`);
+  const onto = new Soksak(state(), { width: 1000, height: 1000, gap: 0, minSize: 10 });
+  onto.moveLinePast("x", 1, 600);
+  assert.equal(onto.lines("x").length, 3, "the line that stops on another line merges onto it");
+  assert.equal(onto.card("a").c1, onto.card("c").c1);
+});
