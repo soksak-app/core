@@ -1013,10 +1013,11 @@ export class GroupTree {
   }
 
   /**
-   * Resolves a drop at x, y from the root level inward (docs/spec/groups.md#moving-and-dropping) and returns {card, zone} or null: a point
-   * in the drawn rectangle of a group card of a level is on its header the centre, in the outer quarter of its body a side, and otherwise
-   * goes on to its members; a point in no group card of the level is resolved by zoneAt of the grid. options are the headerPx and edge of
-   * zoneAt and without, a dragged group card that the resolution leaves out with the cards inside it.
+   * Resolves a drop at x, y on the innermost box that holds the point (docs/spec/groups.md#moving-and-dropping) and returns {card, zone} or
+   * null: a content card whose drawn rectangle holds the point gives the zone of zoneAt of the grid; otherwise the innermost group card
+   * whose frame holds it gives its own zones, the centre on its header and in its middle and a side in the outer edge fraction of its
+   * frame; a point in no box is no zone. options are the headerPx and edge of zoneAt and without, a dragged group card that the resolution
+   * leaves out with the cards inside it.
    */
   dropAt(x, y, options) {
     const { without = null, ...zone } = options;
@@ -1024,32 +1025,32 @@ export class GroupTree {
     const edge = zone.edge ?? 0.25;
     // The dragged group card and the cards inside it are no target.
     const excluded = (id) => without !== null && (id === without || (this.find(id)?.path ?? []).some((node) => node.card === without));
-    let members = this.groups;
-    for (;;) {
-      const hit = members.find((member) => {
-        if (typeof member === "string") return false;
-        const r = this.rect(member.card);
-        return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-      });
-      if (!hit) {
+    const holds = (r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    let hit = null;
+    let frame = null;
+    for (const { id, node } of this.order()) {
+      const r = this.rect(id);
+      if (!holds(r)) continue;
+      if (!node) {
+        if (excluded(id)) return null;
         const found = this.grid.zoneAt(x, y, zone);
-        if (!found || excluded(found.id)) return null;
-        return { card: found.id, zone: found.zone };
+        return found && { card: found.id, zone: found.zone };
       }
-      if (excluded(hit.card)) return null;
-      const head = this.headRect(hit.card);
-      if (y <= head.y + head.h) return { card: hit.card, zone: "centre" };
-      const r = this.rect(hit.card);
-      const px = (x - r.x) / r.w;
-      const py = (y - r.y) / r.h;
-      if (!(px > edge && px < 1 - edge && py > edge && py < 1 - edge)) {
-        const nearest = Math.min(px, 1 - px, py, 1 - py);
-        return { card: hit.card, zone: nearest === px ? "left" : nearest === 1 - px ? "right" : nearest === py ? "top" : "bottom" };
+      // The innermost frame that holds the point is the smallest one.
+      if (hit === null || r.w * r.h < frame.w * frame.h) {
+        hit = id;
+        frame = r;
       }
-      members = hit.members;
     }
+    if (hit === null || excluded(hit)) return null;
+    const head = this.headRect(hit);
+    if (y <= head.y + head.h) return { card: hit, zone: "centre" };
+    const px = (x - frame.x) / frame.w;
+    const py = (y - frame.y) / frame.h;
+    if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) return { card: hit, zone: "centre" };
+    const nearest = Math.min(px, 1 - px, py, 1 - py);
+    return { card: hit, zone: nearest === px ? "left" : nearest === 1 - px ? "right" : nearest === py ? "top" : "bottom" };
   }
-
 
   /** A group node in its stored form, its members in reading order; level adds the level of its members. */
   storedNode(node, level, depth) {
