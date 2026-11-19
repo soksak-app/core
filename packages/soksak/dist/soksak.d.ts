@@ -15,7 +15,7 @@
  * coordinates.
  */
 import type { Axis, Card, CardInit, Rect, Side } from './card.js';
-import type { Divider, Rule, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
@@ -144,6 +144,15 @@ export declare class Soksak {
      * `data` is opaque to this library.
      */
     setData(id: string, data: unknown): boolean;
+    /** The frames of each card by id that `setFrames` set (R5). */
+    private cardFrames;
+    /**
+     * Sets the frames between each card and its four lines (R5): a card without an
+     * entry, and a side without a count, has none. The frames are no part of the
+     * state. Throws for an id that is no card and for a count that is no whole
+     * number from zero, and then changes nothing.
+     */
+    setFrames(frames: Readonly<Record<string, Partial<Frames>>>): void;
     /**
      * Set whether the layout may split, close or move a card.
      */

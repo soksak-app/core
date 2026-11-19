@@ -53,9 +53,9 @@ test("a centring that would draw the card below the header below its minimum lea
   const grid = plane.currentGrid();
   const tree = plane.currentTree();
   const step = tree.options.head + grid.gap;
-  // The plane has room for the two cards of the group at their minimum below the header and a little more, so the middle of the line
-  // draws card-1 below its minimum.
-  page.size.height += 2 * grid.minSize + step + grid.gap + 8 - grid.height;
+  // The plane has room for the two cards of the group at their minimum below the header, the corridor of the line, the frame of the
+  // group below card-2 and a little more, so the middle of the line draws card-1 below its minimum.
+  page.size.height += 2 * grid.minSize + step + 2 * grid.gap + 8 - grid.height;
   page.redraw();
   tree.moveBoundary("y", 1, grid.minSize + step + grid.gap / 2, false);
   page.redraw();

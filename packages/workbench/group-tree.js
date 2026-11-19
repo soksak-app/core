@@ -68,6 +68,8 @@ export class GroupTree {
     this.groups = groups;
     this.rootLeader = leader;
     this.last = last;
+    /** The frames of each content card by id that reframe gave the grid. */
+    this.frames = {};
   }
 
   /** Changes the gap, the smallest edge and the head height. The grid keeps its proportions (R5). */
@@ -234,11 +236,70 @@ export class GroupTree {
   rect(id) {
     const found = this.find(id);
     if (!found) return undefined;
-    // A content card and a group card are drawn below the headers of the group cards that hold them and start on their first row line.
-    const r = found.node ? this.union(found.node) : this.grid.rect(id);
-    const r0 = found.node ? this.rectangle(found.node).r0 : this.grid.card(id).r0;
-    const headers = this.headersAbove(found.path, r0) * this.headStep();
+    if (found.node) return this.frameRect(found.node, found.path);
+    // A content card is drawn below the headers of the group cards that hold it and start on its first row line.
+    const r = this.grid.rect(id);
+    const headers = this.headersAbove(found.path, this.grid.card(id).r0) * this.headStep();
     return { x: r.x, y: r.y + headers, w: r.w, h: r.h - headers };
+  }
+
+  /**
+   * The frame of a group node that the group nodes path hold (docs/spec/groups.md#drawn-rectangles): the rectangle between its lines, each
+   * inset by its corridor and by one gap for each node of path that ends on it, the top line by the headers of the nodes of path that start
+   * on it.
+   */
+  frameRect(node, path) {
+    const span = this.rectangle(node);
+    // The rectangle of the layout library between the lines, without frames: the frames of the library belong to the cards by id, and no
+    // card has the empty id.
+    const bare = this.grid.rectOf({ id: "", fixed: false, ...span });
+    const ends = (key) => path.filter((holder) => this.rectangle(holder)[key] === span[key]).length;
+    const x0 = bare.x + ends("c0") * this.frameUnit("x");
+    const x1 = bare.x + bare.w - ends("c1") * this.frameUnit("x");
+    const y0 = bare.y + this.headersAbove(path, span.r0) * this.headStep();
+    const y1 = bare.y + bare.h - ends("r1") * this.frameUnit("y");
+    return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+  }
+
+  /**
+   * The length that one frame takes on axis, which the layout library reduces with the corridor when the plane cannot hold the corridors
+   * and the frames (R5): read off a content card with a frame on its left or its bottom side that is drawn with a size on axis, as the
+   * distance between its edge and the edge of the same span without frames; 0 when no such card stands.
+   */
+  frameUnit(axis) {
+    for (const [id, frames] of Object.entries(this.frames)) {
+      const card = this.grid.card(id);
+      // An operation in progress can take a card out of the grid before the next reframe.
+      if (!card) continue;
+      const drawn = this.grid.rect(id);
+      const bare = this.grid.rectOf({ ...card, id: "" });
+      if (axis === "x" && frames.left > 0 && drawn.w > 0) return (drawn.x - bare.x) / frames.left;
+      if (axis === "y" && frames.bottom > 0 && drawn.h > 0) return (bare.y + bare.h - drawn.y - drawn.h) / frames.bottom;
+    }
+    return 0;
+  }
+
+  /**
+   * Gives the grid the frames of every content card (docs/spec/groups.md#drawn-rectangles): on its left, right and bottom side the number of
+   * group cards that hold it and end on the line of that side. The top takes no frame, because the header of a group card stands inside its
+   * frame at the top. A card of no group, a window sidebar among them, has none.
+   */
+  reframe() {
+    const frames = {};
+    for (const card of this.grid.cards) {
+      // default: a card that the walk does not meet holds no group.
+      const path = this.find(card.id)?.path ?? [];
+      const counts = { left: 0, right: 0, top: 0, bottom: 0 };
+      for (const node of path) {
+        const span = this.rectangle(node);
+        if (span.c0 === card.c0) counts.left++;
+        if (span.c1 === card.c1) counts.right++;
+        if (span.r1 === card.r1) counts.bottom++;
+      }
+      if (counts.left || counts.right || counts.bottom) frames[card.id] = counts;
+    }
+    this.frames = frames;
+    this.grid.setFrames(frames);
   }
 
   /** The union of the rectangles in the grid of the content cards inside a group node. */
@@ -281,6 +342,7 @@ export class GroupTree {
     this.groups = kept.groups;
     this.rootLeader = kept.rootLeader;
     this.last = kept.last;
+    this.reframe();
   }
 
   /** The drawn rectangle of every content card by its id. */
@@ -340,6 +402,7 @@ export class GroupTree {
    * (docs/spec/groups.md#model). A space without groups keeps what the library keeps.
    */
   keepForm() {
+    this.reframe();
     if (this.groups.length === 0) return;
     this.grid.tidy();
     const state = this.grid.toJSON();
@@ -351,6 +414,7 @@ export class GroupTree {
         if (k < lines.length - 1 && Math.abs(lines[k] - lines[k - 1]) < EPSILON) this.grid.mergeCoincident(axis, k);
       }
     }
+    this.reframe();
   }
 
   /**
@@ -1078,6 +1142,7 @@ export function readGroupTree({ state, groups, leader, lastCard }, options, grid
     if (n !== null && n > lastCard) throw refused;
   }
   tree.last = lastCard;
+  tree.reframe();
   return tree;
 }
 

@@ -128,7 +128,7 @@ test("core.card.move moves a card into a group and the add, split and close of a
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   await refuses(run("core.card.move", { card: "card-4", target: "card-1", side: "right" }), "card card-4 cannot move into itself");
   await refuses(run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN }),
-    "card card-4 cannot split toward right: card card-1 would be 69x1156, below its minimum 96x96");
+    "card card-4 cannot split toward right: card card-1 would be 57x1144, below its minimum 96x96");
   const split = await run("core.card.split", { card: "card-4", side: "bottom", plugin: PLAIN });
   assert.equal(split.card, "card-6");
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
@@ -164,7 +164,7 @@ test("a drop resolves on the rectangles of the group cards and core.tab.move put
   const first = tree.rect("card-1");
   // The header of a group card is its centre, the outer quarter of its rectangle a side, and a point inside goes on to its members.
   assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, "card-3", band), { id: "card-4", zone: "centre" });
-  assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, "card-3", band), { id: "card-4", zone: "left" });
+  assert.deepEqual(plane.dropHit(first.x + 2, group.y + group.h / 2, "card-3", band), { id: "card-4", zone: "left" });
   // A point of card-1 outside the outer quarter of the group card resolves on card-1 by zoneAt.
   assert.deepEqual(plane.dropHit(group.x + group.w * 0.4, first.y + first.h / 2, "card-3", band), { id: "card-1", zone: "right" });
   // A drop on the centre of a group card puts the tab into a new content card inside it; the only tab of a card moves its card.

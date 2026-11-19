@@ -9,6 +9,52 @@
  * Every function here is pure and takes the plane as an argument.
  */
 import { AXES, SPAN, fixedSize, other } from './card.js';
+/** The frames of a card on the lo or the hi side of an axis. */
+function frameSide(frames, axis, side) {
+    if (!frames)
+        return 0;
+    if (axis === 'x')
+        return side === 'lo' ? frames.left : frames.right;
+    return side === 'lo' ? frames.top : frames.bottom;
+}
+/**
+ * The number of frames a slot carries: the most frames of a card that starts on
+ * its lower line on that side, and the most of a card that ends on its upper
+ * line on that side, a run of lines at one position counting as its slot.
+ */
+function slotFrames(plane, axis, slot) {
+    if (!plane.frames || plane.frames.size === 0)
+        return 0;
+    const a = lines(plane, axis);
+    const [lo, hi] = SPAN[axis];
+    let from = slot;
+    let to = slot + 1;
+    while (from > 0 && blank(plane, axis, from - 1))
+        from--;
+    while (to < a.length - 1 && blank(plane, axis, to))
+        to++;
+    let low = 0;
+    let high = 0;
+    for (const card of plane.cards) {
+        const frames = plane.frames.get(card.id);
+        if (card[lo] >= from && card[lo] <= slot)
+            low = Math.max(low, frameSide(frames, axis, 'lo'));
+        if (card[hi] >= slot + 1 && card[hi] <= to)
+            high = Math.max(high, frameSide(frames, axis, 'hi'));
+    }
+    return low + high;
+}
+/**
+ * How far the edge of a card on a side stands from its line: the corridor of the
+ * line on that side and one gap for each frame of the card on that side.
+ */
+export function cardInset(plane, axis, card, side, read = linesRead(plane, axis)) {
+    var _a;
+    const [lo, hi] = SPAN[axis];
+    const line = side === 'lo' ? card[lo] : card[hi];
+    return inset(plane, axis, line, side, read)
+        + frameSide((_a = plane.frames) === null || _a === void 0 ? void 0 : _a.get(card.id), axis, side) * corridor(plane, axis, read);
+}
 const lines = (plane, axis) => (axis === 'x' ? plane.xs : plane.ys);
 const extent = (plane, axis) => (axis === 'x' ? plane.width : plane.height);
 /**
@@ -31,7 +77,7 @@ export function corridorOf(plane, axis, slot, read = linesRead(plane, axis)) {
     for (let k = slot + 2; k < a.length && blank(plane, axis, k - 1); k++) {
         hi = Math.max(hi, inset(plane, axis, k, 'hi', read));
     }
-    return lo + hi;
+    return lo + hi + slotFrames(plane, axis, slot) * corridor(plane, axis, read);
 }
 /**
  * The corridor a slot holds once it has a width.
@@ -61,7 +107,7 @@ export function corridorWhenWide(plane, axis, slot, read = linesRead(plane, axis
     for (let k = slot + 2; k < a.length && blank(plane, axis, k - 1); k++) {
         hi = Math.max(hi, k === a.length - 1 || !read.has(k) ? 0 : half);
     }
-    return lo + hi;
+    return lo + hi + slotFrames(plane, axis, slot) * corridor(plane, axis, read);
 }
 /**
  * True when a slot draws at zero width: no span to take a share with and no px
@@ -388,6 +434,12 @@ function corridor(plane, axis, read = linesRead(plane, axis)) {
         real--;
     if (read.has(a.length - 1))
         real--;
+    // A frame takes one gap of the corridor of its slot (R5), so it counts as a
+    // line does when the plane cannot hold the gaps.
+    for (let slot = 0; slot < a.length - 1; slot++) {
+        if (!blank(plane, axis, slot))
+            real += slotFrames(plane, axis, slot);
+    }
     if (real <= 0)
         return plane.gap;
     return Math.min(plane.gap, Math.max(0, extent(plane, axis)) / real);
@@ -452,27 +504,31 @@ export function frameOf(plane) {
         // produced a different result over coincident lines.
         const lo = a.map((_, i) => inset(plane, axis, i, 'lo', read));
         const hi = a.map((_, i) => inset(plane, axis, i, 'hi', read));
-        return { at, lo, hi };
+        return { at, lo, hi, unit: corridor(plane, axis, read) };
     };
-    return { x: axle('x'), y: axle('y') };
+    return { x: axle('x'), y: axle('y'), frames: plane.frames };
 }
 /** Rect of one card from a precomputed frame. */
 export function rectIn(frame, card) {
-    const [x, w] = span(frame.x, card.c0, card.c1);
-    const [y, h] = span(frame.y, card.r0, card.r1);
+    var _a;
+    var _b, _c, _d, _e;
+    const frames = (_a = frame.frames) === null || _a === void 0 ? void 0 : _a.get(card.id);
+    const [x, w] = span(frame.x, card.c0, card.c1, (_b = frames === null || frames === void 0 ? void 0 : frames.left) !== null && _b !== void 0 ? _b : 0, (_c = frames === null || frames === void 0 ? void 0 : frames.right) !== null && _c !== void 0 ? _c : 0);
+    const [y, h] = span(frame.y, card.r0, card.r1, (_d = frames === null || frames === void 0 ? void 0 : frames.top) !== null && _d !== void 0 ? _d : 0, (_e = frames === null || frames === void 0 ? void 0 : frames.bottom) !== null && _e !== void 0 ? _e : 0);
     return { x, y, w, h };
 }
 /**
- * One axis of a rect: the card's start position and size.
+ * One axis of a rect: the card's start position and size, inset by one gap for
+ * each of its frames on each side.
  *
  * A card whose two lines are at one position has its far edge before its near
  * one. It has no size there, so it is drawn at zero width in the middle of the
  * slots it spans rather than inverted. That position is where its lines are,
  * inside the single gap separating the cards on either side of the run.
  */
-function span(axle, lo, hi) {
-    const near = axle.at[lo] + axle.lo[lo];
-    const far = axle.at[hi] - axle.hi[hi];
+function span(axle, lo, hi, framesLo, framesHi) {
+    const near = axle.at[lo] + axle.lo[lo] + framesLo * axle.unit;
+    const far = axle.at[hi] - axle.hi[hi] - framesHi * axle.unit;
     // A card clamped to exactly zero width lands a rounding on either side of its
     // near edge. Treating that as inverted would move it to the middle of its
     // slots and make the gap before it slightly under one gap.

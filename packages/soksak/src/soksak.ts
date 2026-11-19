@@ -18,6 +18,7 @@
 import { AXES, SIDES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
 import type { Axis, Card, CardInit, Rect, Side } from './card.js';
 import {
+  cardInset,
   corridorOf,
   corridorWhenWide,
   crossing,
@@ -40,7 +41,7 @@ import {
   slotWidths,
   zoneAt,
 } from './geometry.js';
-import type { Divider, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
+import type { Divider, Frames, Plane, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import { fillFor, isSlicing, ORDER } from './slicing.js';
@@ -355,6 +356,31 @@ export class Soksak {
     return true;
   }
 
+  /** The frames of each card by id that `setFrames` set (R5). */
+  private cardFrames: ReadonlyMap<string, Frames> = new Map();
+
+  /**
+   * Sets the frames between each card and its four lines (R5): a card without an
+   * entry, and a side without a count, has none. The frames are no part of the
+   * state. Throws for an id that is no card and for a count that is no whole
+   * number from zero, and then changes nothing.
+   */
+  setFrames(frames: Readonly<Record<string, Partial<Frames>>>): void {
+    const next = new Map<string, Frames>();
+    for (const [id, given] of Object.entries(frames)) {
+      if (!this.find(id)) throw new Error(`soksak: frames name ${JSON.stringify(id)}, which is no card`);
+      // default: a side the entry leaves out has no frames.
+      const counts: Frames = { left: given.left ?? 0, right: given.right ?? 0, top: given.top ?? 0, bottom: given.bottom ?? 0 };
+      for (const count of Object.values(counts)) {
+        if (!Number.isInteger(count)) throw new Error(`soksak: the frames of ${JSON.stringify(id)} count no whole number`);
+        if (count < 0) throw new Error(`soksak: the frames of ${JSON.stringify(id)} count below zero`);
+      }
+      next.set(id, counts);
+    }
+    this.cardFrames = next;
+    this.changed();
+  }
+
   /**
    * Set whether the layout may split, close or move a card.
    */
@@ -438,7 +464,10 @@ export class Soksak {
   }
 
   private get plane(): Plane {
-    return { xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.min };
+    return {
+      xs: this.xs, ys: this.ys, cards: this.list, width: this.w, height: this.h, gap: this.gap, minSize: this.min,
+      frames: this.cardFrames,
+    };
   }
 
   private arr(axis: Axis): number[] {
@@ -809,8 +838,8 @@ export class Soksak {
     const plane = this.plane;
     const read = linesRead(plane, axis);   // one pass, not two per card
     for (const card of this.list) {
-      const near = inset(plane, axis, card[lo], 'lo', read);
-      const far = inset(plane, axis, card[hi], 'hi', read);
+      const near = cardInset(plane, axis, card, 'lo', read);
+      const far = cardInset(plane, axis, card, 'hi', read);
       if (card[hi] === line) min = Math.max(min, along[card[lo]] + this.min + near + far);
       if (card[lo] === line) max = Math.min(max, along[card[hi]] - this.min - near - far);
     }
@@ -1144,11 +1173,11 @@ export class Soksak {
     for (const card of this.list) {
       if (card[hi] === line && along[card[lo]] > start) {
         start = along[card[lo]];
-        insStart = inset(near, axis, card[lo], 'lo', seen);
+        insStart = cardInset(near, axis, card, 'lo', seen);
       }
       if (card[lo] === line && along[card[hi]] < end) {
         end = along[card[hi]];
-        insEnd = inset(near, axis, card[hi], 'hi', seen);
+        insEnd = cardInset(near, axis, card, 'hi', seen);
       }
     }
     // A line no card ends or starts on has no pair to halve. The neighbouring
@@ -1329,8 +1358,8 @@ export class Soksak {
     if (per <= EPS) return null;
 
     const half = halfCorridor(this.plane, axis);
-    const lowest = a[card[lo]] + (this.min + inset(this.plane, axis, card[lo], 'lo') + half) / per;
-    const highest = a[card[hi]] - (this.min + half + inset(this.plane, axis, card[hi], 'hi')) / per;
+    const lowest = a[card[lo]] + (this.min + cardInset(this.plane, axis, card, 'lo') + half) / per;
+    const highest = a[card[hi]] - (this.min + half + cardInset(this.plane, axis, card, 'hi')) / per;
     if (lowest > highest) return null;
 
     const mid = (a[card[lo]] + a[card[hi]]) / 2;

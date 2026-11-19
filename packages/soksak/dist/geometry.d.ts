@@ -20,7 +20,21 @@ export interface Plane {
     gap: number;
     /** Minimum card size, in px. */
     minSize: number;
+    /** The frames of each card by id (R5); a card without an entry has none. */
+    frames?: ReadonlyMap<string, Frames>;
 }
+/** The number of frames between a card and each of its four lines (R5): each takes one gap of the corridor on that side. */
+export interface Frames {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+}
+/**
+ * How far the edge of a card on a side stands from its line: the corridor of the
+ * line on that side and one gap for each frame of the card on that side.
+ */
+export declare function cardInset(plane: Plane, axis: Axis, card: Card, side: 'lo' | 'hi', read?: Set<number>): number;
 /**
  * The gap a slot holds: half a gap for every card edge that insets into it.
  *
@@ -110,11 +124,14 @@ export interface Axle {
     lo: number[];
     /** How far a card ending at each line insets from it. */
     hi: number[];
+    /** The gap that one frame takes on this axis. */
+    unit: number;
 }
-/** Frames for both axes. */
+/** Frames for both axes, and the frames of the cards. */
 export interface Frame {
     x: Axle;
     y: Axle;
+    frames?: ReadonlyMap<string, Frames>;
 }
 /**
  * Line positions and edge insets for both axes.
