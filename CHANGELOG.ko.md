@@ -5,6 +5,11 @@
 
 ## 2026-11-20
 
+- F956 (text size scope의 창 검증): mygo, Wails, Tauri의 debug build에서 plane 둘레 stage의 누름이 frame을 scope로 만들었고, Command = 세 번이 frame 배율 1.1, 1.25, 1.5로 그것을 유지했다. test inventory check의 feature link는 `drawWork`의 현재 stage 경계를 가리킨다.
+- F972 (checkout 사이의 bundle guard): native build의 bundle guard는 실행 중인 process의 상대 실행 파일 경로를 그 process의 작업 디렉터리 기준으로 풀므로, 같은 상대 bundle 경로를 실행하는 다른 checkout의 process가 더는 build를 막지 않는다. 검증: bundle preparation test가 바뀌지 않은 guard에서 실패했고 통과한다.
+- F937-4 (view의 card 배경): 계약은 view의 테마가 모든 view에서 같은 창 테마이고, plugin이 페이지 배경으로 칠하는 card 배경 `--card`를 담는다고 적는다. group card는 토큰을 바꾸지 않으므로 `setTheme`은 surface 하나하나의 토큰을 담지 않는다. 검증: 이미 `--card`를 보내던 두 workbench에서 두 workbench의 테마 test가 통과한다.
+- F945 (세트 없는 창 사이드바): 두 workbench에서 `core.sidebars`는 세트를 보이지 않고 상태 줄만 그리는 고정 창 사이드바를 세트와 layout `null`, 빈 섹션, 그 사각형으로 보고한다. 검증: 두 workbench의 sidebar test가 바뀌지 않은 code에서 실패했고 통과한다.
+- F954 (좁은 card footer의 오류): 두 workbench에서 surface의 오류와 tab의 작업 오류는 card footer의 한 줄에 머물러 줄임표로 잘리고 글 전체를 tooltip으로 가진다. 오류 표시는 여전히 각 오류가 나타날 때 애플리케이션 로그에 쓴다. 검증: 두 workbench의 status row test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F968 (head의 접힘 단계와 선택된 tab): 두 workbench에서 card head의 접힘 단계는 card에서 가장 넓은 tab을 쓰므로, header는 어느 tab이 선택되든 같은 tab을 보이고 선택된 tab은 언제나 그 가운데 있다. 검증: 공유 head case와 mygo head test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-16 (좁은 head의 전체 화면 toggle): 두 workbench에서 tool에 너무 좁은 card header나 group header는 전체 화면 toggle을 ⋯ 옆에 남기며, tool menu는 더 이상 그것을 담지 않는다. 검증: 두 workbench의 좁은 head test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F956 (stage와 key의 글자 크기 범위): 두 workbench에서 판 둘레의 stage를 누르면 프레임이 글자 크기의 범위가 되고, native 입력 monitor가 key 입력에 press를 보고하지 않으므로 Command =가 더 이상 keyboard를 가진 card로 범위를 옮기지 않는다(`docs/spec/text-size.md#scope`). 검증: 두 workbench의 범위 test가 바뀌지 않은 code에서 실패했고 통과한다.

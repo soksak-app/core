@@ -1,0 +1,60 @@
+{
+  "name": "view-theme-card-session",
+  "description": "The page sets the theme and the menu language of its window at each start of the settings, once for each theme and mode; the theme carries the card background as --card.",
+  "replay": false,
+  "reason": "The calls set the theme and the menu language of the window, which the Go producer does not run; it runs only log and workspace without a window (docs/spec/cases/page-wire/README.md#producer-runs).",
+  "variables": {
+    "theme": {
+      "type": "object",
+      "example": {
+        "scheme": "dark",
+        "tokens": {
+          "--bg": "#101117",
+          "--card": "#191b24",
+          "--fg": "#ececf5",
+          "--muted": "#8f92a4",
+          "--edge": "#2b2e3d",
+          "--rule": "#22242f",
+          "--rail": "#7279ff",
+          "--focus": "#ffb36b",
+          "--no": "#ff7c7c",
+          "--r": "10px",
+          "--half-gap": "6px",
+          "--bw": "1px",
+          "--font": "ui-monospace,SFMono-Regular,Menlo,monospace",
+          "--size": "13px"
+        }
+      },
+      "source": "page"
+    },
+    "language": {
+      "type": "string",
+      "example": "en",
+      "source": "page"
+    }
+  },
+  "steps": [
+    {
+      "call": {
+        "name": "setTheme",
+        "payload": "$theme"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    },
+    {
+      "call": {
+        "name": "setMenuLanguage",
+        "payload": "$language"
+      }
+    },
+    {
+      "reply": {
+        "result": null
+      }
+    }
+  ]
+}

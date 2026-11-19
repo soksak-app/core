@@ -151,7 +151,7 @@
       },
       {
         "name": "core.sidebars",
-        "description": "The drawn sidebars in workbench order: the sidebar (`left`, `right`, `top` or `bottom` for the fixed window sidebar of that side, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set, layout, horizontal or vertical orientation (horizontal for a top or bottom window sidebar), selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
+        "description": "The drawn sidebars in workbench order: the sidebar (`left`, `right`, `top` or `bottom` for the fixed window sidebar of that side, `<card>:<side>` for an internal card sidebar), placement (`window` or `card`), its set and layout (both null for a fixed window sidebar that shows no set and draws only its status line), horizontal or vertical orientation (horizontal for a top or bottom window sidebar), selected tab or null, the card and active tab its sections receive (for a fixed window sidebar, the focused content card and its active tab while a plugin override applies, otherwise null), the overriding plugin and side of a fixed window sidebar or null, its rectangle, and each section's id, name, fold state, whether its tab text is clipped (always false in list layout), `surfaceId` (the section surface `<space>/<sidebar>/<section>`), `surface` (the surface that the section follows, as the sidebar reports it), its declared `height` (`fill` or pixels), `size` (the height that the person dragged the section to, or null), `mounted` (whether the section view is mounted), `phase` (the page status of the section view or null before its mount) and `error` (its mount error or null).",
         "schema": {
           "type": "array",
           "items": {
@@ -160,16 +160,8 @@
               "sidebar": {
                 "type": "string"
               },
-              "set": {
-                "type": "string"
-              },
-              "layout": {
-                "type": "string",
-                "enum": [
-                  "list",
-                  "tabs"
-                ]
-              },
+              "set": { "type": ["string", "null"] },
+              "layout": { "type": ["string", "null"], "enum": ["list", "tabs", null] },
               "orientation": { "type": "string", "enum": ["horizontal", "vertical"] },
               "placement": { "enum": ["window", "card"] },
               "plugin": { "type": ["string", "null"] },

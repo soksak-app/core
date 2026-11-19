@@ -39,7 +39,7 @@ import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } f
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
 import { onPluginOperations, pluginOperations } from "./installed-plugins.js";
-import { setSurfaceStatus, surfaceErrorText } from "./surface-status.js";
+import { setSurfaceStatus, setTabError, surfaceErrorText } from "./surface-status.js";
 import { imageDetachHold } from "./image-detach-waits.js";
 import { clearVisibleNotices, missingOriginRecords, onTabReports, recordOrigin, reportError, setVisibleTab, storedLayoutState, tabButtonData, tabError, tabFooter,
   tabLabel, tabModified, tabNotice } from "./tab-reports.js";
@@ -343,8 +343,8 @@ function updateCard(el, card, rect) {
       // The content of an ordinary sidebar has no card-surface link and no rail.
       drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     } else {
-      clearSet(holder);
-      holder.replaceChildren();
+      // The place shows no set; it draws its status line, and core.sidebars reports it with a null set.
+      drawSet(holder, card.id, null, { card: null, surface: null, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     }
     setText(statusText, `${SIDE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).
@@ -521,25 +521,8 @@ function updateCard(el, card, rect) {
   });
   cardFolds.set(card.id, folded);
   setText(statusText, cardStatusText(card, tabs, folded));
-  showTabError(status, shown.id);
-}
-
-/* The operation error of the active tab, shown in its card's status row (docs/spec/plugins.md#tab-reports). */
-function showTabError(status, tabId) {
-  let line = status.querySelector(".status__error");
-  if (!line) {
-    line = document.createElement("span");
-    line.className = "status__error";
-    status.appendChild(line);
-  }
-  const where = `tab error ${tabId}`;
-  const text = tabError(tabId);
-  if (text !== null) {
-    showError(line, where, text);
-    return;
-  }
-  line.hidden = true;
-  hideError(line, where);
+  // The operation error of the active tab, shown in its card's status row (docs/spec/plugins.md#tab-reports).
+  setTabError(status, shown.id, tabError(shown.id));
 }
 
 // The last drawn out-of-space fold text of each card. When a tab changes the bottom text, only the foot is fixed and nothing is redrawn.
@@ -1736,7 +1719,7 @@ const redrawTabReports = () => {
     const statusText = el.querySelector(":scope > .status .status__text");
     // default: a card not drawn yet has no folded-side text.
     if (statusText && !isPlace(card.id)) setText(statusText, cardStatusText(card, tabsOf(card), cardFolds.get(card.id) ?? null));
-    if (statusText && !isPlace(card.id) && tabsOf(card).length) showTabError(statusText.parentElement, activeTab(card).id);
+    if (statusText && !isPlace(card.id) && tabsOf(card).length) setTabError(statusText.parentElement, activeTab(card).id, tabError(activeTab(card).id));
   }
 };
 onTabReports(redrawTabReports);

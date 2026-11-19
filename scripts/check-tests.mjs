@@ -310,9 +310,61 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F972",
+    implementation: [
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation attributes a relative executable path by the working directory of its process" },
+    ],
+    expected: "A running process is attributed to a bundle only by its absolute executable path, a relative one resolved against the working directory of the process.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-4",
+    implementation: [
+      { file: "packages/workbench/settings.js", symbol: "const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });" },
+      { file: "packages/workbench-mygo/src/settings_modal.go", symbol: "func (s *SettingsStore) pageTheme() (map[string]any, error) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheThemeOfTheViewsCarriesTheCardBackground" },
+      { file: "packages/workbench/test/view-theme-card.test.mjs", id: "the theme of the views carries the card background of the theme as --card" },
+    ],
+    expected: "The theme of the views is the window theme with --card, the same for every view, and carries no tokens of single surfaces.",
+    levels: ["unit"],
+  },
+  {
+    id: "F945",
+    implementation: [
+      { file: "packages/workbench-mygo/src/sidebars.go", symbol: "drawn := &drawnSidebar{frame: frame, owner: owner}" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "drawn.set(container, { container, sidebar, key: null, set: null, layout: null, context, entries: [] });" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet" },
+      { file: "packages/workbench/test/window-sidebar-unset.test.mjs", id: "core.sidebars reports a window sidebar that shows no set with its rectangle and a null set" },
+    ],
+    expected: "core.sidebars reports a fixed window sidebar that shows no set with a null set and layout, no sections and its rectangle in both workbenches.",
+    levels: ["unit"],
+  },
+  {
+    id: "F954",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap)" },
+      { file: "packages/workbench/surface-status.js", symbol: "export function setTabError(status, tab, text)" },
+      { file: "packages/workbench/app.css", symbol: ".surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestALongErrorStaysOnOneLineInsideTheStatusRow" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row stays on one line and is cut with an ellipsis" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row carries its whole text as its tooltip until it is withdrawn" },
+    ],
+    expected: "The error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, with the whole text as the tooltip.",
+    levels: ["unit"],
+  },
+  {
     id: "F956",
     implementation: [
-      { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX+inset, shiftY+inset" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX-shareLeft+inset, shiftY-shareTop+inset" },
       { file: "packages/workbench/text-size.js", symbol: "export function pressesFrame(target)" },
       { file: "native/darwin/src/host_api_input.m", symbol: "NSEventMask mask = NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged | NSEventMaskLeftMouseUp;" },
     ],
