@@ -263,7 +263,7 @@ struct RasterState {
     /// change does not reset it, because it counts the frames of the region (host.window presentedFrames).
     presented_frames: u64,
     presentation_error: Option<String>,
-    /// The drawing state and the hiding last returned by drawing_changes, or None before one was returned.
+    /// The drawing state and the hiding last sent to the supplier (mark_drawing_sent), or None before one was sent.
     drawing_sent: Option<(bool, bool)>,
     /// The screen request that the region has not had answered, or None when none is unanswered.
     screen_request: Option<ScreenRequest>,
@@ -475,7 +475,8 @@ impl Images {
     }
 
     /// Returns the drawing state of each attached region whose state was not sent yet or changed since it was sent,
-    /// sorted by surface and name, and records it as sent.
+    /// sorted by surface and name. It does not record a state as sent: the caller records each state whose send succeeded
+    /// with `mark_drawing_sent`, so a state whose send failed is returned again by the next call.
     pub fn drawing_changes(&self) -> Vec<Drawing> {
         let mut guard = self.lock();
         let inner = &mut *guard;
@@ -500,7 +501,6 @@ impl Images {
             if state.drawing_sent == Some((drawing, hidden)) {
                 continue;
             }
-            state.drawing_sent = Some((drawing, hidden));
             // A raster that changed while the region was hidden has no configuration yet, and no later step sends it
             // when the region is shown without a new layout.
             let configure = (drawing && !state.configured && state.width > 0).then(|| {
@@ -1278,6 +1278,16 @@ impl Images {
             .get(key)
             .map(|state| state.presented_frames)
             .ok_or_else(|| format!("image {:?} is not attached", key.1))
+    }
+
+    /// Records the drawing state of change as sent to the supplier of its region. A change of an earlier generation
+    /// records nothing, because the drawing state names the generation and the new generation is sent again.
+    pub fn mark_drawing_sent(&self, change: &Drawing) {
+        if let Some(state) = self.lock().states.get_mut(&change.key)
+            && state.generation == change.generation
+        {
+            state.drawing_sent = Some((change.drawing, change.hidden));
+        }
     }
 
     /// Returns the drawing state last sent to the supplier of a region; it is false before one was sent.
@@ -2146,7 +2156,9 @@ where
 /// The recovery callback is deliberately separate from the response. The caller can therefore configure the sidecar
 /// again over its own transport without hiding the original error. `declared` reports whether a plugin still declares
 /// the sending sidecar: the failure of a frame of a sidecar that no plugin declares is the end of its process, so the
-/// frame is invalidated without recovery (docs/spec/native-surfaces.md#image-regions).
+/// frame is invalidated without recovery (docs/spec/native-surfaces.md#image-regions). `recover` runs before the answer
+/// with `notFound`, when the native region has no IOSurface to display, and with `staleRaster`, when the native raster
+/// of the region differs from the frame, so the host state holds an earlier raster than the native region.
 #[allow(clippy::too_many_arguments)]
 pub fn handle_envelope_with_recovery<OnMain, SendResponse, Recover, Declared, Presented>(
     body_str: &str,
@@ -2319,6 +2331,10 @@ where
                                     .ok_or_else(|| "presentFailed".to_string())
                             })
                     }));
+                    // A frame whose native raster differs from it shows that the host state holds an earlier raster than
+                    // the native region, so it requests a configuration of the native raster as notFound does.
+                    let stale_raster =
+                        matches!(&presentation, Err(detail) if detail.starts_with("staleRaster"));
                     let reason = match presentation {
                         Ok(()) => None,
                         Err(detail) if !declared() => {
@@ -2348,19 +2364,23 @@ where
                         }
                     };
 
+                    let mut recovery = None;
                     if let Some(reason) = reason.filter(|reason| *reason != "stale") {
                         images.mark_presentation_failed(&key, generation, raster, sequence, reason);
-                        if reason == "notFound"
-                            && let Err(error) = recover(reason)
-                        {
-                            log_error(
-                                "image recovery",
-                                format!(
-                                    "surface={} name={} reason={} error={}",
-                                    key.0, name, reason, error
-                                ),
-                            );
-                        }
+                        recovery = (reason == "notFound").then_some(reason);
+                    } else if stale_raster && declared() {
+                        recovery = Some("staleRaster");
+                    }
+                    if let Some(recovery) = recovery
+                        && let Err(error) = recover(recovery)
+                    {
+                        log_error(
+                            "image recovery",
+                            format!(
+                                "surface={} name={} reason={} error={}",
+                                key.0, name, recovery, error
+                            ),
+                        );
                     }
 
                     let response = match reason {

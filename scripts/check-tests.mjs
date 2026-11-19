@@ -13942,6 +13942,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F921",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func (i *Images) MarkDrawingSent(change ImageDrawing)" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub fn mark_drawing_sent(&self, change: &Drawing)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/images_test.go", id: "TestADrawingChangeThatWasNotSentIsReturnedAgain" },
+      { file: "packages/host/go/tests/images_test.go", id: "TestAFrameOfAnOlderNativeRasterRequestsTheCurrentRasterConfiguration" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "a_drawing_change_that_was_not_sent_is_returned_again" },
+      { file: "packages/host/rust/tests/images_test.rs", id: "a_frame_of_an_older_native_raster_requests_the_current_raster_configuration" },
+    ],
+    expected: "A drawing state is recorded as sent only after its send succeeds, and a frame refused as staleRaster requests a configuration of the native raster.",
+    levels: ["unit"],
+  },
+  {
     id: "F922",
     implementation: [{ file: "packages/host/go/src/images.go", symbol: "logAnswerError(\"image reply \"+d.Name, sendResponse(d.Name, d.JSON))" }],
     tests: [{ file: "packages/host/go/src/images_test.go", id: "TestARefusedFrameIsAnsweredToItsSupplier" }],

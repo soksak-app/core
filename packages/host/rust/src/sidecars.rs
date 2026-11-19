@@ -5329,7 +5329,7 @@ impl Owner for Window {
                 response_sender.send(surface, image, &body)
             },
             |reason| {
-                if reason != "notFound" {
+                if reason != "notFound" && reason != "staleRaster" {
                     return Ok(());
                 }
                 crate::composition::refresh_image_rasters(&window)

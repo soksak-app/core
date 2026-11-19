@@ -144,7 +144,7 @@ type ImageRasterState struct {
 	// generation change does not reset it, because it counts the frames of the region (host.window presentedFrames).
 	PresentedFrames   uint64
 	PresentationError string
-	// Drawing and Hidden are the drawing state last returned by DrawingChanges, and DrawingSent whether one was returned.
+	// Drawing and Hidden are the drawing state last sent to the supplier, and DrawingSent whether one was sent (MarkDrawingSent).
 	Drawing     bool
 	Hidden      bool
 	DrawingSent bool
@@ -333,7 +333,8 @@ func (i *Images) shownLocked(key ImageKey, state *ImageRasterState) bool {
 }
 
 // DrawingChanges returns the drawing state of each attached region whose state was not sent yet or changed since it was sent, sorted by
-// surface and name, and records it as sent.
+// surface and name. It does not record a state as sent: the caller records each state whose send succeeded with MarkDrawingSent, so a
+// state whose send failed is returned again by the next call.
 func (i *Images) DrawingChanges() []ImageDrawing {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -350,7 +351,6 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		if state.DrawingSent && state.Drawing == drawing && state.Hidden == hidden {
 			continue
 		}
-		state.Drawing, state.Hidden, state.DrawingSent = drawing, hidden, true
 		// A raster that changed while the region was hidden has no configuration yet, and no later step sends it when the
 		// region is shown without a new layout.
 		var configure *ImageConfigure
@@ -369,6 +369,18 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		return changes[a].Key.Name < changes[b].Key.Name
 	})
 	return changes
+}
+
+// MarkDrawingSent records the drawing state of change as sent to the supplier of its region. A change of an earlier generation records
+// nothing, because the drawing state names the generation and the new generation is sent again.
+func (i *Images) MarkDrawingSent(change ImageDrawing) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[change.Key]
+	if state == nil || state.Generation != change.Generation {
+		return
+	}
+	state.Drawing, state.Hidden, state.DrawingSent = change.Drawing, change.Hidden, true
 }
 
 func NewImages() *Images {
@@ -1318,8 +1330,6 @@ func logRefusedFrame(surface, sender string, images *Images, name string, genera
 		surface, name, sender, generation, raster, sequence, reason, images.FrameState(ImageKey{Surface: surface, Name: name}))})
 }
 
-// recoverFrame is called, after the current frame failed for a native reason, with that reason
-// (notFound has no IOSurface to display, so it requests a new raster configuration). It returns true when it handled the envelope.
 // logAnswerError records the error of an answer to a frame: an answer that cannot reach a sidecar that ended needs no
 // receiver, because the frames of a sidecar end with its process, and any other failure is an error.
 func logAnswerError(where string, err error) {
@@ -1332,6 +1342,9 @@ func logAnswerError(where string, err error) {
 }
 
 // HandleEnvelope handles an image envelope. It takes as arguments the work to run on the main thread, the way to send the reply, the recovery after a presentation failure, whether a plugin still declares the sending sidecar, and the callback for a newly presented frame.
+// recoverFrame runs before the answer with notFound, when the native region has no IOSurface to display, and with staleRaster, when the
+// native raster of the region differs from the frame, so the host state holds an earlier raster than the native region; each requests
+// a configuration of the native raster (docs/spec/native-surfaces.md#image-regions). It returns true when it handled the envelope.
 func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, onMain func(func() error) error,
 	sendResponse func(string, map[string]interface{}) error, recoverFrame func(reason string) error, declared func() bool, presented func()) bool {
 	decision := Decide(bodyBytes, sender, surface, images)
@@ -1423,10 +1436,16 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 			reason, invalidated, line := PresentationOutcome(surface, d.Name, d.Generation, d.Raster, d.Sequence, d.ID,
 				err.Error(), images.FrameState(key))
 			Log(line)
+			recovery := ""
 			if !invalidated {
 				images.MarkPresentationFailed(key, d.Generation, d.Raster, d.Sequence, reason)
-				if err := recoverFrame(reason); err != nil {
-					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, reason, err))
+				recovery = reason
+			} else if strings.HasPrefix(err.Error(), "staleRaster") {
+				recovery = "staleRaster"
+			}
+			if recovery != "" {
+				if err := recoverFrame(recovery); err != nil {
+					LogError("image recovery", fmt.Sprintf("surface=%s name=%s reason=%s error=%v", surface, d.Name, recovery, err))
 				}
 			}
 			response := AfterPresent(false, reason, d.Name, d.Generation, d.Raster, d.Sequence)

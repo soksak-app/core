@@ -369,6 +369,7 @@ place가 빼는 표면의 영역 종료는 호스트가 맡는다. 두 호스트
 - **권한**: 영역이 공급을 허가할 사이드카를 지정한다. 호스트는 등록되지 않은 사이드카의 그림을 오류와 함께 거절한다.
 - **오류 보고**: 호스트가 그림을 표시할 수 없으면 영역이 오류 이벤트를 보낸다: `{type: "error", reason}`. 사유에는 `notFound`(IOSurface를 찾지 못함), `forbidden`(접근 거부), `size`(선언한 크기가 IOSurface의 실제 크기와 맞지 않음), `scale`(창 배율과 다른 배율로 그린 그림), `presentFailed`(플랫폼 표시 실패)가 있다.
 - **끝난 사이드카**: 어떤 plugin도 선언하지 않는 사이드카의 그림, 예를 들어 카드가 열린 채 plugin을 제거할 때 오가던 그림은 buffer와 함께 끝난 process의 것이다: 호스트는 그것을 표시하지 않고 `stale`로 답하고 기록하며, 오류 이벤트를 보내지 않고 복구를 시작하지 않는다. 끝난 사이드카에 닿지 못하는 답은 보내지 않음으로 기록된다.
+- **그림 응답과 복구**: 호스트는 거부하는 모든 image envelope에 답한다. 거부가 native 표시 전(`notAttached`, `stale`, `unsupported`)이든 native 표시에서든 같다. 공급자는 오가는 그림의 답을 받기 전에는 다음 그림을 그리지 않기 때문이다. 영역의 native raster가 그림과 달라 거부된 그림(`staleRaster`)은 호스트가 native 영역보다 이전 raster를 가진다는 뜻이다. 호스트는 답하기 전에 보이는 각 영역의 native raster를 다시 읽고 바뀐 raster마다 configure를 보낸다. `notFound`와 같으며, 그래서 새로 그릴 것이 없는 공급자도 현재 raster의 configure를 받는다. drawing 상태는 전송이 성공한 뒤에만 보낸 것으로 기록된다. 그래서 전송이 실패한 상태는 다음 drawing 상태 전송이 다시 보내며, `host.window`는 공급자가 알기 전에 영역을 drawing으로 보고하지 않는다.
 
 `host.window.regions[].error`는 유효한 프레임이 표시될 때까지 마지막 네이티브 표시 거절을 유지한다. 이전의 유효 스냅샷이 이후 거절을 없애지는 않는다. 그림 픽셀은 네이티브 백킹 배율에서 크기를 유지하며, 레이어 크기 변경으로 글자를 늘려 새 영역을 채우면 안 된다. 창의 backing scale이 바뀌면 표시 중인 그림은 그려진 밀도를 유지하고, host가 보이는 region의 raster를 다시 구성하여 새 scale의 frame이 그것을 대체한다.
 

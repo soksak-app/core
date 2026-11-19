@@ -734,6 +734,7 @@ fn invalid_json_closes_connection() {
 | `images.present.main-thread-failure-reports-present-failed` | 주 스레드 표시가 실패하면 presentFailed로 응답하고 표시 대기는 그 오류를 반환한다. | all |
 | `images.present.older-ack-preserves-newer-rejection` | 성공한 오래된 in-flight presentation은 실제 presented sequence를 전진시키지만 더 새 accepted sequence의 rejection을 지우지 않는다. 최신 accepted sequence의 성공 acknowledgment만 그 rejection을 지운다. | all |
 | `images.present.missing-native-surface-requests-reconfiguration` | notFound로 실패한 표시는 같은 raster의 새 구성을 요청한다. | all |
+| `images.present.stale-native-raster-requests-reconfiguration` | native raster가 그림과 달라 거부된 표시는 stale로 응답하고, 그 전에 native raster의 구성을 요청한다. | all |
 | `images.attach.surface-close-removes-only-its-images` | 표면을 제거하면 그 이미지 핸들을 반환하고 다른 표면의 이미지는 유지한다. | all |
 | `images.attach.one-main-step` | attach는 요청 확인, 이름 예약, 영역 생성과 등록을 main thread의 한 step에서 실행하므로, 표면 닫기나 page reload는 attach 전체의 앞이나 뒤에 실행된다. 실패한 attach는 오류 기록 없이 자기 이름만 되돌리고, 이름 없이 열린 영역은 남지 않는다. | all |
 | `images.attach.rejects-reservation-without-sidecar` | 소유 사이드카가 없는 이미지 예약을 거부하고 아무것도 등록하지 않는다. | all |
@@ -897,6 +898,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar` | 사이드카가 더 이상 선언되지 않은 실행 중인 상주 service는 `installed` `null`로 오래된 것으로 보고된다. 교체하면 `close-owner`와 `shutdown`을 보내고, 실행 파일을 시작하지 않고, 그 sidecar로 보낸 각 표면에 선언되지 않은 오류의 연결 알림을 보내고, `outdated`에서 빼고, info로 `sidecar <name>: service <running> ended; the sidecar is not declared`를 기록한다. | all |
 | `input.pointer.reads-the-press-target-before-delivery` | 주입된 press는 main thread의 한 단계 안에서 전달 전에 그 아래 view를 읽고, target을 읽을 수 없는 press는 전달하지 않는다. | all |
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | all |
+| `image.drawing.unsent-change-is-sent-again` | 한 번의 전송이 읽었으나 보낸 것으로 기록하지 않은 drawing 상태는 보낸 것으로 보고되지 않고 다음 전송이 다시 돌려준다. | all |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | all |
 | `image.drawing.reports-a-hidden-surface` | region의 그리기 메시지는 바깥 표면이 숨김을 알린 동안 `hidden`을 true로, 그 밖에는 false로 적는다. 아무것도 알리지 않은 표면은 숨겨진 것이 아니고, 값이 바뀌면 메시지를 보내며, 새 연결의 서비스는 그 값을 다시 받는다. | all |
 | `image.drawing.configures-shown-regions` | 보이는 region은 창의 상태와 상관없이 설정을 받고, 화면에 없는 창에서 raster가 바뀔 때도 받으며, 숨겨진 region은 받지 않는다. 표시 대기는 그리기 상태가 아닌 region을 기다리지 않고 그리기 상태가 된 region을 기다리며, 설정된 raster는 region이 그리기 상태가 될 때 다시 설정되지 않는다. | all |

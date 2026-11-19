@@ -103,6 +103,8 @@ func (s *Surfaces) sendImageDrawingChange(change ImageDrawing) error {
 	if err := s.sidecars.Send(change.Owner, change.Sidecar, change.Key.Surface, body); err != nil {
 		return fmt.Errorf("image %q drawing: %w", change.Name, err)
 	}
+	// Only a sent state is recorded, so a state whose send failed is sent by the next pass.
+	s.images.MarkDrawingSent(change)
 	if change.Configure == nil {
 		return nil
 	}
