@@ -482,6 +482,7 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-app.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
     ],
     expected: "A bundle build writes and signs a staging bundle and installs it with one rename, so a launch finds a complete signed bundle, and a check run verifies the signature of each bundle before it starts it.",
+    levels: ["unit"],
   },
   {
     id: "F973-1",
