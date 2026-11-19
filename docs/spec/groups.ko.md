@@ -14,7 +14,7 @@ card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab
 - group card는 space group tree의 node다. 식별자, 이름, leader, 그리고 member를 가진다. member는 grid의 content card와 group card이며 둘 이상이다. window sidebar는 member가 아니다. 각 content card와 group card는 많아야 group card 하나의 member다. 어떤 group card의 member도 아닌 card는 root level의 member다.
 - group card의 사각형은 그 안의 content card, 곧 그 member와 그 안의 group card의 member가 가진 가장 작은 첫 line부터 가장 큰 마지막 line까지의 line index span `[c0, c1) × [r0, r1)`이다. group card는 사각형 하나를 덮는다. 곧 그 안의 content card의 cell이 정확히 그 사각형의 cell이므로, grid의 다른 card는 그 사각형의 cell을 갖지 않는다. group card의 사각형은 그것을 담은 group card의 사각형 안에 놓인다.
 - root level의 level은 0이고, group card의 member의 level은 그 group card의 level에 1을 더한 값이다. level은 tree에서 도출되며 저장되지 않는다.
-- space가 group card를 가진 동안 workbench가 grid에 하는 모든 operation은 `tidy`로 끝나며 `paidBy` 기록을 남기지 않는다. 따라서 close하거나 move하는 card는 layout library가 고르는 이웃에게 자기 cell을 주고(R7), 남은 card가 쓰는 모든 line은 자기 좌표를 유지한다. group을 가진 layout은 이 형태로 저장된다.
+- space가 group card를 가진 동안 workbench가 grid에 하는 모든 operation은 `tidy`로 끝나며 `paidBy` 기록을 남기지 않는다. 따라서 close하거나 move하는 card는 [닫기](#닫기)가 고르는 이웃에게 자기 cell을 주고, 남은 card가 쓰는 모든 line은 자기 좌표를 유지한다. group을 가진 layout은 이 형태로 저장된다.
 - card의 식별자는 그 space에서 card 하나를 가리킨다. content card와 group card는 식별자를 한 sequence에서 받는다. 곧 `card-<n>`이며, `n`은 layout이 저장하는([저장](#저장)) 그 space가 낸 가장 큰 card 번호 `lastCard`보다 1 크다. 그래서 space는 끝난 식별자를 재시작 뒤에도 다시 내지 않는다. card는 group 안팎으로 옮겨도 식별자를 유지하며, card를 가리키는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.*`, `core.tab.move`, `core.group.*`)는 활성 space의 어느 level의 card든 받는다.
 - group이라는 낱말 하나는 이름 `core.group.*`, `core.card.group`과 이 명세의 기록의 member `group`에서만 group card를 가리킨다. `core.picker` item의 member `group`과 창 snapshot의 groups는 원래 뜻을 유지한다.
 - level의 reading order는 member를 card 또는 group card 사각형의 첫 row line `r0`, 다음으로 첫 column line `c0` 순으로 정렬한다. 이 순서는 layout library의 R2가 요구하듯 배열 순서가 아니라 line으로 정해진다. card의 workbench order는 root level의 reading order이며, 각 group card는 그 member의 reading order 앞에 선다.
@@ -135,6 +135,8 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 ### 닫기
 
 group card는 member 하나를 담지 않는다. close, move, tab drop이 group card에 member 하나를 남기면, move의 target이 정해진 뒤 같은 변경에서 그 member가 그 group card를 담은 level에서 group card를 대신한다. 그 member는 group card의 자리와 leader mark를 받고 식별자를 유지하며, group card는 dissolve처럼 끝난다. 이 대체에서 grid는 바뀌지 않으므로 거부되지 않는다. group card 안의 모든 card를 닫는 것은 group card의 close, 곧 `core.card.close {card: <group>}`다. grid의 마지막 card를 닫으려는 close는 layout의 마지막 card 규칙(layout library의 R7)을 따른다.
+
+grid card의 close는, 그 자체로든, 한 card로 만든 group card의 close로든, move의 앞 절반으로든, layout library의 R7이 말하는 대로 자기 cell을 이웃 한 줄에 준다. side는 library의 fill 순서로 시도하되, 이웃 줄이 card의 level 안에 놓인 side를 먼저 시도하고, 모든 group card를 사각형 하나로 유지하는 첫 결과를 남긴다. 그래서 group 안의 card는 할 수 있으면 자기 group의 card에게 cell을 주고, root level의 card는 group을 키우지 않는다. 그런 줄이 없는 card는 library가 지우는 대로 자기 slot을 지운다. 어느 것도 허용하지 않는 close는 그 원인과 함께 거부된다: 첫 side가 깨는 group card와 함께 `card <id> cannot <operation>: group <g> would not cover one rectangle`, `card <id> cannot <operation>: it is the last card of the layout`, 또는 `card <id> cannot <operation>: no row of cards that can grow covers a side of it, and its slots hold other cards`.
 
 ## 이동과 drop
 
