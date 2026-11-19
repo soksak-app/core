@@ -62,8 +62,11 @@ func (s *Shell) groupCard(id string) error {
 	return nil
 }
 
-// cardSplitEven tells whether a split balances the plane of the split (cardSplit even).
-func (s *Shell) cardSplitEven() bool { return false }
+// cardSplitEven tells whether a split balances the grid (cardSplit even, docs/spec/groups.md#split-setting).
+func (s *Shell) cardSplitEven() bool {
+	value, _ := s.settings.Value("cardSplit").(string) // silent: the settings store checks the type of the value.
+	return value == "even"
+}
 
 type groupCreateParam struct {
 	Card   string          `json:"card"`

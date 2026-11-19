@@ -14011,6 +14011,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheCloseMenuOfAGroupDissolvesIt" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestALineAcrossAGroupIsOneLine" },
       { file: "packages/workbench-mygo/tests/group_fullscreen_test.go", id: "TestAGroupCardGoesFullscreenWithTheCardsInsideIt" },
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheSplitSettingBalancesTheGrid" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestABoundaryStopsAtTheDrawnMinimumUnderAHeader" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabDropResolvesIntoTheGroup" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabOutOfAGroupSplitsACardOfTheRootLevel" },
