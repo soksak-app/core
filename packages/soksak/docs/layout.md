@@ -537,7 +537,7 @@ first.
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
 | `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
-| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | remove a card; `fill` reports which neighbours take the space; `sides` names the sides whose row of neighbours may grow, tried in their order (`"below"`, `"above"`, `"right"`, `"left"`), `fillSides`, the sides of `fillOrder`, by default, and an empty list only removes the slots |
+| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | remove a card; `fill` reports which neighbours take the space; `sides` names the sides whose row of neighbours may grow, tried in their order (`"below"`, `"above"`, `"right"`, `"left"`), `fillSides`, the sides of `fillOrder`, by default, and an empty list only removes the slots; another side throws `unknown fill side <side>` |
 | `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | take a card to another card's side; `sides` is the sides of its close, as `close` takes them |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
 | `setFrames(frames)` | the frames between each card and its lines (R5) |

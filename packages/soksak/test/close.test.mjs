@@ -566,3 +566,25 @@ test("a close and a move take the row of neighbours of the sides they name, in t
   assertTiling(moving, "after a move that closed into the named side");
   assert.throws(() => quarters().close("a", ["middle"]), { message: "unknown fill side middle" });
 });
+
+// close and move check the sides at the boundary before they act, as fill does and as the Go port does: a fixed card, the last card, a
+// card with a paidBy record and a missing card refuse another side with its name rather than answering (layout.md, the API table).
+test("close and move refuse another side before they judge the card", () => {
+  const quarters = () => new Soksak({ xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
+    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
+    { id: "c", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "d", c0: 1, c1: 2, r0: 1, r1: 2 },
+  ] }, { width: W, height: H });
+  const fixed = quarters();
+  fixed.setFixed("a", true);
+  assert.throws(() => fixed.close("a", ["up"]), { message: "unknown fill side up" });
+  assert.throws(() => fixed.move("a", "c", "right", ["up"]), { message: "unknown fill side up" });
+  const last = new Soksak();
+  const only = last.cards[0].id;
+  assert.throws(() => last.close(only, ["up"]), { message: "unknown fill side up" });
+  const paid = quarters();
+  const born = paid.splitToward("a", "right");
+  assert.ok(Object.hasOwn(paid.toJSON().paidBy, born), "the split card holds a paidBy record");
+  assert.throws(() => paid.close(born, ["up"]), { message: "unknown fill side up" });
+  assert.throws(() => quarters().close("missing", ["up"]), { message: "unknown fill side up" });
+  assert.throws(() => quarters().move("missing", "c", "right", ["up"]), { message: "unknown fill side up" });
+});
