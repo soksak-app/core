@@ -319,8 +319,16 @@ test("the leader keeps its leader mark in a head too narrow for its tools, and i
 test("a group header too narrow for its buttons folds them into its tool menu, which runs them", { timeout: 5000 }, async () => {
   arrange();
   const head = groupElement("card-4").querySelector(".group__head");
+  // JSDOM has no layout engine: the name grows over the room of the header, 1000 wide, unless the fit holds its growth to measure its
+  // text, 40 wide.
+  const name = head.querySelector(".group__name");
+  Object.defineProperty(name, "scrollWidth", { value: 1000, configurable: true });
+  name.getBoundingClientRect = () => ({ x: 0, y: 0, width: head.dataset.measure === undefined ? 1000 : 40, height: 20 });
+  Object.defineProperty(head, "clientWidth", { value: 400, configurable: true });
+  head.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
   plane.settle();
-  assert.equal(head.dataset.tools, "bar", "a wide group header shows its buttons in one row");
+  assert.equal(head.dataset.tools, "bar", "a group header with room for its name and its buttons shows its buttons in one row");
+  assert.equal(head.dataset.measure, undefined, "the fit leaves the name free to grow");
   Object.defineProperty(head, "clientWidth", { value: 120, configurable: true });
   head.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
   plane.settle();

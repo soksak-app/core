@@ -1394,7 +1394,12 @@ function fitChrome(chrome, strip) {
 function fitGroupHead(head) {
   head.dataset.fit = "strip";
   head.dataset.tools = "bar";
-  foldHead(head, { lead: 0, tabWidths: [head.querySelector(".group__name").scrollWidth], tabGap: 0 });
+  // The name grows over the room of the header, so it is measured at the width of its text while data-measure holds its growth, as a
+  // tab is measured; no render happens between the two writes.
+  head.dataset.measure = "";
+  const name = head.querySelector(".group__name").getBoundingClientRect().width;
+  delete head.dataset.measure;
+  foldHead(head, { lead: 0, tabWidths: [name], tabGap: 0 });
 }
 
 /**

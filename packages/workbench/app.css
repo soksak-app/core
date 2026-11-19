@@ -210,6 +210,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   border-bottom:var(--bw) solid}
 .group__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
   color:var(--fg);cursor:grab;user-select:none}
+/* The fit of a group header measures the name at the width of its text (docs/spec/groups.md#headers). */
+.group__head[data-measure] .group__name{flex:0 0 auto}
 
 /* The focus mark is shown only at the four corners of the body. A native surface is outside the CSS stack, so a mark drawn inside the
    card would be hidden under the surface; it is placed on the same layer as the surface. */

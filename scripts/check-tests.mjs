@@ -283,6 +283,18 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-20",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: 'head.dataset.measure = "";' },
+      { file: "packages/workbench/app.css", symbol: ".group__head[data-measure] .group__name{flex:0 0 auto}" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group header too narrow for its buttons folds them into its tool menu, which runs them" },
+    ],
+    expected: "The page fits a group header with its name measured at the width of its text, so a header with room shows its buttons in one row.",
+    levels: ["unit"],
+  },
+  {
     id: "F955",
     implementation: [
       { file: "packages/workbench/group-tree.js", symbol: "drawnDividers(dividers, gripLength) {" },
