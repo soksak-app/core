@@ -4,6 +4,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"image/color"
 	"math"
 	"os"
 	"slices"
@@ -377,5 +378,33 @@ func TestAGroupIsFilledWithTheColorOfItsLevel(t *testing.T) {
 	f.tester.Frame()
 	if got, want := f.pixelOf(points[0].x, points[0].y), opaque(ui.Hex(colors["bg"])); !near(got, want) {
 		t.Errorf("with group.tint 0 %s is %v, want bg %v", points[0].name, got, want)
+	}
+}
+
+// A rule of a line inside a group card is drawn only inside its frame below its header: never in the stage padding beyond the frame,
+// nor across the frame of a nested group card (docs/spec/groups.md#drawing).
+func TestARuleInsideAGroupStaysInsideItsFrame(t *testing.T) {
+	f := nestedSideShell(t)
+	f.tester.Frame()
+	tree := f.tester.ElementTree()
+	cards, frames := exposedAll(tree, "core.card"), exposedAll(tree, "core.group")
+	outer, inner := frames["card-6"], frames["card-5"]
+	// The x line between card-5 and card-2 and the y line between card-1 and card-3 lie inside the group cards.
+	x := (inner.X + inner.W + cards["card-2"].X) / 2
+	y := (cards["card-1"].Y + cards["card-1"].H + cards["card-3"].Y) / 2
+	padding := f.pixelOf(outer.X+40, outer.Y-3)
+	for _, p := range []struct {
+		name string
+		x, y float32
+		want color.RGBA
+	}{
+		{"above the frame of card-6", x, outer.Y - 3, padding},
+		{"below the frame of card-6", x, outer.Y + outer.H + 3, padding},
+		{"left of the frame of card-6", outer.X - 3, y, padding},
+		{"between the frames of card-6 and card-5", inner.X - 6, y, f.pixelOf(inner.X-6, y-40)},
+	} {
+		if got := f.pixelOf(p.x, p.y); !near(got, p.want) {
+			t.Errorf("the rule reaches %s at %v,%v: %v, not %v", p.name, p.x, p.y, got, p.want)
+		}
 	}
 }
