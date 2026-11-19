@@ -673,7 +673,7 @@ impl Platform for Windows {
         _x: f64,
         _y: f64,
     ) -> Result<(), String> {
-        Err("not implemented on windows".into())
+        Err("the action of a person is not implemented on windows".into())
     }
     #[cfg(feature = "diagnostics")]
     fn input_source(&self) -> Result<(Option<String>, String), String> {

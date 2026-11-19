@@ -342,7 +342,7 @@ func diagnosticInputPerson(e *Endpoint, _ *endpointConn, params json.RawMessage,
 	}
 	person, ok := system.(personInputPlatform)
 	if !ok {
-		return nil, rpcError(codeHandler, "not implemented on %s", runtime.GOOS)
+		return nil, errors.New("the action of a person is not implemented on this platform")
 	}
 	if err := s.useWindow(func(window platform.Window) error { return person.DispatchPersonInput(window, action, x, y) }); err != nil {
 		return nil, nativeError(codeHandler, err)

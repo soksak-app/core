@@ -136,6 +136,8 @@ E2E 실행기는 시험 child를 시작하기 전에 비어 있지 않은 `SOKSA
 
 ### end-to-end 실행
 
+실행은 애플리케이션을 시작하기 전에 그 bundle의 서명을 `codesign --verify --deep --strict`로 검증하고, 시작하는 대신 `the bundle <path> does not verify: <codesign output>`로 start 단계를 실패시키므로, 파일이 서명과 맞지 않는 bundle은 실행을 멈추고 시스템의 실행 검사에 닿지 않는다([hosts](../spec/hosts.ko.md)).
+
 일반 focused 검사를 실행하려면 `node scripts/test-app.mjs --script test-app --only window-end.test.mjs`를 사용한다. `--only`는 기존 Node runner의 파일 선택자를 준 횟수만큼 전달하므로, 반복한 `--only`는 그 값 중 하나라도 담은 파일을 고른다. 개별 테스트 이름은 선택하지 않는다. 부모 runner는 Wails와 Tauri의 선언된 Quit menu 항목을 실행하고 mygo에 Command+Q를 보내며 실제 프로세스 종료 상태 0과 잔류 프로세스 검사를 요구한다. 부모가 cohort를 시작하기 전에 같은 bundle 경로를 사용하는 기존 애플리케이션을 종료해야 한다.
 
 컴퓨터의 설정을 바꾸지 않고 한 scroller style 로 검사하려면 `--defaults AppleShowScrollBars=Always` 나 `--defaults AppleShowScrollBars=WhenScrolling` 을 더한다(이름이 더 있으면 option 을 반복한다). 시작하는 각 애플리케이션은 macOS argument domain 쌍 `-AppleShowScrollBars <value>` 를 받고([애플리케이션 인자](../spec/hosts.ko.md#애플리케이션-인자)), 그 값은 그 process 에만 적용된다. 창 검사는 그 항목을 JSON 객체 `SOKSAK_DEFAULTS` 로 읽고, `e2e/design-hosts.test.mjs` 는 모든 host 가 그 style 을 그렸는지도 읽는다. 예: `node scripts/test-app.mjs --script test-app --only design-hosts --defaults AppleShowScrollBars=Always`.

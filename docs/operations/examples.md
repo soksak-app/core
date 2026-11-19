@@ -137,6 +137,8 @@ The fixed-sidebar window checks restore temporary explicit card-sidebar selectio
 
 ### End-to-end run
 
+Before it starts an application, the run verifies the signature of its bundle with `codesign --verify --deep --strict` and fails the start step with `the bundle <path> does not verify: <codesign output>` instead of starting it, so a bundle whose files do not match its signature stops the run and never reaches the launch check of the system ([hosts](../spec/hosts.md)).
+
 For a focused run of the debug applications, use `node scripts/test-app.mjs --script test-app --only window-end.test.mjs`. `--only` forwards the existing Node runner's file selector, once for each time it is given, so a repeated `--only` selects the files that contain any of its values; it does not select individual test names. The parent still quits Wails and Tauri through their declared Quit menu item, sends Command+Q to mygo, requires actual process exit status 0 and audits remaining processes. Stop existing applications holding the same bundle paths before running the owned cohort.
 
 To run the checks under one scroller style without changing the settings of the computer, add `--defaults AppleShowScrollBars=Always` or `--defaults AppleShowScrollBars=WhenScrolling` (the option repeats for more names). Each started application gets the pair `-AppleShowScrollBars <value>` of the macOS argument domain ([application arguments](../spec/hosts.md#application-arguments)), which holds for that process alone, and the window checks read the entries as the JSON object `SOKSAK_DEFAULTS`; `e2e/design-hosts.test.mjs` then also reads that every host drew that style. For example `node scripts/test-app.mjs --script test-app --only design-hosts --defaults AppleShowScrollBars=Always`.
