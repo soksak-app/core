@@ -3402,6 +3402,15 @@ enum EndpointRead {
     Stop,
 }
 
+/// Reads the endpoint file at `path` and its modification time through one descriptor, so the time is the time of the
+/// content that it read (docs/spec/persistent-services.md#endpoint-publisher).
+fn read_endpoint_file(path: &Path) -> std::io::Result<(Vec<u8>, std::time::SystemTime)> {
+    let mut file = std::fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    Ok((bytes, file.metadata()?.modified()?))
+}
+
 /// The end of the wait for the endpoint line of a new service.
 enum EndpointLine {
     /// The first line that the service printed, empty when its output ended before a byte.
@@ -3746,11 +3755,13 @@ impl<O: Owner> Core<O> {
 
         let mut child = None;
         let mut spawn_clock = None;
-        let endpoint: Endpoint = match std::fs::read(&endpoint_path) {
-            Ok(bytes) => {
+        let endpoint: Endpoint = match read_endpoint_file(&endpoint_path) {
+            Ok((bytes, published)) => {
                 let endpoint: Endpoint = serde_json::from_slice(&bytes)
                     .map_err(|e| format!("sidecar {name}: invalid endpoint: {e}"))?;
-                if !current()?.service_process_exists(endpoint.pid)? {
+                // The endpoint names the service only while its pid is the process that published it
+                // (docs/spec/persistent-services.md#endpoint-publisher).
+                if !current()?.service_process_exists(endpoint.pid, published)? {
                     std::fs::remove_file(&endpoint_path)
                         .map_err(|e| format!("sidecar {name}: remove stale endpoint: {e}"))?;
                     // It re-enters the only creation path. A stale endpoint is an explicit crash recovery case and not

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"time"
 	"unsafe"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
@@ -592,7 +593,7 @@ func (implementation) Listen(string, string) (net.Listener, platform.Endpoint, e
 	return nil, platform.Endpoint{}, unsupported("local endpoint")
 }
 
-func (implementation) ServiceProcessExists(int) (bool, error) {
+func (implementation) ServiceProcessExists(int, time.Time) (bool, error) {
 	return false, unsupported("service process inspection")
 }
 

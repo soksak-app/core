@@ -6,6 +6,7 @@
 ## 2026-11-20
 
 - F944: mygo에서 켜진 면이 하나뿐일 때 그 면의 창 사이드바가 스위치나 접기 control로 끄면 plane을 떠난다. `packages/workbench-mygo/src/layout/sidebars.go`의 `ArrangeWindowSidebars`가 면이 없는 배치를 같은 plane 상태에서 거부된 배치로 보았고, 이제 거부 기록이 있을 때만 거부로 본다. 검증: `TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff`가 바뀌지 않은 code에서 실패하고 이제 통과한다. mygo, Wails, Tauri debug application이 네 면을 각각 스위치와 접기 control로 켜고 끄며, 그려진 사이드바가 설정과 같다.
+- F943: 두 host는 persistent service의 endpoint를, 그 pid가 그것을 게시한 process를 가리키지 않으면 낡은 것으로 본다. 게시한 process는 kernel이 나열하고, host의 사용자에게 속하고, zombie가 아니며, 시작 시각이 `endpoint.json`의 수정 시각보다 늦지 않은 process이고, 수정 시각은 host가 endpoint를 읽은 descriptor에서 읽는다(`docs/spec/persistent-services.md#endpoint-publisher`). 전에는 host가 pid만 판단했으므로, machine 재시작 뒤 pid가 무관한 process의 것인 endpoint가 유지되었고 sidecar의 모든 send가 지워진 socket에 대해 `connect authenticated service`로 실패했다. Go host는 `kern.proc.pid` sysctl로, Rust host는 `proc_pidinfo`로 process를 읽으며 이것이 `kill`과 `ps`를 대신한다. Go host는 Rust host처럼 파일에서 읽은 endpoint만 확인한다. 다른 사용자의 process는 더 이상 service로 치지 않는다(contract case `sidecars-transport.endpoint.foreign-process-is-not-the-publisher`). Red: `TestPersistentTransportReplacesTheEndpointOfAReusedPID`, `TestPersistentTransportReplacesTheEndpointOfAProcessOfAnotherUser`와 `sidecars_transport_test.rs`의 Rust case가 바꾸지 않은 host에서 `connect authenticated service`로 실패했다. Green: 같은 case, 두 host의 persistent service test와 `service_process_test`가 통과한다.
 
 ## 2026-11-19
 

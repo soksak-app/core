@@ -891,6 +891,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.startup.exits-before-endpoint` | endpoint 전에 끝난 시작한 service는 "service exited before endpoint"로 보내기를 실패시킨다. | all |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | 죽은 서비스가 남긴 엔드포인트는 새 서비스 엔드포인트로 바뀐다. | all |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | 살아 있지만 연결할 수 없는 서비스의 엔드포인트는 보내기를 실패시키고 바뀌지 않는다. | all |
+| `sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid` | pid가 `endpoint.json`의 수정 시각 뒤에 시작한 살아 있는 프로세스를 가리키는 엔드포인트는 낡은 것이다. 호스트는 그것을 지우고 새 서비스 엔드포인트가 그것을 대신한다([엔드포인트 게시자](persistent-services.ko.md#엔드포인트-게시자)). | all |
 | `sidecars-transport.stop.close-owner-then-shutdown` | 중지는 close-owner를 보내고 성공 응답 뒤에 shutdown을 보낸다. | all |
 | `sidecars-transport.stop.own-close-is-not-a-read-error` | 중지 중에 서비스 연결을 닫아도 `persistent read` 오류 줄을 쓰지 않는다. host 자신이 닫았기 때문이다. | all |
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | 지속 service가 중지 전에 보낸 closed 알림에 중지가 시작된 뒤 답해도 받아들인다. 중지는 shutdown을 보내고 닫는 중인 표면이 남지 않는다. | all |
@@ -918,7 +919,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.replace.waits-for-the-first-layout-list` | layout의 첫 목록 전에는 표면이 닫혀도 오래된 service를 교체하지 않는다. | all |
 | `sidecars-transport.persistent.starts-in-new-session` | 호스트가 시작한 영속 서비스는 새 session의 leader이므로 애플리케이션의 process group이나 terminal의 signal을 받지 않는다. | all |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | 좀비 서비스 pid 는 존재하는 서비스로 치지 않아 낡은 endpoint 를 교체한다. | all |
-| `sidecars-transport.endpoint.foreign-service-process-exists` | 다른 사용자가 소유한 프로세스의 service pid 는 존재하는 service 다. 거부된 signal 확인이 그 프로세스가 있음을 보이기 때문이다. | all |
+| `sidecars-transport.endpoint.foreign-process-is-not-the-publisher` | pid가 다른 사용자가 소유한 살아 있는 프로세스를 가리키는 엔드포인트는 그 프로세스가 게시 전에 시작했더라도 낡은 것이다. 서비스는 호스트의 사용자로 실행되기 때문이다. 호스트는 그것을 지우고 새 서비스 엔드포인트가 그것을 대신한다([엔드포인트 게시자](persistent-services.ko.md#엔드포인트-게시자)). | all |
 | `sidecars-transport.endpoint.waits-for-the-end-of-a-service-process` | service process의 끝을 기다리면 process가 끝날 때, 그리고 process가 없을 때 true를 답하고, 실행 중에 그 중지가 오면 false를 답한다. 그 기다림을 끝내는 time limit은 없다. | all |
 | `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | 교체한 상주 service는 endpoint의 process가 종료한 뒤에만 설치된 service를 시작하고, 호스트는 그 종료를 종료 event로 안다. 그 기다림 중의 중지는 교체를 "sidecars are stopped"로 실패시키고 sidecar를 오래된 채로 둔다. | all |
 | `sidecars-transport.persistent.revive-failure-is-reported` | 재시작 실패는 연결 끊김과 그 까닭을 소유 표면에 알린다. | all |

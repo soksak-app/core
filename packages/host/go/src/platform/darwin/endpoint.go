@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/soksak-app/core/packages/host/go/src/platform"
 	"github.com/soksak-app/core/packages/host/go/src/routine"
@@ -103,29 +104,27 @@ func (implementation) Listen(directory, application string) (net.Listener, platf
 	return listener, platform.Endpoint{Transport: "unix", Address: address}, nil
 }
 
-// ServiceProcessExists checks whether the process of a persistent service endpoint still exists.
-// Only a process that can receive a signal exists. A spawn that was not waited for stays as a zombie and
-// passes kill(pid, 0) (V5-106), so for a process that passed, the state is read to tell zombies apart;
-// a zombie has already ended, and its endpoint is stale. A refusal (EPERM) for a process of another user means that the process
-// exists. It is an error when the existence cannot be determined.
-func (implementation) ServiceProcessExists(pid int) (bool, error) {
-	if pid <= 0 {
+// ServiceProcessExists checks whether pid is the live process that published the persistent service endpoint whose modification
+// time is published (docs/spec/persistent-services.md#endpoint-publisher). It reads the process from the process table of the
+// kern.proc.pid sysctl. A pid that the table does not list has ended; a zombie has ended too, as a spawn that was not waited for
+// stays one (V5-106); a process of another user did not publish the endpoint, because the service runs as the user of the host;
+// and a process that started later than published received the pid after the publisher ended. It is an error when the table
+// cannot be read.
+func (implementation) ServiceProcessExists(pid int, published time.Time) (bool, error) {
+	if pid <= 0 || pid > math.MaxInt32 {
 		return false, nil
 	}
-	err := syscall.Kill(pid, 0)
-	if err == syscall.ESRCH {
+	processes, err := unix.SysctlKinfoProcSlice("kern.proc.pid", pid)
+	if err != nil {
+		return false, fmt.Errorf("cannot inspect service process %d: %w", pid, systemError(err))
+	}
+	if len(processes) == 0 {
 		return false, nil
 	}
-	if err != nil && err != syscall.EPERM {
-		return false, fmt.Errorf("cannot inspect service process %d: %w", pid, err)
-	}
-	// Only the state character that ps printed is used for the decision, not the exit status of ps. It is an error when ps cannot be run.
-	state, err := exec.Command("ps", "-o", "stat=", "-p", strconv.Itoa(pid)).Output()
-	var exit *exec.ExitError
-	if err != nil && !errors.As(err, &exit) {
-		return false, fmt.Errorf("cannot inspect service process %d state: %w", pid, err)
-	}
-	return !strings.HasPrefix(strings.TrimSpace(string(state)), "Z"), nil
+	process := processes[0].Proc
+	started := time.Unix(process.P_starttime.Sec, int64(process.P_starttime.Usec)*int64(time.Microsecond))
+	owned := processes[0].Eproc.Ucred.Uid == uint32(os.Geteuid())
+	return owned && process.P_stat != sZomb && !started.After(published), nil
 }
 
 // stopEvent is the identifier of the user event that wakes the wait for a service process when its stop closes.

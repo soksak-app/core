@@ -10319,16 +10319,12 @@ const FEATURE_LINKS = [
     id: "F52",
     implementation: [
       { file: "Makefile", symbol: "check-windows-build:" },
-      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "err != syscall.EPERM" },
-      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Some(EPERM) => {}" },
     ],
     tests: [
       { file: "scripts/test/check-windows-build.test.mjs", id: "the Windows build check compiles the Go host source in the default and diagnostics builds" },
       { file: "scripts/test/check-windows-build.test.mjs", id: "check-host-files runs the Windows build check" },
-      { file: "packages/host/go/tests/service_process_test.go", id: "TestAServiceProcessOfAnotherUserExists" },
-      { file: "packages/host/rust/tests/service_process_test.rs", id: "a_service_process_of_another_user_exists" },
     ],
-    expected: "Both hosts compile for Windows in the checks, every unsupported Windows operation returns its error, and a service pid of another user exists.",
+    expected: "Both hosts compile for Windows in the checks and every unsupported Windows operation returns its error; F943 replaces the judgment of a service pid of another user.",
     levels: ["unit"],
   },
   {
@@ -14009,6 +14005,21 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench-mygo/src/layout/sidebars.go", symbol: "refused := g.dockRefused != nil && g.dockToken == planeToken(g) && slices.Equal(arranged, g.dockRefused)" }],
     tests: [{ file: "packages/workbench-mygo/tests/layout/window_sidebars_test.go", id: "TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff" }],
     expected: "The window sidebar of the only side that is on leaves the plane when its switch turns off.",
+    levels: ["unit"],
+  },
+  {
+    id: "F943",
+    implementation: [
+      { file: "packages/host/go/src/platform/darwin/endpoint.go", symbol: "return owned && process.P_stat != sZomb && !started.After(published), nil" },
+      { file: "packages/host/rust/src/platform/darwin/endpoint.rs", symbol: "Ok(owned && info.pbi_status != libc::SZOMB && started <= published)" },
+    ],
+    tests: [
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesTheEndpointOfAReusedPID" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_the_endpoint_of_a_reused_pid" },
+      { file: "packages/host/go/tests/sidecars_transport_test.go", id: "TestPersistentTransportReplacesTheEndpointOfAProcessOfAnotherUser" },
+      { file: "packages/host/rust/tests/sidecars_transport_test.rs", id: "persistent_transport_replaces_the_endpoint_of_a_process_of_another_user" },
+    ],
+    expected: "Both hosts treat an endpoint whose pid names a process that started after the modification time of endpoint.json, or a process of another user, as stale, remove it and start the service through the single creation path.",
     levels: ["unit"],
   },
   {
