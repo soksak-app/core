@@ -347,8 +347,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		})
 		if s.renaming != nil && s.renaming.renameTarget == target {
 			// The field takes the place of the name: its text starts where the text of the name started, so it starts its outline and its
-			// padding less the padding of the name before the name, and it grows to the end of the name (docs/spec/groups.md#headers).
-			s.drawRenameField(c, 0).Grow(1).Shrink(1).MarginStart(m.tabPadX - s.palette.BorderWidth - s.frameLength(m.barTabRootPad))
+			// padding less the padding of the name before the name, grows to the end of the name, and keeps the size of the name
+			// (docs/spec/groups.md#headers).
+			s.drawRenameField(c, 0, size).Grow(1).Shrink(1).MarginStart(m.tabPadX - s.palette.BorderWidth - s.frameLength(m.barTabRootPad))
 		} else {
 			if activity != "" {
 				s.drawActivity(c, "core.activity.group", id, activity, m.activityIcon)

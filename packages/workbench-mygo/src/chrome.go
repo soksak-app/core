@@ -194,7 +194,7 @@ func (s *Shell) renameOnDoubleClick(name ui.Element, target renameTarget) {
 
 func (s *Shell) drawBarTab(c *ui.Context, tab barTab) {
 	if s.renaming != nil && s.renaming.renameTarget == tab.rename {
-		s.drawRenameField(c, s.frameLength(s.metrics.barTabRootW))
+		s.drawRenameField(c, s.frameLength(s.metrics.barTabRootW), s.frameFont(s.textControl()))
 		return
 	}
 	m := s.metrics
@@ -346,7 +346,7 @@ func (s *Shell) drawProjectColumn(c *ui.Context, width, height float32) {
 // the pointer or the focus is on the tab.
 func (s *Shell) drawColumnTab(c *ui.Context, tab barTab, width float32) {
 	if s.renaming != nil && s.renaming.renameTarget == tab.rename {
-		s.drawRenameField(c, width)
+		s.drawRenameField(c, width, s.frameFont(s.textControl()))
 		return
 	}
 	m := s.metrics

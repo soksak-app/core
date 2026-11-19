@@ -331,6 +331,22 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F986",
+    implementation: [
+      { file: "packages/workbench-mygo/src/rename.go", symbol: "SelectionColor(mixed(s.palette.Focus, s.palette.Bg, m.renameSelectionMix))." },
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "s.drawRenameField(c, 0, size).Grow(1).Shrink(1).MarginStart(" },
+      { file: "packages/workbench/app.css", symbol: ".bar-tab__root::selection{" },
+      { file: "packages/workbench/app.css", symbol: ".group__rename{flex:1 1 0px;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheRenameFieldOfAGroupTakesThePlaceOfItsName" },
+      { file: "packages/workbench/test/group-rename-field.test.mjs", id: "the rename field of a group takes the place of the name with its text where the text of the name started" },
+      { file: "packages/workbench/test/group-rename-field.test.mjs", id: "the rename field selects in the focus color mixed into bg" },
+    ],
+    expected: "The rename field of a group header is the rename field of a tab in the size of the name, with its text where the text of the name started, the header height kept and the selection of the theme.",
+    levels: ["unit"],
+  },
+  {
     id: "F955",
     implementation: [
       { file: "packages/workbench/group-tree.js", symbol: "drawnDividers(dividers, gripLength) {" },

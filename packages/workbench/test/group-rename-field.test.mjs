@@ -20,6 +20,7 @@ test("the rename field of a group takes the place of the name with its text wher
       "the text of the field starts where the text of the name started");
     assert.equal(of(".group__rename").getPropertyValue("flex"), "1 1 0px", "the field grows over the place of the name");
     assert.equal(of(".group__rename").getPropertyValue("height"), "var(--bar-tab-root-h)", "the field has the height of the rename field of a tab");
+    assert.equal(of(".group__rename").getPropertyValue("font-size"), "var(--text-small)", "the text of the field keeps the size of the name");
     assert.equal(declaration.chrome["rename-selection-mix"], "35%");
   } finally {
     dom.window.close();

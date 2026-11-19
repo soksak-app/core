@@ -656,6 +656,26 @@ func TestTheRenameFieldOfAGroupTakesThePlaceOfItsName(t *testing.T) {
 	f.settle()
 	palette := f.palette()
 	name, header := f.box("core.group.name", "card-2"), f.box("core.group.header", "card-2")
+	// The ink of a text row runs from the first to the last point that stands nearer the text color than the ground of the row: the
+	// header for the name, and the selection, which covers the whole value when the field opens, for the field.
+	distance := func(a, b color.RGBA) int {
+		d := func(x, y uint8) int { return (int(x) - int(y)) * (int(x) - int(y)) }
+		return d(a.R, b.R) + d(a.G, b.G) + d(a.B, b.B)
+	}
+	ink := func(box ui.Rect, ground color.RGBA) float32 {
+		y := box.Y + box.H/2
+		first, last := float32(-1), float32(-1)
+		for x := box.X; x < box.X+box.W/2; x++ {
+			if p := f.pixelOf(x, y); distance(p, opaque(palette.Fg)) < distance(p, ground) {
+				if first < 0 {
+					first = x
+				}
+				last = x
+			}
+		}
+		return last - first
+	}
+	before := ink(name, f.pixelOf(name.X+name.W-2, name.Y+name.H/2))
 	f.run(t, "core.rename.begin", `{"kind": "group", "id": "card-2"}`)
 	f.settle()
 	field, after := f.box("core.rename.input", ""), f.box("core.group.header", "card-2")
@@ -665,6 +685,12 @@ func TestTheRenameFieldOfAGroupTakesThePlaceOfItsName(t *testing.T) {
 	}
 	if want := (ui.Rect{X: name.X + padX - border - rootPad, Y: header.Y + (header.H-border-rootH)/2, W: name.X + name.W - (name.X + padX - border - rootPad), H: rootH}); field != want {
 		t.Errorf("the rename field is %+v for the name %+v, want %+v: its text where the text of the name started", field, name, want)
+	}
+	// The scan of the field starts inside its outline.
+	inner := f.box("core.rename.input", "")
+	inner.X, inner.W = inner.X+palette.BorderWidth+1, inner.W-2*palette.BorderWidth-2
+	if during := ink(inner, opaque(mixed(palette.Focus, palette.Bg, token("rename-selection-mix")/100))); math.Abs(float64(during-before)) > 1 {
+		t.Errorf("the text of the name is %v wide and %v in the rename field: the field does not keep the size of the name", before, during)
 	}
 	// The field selects its whole value when it opens; the selection is the color that covers most of the start of its text row, which
 	// the name of two letters and more fills.
