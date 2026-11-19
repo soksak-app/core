@@ -14000,6 +14000,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func (s *Shell) drawGroupCard" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) MoveBoundary" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) splitRect" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) keepLines" },
       { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
     ],
     tests: [

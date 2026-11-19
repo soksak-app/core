@@ -2550,7 +2550,7 @@
     {
      "call": "split",
      "args": {
-      "card": "card-2",
+      "card": "card-3",
       "side": "right"
      },
      "returns": {

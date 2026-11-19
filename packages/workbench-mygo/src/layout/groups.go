@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"sort"
@@ -449,6 +450,7 @@ func (t *GroupTree) try(id, op string, change func() error) error {
 		t.restore(kept)
 		return err
 	}
+	t.keepLines()
 	if group := t.broken(); group != "" {
 		t.restore(kept)
 		return fmt.Errorf("card %s cannot %s: group %s would not cover one rectangle", id, op, group)
@@ -460,6 +462,17 @@ func (t *GroupTree) try(id, op string, change func() error) error {
 			sizeText(minimum, minimum))
 	}
 	return nil
+}
+
+// keepLines removes the paidBy records and the lines that no card uses while the space holds a group card, so a later close gives the
+// cells of a card to its neighbours without moving the lines of other groups, and a later split does not land on a seam of another
+// group (docs/spec/groups.md#model).
+func (t *GroupTree) keepLines() {
+	if len(t.roots) == 0 {
+		return
+	}
+	clear(t.grid.paidBy)
+	t.grid.Tidy()
 }
 
 // issue returns the next card id of the space.
@@ -1355,10 +1368,31 @@ func ReadTree(state State, groups, leader, lastCard json.RawMessage, options Gro
 			return nil, fmt.Errorf("group %s does not cover one rectangle of the grid", id)
 		}
 	}
+	if len(t.roots) > 0 {
+		if err := t.readLines(state); err != nil {
+			return nil, err
+		}
+	}
 	if err := t.readLast(lastCard, seen); err != nil {
 		return nil, err
 	}
 	return t, nil
+}
+
+// readLines refuses a paidBy record and a line that no card uses in a layout with groups.
+func (t *GroupTree) readLines(state State) error {
+	if len(state.PaidBy) > 0 {
+		ids := slices.Sorted(maps.Keys(state.PaidBy))
+		return fmt.Errorf("layout with groups stores the paidBy record of card %s; a layout with groups keeps none", ids[0])
+	}
+	for _, axis := range axes {
+		for k := 1; k < len(t.grid.arr(axis))-1; k++ {
+			if t.grid.IsVirtual(axis, k) {
+				return fmt.Errorf("layout with groups stores the %s line %d, which no card uses; a layout with groups keeps none", axis, k)
+			}
+		}
+	}
+	return nil
 }
 
 // readNode reads one stored group card.
