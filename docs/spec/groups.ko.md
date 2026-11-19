@@ -112,7 +112,7 @@ header의 버튼은 그 header의 상자에 작용한다.
 
 ### Split 설정
 
-설정 `cardSplit`([값](settings.ko.md#값))은 split 뒤의 크기를 정한다. 기본값 `exact`이면 split은 지금처럼 자기가 나누는 card의 사각형만 나눈다(layout library의 R4). `even`이면 workbench는 같은 변경에서 split이 일어난 plane에 `balance()`를 실행하므로, 그 plane의 card가 구조를 유지한 채 공정한 크기를 받고, 그 plane의 group card 크기를 통한 것 외에는 다른 plane이 바뀌지 않는다. 이 설정은 `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 새 group 안 split, 그리고 `side`가 있는 `core.layout.open`에 적용된다. plane이 거부한 `balance()`는 split을 `exact`가 만든 대로 둔다. `side`가 있는 `core.layout.open`의 반복은 두 값 모두에서 새 card를 `side` 쪽 이웃으로 찾으므로 idempotency가 유지된다.
+설정 `cardSplit`([값](settings.ko.md#값))은 split 뒤의 크기를 정한다. 기본값 `exact`이면 split은 지금처럼 자기가 나누는 card의 사각형만 나눈다(layout library의 R4). `even`이면 workbench는 같은 변경에서 split이 일어난 plane에 `balance()`를 실행하므로, 그 plane의 card가 구조를 유지한 채 공정한 크기를 받고, 그 plane의 group card 크기를 통한 것 외에는 다른 plane이 바뀌지 않는다. 이 설정은 `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 새 group 안 split, 그리고 `side`가 있는 `core.layout.open`에 적용된다. `balance()`는 plane의 모든 card에 공정한 몫을 주고 가장 작은 크기를 검사하지 않는다. px 크기를 가진 card는 그려진 크기를 유지하므로 남는 공간이 다른 card를 `minSize`보다 작게 둘 수 있고, group card는 가장 작은 크기와 상관없이 몫 하나로 센다. balance한 상태가 plane을 나타내지 못하면 `balance()`는 throw한다. 그래서 `even`이면 workbench는 모든 operation처럼([최소 크기](#최소-크기)) balance한 plane을 사본에서 검사하며, 그 plane이나 그 안의 plane의 card가 가장 작은 크기보다 작아지면 `card <id> cannot split toward <side>: cardSplit even would draw card <c> of plane <plane> at <w>x<h>, below its minimum <mw>x<mh>`로(`<c>`는 workbench 순서로 첫 그런 card), `balance()`가 throw하면 `card <id> cannot split toward <side>: cardSplit even cannot balance plane <plane>: <the error of balance>`로 split 전체를 거부하고 아무것도 바꾸지 않는다. slicing plane의 split은 slicing이므로 여기서 `balance()`는 false를 돌려주지 않는다. `side`가 있는 `core.layout.open`의 반복은 두 값 모두에서 새 card를 `side` 쪽 이웃으로 찾으므로 idempotency가 유지된다.
 
 ### 닫기
 
@@ -200,7 +200,7 @@ group card는 기존 디자인의 card로 그린다. 그 background, border, rad
 - card는 식별자의 index가 아니라 tree의 walk 한 번으로 찾는다. index는 card의 포함 관계를 한 번 더 담고 모든 move가 그것을 고쳐야 하므로 tree와 어긋날 수 있다. space는 card를 수십 개 담으므로 조회마다 walk 한 번은 측정할 만한 비용이 없다.
 - `projects.json`은 형식 2를 받는다. `leader`는 `core.group.leader`가 바꾸는 상태이고 형식 1의 file에는 없으며, 저장 형식 규칙은 새 형식 번호와 migration 없음을 요구한다. release는 사람이 다시 만드는 file을 밝힌다.
 - card 식별자는 기존 형태 `card-<n>`을 유지하고, workbench가 layout이 저장한 `lastCard`에서 모든 plane에 대해 낸다. 그래서 plane의 식별자가 충돌하지 않고 재시작을 넘어서도 어떤 식별자도 두 번 내지 않는다. random 식별자는 content card 식별자의 형태를 바꾸므로, 저장된 식별자에서 얻은 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 받아들이지 않았다.
-- `cardSplit` `even`은 split이 일어난 plane만 balance한다. 사람은 상자 하나 안에서 나누고, 그 주변 상자는 크기를 유지하기 때문이다. `exact`는 R4의 동작인 기본값으로 남는다.
+- `cardSplit` `even`은 split이 일어난 plane만 balance한다. 사람은 상자 하나 안에서 나누고, 그 주변 상자는 크기를 유지하기 때문이다. `exact`는 R4의 동작인 기본값으로 남는다. balance가 card를 가장 작은 크기 아래로 둘 때 `even`은 split을 거부한다. `exact` 결과로 되돌아가면 사람이 고른 설정이 말없이 다른 값으로 바뀌기 때문이다.
 - drop은 기존 `zoneAt`과 그 edge 비율로 root plane부터 안쪽으로 정하므로, group body의 바깥 4분의 1은 group card의 side이고 나머지는 그 plane에 속한다. 새 종류의 zone은 더하지 않는다.
 - group card는 focus ring을 받지 않는다. ring은 surface를 위해 키보드를 잡는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
 
