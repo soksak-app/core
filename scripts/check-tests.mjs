@@ -364,6 +364,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-49",
+    implementation: [
+      { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "snapshotText(node.Text)" },
+      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.15" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },
+    ],
+    expected: "The text of an element item of a window snapshot in mygo is the text content of the element, as on the page, not its accessible label.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-53",
     implementation: [
       { file: "packages/workbench-mygo/src/group_cards.go", symbol: "Border(s.palette.CardBorder(), s.frameColor(id)).Radius(radius).PassThrough()" },

@@ -199,7 +199,7 @@ func statusEntry(row map[string]any, read Status) map[string]any {
 	return row
 }
 
-// snapshotItem is one element of an element name: its role and its rectangle as element.rect gives them, its text, whether it is
+// snapshotItem is one element of an element name: its role and its rectangle as element.rect gives them, its text content, whether it is
 // behind the open dialog, and the command and the params that it runs, or null. An element with an empty box, which the window does
 // not draw, has no item and answers nil.
 func (r *Registry) snapshotItem(name string, index int, node ui.ElementNode) (map[string]any, error) {
@@ -222,7 +222,7 @@ func (r *Registry) snapshotItem(name string, index int, node ui.ElementNode) (ma
 		}
 	}
 	return map[string]any{
-		"index": index, "role": ElementRole(node.Role), "text": snapshotText(node.Label),
+		"index": index, "role": ElementRole(node.Role), "text": snapshotText(node.Text),
 		"rect":  map[string]any{"x": node.Bounds.X, "y": node.Bounds.Y, "width": node.Bounds.W, "height": node.Bounds.H},
 		"inert": node.Inert, "command": command, "params": params,
 	}, nil

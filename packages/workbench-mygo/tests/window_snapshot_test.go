@@ -130,7 +130,9 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 	tester := ui.NewTester(func(c *ui.Context) {
 		binder.Frame()
 		ui.Column(c).Fill().Children(func() {
-			binder.Press(c, "core.card", "core.card.focus", "c1", map[string]string{"card": "c1"}).Role(ui.RoleGroup).Label("c1   first\n card").Size(100, 40)
+			// The label names the card for assistive technology; the text of the item is the text content, the texts inside it.
+			binder.Press(c, "core.card", "core.card.focus", "c1", map[string]string{"card": "c1"}).Role(ui.RoleGroup).Label("c1").Size(100, 40).
+				Children(func() { ui.Text(c, "first   \n card") })
 			binder.Absent(c, "core.card", "core.card.focus", "c2", map[string]string{"card": "c2"})
 			binder.Absent(c, "core.card.tools", "core.card.tools", "c1", map[string]string{"card": "c1"})
 			ui.Button(c.Key(workbench.Exposed{Name: "core.debug.close"}), strings.Repeat("가", 130)).Size(60, 20)
@@ -198,7 +200,7 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 	// The card c2 and the tools of c1 are not drawn: they keep their element.rect index and leave the items, and the name of the tools
 	// stays as an entry with no item, since its owner registered it (docs/spec/exposure.md#window-snapshot).
 	want := []item{
-		{name: "core.card", text: "c1 first card", command: "core.card.focus", index: 0, params: map[string]any{"card": "c1"}},
+		{name: "core.card", text: "first card", command: "core.card.focus", index: 0, params: map[string]any{"card": "c1"}},
 		{name: "core.debug.close", text: strings.Repeat("가", 120), index: 0},
 	}
 	if !reflect.DeepEqual(items, want) {

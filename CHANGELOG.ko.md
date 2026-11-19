@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-49 (mygo snapshot item의 text content): mygo library의 replacement가 element tree의 각 element에 text content를 주는 `v0.7.4-244-g4abb83d-soksak.15`로 바뀌고, mygo에서 `exposure.snapshot` element item의 `text`는 page처럼 accessible label이 아닌 그 text content이다. 검증: mygo window snapshot test가 이전 코드에서 Red였고 Green이며, mygo package 전체가 통과한다.
 - F937-53 (group header를 두르는 테두리): 두 workbench에서 group card의 header는 frame 사각형 맨 위의 `head-h` 띠이고, 테두리의 선과 radius는 header의 양 끝 위로 card 전체를 두른다; mygo는 header 색을 테두리 선과 모서리 위에 그렸고, page는 header를 테두리 안쪽 border 하나만큼 들여 그렸다. 검증: `TestTheFrameOfAGroupCardRunsAroundItsHeader`와 `group-frame.test.mjs`가 이전 코드에서 Red였고 Green이며, mygo group test와 page suite가 통과한다.
 - F937-55 (잘린 탭 이름의 첫 글자): 맞지 않는 탭 이름은 CSS `text-overflow: ellipsis`가 자르듯 `…` 옆에 들어가는 만큼의 앞 글자를 남기고, 첫 글자는 말줄임표로 바뀌지 않고 잘린다; mygo는 카드의 최소 너비에서 `…`만 그렸고, 이제 page처럼 잘린 첫 글자를 그린다. 검증: `TestTheCutNameOfATabKeepsItsFirstCharacter`가 이전 코드에서 Red였고 Green이며, mygo의 tab, head, card, name test가 통과하고, `tab-name-cut.test.mjs`가 page의 CSS 규칙을 지킨다.
 - F937-50 (window snapshot의 그려진 element): `exposure.snapshot`의 element 항목은 page와 mygo에서 창이 그리는 element만 `element.rect` index와 함께 나열하므로 item이 모든 host에서 같다; item에는 `visible` member가 없고, `sok describe`와 `window_describe`의 compact form도 그것을 뺀다. 검증: plugin-api snapshot test와 mygo window snapshot test가 이전 코드에서 Red였고 Green이며, Go와 Rust의 sok test가 바뀐 case에서 통과한다.
