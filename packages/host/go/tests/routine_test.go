@@ -129,6 +129,43 @@ func TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens(t *testing.T) {
 	}
 }
 
+const routineNoStartChild = "SOKSAK_ROUTINE_NO_START_CHILD"
+
+// contract: log.panic.without-start-ends-the-process-at-the-panic
+func TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic(t *testing.T) {
+	if os.Getenv(routineNoStartChild) != "" {
+		// This process runs no start of the host and attaches no writer, as a test of the package that starts a goroutine does.
+		routine.Go("probe", func() { panic("the region has no owner") })
+		// The entrance ends the process; the read blocks in a system call until then. A test that continues after the panic of
+		// its goroutine reaches the time limit of the child instead.
+		io.ReadAll(os.Stdin)
+		os.Exit(4)
+	}
+	// The time limit of the child test ends a child whose panic waits for a writer; the result is judged by its output.
+	command := exec.Command(os.Args[0], "-test.run=^TestAPanicInAProcessThatRunsNoStartEndsTheProcessAtThePanic$", "-test.timeout=10s")
+	command.Env = append(os.Environ(), routineNoStartChild+"=1")
+	// The parent holds the standard input of the child open until the child ended.
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stdin.Close()
+	output, err := command.CombinedOutput()
+	stderr := string(output)
+	if strings.Contains(stderr, "test timed out") {
+		t.Fatalf("the panic did not end the process at the test that caused it; the test ran on until its time limit: %q", stderr)
+	}
+	var ended *exec.ExitError
+	if !errors.As(err, &ended) || ended.ExitCode() != routine.PanicStatus {
+		t.Fatalf("child ended with %v, output %q", err, stderr)
+	}
+	if !strings.Contains(stderr, "the record of the panic is not stored: no writer is attached and no start of the host runs") ||
+		!strings.Contains(stderr, "host.panic name=probe") || !strings.Contains(stderr, "the region has no owner") ||
+		!strings.Contains(stderr, "routine_test.go") {
+		t.Fatalf("the standard error does not hold the record of the panic with its stack: %q", stderr)
+	}
+}
+
 const routineNoWriterChild = "SOKSAK_ROUTINE_NO_WRITER_CHILD"
 
 // contract: log.panic.without-writer-is-written-to-the-standard-error
