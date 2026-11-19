@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F958-2 (press to display): the click benchmark reports the time from a press to the displayed frame of its focus in milliseconds and in display periods of the refresh rate of the window. Verification: the display period test failed without the function and passes.
 - F950-1 (drag stages): the layout redraw benchmark reports the commit paths and the stage times of the layout transactions of its divider drag. Verification: the drag stage test failed without the function and passes.
 - F960 (click benchmark sidebars): the balanced grid of the raster benchmarks turns the window sidebars off while it runs, because a row of five cards beside them cannot be split at the exact half. Verification: the click benchmark that failed with `card terminal cannot split toward right` opens its grid on Wails.
 - F958-1 (press during a layout): the native delivery of an injected press answers the web view that the press reached, and the Wails and Tauri hosts attribute the surface press to that web view instead of the web view at the coordinates before the delivery, so a press that waits for an open layout moves the focus to its card. The hosts and the page record each surface press (`host.surface.press`, `workbench.surface.press`). Verification: the press attribution check of the native surface layout test failed on the unchanged code and passes, with the delivery tests of both hosts.

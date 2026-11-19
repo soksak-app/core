@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { clickOrder, focusTimes } from "../benchmark/cases/click-cpu.mjs";
+import { clickOrder, displayFrames, focusTimes } from "../benchmark/cases/click-cpu.mjs";
 import { actionFrames, blankFigures, dragStages, redrawActions, regionRaster } from "../benchmark/cases/layout-redraw.mjs";
 import { boundaryMoves, startRows, widestCard } from "../benchmark/cases/raster-cards.mjs";
 import { steppedOffset, wheelDelta } from "../benchmark/cases/scroll-cpu.mjs";
@@ -79,4 +79,10 @@ test("the stages of a divider drag count the commit paths of its transactions an
   assert.deepEqual(stages.cadence.total, { count: 3, median: 20, p90: 22 });
   assert.deepEqual(stages.cadence.committing, { count: 3, median: 16, p90: 19 });
   assert.deepEqual(stages.cadence.interval, { count: 3, median: 9, p90: 9 });
+});
+
+test("the time from a press to the display of its focus counts the display periods of the refresh rate of the window", { timeout: 5000 }, () => {
+  assert.deepEqual(displayFrames([8.4, 16.7, 25], 120), { count: 3, medianFrames: 2.004, p90Frames: 3, maxFrames: 3 });
+  assert.deepEqual(displayFrames([33.4, 16.7], 60), { count: 2, medianFrames: 1.002, p90Frames: 2.004, maxFrames: 2.004 });
+  assert.throws(() => displayFrames([10], 0), /refresh rate 0/);
 });
