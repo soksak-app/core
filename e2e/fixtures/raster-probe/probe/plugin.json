@@ -1,8 +1,9 @@
 {
   "id": "rasterprobe",
   "name": "Raster probe",
-  "description": "Window check fixture: a view whose image region shows the frames of the persistent fixture sidecar rasterprobe, which reports the view, its session, its frames and its input as statuses.",
+  "description": "Window check fixture: a view whose image region shows the frames of the persistent fixture sidecar rasterprobe, which reports the view, its session, its frames and its input as statuses; its tab params take a benchmark number, so a benchmark opens one tab for each number.",
   "surface": {
+    "params": { "type": "object", "properties": { "benchmark": { "type": "number" } } },
     "composition": {
       "kind": "view",
       "page": "ui/page.html",
