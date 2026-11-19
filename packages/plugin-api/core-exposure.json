@@ -128,6 +128,7 @@
     "core.group.dissolve",
     "core.group.rename",
     "core.group.leader",
+    "core.group.menu",
     "core.card.move",
     "core.card.get",
     "core.card.close",

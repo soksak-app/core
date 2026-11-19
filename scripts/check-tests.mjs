@@ -320,7 +320,7 @@ const FEATURE_LINKS = [
   },
   {
     id: "F895",
-    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange } = declaration.settings.choices;" }],
+    implementation: [{ file: "packages/workbench/settings.js", symbol: "const { projectOpening, viewProcess, projectTabs, focusInd, fullRule, cardArrange, cardSplit } = declaration.settings.choices;" }],
     tests: [{ file: "packages/workbench/test/settings-controls.test.mjs", id: "every setting form is drawn with its one control" }],
     expected: "The setting cardArrange is a choice of resize and even, drawn as a select box whose options are the declared choices.",
     levels: ["unit"],

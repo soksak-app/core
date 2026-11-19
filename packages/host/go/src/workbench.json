@@ -387,6 +387,7 @@
       "focusInd": "border",
       "fullRule": "under",
       "cardArrange": "resize",
+      "cardSplit": "exact",
       "textSize": 1,
       "sets": [],
       "links": [],
@@ -452,6 +453,10 @@
       ],
       "cardArrange": [
         "resize",
+        "even"
+      ],
+      "cardSplit": [
+        "exact",
         "even"
       ]
     },
