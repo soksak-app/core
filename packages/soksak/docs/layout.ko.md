@@ -497,16 +497,17 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | --- | --- |
 | `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | 배치를 읽는다 |
 | `resize(w, h)`, `width`, `height` | 판의 크기 |
-| `canSplit(id, axis)`, `split(id, axis, {id?, data?})` | 카드 하나를 둘로 자른다 |
-| `splitToward(id, side, {id?, data?})` | 자르고 새 카드를 지정한 쪽에 놓는다 |
-| `canClose(id)`, `close(id)`, `fill(id)` | 카드를 제거한다. `fill` 은 어느 이웃이 그 자리를 갖는지 보고한다 |
-| `canMove(id, targetId, side)`, `move(id, targetId, side)` | 카드를 다른 카드의 옆으로 옮긴다 |
+| `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | 카드 하나를 둘로 자른다 |
+| `splitToward(id, side, {id?, data?, newLine?})` | 자르고 새 카드를 지정한 쪽에 놓는다. `newLine` 은 카드가 가로지르는 line이 안에 있어도 가운데의 새 line에서 자른다 |
+| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | 카드를 제거한다. `fill` 은 어느 이웃이 그 자리를 갖는지 보고한다. `sides` 는 이웃 행이 자랄 수 있는 변을 시도 순서대로 말한다(`"below"`, `"above"`, `"right"`, `"left"`). 기본값은 `fillOrder` 의 변인 `fillSides` 이고, 빈 목록은 slot만 지운다. 다른 변은 `unknown fill side <side>` 를 throw한다 |
+| `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | 카드를 다른 카드의 옆으로 옮긴다. `sides` 는 그 닫기의 변이며 `close` 가 받는 대로다 |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경한다. 반환된 사본은 동결되어 있다 |
 | `setFrames(frames)` | 각 카드와 그 선 사이의 프레임 (R5) |
 | `standings(axis, without?)`, `canInsertAt(axis, line, without?)`, `insertAt`, `moveTo` | 판을 가로지르는 카드 |
 | `zoneAt(x, y, options)` | 드롭이 내려앉는 곳 |
 | `dividers()`, `rules()` | 잡는 영역과 그릴 경계 |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | 경계를 끈다 |
+| `moveLinePast(axis, line, px)` | line을 `moveBoundary` 처럼 옮기고, 둘 사이에 카드가 없는 곳에서 닿는 각 line을 지나간다. 다른 line 위에 멈춘 line은 그 line에 합쳐진다 |
 | `shareLines(axis, extra?)` | 그 axis의 모든 line index를 유지하고, px 크기를 가진 카드가 차지하지 않은 모든 slot에 자기 corridor, `extra[slot]` px, 그리고 free length의 같은 몫을 준다. free length는 extent에서 corridor, 고정 크기와 extra를 뺀 값이다. 고정된 slot은 자기 span을 유지한다. 알 수 없는 axis, slot 수와 길이가 다른 extra 목록, 공유 slot이 길이를 갖지 못하는 axis에는 throw 한다 |
 | `balance()` | 배치를 유지하고 모든 카드에 공정한 몫을 준다 |
 | `sliceTree(cards)` | 배치의 slicing tree(`Slice`: 카드 하나, 또는 한 축을 따라 판의 처음부터 나눈 쪽들), 아니면 null |

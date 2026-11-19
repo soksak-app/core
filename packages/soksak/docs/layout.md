@@ -535,16 +535,17 @@ first.
 | --- | --- |
 | `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | read the arrangement |
 | `resize(w, h)`, `width`, `height` | plane size |
-| `canSplit(id, axis)`, `split(id, axis, {id?, data?})` | cut one card in two |
-| `splitToward(id, side, {id?, data?})` | cut it and put the new one on a named side |
-| `canClose(id)`, `close(id)`, `fill(id)` | remove a card; `fill` reports which neighbours take the space |
-| `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side |
+| `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
+| `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
+| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | remove a card; `fill` reports which neighbours take the space; `sides` names the sides whose row of neighbours may grow, tried in their order (`"below"`, `"above"`, `"right"`, `"left"`), `fillSides`, the sides of `fillOrder`, by default, and an empty list only removes the slots; another side throws `unknown fill side <side>` |
+| `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | take a card to another card's side; `sides` is the sides of its close, as `close` takes them |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
 | `setFrames(frames)` | the frames between each card and its lines (R5) |
 | `standings(axis, without?)`, `canInsertAt(axis, line, without?)`, `insertAt`, `moveTo` | a card that reaches across the plane |
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
+| `moveLinePast(axis, line, px)` | move a line as `moveBoundary` does and past each line that it reaches where no card lies between the two; a line that stops on another line merges onto it |
 | `shareLines(axis, extra?)` | keep every line index of the axis and give every slot that no card with a size in px holds its corridor, `extra[slot]` px and an equal share of the free length, the extent less the corridors, the held sizes and the extras; a held slot keeps its span; throws for an unknown axis, an extra list of another length than the slots and an axis whose shared slots take no length |
 | `balance()` | give every card a fair share and keep the arrangement |
 | `sliceTree(cards)` | the slicing tree of an arrangement (`Slice`: a card, or a cut along an axis into sides from the plane's start), or null |
