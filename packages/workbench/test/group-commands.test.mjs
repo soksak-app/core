@@ -156,6 +156,29 @@ test("core.layout.open on a group card selects an equal tab inside it, adds a ca
   await refuses(run("core.layout.open", { card: "card-10", plugin: PLAIN }), "card card-10 is in space spc-bbbbbb, which is not active");
 });
 
+test("a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
+  arrange();
+  const tree = plane.currentTree();
+  const band = plane.dropBands();
+  const group = tree.rect("card-4");
+  const first = tree.rect("card-1");
+  // The header of a group card is its centre, the outer quarter of its rectangle a side, and a point inside goes on to its members.
+  assert.deepEqual(plane.dropHit(group.x + group.w / 2, group.y + 1, "card-3", band), { id: "card-4", zone: "centre" });
+  assert.deepEqual(plane.dropHit(group.x + 2, group.y + group.h / 2, "card-3", band), { id: "card-4", zone: "left" });
+  assert.deepEqual(plane.dropHit(first.x + first.w / 2, first.y + first.h / 2, "card-3", band), { id: "card-1", zone: "centre" });
+  // A drop on the centre of a group card puts the tab into a new content card inside it; the only tab of a card moves its card.
+  const { tab } = await run("core.card.add-tab", { card: "card-3", plugin: PLAIN });
+  await run("core.tab.move", { tab, card: "card-4", zone: "centre" });
+  assert.equal(plane.currentGrid().cards.find((card) => plane.tabsOf(card).some((t) => t.id === tab)).id, "card-5");
+  assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
+  // A drop on a side of a group card puts the card beside the rectangle of the group card in the level that holds it.
+  await run("core.tab.move", { tab: "tab-aaaaa3", card: "card-4", zone: "bottom" });
+  const moved = plane.currentGrid().card("card-3");
+  const box = plane.currentTree().rectangle(plane.currentTree().node("card-4"));
+  assert.deepEqual([moved.c0, moved.c1, moved.r0], [box.c0, box.c1, box.r1]);
+  assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
+});
+
 test("core.card.get reads a content card with its group path and a group card with its node", { timeout: 5000 }, async () => {
   arrange();
   assert.deepEqual(await run("core.card.get", { card: "card-2" }), {
