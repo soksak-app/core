@@ -104,3 +104,14 @@ test("a surface page calls its document command with the surface of its address"
     delete globalThis.location;
   }
 });
+
+test("the host invoke passes a null argument as null and sends an empty object only for an undefined argument", async () => {
+  const calls = [];
+  globalThis.window = channel(calls);
+  globalThis.location = { search: "" };
+  const { hostInvoke } = await import("../runtime/index.js?test=host-invoke");
+  const invoke = hostInvoke();
+  await invoke("probe", null);
+  await invoke("probe", undefined);
+  assert.deepEqual(calls, [["probe", null], ["probe", {}]]);
+});

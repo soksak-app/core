@@ -179,8 +179,8 @@ const ARG = {
  * Host invoke over the call channel of the adapter. A host command failure rejects with the error text of the host,
  * which the call channel already wraps in an Error, so the value passes through unchanged.
  */
-function hostInvoke() {
-  return (command, args) => window.__soksak.call(command, args ?? {});
+export function hostInvoke() {
+  return (command, args) => window.__soksak.call(command, args === undefined ? {} : args);
 }
 
 export const host = (() => {
