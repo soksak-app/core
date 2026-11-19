@@ -19,8 +19,13 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 )
+
+// inputDrawWindow is the age of a user input at which the screen request of the input is sent at once, without waiting for a tick
+// (docs/spec/native-surfaces.md#copy-path-frames).
+const inputDrawWindow = 200 * time.Millisecond
 
 // imageStore is the name of the persistent data store of an image region.
 const imageStore = "soksak-images"
@@ -179,14 +184,16 @@ type ImageDrawing struct {
 // ImageScreenRequest is the request for the current screen of a drawing region (docs/spec/native-surfaces.md#copy-path-frames).
 // Full is true when the host holds no accepted screen of the same generation and raster, so the supplier sends every row.
 type ImageScreenRequest struct {
-	Request    string       `json:"request"`
-	Name       string       `json:"name"`
-	Generation uint64       `json:"generation"`
-	Raster     uint64       `json:"raster"`
-	Full       bool         `json:"full"`
-	Key        ImageKey     `json:"-"`
-	Sidecar    string       `json:"-"`
-	Owner      SidecarOwner `json:"-"`
+	Request    string `json:"request"`
+	Name       string `json:"name"`
+	Generation uint64 `json:"generation"`
+	Raster     uint64 `json:"raster"`
+	Full       bool   `json:"full"`
+	// Cids are the correlation identifiers of the inputs that the request continues, present when the request was sent for an input.
+	Cids    []string     `json:"cids,omitempty"`
+	Key     ImageKey     `json:"-"`
+	Sidecar string       `json:"-"`
+	Owner   SidecarOwner `json:"-"`
 }
 
 // ScreenRequests returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
@@ -196,17 +203,9 @@ func (i *Images) ScreenRequests() []ImageScreenRequest {
 	defer i.mu.Unlock()
 	requests := []ImageScreenRequest{}
 	for key, state := range i.states {
-		owner := i.owners[key]
-		if owner == nil || i.handles[key] == nil || state.ScreenRequest.Request != "" || !i.drawingLocked(key, state) {
-			continue
+		if request, ok := i.newScreenRequestLocked(key, state, nil); ok {
+			requests = append(requests, request)
 		}
-		request := ImageScreenRequest{
-			Request: "screen-" + rand.Text(), Name: key.Name, Generation: state.Generation, Raster: state.Raster,
-			Full: !(state.ScreenAccepted && state.ScreenGeneration == state.Generation && state.ScreenRaster == state.Raster),
-			Key:  key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
-		}
-		state.ScreenRequest = request
-		requests = append(requests, request)
 	}
 	sort.Slice(requests, func(a, b int) bool {
 		if requests[a].Key.Surface != requests[b].Key.Surface {
@@ -215,6 +214,39 @@ func (i *Images) ScreenRequests() []ImageScreenRequest {
 		return requests[a].Key.Name < requests[b].Key.Name
 	})
 	return requests
+}
+
+// InputScreenRequest returns the screen request that a user input sends at once to a drawing region: the input is at most inputDrawWindow old
+// at now and the region has no unanswered request. cids are the correlation identifiers of the input. It returns false when the input sends
+// no request, and the next tick sends the request of the region. An input at a time after now is not within the window.
+func (i *Images) InputScreenRequest(key ImageKey, cids []string, inputAt, now time.Time) (ImageScreenRequest, bool) {
+	age := now.Sub(inputAt)
+	if age < 0 || age > inputDrawWindow {
+		return ImageScreenRequest{}, false
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil {
+		return ImageScreenRequest{}, false
+	}
+	return i.newScreenRequestLocked(key, state, cids)
+}
+
+// newScreenRequestLocked records and returns the screen request of a drawing region that has no unanswered request. It returns false
+// when the region gets no request. Call it while holding i.mu.
+func (i *Images) newScreenRequestLocked(key ImageKey, state *ImageRasterState, cids []string) (ImageScreenRequest, bool) {
+	owner := i.owners[key]
+	if owner == nil || i.handles[key] == nil || state.ScreenRequest.Request != "" || !i.drawingLocked(key, state) {
+		return ImageScreenRequest{}, false
+	}
+	request := ImageScreenRequest{
+		Request: "screen-" + rand.Text(), Name: key.Name, Generation: state.Generation, Raster: state.Raster,
+		Full: !(state.ScreenAccepted && state.ScreenGeneration == state.Generation && state.ScreenRaster == state.Raster),
+		Cids: cids, Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
+	}
+	state.ScreenRequest = request
+	return request, true
 }
 
 // AnswerScreen ends the unanswered screen request of a region. An accepted answer makes the rows of the request the baseline of the next

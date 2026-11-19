@@ -1426,3 +1426,52 @@ fn window_clock_ticks_each_drawing_region_with_its_sequence() {
         } } })
     );
 }
+
+// contract: copy-path-input-draw
+// A user input that reaches a drawing region sends the screen request at once when the input is at most 200 ms old and the region has no
+// unanswered request. The request carries the correlation identifiers of the input (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn input_sends_the_screen_request_at_once_with_its_correlation_identifiers() {
+    let images = super::Images::default();
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    let key = (surface.to_string(), "copy".to_string());
+    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+    assert!(images.set(&key, 1));
+    images.configure_raster(&key, 800, 600, 2.0, true).unwrap();
+    let input_at = std::time::Instant::now();
+    let ms = std::time::Duration::from_millis;
+    let request = images
+        .input_screen_request(
+            &key,
+            vec!["cid-1".to_string()],
+            input_at,
+            input_at + ms(150),
+        )
+        .expect("an input 150 ms old sends its screen request at once");
+    assert_eq!(request.cids, ["cid-1"]);
+    let body =
+        serde_json::to_value(serde_json::json!({ "image": { "screen": &request } })).unwrap();
+    assert_eq!(
+        body["image"]["screen"]["cids"],
+        serde_json::json!(["cid-1"])
+    );
+    assert!(
+        images
+            .input_screen_request(&key, vec!["cid-2".to_string()], input_at, input_at + ms(10))
+            .is_none(),
+        "an input sends no request while the region has an unanswered one"
+    );
+    images.answer_screen(&key, &request, false).unwrap();
+    assert!(
+        images
+            .input_screen_request(
+                &key,
+                vec!["cid-3".to_string()],
+                input_at,
+                input_at + ms(201)
+            )
+            .is_none(),
+        "an input 201 ms old sends no request at once"
+    );
+}

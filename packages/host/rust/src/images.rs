@@ -11,6 +11,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::framework::{Manager, Webview};
 use base64::Engine;
@@ -129,6 +130,35 @@ struct Inner {
 
 /// The end of a raster wait by the end of the layout transaction that it belongs to.
 pub(crate) const LAYOUT_WAIT_ENDED: &str = "the layout transaction of the window ended";
+
+impl Inner {
+    /// Records and returns the screen request of a drawing region that has no unanswered request, or None when the region gets none.
+    fn new_screen_request(&mut self, key: &Key, cids: Vec<String>) -> Option<ScreenRequest> {
+        let sidecar = self.sidecars.get(key)?.clone();
+        // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+        if self.handles.get(key).copied().unwrap_or_default() == 0 {
+            return None;
+        }
+        let drawing = self.drawing(key, self.states.get(key)?);
+        let state = self.states.get_mut(key)?;
+        if !drawing || state.screen_request.is_some() {
+            return None;
+        }
+        let serial = NEXT_SCREEN_REQUEST.fetch_add(1, Ordering::Relaxed);
+        let request = ScreenRequest {
+            request: format!("screen-{}-{serial}", std::process::id()),
+            name: key.1.clone(),
+            generation: state.generation,
+            raster: state.raster,
+            full: state.screen_baseline != Some((state.generation, state.raster)),
+            cids,
+            key: key.clone(),
+            sidecar,
+        };
+        state.screen_request = Some(request.clone());
+        Some(request)
+    }
+}
 
 impl Inner {
     /// Whether a region is drawing: it is attached and visible, its outer surface is visible and the window is neither
@@ -252,6 +282,9 @@ pub struct ScreenRequest {
     pub generation: u64,
     pub raster: u64,
     pub full: bool,
+    /// The correlation identifiers of the inputs that the request continues, present when the request was sent for an input.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub cids: Vec<String>,
     #[serde(skip)]
     pub key: Key,
     #[serde(skip)]
@@ -272,6 +305,9 @@ pub struct Tick {
     #[serde(skip)]
     pub sidecar: String,
 }
+
+/// The age of a user input at which its screen request is sent at once (docs/spec/native-surfaces.md#copy-path-frames).
+const INPUT_DRAW_WINDOW: Duration = Duration::from_millis(200);
 
 /// The serial of the screen requests of this process.
 static NEXT_SCREEN_REQUEST: AtomicU64 = AtomicU64::new(1);
@@ -330,39 +366,31 @@ impl Images {
     pub fn screen_requests(&self) -> Vec<ScreenRequest> {
         let mut guard = self.lock();
         let inner = &mut *guard;
-        let mut requests = Vec::new();
         let keys: Vec<Key> = inner.states.keys().cloned().collect();
-        for key in keys {
-            let Some(sidecar) = inner.sidecars.get(&key).cloned() else {
-                continue;
-            };
-            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
-            if inner.handles.get(&key).copied().unwrap_or_default() == 0 {
-                continue;
-            }
-            let drawing = inner.drawing(&key, &inner.states[&key]);
-            let state = inner
-                .states
-                .get_mut(&key)
-                .expect("the key was read from the states");
-            if !drawing || state.screen_request.is_some() {
-                continue;
-            }
-            let serial = NEXT_SCREEN_REQUEST.fetch_add(1, Ordering::Relaxed);
-            let request = ScreenRequest {
-                request: format!("screen-{}-{serial}", std::process::id()),
-                name: key.1.clone(),
-                generation: state.generation,
-                raster: state.raster,
-                full: state.screen_baseline != Some((state.generation, state.raster)),
-                key: key.clone(),
-                sidecar,
-            };
-            state.screen_request = Some(request.clone());
-            requests.push(request);
-        }
+        let mut requests: Vec<ScreenRequest> = keys
+            .iter()
+            .filter_map(|key| inner.new_screen_request(key, Vec::new()))
+            .collect();
         requests.sort_by(|a, b| a.key.cmp(&b.key));
         requests
+    }
+
+    /// Returns the screen request that a user input sends at once to a drawing region: the input is at most 200 ms old at `now` and
+    /// the region has no unanswered request. `cids` are the correlation identifiers of the input. It returns None when the input sends
+    /// no request, and the next tick sends the request of the region. An input at a time after `now` is not within the window.
+    pub fn input_screen_request(
+        &self,
+        key: &Key,
+        cids: Vec<String>,
+        input_at: Instant,
+        now: Instant,
+    ) -> Option<ScreenRequest> {
+        let age = now.checked_duration_since(input_at)?;
+        if age > INPUT_DRAW_WINDOW {
+            return None;
+        }
+        let mut guard = self.lock();
+        guard.new_screen_request(key, cids)
     }
 
     /// Ends the unanswered screen request of a region. An accepted answer makes the rows of the request the baseline of the
