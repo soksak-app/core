@@ -324,18 +324,22 @@ func (t *GroupTree) Rect(id string) (Rect, bool) {
 		rect, ok := t.grid.Rect(id)
 		card, _ := t.grid.Card(id) // silent: the grid holds the card.
 		k := float64(t.heads(path, card.R0))
-		rect.Y += k * t.head
-		rect.H -= k * t.head
+		rect.Y += k * t.headStep()
+		rect.H -= k * t.headStep()
 		return rect, ok
 	}
 	// A group card is drawn below the headers of the group cards that hold it and start on its first row line, as a content card is.
 	rect := t.union(n)
 	_, _, r0, _ := t.span(n)
 	k := float64(t.heads(path, r0))
-	rect.Y += k * t.head
-	rect.H -= k * t.head
+	rect.Y += k * t.headStep()
+	rect.H -= k * t.headStep()
 	return rect, true
 }
+
+// headStep is how far one header moves the boxes below it down: the header and the corridor that separates it from them, as between
+// two cards (docs/spec/groups.md#drawn-rectangles).
+func (t *GroupTree) headStep() float64 { return t.head + t.grid.Gap() }
 
 // union is the union of the rectangles in the grid of the content cards inside the node.
 func (t *GroupTree) union(n *node) Rect {
@@ -345,16 +349,6 @@ func (t *GroupTree) union(n *node) Rect {
 		x0, y0, x1, y1 = math.Min(x0, r.X), math.Min(y0, r.Y), math.Max(x1, r.X+r.W), math.Max(y1, r.Y+r.H)
 	}
 	return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
-}
-
-// UnderHeads tells whether the group card id stands below the header of a group card that holds it, which starts on its first row line.
-func (t *GroupTree) UnderHeads(id string) bool {
-	path, n, _ := t.find(id) // silent: an id that is no card has no node.
-	if n == nil || !n.group {
-		return false
-	}
-	_, _, r0, _ := t.span(n)
-	return t.heads(path, r0) > 0
 }
 
 // HeadRect is the header of the group card id: a row of the head height at the top of its rectangle, below the headers of the group

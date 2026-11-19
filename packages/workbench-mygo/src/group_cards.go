@@ -65,15 +65,10 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	head, _ := s.groupHeadRect(id)  // silent: a group card has a header.
 	line := s.palette.CardBorder()
 	out := float32(s.plane.Gap()/2) + line/2
-	// Below the header of a group card that holds it, the frame starts at the bottom of that header, which no corridor separates from it.
-	top := out
-	if s.planes.UnderHeads(id) {
-		top = 0
-	}
 	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
 	s.anchored("core.group/"+id, card)
-	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset-out).Top(float32(rect.Y)+inset-top).
-		Size(float32(rect.W)+2*out, float32(rect.H)+out+top).Border(line, s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
+	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset-out).Top(float32(rect.Y)+inset-out).
+		Size(float32(rect.W)+2*out, float32(rect.H)+2*out).Border(line, s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
 	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).
 		Background(s.palette.Card).Radius(s.palette.CardRadius()).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
