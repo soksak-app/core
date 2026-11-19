@@ -482,6 +482,18 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-app.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
     ],
     expected: "A bundle build writes and signs a staging bundle and installs it with one rename, so a launch finds a complete signed bundle, and a check run verifies the signature of each bundle before it starts it.",
+  },
+  {
+    id: "F973-1",
+    implementation: [
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn report_ended_presentation_waits_to(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_join_test.go", id: "TestKeysBeforeThePresentationWriteOneDiagnosticRecordAndNoError" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "keys_before_the_presentation_write_no_error_record" },
+    ],
+    expected: "A key down that ends the hold before a view presented writes the gated host.trace.view.presentation-abandoned record and no error.",
     levels: ["unit"],
   },
   {

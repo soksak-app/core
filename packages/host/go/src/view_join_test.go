@@ -776,6 +776,36 @@ func TestAJoinedViewThatDoesNotPresentEndsItsWaitAtInput(t *testing.T) {
 	}
 }
 
+// Two key downs that come before the view presented its change are ordinary input of a person: the first ends the hold and writes
+// the gated diagnostic record host.trace.view.presentation-abandoned with the reason input, the second finds no join to end, and
+// neither writes an error record (docs/spec/native-surfaces.md#layout-transaction, docs/spec/diagnostics.md).
+// contract: view.presentation-wait.ends-at-input
+func TestKeysBeforeThePresentationWriteOneDiagnosticRecordAndNoError(t *testing.T) {
+	isolateTraceRecords(t)
+	s, _, _ := newLifecycleSurfaces(t)
+	joins := &viewJoins{}
+	window := platform.Window(1)
+	placement := Placement{ID: "probe-surface", Rect: Rect{X: 14, Y: 28, W: 320, H: 180}, Visible: true}
+	request := PresentRequest{Ticket: 51, Placements: []Placement{placement}}
+	if err := joins.forRequest(s, window, request, request.Placements); err != nil {
+		t.Fatalf("join the view: %v", err)
+	}
+	joins.end(s, 0, "input")
+	joins.end(s, 0, "input")
+	if got := bufferedTraces(t, "host.trace.view.presentation-abandoned"); len(got) != 1 || got[0]["reason"] != "input" {
+		t.Fatalf("abandoned records %v, want one with the reason input", got)
+	}
+	var errs []map[string]any
+	for _, fields := range bufferedTraces(t, "host.record.error") {
+		if fields["where"] == "view presentation" {
+			errs = append(errs, fields)
+		}
+	}
+	if len(errs) != 0 {
+		t.Fatalf("keys before the presentation wrote error records %v, want none", errs)
+	}
+}
+
 // contract: view.presentation-wait.ends-at-input
 func TestAnInputEndAfterThePresentationChangesNothing(t *testing.T) {
 	isolateTraceRecords(t)

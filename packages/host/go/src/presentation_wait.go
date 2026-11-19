@@ -442,15 +442,14 @@ func (s *Surfaces) endNativePresentationWait(surface string, ticket, generation 
 	s.presentationWaitEnded(surface, reason, abandoned, err)
 }
 
-// presentationWaitEnded reports the end of a presentation wait: an error of the end and the abandonment to the page.
+// presentationWaitEnded reports the end of a presentation wait: an error of the end and the abandonment to the page. A wait that
+// input ended is ordinary input of a person, a key down before the view presented its change, so its record is the gated
+// host.trace.view.presentation-abandoned that the end wrote and not an error.
 func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {
 	if err != nil {
 		LogError("view channel", err)
 	}
 	if abandoned {
-		if reason == "input" {
-			LogError("view presentation", fmt.Errorf("surface %s had not presented when input ended the hold", surface))
-		}
 		s.emitToSurface(surface, "view-presentation-abandoned", map[string]any{"surface": surface, "reason": reason})
 	}
 }
