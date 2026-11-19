@@ -825,3 +825,42 @@ func TestALayoutCommandRecordsTheLayoutItLeaves(t *testing.T) {
 		t.Fatalf("the record is %v", fields)
 	}
 }
+
+// Every command that changes the layout writes one record workbench.layout.change, one that answers at once and one that answers in a
+// later step, and a command that changes nothing writes none.
+func TestEveryLayoutCommandRecordsTheLayout(t *testing.T) {
+	host := recordingCommands(&storedHost{installed: layoutPlugins, common: map[string]any{},
+		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
+	f := newTabShell(t, host)
+	f.open(t)
+	if _, err := f.apply("core.layout.open", `{"card":"main","plugin":"plain","side":"right"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.apply("core.card.focus", `{"card":"main"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.apply("core.space.add", ``); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	spaces := host.projects[0]["spaces"].([]any)
+	added := spaces[len(spaces)-1].(map[string]any)["id"].(string)
+	closed := false
+	f.shell.Registry().RunLater("core.space.close", json.RawMessage(`{"id":"`+added+`"}`), func(_ any, err error) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		closed = true
+	})
+	f.settle()
+	if !closed {
+		t.Fatal("the close of the added space did not answer")
+	}
+	counts := map[string]int{}
+	for _, record := range host.written("workbench.layout.change") {
+		counts[record["fields"].(map[string]any)["command"].(string)]++
+	}
+	if want := map[string]int{"core.layout.open": 1, "core.space.add": 1, "core.space.close": 1}; !reflect.DeepEqual(counts, want) {
+		t.Fatalf("the commands wrote the records %v, not %v", counts, want)
+	}
+}
