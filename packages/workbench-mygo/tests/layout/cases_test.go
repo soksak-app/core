@@ -271,6 +271,11 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &fixed)
 		return g.SetFixed(id, fixed), true, nil
+	case "shareLines":
+		var extra []float64
+		arg(t, s, 0, &axis)
+		arg(t, s, 1, &extra)
+		return nil, false, g.ShareLines(layout.Axis(axis), extra)
 	case "setFrames":
 		var frames map[string]layout.Frames
 		arg(t, s, 0, &frames)
