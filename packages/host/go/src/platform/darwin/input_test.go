@@ -106,3 +106,18 @@ func TestAnInterruptionCarriesTheMessageOfTheLibrary(t *testing.T) {
 		t.Fatalf("the interruption answered %v with %+v, want PointerInterrupted with the message %q", result, held, message)
 	}
 }
+
+// A pointer input that the library refuses carries the reason of the refusal, and the host answers it in its error
+// (docs/spec/exposure.md#methods).
+// contract: endpoint.input.rejection-reason
+func TestARefusalCarriesTheReasonOfTheLibrary(t *testing.T) {
+	message := "no open press of the pointer and button in the window"
+	reason := append([]byte(message), 0)
+	var result platform.PointerResult
+	var held platform.ButtonHeld
+	handle := handles.NewHandle(func(got platform.PointerResult, state platform.ButtonHeld, _ uintptr) { result, held = got, state })
+	goHost_input_delivered(uintptr(handle), abi.SP_INPUT_REJECTED, &abi.SpInputHeld{Pid: -1, Reason: &reason[0]}, 0)
+	if result != platform.PointerRejected || held.Reason != message {
+		t.Fatalf("the refusal answered %v with %+v, want PointerRejected with the reason %q", result, held, message)
+	}
+}

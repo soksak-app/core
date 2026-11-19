@@ -1073,7 +1073,7 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerInactive:
 		return errInactive()
 	case platform.PointerRejected:
-		return rpcError(codeInvalidParams, "the window did not accept the input")
+		return rpcError(codeInvalidParams, "%s", RejectedMessage(got.held.Reason))
 	case platform.PointerUnreceived:
 		return rpcError(codeTimeout, "the document did not receive the input")
 	case platform.PointerButtonHeld:
@@ -1093,6 +1093,15 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 		s.press(got.view)
 	}
 	return nil
+}
+
+// RejectedMessage builds the message of the -32602 refusal of a pointer input from the reason of the platform, which the native
+// library of macOS names (docs/spec/exposure.md#methods). A platform that names no reason gives the empty reason.
+func RejectedMessage(reason string) string {
+	if reason == "" {
+		return "the window did not accept the input"
+	}
+	return "the window did not accept the input: " + reason
 }
 
 // ButtonHeldMessage builds the message of the 1007 error. It writes the mask at the time of the rejection and the frontmost application

@@ -923,14 +923,17 @@ static const char *resultName(sp_input_result result) {
 }
 
 // Records one injected pointer input with its pointer, arguments, result, and rejection reason, and the pointer whose press rejected
-// it. Every path by which the caller receives a result uses it. A pointer name has only a-z, 0-9 and -, so it needs no escape.
+// it. Every path by which the caller receives a result uses it. A refused input is an error that the caller receives, so its record
+// is an error and is stored under every policy; a delivered input and one that the document did not confirm are recorded at info,
+// and logUnreceived records the second as an error with its facts. A pointer name has only a-z, 0-9 and -, so it needs no escape.
 static void logPointer(SPPointer *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,
     sp_input_result result, const char *why, SPPointer *holder) {
     NSString *text = [NSString stringWithFormat:
         @"{\"kind\":\"pointer\",\"pointer\":%@,\"x\":%g,\"y\":%g,\"phase\":%d,\"button\":%d,\"deltaX\":%g,\"deltaY\":%g,\"clicks\":%d,\"result\":\"%s\",\"reason\":\"%s\",\"holder\":%@}",
         pointer ? [NSString stringWithFormat:@"\"%@\"", pointer->name] : @"null", x, y, phase, button, deltaX, deltaY, clicks,
         resultName(result), why ?: "", holder ? [NSString stringWithFormat:@"\"%@\"", holder->name] : @"null"];
-    sp_log_info("input inject", text.UTF8String);
+    if (result == SP_INPUT_DELIVERED || result == SP_INPUT_UNRECEIVED) sp_log_info("input inject", text.UTF8String);
+    else sp_log_error("input inject", text.UTF8String);
 }
 
 // Delivers a phase of a gesture of the pointer SP_INPUT_POINTER_MAIN behind the input of its window that waits. Whether the input is
@@ -962,10 +965,10 @@ sp_input_result sp_input_pointer_clicks(void *handle, double x, double y, int ph
     return pointerAt(handle, x, y, phase, button, 0, 0, clicks);
 }
 
-// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD,
+// Calls done and releases the reference of held. held is reported only when result is SP_INPUT_REJECTED, SP_INPUT_BUTTON_HELD,
 // SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED.
 static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held, WKWebView *view) {
-    if (result == SP_INPUT_RESIZE_EDGE || result == SP_INPUT_INTERRUPTED) {
+    if (result == SP_INPUT_REJECTED || result == SP_INPUT_RESIZE_EDGE || result == SP_INPUT_INTERRUPTED) {
         sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = NULL, .reason = held.why };
         [held.front release];
         done(context, result, &report, NULL);
@@ -1215,8 +1218,10 @@ static void observeWindowCloses(void) {
                 for (SPPointerRequest *request in pointerRequests) if (request->window == closed) [ended addObject:request];
                 [pointerRequests removeObjectsInArray:ended];
                 for (SPPointerRequest *request in ended) {
-                    sp_log_info("input inject", "a pointer request of a window that closed before its turn is answered rejected");
-                    request->done(request->context, SP_INPUT_REJECTED, NULL, NULL);
+                    const char *reason = "the window closed before the turn of the request";
+                    sp_log_error("input inject", "a pointer request of a window that closed before its turn is answered rejected");
+                    sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = NULL, .reason = reason };
+                    request->done(request->context, SP_INPUT_REJECTED, &report, NULL);
                 }
             });
     });

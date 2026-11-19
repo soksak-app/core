@@ -65,7 +65,7 @@ impl PressState {
         let button = match pointer.button {
             0 => 0,
             1 => 1,
-            _ => return Err(Delivery::Rejected),
+            _ => return Err(Delivery::Rejected(String::new())),
         };
         if let Some(holder) = &self.holder
             && *holder != pointer.pointer
@@ -87,7 +87,7 @@ impl PressState {
                     return Err(Delivery::PressOpen);
                 }
                 if !valid_clicks {
-                    return Err(Delivery::Rejected);
+                    return Err(Delivery::Rejected(String::new()));
                 }
                 (
                     "mousePressed",
@@ -98,13 +98,13 @@ impl PressState {
             }
             PHASE_DRAG => {
                 if !self.open[button] {
-                    return Err(Delivery::Rejected);
+                    return Err(Delivery::Rejected(String::new()));
                 }
                 ("mouseMoved", name, 0, self.buttons(None))
             }
             PHASE_RELEASE => {
                 if !self.open[button] || !valid_clicks {
-                    return Err(Delivery::Rejected);
+                    return Err(Delivery::Rejected(String::new()));
                 }
                 (
                     "mouseReleased",
@@ -113,7 +113,7 @@ impl PressState {
                     self.buttons(Some((button, false))),
                 )
             }
-            _ => return Err(Delivery::Rejected),
+            _ => return Err(Delivery::Rejected(String::new())),
         };
         let mut event = json!({
             "type": kind, "x": pointer.x, "y": pointer.y, "button": named, "buttons": buttons, "clickCount": count,
@@ -229,7 +229,7 @@ pub(crate) fn key_call(key: &Key) -> Result<Call, Delivery> {
         .get(key.key.as_str())
         .cloned()
         .or_else(|| character_key(&key.key))
-        .ok_or(Delivery::Rejected)?;
+        .ok_or(Delivery::Rejected(String::new()))?;
     let mut event = json!({"key": found.key, "modifiers": protocol_modifiers(key.modifiers)});
     if let Some((code, virtual_key)) = &found.code {
         event["code"] = json!(code);
@@ -279,7 +279,7 @@ pub(crate) fn pointer_delivery(result: &Result<(), InputFailure>) -> Delivery {
     match result {
         Ok(()) => Delivery::Delivered,
         Err(InputFailure::TimedOut) => Delivery::Unreceived,
-        Err(InputFailure::Failed(_)) => Delivery::Rejected,
+        Err(InputFailure::Failed(_)) => Delivery::Rejected(String::new()),
     }
 }
 

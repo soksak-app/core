@@ -60,3 +60,21 @@ fn an_interruption_carries_the_message_of_the_library() {
         Delivery::Interrupted(message.to_string())
     );
 }
+
+// contract: endpoint.input.rejection-reason
+#[test]
+fn a_refusal_carries_the_reason_of_the_library() {
+    let message = "no open press of the pointer and button in the window";
+    let reason = CString::new(message).expect("the message holds no NUL");
+    let held = SpInputHeld {
+        mask: 0,
+        pid: -1,
+        bundle_identifier: std::ptr::null(),
+        pointer: std::ptr::null(),
+        reason: reason.as_ptr(),
+    };
+    assert_eq!(
+        delivery(1, Some(&held)),
+        Delivery::Rejected(message.to_string())
+    );
+}

@@ -331,8 +331,9 @@ pub enum FullscreenResult {
 pub enum Delivery {
     /// It was delivered to the window.
     Delivered,
-    /// The window, coordinates or phase are not valid.
-    Rejected,
+    /// The window, coordinates or phase are not valid. The value is the reason that the platform names, empty on a platform that
+    /// names none.
+    Rejected(String),
     /// A move without a button, and the window is not the key window.
     Inactive,
     /// A press or a release was delivered, but the document did not receive it within the time limit.

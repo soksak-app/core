@@ -67,6 +67,8 @@ for (const app of Object.values(APPS)) {
     const second = { s, surface: right, at: rightAt, name: "second", sign: -1 };
     await first.s.pointer(leftAt.x, leftAt.y, "down", { pointer: "first" });
     await counted(s, left, [1, 0, 0], "the press of pointer first");
+    // The move of pointer second is refused on purpose, and a refused input is an error record of the native library.
+    s.expectError(/^error native input inject: \{"kind":"pointer","pointer":"second",.*"phase":0,.*"result":"pointer held"/);
     await assert.rejects(s.pointer(rightAt.x, rightAt.y, "move", { pointer: "second" }), (error) => {
       assert.equal(error.code, 1011, error.message);
       assert.match(error.message, /pointer first holds a press that this input would share: the window has one hover position/);

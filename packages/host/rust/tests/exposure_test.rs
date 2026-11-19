@@ -850,6 +850,19 @@ fn button_held_message_reports_mask_and_frontmost_application() {
     }
 }
 
+// contract: endpoint.input.rejection-reason
+#[test]
+fn rejected_message_names_the_reason_of_the_platform() {
+    assert_eq!(
+        exposure::rejected_message("the window is not shown"),
+        "the window did not accept the input: the window is not shown"
+    );
+    assert_eq!(
+        exposure::rejected_message(""),
+        "the window did not accept the input"
+    );
+}
+
 // contract: endpoint.input.pointer-held-message
 #[test]
 fn pointer_held_message_names_the_holding_pointer_and_its_reason() {

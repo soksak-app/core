@@ -41,8 +41,8 @@ func (implementation) InjectPointer(window platform.Window, pointer string, x, y
 	return nil
 }
 
-// goHost_input_delivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD,
-// SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED and keeps it valid until done returns, and view is the web view that
+// goHost_input_delivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_REJECTED,
+// SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED and keeps it valid until done returns, and view is the web view that
 // a delivered press or release reached.
 func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld, view uintptr) {
 	handle := handles.Handle(uintptr(context))
@@ -65,8 +65,10 @@ func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld
 		done(platform.PointerResizeEdge, resizeEdge(held), 0)
 	case abi.SP_INPUT_INTERRUPTED:
 		done(platform.PointerInterrupted, interruption(held), 0)
+	case abi.SP_INPUT_REJECTED:
+		done(platform.PointerRejected, rejection(held), 0)
 	default:
-		done(platform.PointerRejected, platform.ButtonHeld{}, 0)
+		panic(fmt.Sprintf("sp_input_pointer_then reported the unknown result %d", result))
 	}
 }
 
@@ -100,6 +102,15 @@ func pointerHeld(held *abi.SpInputHeld) platform.ButtonHeld {
 func resizeEdge(held *abi.SpInputHeld) platform.ButtonHeld {
 	if held == nil || held.Reason == nil {
 		panic("sp_input_pointer_then reported SP_INPUT_RESIZE_EDGE without its message")
+	}
+	return platform.ButtonHeld{Reason: native.GoString(held.Reason)}
+}
+
+// rejection reads the reason of an SP_INPUT_REJECTED refusal from sp_input_held. A notification of this result without it is a
+// contract violation of the library, so it stops and names the violation.
+func rejection(held *abi.SpInputHeld) platform.ButtonHeld {
+	if held == nil || held.Reason == nil {
+		panic("sp_input_pointer_then reported SP_INPUT_REJECTED without its reason")
 	}
 	return platform.ButtonHeld{Reason: native.GoString(held.Reason)}
 }
