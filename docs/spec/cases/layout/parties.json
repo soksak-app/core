@@ -554,7 +554,7 @@
       ]
     },
     {
-      "name": "removing a card that is not in the party changes nothing",
+      "name": "removing a card that is not in the party is refused",
       "state": {
         "cards": [
           {
@@ -596,19 +596,7 @@
             "party": "p1",
             "card": "c"
           },
-          "returns": {
-            "party": {
-              "id": "p1",
-              "cards": [
-                "a",
-                "b"
-              ],
-              "leader": null,
-              "color_token": "party-1",
-              "leaderColor": null
-            },
-            "changed": []
-          }
+          "error": "card c is not in party p1"
         }
       ]
     },
