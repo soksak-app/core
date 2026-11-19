@@ -4077,6 +4077,134 @@
         }
       },
       {
+        "name": "core.layout.plan",
+        "description": "Plans a whole arrangement of the active space without changing it: tree, a split {direction: row or column, children} or a card {tabs, active?} whose entries are {tab} or {plugin, params?}, or count cards of plugin with params in the most even grid. close true closes the tabs that the tree does not hold; else they stay as inactive tabs of the first card. The result states whether the operations of the size rule can build it, the tree as an apply takes it, the cards in reading order with their frames, the plane and the minimum card size; an arrangement that is not feasible states the reason, the plane that it needs and a proposal of the nearest arrangement that can be built.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tree": {
+              "type": "object"
+            },
+            "count": {
+              "type": "number"
+            },
+            "plugin": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            },
+            "close": {
+              "type": "boolean"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "feasible": {
+              "type": "boolean"
+            },
+            "tree": {},
+            "cards": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "card": {
+                    "type": "string"
+                  },
+                  "frame": {
+                    "type": "object"
+                  },
+                  "tabs": {
+                    "type": "array"
+                  },
+                  "active": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "plane": {},
+            "minimum": {},
+            "kept": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "closed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "reason": {},
+            "needed": {},
+            "proposal": {}
+          }
+        }
+      },
+      {
+        "name": "core.layout.apply",
+        "description": "Builds the plan of tree in the active space with the operations of the size rule, as core.layout.plan states it: the existing tabs move into their cards with their surfaces, the new tabs open, the tabs of closed close and the first card of the tree is focused. A plan that is not feasible changes nothing and fails with its reason; the same tree applied again changes nothing and answers the same.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tree": {
+              "type": "object"
+            },
+            "close": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "tree"
+          ]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "tree": {
+              "type": "object"
+            },
+            "cards": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "card": {
+                    "type": "string"
+                  },
+                  "frame": {
+                    "type": "object"
+                  },
+                  "tabs": {
+                    "type": "array"
+                  },
+                  "active": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "kept": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "closed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      {
         "name": "core.layout.close",
         "description": "Closes a tab as its close control does, and a card without tabs closes; tab is a tab identifier or current. A tab with unsaved changes opens the question of the close control and the result is closed false at once; a tab that this window closed since its workbench started answers closed true and changes nothing.",
         "params": {

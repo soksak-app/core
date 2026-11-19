@@ -71,6 +71,7 @@
     "stored-layout.js",
     "layout-queue.js",
     "layout-tree.js",
+    "layout-plan.js",
     "closed-tabs.js",
     "page-layout.js",
     "plane.js",

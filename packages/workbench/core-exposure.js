@@ -24,7 +24,7 @@ import {
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   drawnCardRects, focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
-  openInLayout, selectInLayout, moveInLayout, closeInLayout, layoutDescription, surfaceSpace, activityLayout,
+  openInLayout, selectInLayout, moveInLayout, closeInLayout, planInLayout, applyInLayout, layoutDescription, surfaceSpace, activityLayout,
   cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
 } from "./plane.js";
 import { emitEvent, eventAdmits } from "./page-log.js";
@@ -751,6 +751,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.layout.select", (params) => selectInLayout(params));
   registry.command("core.layout.move", (params) => moveInLayout(params));
   registry.command("core.layout.close", (params) => closeInLayout(params));
+  // The plan and the apply of a whole arrangement (docs/spec/cli.md#planning-an-arrangement).
+  registry.command("core.layout.plan", (params) => planInLayout(params));
+  registry.command("core.layout.apply", (params) => applyInLayout(params));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));
   registry.command("core.tab.unload", async ({ tab }) => {

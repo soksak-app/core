@@ -584,3 +584,154 @@ test("exposure.snapshot holds the layout of the description as a tree of splits 
     { plugin: PLAIN, name: PLAIN, description, surface: { params: null, opens: [] } },
   ]);
 });
+
+
+/** The cards of a plan as [card, tab identifiers] in reading order. */
+const planned = (cards) => cards.map(({ card, tabs }) => [card, tabs.map(({ tab }) => tab)]);
+/** The number of cards of each row of planned cards, by their top edge. */
+const rowSizes = (cards) => Object.values(Object.groupBy(cards, ({ frame }) => Math.round(frame.y))).map((row) => row.length);
+const terminals = (count) => Array.from({ length: count }, () => ({ tabs: [{ plugin: SESSION }] }));
+
+// contract: layout.plan.count-grid
+test("core.layout.plan of a count answers the most even grid of feasible cards and changes nothing", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN)]);
+  const before = layout();
+  const plan = await run("core.layout.plan", { count: 10, plugin: SESSION });
+  assert.deepEqual(layout(), before);
+  assert.deepEqual([plan.feasible, plan.reason, plan.needed, plan.proposal], [true, null, null, null]);
+  assert.deepEqual([plan.plane, plan.minimum], [{ width: 1600, height: 1200 }, { width: 96, height: 96 }]);
+  // Of the grids of 1 to 10 rows, three rows of 4, 3 and 3 cards are nearest to a square in a plane of 1600 × 1200.
+  assert.deepEqual(rowSizes(plan.cards), [4, 3, 3]);
+  assert.deepEqual(planned(plan.cards), [["main", [null, "tab-aaaaa1"]], ...Array.from({ length: 9 }, () => [null, [null]])]);
+  assert.deepEqual([plan.kept, plan.closed], [["tab-aaaaa1"], []]);
+  // The tree is the tree of an apply: the kept tab is an entry {tab} of the first card.
+  assert.deepEqual(plan.tree.children[0].children[0], { tabs: [{ plugin: SESSION, params: null }, { tab: "tab-aaaaa1" }], active: 0 });
+  // The cards of a row share its height, and the cards of one row have one width.
+  assert.deepEqual([...new Set(plan.cards.slice(0, 4).map(({ frame }) => Math.round(frame.width)))], [391]);
+});
+
+// contract: layout.apply.builds-once
+test("core.layout.apply applied twice builds the plan once, keeps the tab of the plane and answers the same", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN)]);
+  const plan = await run("core.layout.plan", { count: 10, plugin: SESSION });
+  const applied = await twice("core.layout.apply", { tree: plan.tree });
+  assert.deepEqual(applied.cards.map(({ frame }) => frame), plan.cards.map(({ frame }) => frame));
+  assert.equal(applied.cards[0].card, "main");
+  assert.ok(applied.cards.every(({ card, tabs }) => card !== null && tabs.every(({ tab }) => tab !== null)));
+  const { root, focused } = layout();
+  assert.equal(focused, "main");
+  assert.equal(root.direction, "column");
+  assert.deepEqual(root.children.map((row) => row.children.length), [4, 3, 3]);
+  // The cards of a row are drawn at one width, and the rows at one height.
+  for (const row of root.children) {
+    assert.ok(row.children.every(({ frame }) => Math.abs(frame.width - row.children[0].frame.width) < 1e-6), JSON.stringify(row.children.map(({ frame }) => frame)));
+    assert.ok(Math.abs(row.children[0].frame.height - root.children[0].children[0].frame.height) < 1e-6);
+  }
+  assert.deepEqual(cardNode(root, "main").tabs.map(({ tab, active }) => [tab === "tab-aaaaa1", active]), [[false, true], [true, false]]);
+  // A repeated plan of the count takes the tabs that the apply made and keeps every card.
+  const again = await run("core.layout.plan", { count: 10, plugin: SESSION });
+  assert.deepEqual(planned(again.cards), planned(applied.cards));
+  assert.deepEqual([again.kept, again.closed], [["tab-aaaaa1"], []]);
+});
+
+// contract: layout.plan.below-the-minimum
+test("a plan below the minimum states the card, the plane it needs and the nearest grid, and its apply changes nothing", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN)]);
+  const before = layout();
+  const tree = { direction: "row", children: terminals(30) };
+  const plan = await run("core.layout.plan", { tree });
+  assert.equal(plan.feasible, false);
+  // 30 cards of 96 points and 29 corridors of 12 points need 3228 points across.
+  assert.equal(plan.reason, "card 1 of the tree would be 42 × 1200 points, below the minimum 96 × 96 points; " +
+    "the tree needs a plane of 3228 × 96 points and the plane is 1600 × 1200 points");
+  assert.deepEqual(plan.needed, { width: 3228, height: 96 });
+  assert.deepEqual(rowSizes(plan.proposal.cards), [6, 6, 6, 6, 6]);
+  assert.deepEqual(planned(plan.proposal.cards), planned(plan.cards));
+  await refuses(run("core.layout.apply", { tree }), plan.reason);
+  assert.deepEqual(layout(), before);
+  // Of more cards than any grid fits, the proposal is the most even grid of the largest count that fits, whose last card takes the rest.
+  // Of more cards than any grid fits, the proposal is the most even grid of the largest count that fits, whose last card takes the rest:
+  // with cards of at least 400 points, a plane of 1600 × 1200 holds three cards across and two down.
+  const grid = plane.currentGrid();
+  grid.minSize = 400;
+  try {
+    const many = await run("core.layout.plan", { count: 8, plugin: SESSION });
+    assert.equal(many.feasible, false);
+    // The plan is of the grid nearest to a square, three rows of 3, 3 and 2 cards, whose rows are 392 points high.
+    assert.equal(many.reason, "card 1 of the tree would be 525 × 392 points, below the minimum 400 × 400 points; " +
+      "the tree needs a plane of 1224 × 1224 points and the plane is 1600 × 1200 points");
+    assert.deepEqual(rowSizes(many.proposal.cards), [3, 3]);
+    assert.deepEqual(many.proposal.cards.map(({ tabs }) => tabs.length), [2, 1, 1, 1, 1, 3]);
+  } finally {
+    grid.minSize = 96;
+  }
+  // A tree whose corridors of 500 points leave its cards no extent states the plane, and the proposal is the most even grid of the
+  // largest count that fits, two by two, whose last card takes the entries of the fifth card.
+  grid.gap = 500;
+  try {
+    const wide = await run("core.layout.plan", { tree: { direction: "row", children: terminals(5) } });
+    assert.deepEqual([wide.feasible, wide.reason, wide.needed, wide.cards], [false, "the cards of the tree have no extent in the plane of 1600 × 1200 points", null, []]);
+    assert.deepEqual(rowSizes(wide.proposal.cards), [2, 2]);
+    assert.deepEqual(wide.proposal.cards.map(({ tabs }) => tabs.length), [2, 1, 1, 2]);
+  } finally {
+    grid.gap = 12;
+  }
+  assert.deepEqual(layout(), before);
+  assert.deepEqual(layout(), before);
+});
+
+// contract: layout.apply.moves-existing-tabs
+test("core.layout.apply moves each existing tab with its identifier into its card and closes only what close names", { timeout: 5000 }, async () => {
+  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION, { name: "s" })] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  const tree = { direction: "column", children: [{ tabs: [{ tab: "tab-aaaaa3" }] }, { tabs: [{ plugin: SESSION, params: { name: "s" } }, { tab: "tab-aaaaa1" }], active: 1 }] };
+  const applied = await twice("core.layout.apply", { tree });
+  assert.deepEqual(planned(applied.cards), [["b", ["tab-aaaaa3"]], ["a", ["tab-aaaaa2", "tab-aaaaa1"]]]);
+  const { root } = layout();
+  assert.equal(root.direction, "column");
+  assert.deepEqual(root.children.map(({ card, size }) => [card, size]), [["b", 0.5], ["a", 0.5]]);
+  assert.deepEqual(cardNode(root, "a").tabs.map(({ tab, active }) => [tab, active]), [["tab-aaaaa2", false], ["tab-aaaaa1", true]]);
+  // A tab that the tree does not hold closes with close true; a modified one refuses the apply.
+  const one = { tabs: [{ tab: "tab-aaaaa2" }] };
+  reports.reportModified("tab-aaaaa3", true);
+  try {
+    const before = layout();
+    await refuses(run("core.layout.apply", { tree: one, close: true }), "tab tab-aaaaa3 has unsaved changes; core.layout.close asks the person");
+    assert.deepEqual(layout(), before);
+  } finally {
+    reports.reportModified("tab-aaaaa3", false);
+  }
+  const closed = await run("core.layout.apply", { tree: one, close: true });
+  assert.deepEqual([planned(closed.cards), closed.kept, closed.closed], [[["a", ["tab-aaaaa2"]]], [], ["tab-aaaaa3", "tab-aaaaa1"]]);
+  assert.deepEqual(cardIds(layout().root), ["a"]);
+});
+
+// contract: layout.plan.refusals
+test("a plan that cannot resolve its tree states the reason and changes nothing", { timeout: 5000 }, async () => {
+  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  const before = layout();
+  for (const [tree, reason] of [
+    [{ tabs: [{ tab: "tab-zzzzzz" }] }, "tab tab-zzzzzz is not a tab of the active space"],
+    [{ tabs: [{ tab: "tab-ooooo1" }] }, "tab tab-ooooo1 is not a tab of the active space"],
+    [{ direction: "row", children: [{ tabs: [{ tab: "tab-aaaaa1" }] }, { tabs: [{ tab: "tab-aaaaa1" }] }] }, "tab tab-aaaaa1 stands twice in the tree"],
+    [{ tabs: [{ plugin: "nothing" }] }, "unknown plugin nothing"],
+    [{ tabs: [{ plugin: PLAIN, params: { name: "x" } }] }, `plugin ${PLAIN} declares no tab params`],
+    [{ direction: "row", children: [{ tabs: [{ tab: "tab-aaaaa1" }] }] }, "tree.children must hold at least two nodes"],
+  ]) {
+    const plan = await run("core.layout.plan", { tree });
+    assert.deepEqual([plan.feasible, plan.reason], [false, reason]);
+    await refuses(run("core.layout.apply", { tree }), reason);
+    assert.deepEqual(layout(), before, reason);
+  }
+  await refuses(run("core.layout.plan", { tree: { tabs: [{ tab: "tab-aaaaa1" }] }, count: 2 }), "core.layout.plan takes tree or count with plugin, not both");
+  await refuses(run("core.layout.plan", { count: 2 }), "core.layout.plan needs tree, or count with plugin");
+  await refuses(run("core.layout.plan", { count: 0, plugin: SESSION }), "count must be a whole number of at least 1");
+  plane.toggleCardFullscreen("a");
+  const shown = await run("core.layout.plan", { count: 2, plugin: SESSION });
+  assert.equal(shown.reason, "the layout does not change while card a is fullscreen; restore the arrangement first");
+  plane.toggleCardFullscreen("a");
+  await run("core.group.create", { card: "b", side: "right", plugin: SESSION });
+  const grouped = await run("core.layout.plan", { count: 2, plugin: SESSION });
+  assert.match(grouped.reason, /^core\.layout\.plan arranges a space without group cards; group card-\d+ holds b, card-\d+$/);
+});

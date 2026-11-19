@@ -27,6 +27,7 @@ import { drawGroupCards } from "./group-cards.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
 import { layoutTree, sameJson, stateCards } from "./layout-tree.js";
+import { buildTree, planArrangement, treeCards } from "./layout-plan.js";
 import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { followRing, keyboardOwed } from "./keyboard.js";
@@ -2746,6 +2747,107 @@ export async function closeInLayout({ tab: tabId }) {
   restoreFullscreen();
   await closeTab(card.id, tab.id);
   return { closed: true };
+}
+
+/* ── Planning an arrangement (docs/spec/cli.md#planning-an-arrangement) ───────────────────────────── */
+
+/**
+ * The operations of the size rule of the layout library on the content cards of the plane: the content cards are the members of one
+ * box without a head, so every cut that the plan makes is a cut of content cards and a window sidebar keeps its span.
+ */
+const contentBox = () => ({ id: "content", head: 0, members: contentCards().map((card) => card.id) });
+function windowFrame(rect) {
+  const origin = plane.getBoundingClientRect();
+  return { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h };
+}
+const planOperations = {
+  cards: () => contentCards().map((card) => card.id),
+  withdraw: (id) => grid.withdraw([contentBox()], id),
+  insert: (target, side, card) => grid.insert([contentBox()], target, side, card),
+  even: () => grid.even([contentBox()]),
+  frame: (id) => windowFrame(grid.rect(id)),
+};
+
+/** The active space as planArrangement reads it (packages/workbench/layout-plan.js). */
+function planSpace() {
+  if (!grid) return { refusal: `window ${nameOfWindow()} shows no space`, plane: null, minimum: null };
+  const minimum = { width: grid.minSize, height: grid.minSize };
+  const content = contentCards();
+  const rects = content.map((card) => ({ card, rect: grid.rect(card.id) }));
+  const x0 = Math.min(...rects.map(({ rect }) => rect.x)), y0 = Math.min(...rects.map(({ rect }) => rect.y));
+  const size = {
+    width: Math.max(...rects.map(({ rect }) => rect.x + rect.w)) - x0,
+    height: Math.max(...rects.map(({ rect }) => rect.y + rect.h)) - y0,
+  };
+  const shown = fullscreenCard();
+  const group = tree.order().find(({ node }) => node);
+  let refusal = null;
+  if (shown !== null) refusal = `the layout does not change while card ${shown} is fullscreen; restore the arrangement first`;
+  else if (group) {
+    refusal = `core.layout.plan arranges a space without group cards; group ${group.id} holds ${tree.readingOrder(group.node.members).map(memberId).join(", ")}`;
+  }
+  const tabs = rects.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
+    // default: a tab stored without params has the params null.
+    .flatMap(({ card }) => tabsOf(card).map((t) => ({ tab: t.id, card: card.id, plugin: t.plugin, params: t.params ?? null })));
+  return {
+    refusal, tabs, plane: size, minimum,
+    entry: (kind, params) => {
+      knownPlugin(kind);
+      return checkTabParams(kind, plugin(kind).params, params);
+    },
+    unsaved: (tabId) => tabModified(tabId),
+    // The plan builds on a copy of the plane without the minimum, so it reads the size of every card and judges it by the minimum.
+    measure: (shape) => tree.probe(() => {
+      const kept = grid.minSize;
+      grid.minSize = 0;
+      try {
+        const ids = treeCards(shape).map((_, index) => (index === 0 ? content[0].id : tree.issue()));
+        return buildTree(planOperations, shape, ids);
+      } finally {
+        grid.minSize = kept;
+      }
+    }),
+  };
+}
+
+/** core.layout.plan: whether the arrangement can be built in the plane of the active space and what it would be. */
+export function planInLayout(params) {
+  const { ids, ...answer } = planArrangement(params, planSpace());
+  return answer;
+}
+
+/**
+ * core.layout.apply: builds the plan of its tree with the operations of the size rule on the plane, moves the existing tabs into their
+ * cards, opens the new tabs, closes the tabs of closed and focuses the first card of the tree. A plan that is not feasible changes
+ * nothing and fails with its reason.
+ */
+export function applyInLayout(params) {
+  const planned = planArrangement(params, planSpace());
+  if (!planned.feasible) throw new Error(planned.reason);
+  const held = new Map(contentCards().flatMap((card) => tabsOf(card).map((t) => [t.id, t])));
+  const kept = tree.snapshot();
+  const ids = planned.ids.map((id) => id ?? tree.issue());
+  try {
+    buildTree(planOperations, planned.tree, ids);
+  } catch (error) {
+    tree.restore(kept);
+    throw error;
+  }
+  let k = 0;
+  // The tree of the result names each tab by its identifier, the new tabs included.
+  const place = (node) => {
+    if (node.direction) return { direction: node.direction, children: node.children.map(place) };
+    const tabs = node.tabs.map((entry) => (entry.tab !== undefined ? held.get(entry.tab) : newTab(entry.plugin, entry.params, null, "layout apply")));
+    grid.setData(ids[k++], { tabs, activeId: tabs[node.active].id });
+    return { tabs: tabs.map((t) => ({ tab: t.id })), active: node.active };
+  };
+  const named = place(planned.tree);
+  recordClosedTabs(planned.closed);
+  tree.reframe();
+  focusOn(ids[0]);
+  settle();
+  const applied = planArrangement({ tree: named }, planSpace());
+  return { tree: applied.tree, cards: applied.cards, kept: planned.kept, closed: planned.closed };
 }
 
 /**
