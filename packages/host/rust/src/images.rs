@@ -9,6 +9,7 @@
 //! thread is not awaited.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
 use crate::framework::{Manager, Webview};
@@ -203,6 +204,10 @@ struct RasterState {
     presentation_error: Option<String>,
     /// The drawing state and the hiding last returned by drawing_changes, or None before one was returned.
     drawing_sent: Option<(bool, bool)>,
+    /// The screen request that the region has not had answered, or None when none is unanswered.
+    screen_request: Option<ScreenRequest>,
+    /// The generation and the raster of the screen that the host accepted last: the baseline of the rows of the next request.
+    screen_baseline: Option<(u64, u64)>,
 }
 
 /// The raster, its size and the sequence number to which a frame that a supplier sent belongs.
@@ -236,6 +241,24 @@ pub struct Configure {
     pub sidecar: String,
 }
 
+/// The request for the current screen of a drawing region (docs/spec/native-surfaces.md#copy-path-frames). Full is true when
+/// the host holds no accepted screen of the same generation and raster, so the supplier sends every row.
+#[derive(Clone, Debug, Serialize)]
+pub struct ScreenRequest {
+    pub request: String,
+    pub name: String,
+    pub generation: u64,
+    pub raster: u64,
+    pub full: bool,
+    #[serde(skip)]
+    pub key: Key,
+    #[serde(skip)]
+    pub sidecar: String,
+}
+
+/// The serial of the screen requests of this process.
+static NEXT_SCREEN_REQUEST: AtomicU64 = AtomicU64::new(1);
+
 /// The drawing state of an image region to send to its supplier (docs/spec/native-surfaces.md#image-regions).
 #[derive(Clone, Debug, Serialize)]
 pub struct Drawing {
@@ -254,6 +277,77 @@ pub struct Drawing {
 }
 
 impl Images {
+    /// Returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
+    /// records each returned request as unanswered. A region with an unanswered request gets no other request.
+    pub fn screen_requests(&self) -> Vec<ScreenRequest> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let mut requests = Vec::new();
+        let keys: Vec<Key> = inner.states.keys().cloned().collect();
+        for key in keys {
+            let Some(sidecar) = inner.sidecars.get(&key).cloned() else {
+                continue;
+            };
+            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+            if inner.handles.get(&key).copied().unwrap_or_default() == 0 {
+                continue;
+            }
+            let drawing = inner.drawing(&key, &inner.states[&key]);
+            let state = inner
+                .states
+                .get_mut(&key)
+                .expect("the key was read from the states");
+            if !drawing || state.screen_request.is_some() {
+                continue;
+            }
+            let serial = NEXT_SCREEN_REQUEST.fetch_add(1, Ordering::Relaxed);
+            let request = ScreenRequest {
+                request: format!("screen-{}-{serial}", std::process::id()),
+                name: key.1.clone(),
+                generation: state.generation,
+                raster: state.raster,
+                full: state.screen_baseline != Some((state.generation, state.raster)),
+                key: key.clone(),
+                sidecar,
+            };
+            state.screen_request = Some(request.clone());
+            requests.push(request);
+        }
+        requests.sort_by(|a, b| a.key.cmp(&b.key));
+        requests
+    }
+
+    /// Ends the unanswered screen request of a region. An accepted answer makes the rows of the request the baseline of the
+    /// next screen request of the same generation and raster. It returns an error when the region has no unanswered request
+    /// with that identifier.
+    pub fn answer_screen(
+        &self,
+        key: &Key,
+        request: &ScreenRequest,
+        accepted: bool,
+    ) -> Result<(), String> {
+        let mut guard = self.lock();
+        let answered = guard.states.get_mut(key).filter(|state| {
+            state
+                .screen_request
+                .as_ref()
+                .is_some_and(|pending| pending.request == request.request)
+        });
+        match answered {
+            Some(state) => {
+                state.screen_request = None;
+                if accepted {
+                    state.screen_baseline = Some((request.generation, request.raster));
+                }
+                Ok(())
+            }
+            None => Err(format!(
+                "image {:?} of surface {:?} has no unanswered screen request {:?}",
+                key.1, key.0, request.request
+            )),
+        }
+    }
+
     /// Records whether the window is neither occluded nor minimized.
     pub fn set_on_screen(&self, on_screen: bool) {
         let mut inner = self.lock();

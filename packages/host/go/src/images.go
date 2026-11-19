@@ -9,6 +9,7 @@ package host
 // envelope (image envelope) that a sidecar sent, and the host verifies the authenticity of the sidecar.
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -140,6 +141,11 @@ type ImageRasterState struct {
 	Drawing     bool
 	Hidden      bool
 	DrawingSent bool
+	// ScreenRequest is the screen request that the region has not had answered; its Request is empty when none is unanswered.
+	// ScreenAccepted and ScreenGeneration, ScreenRaster are the screen that the host accepted last, the baseline of the rows.
+	ScreenRequest                  ImageScreenRequest
+	ScreenAccepted                 bool
+	ScreenGeneration, ScreenRaster uint64
 }
 
 // ImageConfigure is the new raster configuration to send to the authorized sidecar.
@@ -166,6 +172,63 @@ type ImageDrawing struct {
 	Key       ImageKey        `json:"-"`
 	Sidecar   string          `json:"-"`
 	Owner     SidecarOwner    `json:"-"`
+}
+
+// ImageScreenRequest is the request for the current screen of a drawing region (docs/spec/native-surfaces.md#copy-path-frames).
+// Full is true when the host holds no accepted screen of the same generation and raster, so the supplier sends every row.
+type ImageScreenRequest struct {
+	Request    string       `json:"request"`
+	Name       string       `json:"name"`
+	Generation uint64       `json:"generation"`
+	Raster     uint64       `json:"raster"`
+	Full       bool         `json:"full"`
+	Key        ImageKey     `json:"-"`
+	Sidecar    string       `json:"-"`
+	Owner      SidecarOwner `json:"-"`
+}
+
+// ScreenRequests returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
+// records each returned request as unanswered. A request is not sent again while the region has an unanswered one.
+func (i *Images) ScreenRequests() []ImageScreenRequest {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	requests := []ImageScreenRequest{}
+	for key, state := range i.states {
+		owner := i.owners[key]
+		if owner == nil || i.handles[key] == nil || state.ScreenRequest.Request != "" || !i.drawingLocked(key, state) {
+			continue
+		}
+		request := ImageScreenRequest{
+			Request: "screen-" + rand.Text(), Name: key.Name, Generation: state.Generation, Raster: state.Raster,
+			Full: !(state.ScreenAccepted && state.ScreenGeneration == state.Generation && state.ScreenRaster == state.Raster),
+			Key:  key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
+		}
+		state.ScreenRequest = request
+		requests = append(requests, request)
+	}
+	sort.Slice(requests, func(a, b int) bool {
+		if requests[a].Key.Surface != requests[b].Key.Surface {
+			return requests[a].Key.Surface < requests[b].Key.Surface
+		}
+		return requests[a].Key.Name < requests[b].Key.Name
+	})
+	return requests
+}
+
+// AnswerScreen ends the unanswered screen request of a region. An accepted answer makes the rows of the request the baseline of the next
+// screen request of the same generation and raster. It returns an error when the region has no unanswered request with that identifier.
+func (i *Images) AnswerScreen(key ImageKey, request ImageScreenRequest, accepted bool) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	state := i.states[key]
+	if state == nil || request.Request == "" || state.ScreenRequest.Request != request.Request {
+		return fmt.Errorf("image %s of surface %s has no unanswered screen request %q", key.Name, key.Surface, request.Request)
+	}
+	state.ScreenRequest = ImageScreenRequest{}
+	if accepted {
+		state.ScreenAccepted, state.ScreenGeneration, state.ScreenRaster = true, request.Generation, request.Raster
+	}
+	return nil
 }
 
 // SetOnScreen records whether the window is neither occluded nor minimized.

@@ -1330,3 +1330,52 @@ fn a_release_that_fails_in_an_open_window_reports_the_failure() {
         Err("sidecars are stopped".to_string())
     );
 }
+
+// contract: copy-path-screen-request
+// A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
+// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn drawing_region_receives_one_screen_request_until_it_is_answered() {
+    let images = super::Images::default();
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    let key = (surface.to_string(), "copy".to_string());
+    images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+    assert!(images.set(&key, 1));
+    let configure = images
+        .configure_raster(&key, 800, 600, 2.0, true)
+        .unwrap()
+        .expect("a drawing region with a size has a raster configuration");
+    let requests = images.screen_requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "a drawing region gets one screen request"
+    );
+    let first = &requests[0];
+    assert!(
+        first.full && first.generation == configure.generation && first.raster == configure.raster,
+        "the first screen request is full for the configured raster: {first:?}"
+    );
+    let body = serde_json::to_value(serde_json::json!({ "image": { "screen": first } })).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({ "image": { "screen": {
+            "request": first.request,
+            "name": "copy",
+            "generation": configure.generation,
+            "raster": configure.raster,
+            "full": true,
+        } } })
+    );
+    assert!(
+        images.screen_requests().is_empty(),
+        "a region with an unanswered screen request gets no other one"
+    );
+    images.answer_screen(&key, first, true).unwrap();
+    let next = images.screen_requests();
+    assert!(
+        next.len() == 1 && !next[0].full && next[0].request != first.request,
+        "after an accepted screen the next request is {next:?}: one request, full false, new identifier"
+    );
+}

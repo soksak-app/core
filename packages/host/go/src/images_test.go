@@ -813,3 +813,49 @@ func TestTheEndOfItsRequestEndsTheWaitOfTheCurrentRasters(t *testing.T) {
 		t.Fatalf("the wait of the current rasters ended with %v, want the end of its request", err)
 	}
 }
+
+// contract: copy-path-screen-request
+// A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
+// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
+	images := NewImages()
+	key := ImageKey{Surface: "tab-1", Name: "copy"}
+	var handle int
+	if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+		t.Fatal(err)
+	}
+	if !images.Set(key, unsafe.Pointer(&handle)) {
+		t.Fatal("image was not attached")
+	}
+	raster, err := images.ConfigureRaster(key, 800, 600, 2, true)
+	if err != nil || raster == nil {
+		t.Fatalf("configure image: %+v, %v", raster, err)
+	}
+	requests := images.ScreenRequests()
+	if len(requests) != 1 {
+		t.Fatalf("a drawing region got %d screen requests, want 1", len(requests))
+	}
+	first := requests[0]
+	if !first.Full || first.Generation != raster.Generation || first.Raster != raster.Raster {
+		t.Fatalf("first screen request %+v: want full for generation %d raster %d", first, raster.Generation, raster.Raster)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"screen": first}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(`{"image":{"screen":{"request":%q,"name":"copy","generation":%d,"raster":%d,"full":true}}}`,
+		first.Request, raster.Generation, raster.Raster)
+	if string(body) != want {
+		t.Fatalf("screen request body = %s, want %s", body, want)
+	}
+	if again := images.ScreenRequests(); len(again) != 0 {
+		t.Fatalf("a region with an unanswered screen request got another one: %+v", again)
+	}
+	if err := images.AnswerScreen(key, first, true); err != nil {
+		t.Fatalf("answer screen request: %v", err)
+	}
+	next := images.ScreenRequests()
+	if len(next) != 1 || next[0].Full || next[0].Request == first.Request {
+		t.Fatalf("after an accepted screen the next request is %+v: want one request with full false and a new identifier", next)
+	}
+}
