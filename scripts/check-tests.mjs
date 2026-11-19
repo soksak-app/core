@@ -364,6 +364,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-50",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: ".filter((item) => item !== null) }));" },
+      { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "if node.Bounds.W <= 0 || node.Bounds.H <= 0 {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "the snapshot lists only the drawn elements of an element entry with their element.rect indexes" },
+      { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },
+    ],
+    expected: "An element entry of a window snapshot lists only the elements that the window draws, with their element.rect indexes, on the page and in mygo.",
+    levels: ["unit"],
+  },
+  {
     id: "F955",
     implementation: [
       { file: "packages/workbench/group-tree.js", symbol: "drawnDividers(dividers, gripLength) {" },

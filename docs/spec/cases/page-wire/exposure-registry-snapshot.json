@@ -5,7 +5,7 @@
   "reason": "A forwarded request reaches a surface document that a window of the native host runs, and the Go producer runs no window (docs/spec/cases/page-wire/README.md#producer-runs).",
   "steps": [
     {"call":{"name":"exposureForward","payload":{"id":1,"origin":7,"surface":"tab-a","method":"exposure.snapshot","params":{}}}},
-    {"reply":{"result":{"result":{"status":[{"name":"probe.lines","description":"Lines.","schema":{"type":"array"},"value":["x"]}],"commands":[],"element":[{"name":"probe.lines","description":"Output.","items":[{"index":0,"role":null,"text":"x","rect":{"x":12,"y":24,"width":80,"height":30},"visible":true,"command":null,"params":null}]}]}}}},
+    {"reply":{"result":{"result":{"status":[{"name":"probe.lines","description":"Lines.","schema":{"type":"array"},"value":["x"]}],"commands":[],"element":[{"name":"probe.lines","description":"Output.","items":[{"index":0,"role":null,"text":"x","rect":{"x":12,"y":24,"width":80,"height":30},"command":null,"params":null}]}]}}}},
     {"call":{"name":"exposureForward","payload":{"id":2,"origin":7,"surface":"tab-b","method":"exposure.snapshot","params":{}}}},
     {"reply":{"result":{"error":{"code":1003,"message":"surface tab-b ended"}}}},
     {"call":{"name":"exposureForward","payload":{"id":3,"origin":8,"surface":"tab-a","method":"exposure.snapshot","params":{}}}},

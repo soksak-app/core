@@ -281,7 +281,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -298,7 +297,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -315,7 +313,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -332,7 +329,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -349,7 +345,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -366,7 +361,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -383,7 +377,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -400,7 +393,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -417,7 +409,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -434,7 +425,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -451,7 +441,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -468,7 +457,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -485,7 +473,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -502,7 +489,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -519,7 +505,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -536,7 +521,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -553,7 +537,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -570,7 +553,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -587,7 +569,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -604,7 +585,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": true,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -621,7 +601,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": false,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -638,7 +617,6 @@
                       "width": 10,
                       "height": 30
                     },
-                    "visible": false,
                     "inert": false,
                     "command": "core.tab.select",
                     "params": {
@@ -1380,160 +1358,140 @@
                   "index": 0,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 0",
-                  "visible": true
+                  "text": "tab 0"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 1,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 1",
-                  "visible": true
+                  "text": "tab 1"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 2,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 2",
-                  "visible": true
+                  "text": "tab 2"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 3,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 3",
-                  "visible": true
+                  "text": "tab 3"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 4,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 4",
-                  "visible": true
+                  "text": "tab 4"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 5,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 5",
-                  "visible": true
+                  "text": "tab 5"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 6,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 6",
-                  "visible": true
+                  "text": "tab 6"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 7,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 7",
-                  "visible": true
+                  "text": "tab 7"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 8,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 8",
-                  "visible": true
+                  "text": "tab 8"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 9,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 9",
-                  "visible": true
+                  "text": "tab 9"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 10,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 10",
-                  "visible": true
+                  "text": "tab 10"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 11,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 11",
-                  "visible": true
+                  "text": "tab 11"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 12,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 12",
-                  "visible": true
+                  "text": "tab 12"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 13,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 13",
-                  "visible": true
+                  "text": "tab 13"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 14,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 14",
-                  "visible": true
+                  "text": "tab 14"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 15,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 15",
-                  "visible": true
+                  "text": "tab 15"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 16,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 16",
-                  "visible": true
+                  "text": "tab 16"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 17,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 17",
-                  "visible": true
+                  "text": "tab 17"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 18,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 18",
-                  "visible": true
+                  "text": "tab 18"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 19,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 19",
-                  "visible": true
+                  "text": "tab 19"
                 }
               ],
               "itemsTotal": 22,
@@ -1816,7 +1774,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1833,7 +1790,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1850,7 +1806,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1867,7 +1822,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1884,7 +1838,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1901,7 +1854,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1918,7 +1870,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1935,7 +1886,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1952,7 +1902,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1969,7 +1918,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -1986,7 +1934,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2003,7 +1950,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2020,7 +1966,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2037,7 +1982,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2054,7 +1998,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2071,7 +2014,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2088,7 +2030,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2105,7 +2046,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2122,7 +2062,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2139,7 +2078,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": true,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2156,7 +2094,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": false,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2173,7 +2110,6 @@
                     "width": 10,
                     "height": 30
                   },
-                  "visible": false,
                   "inert": false,
                   "command": "core.tab.select",
                   "params": {
@@ -2637,160 +2573,140 @@
                   "index": 0,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 0",
-                  "visible": true
+                  "text": "tab 0"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 1,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 1",
-                  "visible": true
+                  "text": "tab 1"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 2,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 2",
-                  "visible": true
+                  "text": "tab 2"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 3,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 3",
-                  "visible": true
+                  "text": "tab 3"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 4,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 4",
-                  "visible": true
+                  "text": "tab 4"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 5,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 5",
-                  "visible": true
+                  "text": "tab 5"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 6,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 6",
-                  "visible": true
+                  "text": "tab 6"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 7,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 7",
-                  "visible": true
+                  "text": "tab 7"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 8,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 8",
-                  "visible": true
+                  "text": "tab 8"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 9,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 9",
-                  "visible": true
+                  "text": "tab 9"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 10,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 10",
-                  "visible": true
+                  "text": "tab 10"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 11,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 11",
-                  "visible": true
+                  "text": "tab 11"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 12,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 12",
-                  "visible": true
+                  "text": "tab 12"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 13,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 13",
-                  "visible": true
+                  "text": "tab 13"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 14,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 14",
-                  "visible": true
+                  "text": "tab 14"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 15,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 15",
-                  "visible": true
+                  "text": "tab 15"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 16,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 16",
-                  "visible": true
+                  "text": "tab 16"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 17,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 17",
-                  "visible": true
+                  "text": "tab 17"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 18,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 18",
-                  "visible": true
+                  "text": "tab 18"
                 },
                 {
                   "command": "core.tab.select",
                   "index": 19,
                   "inert": false,
                   "role": "tab",
-                  "text": "tab 19",
-                  "visible": true
+                  "text": "tab 19"
                 }
               ],
               "itemsTotal": 22,

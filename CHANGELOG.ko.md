@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-50 (window snapshot의 그려진 element): `exposure.snapshot`의 element 항목은 page와 mygo에서 창이 그리는 element만 `element.rect` index와 함께 나열하므로 item이 모든 host에서 같다; item에는 `visible` member가 없고, `sok describe`와 `window_describe`의 compact form도 그것을 뺀다. 검증: plugin-api snapshot test와 mygo window snapshot test가 이전 코드에서 Red였고 Green이며, Go와 Rust의 sok test가 바뀐 case에서 통과한다.
 - F986-1 (group 이름 입력 칸의 크기): group header의 이름 입력 칸은 mygo와 page에서 group 이름의 크기 `text-small`을 지키므로, 칸이 열릴 때 글자 크기가 바뀌지 않는다; project와 space tab의 이름 입력 칸은 `text-control`을 지킨다. 검증: mygo와 page test가 이전 크기에서 실패했고 통과한다.
 - F937-52 (group header 띠, mygo): group 명세의 drawn rectangles와 달리 mygo group header를 frame 안으로 border 하나만큼 옮긴 F937-47의 변경을 없애므로, header 아래 card가 다시 gap 하나 떨어진다. 검증: mygo의 gap test가 F937-47의 code에서 실패했고 통과한다.
 - F986 (group header의 이름 입력 칸): group 이름을 바꾸는 칸은 mygo, Wails, Tauri에서 project나 space tab의 이름 입력 칸이다; 이름의 자리를 차지하고 그 글자는 이름의 글자가 시작한 곳에서 시작하며, header 높이를 지키고, 새 token `rename-selection-mix`만큼 `bg`에 섞은 focus 색으로 선택한다; page는 mygo처럼 group 이름의 글자를 `tab-pad-x`만큼 들인다. 검증: mygo와 page test가 바뀌지 않은 code에서 실패했고 통과한다; 세 debug build의 사각형과 still이 dark와 light에서 일치한다.
