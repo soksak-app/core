@@ -27,7 +27,7 @@ import { missingKinds } from "./setup-parts.js";
 import { showError } from "./shown-errors.js";
 import { hasSection, section, sectionNames } from "./registry.js";
 import {
-  CHOICES, FONTS, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
+  CHOICES, FONTS, GROUP_TINT, LAYOUT_RANGES, MEMORY_SAVER_DELAY, MENU_LANGUAGES, SHAPE_RANGES, THEMES, debugOn, scopedValue, settingProject, settingProjectRoot, overridden, sourceScope,
   settingDefinitions,
 } from "./settings.js";
 
@@ -315,6 +315,7 @@ function drawGeneral() {
     row("포커스 표시", choose("focusInd", named("focusInd", { border: "테두리", corner: "꺽쇠" }), value("focusInd"))),
     row("카드 자동 정렬", choose("cardArrange", named("cardArrange", { resize: "크기맞춤", even: "균등" }), value("cardArrange"))),
     row("카드 분할", choose("cardSplit", named("cardSplit", { exact: "정확히 분할", even: "균등" }), value("cardSplit"))),
+    row("그룹 색", slide("group.tint", ...GROUP_TINT, value("group.tint"), "%")),
     row("경계선", choose("fullRule", named("fullRule", { under: "가림", over: "보임", none: "숨김" }), value("fullRule"))),
     row("포커스 밖 흐리게", toggle("dim", value("dim"))),
   ]));

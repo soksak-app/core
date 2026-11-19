@@ -107,6 +107,9 @@ export const defaults = {
 /* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
 export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
 
+/* The range of group.tint in percent, the share of the group colours that the group cards show (docs/spec/settings.md#values). */
+export const GROUP_TINT = declaration.settings["group.tint"];
+
 /* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
 export const LAYOUT_RANGES = declaration.settings.layoutRanges;
 
@@ -213,6 +216,9 @@ function validateValue(key, value) {
   if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < MEMORY_SAVER_DELAY[0] || value > MEMORY_SAVER_DELAY[1])) {
     throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
   }
+  if (key === "group.tint" && (!Number.isInteger(value) || value < GROUP_TINT[0] || value > GROUP_TINT[1])) {
+    throw new Error(`Invalid setting group.tint: ${JSON.stringify(value)}`);
+  }
   const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
@@ -239,7 +245,7 @@ function validateValue(key, value) {
 export function settingType(key) {
   if (SWITCHES.includes(key)) return "boolean";
   if (STRUCTURED.includes(key) || Object.hasOwn(ORDERS, key)) return "object";
-  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay") return "number";
+  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay" || key === "group.tint") return "number";
   if (CHOICES[key]) return typeof CHOICES[key][0];
   const definition = pluginDefinitions.get(key);
   if (!definition) throw new Error(`Unknown setting: ${key}`);
