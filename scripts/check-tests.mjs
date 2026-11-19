@@ -287,6 +287,23 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F985",
+    implementation: [
+      { file: "packages/workbench/head-fit.js", symbol: "if (withMore >= Math.min(widest, head.grab)) return { fit: \"one\", tools: \"all\" };" },
+      { file: "packages/workbench/plane.js", symbol: "const shownKept = (row, acts) =>" },
+      { file: "packages/workbench-mygo/src/layout/head.go", symbol: "case withMore >= math.Min(widest, head.Grab):" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func shownKept(fit layout.HeadFit, kept []headTool) []headTool" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/layout-cases.test.mjs", id: "head: ${kase.name}" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a head at the minimum width of a card keeps a part of its tab and folds the fullscreen toggle into its tool menu" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestHeadCases" },
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestACardAtItsMinimumWidthKeepsAPartOfItsTab" },
+    ],
+    expected: "At every width down to the minimum width of a card, a card head keeps a part of its active tab at least `tab-grab-w` wide: the fullscreen toggle and the leader mark fold into the tool menu before the tab, and the tab drops only when less than `tab-grab-w` stays beside ⋯, in the page workbench and in mygo alike.",
+    levels: ["unit"],
+  },
+  {
     id: "F958-1",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "WKWebView *view = final == SP_INPUT_DELIVERED ? target : nil;" },

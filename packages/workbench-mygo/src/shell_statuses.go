@@ -212,7 +212,7 @@ func (s *Shell) cardActs(id string) map[string]any {
 	if s.isGroup(id) {
 		tools = s.groupHeadTools(id)
 	}
-	kept := keptTools(tools)
+	kept := shownKept(fit, keptTools(tools))
 	for _, tool := range tools {
 		hidden := fit.Tools != "bar" && !keeps(kept, tool.Do)
 		acts[tool.Status] = cardTool{Enabled: tool.Enabled, Hidden: hidden, Title: tool.Title}

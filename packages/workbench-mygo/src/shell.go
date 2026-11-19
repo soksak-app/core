@@ -102,7 +102,7 @@ type metrics struct {
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
 	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW, tabGrabW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -193,6 +193,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("tab-max-w", &m.tabMaxW)
 	read("tab-peek-w", &m.tabPeekW)
 	read("tab-min-w", &m.tabMinW)
+	read("tab-grab-w", &m.tabGrabW)
 	read("card-head-gap", &m.cardHeadGap)
 	read("card-head-pad", &m.cardHeadPad)
 	read("card-tabs-gap", &m.cardTabsGap)
