@@ -402,6 +402,9 @@ grid.even([{ id: "group-1", head: 44, members: ["card-1", "card-2"] }]); // head
 건너뛴 것으로 보고하고 실행하지 않으며, 그 case가 부르는 call(`insert`,
 `withdraw`)은 결정이 내려질 때까지 library에 없다.
 
+pending case가 기술하는 제안은
+[layout sizes](../../../docs/plans/layout-sizes.ko.md)다.
+
 ## 균등 배치
 
 `arrange("even")`은 현재 순서의 카드를 격자로 다시 배치한다. 분할과 합치기를

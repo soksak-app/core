@@ -436,6 +436,9 @@ runners report such a case as skipped with that text and do not run it, and
 the calls that they name (`insert`, `withdraw`) are not part of the library
 until the decision is made.
 
+The proposal that the pending cases state is
+[layout sizes](../../../docs/plans/layout-sizes.md).
+
 ## Even arrangement
 
 `arrange("even")` replaces the arrangement with a grid of the cards in their
