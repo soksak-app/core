@@ -48,7 +48,7 @@ const codeOf = (file) =>
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
 
 test("the core imports no DOM API", () => {
-  for (const file of ["src/card.ts", "src/geometry.ts", "src/slicing.ts", "src/soksak.ts", "src/outline.ts"]) {
+  for (const file of ["src/card.ts", "src/geometry.ts", "src/tree.ts", "src/cuts.ts", "src/soksak.ts", "src/outline.ts"]) {
     const source = codeOf(file);
     assert.doesNotMatch(source, /\bdocument\b/, `${file} touches document`);
     assert.doesNotMatch(source, /\bwindow\b/, `${file} touches window`);
@@ -93,7 +93,7 @@ test("the declaration files name a DOM lib for the view only", () => {
   // view needs one and declares it, so the core typechecks in a worker or on a
   // server.
   assert.match(dts("dom.d.ts"), /^\/\/\/ <reference lib="dom" \/>/, "dom.d.ts declares it");
-  for (const name of ["soksak.d.ts", "geometry.d.ts", "outline.d.ts", "card.d.ts", "slicing.d.ts"]) {
+  for (const name of ["soksak.d.ts", "geometry.d.ts", "outline.d.ts", "card.d.ts", "tree.d.ts", "cuts.d.ts"]) {
     assert.doesNotMatch(dts(name), /HTMLElement|PointerEvent|ResizeObserver/, `${name} needs no DOM`);
   }
   const tsconfig = readFileSync(new URL("../tsconfig.json", import.meta.url), "utf8");

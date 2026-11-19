@@ -53,18 +53,15 @@ function checkForm(value) {
  */
 export function checkState(state) {
     if (!state || typeof state !== 'object')
-        refuse(`the state ${JSON.stringify(state)} is not {root, paidBy}`);
+        refuse(`the state ${JSON.stringify(state)} is not {root}`);
     if (['xs', 'ys', 'cards'].some((key) => key in state)) {
-        refuse('the state holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}');
+        refuse('the state holds xs, ys and cards, which is the earlier form; the state is {root}');
     }
-    if (state.paidBy !== undefined) {
-        if (!state.paidBy || typeof state.paidBy !== 'object' || Array.isArray(state.paidBy))
-            refuse('paidBy is not a map of card ids');
-        for (const [id, to] of Object.entries(state.paidBy)) {
-            if (typeof to !== 'string')
-                refuse(`paidBy of ${id} is ${JSON.stringify(to)}, which is no card id`);
-        }
-    }
+    if ('paidBy' in state)
+        refuse('the state holds paidBy, which the layout does not record; the state is {root}');
+    const extra = Object.keys(state).filter((key) => key !== 'root');
+    if (extra.length)
+        refuse(`the state holds ${extra.join(', ')}; the state is {root}`);
     const seen = new Set();
     const check = (value, path) => {
         checkForm(value);

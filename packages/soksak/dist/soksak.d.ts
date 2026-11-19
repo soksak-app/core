@@ -19,10 +19,8 @@
 import type { Axis, Card, Rect, Side } from './card.js';
 import type { Divider, Frames, Rule, ZoneHit, ZoneOptions } from './geometry.js';
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
-import type { Fill, FillOrder } from './slicing.js';
 import type { SoksakState, TreeNode } from './tree.js';
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
-export type { Fill, FillOrder } from './slicing.js';
 export type { BoxNode, CardNode, CutNode, Kid, SoksakState, TreeNode } from './tree.js';
 export { checkState } from './tree.js';
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
@@ -38,23 +36,14 @@ export interface SoksakOptions {
     snapDistance?: number;
     /** How a dragged boundary snaps. Default `merge`. */
     snap?: SnapMode;
-    /** Which axis a fill walks first. Default `v`. */
-    fillOrder?: FillOrder;
     /** Plane width in px. Default 0 until `resize`. */
     width?: number;
     /** Plane height in px. Default 0 until `resize`. */
     height?: number;
 }
 export declare class Soksak {
-    /** The state: the slicing tree of the plane, and the card that each card took its space from. */
+    /** The state: the slicing tree of the plane. */
     private root;
-    /**
-     * Which card each card took its space from, by id. `split` and `insertAt`
-     * record it, and a close gives the space back to that card when it stands
-     * beside it in the same cut, so the two operations are inverses; `''` names
-     * a card that took a share of every kid of the root.
-     */
-    private paidBy;
     private xs;
     private ys;
     private list;
@@ -84,12 +73,6 @@ export declare class Soksak {
     get minSize(): number;
     /** Assigning it clears the values cached against the previous one. */
     set minSize(px: number);
-    private order;
-    /** The axis a close tries first. */
-    get fillOrder(): FillOrder;
-    /** The sides a close tries, in the order of `fillOrder`. */
-    get fillSides(): readonly Fill['side'][];
-    set fillOrder(value: FillOrder);
     private grab;
     /** Smallest grab area of a boundary, in px. */
     get grabSize(): number;
@@ -104,7 +87,7 @@ export declare class Soksak {
     set snap(mode: SnapMode);
     constructor(state?: SoksakState, options?: SoksakOptions);
     static from(state: SoksakState, options?: SoksakOptions): Soksak;
-    /** Takes the tree and the payers of a state as copies and derives the lines and the cells. */
+    /** Takes the tree of a state as a copy and derives the lines and the cells. */
     private load;
     /**
      * Lays the tree into the unit plane and derives the lines and the cells from
@@ -124,12 +107,6 @@ export declare class Soksak {
     private on;
     /** Puts `next` where `node` stands: in its cut, inside its box, or as the root. A cut along the axis of its cut gives that cut its kids. */
     private put;
-    /**
-     * Takes the kid `i` out of the cut `holder` and gives its share to the kid
-     * `to`, or to every other kid in proportion to its share when `to` is -1. A cut
-     * left with one kid is replaced by that kid.
-     */
-    private drop;
     /** The node that leaves with the card of `leaf`: the card, or the box around it that holds nothing else. */
     private departing;
     /** Whether an id names a card or a box of the tree. */
@@ -195,7 +172,7 @@ export declare class Soksak {
     private find;
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
     lines(axis: Axis): number[];
-    /** The state: a copy of the slicing tree and of the payers. */
+    /** The state: a copy of the slicing tree. */
     toJSON(): SoksakState;
     /**
      * Replace the arrangement while keeping this grid's plane and options.
@@ -364,7 +341,7 @@ export declare class Soksak {
     even(): void;
     /**
      * Installs the tree of the plan that `make` makes of the stored tree and its
-     * drawn rectangles, with the paidBy records of the grid. The plan lays its
+     * drawn rectangles. The plan lays its
      * cuts, the grid draws them, and the plan corrects its spans by what was drawn
      * until the largest error is below a thousandth of a px; a corridor does not
      * change with a span, so this takes one correction, and one more for each
@@ -449,74 +426,36 @@ export declare class Soksak {
     private splitAt;
     private nextId;
     /**
-     * The neighbours that would expand over a card if it closed, as frozen copies:
-     * the cards of the kid of its cut beside it toward the first of `sides` that
-     * names a kid without a fixed card, or null. `sides` names the sides to try
-     * in their order, the sides of `fillOrder` by default.
+     * Whether a kid is a fixed card, which keeps its size when a sibling leaves. A
+     * cut or a box that holds a fixed card is not fixed: its other cards take the
+     * share, and its fixed card keeps its size by the rule of its own cut.
      */
-    fill(id: string, sides?: readonly Fill['side'][]): Fill | null;
-    /**
-     * The neighbour that takes the space of the card `id` when it closes: the kid
-     * of the cut of the card beside it toward the first of `sides` that holds no
-     * fixed card, or null. A close gives the space to a kid of the card's own
-     * cut, so it never crosses the structure of another cut.
-     */
-    private fillAlong;
-    /**
-     * The index of the kid of `holder` that holds the card `id`, or -1 when no
-     * kid holds it. The walk goes up from the card, so it visits the depth of
-     * the card and no other node.
-     */
-    private kidHolding;
-    /** Whether a fixed card stands inside a node. */
     private holdsFixed;
     private removable;
     /** Whether `close` would remove the card. */
     canClose(id: string): boolean;
     /**
-     * The cut that holds the node leaving with the card `id`, the kid that takes
-     * its space, -1 for every other kid in proportion to its share, and whether
-     * that kid grows over the space as a neighbour. The kid of its cut that holds
-     * the card it took its space from takes it when that kid holds no fixed card;
-     * the kids between the two shift by the span. Otherwise a kid of the root
-     * cut that took its space gives it back to every kid in proportion when it
-     * took a share of every kid (paidBy `''`), else to the kid after it, or before
-     * it at the end of the plane. Otherwise the neighbour of the first of `sides`
-     * that fills it takes it, else every other kid in proportion. It
-     * is null when the card cannot close: it is fixed or the last card, or no kid
-     * of its cut without a fixed card can take the space.
+     * The cut that holds the node leaving with the card `id` and its index in
+     * that cut, or null when the card cannot close: it is fixed or the last card,
+     * or every other kid of its cut holds a fixed card.
      */
     private closing;
     /**
-     * Remove a card. Its space goes to a kid of its own cut: the card it took its
-     * space from when that card stands beside it, else the neighbour that the
-     * first of `sides` names, else every other kid in proportion to its share.
-     * Returns false when the card is `fixed`, when it is the last card, or when no
-     * kid of its cut without a fixed card can take the space. `sides` names the
-     * sides whose neighbour may expand, tried in their order, the sides of
-     * `fillOrder` by default; an empty list gives the space to every kid in
-     * proportion. A host that keeps its own regions of cards passes one side at a
-     * time.
+     * Remove a card (packages/soksak/docs/layout.md#boundaries): the node that
+     * leaves with it goes out of its cut, and the other kids of the cut that hold
+     * no fixed card take its share by one factor, so their ratios hold; a kid that
+     * holds a fixed card keeps its share. Returns false when the card is `fixed`,
+     * when it is the last card, or when every other kid of its cut holds a fixed
+     * card.
      */
-    close(id: string, sides?: readonly Fill['side'][]): boolean;
+    close(id: string): boolean;
     private closeAlong;
     /**
-     * The slots of the lines of kid `i` of `holder`, which leave with it, when
-     * `holder` spans the plane across its axis and kid `to` takes the span: every
-     * line of the range of such a cut is a line of its kids, so each other slot of
-     * the axis stands after the drop at its index less the slots that left.
-     * Null for a cut that does not span the plane, whose lines share their places
-     * with the lines of other cuts.
-     */
-    private leavingSlots;
-    /**
-     * Draws again every slot of `axis` that stood between the same two lines
-     * before a change at the width it had, where the axis had or has a card with
-     * a px size: the slots that the change made share what is left, the slots of
-     * the card `payer` first absorbing the difference. On an axis that had and has
-     * no px size the coordinates are already the drawn sizes and nothing moves.
-     * `leaving` names the slots that left with a kid of a cut that spans the plane
-     * (`leavingSlots`); every other slot then pairs with the slot of its index.
+     * Draws again at the width it had every slot of `axis` that stood between the
+     * same two lines before a change, where the axis has a card with a px size,
+     * and lets the slots that the change made share what is left in the
+     * proportion of their spans. On an axis without a px size the coordinates are
+     * already the drawn sizes and nothing moves.
      */
     private settle;
     /**
@@ -538,20 +477,29 @@ export declare class Soksak {
      * Inserts a card at a boundary, spanning the whole plane on the other axis,
      * as a kid of the root cut along `axis`.
      *
-     * `size` is required, in px, and must be smaller than the plane. The new kid
-     * takes its span from the kid after it, else from the kid before it, else
-     * from every kid in proportion, and every other slot is drawn at the width it
-     * had.
+     * `size` is required, in px, and must be smaller than the plane. A boundary
+     * between kids i and i + 1 of the root is the add of the card beside kid i
+     * toward kid i + 1 (packages/soksak/docs/layout.md#boundaries): when the kids
+     * that hold no px size on the axis have one drawn size, or kid i holds one,
+     * every kid gives a share in proportion and keeps its ratio; otherwise kid i
+     * alone gives the span and every other kid keeps its size. An edge of the
+     * plane is the add beside the root as a whole, so every kid gives a share in
+     * proportion.
      *
      * Returns the new card's id, or null when a card spans the boundary, the line
      * is no seam of the root, the size is invalid, or the result would leave a
-     * card with no area.
+     * card with no area or below the size it had and `minSize`.
      */
     insertAt(axis: Axis, line: number, init: {
         id?: string;
         data?: unknown;
         size: number;
     }): string | null;
+    /**
+     * Whether the kids of a cut along `axis` that hold no px size on it have one
+     * drawn size, within half a px, as `insert` judges an even cut.
+     */
+    private evenKids;
     /**
      * Moves a card that spans the whole plane, a kid of the root cut along `axis`,
      * to another boundary of the root: its kid moves to that place with its share,
@@ -578,10 +526,9 @@ export declare class Soksak {
      *
      * The card keeps its id and its payload, so the host's element is reused and a
      * live surface inside it is not destroyed. It keeps its px size only when it
-     * lands spanning one slot on that axis. `sides` is the sides of the close, as
-     * `close` takes them.
+     * lands spanning one slot on that axis.
      */
-    move(id: string, targetId: string, side: Side, sides?: readonly Fill['side'][]): boolean;
+    move(id: string, targetId: string, side: Side): boolean;
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
     /**

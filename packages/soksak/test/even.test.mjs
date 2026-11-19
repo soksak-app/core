@@ -77,3 +77,12 @@ test("three cards over four give a third and a quarter each, and the rows halve 
   for (const id of ["d", "e", "f", "g"]) near(grid.rect(id).w, 300, `${id} takes a quarter`);
   for (const id of ["a", "d"]) near(grid.rect(id).h, 400, `the row of ${id} takes half the height`);
 });
+
+test("a card added beside a run of an even level takes 1/(k+1) of the level", () => {
+  // ADD(M, run, side) along the level: the card joins the level, not a cut of the run.
+  const grid = new Soksak({ root: { cut: "x", kids: ["a", "b", "c"].map((card) => ({ share: 1 / 3, node: { card } })) } }, { width: 1200, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insert(["a", "b"], "right", { card: "n" }), "n");
+  const root = grid.toJSON().root;
+  assert.deepEqual(root.kids.map((kid) => kid.node.card), ["a", "b", "n", "c"]);
+  for (const kid of root.kids) assert.ok(Math.abs(kid.share - 0.25) < 1e-6, `share ${kid.share}`);
+});

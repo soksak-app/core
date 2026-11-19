@@ -11,7 +11,7 @@ test("changed implementation owners select only their required defects", { timeo
   const { selectRequiredBreaks } = await import("../scripts/required-breaks.mjs");
   assert.deepEqual(selectRequiredBreaks(["unrelated/fixture.js", "docs/features.md"]), []);
   assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/soksak.ts"]).map(({ id }) => id), ["insert-fits"]);
-  assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/slicing.ts", "packages/soksak/dist/slicing.js"]).map(({ id }) => id), ["fill-order"]);
+  assert.deepEqual(selectRequiredBreaks(["packages/soksak/src/tree.ts", "packages/soksak/dist/tree.js"]).map(({ id }) => id), ["state"]);
   assert.throws(() => selectRequiredBreaks(["packages/soksak/src/unregistered.ts"]), /no required mutation owner/);
   assert.throws(() => selectRequiredBreaks(["pnpm-lock.yaml", "packages/soksak/src/unregistered.ts"]), /no required mutation owner/);
   assert.deepEqual(selectRequiredBreaks(["packages/soksak/dist/soksak.d.ts"]), []);

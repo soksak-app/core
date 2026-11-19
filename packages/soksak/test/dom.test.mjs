@@ -1521,7 +1521,7 @@ test("a change on one stretch of a line carries the anchor of a gesture on the o
   const { window, host, grid, view } = mount();
   // A card spanning the line breaks it into two stretches, so two gestures hold
   // one boundary through two elements.
-  grid.replace({ root: { cut: "y", kids: [{ share: 0.3333333333333333, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.3333333333333333, node: { card: "band" } }, { share: 0.33333333333333337, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "y", kids: [{ share: 0.3333333333333333, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.3333333333333333, node: { card: "band" } }, { share: 0.33333333333333337, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }] } });
   view.render();
   const both = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
     (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
@@ -1549,7 +1549,7 @@ test("a change on one stretch of a line carries the anchor of a gesture on the o
 
 test("two stretches that become one divider stay with the gesture that kept it", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "y", kids: [{ share: 0.3333333333333333, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.3333333333333333, node: { card: "band" } }, { share: 0.33333333333333337, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "y", kids: [{ share: 0.3333333333333333, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.3333333333333333, node: { card: "band" } }, { share: 0.33333333333333337, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }] } });
   view.render();
   const both = [...host.querySelectorAll('.sp-divider[data-axis="x"][data-line="1"]')].sort(
     (p, q) => parseFloat(p.style.top) - parseFloat(q.style.top),
@@ -1577,9 +1577,10 @@ test("a re-filed divider takes the stretch it covers most when it covers two", (
   // A rail cuts the stretch the element holds in two, and a split above it
   // renumbers the key. Two changes the host makes before one render, which is
   // how a host batches. The element covers part of both halves, so how much of
-  // each it covers is what picks one.
+  // each it covers is what picks one. The pair above the rail is the kid that
+  // pays for it, so it is drawn tall enough to keep its minimum size.
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "y", kids: [{ share: 0.42, node: { card: "band" } }, { share: 0.22000000000000003, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p1" } }, { share: 0.5, node: { card: "q1" } }] } }, { share: 0.36, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p2" } }, { share: 0.5, node: { card: "q2" } }] } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "y", kids: [{ share: 0.4, node: { card: "band" } }, { share: 0.35, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p1" } }, { share: 0.5, node: { card: "q1" } }] } }, { share: 0.25, node: { cut: "x", kids: [{ share: 0.5, node: { card: "p2" } }, { share: 0.5, node: { card: "q2" } }] } }] } });
   view.render();
   const down = [...host.querySelectorAll('.sp-divider[data-axis="x"]')];
   assert.equal(down.length, 1, "the vertical line is drawn as one stretch");
@@ -1610,7 +1611,7 @@ test("a re-filed divider takes the stretch it covers most when it covers two", (
 
 test("a gesture ends when a change the host makes takes its boundary away", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
@@ -1632,7 +1633,7 @@ test("a gesture ends when a change the host makes takes its boundary away", () =
 
 test("a gesture ends when a card the host puts in shifts the boundary it holds", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
@@ -1652,7 +1653,7 @@ test("a gesture ends when a card the host puts in shifts the boundary it holds",
 
 test("a gesture survives a change that leaves its boundary where it stands", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);
@@ -1704,7 +1705,7 @@ test("a host that renders between a drag and the draw it is holding keeps the dr
 
 test("a gesture the host's change ends does not leave the next press centring", () => {
   const { window, host, grid, view } = mount();
-  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] }, paidBy: {  } });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.4, node: { card: "left" } }, { share: 0.6, node: { card: "right" } }] } });
   view.render();
   const el = host.querySelector('.sp-divider[data-axis="x"]');
   const held = grid.boundaryPos("x", 1);

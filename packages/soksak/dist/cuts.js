@@ -281,10 +281,11 @@ function arriving(node) {
     return cardLeaf(cloneNode(node), NONE, { x: 1, y: 1 });
 }
 /**
- * The target of an insert: the node of one id, or the neighbouring kids of one cut that hold exactly the ids of the list, which become a
- * cut of their own inside it.
+ * The target of an insert toward an axis: the node of one member, or the neighbouring kids of one cut that hold exactly the
+ * members. A run of kids is the target itself when the insert goes along its cut, so the node joins that cut; across it, the run
+ * becomes a cut of its own that the insert wraps.
  */
-function targetNode(tree, target, sizes) {
+function targetNode(tree, target, sizes, axis) {
     var _a;
     const list = typeof target === 'string' ? [target] : [...target];
     const hits = list.map((id) => {
@@ -317,6 +318,8 @@ function targetNode(tree, target, sizes) {
         throw refused();
     if (first === 0 && last === holder.kids.length - 1)
         return holder;
+    if (holder.axis === axis)
+        return { holder, first, last };
     const sub = cut(holder.axis, span, false);
     sub.weight = span.reduce((a, k) => a + weightOf(k, holder.axis, sizes), 0);
     sizes.set(sub, union(span.map((k) => sizes.get(k))));
@@ -337,38 +340,48 @@ function isEven(into, sizes) {
  * a cut that is not even takes half of the target less the new corridor, `gap`, the kid toward `side` when the target is the cut itself,
  * and keeps every other size. Across the cut, the target is wrapped in a new cut of two halves.
  */
-function addBeside(tree, node, side, coming, gap, sizes) {
+function addBeside(tree, target, side, coming, gap, sizes) {
     var _a;
     const axis = axisOf(side);
     const after = side === 'right' || side === 'bottom';
-    const holder = (_a = tree.parent.get(node)) !== null && _a !== void 0 ? _a : null;
-    const insertInto = (into, at, payer) => {
+    const insertInto = (into, at, payers) => {
         var _a;
         const sharing = into.kids.filter((kid) => !isHeld(kid, axis));
         const even = isEven(into, sizes);
         sharing.forEach((kid) => {
             kid.weight = weightOf(kid, axis, sizes);
         });
-        if (even || isHeld(payer, axis)) {
+        const paying = payers.filter((kid) => !isHeld(kid, axis));
+        if (even || !paying.length) {
             const total = sharing.reduce((a, kid) => a + kid.weight, 0);
             coming.weight = sharing.length ? total / sharing.length : 1;
         }
         else {
-            // The new corridor comes out of the target too, so every other kid keeps its drawn size.
-            payer.weight = Math.max(0, payer.weight - gap) / 2;
-            coming.weight = payer.weight;
+            // The target gives half of its size, the new corridor included, so every other kid keeps its drawn size; the kids of a run
+            // give it in proportion and keep their ratios.
+            const sum = paying.reduce((a, kid) => a + kid.weight, 0);
+            const half = Math.max(0, sum - gap) / 2;
+            for (const kid of paying)
+                kid.weight = sum > 0 ? (kid.weight * half) / sum : 0;
+            coming.weight = half;
         }
         into.kids.splice(at, 0, coming);
         into.adjust = into.kids.map(() => 0);
         into.dirty = true;
         tree.enter(coming, into, (_a = tree.owner.get(into)) !== null && _a !== void 0 ? _a : null);
     };
+    if ('holder' in target) {
+        insertInto(target.holder, after ? target.last + 1 : target.first, target.holder.kids.slice(target.first, target.last + 1));
+        return;
+    }
+    const node = target;
+    const holder = (_a = tree.parent.get(node)) !== null && _a !== void 0 ? _a : null;
     if (node.kind === 'cut' && node.axis === axis) {
-        insertInto(node, after ? node.kids.length : 0, after ? node.kids[node.kids.length - 1] : node.kids[0]);
+        insertInto(node, after ? node.kids.length : 0, [after ? node.kids[node.kids.length - 1] : node.kids[0]]);
         return;
     }
     if (holder && holder.axis === axis) {
-        insertInto(holder, holder.kids.indexOf(node) + (after ? 1 : 0), node);
+        insertInto(holder, holder.kids.indexOf(node) + (after ? 1 : 0), [node]);
         return;
     }
     const weight = holder ? weightOf(node, holder.axis, sizes) : null;
@@ -453,7 +466,7 @@ export function insertNode(input, target, side, node, gap) {
     if (member !== undefined && member !== null)
         throw new Error(`card ${member} is a member of the layout`);
     const { tree, sizes } = start(input);
-    addBeside(tree, targetNode(tree, target, sizes), side, arriving(node), gap, sizes);
+    addBeside(tree, targetNode(tree, target, sizes, axisOf(side)), side, arriving(node), gap, sizes);
     return planOf(tree, sizes, input);
 }
 /** REMOVE: the plan of taking the card or the box `id` out of its cut, and the stored node that left. */

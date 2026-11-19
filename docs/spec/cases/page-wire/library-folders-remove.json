@@ -64,8 +64,7 @@
                           ],
                           "activeId": "tab-a"
                         }
-                      },
-                      "paidBy": {}
+                      }
                     }, "leader": "main", "lastCard": 1
                   }
                 }
@@ -97,8 +96,7 @@
                           ],
                           "activeId": "tab-b"
                         }
-                      },
-                      "paidBy": {}
+                      }
                     }, "leader": "main", "lastCard": 1
                   }
                 }
@@ -251,8 +249,7 @@
                           ],
                           "activeId": "tab-b"
                         }
-                      },
-                      "paidBy": {}
+                      }
                     }, "leader": "main", "lastCard": 1
                   }
                 }

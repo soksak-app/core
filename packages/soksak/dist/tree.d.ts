@@ -36,11 +36,6 @@ export interface CutNode {
 export type TreeNode = CardNode | BoxNode | CutNode;
 export interface SoksakState {
     root: TreeNode;
-    /**
-     * The card that each card took its space from, by id. A close gives the space
-     * back to that card when it is a neighbouring kid of the same cut.
-     */
-    paidBy?: Record<string, string>;
 }
 /** The distance under which two coordinates are one line (R1), and the tolerance of the sum of the shares. */
 export declare const EPS = 1e-9;

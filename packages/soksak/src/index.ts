@@ -7,8 +7,6 @@ export type {
   CardNode,
   CutNode,
   Divider,
-  Fill,
-  FillOrder,
   Kid,
   Rect,
   Rule,

@@ -100,11 +100,12 @@ px 크기는 슬롯 하나를 기술하므로, 자르기는 그것을 두 쪽으
 
 **R7 — 배치가 대체할 카드를 옮길 수 없는 경우가 아니면 카드는 나갈 수 있다.**
 마지막 하나를 제외한 모든 열린 카드는 닫을 수 있고, 그 결과는 다시 쪼개기로 만들 수
-있었던 배치다. 나가는 길은 둘이다. 이웃 한 줄이 그 자리를 덮으며 커지거나, 그 카드의
-슬롯이 제거된다.
+있었던 배치다. 카드는 자기 cut을 떠나고, 그 cut의 다른 kid가 한 인수로 그 share를
+가지므로 그 비율이 유지된다. kid가 하나만 남은 cut은 그 kid로 바뀌며, cut을 홀로
+채우는 카드는 그 cut의 축에 px 크기를 갖지 않는다.
 
-`fixed` 카드는 떠나는 이웃 위로 커지지 않는다. 그래서 채울 이웃이 `fixed` 뿐이고 자기
-슬롯에 다른 카드가 있는 카드는 남는다. `canClose` 가 무엇이 움직이기 전에 이것을
+`fixed` 카드는 sibling이 떠날 때 자기 크기를 유지한다. 그래서 cut에 자기 말고는
+`fixed` 카드만 있는 카드는 남는다. `canClose` 가 무엇이 움직이기 전에 이것을
 보고한다.
 
 ## 설치
@@ -124,7 +125,7 @@ grid의 state는 그 slicing tree이며, tree가 저장 형태다. line과 cell�
 도출되고, tree를 그것들에서 다시 읽지 않는다.
 
 ```
-state  {root, paidBy}
+state  {root}
 root   node 하나
 node   {card, data?, fixed?, width?, height?}     카드
        {box, data?, inner}                        host가 node 둘레에 그리는 box
@@ -151,14 +152,15 @@ seam이다. tree의 operation은 카드나 box가 속한 cut을 tree에서 읽�
 옮기므로 그 line에 선 모든 seam을 옮기며, 각 seam은 자기 cut 안에서 움직인다
 ([경계](#경계)).
 
-`paidBy`는 카드를 그것이 자리를 받아 온 카드에 대응시키며, root의 모든 kid가 몫을
-냈을 때는 `''`에 대응시킨다. split은 나눈 카드를 기록하고, close는 카드의 자리를 그
-카드를 담은 같은 cut의 kid에 주며, 그렇지 않으면 fill 순서를 따른다(R7).
+state는 payer를 기록하지 않는다. close는 카드의 share를 그 cut의 다른 kid에 한 인수로
+주므로(R7), 카드의 자리는 그 카드가 어느 카드에서 왔는지에 따르지 않는다.
 
 `Soksak.from(state, options?)`, 생성자, `replace(state)`와 `checkState(state)`는 이
 형태만 읽는다. 이전 release의 형태인 `xs`, `ys` 또는 `cards`를 가진 state는
 `soksak: the state holds xs, ys and cards, which is the earlier form; the state is
-{root, paidBy}`를 던지고, 다른 형태의 node는 `soksak: the node <json> is not a card, a
+{root}`를 던지고, `paidBy`를 가진 state는 `soksak: the state holds paidBy, which the
+layout does not record; the state is {root}`를, `root` 말고 다른 member를 가진 state는
+`soksak: the state holds <members>; the state is {root}`를 던지며, 다른 형태의 node는 `soksak: the node <json> is not a card, a
 box or a cut`을, kid가 둘 미만인 cut, 그 cut의 축을 따라가는 kid cut, 양수가 아니거나
 합이 10억분의 1 안에서 1이 아닌 share는 `soksak: the cut <path> is not canonical:
 <reason>`을, 두 node를 가리키는 id는 `soksak: card <id> is stored twice`를 던진다.
@@ -369,20 +371,22 @@ px 크기를 가진 카드 옆에서는, 경계가 닿을 수 있는 범위가 �
 `boundaryRange` 는 끌기의 한계를 정할 뿐, 끌기가 어디서 멈출 수 있는지를 나열하지
 않는다.
 
-같은 규칙이 나타나거나 사라지는 카드를 정리한다. 경계에 삽입된 카드는 경계 뒤의 root
-kid에서, 그렇지 않으면 경계 앞의 kid에서 너비를 가져온다. 그 kid가 카드를 `minSize`
-아래로 만들지 않고 자리를 낼 수 있을 때이며, `paidBy`는 자리를 낸 kid의 카드 하나를
-기록한다. 둘 다 낼 수 없으면 모든 kid가 비례해 몫을 내고 `paidBy`는 `''`를 기록한다.
-닫히는 카드의 span과 그것이 내놓는 통로는 기록된 카드를 담은 같은 cut의 kid로, 그 kid가
-어디에 서 있든 돌아가며, 둘 사이의 kid들은 그 span만큼 밀린다. 모든 kid가 자리를 낸
-카드는 모든 kid에 그 몫을 돌려준다. 그래서 사이드바를 껐다 켜면 다른 모든 카드는 갖고
-있던 너비를 유지한다 — 그 사이에 아무것도 움직이지 않고, 두 시점 모두 판이 그 축의
-선언을 담을 때에 한한다. 판이 그 축의 선언을 담지 못하면 선언된 크기는 모두 한 인수로 축소되어 그려지고,
-카드가 들어오거나 나갈 때 그 인수가 바뀌므로, 공간을 돌려주는 것만으로는 그 인수가 그린
-너비를 되돌릴 수 없다.
+같은 규칙이 나타나거나 사라지는 카드를 정리한다. root의 kid i와 i+1 사이 경계에 삽입된
+카드는 kid i 옆 kid i+1 쪽에 더해진다([add and remove](#add-and-remove)). 그 축에 px
+크기를 갖지 않은 root의 kid들이 하나의 그려진 크기(반 px 안)를 가지거나 kid i가 px
+크기를 가지면, px 크기가 없는 모든 kid가 비례해 몫을 내고 비율을 유지한다. 그렇지
+않으면 kid i 혼자 span을 내고 다른 모든 kid는 크기를 유지한다. 모든 kid가 px 크기를
+가지면 모든 kid가 몫을 낸다. 판의 가장자리에 삽입된 카드는 root 옆에 더해지므로 px
+크기가 없는 모든 kid가 비례해 몫을 낸다. 카드를 `minSize` 아래로 만드는 삽입은
+거부된다. 닫히는 카드는 자기 cut을 떠나고, `fixed` 카드가 아닌 그 cut의 다른 kid가 한
+인수로 그 span을 가진다. 전후에 같은 두 line 사이에 선 slot은 그려진 너비를 유지한다.
+그래서 사이드바를 껐다 켜면 root가 고를 때 다른 모든 카드는 갖고 있던 너비를 유지하고,
+고르지 않은 root에서는 자리를 낸 kid가 낸 것보다 적게 돌려받는다. 판이 그 축의 선언을
+담지 못하면 선언된 크기는 모두 한 인수로 축소되어 그려지고, 카드가 들어오거나 나갈 때
+그 인수가 바뀐다.
 
 px 크기는 호스트가 선언한다. 끌기가 그것을 바꾸고, 자르기는 그것을 두 쪽으로 나눈다.
-닫기는 span을 자기 cut의 kid에 주고, 삽입은 경계 옆의 kid나 모든 kid에서 그것을
+닫기는 span을 자기 cut의 다른 kid에 주고, 삽입은 경계 앞의 kid나 모든 kid에서 그것을
 가져온다.
 
 ```js
@@ -414,9 +418,8 @@ share가 같은 크기는 아니다. `even`은 모든 cut을 같은 share로 놓
 읽고, 각 share를 그려진 크기와 같은 크기의 차이만큼 옮기며, 가장 큰 차이가 1000분의
 1 px 아래가 될 때까지 반복한다. corridor는 share에 따라 바뀌지 않으므로 한 번의
 보정으로 cut 하나가 정확히 놓이고, 중첩된 cut은 한 번 더 걸린다. cut의 축에 px
-크기를 가진 카드와 `fixed` 카드는 자기 span을 유지하고 share를 받지 않는다. `even`은
-`paidBy` 기록을 유지한다. minimum 아래의 결과는 아래와 같이 던지며, 던지면 아무것도
-바뀌지 않는다.
+크기를 가진 카드와 `fixed` 카드는 자기 span을 유지하고 share를 받지 않는다. minimum
+아래의 결과는 아래와 같이 던지며, 던지면 아무것도 바뀌지 않는다.
 
 node의 minimum은 재귀적이며 head와 corridor를 고정 비용으로 센다. 카드는 `minSize`와
 `y`에서 그 사각형 안에 그려지는 head를 필요로 하고, box는 그 inner node가 필요로 하는
@@ -439,8 +442,8 @@ grid.visits;                      // even이 방문한 node 수
 
 ### Add and remove
 
-`withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid는 크기에
-비례해 그 자리를 나눠 가지며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 떠난 node, 곧
+`withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid는 close와
+같이 크기에 비례해 그 자리를 나눠 가지며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 떠난 node, 곧
 카드 node이거나 inner node를 가진 box node를 돌려주고 `insert`가 그것을 받으므로,
 box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 카드는 거부된다.
 
@@ -449,7 +452,9 @@ box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 
 cut의 이웃한 kid들이 가진 id들이다. target의 cut을 따라서는, kid의 크기가 하나인(반
 px 안) cut은 node에 cut의 1/(k+1)을 주고 모든 비율을 유지하며, kid의 크기가 다른
 cut은 node에 target의 절반에서 새 corridor를 뺀 크기를 주고 다른 모든 크기를
-유지한다. target이 cut 자체이면 `side` 쪽 끝의 kid가 target이다. cut을 가로질러서는
+유지한다. target이 cut 자체이면 `side` 쪽 끝의 kid가 target이다. side의 축을 따라 한
+cut의 이웃한 kid들의 id는 그 cut 안의 run이다. node는 kid 옆에서와 같이 run 옆에서 그
+cut에 더해지고, run은 자기 cut으로 감싸지지 않는다. cut을 가로질러서는
 target을 두 절반의 새 cut으로 감싼다. operation이 바꾼 cut만 다시 놓으므로 다른 모든
 카드는 사각형을 유지한다. move는 `withdraw`와 `insert`다.
 
@@ -567,14 +572,13 @@ state는 slicing tree이므로(R4) 풍차 — 네 카드가 각각 가운데 카
 쪽도 그 자리를 대신할 수 없는 배치 — 는 저장될 수 없고, 어떤 연산도 거기에 도달하지
 않는다.
 
-닫기는 카드를 자기 cut에서 빼고 그 자리를 같은 cut의 kid에 준다. 모든 cut은 kid가 둘
-이상이므로 그런 kid는 항상 존재한다. 고정 카드는 빈자리를 채우지 않는다. 그 크기는 그
-카드의 것이다. 그래서 cut에 자기 말고는 고정 카드만 있는 카드는 그 kid들에 비례해 자리를
-준다.
+닫기는 카드를 자기 cut에서 빼고 그 share를 같은 cut의 다른 kid에 한 인수로 준다. 모든
+cut은 kid가 둘 이상이므로 다른 kid는 항상 존재한다. `fixed` 카드는 자기 크기를 유지하므로
+share를 받지 않는다. fixed 카드를 담은 cut이나 box는 다른 kid처럼 share를 받는다.
 
 이로써 마지막 하나를 제외한 모든 열린 카드에 대해 `canClose` 가 참이다. 앞서 무슨 일이
-있었든 그렇다. 위의 R7 경우 — 채울 이웃이 `fixed` 뿐이고 그 슬롯에 다른 카드가 있는
-경우 — 만 예외다. `fixed` 카드에 대해서는 `canClose` 가 거짓을 반환한다. 배치가 그것을
+있었든 그렇다. 위의 R7 경우 — 카드의 cut의 다른 kid가 모두 `fixed` 카드인 경우 — 만
+예외다. `fixed` 카드에 대해서는 `canClose` 가 거짓을 반환한다. 배치가 그것을
 옮기지 않기 때문이며, `setFixed` 로 먼저 플래그를 지우면 된다.
 
 ## 옵션
@@ -586,7 +590,6 @@ state는 slicing tree이므로(R4) 풍차 — 네 카드가 각각 가운데 카
 | `grabSize` | `11` | 잡는 영역의 최소 크기, px. `gap` 과 별개이므로 `gap: 0` 에서도 끌 수 있다. |
 | `snap` | `"merge"` | 끌린 경계가 거의 만난 선에 내려앉고, 둘은 그때부터 한 선이다. `"off"` 면 내려앉지 않는다. |
 | `snapDistance` | `7` | 얼마나 가까워야 하는지, px. |
-| `fillOrder` | `"v"` | 닫히는 카드의 자리를 이웃이 갖는 변의 순서. `"v"` 는 아래, 위, 오른쪽, 왼쪽, `"h"` 는 오른쪽, 왼쪽, 아래, 위. 카드의 cut을 따르는 변만 그 cut의 kid를 가리킨다. |
 | `width`, `height` | `0` | 판의 크기. `resize(w, h)` 가 갱신하며 뷰가 대신 해 준다. |
 
 ## API
@@ -599,8 +602,8 @@ state는 slicing tree이므로(R4) 풍차 — 네 카드가 각각 가운데 카
 | `resize(w, h)`, `width`, `height` | 판의 크기 |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | 카드 하나를 둘로 자른다 |
 | `splitToward(id, side, {id?, data?, newLine?})` | 자르고 새 카드를 지정한 쪽에 놓는다. `newLine` 은 카드가 가로지르는 line이 안에 있어도 가운데의 새 line에서 자른다 |
-| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | 카드를 제거한다. `fill` 은 어느 이웃이 그 자리를 갖는지 보고한다. `sides` 는 이웃 행이 자랄 수 있는 변을 시도 순서대로 말한다(`"below"`, `"above"`, `"right"`, `"left"`). 기본값은 `fillOrder` 의 변인 `fillSides` 이고, 빈 목록은 slot만 지운다. 다른 변은 `unknown fill side <side>` 를 throw한다 |
-| `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | 카드를 다른 카드의 옆으로 옮긴다. `sides` 는 그 닫기의 변이며 `close` 가 받는 대로다 |
+| `canClose(id)`, `close(id)` | 카드를 제거한다. 그 cut의 다른 kid가 한 인수로 그 share를 가진다(R7) |
+| `canMove(id, targetId, side)`, `move(id, targetId, side)` | 카드를 다른 카드의 옆으로 옮긴다. close와 insert다 |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | 카드를 변경한다. 반환된 사본은 동결되어 있다 |
 | `setFrames(frames)` | 각 카드와 그 선 사이의 프레임 (R5) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | 판을 가로지르는 카드: 판의 가장자리와 그 축을 따르는 root cut의 seam |
@@ -612,14 +615,14 @@ state는 slicing tree이므로(R4) 풍차 — 네 카드가 각각 가운데 카
 | `insert(target, side, node)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | 카드가 가로지르는 선, 그리고 선을 가로지르는 카드 |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | 검사와 상태 |
-| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `fillOrder` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
+| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap` | 옵션. 생성 후에도 읽고 쓸 수 있다 |
 
 축을 받는 모든 메서드는 `"x"` 나 `"y"` 가 아닌 값을 거절한다. 방향을 받는 모든
 메서드는 `left`, `right`, `top`, `bottom` 이 아닌 값을 거절한다. 거절은 `null`,
 `false` 또는 빈 답을 반환하고 아무것도 바꾸지 않는다.
 
-`toJSON()` 은 `paidBy` 를 함께 담는다. 각 카드가 어느 카드에서 자리를 가져왔는지 기록하므로,
-그것으로 다시 만든 grid 는 카드를 같은 방식으로 닫는다. `checkState` 는 생성자가
+`toJSON()` 은 `{root}` 를 돌려주며, close는 tree만 읽으므로 그것으로 다시 만든 grid 는
+카드를 같은 방식으로 닫는다. `checkState` 는 생성자가
 실행하는 것이다. 오래된 저장 배치를 설치하기 전에 거절하려면 직접 호출하라.
 
 `fullscreen(id)`는 격자 모델을 바꾸지 않고 기존 카드 하나를 판 전체에 표시한다. `fullscreen(null)`은 배치를 복원한다. `fullscreenCard` 접근자는 현재 표시 선택을 보고한다. 다른 카드 요소는 살아 있지만 숨기며 표시 사각형의 넓이는 0이다. 전체 화면에는 선과 경계선 손잡이가 없다. 커밋 사각형과 그림은 크기 변경·비동기 복원 중에도 같은 스냅샷을 사용한다. 잘못된 ID는 상태를 바꾸지 않고 실패한다. 호스트는 전체 화면 카드를 제거하거나 배치를 변경하기 전에 일반 표시를 복원한다.
@@ -710,8 +713,7 @@ operation 하나를 제거하는 범위에서 최소이며, 가능한 가장 짧
 시도하기 전에 전체 원본을 출력한다.
 
 Role-independence test는 별도의 고정 operation trace를 사용한다. Fixture의
-card array 전체 순열과 변경된 identifier를 public constructor에 전달하고,
-payer reference도 함께 변경한다. 비교 단계에서만 identifier와 card 순서를
+card array 전체 순열과 변경된 identifier를 public constructor에 전달한다. 비교 단계에서만 identifier와 card 순서를
 정규화한다. 각 operation마다 geometry, card 속성, close/split 예측과 결과를
 비교하며, identifier 또는 array 위치에 의존하는 결함을 주입하면 비교가
 실패해야 한다. Source ownership 검사는 구조 검사로 유지하며, 독립적인
@@ -731,7 +733,7 @@ option을 적용한다. 각 case는 실제 card 수, topology, dimension과 opti
 | Initial card | 2부터 8까지; mixed cut은 3개 이상 |
 | Width / height | 320, 640, 1730 / 180, 900, 1440 px |
 | Gap / minimum size | 0, 17, 64 / 24, 96, 160 px |
-| Snap / fill order | merge와 off / h와 v |
+| Snap | merge와 off |
 | Snap distance / grab size | 3과 29 / 7과 23 px |
 | Card 속성 | fixed 및 sharing card, 선언한 px size와 constrained 상태의 크기 0인 card |
 | Trace | refusal/recovery 호출 14개와 이어지는 seed 기반 호출 20개 |
@@ -746,7 +748,7 @@ Fixed card의 split은 거부되어야 하며 fixed flag를 해제하고 공간�
 성공해야 한다. 새 card를 닫아 각 회복 뒤에도 작업을 계속할 수 있음을 확인한다.
 모든 전이는 successful 또는 refused 결과를 보고하고 거부는 serialized state와
 public 관측값을 보존한다. Report는 입력군과 method별 결과 수를 assert하고
-출력한다. 별도 control은 gap, minimum size, snapping, grab size와 fill order가
+출력한다. 별도 control은 gap, minimum size, snapping과 grab size가
 해당 geometry나 판단을 바꾼다는 것을 검증한다.
 
 Slicing oracle은 layout 구현을 import하지 않는 순수 test module이며 기존

@@ -38,25 +38,3 @@ test("role comparison rejects an injected identifier-dependent operation choice"
     return grid;
   } }), /role independence/);
 });
-
-test("role comparison renames payer references before following a restored close", { timeout: 5000 }, async () => {
-  const { assertRoleIndependence } = await import("../scripts/layout-equivalence.mjs");
-  const grid = new Soksak(state, options);
-  assert.equal(grid.split("upper", "x", { id: "child" }), "child");
-  assert.equal(grid.toJSON().paidBy.child, "upper");
-  let renamed = false;
-  const result = assertRoleIndependence({ state: grid.toJSON(), options, operations: [{ method: "close", args: ["child"] }], create(value, settings) {
-    if (!idsOf(value.root).includes("upper")) {
-      const [child, paid] = Object.entries(value.paidBy)[0];
-      assert.notEqual(child, "child");
-      assert.notEqual(paid, "upper");
-      assert.ok(idsOf(value.root).includes(child));
-      assert.ok(idsOf(value.root).includes(paid));
-      renamed = true;
-    }
-    return new Soksak(value, settings);
-  } });
-  assert.ok(renamed);
-  assert.deepEqual(result.outcomes, [true]);
-  assert.equal(result.final.cards.find((card) => card.id === "left").rect.w, 180);
-});

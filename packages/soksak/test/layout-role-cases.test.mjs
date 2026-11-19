@@ -79,7 +79,6 @@ test("varied layout cases cover the declared input classes and operation outcome
   assert.deepEqual(unique("snap"), ["merge", "off"]);
   assert.deepEqual(unique("snapDistance"), [3, 29]);
   assert.deepEqual(unique("grabSize"), [7, 23]);
-  assert.deepEqual(unique("fillOrder"), ["h", "v"]);
   for (const topology of unique("topology")) assert.equal(new Set(observed.filter((entry) => entry.topology === topology).map((entry) => entry.width)).size, 3);
   assert.ok(observed.some((entry) => entry.fixed > 0) && observed.some((entry) => entry.sized > 0));
   assert.ok(observed.some((entry) => entry.zeroSize > 0) && observed.some((entry) => entry.zeroSize === 0));

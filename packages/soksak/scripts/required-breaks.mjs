@@ -3,7 +3,6 @@ import { execFileSync } from "node:child_process";
 
 export const REQUIRED_BREAKS = Object.freeze([
   { owner: "soksak", id: "insert-fits", tests: ["test/fixedSize.test.mjs"] },
-  { owner: "slicing", id: "fill-order", tests: ["test/close.test.mjs"] },
   { owner: "tree", id: "state", tests: ["test/contract.test.mjs", "test/soksak.test.mjs"] },
   { owner: "cuts", id: "cut-gaps", tests: ["test/layout-invariants.test.mjs", "test/layout-cases.test.mjs"] },
   { owner: "geometry", id: "corridor", tests: ["test/fixedSize.test.mjs"] },

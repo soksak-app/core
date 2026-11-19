@@ -109,12 +109,14 @@ which only the host knows.
 
 **R7 — A card can leave unless the layout may not move what would replace it.**
 Every open card but the last can be closed, and the result is again an
-arrangement splitting could have built. There are two ways out: a row of
-neighbours grows over the space, or the card's slots are removed.
+arrangement splitting could have built. The card leaves its cut, and the other
+kids of that cut take its share by one factor, so their ratios hold. A cut left
+with one kid is replaced by that kid, and a card that fills a cut alone has no
+px size on the axis of that cut.
 
-A `fixed` card does not grow over a departing neighbour, so a card whose only
-filler is `fixed`, and whose slots hold another card, stays. `canClose` reports
-this before anything moves.
+A `fixed` card keeps its size when a sibling leaves, so a card whose cut holds
+only `fixed` cards besides it stays. `canClose` reports this before anything
+moves.
 
 ## Install
 
@@ -134,7 +136,7 @@ lines and the cells are derived from it, and the tree is never read back from
 them.
 
 ```
-state  {root, paidBy}
+state  {root}
 root   a node
 node   {card, data?, fixed?, width?, height?}     a card
        {box, data?, inner}                        a box of the host around a node
@@ -165,15 +167,17 @@ share by chance changes no result. A boundary drag moves a line that the person
 sees, so it moves every seam that stands on that line, and each moves in its own
 cut ([boundaries](#boundaries)).
 
-`paidBy` maps a card to the card that it took its space from, or to `''` when
-every kid of the root gave a share: a split records the card that it split, and
-a close gives the space of a card to the kid of its cut that holds that card,
-and otherwise by the fill order (R7).
+The state records no payer: a close gives the share of the card to the other
+kids of its cut by one factor (R7), so the space of a card does not depend on
+the card it came from.
 
 `Soksak.from(state, options?)`, the constructor, `replace(state)` and
 `checkState(state)` read only this form. A state that holds `xs`, `ys` or
 `cards`, which is the form of the earlier releases, throws `soksak: the state
-holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}`;
+holds xs, ys and cards, which is the earlier form; the state is {root}`; a state
+that holds `paidBy` throws `soksak: the state holds paidBy, which the layout does
+not record; the state is {root}`, and a state with another member besides `root`
+throws `soksak: the state holds <members>; the state is {root}`;
 a node of another form throws `soksak: the node <json> is not a card, a box or a
 cut`; a cut with fewer than two kids, a kid cut along the axis of its cut, or
 shares that are not positive or do not sum to 1 within a billionth throw
@@ -404,24 +408,26 @@ produce only a few positions in all. A drag asking for one that cannot be drawn
 lands on one that can, which may be outside the range. `boundaryRange` bounds a
 drag; it does not list where the drag can stop.
 
-The same rule settles a card that appears or disappears. A card inserted at a
-boundary takes its width from the kid of the root after the boundary, else from
-the kid before it, when that kid can give it without taking a card below
-`minSize`, and `paidBy` records a card of the kid that gave it; when neither
-can, every kid gives a share in proportion and `paidBy` records `''`. A closing
-card's span, and the corridor it releases, go back to the kid of its cut that
-holds the recorded card, wherever that kid stands, and the kids between the two
-shift by the span; a card that every kid paid for gives every kid its share
-back. So a sidebar switched off and back on leaves every other card the width it
-had, as long as nothing moved in between and the plane holds what the axis
-declares both times. Where the
-plane does not hold what the axis declares, every declared size is drawn scaled
-by one factor; that factor changes when a card arrives or leaves, and the widths
-it drew cannot be restored by giving the space back.
+The same rule settles a card that appears or disappears. A card inserted at the
+boundary between kids i and i+1 of the root is added beside kid i toward kid
+i+1 ([add and remove](#add-and-remove)): when the kids of the root that hold no
+px size on the axis have one drawn size (within half a px), or kid i holds a px
+size, every kid without a px size gives a share in proportion and keeps its
+ratio; otherwise kid i alone gives the span, and every other kid keeps its size.
+When every kid holds a px size, every kid gives a share.
+A card inserted at an edge of the plane is added beside the root, so every kid
+without a px size gives a share in proportion. An insert that would take a card
+below `minSize` is refused. A closing card leaves its cut, and the other kids of
+the cut that are no `fixed` card take its span by one factor; slots that stand
+between the same two lines before and after keep their drawn width. So a sidebar
+switched off and back on leaves every other card the width it had when the root
+is even; on an uneven root the kid that paid for it keeps less than it gave.
+Where the plane does not hold what the axis declares, every declared size is
+drawn scaled by one factor; that factor changes when a card arrives or leaves.
 
 A px size is declared by the host. A drag changes one, and a cut divides one
-between the halves; a close gives the span to a kid of its cut, and an insert
-takes it from a kid beside the boundary or from every kid.
+between the halves; a close gives the span to the other kids of its cut, and an
+insert takes it from the kid before the boundary or from every kid.
 
 ```js
 grid.dividers();                       // where each boundary can be grabbed
@@ -457,9 +463,8 @@ drawn rectangles and moves each share by the difference between its drawn size
 and the equal size, until the largest difference is below a thousandth of a px;
 a corridor does not change with a share, so one correction lays a cut exactly
 and a nested cut takes one more. A card with a px size on the axis of its cut,
-and a `fixed` card, keeps its span and takes no share. `even` keeps the
-`paidBy` records. A result below a minimum throws as below, and a throw
-changes nothing.
+and a `fixed` card, keeps its span and takes no share. A result below a minimum
+throws as below, and a throw changes nothing.
 
 The minimum of a node is recursive, with the heads and the corridors as fixed
 costs: a card needs `minSize` and on `y` the heads drawn inside its rectangle,
@@ -484,7 +489,8 @@ grid.visits;                      // the nodes that even visited
 ### Add and remove
 
 `withdraw(id)` takes the node `id`, a card or a box, out of its cut; the other
-kids of the cut take its space in proportion to their sizes, and a cut left
+kids of the cut take its space in proportion to their sizes, as a close does,
+and a cut left
 with one kid is replaced by that kid. It returns the node that left, a card
 node or a box node with its inner node, which `insert` takes, so a box lands
 with its members in their proportions. The last card and a `fixed` card are
@@ -497,7 +503,10 @@ cut of the target, a cut whose kids have one size (within half a px) gives the
 node 1/(k+1) of the cut and keeps every ratio, and a cut whose kids differ
 gives the node half of the target less the new corridor and keeps every other
 size; when the target is the cut itself, the kid at the end toward `side` is
-the target. Across the cut, the target is wrapped in a new cut of two halves.
+the target. Ids of neighbouring kids of one cut along the axis of the side are a
+run inside that cut: the node is added to that cut beside the run, as beside a
+kid, and the run is not wrapped in a cut of its own. Across the cut, the target
+is wrapped in a new cut of two halves.
 Only the cuts that the operation changes are laid again, so every other card
 keeps its rectangle. A move is a `withdraw` and an `insert`.
 
@@ -623,15 +632,15 @@ The state is a slicing tree (R4), so a pinwheel — four cards each overhanging
 the one in the middle, so no side can take its place — cannot be stored, and no
 operation reaches it.
 
-A close takes the card out of its cut and gives its space to a kid of the same
-cut, and every cut has at least two kids, so that kid always exists. Fixed cards
-never fill a gap — their size is their own — so a card whose cut holds only
-fixed cards besides it gives its space to those kids in proportion.
+A close takes the card out of its cut and gives its share to the other kids of
+the same cut by one factor, and every cut has at least two kids, so another kid
+always exists. A `fixed` card keeps its size, so it takes no share; a cut or a
+box that holds a fixed card takes a share like any other kid.
 
 Together that makes `canClose` true for every open card except the last,
-whatever has happened before — apart from the R7 case above, where a card's only
-filler is `fixed` and its slots hold another card. `canClose` returns false for a
-`fixed` card, because the layout does not move it; clear the flag with `setFixed`
+whatever has happened before — apart from the R7 case above, where every other
+kid of the card's cut is a `fixed` card. `canClose` returns false for a `fixed`
+card, because the layout does not move it; clear the flag with `setFixed`
 first.
 
 ## Options
@@ -643,7 +652,6 @@ first.
 | `grabSize` | `11` | Smallest grab area, px. Apart from `gap`, so `gap: 0` is still draggable. |
 | `snap` | `"merge"` | A dragged boundary snaps onto a line it nearly meets, and the two are then one line. `"off"`: no snap. |
 | `snapDistance` | `7` | How close it must come, px. |
-| `fillOrder` | `"v"` | The order of the sides whose neighbour takes the space of a closing card: `"v"` below, above, right, left; `"h"` right, left, below, above. Only the sides along the cut of the card name a kid of that cut. |
 | `width`, `height` | `0` | Plane size. `resize(w, h)` updates it; the view does this for you. |
 
 ## API
@@ -656,8 +664,8 @@ first.
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
 | `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
-| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | remove a card; `fill` reports which neighbours take the space; `sides` names the sides whose row of neighbours may grow, tried in their order (`"below"`, `"above"`, `"right"`, `"left"`), `fillSides`, the sides of `fillOrder`, by default, and an empty list only removes the slots; another side throws `unknown fill side <side>` |
-| `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | take a card to another card's side; `sides` is the sides of its close, as `close` takes them |
+| `canClose(id)`, `close(id)` | remove a card; the other kids of its cut take its share by one factor (R7) |
+| `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side: a close and an insert |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
 | `setFrames(frames)` | the frames between each card and its lines (R5) |
 | `standings(axis)`, `canInsertAt(axis, line)`, `insertAt`, `moveTo` | a card that reaches across the plane: the edges of the plane and the seams of the root cut along the axis |
@@ -669,14 +677,14 @@ first.
 | `insert(target, side, node)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
 | `crossings(card)`, `cardsCrossing(axis, line)` | the lines a card crosses, and the cards that cross a line |
 | `lines(axis)`, `toJSON()`, `Soksak.from(state, options?)`, `checkState(state)`, `replace(state)` | inspection and state |
-| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap`, `fillOrder` | the options, readable and writable after construction |
+| `gap`, `minSize`, `grabSize`, `snapDistance`, `snap` | the options, readable and writable after construction |
 
 Every method taking an axis refuses one that is not `"x"` or `"y"`; every method
 taking a side refuses one that is not `left`, `right`, `top` or `bottom`. A
 refusal returns `null`, `false` or an empty answer and changes nothing.
 
-`toJSON()` carries `paidBy`, which records the card each card took its space from, so
-a grid rebuilt from it closes cards the same way. `checkState` is what the
+`toJSON()` returns `{root}`, and a grid rebuilt from it closes cards the same way,
+because a close reads only the tree. `checkState` is what the
 constructor runs; call it to reject a stale saved layout before installing one.
 
 `fullscreen(id)` presents one existing card across the plane without changing the grid model. `fullscreen(null)` restores the arrangement. The `fullscreenCard` getter reports the current presentation choice. Other card elements remain alive but hidden; their presented rectangles have zero area. Rules and dividers are absent in fullscreen. Commit rectangles and the draw use the same snapshot, including during resize and asynchronous restore. Invalid IDs fail without changing state. A host restores normal presentation before removing the fullscreen card or changing the arrangement.
@@ -782,7 +790,7 @@ prints the complete original before attempting reduction.
 
 Role-independence tests use a separate fixed operation trace. They pass every
 permutation of the fixture's card array and renamed identifiers into the public
-constructor, including renamed payer references. Only the comparison normalizes
+constructor. Only the comparison normalizes
 identifiers and card order. Every operation compares geometry, card attributes,
 close/split predictions and its result; controlled identifier-dependent and
 array-position-dependent defects must fail that comparison. Source ownership
@@ -804,7 +812,7 @@ The input classes are:
 | Initial cards | 2 through 8; mixed cuts require at least 3 |
 | Width / height | 320, 640, 1730 / 180, 900, 1440 px |
 | Gap / minimum size | 0, 17, 64 / 24, 96, 160 px |
-| Snap / fill order | merge and off / h and v |
+| Snap | merge and off |
 | Snap distance / grab size | 3 and 29 / 7 and 23 px |
 | Card attributes | fixed and sharing cards, declared px sizes and zero-size constrained cards |
 | Trace | 14 refusal/recovery calls followed by 20 seeded calls |
@@ -821,7 +829,7 @@ restoring room. Closing the new card proves that work can continue after each
 recovery. Every transition reports its successful or refused result, and a
 refusal preserves the serialized state and public observations. The report
 asserts and lists input classes and per-method outcome counts. Separate controls
-prove that gap, minimum size, snapping, grab size and fill order change the
+prove that gap, minimum size, snapping and grab size change the
 corresponding geometry or decisions.
 
 The slicing oracle is a pure test module that imports no layout implementation;

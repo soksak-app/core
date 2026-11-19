@@ -189,3 +189,24 @@ test("canInsertAt refuses a line the axis does not have, and insertAt agrees", (
   }
   assert.deepEqual(grid.standings("x"), [0, 1, 2], "and standings names only the lines there are");
 });
+
+test("a card inserted at a boundary of an even level takes its size from every kid in proportion", () => {
+  // ADD(M, kid i, the side toward i + 1): an even level keeps every ratio.
+  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { width: 1000, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 200 }), "rail");
+  assert.deepEqual(["a", "rail", "b"].map((id) => Number(grid.rect(id).w.toFixed(6))), [400, 200, 400]);
+});
+
+test("a card inserted at a boundary of an uneven level takes its size from the kid before the boundary", () => {
+  // ADD(M, kid i, the side toward i + 1): an uneven level was sized by the person, so only kid i pays.
+  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.3, node: { card: "a" } }, { share: 0.7, node: { card: "b" } }] } }, { width: 1000, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insertAt("x", 1, { id: "rail", size: 200 }), "rail");
+  assert.deepEqual(["a", "rail", "b"].map((id) => Number(grid.rect(id).w.toFixed(6))), [100, 200, 700]);
+});
+
+test("a card inserted at an edge of the plane takes its size from every kid in proportion", () => {
+  // ADD(M, root, side): the root level as a whole pays, so its kids keep their ratios.
+  const grid = new Soksak({ root: { cut: "x", kids: [{ share: 0.3, node: { card: "a" } }, { share: 0.7, node: { card: "b" } }] } }, { width: 1000, height: 600, gap: 0, minSize: 20 });
+  assert.equal(grid.insertAt("x", 0, { id: "rail", size: 200 }), "rail");
+  assert.deepEqual(["rail", "a", "b"].map((id) => Number(grid.rect(id).w.toFixed(6))), [200, 240, 560]);
+});
