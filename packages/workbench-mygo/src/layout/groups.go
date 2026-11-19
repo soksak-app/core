@@ -1196,7 +1196,7 @@ func (p *Planes) GroupTree(id string) (State, error) { return p.storedPlane(id, 
 func MaxCardNumber(state State) int {
 	most := 0
 	for _, card := range state.Cards {
-		if n, ok := cardNumber(card.ID); ok {
+		if n, ok := CardNumber(card.ID); ok {
 			most = max(most, n)
 		}
 		var record groupRecord
@@ -1209,8 +1209,8 @@ func MaxCardNumber(state State) int {
 	return most
 }
 
-// cardNumber is n of a card id card-<n>.
-func cardNumber(id string) (int, bool) {
+// CardNumber is n of a card id card-<n>.
+func CardNumber(id string) (int, bool) {
 	text, ok := strings.CutPrefix(id, "card-")
 	if !ok {
 		return 0, false
@@ -1350,7 +1350,7 @@ func (p *Planes) readLast(raw json.RawMessage, seen map[string]bool) error {
 		return refused
 	}
 	for id := range seen {
-		if n, ok := cardNumber(id); ok && n > int(last) {
+		if n, ok := CardNumber(id); ok && n > int(last) {
 			return refused
 		}
 	}

@@ -56,7 +56,7 @@ func (t shellText) CardTextSizes() map[string]float64 {
 	if t.s.plane == nil {
 		return sizes
 	}
-	for _, card := range t.s.plane.Cards() {
+	for _, card := range t.s.contentCards() {
 		sizes[card.ID] = 1
 		data, err := t.s.readCard(card)
 		if err != nil {
@@ -71,8 +71,8 @@ func (t shellText) CardTextSizes() map[string]float64 {
 }
 
 func (t shellText) SetCardTextSize(id string, size float64) error {
-	card, ok := t.s.plane.Card(id)
-	if !ok {
+	card, ok := t.s.findCard(id)
+	if !ok || t.s.isGroup(id) {
 		return fmt.Errorf("text size card %s is not in the layout", id)
 	}
 	data, err := layout.DecodeCardData(card.Data)
@@ -87,7 +87,7 @@ func (t shellText) SetCardTextSize(id string, size float64) error {
 	if err != nil {
 		return err
 	}
-	t.s.plane.SetData(id, encoded)
+	t.s.planes.SetData(id, encoded)
 	t.s.settle()
 	t.s.followScale()
 	return nil

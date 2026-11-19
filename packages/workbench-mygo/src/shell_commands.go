@@ -94,6 +94,7 @@ func (s *Shell) register() {
 	s.registerPicker()
 	Functions{Text: s.text, Focus: s.exposedFocus, Pointer: s.pointer, Contributions: s.contributions}.Register(s.registry)
 	s.registerTabDrag()
+	s.registerGroups()
 	s.registerCardSidebars()
 	s.registerPlugins()
 	s.registerSetup()
@@ -184,7 +185,7 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
-		if _, err := s.plane.Balance(); err != nil {
+		if err := s.planes.Balance(); err != nil {
 			return err
 		}
 		s.settle()
@@ -195,11 +196,13 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
-		if _, ok := s.plane.Card(value.Card); !ok {
+		if _, ok := s.findCard(value.Card); !ok {
 			return fmt.Errorf("Unknown card: %s", value.Card)
 		}
-		s.focusCard(value.Card)
-		if s.fullscreen != value.Card {
+		// A group card takes no focus ring: its focus is the first content card of its child plane (docs/spec/groups.md#focus).
+		focused := s.planes.Focusable(value.Card)
+		s.focusCard(focused)
+		if s.fullscreen != focused {
 			s.fullscreen = ""
 		}
 		s.options.Invalidate()
@@ -211,6 +214,9 @@ func (s *Shell) register() {
 		}
 		if err := s.paneCard(value.Card); err != nil {
 			return err
+		}
+		if s.isGroup(value.Card) {
+			return fmt.Errorf("card %s is a group; fullscreen shows a content card", value.Card)
 		}
 		s.focusCard(value.Card)
 		if s.fullscreen == value.Card {
@@ -253,6 +259,8 @@ func (s *Shell) register() {
 			return nil, fmt.Errorf("core.boundary.move: position is missing")
 		}
 		moved := s.plane.MoveBoundary(value.Axis, value.Line, *value.Position, false)
+		// The child planes take the bodies of the group cards that the move resized.
+		s.planes.Resize(s.plane.Width(), s.plane.Height())
 		s.settle()
 		return map[string]float64{"position": moved}, nil
 	})

@@ -244,7 +244,7 @@ func eachTab(cards []layout.Card, visit func(tab layout.Tab, active bool)) {
 func (s *Shell) backgroundTabs() []BackgroundTab {
 	var tabs []BackgroundTab
 	if s.plane != nil {
-		eachTab(s.plane.Cards(), func(tab layout.Tab, active bool) {
+		eachTab(s.contentCards(), func(tab layout.Tab, active bool) {
 			tabs = append(tabs, BackgroundTab{tab.ID, tab.Plugin, active})
 		})
 	}
@@ -283,14 +283,14 @@ func (s *Shell) eachLayoutTab(visit func(project, space string, tab layout.Tab, 
 		}
 		for _, space := range project.Spaces {
 			if project.ID == s.active && space.ID == project.ActiveSpaceID && s.plane != nil {
-				eachTab(s.plane.Cards(), func(tab layout.Tab, active bool) { visit(project.ID, space.ID, tab, active) })
+				eachTab(s.contentCards(), func(tab layout.Tab, active bool) { visit(project.ID, space.ID, tab, active) })
 				continue
 			}
 			var stored storedLayout
 			if err := json.Unmarshal(space.Layout, &stored); err != nil {
 				return fmt.Errorf("space %s: %w", space.ID, err)
 			}
-			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
+			eachTab(storedCards(stored.State), func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
 		}
 	}
 	return nil

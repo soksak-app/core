@@ -29,10 +29,10 @@ func (s *Shell) layoutSurfaces() ([]retainedSurface, error) {
 			if err := json.Unmarshal(space.Layout, &stored); err != nil {
 				return nil, fmt.Errorf("space %s: %w", space.ID, err)
 			}
-			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) {
+			eachTab(storedCards(stored.State), func(tab layout.Tab, _ bool) {
 				surfaces = append(surfaces, retainedSurface{tab.ID, project.Root, tab.Plugin})
 			})
-			sections, err := s.spaceSections(project, space.ID, stored.State.Cards)
+			sections, err := s.spaceSections(project, space.ID, storedCards(stored.State))
 			if err != nil {
 				return nil, fmt.Errorf("space %s: %w", space.ID, err)
 			}
@@ -107,7 +107,7 @@ func (s *Shell) storedSurfaceKept() (func(id string) bool, error) {
 				return nil, fmt.Errorf("space %s: %w", space.ID, err)
 			}
 			cards := map[string]bool{}
-			for _, card := range stored.State.Cards {
+			for _, card := range storedCards(stored.State) {
 				cards[card.ID] = true
 			}
 			spaces[space.ID] = cards

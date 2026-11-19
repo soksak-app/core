@@ -451,7 +451,7 @@ func (s *Shell) pressSurface(surface string) {
 			sectionCard = *held.section.Card
 		}
 	}
-	for _, card := range s.plane.Cards() {
+	for _, card := range s.contentCards() {
 		if card.ID != sectionCard && !s.cardHoldsTab(card.ID, surface) {
 			continue
 		}

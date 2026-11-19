@@ -351,7 +351,11 @@ type Shell struct {
 	// savedGeometry is the geometry that this window last stored for each project.
 	savedGeometry map[string]json.RawMessage
 	plane         *layout.Grid
-	focused       string
+	// planes is the tree of planes of the shown space, whose root plane is plane (docs/spec/groups.md#model).
+	planes *layout.Planes
+	// dissolved holds the group cards that this window dissolved since its workbench started (docs/spec/groups.md#idempotency).
+	dissolved map[string]bool
+	focused   string
 	// columnsChanged tells that the next frame matches the columns of the window sidebars to the settings.
 	columnsChanged bool
 	// fullscreen is the card that covers the plane, or "" while the cards stand in their arrangement.
@@ -498,7 +502,7 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if err := json.Unmarshal(options.Environment, &environment); err != nil {
 		return nil, fmt.Errorf("environment declaration: %w", err)
 	}
-	s := &Shell{closedTabs: map[string]bool{}, asked: map[string]bool{}, windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
+	s := &Shell{closedTabs: map[string]bool{}, dissolved: map[string]bool{}, asked: map[string]bool{}, windowProjects: map[string]bool{}, savedGeometry: map[string]json.RawMessage{}, cardReads: map[string]cardRead{}, options: options, metrics: read, palette: palette, registry: NewRegistry(options.Declared), calls: options.Calls,
 		grid: environment.Workspace.Grid, focus: environment.Workspace.Focus, browsing: true, library: newLibraryState(), strips: map[string]*stripPlace{}, icons: map[string]*ui.SVG{}, heads: map[string]layout.HeadFit{}}
 	// Every frame that the shell asks for passes this count: a command answers after the frame that its run asked for.
 	invalidate := options.Invalidate

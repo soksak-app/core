@@ -11,8 +11,8 @@ import (
 
 // focusedSurface returns the active tab of the focused card, which a window sidebar of its plugin follows.
 func (s *Shell) focusedSurface() FocusedSurface {
-	card, ok := s.plane.Card(s.focused)
-	if !ok {
+	card, ok := s.findCard(s.focused)
+	if !ok || s.isGroup(s.focused) {
 		return FocusedSurface{}
 	}
 	// silent: a card whose data cannot be read shows its error in its place, and has no tab to follow.
@@ -326,7 +326,7 @@ func (s *Shell) sideItems(card string) ([]pickerItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	rect, _ := s.plane.Rect(card) // silent: paneCard found the card.
+	rect, _ := s.planes.Rect(card) // silent: paneCard found the card.
 	presented, err := s.presentCard(card, data, rect)
 	if err != nil {
 		return nil, err
@@ -381,7 +381,7 @@ func (s *Shell) registerCardSidebars() {
 		return layout.SetSidebar(id, data, value.Side, value.Set, sets)
 	})
 	change("core.card.sidebar.toggle", func(id string, data *layout.CardData, value cardSideParam) error {
-		rect, _ := s.plane.Rect(id) // silent: paneCard found the card.
+		rect, _ := s.planes.Rect(id) // silent: paneCard found the card.
 		presented, err := s.presentCard(id, data, rect)
 		if err != nil {
 			return err

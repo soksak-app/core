@@ -141,7 +141,7 @@
       },
       {
         "name": "core.layout",
-        "description": "The saved form of the current space layout: grid state, focus, and restore widths, or null.",
+        "description": "The stored form of the current space layout with the level of each group record, or null.",
         "schema": {
           "type": [
             "object",
@@ -212,7 +212,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation.",
+        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. The cards of the child planes follow their group card, each with plane, the group card whose child plane holds it; the leader of each plane carries leader true, and a group card carries its group record {name, level, leader} and no tabs.",
         "schema": {
           "type": [
             "object",
@@ -3629,6 +3629,165 @@
               "type": "string"
             }
           }
+        }
+      },
+      {
+        "name": "core.group.create",
+        "description": "Turns a card into a group card that holds the card and a new content card toward side.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            },
+            "plugin": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.dissolve",
+        "description": "Replaces a group card with the cards of its child plane inside its span.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "dissolved": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.rename",
+        "description": "Renames a group card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.group.leader",
+        "description": "Makes a card the leader of its plane.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "plane": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.move",
+        "description": "Moves a content card or a group card beside a card of any plane, or into a group, as a drop does.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom",
+                "centre"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "core.card.get",
+        "description": "Reads the state of one content card of any plane with its group path, or one group card.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "object"
         }
       },
       {

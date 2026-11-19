@@ -30,7 +30,8 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	// The plane stands on the device pixel grid, so the stage holds it moved by the part of a device pixel that the rows above and
 	// left of it leave.
 	shiftX, shiftY := s.alignPlane(width, stage)
-	s.plane.Resize(s.planeBox.W, s.planeBox.H)
+	// The tree places each child plane in the body of its group card after the root plane takes its size.
+	s.planes.Resize(s.planeBox.W, s.planeBox.H)
 	held := float32(s.planeBox.W) + 2*inset
 	heldHeight := float32(s.planeBox.H) + 2*inset
 	// A column takes its width from the plane, whose size only a frame knows, so a change of the columns waits for it.
@@ -746,6 +747,18 @@ type LayoutNode struct {
 	Card      string
 	Frame     LayoutFrame
 	Tabs      []LayoutTab
+	// Leader tells that the card is the leader of its plane, and Group is the record of a group card (docs/spec/groups.md#status-and-queries).
+	Leader bool
+	Group  *LayoutGroup
+}
+
+// LayoutGroup is the group record of a group card node: its name, the level and the leader of its child plane, and the tree of its
+// child plane, nil for a plane of window sidebars only.
+type LayoutGroup struct {
+	Name   string      `json:"name"`
+	Level  int         `json:"level"`
+	Leader string      `json:"leader"`
+	Root   *LayoutNode `json:"root"`
 }
 
 // LayoutFrame is the frame of a card in window points.
@@ -774,16 +787,26 @@ func (n LayoutNode) MarshalJSON() ([]byte, error) {
 			Children  []LayoutNode `json:"children"`
 		}{n.Direction, n.Size, n.Children})
 	}
+	if n.Group != nil {
+		return json.Marshal(struct {
+			Card   string       `json:"card"`
+			Size   float64      `json:"size"`
+			Frame  LayoutFrame  `json:"frame"`
+			Leader bool         `json:"leader,omitempty"`
+			Group  *LayoutGroup `json:"group"`
+		}{n.Card, n.Size, n.Frame, n.Leader, n.Group})
+	}
 	tabs := n.Tabs
 	if tabs == nil {
 		tabs = []LayoutTab{}
 	}
 	return json.Marshal(struct {
-		Card  string      `json:"card"`
-		Size  float64     `json:"size"`
-		Frame LayoutFrame `json:"frame"`
-		Tabs  []LayoutTab `json:"tabs"`
-	}{n.Card, n.Size, n.Frame, tabs})
+		Card   string      `json:"card"`
+		Size   float64     `json:"size"`
+		Frame  LayoutFrame `json:"frame"`
+		Leader bool        `json:"leader,omitempty"`
+		Tabs   []LayoutTab `json:"tabs"`
+	}{n.Card, n.Size, n.Frame, n.Leader, tabs})
 }
 
 // LayoutDescription describes the layout of the shown space, and nil while the window shows no project. The tree comes from the lines
@@ -793,31 +816,42 @@ func (s *Shell) LayoutDescription() (*LayoutDescription, error) {
 	if project == nil || s.plane == nil || s.browsing {
 		return nil, nil
 	}
-	tree, err := layout.Tree(s.plane.ToJSON())
-	if err != nil {
-		return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
-	}
 	description := &LayoutDescription{Space: project.ActiveSpaceID}
-	if _, ok := s.plane.Card(s.focused); ok && !isPlace(s.focused) {
+	if _, ok := s.findCard(s.focused); ok && !isPlace(s.focused) {
 		focused := s.focused
 		description.Focused = &focused
 	}
-	if tree != nil {
-		root, err := s.describeNode(*tree)
-		if err != nil {
-			return nil, err
-		}
-		description.Root = &root
+	root, err := s.describePlane(layout.RootPlane)
+	if err != nil {
+		return nil, fmt.Errorf("the layout of space %s: %w", project.ActiveSpaceID, err)
 	}
+	description.Root = root
 	return description, nil
 }
 
+// describePlane is the tree of the plane key, or nil for a plane of window sidebars only.
+func (s *Shell) describePlane(key string) (*LayoutNode, error) {
+	plane, ok := s.planes.Plane(key)
+	if !ok {
+		return nil, fmt.Errorf("no plane %s", key)
+	}
+	tree, err := layout.Tree(plane.ToJSON())
+	if err != nil || tree == nil {
+		return nil, err
+	}
+	node, err := s.describeNode(key, *tree)
+	if err != nil {
+		return nil, err
+	}
+	return &node, nil
+}
+
 // describeNode is the node of the description of a node of the tree.
-func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
+func (s *Shell) describeNode(key string, node layout.TreeNode) (LayoutNode, error) {
 	if node.Direction != "" {
 		described := LayoutNode{Direction: node.Direction, Size: node.Size}
 		for _, child := range node.Children {
-			part, err := s.describeNode(child)
+			part, err := s.describeNode(key, child)
 			if err != nil {
 				return LayoutNode{}, err
 			}
@@ -825,13 +859,24 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 		}
 		return described, nil
 	}
+	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.
+	origin := s.planeOrigin()
+	leader, _ := s.planes.Leader(key) // silent: a plane without a leader has no card that carries the mark.
+	described := LayoutNode{Card: node.Card, Size: node.Size, Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H},
+		Leader: leader == node.Card}
+	if s.isGroup(node.Card) {
+		record, _ := s.planes.Group(node.Card) // silent: isGroup found the group card.
+		inner, err := s.describePlane(node.Card)
+		if err != nil {
+			return LayoutNode{}, err
+		}
+		described.Group = &LayoutGroup{Name: record.Name, Level: record.Level, Leader: record.Leader, Root: inner}
+		return described, nil
+	}
 	data, err := s.cardData(node.Card)
 	if err != nil {
 		return LayoutNode{}, err
 	}
-	rect, _ := s.cardRect(node.Card) // silent: the tree holds only cards of the plane, which have a rectangle.
-	origin := s.planeOrigin()
-	described := LayoutNode{Card: node.Card, Size: node.Size, Frame: LayoutFrame{X: origin.X + rect.X, Y: origin.Y + rect.Y, Width: rect.W, Height: rect.H}}
 	active := data.ActiveTab()
 	for _, tab := range data.TabList() {
 		params := tab.Rest["params"]
@@ -944,11 +989,18 @@ func (s *Shell) openLayoutTab(value layoutOpenParam) (map[string]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	target := card
+	targets := []string{card}
 	if value.Side != nil {
-		target = s.neighbour(card, *value.Side)
+		targets = []string{s.neighbour(card, *value.Side)}
+	} else if s.isGroup(card) {
+		// A group card selects the first equal tab among the content cards of its child plane in reading order
+		// (docs/spec/groups.md#card-commands-on-a-group-card).
+		targets = s.planes.PlaneCards(card)
 	}
-	if target != "" {
+	for _, target := range targets {
+		if target == "" || s.isGroup(target) {
+			continue
+		}
 		tab, err := s.equalTab(target, plugin, checked)
 		if err != nil {
 			return nil, err
@@ -1006,22 +1058,14 @@ func jsonValue(text json.RawMessage) (any, error) {
 	return value, err
 }
 
-// neighbour returns the content card whose edge lies on the line of the edge of card toward side and which spans the same two lines
+// neighbour returns the content card of the plane of card whose edge lies on the line of the edge of card toward side and which spans the same two lines
 // across that side, compared by the lines of the layout, or "" when none does.
 func (s *Shell) neighbour(card, side string) string {
-	from, _ := s.plane.Card(card) // silent: layoutCard resolved card to a card of the plane.
-	for _, other := range s.plane.Cards() {
-		if other.ID == card || isPlace(other.ID) {
-			continue
-		}
-		rows := other.R0 == from.R0 && other.R1 == from.R1
-		columns := other.C0 == from.C0 && other.C1 == from.C1
-		if side == "right" && rows && other.C0 == from.C1 || side == "left" && rows && other.C1 == from.C0 ||
-			side == "bottom" && columns && other.R0 == from.R1 || side == "top" && columns && other.R1 == from.R0 {
-			return other.ID
-		}
+	other := s.planes.Neighbour(card, side)
+	if isPlace(other) || s.isGroup(other) {
+		return ""
 	}
-	return ""
+	return other
 }
 
 // showLayoutTab makes tab the active tab of card and focuses card, and leaves a tab that is already active in the focused card as it is.
@@ -1040,12 +1084,12 @@ func (s *Shell) showLayoutTab(card, tab string) error {
 // fails with the place where it is.
 func (s *Shell) layoutCard(id string) (string, error) {
 	if id == currentTarget {
-		if _, ok := s.plane.Card(s.focused); !ok || isPlace(s.focused) {
+		if _, ok := s.findCard(s.focused); !ok || isPlace(s.focused) {
 			return "", fmt.Errorf("card current names no card: window %s has no focused card", s.options.Name)
 		}
 		return s.focused, nil
 	}
-	if _, ok := s.plane.Card(id); ok && !isPlace(id) {
+	if _, ok := s.findCard(id); ok && !isPlace(id) {
 		return id, nil
 	}
 	return "", s.outOfLayout("card", id, func(cards []layout.Card) bool {
@@ -1092,7 +1136,7 @@ func (s *Shell) outOfLayout(kind, id string, holds func(cards []layout.Card) boo
 		if err := json.Unmarshal(space.Layout, &stored); err != nil {
 			return fmt.Errorf("space %s: %w", space.ID, err)
 		}
-		if holds(stored.State.Cards) {
+		if holds(storedCards(stored.State)) {
 			return fmt.Errorf("%s %s is in space %s, which is not active", kind, id, space.ID)
 		}
 	}
