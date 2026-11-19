@@ -1806,6 +1806,15 @@ export const capture = (path = null) => {
   };
 };
 
+/**
+ * The cards and the group tree of the drawn layout in the stored form, each card with its tabs as {id, plugin}, and null before the plane
+ * is built: the layout of the shown space whose activities core.activity reports (docs/spec/activity.md).
+ */
+export const activityLayout = () => (grid ? {
+  state: { cards: grid.cards.map((card) => ({ id: card.id, data: card.data ? { tabs: tabsOf(card).map(({ id, plugin }) => ({ id, plugin })) } : null })) },
+  groups: tree.stored().groups,
+} : null);
+
 /** Applies one stored set of state to the plane. */
 export function adopt(kept, space) {
   if (typeof space !== "string" || !space) throw new TypeError(`adopt requires the id of the space of the layout, not ${space}`);

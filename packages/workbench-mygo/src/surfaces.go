@@ -59,6 +59,8 @@ type installedUnit struct {
 	// Opens holds the extensions of surface.opens, and Background the background declaration, or nil.
 	Opens      []string
 	Background *BackgroundDeclaration
+	// Activity holds the statuses that declare activity, which the activity of each tab of the plugin follows (docs/spec/activity.md).
+	Activity []ActivityDeclaration
 }
 
 // surfaceUnload is the declaration surface.unload of a plugin.
@@ -133,6 +135,11 @@ func readSurfaceUnits(document []byte) (map[string]*installedUnit, error) {
 			unit.Exposes.Commands = append(unit.Exposes.Commands, diagnostics.Exposes.Commands...)
 			unit.Exposes.Element = append(unit.Exposes.Element, diagnostics.Exposes.Element...)
 		}
+		activity, err := activityDeclarations(plugin.ID, unit.Exposes.Status)
+		if err != nil {
+			return nil, err
+		}
+		unit.Activity = activity
 		if plugin.Manifest.Surface == nil || len(plugin.Manifest.Surface.Composition) == 0 {
 			continue
 		}

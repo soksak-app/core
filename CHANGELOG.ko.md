@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F982-2 (창의 activity): 두 workbench가 창의 project들의 각 tab의 surface에서 `activity`를 선언한 각 status를 watch로 따르고, `docs/spec/cases/activity.json`의 공유 case대로 각 tab, card, group card, space, project의 activity를 얻어 `core.activity`로 보고한다(`docs/spec/activity.md#status`). 검증: 두 workbench의 case와 follow test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F982-1 (status의 activity): plugin의 status 항목이 status 값에서 activity `attention`, `failed`, `running`, `idle`로의 map인 `activity`를 선언할 수 있다. `packages/plugin-api`, `packages/sok/go`, `packages/sok/rust`의 manifest 검사가 이를 받아들이고 다른 형식을 `docs/spec/activity.md#declaration`의 문구로 거부한다. 검증: manifest case `exposes.status-activity-*`가 바뀌지 않은 코드의 세 reader에서 `unknown field activity`로 실패했고 통과한다.
 - F937-20 (group header의 fit, page): page가 group header의 이름을 그 글자의 폭으로 재므로, 버튼을 담을 자리가 있는 header가 모든 폭에서 접지 않고 버튼을 한 줄에 보인다(`docs/spec/groups.md#headers`). 검증: fit test가 이전 fit에서 실패했고 통과한다.
 - F955 (boundary의 grip): divider의 그려진 각 stretch가 grip 길이를 담는 동안 그 가운데에 grip을 그리고, 쌓인 두 group header 사이의 한 gap 길이 stretch처럼 더 짧은 stretch는 그리지 않으므로, 두 workbench에서 어떤 grip도 header에 들어가지 않는다(`docs/spec/groups.md#drawing`). 검증: 두 workbench의 grip test가 바뀌지 않은 코드에서 실패했고 통과한다.

@@ -416,7 +416,9 @@ type Shell struct {
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
-	units         map[string]*installedUnit
+	units map[string]*installedUnit
+	// activity follows the statuses that declare activity on the surface of each tab of the window (docs/spec/activity.md).
+	activity      *ActivityFollow
 	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
@@ -555,6 +557,10 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if s.units, err = readSurfaceUnits(installed); err != nil {
 		return nil, err
 	}
+	s.activity = NewActivityFollow(func(name, surface string, fn func(value any)) func() {
+		return s.registry.Observe(name, &surface, true, fn)
+	},
+		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.fail)
 	s.contributions = NewContributions()
 	if err := s.contributions.Install(s.installed); err != nil {
 		return nil, err

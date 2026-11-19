@@ -84,7 +84,7 @@ import { pressesFrame, setTextScope } from "./text-size.js";
 import { applyFrameText, chromeRow, drawnFrameText } from "./frame-text.js";
 
 /* Public entries and diagnostic methods of the core. The registry answers requests of the host. */
-import { coreChanged, followPlugins, installCoreExposure, redrawSettings, setVerify } from "./core-exposure.js";
+import { coreChanged, followPlugins, installCoreExposure, redrawSettings, setVerify, syncActivity } from "./core-exposure.js";
 /* The setup parts of the agents of this machine, which the settings window shows (docs/spec/settings.md#agents). */
 import { installSetupExposure } from "./setup-exposure.js";
 /* Only a diagnostic build contains the diagnostic methods. In other builds this is an empty module. */
@@ -389,6 +389,8 @@ onRender(() => {
     if (latest() !== record) return false;
     pageLayout.clearFailure();
     check();
+    // The drawn layout decides the tabs whose statuses the activities follow (docs/spec/activity.md).
+    syncActivity();
     coreChanged();
     if (record?.settled !== false) {
       projects.keep();
@@ -566,7 +568,7 @@ const library = createLibrary(document.getElementById("library"), coreChanged);
    WebKit keeps the previous page of a reload on screen until the new page first draws visible content, so the first frame is
    this screen (docs/spec/native-host.md#page-start). The layout queue is connected after it so that the first draw of the plane does not wait for
    the native preparation. The plugin content and the native surfaces are filled in afterwards. */
-projects.onChange(() => { drawBars(); redrawSettings(); library.refreshFolders(); library.render(); coreChanged(); });
+projects.onChange(() => { drawBars(); redrawSettings(); library.refreshFolders(); library.render(); syncActivity(); coreChanged(); });
 prepareSourceOriginIngress();
 // The surfaces whose image detach is pending wait for its end before they mount (docs/spec/sidecars.md).
 holdImageDetachSurfaces(start.pendingSurfaces);

@@ -120,6 +120,22 @@
         }
       },
       {
+        "name": "core.activity",
+        "description": "The activities of the window: for each project that the window opened, each of its spaces and each card and group card of a space, the highest activity that it holds, and the activity of each tab, each listed only with an activity (docs/spec/activity.md#status).",
+        "schema": {
+          "type": "object",
+          "required": ["projects", "tabs"],
+          "properties": {
+            "projects": {
+              "type": "object"
+            },
+            "tabs": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      {
         "name": "core.projects",
         "description": "Every saved project with its open state.",
         "schema": {
