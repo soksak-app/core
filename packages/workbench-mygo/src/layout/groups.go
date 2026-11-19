@@ -820,14 +820,9 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 func (t *GroupTree) balanced(id string, side Side) error {
 	before := t.drawn()
 	kept := t.snapshot()
-	if _, err := t.grid.Balance(); err != nil {
+	if err := t.balance(); err != nil {
 		t.restore(kept)
 		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance the grid: %w", id, side, err)
-	}
-	t.keepLines()
-	if group := t.broken(); group != "" {
-		t.restore(kept)
-		return fmt.Errorf("card %s cannot split toward %s: cardSplit even would leave group %s not covering one rectangle", id, side, group)
 	}
 	if card, rect := t.below(before); card != "" {
 		t.restore(kept)
@@ -1242,18 +1237,85 @@ func (t *GroupTree) Move(id, target, side string) error {
 	})
 }
 
-// Balance balances the grid; it keeps the arrangement, so every group card keeps its rectangle.
+// balance runs the balance of the layout library in a space without groups. In a space with groups it keeps every line index and
+// gives every slot of each axis that no card with a size in px holds an equal share of the free length, the extent less the corridors
+// and the held sizes; a slot on the y axis takes the heads of the group cards that start on its upper line on top of its share.
+func (t *GroupTree) balance() error {
+	if len(t.roots) == 0 {
+		_, err := t.grid.Balance()
+		return err
+	}
+	p := t.grid.plane()
+	state := t.grid.ToJSON()
+	for _, axis := range axes {
+		a := p.lines(axis)
+		count := len(a) - 1
+		read := linesRead(p, axis)
+		held := heldSizes(p, axis)
+		heads := make([]float64, count)
+		if axis == "y" {
+			for _, card := range t.grid.Cards() {
+				path, _, ok := t.find(card.ID)
+				if ok {
+					heads[card.R0] = math.Max(heads[card.R0], float64(t.heads(path, card.R0))*t.headStep())
+				}
+			}
+		}
+		want := make([]float64, count)
+		free, shared, sharedSpan := p.extent(axis), 0, 0.0
+		for i := range count {
+			want[i] = corridorOf(p, axis, i, read)
+			free -= want[i]
+			if held[i].ok {
+				free -= held[i].v
+				continue
+			}
+			want[i] += heads[i]
+			free -= heads[i]
+			shared++
+			sharedSpan += a[i+1] - a[i]
+		}
+		if shared == 0 {
+			continue
+		}
+		// A plane too small for its corridors shares nothing; the check of the minimum size then refuses the balance.
+		free = math.Max(0, free)
+		total := 0.0
+		for i := range count {
+			if !held[i].ok {
+				want[i] += free / float64(shared)
+				total += want[i]
+			}
+		}
+		if total <= 0 {
+			return fmt.Errorf("the layout cannot balance: the %s axis of the plane has no length", axis)
+		}
+		lines := make([]float64, count+1)
+		for i := range count {
+			span := a[i+1] - a[i]
+			if !held[i].ok {
+				span = sharedSpan * want[i] / total
+			}
+			lines[i+1] = lines[i] + span
+		}
+		lines[count] = 1
+		if axis == "x" {
+			state.Xs = lines
+		} else {
+			state.Ys = lines
+		}
+	}
+	return t.grid.Replace(state)
+}
+
+// Balance balances the grid (docs/spec/groups.md#card-commands-on-a-group-card) and keeps the result only when no content card that it
+// changed is drawn below minSize.
 func (t *GroupTree) Balance() error {
 	before := t.drawn()
 	kept := t.snapshot()
-	if _, err := t.grid.Balance(); err != nil {
+	if err := t.balance(); err != nil {
 		t.restore(kept)
 		return err
-	}
-	t.keepLines()
-	if group := t.broken(); group != "" {
-		t.restore(kept)
-		return fmt.Errorf("the layout cannot balance: group %s would not cover one rectangle", group)
 	}
 	if card, rect := t.below(before); card != "" {
 		t.restore(kept)
