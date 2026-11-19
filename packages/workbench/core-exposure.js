@@ -652,7 +652,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => closeCard(card));
   // The group commands and the card query of any level (docs/spec/groups.md#commands).
-  registry.command("core.group.create", ({ card, side, plugin: kind, params }) => createGroup(card, side, kind, params));
+  registry.command("core.group.create", ({ card, side, plugin: kind, params, request }) => createGroup(card, side, kind, params, request));
   registry.command("core.group.dissolve", ({ group }) => dissolveGroup(group));
   registry.command("core.group.rename", ({ group, name }) => renameGroup(group, name));
   registry.command("core.group.leader", ({ card }) => leadLevel(card));

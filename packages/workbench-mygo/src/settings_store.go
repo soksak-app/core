@@ -63,7 +63,6 @@ type SettingsCatalog struct {
 		LayoutRanges     map[string][2]float64 `json:"layoutRanges"`
 		ShapeRanges      map[string][2]float64 `json:"shapeRanges"`
 		MemorySaverDelay [2]float64            `json:"memorySaverDelay"`
-		GroupTint        [2]float64            `json:"group.tint"`
 		Choices          map[string][]string   `json:"choices"`
 		TextSteps        []float64             `json:"textSteps"`
 		Switches         []string              `json:"switches"`
@@ -462,12 +461,6 @@ func (s *SettingsStore) validate(key string, value any) error {
 			return fmt.Errorf("Invalid setting memorySaverDelay: %s", jsonText(value))
 		}
 	}
-	if key == "group.tint" {
-		number, ok := integer(value)
-		if bounds := catalog.Settings.GroupTint; !ok || number < bounds[0] || number > bounds[1] {
-			return fmt.Errorf("Invalid setting group.tint: %s", jsonText(value))
-		}
-	}
 	if bounds, ok := catalog.bounds(key); ok {
 		number, whole := integer(value)
 		if !whole || number < bounds[0] || number > bounds[1] {
@@ -626,7 +619,7 @@ func (s *SettingsStore) settingType(key string) (string, error) {
 		return "boolean", nil
 	case key == "diagnostics.log" || key == "sets" || key == "links" || catalog.Settings.Orders[key] != nil:
 		return "object", nil
-	case ranged || key == "memorySaverDelay" || key == "group.tint" || key == "textSize":
+	case ranged || key == "memorySaverDelay" || key == "textSize":
 		return "number", nil
 	case catalog.choices(key) != nil:
 		return "string", nil

@@ -6,12 +6,13 @@ import declaration from "./workbench.json" with { type: "json" };
 /** The names of the card tools and the reasons of their refusals, declared in workbench.json for both workbenches (docs/spec/example-model.md#card-tools). */
 const names = declaration.cardTools;
 
-export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y", group: "group" };
+export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y", gx: "group-x", gy: "group-y" };
 const definitions = [
   ["add", names.add, "core.card.add", icons["card-add"]],
   ["x", names["split-x"], "core.card.split-x", icons["card-split-x"]],
   ["y", names["split-y"], "core.card.split-y", icons["card-split-y"]],
-  ["group", names.group, "core.card.group", icons["card-group"]],
+  ["gx", names["group-x"], "core.card.group-x", icons["card-group-x"]],
+  ["gy", names["group-y"], "core.card.group-y", icons["card-group-y"]],
   ["leader", names.leader, "core.card.leader", icons["card-leader"]],
   ["fullscreen", names.fullscreen, "core.card.fullscreen", icons["card-expand"]],
   ["close", names.close, "core.card.close", icons["card-close"]],
@@ -41,19 +42,20 @@ export function createCardTools(card) {
 }
 
 /**
- * Draws the state of the card tools. The group button is shown while canGroup, a group of the card toward its longer axis, would
- * succeed, and the leader button while leads, a level of two or more members, holds the card; it is pressed on the leader
- * (docs/spec/groups.md#headers).
+ * Draws the state of the card tools. The group split buttons are enabled while canGroupX and canGroupY, a group of the card toward right
+ * and toward bottom, would succeed, as a split button is enabled while its split would succeed, and the leader button is shown while
+ * leads, a level of two or more members, holds the card; it is pressed on the leader (docs/spec/groups.md#headers).
  */
-export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroup, leads, leader, fullscreen }) {
+export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroupX, canGroupY, leads, leader, fullscreen }) {
   for (const button of toolbar.children) {
     const action = button.dataset.do;
-    const hidden = action === "group" ? !canGroup : action === "leader" ? !leads : button.hidden;
+    const hidden = action === "leader" ? !leads : button.hidden;
     if (button.hidden !== hidden) button.hidden = hidden;
     // A fullscreen card does not change the layout, so adding a tab, splitting, grouping, leading and closing wait for the restore.
-    const layout = action === "add" || action === "x" || action === "y" || action === "group" || action === "leader" || action === "close";
+    const layout = ["add", "x", "y", "gx", "gy", "leader", "close"].includes(action);
     const disabled = fullscreen && layout ? true
-      : action === "close" ? !canClose : action === "x" ? !canSplitX : action === "y" ? !canSplitY : false;
+      : action === "close" ? !canClose : action === "x" ? !canSplitX : action === "y" ? !canSplitY
+        : action === "gx" ? !canGroupX : action === "gy" ? !canGroupY : false;
     if (button.disabled !== disabled) button.disabled = disabled;
     let title = fullscreen && layout ? names["layout-held"]
       : disabled && action === "close" ? names["close-refused"] : button.dataset.title;

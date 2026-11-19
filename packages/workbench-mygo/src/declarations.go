@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -141,17 +142,29 @@ func (d *Declarations) HeightMetric(name string) (float64, bool) {
 // Palette is the colors and the shape of a theme in one mode.
 type Palette struct {
 	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color
-	// Groups are the theme colors group-1 to group-3, and GroupTint the setting group.tint as a share from 0 to 1.
-	Groups    [3]ui.Color
-	GroupTint float32
 	// Gap is the gap setting: the full distance between two adjacent cards, 0 for the seam (docs/spec/settings.md#values).
 	Radius, Gap, BorderWidth float32
 }
 
-// GroupFill is the fill of a group card whose members stand on level: bg mixed with group-<level> by group.tint, group-3 for a level
-// above 3 (docs/spec/groups.md#drawing).
-func (p Palette) GroupFill(level int) ui.Color {
-	return mixed(p.Groups[min(max(level, 1), 3)-1], p.Bg, p.GroupTint)
+// GroupLook is the colors of a group card (docs/spec/groups.md#drawing): Head is its header, Line the line under its header and Body the
+// area inside its frame around its members.
+type GroupLook struct {
+	Head, Line, Body ui.Color
+}
+
+// GroupLook is the colors of a group card whose members stand on level with the chrome value group-fill-fade (fade), groupLook of
+// packages/workbench/group-look.js (docs/spec/cases/group-look.json): the header is card, as the head of a content card; the line under
+// it is edge with a gap and rule at the seam, as under the head of a content card; the body is bg mixed into card by fade to the power
+// of level, each channel rounded, so each nesting level stands one step nearer to card.
+func (p Palette) GroupLook(level int, fade float64) GroupLook {
+	share := math.Pow(fade, float64(level))
+	blend := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*share + float64(b)*(1-share))) }
+	body := ui.Color{R: blend(p.Bg.R, p.Card.R), G: blend(p.Bg.G, p.Card.G), B: blend(p.Bg.B, p.Card.B), A: 255}
+	line := p.Edge
+	if p.Seam() {
+		line = p.Rule
+	}
+	return GroupLook{Head: p.Card, Line: line, Body: body}
 }
 
 // Seam is whether the cards share one line: the gap is 0 (seam of packages/workbench/settings.js).
@@ -217,8 +230,7 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 		return float32(number)
 	}
 	return Palette{Bg: color("bg"), Card: color("card"), Fg: color("fg"), Muted: color("muted"), Edge: color("edge"), Rule: color("rule"),
-		Rail: color("rail"), Focus: color("focus"), No: color("no"), Groups: [3]ui.Color{color("group-1"), color("group-2"), color("group-3")},
-		GroupTint: 1, Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
+		Rail: color("rail"), Focus: color("focus"), No: color("no"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
 }
 
 // Declared returns the declarations of the embedded copies.

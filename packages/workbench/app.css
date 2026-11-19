@@ -204,9 +204,14 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    plane sets to group-focus-fade to the power of the levels up to it (docs/spec/groups.md#focus). Only the color of the frame line
    changes, so the mark adds no line, also at the seam. */
 :root[data-focus-ind=border] .group[data-focus]{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
-.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden}
+/* The header draws the line below it as the head of a card does, in the color that the plane writes from groupLook of group-look.js:
+   edge with a gap and rule at the seam (docs/spec/groups.md#drawing). */
+.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;
+  border-bottom:var(--bw) solid}
 .group__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
   color:var(--fg);cursor:grab;user-select:none}
+/* The fit of a group header measures the name at the width of its text (docs/spec/groups.md#headers). */
+.group__head[data-measure] .group__name{flex:0 0 auto}
 
 /* The focus mark is shown only at the four corners of the body. A native surface is outside the CSS stack, so a mark drawn inside the
    card would be hidden under the surface; it is placed on the same layer as the surface. */
@@ -248,12 +253,11 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   outline:var(--bw) solid var(--focus)}
 :root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}
 /* At the seam a group card draws no border either: the line around it is the line of the plane, its header draws the line between it
-   and the box below it, and the mark of a group card that holds the focus paints the line outside the frame, as the focus of a card does.
+   and the box below it in rule, and the mark of a group card that holds the focus paints the line outside the frame, as the focus of a card does.
    A nested group card and the focused card stand later in the paint order, so the innermost mark owns a line that several marked boxes
    end on (docs/spec/groups.md#drawing). The stage starts on the bottom line of the space bar and on the right line of the project
    column and draws its own line over them, so the edge of the plane is one line on each side. */
 :root[data-seam=line] .group{border-width:0;border-radius:0}
-:root[data-seam=line] .group__head{border-bottom:var(--bw) solid var(--rule)}
 :root[data-seam=line][data-focus-ind=border] .group[data-focus]{
   outline-width:var(--bw);outline-style:solid;outline-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
 :root[data-seam=line] .stage{margin-top:calc(0px - var(--bw))}
@@ -291,12 +295,12 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   flex:0 0 auto;background:transparent;color:var(--muted);border-radius:var(--r-xs);cursor:pointer}
 .chrome__more svg{width:var(--card-icon);height:var(--card-icon);fill:currentColor;stroke:none}
 .chrome__more:hover{background:var(--inset);color:var(--fg)}
-.chrome[data-tools=menu] .chrome__more{display:grid}
-/* The folded head keeps the fullscreen toggle and, on the leader, the leader mark beside ⋯ (docs/spec/example-model.md#card-tools). */
-.chrome[data-tools=menu] .chrome__acts{display:flex;gap:var(--card-head-gap);padding:0;border-color:transparent}
-.chrome[data-tools=menu] .chrome__acts > :not([data-do=fullscreen]):not([data-do=leader]){display:none}
-.chrome[data-tools=menu]:not([data-mark=leader]) .chrome__acts > [data-do=leader]{display:none}
-.chrome[data-tools=menu] .chrome__more{margin-left:0}
+/* The folded head keeps the fullscreen toggle and, on the leader, the leader mark beside ⋯ (docs/spec/example-model.md#card-tools); a
+   group header folds by the same rule (docs/spec/groups.md#headers). */
+:is(.chrome,.group__head)[data-tools=menu] .chrome__more{display:grid;margin-left:0}
+:is(.chrome,.group__head)[data-tools=menu] .chrome__acts{display:flex;gap:var(--card-head-gap);padding:0;border-color:transparent}
+:is(.chrome,.group__head)[data-tools=menu] .chrome__acts > :not([data-do=fullscreen]):not([data-do=leader]){display:none}
+:is(.chrome,.group__head)[data-tools=menu]:not([data-mark=leader]) .chrome__acts > [data-do=leader]{display:none}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
 /* A tab is at most 200 points wide, so one long title leaves the width of the strip to the other tabs; the name is cut with
    an ellipsis inside that bound, and the tab shows the whole name as its tooltip (docs/spec/example-model.md#card-tabs). */
@@ -417,6 +421,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 :root[data-full-rule=over] .sp-rule[data-virtual=true]{z-index:70}
 :root[data-full-rule=none] .sp-rule[data-virtual=true]{display:none}
 .sp-divider{z-index:4}
+/* A stretch of a divider shorter than its grip draws none, so no grip reaches into a header (docs/spec/groups.md#drawing). */
+.sp-divider[data-grip=false]::after{content:none}
 
 /* The rail outline is drawn only inside the passage. A fill that covers the inside of a card would be hidden by the native surface
    in the application, so it is not drawn here either. */

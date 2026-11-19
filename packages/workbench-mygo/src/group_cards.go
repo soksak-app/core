@@ -15,8 +15,8 @@ import (
 // top that shows the name of the group and the head buttons of the group. The close menu of a group header.
 
 // groupMenuElements are the elements of the buttons of a group header that open the menus of core.card.menu.
-var groupMenuElements = map[string]string{"add": "core.group.add", "split-x": "core.group.split-x", "split-y": "core.group.split-y",
-	"group": "core.group.wrap"}
+var groupMenuElements = map[string]string{"split-x": "core.group.split-x", "split-y": "core.group.split-y",
+	"group-x": "core.group.group-x", "group-y": "core.group.group-y"}
 
 // cardMenuElement is the element of the button that opens the menu of card: the button of a group header for a group card.
 func (s *Shell) cardMenuElement(card, menu string) string {
@@ -26,8 +26,8 @@ func (s *Shell) cardMenuElement(card, menu string) string {
 	return "core.card." + menu
 }
 
-// groupHeadTools are the head buttons of the group card id in the order of docs/spec/groups.md#headers: add, the two splits, the group
-// button, the leader button, fullscreen and close.
+// groupHeadTools are the head buttons of the group card id in the order of docs/spec/groups.md#headers: the two splits, the two group
+// splits, the leader button, fullscreen and close; a group header holds no add button.
 func (s *Shell) groupHeadTools(id string) []headTool {
 	names := s.options.Declared.CardTools
 	changes := func(tool headTool, can bool) headTool {
@@ -38,14 +38,12 @@ func (s *Shell) groupHeadTools(id string) []headTool {
 		return tool
 	}
 	tools := []headTool{
-		changes(headTool{Do: "add", Status: "add", Name: "core.group.add", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "add"},
-			Title: names["add"], Icon: "card-add"}, true),
 		changes(headTool{Do: "x", Status: "split-x", Name: "core.group.split-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-x"},
 			Title: names["split-x"], Icon: "card-split-x"}, s.planes.CanSplit(id, "right")),
 		changes(headTool{Do: "y", Status: "split-y", Name: "core.group.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
 			Title: names["split-y"], Icon: "card-split-y"}, s.planes.CanSplit(id, "bottom")),
 	}
-	tools = append(tools, s.groupTools(id, "core.group.wrap", changes)...)
+	tools = append(tools, s.groupTools(id, "core.group", changes)...)
 	// The fullscreen button stays enabled while its group card is fullscreen, so a second press restores the arrangement.
 	fullscreen := s.fullscreen == id
 	whole := headTool{Do: "fullscreen", Status: "fullscreen", Name: "core.group.fullscreen", Command: "core.card.fullscreen", Params: cardParam{Card: id},
@@ -67,7 +65,7 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
 	s.anchored("core.group/"+id, card)
 	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
-		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupFill(s.planes.Level(id)+1)).
+		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade).Body).
 		Border(s.palette.CardBorder(), s.frameColor(id)).Radius(s.palette.CardRadius()).PassThrough()
 	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
@@ -324,9 +322,10 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
 	s.heads[id] = fit
 	target := renameTarget{Kind: "group", ID: id}
+	look := s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade)
 	header := ui.Row(s.binder.Name(c, "core.group.header", id))
 	header.Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
-		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.cardLine()).Children(func() {
+		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(look.Line).Background(look.Head).Children(func() {
 		ui.Box(c).Absolute().Size(0, 0).Children(func() {
 			if fit.Tools == "bar" {
 				s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
@@ -386,7 +385,7 @@ func (s *Shell) openGroupMenu(id, anchor string) error {
 	names := s.options.Declared.CardTools
 	items := []pickerItem{{Key: "close", Name: names["group-close"], Icon: s.headIconElements("card-close")}}
 	if s.fullscreen == "" && s.planes.IsGroup(id) {
-		items = append(items, pickerItem{Key: "dissolve", Name: names["group-dissolve"], Icon: s.headIconElements("card-group")})
+		items = append(items, pickerItem{Key: "dissolve", Name: names["group-dissolve"], Icon: s.headIconElements("card-group-x")})
 	}
 	s.openPicker(names["group-menu"], items, func(key string) error {
 		if key == "dissolve" {

@@ -21,6 +21,7 @@
     "device-grid.js",
     "card-tools.js",
     "group-cards.js",
+    "group-look.js",
     "card-insets.js",
     "sidebar-grip.js",
     "window-sidebars.js",

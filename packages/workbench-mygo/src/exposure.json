@@ -3388,7 +3388,7 @@
       },
       {
         "name": "core.card.menu",
-        "description": "Opens or closes the add, split or group menu of a card or a group card.",
+        "description": "Opens or closes the add, split or group split menu of a card, or the split or group split menu of a group card.",
         "params": {
           "type": "object",
           "properties": {
@@ -3400,7 +3400,8 @@
                 "add",
                 "split-x",
                 "split-y",
-                "group"
+                "group-x",
+                "group-y"
               ]
             }
           },
@@ -3569,7 +3570,7 @@
       },
       {
         "name": "core.card.tools",
-        "description": "Opens or closes a card's tool menu, which a narrow card header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
+        "description": "Opens or closes the tool menu of a card or a group card, which a narrow header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
         "params": {
           "type": "object",
           "properties": {
@@ -4738,11 +4739,6 @@
         "many": true
       },
       {
-        "name": "core.group.add",
-        "description": "The add buttons of the group headers in workbench order.",
-        "many": true
-      },
-      {
         "name": "core.group.split-x",
         "description": "The vertical split buttons of the group headers in workbench order.",
         "many": true
@@ -4753,8 +4749,13 @@
         "many": true
       },
       {
-        "name": "core.group.wrap",
-        "description": "The group buttons of the group headers in workbench order, shown while the group card can be grouped with a new card toward its longer axis.",
+        "name": "core.group.group-x",
+        "description": "The group split buttons toward right of the group headers in workbench order, enabled while the group card can be split into a new group toward right.",
+        "many": true
+      },
+      {
+        "name": "core.group.group-y",
+        "description": "The group split buttons toward bottom of the group headers in workbench order, enabled while the group card can be split into a new group toward bottom.",
         "many": true
       },
       {
@@ -4768,8 +4769,13 @@
         "many": true
       },
       {
-        "name": "core.card.group",
-        "description": "The group buttons of the content card headers in workbench order, shown while the card can be grouped with a new card toward its longer axis.",
+        "name": "core.card.group-x",
+        "description": "The group split buttons toward right of the content card headers in workbench order, enabled while the card can be split into a new group toward right.",
+        "many": true
+      },
+      {
+        "name": "core.card.group-y",
+        "description": "The group split buttons toward bottom of the content card headers in workbench order, enabled while the card can be split into a new group toward bottom.",
         "many": true
       },
       {
@@ -5268,7 +5274,7 @@
       },
       {
         "name": "core.card.tools",
-        "description": "The tool menu buttons of the cards, in card order.",
+        "description": "The tool menu buttons of the headers of the cards and the group cards, in workbench order.",
         "many": true
       },
       {
