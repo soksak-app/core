@@ -180,6 +180,22 @@ test("a drop resolves on the rectangles of the group cards and core.tab.move put
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
 });
 
+test("the layout of the window description carries parent and leader on each card and the group tree with frames", { timeout: 5000 }, () => {
+  arrange();
+  const { root, groups } = plane.layoutDescription();
+  const cards = [];
+  const walk = (node) => (node.card ? cards.push(node) : node.children.forEach(walk));
+  walk(root);
+  assert.deepEqual(cards.map(({ card, parent, leader }) => ({ card, parent, leader })), [
+    { card: "card-1", parent: "card-4", leader: true }, { card: "card-2", parent: "card-4", leader: false },
+    { card: "card-3", parent: null, leader: false },
+  ]);
+  const { x, y, w, h } = plane.currentTree().rect("card-4");
+  const origin = document.getElementById("plane").getBoundingClientRect();
+  assert.deepEqual(groups, [{ card: "card-4", name: "그룹 1", level: 1, leader: "card-1", leading: true,
+    frame: { x: origin.left + x, y: origin.top + y, width: w, height: h }, members: ["card-1", "card-2"] }]);
+});
+
 test("core.card.get reads a content card with its group path and a group card with its node", { timeout: 5000 }, async () => {
   arrange();
   assert.deepEqual(await run("core.card.get", { card: "card-2" }), {
