@@ -13949,6 +13949,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F919",
+    implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Drawings(g *Grid) ([]Drawing, error) {" }],
+    tests: [{ file: "packages/workbench-mygo/tests/party_drawing_test.go", id: "TestAPartyDrawsItsOutlineInItsColorAndTheLeaderBorder" }],
+    expected: "The mygo host draws each party outline in its party color and the leader border on the leader card.",
+    levels: ["unit"],
+  },
+  {
     id: "F916",
     implementation: [{ file: "package.json", symbol: "https://github.com/soksak-app/kit/releases/download/v0.0.15/soksak-kit-0.0.15.tgz" }],
     tests: [{ file: "scripts/test/checklist.test.mjs", id: "checklist translations with the same identifiers, ordering, nesting, and states pass when their labels differ" }],
