@@ -188,8 +188,8 @@ line이 둘 이상의 tree로 읽히는 layout에서였으며 다른 layout에�
   언제나 그것을 찾는다.
 - *이전 release의 저장된 layout이 열리지 않는다.* release가 0.0.x인 동안 어떤 저장
   형태도 정해지지 않았다. reader는 이전 형태를 file을 밝히는 error로 거부하고,
-  release는 사람이 어떤 file을 다시 만드는지 밝힌다
-  ([persistence](../../../docs/spec/projects.ko.md#저장)).
+  layout을 담은 repository의 모든 file은 그 reader가 그것을 읽게 하는 변경에서
+  tree 형태로 쓰인다([persistence](../../../docs/spec/projects.ko.md#저장)).
 
 ## 사이드바도 카드다
 

@@ -207,8 +207,9 @@ Objections and answers:
   at least two kids.
 - *The stored layouts of the earlier releases stop opening.* While the release
   is 0.0.x no stored format is settled: the reader refuses the earlier form
-  with an error that names the file, and the release states which file the
-  person creates again ([persistence](../../../docs/spec/projects.md#persistence)).
+  with an error that names the file, and every file of the repository that
+  holds a layout is written in the tree form in the change that makes its
+  reader read it ([persistence](../../../docs/spec/projects.md#persistence)).
 
 ## A sidebar is a card
 

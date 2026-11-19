@@ -182,7 +182,7 @@ focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [ke
 | `paidBy` 기록을 저장한 group을 가진 layout | `layout with groups stores the paidBy record of card <id>; a layout with groups keeps none`. `<id>`는 정렬 순서로 기록의 첫 card다 |
 | `lastCard`가 없는 layout, 또는 양의 정수가 아니거나 tree의 card 식별자 번호보다 작은 `lastCard` | `layout stores lastCard <value>, which is not the largest issued card number` |
 
-tree는 어떤 이전 release에도 없는 형태다. `projects.json`은 format 3을 가지고, format 2 파일은 `<file>: projects.json: format must be 3`로 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이전 파일을 바꾸는 migration은 없다. 형식으로 거부된 파일은 거부된 space와 달리 통째로 거부된다. 그 파일은 registry, 화면 상태, space, plugin의 project 데이터(`plugins`)를 담으므로 그 어느 것도 읽히지 않으며, 파일을 지울 때까지 파일의 모든 쓰기는 그 오류로 실패한다. release는 사람이 `projects.json`을 지우고 project를 다시 더한다는 것, 그리고 project의 설정 파일(`.soksak/settings.json`)과 폴더는 남는다는 것을 말한다. `docs/spec/cases/layout/groups.json`의 layout case가 저장 검사, 그리는 사각형, command와 그 거부, 사각형 operation, drop 결정을 말하며, `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model은 같은 파일을 실행한다.
+tree는 어떤 이전 release에도 없는 형태다. `projects.json`은 format 3을 가지고, format 2 파일은 `<file>: projects.json: format must be 3`로 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이전 파일을 바꾸는 migration은 없다. 형식으로 거부된 파일은 거부된 space와 달리 통째로 거부된다. 그 파일은 registry, 화면 상태, space, plugin의 project 데이터(`plugins`)를 담으므로 그 어느 것도 읽히지 않으며, 파일의 모든 쓰기는 그 오류로 실패한다. 이전 형태의 파일은 남지 않는다. layout을 담은 repository의 모든 파일, 곧 case file, fixture, application의 `environment.json`은 그 reader가 그 형태를 읽게 하는 변경에서 tree 형태로 쓰인다. `docs/spec/cases/layout/groups.json`의 layout case가 저장 검사, 그리는 사각형, command와 그 거부, 사각형 operation, drop 결정을 말하며, `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model은 같은 파일을 실행한다.
 
 ## 그리기
 
@@ -233,7 +233,7 @@ group card는 기존 card 디자인의 container 하나로 그린다. 그 테두
 - root level의 leader는 `leader`로, group card member의 leader는 그 node에 저장된다. level은 node의 깊이에서 도출되고 저장되지 않으므로, 어떤 저장 값도 tree와 어긋날 수 없다.
 - tree는 중첩되어 저장된다. group card의 member는 그 node에 있다. tree의 주된 조회는 card 식별자 하나에서 그 조상 경로 전체와 subtree 전체로 가는 것이기 때문이다. 중첩 형태에서 subtree는 저장된 node 자체이고 경로는 그것까지의 walk이므로 조립이 없다. card마다 parent 식별자를 가진 기록 하나씩의 평면 형태는 거부되었다. 중첩 형태가 구성으로 지키는 참조 검사가 필요하고, 파일은 어느 형태든 통째로 쓰이기 때문이다.
 - workbench는 식별자 index가 아니라 tree의 walk 한 번으로 card에 닿는다. index는 card의 포함 관계를 두 번째로 가지며 모든 move가 그것을 고쳐야 하므로 tree와 어긋날 수 있다. space는 card를 수십 개 담으므로 조회마다 walk 한 번은 잴 만한 비용이 없다.
-- `projects.json`은 format 3을 받는다. group card를 box로 가진 grid의 tree는 format 2 파일에 없는 상태이며, 저장 형식 규칙은 새 format 번호를 요구하고 migration을 두지 않는다. release는 사람이 다시 만드는 파일을 밝힌다.
+- `projects.json`은 format 3을 받는다. group card를 box로 가진 grid의 tree는 format 2 파일에 없는 상태이며, 저장 형식 규칙은 새 format 번호를 요구하고 migration을 두지 않는다.
 - card 식별자는 기존 형태 `card-<n>`으로 남고, layout이 저장하는 `lastCard`에서 workbench가 낸다. 그래서 재시작을 지나도 식별자는 두 번 나오지 않는다. 무작위 식별자는 content card 식별자의 형태를 바꾸므로 거부되었다. 저장된 식별자에서 도출한 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 거부되었다.
 - `cardSplit` `even`은 grid를 balance한다. grid가 space의 line 집합 하나이기 때문이다. `exact`는 기본값으로 남으며, R4와 그 사각형 일반화의 동작이다. balance가 card를 최소보다 작게 그리면 `even`은 split을 거부한다. `exact` 결과로 돌아가면 말없이 고른 설정을 다른 값으로 바꾸게 되기 때문이다.
 - group을 가진 space는 `paidBy` 기록을 남기지 않는다. `paidBy` 기록은 library가 close된 card의 자리를 그 card를 split해 낸 card에게 돌려주게 하며, group을 가진 space에서 그 card는 move 뒤 다른 level에 설 수 있으므로, close는 자리를 fill 순서로 이웃 kid에게 준다.
