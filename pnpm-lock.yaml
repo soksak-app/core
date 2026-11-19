@@ -127,6 +127,8 @@ importers:
 
   packages/host/go: {}
 
+  packages/host/gpuikit: {}
+
   packages/host/mygo: {}
 
   packages/host/rust: {}
