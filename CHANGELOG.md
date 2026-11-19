@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-46 (full screen menu item, Wails host): the View menu of the Wails host holds the toggle full screen item of the framework with `ctrl+cmd+f`, as the other hosts do, instead of an item titled `Fullscreen` without a shortcut that only enters full screen. Verification: the host menu test failed on the unchanged code and passes.
 - F937-45 (order of `exposes` in `core.surfaces`, page): the page lists the entries that a surface registered in sorted order, as mygo does, so the timing of the registrations does not decide the order. Verification: the page test failed on the unchanged code and passes.
 - F937-44 (cards hidden by fullscreen in `core.grid`, page): the page reports `acts` and `pane` null for a card that a fullscreen card hides and counts the panes of the shown cards without it, as mygo does (`docs/spec/example-model.md#card-fullscreen`). Verification: the page test failed on the unchanged code and passes.
 - F937-43 (origin of the first tabs of a space, mygo): mygo stores the tabs of a new space, which the grid of the environment declares, with `origin: {directory: null}`, as the page does and `docs/spec/projects.md#tab-origin` states. Verification: the mygo test failed on the unchanged code and passes.

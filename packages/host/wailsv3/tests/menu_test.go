@@ -57,6 +57,12 @@ func TestApplicationMenuViewHasFullScreenAndTextSize(t *testing.T) {
 	if labels(view)[3] == "" {
 		t.Fatal("the full screen item has an empty title")
 	}
+	// The full screen item is the toggle item of the framework, with its title and its Control-Command F shortcut, which the window
+	// check compares across hosts (docs/spec/host-contract.md#application-menu).
+	toggle := frameworkItem(application.ToggleFullscreen)
+	if got, want := [2]string{view.ItemAt(3).Label(), view.ItemAt(3).GetAccelerator()}, [2]string{toggle.Label(), toggle.GetAccelerator()}; got != want {
+		t.Fatalf("the full screen item is %q with the shortcut %q, want the toggle item %q with %q", got[0], got[1], want[0], want[1])
+	}
 	accelerators := []string{}
 	for index := 0; view.ItemAt(index) != nil; index++ {
 		accelerators = append(accelerators, view.ItemAt(index).GetAccelerator())
@@ -87,6 +93,7 @@ func TestApplicationMenuLanguages(t *testing.T) {
 	// are system items, so in both languages they have the title and the shortcut that the framework gives their role; AppKit
 	// sets the title of an item with the undo: or redo: action from the undo manager when it validates the menu.
 	undo, redo := frameworkItem(application.Undo), frameworkItem(application.Redo)
+	fullscreen := frameworkItem(application.ToggleFullscreen).Label()
 	want := []struct {
 		language string
 		menu     string
@@ -94,10 +101,10 @@ func TestApplicationMenuLanguages(t *testing.T) {
 	}{
 		{"ko", "파일", []string{"윈도우 닫기"}},
 		{"ko", "편집", []string{undo.Label(), redo.Label(), "잘라내기", "복사", "붙여넣기", "모두 선택"}},
-		{"ko", "보기", []string{"글자 크게", "글자 작게", "글자 기본 크기", "Fullscreen"}},
+		{"ko", "보기", []string{"글자 크게", "글자 작게", "글자 기본 크기", fullscreen}},
 		{"en", "File", []string{"Close Window"}},
 		{"en", "Edit", []string{undo.Label(), redo.Label(), "Cut", "Copy", "Paste", "Select All"}},
-		{"en", "View", []string{"Bigger Text", "Smaller Text", "Default Text Size", "Fullscreen"}},
+		{"en", "View", []string{"Bigger Text", "Smaller Text", "Default Text Size", fullscreen}},
 	}
 	menus := map[string]*application.Menu{}
 	for _, language := range []string{"ko", "en"} {
