@@ -1897,6 +1897,35 @@
   {"call":"rects","returns":{"card":{"x":0,"y":0,"w":406,"h":188.6666666666667},"card-1":{"x":925.9999999999999,"y":0,"w":265.0000000000001,"h":1084},"card-2":{"x":436,"y":0,"w":459.9999999999999,"h":1084},"card-7":{"x":0,"y":895.3333333333335,"w":406,"h":188.66666666666652},"card-6":{"x":0,"y":218.6666666666667,"w":406,"h":646.6666666666667}}},
   {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":420.5,"y":0,"w":1,"h":1084},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":420.5,"y":0,"w":1,"h":1084},{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":910.4999999999999,"y":0,"w":1,"h":1084},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":910.4999999999999,"y":0,"w":1,"h":1084},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":203.1666666666667,"w":1191,"h":1},{"key":"sy:1:0","axis":"y","line":1,"virtual":false,"x":0,"y":203.1666666666667,"w":421,"h":1},{"key":"vy:2","axis":"y","line":2,"virtual":true,"x":0,"y":879.8333333333335,"w":1191,"h":1},{"key":"sy:2:0","axis":"y","line":2,"virtual":false,"x":0,"y":879.8333333333335,"w":421,"h":1}]},
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":406,"y":0,"w":30,"h":1084},{"key":"x:2:0","axis":"x","line":2,"x":895.9999999999999,"y":0,"w":30,"h":1084},{"key":"y:1:0","axis":"y","line":1,"x":0,"y":188.6666666666667,"w":406,"h":30},{"key":"y:2:0","axis":"y","line":2,"x":0,"y":865.3333333333335,"w":406,"h":30}]}
+ ]},
+ {"name":"a frame takes one gap of the corridor on its side, so a card stands one gap from the frame around it and the frame one gap from the neighbour","state":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1}]},"steps":[
+  {"call":"resize","args":[1000,600]},
+  {"call":"setFrames","args":[{"a":{"right":1}}]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":464,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}},
+  {"call":"toJSON","returns":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"fixed":false},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1,"fixed":false}],"paidBy":{}}},
+  {"call":"setFrames","args":[{}]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":488,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}}
+ ]},
+ {"name":"frames on the two sides of a line add a gap each to its corridor","state":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1}]},"steps":[
+  {"call":"resize","args":[1000,600]},
+  {"call":"setFrames","args":[{"a":{"right":1,"bottom":1},"b":{"left":2}}]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":464,"h":576},"b":{"x":560,"y":0,"w":440,"h":600}}}
+ ]},
+ {"name":"a slot carries the most frames of its cards on a side, and a card in fewer frames stands nearer the line","state":{"xs":[0,0.5,1],"ys":[0,0.5,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"c","c0":0,"c1":1,"r0":1,"r1":2},{"id":"b","c0":1,"c1":2,"r0":0,"r1":2}]},"steps":[
+  {"call":"resize","args":[1000,600]},
+  {"call":"setFrames","args":[{"a":{"right":1}}]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":464,"h":288},"c":{"x":0,"y":312,"w":488,"h":288},"b":{"x":512,"y":0,"w":488,"h":600}}}
+ ]},
+ {"name":"a px size is the drawn size of a card in the most frames of its slot","state":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"width":300},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1}]},"steps":[
+  {"call":"resize","args":[1000,600]},
+  {"call":"setFrames","args":[{"a":{"right":1}}]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":300,"h":600},"b":{"x":348,"y":0,"w":652,"h":600}}}
+ ]},
+ {"name":"frames that name no card or count below zero are refused and change nothing","state":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1}]},"steps":[
+  {"call":"resize","args":[1000,600]},
+  {"call":"setFrames","args":[{"z":{"left":1}}],"throws":"soksak: frames name \"z\", which is no card"},
+  {"call":"setFrames","args":[{"a":{"right":-1}}],"throws":"soksak: the frames of \"a\" count below zero"},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":488,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}}
  ]}
 ]
 }

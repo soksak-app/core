@@ -264,6 +264,22 @@ test('the memory saver settings are common-only with their defaults and ranges',
   wire.finish();
 });
 
+// group.tint is an integer from 0 to 100 percent, default 100, and another value is refused with itself (docs/spec/settings.md#values).
+test('group.tint refuses a value that is no integer from 0 to 100', async () => {
+  const wire = selectPageWire('settings-group-tint');
+  const { beginSettings, set: change, value } = await import('../settings.js?test=group-tint');
+  const { orderedCallsAnswered } = await import('../host.js');
+  beginSettings({ common: {}, projects: [{ id: 'prj-a', settings: {} }] }, 'prj-a');
+  assert.equal(value('group.tint'), 100);
+  for (const tint of [101, -1, 50.5, '50']) {
+    assert.throws(() => change({ 'group.tint': tint }, 'common', 'test'),
+      { message: `Invalid setting group.tint: ${JSON.stringify(tint)}` });
+  }
+  assert.equal(value('group.tint'), 100);
+  await orderedCallsAnswered();
+  wire.finish();
+});
+
 test('a change of the settings names its actor and its keys, and its identifiers go with the write', async () => {
   const wire = selectPageWire('settings-actor');
   const { installOperationSink } = await import('../operations.js');
