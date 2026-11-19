@@ -4675,7 +4675,7 @@
    "throws": "layout stores lastCard 3, which is not the largest issued card number"
   },
   {
-   "name": "a balance that would lay a group card over the cards of its neighbours is refused and changes nothing",
+   "name": "a balance in a space with groups keeps every line index and gives every slot an equal share of the free length",
    "options": {
     "gap": 12,
     "minSize": 96,
@@ -4775,8 +4775,7 @@
    "steps": [
     {
      "call": "balance",
-     "args": {},
-     "throws": "the layout cannot balance: group card-12 would not cover one rectangle"
+     "args": {}
     },
     {
      "call": "grid",
@@ -4784,14 +4783,14 @@
      "returns": {
       "xs": [
        0,
-       0.3319982198486871,
-       0.6680017801513128,
+       0.3319047619047619,
+       0.6680952380952381,
        1
       ],
       "ys": [
        0,
-       0.33085808580858084,
-       0.6691419141914192,
+       0.3491666666666667,
+       0.7058333333333333,
        1
       ],
       "cards": [
@@ -4845,11 +4844,317 @@
        }
       ]
      }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "terminal"
+     },
+     "returns": {
+      "x": 941.3333333333333,
+      "y": 285.33333333333337,
+      "w": 458.66666666666674,
+      "h": 514.6666666666667
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "browser"
+     },
+     "returns": {
+      "x": 0,
+      "y": 44,
+      "w": 929.3333333333333,
+      "h": 229.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-9"
+     },
+     "returns": {
+      "x": 0,
+      "y": 329.33333333333337,
+      "w": 458.6666666666667,
+      "h": 229.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-11"
+     },
+     "returns": {
+      "x": 470.6666666666667,
+      "y": 329.33333333333337,
+      "w": 458.6666666666666,
+      "h": 229.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-7"
+     },
+     "returns": {
+      "x": 0,
+      "y": 570.6666666666667,
+      "w": 929.3333333333333,
+      "h": 229.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-13"
+     },
+     "returns": {
+      "x": 941.3333333333333,
+      "y": 44,
+      "w": 458.66666666666674,
+      "h": 229.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-12"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1400,
+      "h": 273.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-10"
+     },
+     "returns": {
+      "x": 0,
+      "y": 285.33333333333337,
+      "w": 929.3333333333333,
+      "h": 273.33333333333337
+     }
     }
    ]
   },
   {
-   "name": "a balance that would lay nested group cards over the cells of other groups is refused and changes nothing",
+   "name": "a balance in a space with groups keeps the size of a slot that a card with a size in px holds and shares the rest",
+   "options": {
+    "gap": 12,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 800
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.3319982198486871,
+      0.6680017801513128,
+      1
+     ],
+     "ys": [
+      0,
+      0.33085808580858084,
+      0.6691419141914192,
+      1
+     ],
+     "cards": [
+      {
+       "id": "terminal",
+       "c0": 2,
+       "c1": 3,
+       "r0": 1,
+       "r1": 3,
+       "fixed": false,
+       "width": 300
+      },
+      {
+       "id": "browser",
+       "c0": 0,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-9",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-11",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-7",
+       "c0": 0,
+       "c1": 2,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-13",
+       "c0": 2,
+       "c1": 3,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-12",
+      "name": "그룹 1",
+      "leader": "browser",
+      "members": [
+       "browser",
+       "card-13"
+      ]
+     },
+     {
+      "card": "card-10",
+      "name": "그룹 3",
+      "leader": "card-9",
+      "members": [
+       "card-9",
+       "card-11"
+      ]
+     }
+    ],
+    "leader": "card-12",
+    "lastCard": 13
+   },
+   "steps": [
+    {
+     "call": "balance",
+     "args": {}
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.3321690753220422,
+       0.6680017801513128,
+       1
+      ],
+      "ys": [
+       0,
+       0.3491666666666667,
+       0.7058333333333333,
+       1
+      ],
+      "cards": [
+       {
+        "id": "terminal",
+        "c0": 2,
+        "c1": 3,
+        "r0": 1,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "browser",
+        "c0": 0,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-9",
+        "c0": 0,
+        "c1": 1,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-11",
+        "c0": 1,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-7",
+        "c0": 0,
+        "c1": 2,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-13",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "terminal"
+     },
+     "returns": {
+      "x": 1100,
+      "y": 285.33333333333337,
+      "w": 300,
+      "h": 514.6666666666667
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-9"
+     },
+     "returns": {
+      "x": 0,
+      "y": 329.33333333333337,
+      "w": 538,
+      "h": 229.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-11"
+     },
+     "returns": {
+      "x": 550,
+      "y": 329.33333333333337,
+      "w": 538,
+      "h": 229.33333333333337
+     }
+    }
+   ]
+  },
+  {
+   "name": "a balance in a space with nested groups gives each row its share and the heads of the group cards that start on its upper line",
    "options": {
     "gap": 12,
     "minSize": 96,
@@ -4972,8 +5277,324 @@
    "steps": [
     {
      "call": "balance",
+     "args": {}
+    },
+    {
+     "call": "grid",
      "args": {},
-     "throws": "the layout cannot balance: group card-6 would not cover one rectangle"
+     "returns": {
+      "xs": [
+       0,
+       0.3319047619047619,
+       0.6680952380952381,
+       1
+      ],
+      "ys": [
+       0,
+       0.45916666666666667,
+       0.7058333333333333,
+       1
+      ],
+      "cards": [
+       {
+        "id": "browser",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 1,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 1,
+        "c1": 3,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-7",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-9",
+        "c0": 1,
+        "c1": 3,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-11",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "browser"
+     },
+     "returns": {
+      "x": 0,
+      "y": 88,
+      "w": 458.6666666666667,
+      "h": 470.66666666666663
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 614.6666666666666,
+      "w": 458.6666666666667,
+      "h": 185.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": {
+      "x": 470.6666666666667,
+      "y": 614.6666666666666,
+      "w": 929.3333333333333,
+      "h": 185.33333333333337
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-7"
+     },
+     "returns": {
+      "x": 470.6666666666667,
+      "y": 176,
+      "w": 458.6666666666666,
+      "h": 185.33333333333331
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-9"
+     },
+     "returns": {
+      "x": 470.6666666666667,
+      "y": 373.3333333333333,
+      "w": 929.3333333333333,
+      "h": 185.33333333333331
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-11"
+     },
+     "returns": {
+      "x": 941.3333333333333,
+      "y": 176,
+      "w": 458.66666666666674,
+      "h": 185.33333333333331
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-10"
+     },
+     "returns": {
+      "x": 470.6666666666667,
+      "y": 132,
+      "w": 929.3333333333333,
+      "h": 229.33333333333331
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-6"
+     },
+     "returns": {
+      "x": 0,
+      "y": 44,
+      "w": 1400,
+      "h": 514.6666666666666
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-8"
+     },
+     "returns": {
+      "x": 470.6666666666667,
+      "y": 88,
+      "w": 929.3333333333333,
+      "h": 470.66666666666663
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 0,
+      "y": 570.6666666666666,
+      "w": 1400,
+      "h": 229.33333333333337
+     }
+    }
+   ]
+  },
+  {
+   "name": "a balance in a space with groups that would draw a content card below its minimum is refused and changes nothing",
+   "options": {
+    "gap": 12,
+    "minSize": 96,
+    "head": 32,
+    "width": 1400,
+    "height": 500
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      0.75,
+      1
+     ],
+     "ys": [
+      0,
+      0.3250619903853242,
+      0.6501239807706484,
+      1
+     ],
+     "cards": [
+      {
+       "id": "browser",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 1,
+       "c1": 3,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-7",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-9",
+       "c0": 1,
+       "c1": 3,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-11",
+       "c0": 2,
+       "c1": 3,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-2",
+      "name": "그룹 1",
+      "leader": "card-6",
+      "members": [
+       {
+        "card": "card-6",
+        "name": "그룹 3",
+        "leader": "browser",
+        "members": [
+         "browser",
+         {
+          "card": "card-8",
+          "name": "그룹 4",
+          "leader": "card-10",
+          "members": [
+           {
+            "card": "card-10",
+            "name": "그룹 5",
+            "leader": "card-7",
+            "members": [
+             "card-7",
+             "card-11"
+            ]
+           },
+           "card-9"
+          ]
+         }
+        ]
+       },
+       {
+        "card": "card-4",
+        "name": "그룹 2",
+        "leader": "card-3",
+        "members": [
+         "card-3",
+         "card-5"
+        ]
+       }
+      ]
+     }
+    ],
+    "leader": "card-2",
+    "lastCard": 11
+   },
+   "steps": [
+    {
+     "call": "balance",
+     "args": {},
+     "throws": "the layout cannot balance: card card-7 would be 459x85, below its minimum 96x96"
     },
     {
      "call": "grid",
