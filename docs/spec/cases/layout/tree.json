@@ -1,31 +1,12 @@
 {
-"description":"The tree of the content cards of a layout (docs/spec/exposure.md#window-snapshot). Each case gives the lines and the cards of a stored space layout, {xs, ys, cards}, with xs and ys the line positions as fractions of the plane and each card spanning the lines c0 to c1 and r0 to r1; a card whose id is a window side (left, right, top, bottom) is a place card and is outside the tree. root is the tree that the page and the workbench of the mygo host derive: a split is {direction, size, children} and a card is {card, size}; frame and tabs of a card are not part of a case, because they depend on the plane size and the tab data. A region is a row when a vertical line crosses it from edge to edge, else a column; size values are compared within a relative 1e-9.",
+"description":"The tree of the content cards of a layout (docs/spec/exposure.md#window-snapshot). Each case gives the stored slicing tree of a space layout, {root} (packages/soksak/docs/layout.md#the-model); a card whose id is a window side (left, right, top, bottom) is a place card and is outside the tree. root is the tree that the page and the workbench of the mygo host derive: a split is {direction, size, children} and a card is {card, size}; frame and tabs of a card are not part of a case, because they depend on the plane size and the tab data. A cut along x is a row and a cut along y a column; size values are compared within a relative 1e-9.",
 "cases":[
- {"name":"single card","layout":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"main","c0":0,"c1":1,"r0":0,"r1":1}]},
-  "root":{"card":"main","size":1}},
- {"name":"single card beside a window sidebar","layout":{"xs":[0,0.2,1],"ys":[0,1],"cards":[{"id":"left","c0":0,"c1":1,"r0":0,"r1":1},{"id":"main","c0":1,"c1":2,"r0":0,"r1":1}]},
-  "root":{"card":"main","size":1}},
- {"name":"column of two cards","layout":{"xs":[0,1],"ys":[0,0.25,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":0,"c1":1,"r0":1,"r1":2}]},
-  "root":{"direction":"column","size":1,"children":[{"card":"a","size":0.25},{"card":"b","size":0.75}]}},
- {"name":"grid whose two lines cross the whole window is a row of two columns","layout":{"xs":[0,0.5,1],"ys":[0,0.5,1],"cards":[
-   {"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1},{"id":"c","c0":0,"c1":1,"r0":1,"r1":2},{"id":"d","c0":1,"c1":2,"r0":1,"r1":2}]},
-  "root":{"direction":"row","size":1,"children":[
-   {"direction":"column","size":0.5,"children":[{"card":"a","size":0.5},{"card":"c","size":0.5}]},
-   {"direction":"column","size":0.5,"children":[{"card":"b","size":0.5},{"card":"d","size":0.5}]}]}},
- {"name":"grid of three columns whose lines all cross the whole window","layout":{"xs":[0,0.25,0.5,1],"ys":[0,1],"cards":[
-   {"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1},{"id":"c","c0":2,"c1":3,"r0":0,"r1":1}]},
-  "root":{"direction":"row","size":1,"children":[{"card":"a","size":0.25},{"card":"b","size":0.25},{"card":"c","size":0.5}]}},
- {"name":"nested splits of alternating directions","layout":{"xs":[0,0.4,0.7,1],"ys":[0,0.6,1],"cards":[
-   {"id":"a","c0":0,"c1":1,"r0":0,"r1":2},{"id":"b","c0":1,"c1":3,"r0":0,"r1":1},{"id":"c","c0":1,"c1":2,"r0":1,"r1":2},{"id":"d","c0":2,"c1":3,"r0":1,"r1":2}]},
-  "root":{"direction":"row","size":1,"children":[
-   {"card":"a","size":0.4},
-   {"direction":"column","size":0.6,"children":[
-    {"card":"b","size":0.6},
-    {"direction":"row","size":0.4,"children":[{"card":"c","size":0.5},{"card":"d","size":0.5}]}]}]}},
- {"name":"nested column whose top holds a row","layout":{"xs":[0,0.5,1],"ys":[0,0.5,1],"cards":[
-   {"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1},{"id":"c","c0":0,"c1":2,"r0":1,"r1":2}]},
-  "root":{"direction":"column","size":1,"children":[
-   {"direction":"row","size":0.5,"children":[{"card":"a","size":0.5},{"card":"b","size":0.5}]},
-   {"card":"c","size":0.5}]}}
+ {"name":"single card","layout":{"root":{"card":"main"}},"root":{"card":"main","size":1}},
+ {"name":"single card beside a window sidebar","layout":{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"left"}},{"share":0.8,"node":{"card":"main"}}]}},"root":{"card":"main","size":1}},
+ {"name":"column of two cards","layout":{"root":{"cut":"y","kids":[{"share":0.25,"node":{"card":"a"}},{"share":0.75,"node":{"card":"b"}}]}},"root":{"direction":"column","size":1,"children":[{"card":"a","size":0.25},{"card":"b","size":0.75}]}},
+ {"name":"grid whose two lines cross the whole window is a row of two columns","layout":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"c"}}]}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"d"}}]}}]}},"root":{"direction":"row","size":1,"children":[{"direction":"column","size":0.5,"children":[{"card":"a","size":0.5},{"card":"c","size":0.5}]},{"direction":"column","size":0.5,"children":[{"card":"b","size":0.5},{"card":"d","size":0.5}]}]}},
+ {"name":"grid of three columns whose lines all cross the whole window","layout":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}},"root":{"direction":"row","size":1,"children":[{"card":"a","size":0.25},{"card":"b","size":0.25},{"card":"c","size":0.5}]}},
+ {"name":"nested splits of alternating directions","layout":{"root":{"cut":"x","kids":[{"share":0.4,"node":{"card":"a"}},{"share":0.6,"node":{"cut":"y","kids":[{"share":0.6,"node":{"card":"b"}},{"share":0.4,"node":{"cut":"x","kids":[{"share":0.4999999999999999,"node":{"card":"c"}},{"share":0.5000000000000001,"node":{"card":"d"}}]}}]}}]}},"root":{"direction":"row","size":1,"children":[{"card":"a","size":0.4},{"direction":"column","size":0.6,"children":[{"card":"b","size":0.6},{"direction":"row","size":0.4,"children":[{"card":"c","size":0.5},{"card":"d","size":0.5}]}]}]}},
+ {"name":"nested column whose top holds a row","layout":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c"}}]}},"root":{"direction":"column","size":1,"children":[{"direction":"row","size":0.5,"children":[{"card":"a","size":0.5},{"card":"b","size":0.5}]},{"card":"c","size":0.5}]}}
 ]
 }
