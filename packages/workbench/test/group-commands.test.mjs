@@ -219,7 +219,7 @@ test("core.card.get reads a content card with its group path and a group card wi
     card: "card-2", activeTab: "tab-aaaaa2", tabs: [{ tab: "tab-aaaaa2", plugin: PLAIN, status: {} }], groups: [{ card: "card-4", name: "그룹 1" }],
   });
   assert.deepEqual(await run("core.card.get", { card: "card-4" }), {
-    card: "card-4", groups: [], group: { name: "그룹 1", level: 1, leader: "card-1", members: ["card-1", "card-2"] },
+    card: "card-4", groups: [], focus: 1, group: { name: "그룹 1", level: 1, leader: "card-1", members: ["card-1", "card-2"] },
   });
   await refuses(run("core.card.get", { card: "card-99" }), "card card-99 is not in the layout of window main");
 });

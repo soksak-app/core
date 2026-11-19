@@ -665,6 +665,7 @@
     "sp-grip-length": "24px",
     "fill": "100%",
     "focus-outline": "2px",
+    "group-focus-fade": ".6",
     "chrome-row-h": "36px",
     "chrome-h": "40px",
     "head-h": "32px",

@@ -1661,7 +1661,7 @@ function build(kept) {
       }
       keepHiddenSidebars();
       const fullscreen = view.fullscreenCard;
-      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven() });
+      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId });
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
@@ -2710,13 +2710,13 @@ export function moveCard(id, target, side) {
 /**
  * The state of the card id of any level (docs/spec/groups.md#status-and-queries): a content card with its active tab, its tabs with their
  * summary statuses, read from summary, the statuses of each surface that its plugin declares with summary true, and its group path; a
- * group card with its group path and its node.
+ * group card with its group path, the number of levels from the focused card up to it and its node.
  */
 export function cardState(id, summary) {
   const card = treeCard(id);
   if (isPlace(card)) throw new Error(`card ${card} is a window sidebar`);
   const groups = tree.path(card);
-  if (tree.isGroup(card)) return { card, groups, group: tree.groupRecord(card) };
+  if (tree.isGroup(card)) return { card, groups, focus: tree.focusDistance(card, focusedId), group: tree.groupRecord(card) };
   const data = grid.card(card);
   // default: a tab whose surface declares no summary status has the status {}.
   const tabs = tabsOf(data).map((t) => ({ tab: t.id, plugin: t.plugin, status: summary.get(t.id) ?? {} }));

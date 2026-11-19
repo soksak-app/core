@@ -276,6 +276,17 @@ export class GroupTree {
     return (this.find(id)?.path ?? []).map((node) => ({ card: node.card, name: node.name }));
   }
 
+  /**
+   * The number of levels from the content card focused up to the group card id that holds it, 1 for the group card that holds it
+   * directly, or null when focused is null or stands outside id (docs/spec/groups.md#focus).
+   */
+  focusDistance(id, focused) {
+    // default: no focused card, or a focused card of no space, lies inside no group card.
+    const path = focused === null ? [] : (this.find(focused)?.path ?? []);
+    const index = path.findIndex((node) => node.card === id);
+    return index < 0 ? null : path.length - index;
+  }
+
   /** The level of the card id: the number of group cards that hold it. */
   level(id) {
     return this.find(id).path.length;

@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -489,4 +490,90 @@ func TestTheLeaderMarkStaysInANarrowHeader(t *testing.T) {
 			t.Fatal("the tool menu of the leader main holds the leader mark")
 		}
 	}
+}
+
+// Each group card that holds the focused card mixes the focus color into its frame line by group-focus-fade to the power of the levels
+// up to it, the mark follows the focus in the next frame, and at the seam it recolors the frame line and draws no line beside it
+// (docs/spec/groups.md#focus).
+func TestEveryGroupCardThatHoldsTheFocusMarksItsFrame(t *testing.T) {
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Chrome map[string]string `json:"chrome"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	fade, err := strconv.ParseFloat(declared.Chrome["group-focus-fade"], 64)
+	if err != nil || fade <= 0 || fade >= 1 || fade*fade < 0.3 {
+		t.Fatalf("group-focus-fade %q does not keep two levels visible (%v)", declared.Chrome["group-focus-fade"], err)
+	}
+	f := nestedSideShell(t)
+	palette := f.palette()
+	marked := func(d int) color.RGBA {
+		share := math.Pow(fade, float64(d))
+		mix := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*share + float64(b)*(1-share))) }
+		return color.RGBA{mix(palette.Focus.R, palette.Edge.R), mix(palette.Focus.G, palette.Edge.G), mix(palette.Focus.B, palette.Edge.B), 255}
+	}
+	focusOf := func(id string) any {
+		text, err := json.Marshal(f.run(t, "core.card.get", `{"card": "`+id+`"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var state map[string]any
+		if err := json.Unmarshal(text, &state); err != nil {
+			t.Fatal(err)
+		}
+		focus, ok := state["focus"]
+		if !ok {
+			t.Fatalf("core.card.get of %s holds no focus: %s", id, text)
+		}
+		return focus
+	}
+	// The left frame line of card-5 and of card-6 beside the middle of card-3, and the bottom frame line of card-5 below card-3.
+	lines := func() map[string]color.RGBA {
+		f.tester.Frame()
+		tree := f.tester.ElementTree()
+		cards, frames := exposedAll(tree, "core.card"), exposedAll(tree, "core.group")
+		y := cards["card-3"].Y + cards["card-3"].H/2
+		line := palette.BorderWidth / 2
+		return map[string]color.RGBA{
+			"card-5 left":         f.pixelOf(frames["card-5"].X+line, y),
+			"card-6 left":         f.pixelOf(frames["card-6"].X+line, y),
+			"card-5 bottom":       f.pixelOf(cards["card-3"].X+cards["card-3"].W/2, frames["card-5"].Y+frames["card-5"].H-line),
+			"outside card-6 left": f.pixelOf(frames["card-6"].X-line, y),
+			"card-6 bottom":       f.pixelOf(cards["card-3"].X+cards["card-3"].W/2, frames["card-6"].Y+frames["card-6"].H-line),
+			"below card-6":        f.pixelOf(cards["card-3"].X+cards["card-3"].W/2, frames["card-6"].Y+frames["card-6"].H+line),
+		}
+	}
+	check := func(when string, want map[string]color.RGBA) {
+		t.Helper()
+		got := lines()
+		for name, color := range want {
+			if !near(got[name], color) {
+				t.Errorf("%s: the %s frame line is %v, want %v", when, name, got[name], color)
+			}
+		}
+	}
+	f.run(t, "core.card.focus", `{"card": "card-3"}`)
+	check("card-3 focused", map[string]color.RGBA{"card-5 left": marked(1), "card-6 left": marked(2), "card-5 bottom": marked(1)})
+	if got := []any{focusOf("card-5"), focusOf("card-6")}; got[0] != 1.0 || got[1] != 2.0 {
+		t.Errorf("with card-3 focused core.card.get reports the focus %v of card-5 and card-6, want 1 and 2", got)
+	}
+	f.run(t, "core.card.focus", `{"card": "card-2"}`)
+	check("card-2 focused", map[string]color.RGBA{"card-5 left": opaque(palette.Edge), "card-6 left": marked(1)})
+	if got := []any{focusOf("card-5"), focusOf("card-6")}; got[0] != nil || got[1] != 1.0 {
+		t.Errorf("with card-2 focused core.card.get reports the focus %v of card-5 and card-6, want null and 1", got)
+	}
+	// At the seam the frames draw their line as the fill of their edge, card-5 and card-6 one line apart at the bottom; the mark recolors
+	// those lines and leaves the points outside the outer frame as the frames draw them without a mark.
+	f.run(t, "core.settings.change", `{"key": "gap", "value": 0, "scope": "common"}`)
+	f.run(t, "core.card.focus", `{"card": "card-1"}`)
+	f.run(t, "core.settings.change", `{"key": "focusInd", "value": "corner", "scope": "common"}`)
+	plain := lines()
+	f.run(t, "core.settings.change", `{"key": "focusInd", "value": "border", "scope": "common"}`)
+	check("card-1 focused at the seam", map[string]color.RGBA{"card-6 left": marked(2), "card-5 bottom": marked(1), "card-6 bottom": marked(2),
+		"outside card-6 left": plain["outside card-6 left"], "below card-6": plain["below card-6"]})
 }

@@ -354,10 +354,12 @@ type groupCardRead struct {
 	Members []any  `json:"members"`
 }
 
-// groupState is a group card as core.card.get returns it: its id, its group path and its group record.
+// groupState is a group card as core.card.get returns it: its id, its group path, the number of levels from the focused card up to it,
+// null when the focused card stands outside it, and its group record.
 type groupState struct {
 	Card   string        `json:"card"`
 	Groups []groupOnPath `json:"groups"`
+	Focus  *int          `json:"focus"`
 	Group  groupCardRead `json:"group"`
 }
 
@@ -378,7 +380,7 @@ func (s *Shell) cardGet(id string, answer func(any, error)) {
 	}
 	if s.isGroup(id) {
 		record, _ := s.planes.Group(id) // silent: isGroup found the group card.
-		answer(groupState{Card: id, Groups: path, Group: groupCardRead{Name: record.Name, Level: record.Level, Leader: record.Leader,
+		answer(groupState{Card: id, Groups: path, Focus: s.groupFocus(id), Group: groupCardRead{Name: record.Name, Level: record.Level, Leader: record.Leader,
 			Members: s.planes.ReportedMembers(id)}}, nil)
 		return
 	}
