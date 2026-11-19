@@ -315,6 +315,14 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .tab[data-notice=true]::before,.chrome__ham[data-notice=true]::after,.picker__item[data-notice=true]::before{
   content:"";width:var(--notice-dot);height:var(--notice-dot);border-radius:var(--circle);background:var(--focus);flex:0 0 auto}
 .chrome__ham{position:relative}
+/* The icon of an activity before the name of a tab, a group header, a space tab or a project tab (docs/spec/activity.md#drawing).
+   No activity uses the error color. */
+.activity{display:inline-grid;flex:0 0 auto;width:var(--activity-icon);height:var(--activity-icon)}
+.activity svg{width:var(--fill);height:var(--fill);fill:none;stroke:currentColor;stroke-width:var(--activity-stroke);stroke-linecap:round;stroke-linejoin:round}
+.activity[data-activity=attention]{color:var(--focus)}
+.activity[data-activity=failed]{color:var(--fg)}
+.activity[data-activity=running]{color:var(--rail)}
+.activity[data-activity=idle]{color:var(--muted)}
 .chrome__ham[data-notice=true]::after{position:absolute;top:var(--notice-dot-inset);right:var(--notice-dot-inset)}
 /* At the one level, the active tab uses only the remaining width and truncates the title with an ellipsis.
    Showing it only when the whole title fits would hide the tab unnecessarily. */

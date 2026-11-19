@@ -464,7 +464,7 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
                 allowed.push("many");
             }
             if kind == "status" {
-                allowed.push("summary");
+                allowed.extend_from_slice(&["summary", "activity"]);
             }
             only(&at_entry, entry, &allowed)?;
             if !is_text(entry.get("description")) {
@@ -491,6 +491,14 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
             // A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
             if entry.get("summary").is_some_and(|raw| !raw.is_boolean()) {
                 return Err(format!("{at_entry}: summary must be a boolean"));
+            }
+            // A status with activity true reports the activity of its surface as its value
+            // (docs/spec/activity.md#declaration).
+            if entry
+                .get("activity")
+                .is_some_and(|raw| raw != &Value::Bool(true))
+            {
+                return Err(format!("{at_entry}: activity must be true"));
             }
         }
     }

@@ -22,6 +22,7 @@
     "card-tools.js",
     "group-cards.js",
     "group-look.js",
+    "activity.js",
     "card-insets.js",
     "sidebar-grip.js",
     "window-sidebars.js",
@@ -135,6 +136,7 @@
     "test": "node --test --experimental-test-module-mocks 'test/**/*.test.mjs'"
   },
   "specFiles": [
+    "docs/spec/cases/activity.json",
     "docs/spec/cases/group-look.json",
     "docs/spec/cases/layout/",
     "docs/spec/cases/log-contract/query/",

@@ -1322,7 +1322,7 @@ func checkExposes(owner string, raw any) error {
 				allowed = append(allowed, "many")
 			}
 			if kind == "status" {
-				allowed = append(allowed, "summary")
+				allowed = append(allowed, "summary", "activity")
 			}
 			if err := only(at, entry, allowed...); err != nil {
 				return err
@@ -1355,6 +1355,10 @@ func checkExposes(owner string, raw any) error {
 				if _, isBool := raw.(bool); !isBool {
 					return fmt.Errorf("%s: summary must be a boolean", at)
 				}
+			}
+			// A status with activity true reports the activity of its surface as its value (docs/spec/activity.md#declaration).
+			if raw, has := entry["activity"]; has && raw != true {
+				return fmt.Errorf("%s: activity must be true", at)
 			}
 		}
 	}
