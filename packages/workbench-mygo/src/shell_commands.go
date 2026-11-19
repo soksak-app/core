@@ -218,7 +218,10 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return err
 		}
-		if err := s.planes.Balance(); err != nil {
+		// The setting cardArrange chooses the operation: resize keeps the layout and gives every card a fair share, even replaces it with
+		// an equal grid in a space without groups (docs/spec/groups.md#card-commands-on-a-group-card).
+		arrange, _ := s.settings.Value("cardArrange").(string) // silent: the settings store checks the type of the value.
+		if err := s.planes.Balance(arrange == "even"); err != nil {
 			return err
 		}
 		s.settle()

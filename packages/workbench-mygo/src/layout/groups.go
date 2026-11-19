@@ -881,7 +881,7 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 func (t *GroupTree) balanced(id string, side Side) error {
 	before := t.drawn()
 	kept := t.snapshot()
-	if err := t.balance(); err != nil {
+	if err := t.balance(false); err != nil {
 		t.restore(kept)
 		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance the grid: %w", id, side, err)
 	}
@@ -1298,10 +1298,26 @@ func (t *GroupTree) Move(id, target, side string) error {
 	})
 }
 
-// balance runs the balance of the layout library in a space without groups and refuses a grid that is not a slicing arrangement. In a
-// space with groups it keeps every line index and shares the lines of each axis (Grid.ShareLines), the slots of the y axis with the
+// balance runs the balance of the layout library in a space without groups and refuses a grid that is not a slicing arrangement, or with
+// arrange its even arrangement (cardArrange even), which refuses when no equal grid keeps every card at its minimum size and raises
+// lastCard to the empty card that it adds. In a space with groups it keeps every line index and shares the lines of each axis (Grid.ShareLines), the slots of the y axis with the
 // heads of the group cards that start on their upper line (docs/spec/groups.md#card-commands-on-a-group-card).
-func (t *GroupTree) balance() error {
+func (t *GroupTree) balance(arrange bool) error {
+	if len(t.roots) == 0 && arrange {
+		arranged, err := t.grid.Arrange("even")
+		if err != nil {
+			return err
+		}
+		if !arranged {
+			return errors.New("the layout cannot balance: no equal grid keeps every card at its minimum size")
+		}
+		for _, card := range t.grid.Cards() {
+			if n, ok := CardNumber(card.ID); ok {
+				t.last = max(t.last, n)
+			}
+		}
+		return nil
+	}
 	if len(t.roots) == 0 {
 		balanced, err := t.grid.Balance()
 		if err != nil {
@@ -1328,11 +1344,11 @@ func (t *GroupTree) balance() error {
 }
 
 // Balance balances the grid (docs/spec/groups.md#card-commands-on-a-group-card) and keeps the result only when no content card that it
-// changed is drawn below minSize.
-func (t *GroupTree) Balance() error {
+// changed is drawn below minSize; arrange is as for balance.
+func (t *GroupTree) Balance(arrange bool) error {
 	before := t.drawn()
 	kept := t.snapshot()
-	if err := t.balance(); err != nil {
+	if err := t.balance(arrange); err != nil {
 		t.restore(kept)
 		return err
 	}

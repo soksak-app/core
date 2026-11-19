@@ -979,6 +979,80 @@ func (g *Grid) CenterBoundary(axis Axis, line int) float64 {
 	return at
 }
 
+// Arrange replaces the arrangement with an equal grid of the cards in their current order and removes every split and merge
+// (packages/soksak/docs/layout.md#even-arrangement). The grid has rows times columns equal to the card count n or n + 1, with one
+// empty card added for n + 1. Among the grids whose cells are at least minSize on both axes it takes the one whose cell is closest to
+// square, and a tie goes to the grid without an empty card. It is false, and changes nothing, when no grid keeps every cell at least
+// minSize, and an error for a mode other than even.
+func (g *Grid) Arrange(mode string) (bool, error) {
+	if mode != "even" {
+		return false, errors.New("unknown arrangement " + strconv.Quote(mode))
+	}
+	n := len(g.list)
+	if n == 0 {
+		return false, nil
+	}
+	// The drawn size of a card along an axis with count cells: a card at the border insets by half a gap on one side only, so the line
+	// spacing carries that inset.
+	cellSize := func(count int, size float64) float64 {
+		if count == 1 {
+			return size - g.gap
+		}
+		return (size - float64(count-1)*g.gap) / float64(count)
+	}
+	rows, columns, empty, skew := 0, 0, 0, 0.0
+	for r := 1; r <= n+1; r++ {
+		c := (n + r - 1) / r
+		e := r*c - n
+		if e > 1 {
+			continue
+		}
+		cellW, cellH := cellSize(c, g.w), cellSize(r, g.h)
+		if cellW < g.min || cellH < g.min {
+			continue
+		}
+		k := math.Abs(math.Log(cellW / cellH))
+		if rows == 0 || k < skew-1e-9 || (math.Abs(k-skew) <= 1e-9 && e < empty) {
+			rows, columns, empty, skew = r, c, e, k
+		}
+	}
+	if rows == 0 {
+		return false, nil
+	}
+	// Lines of one axis: the border lines are at the plane edges, and every inner line is at the next cell start plus the gap that the
+	// border insets take.
+	lines := func(count int, size float64) []float64 {
+		if count == 1 {
+			return []float64{0, 1}
+		}
+		d := cellSize(count, size)
+		out := []float64{0, d + g.gap/2}
+		for i := 2; i < count; i++ {
+			out = append(out, out[i-1]+d+g.gap)
+		}
+		out = append(out, size)
+		for i := range out {
+			out[i] /= size
+		}
+		return out
+	}
+	state := g.ToJSON()
+	state.Xs, state.Ys = lines(columns, g.w), lines(rows, g.h)
+	for k := range state.Cards {
+		card := &state.Cards[k]
+		card.Width, card.Height = nil, nil
+		card.C0, card.C1, card.R0, card.R1 = k%columns, k%columns+1, k/columns, k/columns+1
+	}
+	for k := range empty {
+		at := n + k
+		state.Cards = append(state.Cards, Card{ID: g.nextID(), C0: at % columns, C1: at%columns + 1, R0: at / columns, R1: at/columns + 1})
+	}
+	if err := g.Replace(state); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Balance gives every card a fair share of the plane and keeps the arrangement. It is false when the arrangement is not slicing,
 // which leaves it unchanged, and an error when the balanced state cannot describe a plane.
 func (g *Grid) Balance() (bool, error) {

@@ -169,7 +169,7 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 					}
 				}
 			case 11:
-				step = fmt.Sprintf("balance: %v", tree.Balance())
+				step = fmt.Sprintf("balance: %v", tree.Balance(false))
 			case 12:
 				id := pick()
 				_, err := tree.AddCard(id, nil)

@@ -347,6 +347,11 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 	case "balance":
 		balanced, err := g.Balance()
 		return balanced, true, err
+	case "arrange":
+		var mode string
+		arg(t, s, 0, &mode)
+		arranged, err := g.Arrange(mode)
+		return arranged, true, err
 	case "mergeCoincident":
 		arg(t, s, 0, &axis)
 		arg(t, s, 1, &line)
