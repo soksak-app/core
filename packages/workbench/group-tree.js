@@ -113,8 +113,8 @@ function clearOfFrames(axis, [a0, a1], part, groups) {
 
 export class GroupTree {
   /**
-   * grid is the grid of the space; options are the gap, the smallest drawn edge of a content card (minSize) and the head height of a
-   * group header (head); groups are the group nodes of the root level, leader the leader of the root level or null, last lastCard.
+   * grid is the grid of the space; options are the gap, the smallest drawn edge of a content card (minSize), the head height of a
+   * group header (head) and whether the cards share one line at the seam, where a frame and a header take no gap (seam); groups are the group nodes of the root level, leader the leader of the root level or null, last lastCard.
    */
   constructor(grid, options, groups, leader, last) {
     this.grid = grid;
@@ -131,10 +131,14 @@ export class GroupTree {
     this.answersToken = null;
   }
 
-  /** Changes the gap, the smallest edge and the head height. The grid keeps its proportions (R5). */
+  /**
+   * Changes the gap, the smallest edge, the head height and the seam, and gives the grid the frames of that drawing. The grid keeps its
+   * proportions (R5).
+   */
   setOptions(options) {
     this.options = { ...options };
     this.grid.gap = options.gap;
+    this.reframe();
   }
 
   /** The line indices {c0, c1, r0, r1} of a member: the card of the grid, or the rectangle of a group node. */
@@ -451,11 +455,12 @@ export class GroupTree {
   /**
    * Gives the grid the frames of every content card (docs/spec/groups.md#drawn-rectangles): on its left, right and bottom side the number of
    * group cards that hold it and end on the line of that side. The top takes no frame, because the header of a group card stands inside its
-   * frame at the top. A card of no group, a window sidebar among them, has none.
+   * frame at the top. A card of no group, a window sidebar among them, has none, and at the seam, where a frame takes no gap, no card has
+   * a frame.
    */
   reframe() {
     const frames = {};
-    for (const card of this.grid.cards) {
+    for (const card of this.options.seam ? [] : this.grid.cards) {
       // default: a card that the walk does not meet holds no group.
       const path = this.find(card.id)?.path ?? [];
       const counts = { left: 0, right: 0, top: 0, bottom: 0 };
@@ -478,11 +483,11 @@ export class GroupTree {
   }
 
   /**
-   * How far one header moves the boxes below it down: the header and the corridor that separates it from them, as between two cards
-   * (docs/spec/groups.md#drawn-rectangles).
+   * How far one header moves the boxes below it down: the header and the corridor that separates it from them, as between two cards, and
+   * the header alone at the seam, where its bottom line is the line between them (docs/spec/groups.md#drawn-rectangles).
    */
   headStep() {
-    return this.options.head + this.grid.gap;
+    return this.options.seam ? this.options.head : this.options.head + this.grid.gap;
   }
 
   /** The number of group cards of path, the group cards outside a group card, that start on its first row line r0. */

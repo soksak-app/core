@@ -12,9 +12,10 @@ import (
 // The group cards of the shown space (docs/spec/groups.md): the group tree that the workbench holds beside the grid, the commands
 // core.group.*, core.card.move and core.card.get, and the reads of the cards of every level.
 
-// groupOptions are the sizes that the group tree of the shown space draws with: the head height of a card.
+// groupOptions are the sizes that the group tree of the shown space draws with: the head height of a card, and whether the cards share
+// one line at the seam.
 func (s *Shell) groupOptions() layout.GroupOptions {
-	return layout.GroupOptions{Head: float64(s.metrics.headH)}
+	return layout.GroupOptions{Head: float64(s.metrics.headH), Seam: s.palette.Seam()}
 }
 
 // allCards is every card of every level of the shown space in workbench order, a group card with its span.

@@ -139,7 +139,7 @@ Each core setting accepts one form. Reading the settings files and every change 
 | `theme` | `midnight`, `nord`, `solar`, `forest`, `ember`, `slate`, `mist`, `grape`, `sand` or `paper` |
 | `mode` | `dark` or `light` |
 | `font` | `mono-system`, `mono-sf`, `mono-jet`, `sans-system` or `sans-inter` |
-| `gap` | An integer from 0 to 48 (px): the gap between two adjacent cards: the full distance between them. The margin between the plane and the edge of the stage is half the gap. At 0 the two cards share one line: the plane gap is the border width, a card draws no border and no radius of its own, the drop zone of a tab drag draws no radius and a border of the border width, and the stage has no margin (the seam) |
+| `gap` | An integer from 0 to 48 (px): the gap between two adjacent cards: the full distance between them. The margin between the plane and the edge of the stage is half the gap. At 0 the two cards share one line: the plane gap is the border width, a card draws no border and no radius of its own, the drop zone of a tab drag draws no radius and a border of the border width, and the stage has no margin and shares its top line with the bottom line of the space bar and, while the project tabs stand at the left, its left line with the right line of the project column, so the edge of the plane is one line on each side (the seam) |
 | `radius` | An integer from 0 to 24 (px) |
 | `size` | An integer from 10 to 18 (px) |
 | `textSize` | A [text size step](text-size.md) |

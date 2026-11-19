@@ -5,7 +5,7 @@
 //
 // It does not know that verification exists. It only announces that rendering finished, and the document decides what follows.
 import { Soksak, SoksakView, outline, sliceTree } from "soksak";
-import { appliedPatch, borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, set as setSetting, stagePad, value } from "./settings.js";
+import { appliedPatch, borderWidth, cardRadius, halfGap, linkedSet, pluginSettings, seam, set as setSetting, stagePad, value } from "./settings.js";
 import { effectiveTextScope, keepCardScope, nextTextSize, notifyTextSize, setSurfaceTextSize, setTextScope, textScope } from "./text-size.js";
 import { applyFrameText, chromeRow, measureAt } from "./frame-text.js";
 import { alignPlane, gridScale } from "./device-grid.js";
@@ -132,7 +132,8 @@ let grid, view, focusedId;
 let tree = null;
 
 /** The options of the group tree: the gap and the smallest edge of the grid and the head height of a group header. */
-const treeOptions = () => ({ gap: grid.gap, minSize: grid.minSize, head: HEADER });
+// At the seam a frame and a header of a group card take no gap (docs/spec/groups.md#drawn-rectangles).
+const treeOptions = () => ({ gap: grid.gap, minSize: grid.minSize, head: HEADER, seam: seam() === "line" });
 
 /** Whether a split balances the grid in the same change (cardSplit even, docs/spec/groups.md#split-setting). */
 const splitsEven = () => value("cardSplit") === "even";

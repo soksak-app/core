@@ -247,6 +247,17 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 :root[data-seam=line][data-focus-ind=border] .card[data-focused=true]{
   outline:var(--bw) solid var(--focus)}
 :root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}
+/* At the seam a group card draws no border either: the line around it is the line of the plane, its header draws the line between it
+   and the box below it, and the mark of a group card that holds the focus paints the line outside the frame, as the focus of a card does.
+   A nested group card and the focused card stand later in the paint order, so the innermost mark owns a line that several marked boxes
+   end on (docs/spec/groups.md#drawing). The stage starts on the bottom line of the space bar and on the right line of the project
+   column and draws its own line over them, so the edge of the plane is one line on each side. */
+:root[data-seam=line] .group{border-width:0;border-radius:0}
+:root[data-seam=line] .group__head{border-bottom:var(--bw) solid var(--rule)}
+:root[data-seam=line][data-focus-ind=border] .group[data-focus]{
+  outline-width:var(--bw);outline-style:solid;outline-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
+:root[data-seam=line] .stage{margin-top:calc(0px - var(--bw))}
+:root[data-seam=line] .project-column + .work > .stage{margin-left:calc(0px - var(--bw))}
 
 /* Card head */
 .chrome{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;

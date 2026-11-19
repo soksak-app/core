@@ -72,10 +72,13 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
 	})
-	// At the seam the frame has no border, and its line is the fill at its edge; the mark of the focus recolors that line, over the header.
+	// At the seam the frame has no border, and its line is the line of the plane around it; the mark of the focus colors that line, as
+	// the focus ring of a content card does. A nested group card and the focused card draw later, so the innermost mark owns a line that
+	// several marked boxes end on (docs/spec/groups.md#drawing).
 	if s.palette.Seam() && s.frameColor(id) != s.palette.Edge {
-		ui.Box(c).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
-			Border(s.palette.BorderWidth, s.frameColor(id)).PassThrough()
+		line := s.palette.BorderWidth
+		ui.Box(c).Absolute().Left(float32(rect.X)+inset-line).Top(float32(rect.Y)+inset-line).Size(float32(rect.W)+2*line, float32(rect.H)+2*line).
+			Border(line, s.frameColor(id)).PassThrough()
 	}
 }
 
