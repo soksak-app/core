@@ -392,11 +392,17 @@ func (g *Grid) Replace(state State) error {
 	if err := CheckState(state); err != nil {
 		return err
 	}
+	g.reload(state)
+	return nil
+}
+
+// reload puts state into the grid without checking it, for a state that ToJSON of a grid returned and that CheckState accepted when
+// that grid took it.
+func (g *Grid) reload(state State) {
 	g.load(state)
 	clear(g.sliceMemo)
 	clear(g.splitMemo)
 	g.agreeSizes()
-	return nil
 }
 
 func (g *Grid) plane() *plane {

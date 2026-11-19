@@ -13992,6 +13992,18 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-2",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func ReadPlanes" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "cardSplit even would draw card" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/layout/groups_cases_test.go", id: "TestGroupCases" },
+    ],
+    expected: "The layout model of the mygo workbench holds the tree of planes of group cards and passes every case of the group layout cases.",
+    levels: ["unit"],
+  },
+  {
     id: "F939",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "summary must be a boolean" },
