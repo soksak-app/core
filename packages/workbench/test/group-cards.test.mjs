@@ -287,12 +287,20 @@ test("the layout of the window snapshot gives each card and group card the frame
   await run("core.card.fullscreen", { card: "card-4" });
 });
 
+// JSDOM has no stylesheet, so a test of the header fit gives a head the padding and the gap of card-head-pad and card-head-gap and gives ≡
+// and ⋯ the width of card-button, as app.css does.
+function styleHead(row) {
+  Object.assign(row.style, { paddingLeft: "4px", paddingRight: "4px", columnGap: "4px" });
+  for (const button of row.querySelectorAll(".chrome__ham, .chrome__more")) button.style.width = "20px";
+}
+
 test("the leader keeps its leader mark in a head too narrow for its tools, and its tool menu does not hold it", { timeout: 5000 }, async () => {
   arrange();
   // JSDOM has no layout engine: each head is narrower than its tool row, so its tools fold into the menu.
   for (const id of ["card-1", "card-2"]) {
     const chrome = cardElement(id).querySelector(".chrome");
     Object.defineProperty(chrome, "clientWidth", { value: 120, configurable: true });
+    styleHead(chrome);
     const acts = chrome.querySelector(".chrome__acts");
     acts.getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
   }
@@ -325,6 +333,7 @@ test("a group header too narrow for its buttons folds them into its tool menu, w
   Object.defineProperty(name, "scrollWidth", { value: 1000, configurable: true });
   name.getBoundingClientRect = () => ({ x: 0, y: 0, width: head.dataset.measure === undefined ? 1000 : 40, height: 20 });
   Object.defineProperty(head, "clientWidth", { value: 400, configurable: true });
+  styleHead(head);
   head.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
   plane.settle();
   assert.equal(head.dataset.tools, "bar", "a group header with room for its name and its buttons shows its buttons in one row");
@@ -357,11 +366,33 @@ test("a narrow head keeps the fullscreen toggle beside its tool menu, and the me
   arrange();
   const chrome = cardElement("card-3").querySelector(".chrome");
   Object.defineProperty(chrome, "clientWidth", { value: 120, configurable: true });
+  styleHead(chrome);
   chrome.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
   plane.settle();
   assert.equal(chrome.dataset.tools, "menu", "the head of card-3 is not folded");
   assert.equal(plane.cardActs("card-3").fullscreen.hidden, false, "the narrow head of card-3 hides its fullscreen toggle");
   await run("core.card.tools", { card: "card-3" });
   assert.equal(plane.pickerState().items.some((item) => item.key === "fullscreen"), false, "the tool menu of card-3 holds the fullscreen toggle");
+  plane.closePicker("test end");
+});
+
+// A head at the minimum width of a card keeps a part of its active tab at least tab-grab-w wide and folds the fullscreen toggle into
+// the tool menu before the tab, so only ⋯ stands after the tab (docs/spec/example-model.md#card-tabs).
+test("a head at the minimum width of a card keeps a part of its tab and folds the fullscreen toggle into its tool menu", { timeout: 5000 }, async () => {
+  arrange();
+  const chrome = cardElement("card-3").querySelector(".chrome");
+  // JSDOM has no layout engine: the head is the minimum card width 96 less its two borders, its tab is 120 wide and each tool is 20 wide.
+  Object.defineProperty(chrome, "clientWidth", { value: 94, configurable: true });
+  styleHead(chrome);
+  const rect = (width) => () => ({ x: 0, y: 0, width, height: 24, top: 0, left: 0, right: width, bottom: 24 });
+  chrome.querySelector(".chrome__acts").getBoundingClientRect = rect(200);
+  for (const tab of chrome.querySelectorAll(".tab")) tab.getBoundingClientRect = rect(120);
+  for (const act of chrome.querySelectorAll(".chrome__act")) act.getBoundingClientRect = rect(20);
+  plane.settle();
+  assert.equal(chrome.dataset.fit, "one", "the head of card-3 at the minimum width shows no tab");
+  assert.equal(chrome.dataset.tools, "all", "the head of card-3 at the minimum width keeps tools beside its tool menu");
+  assert.equal(plane.cardActs("card-3").fullscreen.hidden, true, "the head of card-3 at the minimum width shows its fullscreen toggle");
+  await run("core.card.tools", { card: "card-3" });
+  assert.equal(plane.pickerState().items.some((item) => item.key === "fullscreen"), true, "the tool menu of card-3 does not hold the fullscreen toggle");
   plane.closePicker("test end");
 });

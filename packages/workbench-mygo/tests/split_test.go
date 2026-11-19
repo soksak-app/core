@@ -746,9 +746,10 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 	}
 	f.click("core.card.tools", card)
 	keys := f.menu().keys()
-	// The head keeps the fullscreen toggle beside the menu, so the menu does not hold it (docs/spec/example-model.md#card-tools).
-	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || slices.Contains(keys, "fullscreen") {
-		t.Fatalf("the tool menu holds %q", keys)
+	// The menu holds the fullscreen toggle exactly when the head does not keep it beside the menu, as the narrowest heads fold it before
+	// the tab (docs/spec/example-model.md#card-tabs).
+	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || slices.Contains(keys, "fullscreen") == f.has("core.card.fullscreen", card) {
+		t.Fatalf("the tool menu holds %q, and the head shows the fullscreen toggle %v", keys, f.has("core.card.fullscreen", card))
 	}
 	// The menu takes the names of the tools as their tooltips hold them.
 	names := map[string]string{"add": "탭 추가", "y": "상하로 분할", "fullscreen": "카드 전체 화면", "close": "카드 닫기"}
