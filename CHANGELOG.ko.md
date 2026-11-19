@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F967-6 (host 시험의 짝): `host.window.resize`의 content size Go 시험은 Rust 짝 옆 `packages/host/go/tests`에 있고 Go host의 `ContentSize`를 export한다. schema subset의 case는 `docs/spec/cases/schema-subset.json`이며 reader, Go `sok`, Rust `sok`가 재생한다. 검증: `make check-host-files`가 짝 없는 세 시험으로 실패했고 이제 통과한다. 네 재생이 통과한다.
 - F937-38 (두 절반이 들어맞는 split): group header 아래 card의 `bottom` 쪽 split은 새 card가 그 group의 frame을 받은 뒤 line을 놓으므로, 그리는 두 절반이 같은 높이가 되고 두 절반이 들어맞는 split은 더 이상 거부되지 않는다. `cardSplit` `even`의 balance는 현재 tree의 frame을 재며, mygo는 split, group, group에 card 추가에서 balance된 grid만 판정하고, 추가는 이제 `cardSplit`을 따른다(`docs/spec/groups.md#split-setting`). 검증: `docs/spec/cases/layout/groups.json`의 case가 바뀌지 않은 workbench에서 실패했고 두 workbench에서 통과한다.
 - F950-2 (transaction 없는 drag 단계): layout redraw benchmark는 빈 수치를 출력하는 대신, workbench가 그 drag를 native layout transaction 없이 그렸다고 말한다. 검증: 단계 줄 test가 그 함수 없이 실패했고 통과한다.
 - F960 (결과): click, scroll, layout redraw benchmark가 F958-1의 press 수정과 함께 mygo, Wails, Tauri에서 실행되었다. 수치는 checklist 항목에 있다.

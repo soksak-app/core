@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F967-6 (pairs of the host tests): the Go test of the content size of `host.window.resize` is in `packages/host/go/tests` beside its Rust counterpart, with `ContentSize` of the Go host exported, and the cases of the schema subset are `docs/spec/cases/schema-subset.json`, which the reader, the Go `sok` and the Rust `sok` replay. Verification: `make check-host-files` failed on the three tests without a counterpart and passes; the four replays pass.
 - F937-38 (a split whose halves fit): a split toward `bottom` of a card under a group header places its line after the new card takes the frames of its group, so its drawn halves have one height and a split whose halves fit is no longer refused; the balance of `cardSplit` `even` measures the frames of the current tree, and mygo judges only the balanced grid of a split, a group and the add of a card to a group, which now follows `cardSplit` (`docs/spec/groups.md#split-setting`). Verification: the cases of `docs/spec/cases/layout/groups.json` failed on the unchanged workbenches and pass in both.
 - F950-2 (drag stages without transactions): the layout redraw benchmark states that a workbench drew the drag without a native layout transaction instead of printing empty figures. Verification: the stage line test failed without the function and passes.
 - F960 (result): the click, scroll and layout redraw benchmarks ran on mygo, Wails and Tauri with the press fix of F958-1; the figures are in the checklist entry.

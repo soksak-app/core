@@ -1,4 +1,4 @@
-package host
+package host_test
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	host "github.com/soksak-app/core/packages/host/go/src"
 )
 
 // TestTheContentSizeOfEachCase reads the params of each case of docs/spec/cases/window-resize.json as host.window.resize reads them.
@@ -26,7 +28,7 @@ func TestTheContentSizeOfEachCase(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range file.Cases {
-		width, height, err := contentSize(c.Params)
+		width, height, err := host.ContentSize(c.Params)
 		if c.Error == nil {
 			var want struct{ Width, Height float64 }
 			if err := json.Unmarshal(c.Params, &want); err != nil {
@@ -37,8 +39,8 @@ func TestTheContentSizeOfEachCase(t *testing.T) {
 			}
 			continue
 		}
-		var refusal *RPCError
-		if !errors.As(err, &refusal) || refusal.Code != codeInvalidParams || refusal.Message != *c.Error {
+		var refusal *host.RPCError
+		if !errors.As(err, &refusal) || refusal.Code != -32602 || refusal.Message != *c.Error {
 			t.Errorf("%s: refused with %v, want -32602 %q", c.Name, err, *c.Error)
 		}
 	}
