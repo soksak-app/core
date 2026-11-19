@@ -321,6 +321,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F973-1",
+    implementation: [
+      { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },
+      { file: "packages/host/rust/src/documents.rs", symbol: "pub(crate) fn report_ended_presentation_waits_to(" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/view_join_test.go", id: "TestKeysBeforeThePresentationWriteOneDiagnosticRecordAndNoError" },
+      { file: "packages/host/rust/src/presentation_end_test.rs", id: "keys_before_the_presentation_write_no_error_record" },
+    ],
+    expected: "A key down that ends the hold before a view presented writes the gated host.trace.view.presentation-abandoned record and no error.",
+    levels: ["unit"],
+  },
+  {
     id: "F972",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },

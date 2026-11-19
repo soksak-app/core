@@ -285,6 +285,16 @@ JavaScript의 emit site는 `emitEvent(`와 page writer의 batcher 호출이며, 
 
 각 이벤트는 그 emit site를 더하는 변경에서 `events.json`에 들어간다. catalog 검사는 어떤 source도 내지 않는 선언된 이벤트를 거부하기 때문이다.
 
+### 늦은 presentation
+
+배치 트랜잭션의 hold를 참여한 view가 그 변경을 표시하기 전에 끝내는 누름이나 key down([배치 트랜잭션](native-surfaces.ko.md#배치-트랜잭션))은 사람의 보통 입력이다. key repeat와 빠른 타자는 view가 표시하는 것보다 가까운 간격으로 key down을 보낸다. host는 그 끝을 gate된 이벤트 하나로 기록하고 error를 쓰지 않는다.
+
+| 이벤트 | 수준 | Class | 필드 | 뜻 |
+| --- | --- | --- | --- | --- |
+| `host.trace.view.presentation-abandoned` | debug | call | `surface`, `reason` | view `surface`의 presentation wait가 presentation 없이 끝났다. `reason`은 누름이나 key down이면 `input`, 그 밖에는 `closed`, `hidden`, `process-ended`, `unresponsive`이다. host는 성능 trace가 켜져 있고([스위치](performance-trace.ko.md#스위치)) 정책이 class `call`의 `debug`를 저장할 때만 쓴다. |
+
+어떤 wait도 시간으로 끝나지 않으므로 presentation을 늦었다고 정하는 bound는 없다. 끝 자체의 실패, 곧 끝낼 수 없는 native join이나 보낼 수 없는 알림은 error `error host view channel: <reason>`로 남는다.
+
 ### Sidecar catalog
 
 sidecar catalog(sidecar 저장소의 `events.json`)는 member `sidecar`에 자기 sidecar의 이름을 쓰고, `layers: ["sidecar"]`만 나열하며, layer `sidecar`의 event를 선언한다. `sidecar.<name>.*` event와 lifecycle event `log.open`, `log.dropped`, `log.rotated`이다. `composeCatalogs(base, ...sidecars)`(`packages/log-contract`)는 이 저장소의 catalog와 설치된 sidecar의 catalog를 감사가 받는 하나의 catalog로 합친다. catalog가 sidecar 이름을 쓰지 않거나, 다른 layer를 나열하거나, 다른 layer의 event 또는 `sidecar.<name>.`과 `log.` 밖의 이름을 선언하거나, `sidecar.<name>.*` event를 두 번 선언하거나, base의 선언과 class, level, field, `cids`가 다른 `log.*` event를 선언하면 sidecar와 event 이름을 담은 오류로 거부한다. 둘 다 선언한 `log.*` event는 하나의 선언이므로 sidecar 파일의 lifecycle event(`log.open`, `from_seq`, `to_seq`, `count`, `bytes`, `reason`을 가진 `log.dropped`, `log.rotated`)는 layer `sidecar`로 통과하고, 빠졌거나 형이 틀린 field는 다른 event처럼 줄 번호를 가진 발견이다.
