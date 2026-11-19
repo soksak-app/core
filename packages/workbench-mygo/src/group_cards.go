@@ -148,31 +148,113 @@ func (s *Shell) planeDividers() []layout.Divider {
 	return out
 }
 
-// planeRules are the rules of the grid cut where they would cross a group header, and none while a card is fullscreen, which hides
-// the cards that the rules separate.
-func (s *Shell) planeRules() []layout.Rule {
-	heads := s.headRects()
-	out := []layout.Rule{}
+// planeRule is a stretch of a rule of the grid to draw, and whether it may reach into the stage padding at the edge of the plane: only a
+// stretch outside every group card does.
+type planeRule struct {
+	layout.Rule
+	Bleed bool
+}
+
+// planeRules are the rules of the grid as drawn (docs/spec/groups.md#drawing): none while a card is fullscreen, each cut where it would
+// cross a header, and a stretch inside a group card cut to the inside of its frame below its header; a stretch outside every group card
+// is cut where it would cross a frame.
+func (s *Shell) planeRules() []planeRule {
+	out := []planeRule{}
 	if s.fullscreen != "" {
 		return out
+	}
+	heads := s.headRects()
+	frames := []layout.Rect{}
+	inner := []layout.Rect{}
+	for _, id := range s.planes.Cards() {
+		if !s.planes.IsGroup(id) {
+			continue
+		}
+		frame, _ := s.planes.Rect(id) // silent: id is a group card of the tree.
+		head, _ := s.planes.HeadRect(id)
+		frames = append(frames, frame)
+		inner = append(inner, layout.Rect{X: frame.X, Y: head.Y + head.H, W: frame.W, H: frame.Y + frame.H - head.Y - head.H})
 	}
 	for _, rule := range s.plane.Rules() {
 		a0, a1, from, to := rule.X, rule.X+rule.W, rule.Y, rule.Y+rule.H
 		if rule.Axis == "y" {
 			a0, a1, from, to = rule.Y, rule.Y+rule.H, rule.X, rule.X+rule.W
 		}
-		for k, part := range clearOfHeads(rule.Axis, a0, a1, from, to, heads) {
-			piece := rule
-			if k > 0 {
-				piece.Key = rule.Key + ":" + strconv.Itoa(k)
+		k := 0
+		for _, part := range clearOfHeads(rule.Axis, a0, a1, from, to, heads) {
+			for _, cut := range clearOfFrames(rule.Axis, a0, a1, part, frames, inner) {
+				piece := planeRule{Rule: rule, Bleed: cut.outside}
+				if k > 0 {
+					piece.Key = rule.Key + ":" + strconv.Itoa(k)
+				}
+				k++
+				if rule.Axis == "y" {
+					piece.X, piece.W = cut.from, cut.to-cut.from
+				} else {
+					piece.Y, piece.H = cut.from, cut.to-cut.from
+				}
+				out = append(out, piece)
 			}
-			if rule.Axis == "y" {
-				piece.X, piece.W = part[0], part[1]-part[0]
-			} else {
-				piece.Y, piece.H = part[0], part[1]-part[0]
-			}
-			out = append(out, piece)
 		}
+	}
+	return out
+}
+
+// ruleCut is a stretch [from, to] of a rule, and whether it lies outside every group card.
+type ruleCut struct {
+	from, to float64
+	outside  bool
+}
+
+// clearOfFrames cuts the stretch part of a line of axis, which spans [a0, a1] across it, by the group cards: inside the innermost frame
+// that holds the middle of the stretch and the line, the stretch keeps only the inside of that frame below its header, inner; outside
+// every frame, it loses every stretch where it would cross a frame.
+func clearOfFrames(axis layout.Axis, a0, a1 float64, part [2]float64, frames, inner []layout.Rect) []ruleCut {
+	span := func(r layout.Rect) (float64, float64, float64, float64) {
+		if axis == "y" {
+			return r.Y, r.Y + r.H, r.X, r.X + r.W
+		}
+		return r.X, r.X + r.W, r.Y, r.Y + r.H
+	}
+	middle := (part[0] + part[1]) / 2
+	holder := -1
+	for k, frame := range frames {
+		c0, c1, s0, s1 := span(frame)
+		if a0 >= c0 && a1 <= c1 && middle > s0 && middle < s1 && (holder < 0 || frames[holder].W*frames[holder].H > frame.W*frame.H) {
+			holder = k
+		}
+	}
+	if holder >= 0 {
+		_, _, s0, s1 := span(inner[holder])
+		if from, to := max(part[0], s0), min(part[1], s1); to > from {
+			return []ruleCut{{from: from, to: to}}
+		}
+		return nil
+	}
+	parts := [][2]float64{part}
+	for _, frame := range frames {
+		c0, c1, s0, s1 := span(frame)
+		if min(a1, c1)-max(a0, c0) <= headTolerance {
+			continue
+		}
+		next := [][2]float64{}
+		for _, p := range parts {
+			if p[1] <= s0 || p[0] >= s1 {
+				next = append(next, p)
+				continue
+			}
+			if p[0] < s0 {
+				next = append(next, [2]float64{p[0], s0})
+			}
+			if p[1] > s1 {
+				next = append(next, [2]float64{s1, p[1]})
+			}
+		}
+		parts = next
+	}
+	out := make([]ruleCut, 0, len(parts))
+	for _, p := range parts {
+		out = append(out, ruleCut{from: p[0], to: p[1], outside: true})
 	}
 	return out
 }

@@ -189,8 +189,11 @@ const ruleEdge = 0.5
 
 // ruleRect is where a rule of the plane stands in the stage, whose margin around the plane is inset. A rule at the edge of the plane
 // goes on across the padding of the stage, bleed, to the line around the stage.
-func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset, padding float32) ui.Rect {
+func ruleRect(rule planeRule, width, height float64, stage ui.Rect, inset, padding float32) ui.Rect {
 	bleed := float64(padding)
+	if !rule.Bleed {
+		bleed = 0
+	}
 	x, y, w, h := rule.X, rule.Y, rule.W, rule.H
 	if rule.Axis == "x" {
 		if rule.Y <= ruleEdge {
@@ -212,7 +215,7 @@ func ruleRect(rule layout.Rule, width, height float64, stage ui.Rect, inset, pad
 
 // drawRules paints the boundary lines. The solid stretches lie under the cards. The rest of a line, where a card crosses it, follows the
 // fullRule setting: it lies under the cards, over them and their surfaces, or is not drawn. over tells which of the two layers this is.
-func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []layout.Rule, over bool) {
+func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []planeRule, over bool) {
 	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
 	for _, rule := range rules {
 		color := s.palette.Rule
