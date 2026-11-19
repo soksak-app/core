@@ -477,6 +477,7 @@ fn invalid_json_closes_connection() {
 | `exposure.host-window.unregistered-surface-named` | window status 읽기가 등록된 surface가 없는 네이티브 surface view를 만나면 `unregistered native surface <id>`로 실패하며, `<id>`는 window facts의 네이티브 view 주소이고 두 host의 글은 같다. | all |
 | `exposure.command.ends-by-reply-or-peer-end` | command.run에는 시간 제한이 없다. 그 답, 그것을 실행하는 문서의 끝, 그것을 보낸 endpoint 연결의 끝으로 끝난다. | all |
 | `exposure.command-params.checked-before-the-run` | page의 registry, mygo workbench의 registry, Go와 Rust host의 endpoint는 `docs/spec/cases/command-params.json`의 각 case의 params를 command 실행 전에 그 case의 text로 거부하고, error가 없는 case의 command는 실행한다. | all |
+| `exposure.window-resize.bound-and-text` | host.window.resize는 `docs/spec/cases/window-resize.json`의 각 case의 params를 콘텐츠 크기로 읽고, 1 point보다 작은 너비나 높이를 -32602와 `width and height must be at least 1`로 거부한다. | all |
 | `exposure.relay.connection-end-ends-its-requests` | endpoint 연결의 끝은 호스트에서 그 연결의 요청을 각각 끝내고 호스트는 아무것도 답하지 않는다. 그 뒤 문서의 답은 끝난 요청의 관찰로 쓴다. | all |
 | `exposure.relay.forward-lives-while-its-origin-is-open` | `origin`이 있는 `exposureForward`는 그 origin 요청이 메인 페이지의 답, 1003, 또는 그 endpoint 연결의 끝으로 끝날 때 결과 없이 끝나고, 그 뒤의 답은 끝난 요청의 관찰로 쓴다. `origin`이 열린 요청을 가리키지 않는 전달은 표면에 보내지 않고 곧바로 1003 `the origin request <origin> has ended`로 거절한다. `origin`이 없는 전달은 어떤 연결의 끝으로도 끝나지 않는다. | all |
 | `exposure.command.declaration-refuses-a-time-limit` | `timeout`을 가진 명령 선언은 manifest 검사와 registry가 `<where>: timeout is not a member of a command declaration`로 거절한다. | all |
@@ -909,7 +910,7 @@ fn invalid_json_closes_connection() {
 | `sidecars-transport.replace.replaces-an-outdated-service` | `hello`의 version이 설치된 version과 다른 상주 service를 교체하면 `close-owner`와 `shutdown`을 보내고, 연결을 닫고, 생성 경로로 설치된 service를 시작하고, 그 sidecar로 보낸 각 표면에 연결 알림을 보내고, `host.sidecars`의 `outdated`에서 그 sidecar를 빼고, `sidecar <name>: service <running> replaced by <installed>`를 쓴다. | all |
 | `sidecars-transport.replace.refuses-a-service-that-is-not-outdated` | 실행 중인 service가 없거나 service가 설치된 version이면 그 sidecar의 교체는 sidecar를 밝히는 오류로 실패하고 service에 아무것도 보내지 않는다. | all |
 | `sidecars-transport.replace.ends-a-service-of-an-undeclared-sidecar` | 사이드카가 더 이상 선언되지 않은 실행 중인 상주 service는 `installed` `null`로 오래된 것으로 보고된다. 교체하면 `close-owner`와 `shutdown`을 보내고, 실행 파일을 시작하지 않고, 그 sidecar로 보낸 각 표면에 선언되지 않은 오류의 연결 알림을 보내고, `outdated`에서 빼고, info로 `sidecar <name>: service <running> ended; the sidecar is not declared`를 기록한다. | all |
-| `input.pointer.reads-the-press-target-before-delivery` | 주입된 press는 main thread의 한 단계 안에서 전달 전에 그 아래 view를 읽고, target을 읽을 수 없는 press는 전달하지 않는다. | all |
+| `input.pointer.attributes-the-press-to-the-view-it-reached` | 주입된 press는 전달된 press가 닿은 web view에 귀속되고, 그 web view는 native 전달이 답한다. 열린 layout을 기다리는 press는 도착했을 때 그 좌표의 view가 아니라 그 layout의 view에 닿으며, 다른 결과는 web view를 답하지 않는다. | all |
 | `image.drawing.sent-at-attach-and-on-change` | 호스트는 image region의 공급자에게 region의 부착 때와 상태가 바뀔 때마다 그 그리기 상태를 보내고, 바뀌지 않은 상태는 다시 보내지 않는다. | all |
 | `image.drawing.unsent-change-is-sent-again` | 한 번의 전송이 읽었으나 보낸 것으로 기록하지 않은 drawing 상태는 보낸 것으로 보고되지 않고 다음 전송이 다시 돌려준다. | all |
 | `image.drawing.reads-occlusion-at-attach` | 만들 때 완전히 가려진 창에 부착된 region의 그리기 상태는 false이며, 창 event가 아니라 AppKit occlusion 상태에서 읽는다. | all |

@@ -317,6 +317,13 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	tools := s.groupHeadTools(id)
 	size, family := s.tabText()
 	nameWidth := spanWidth(c, ui.Span{Text: name, Size: size, Font: family}) + 2*m.tabPadX
+	// The icon of the activity of the group card stands before its name, so the name takes its width and the gap of the header with it
+	// (docs/spec/activity.md#drawing).
+	_, groupActivities, _, _ := s.shownActivities()
+	activity := groupActivities[id]
+	if activity != "" {
+		nameWidth += m.activityIcon + m.cardHeadGap
+	}
 	buttons := float32(len(tools))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
 	kept := keptTools(tools)
@@ -346,6 +353,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			// padding less the padding of the name before the name, and it grows to the end of the name (docs/spec/groups.md#headers).
 			s.drawRenameField(c, 0).Grow(1).Shrink(1).MarginStart(m.tabPadX - s.palette.BorderWidth - s.frameLength(m.barTabRootPad))
 		} else {
+			if activity != "" {
+				s.drawActivity(c, "core.activity.group", id, activity, m.activityIcon)
+			}
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
 			// The name stands at the start of the place of the tab strip, where the first tab of a content card stands; a button centres its
 			// content otherwise (docs/spec/groups.md#headers).

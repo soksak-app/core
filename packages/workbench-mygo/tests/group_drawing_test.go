@@ -704,6 +704,8 @@ func TestTheRenameFieldOfAGroupTakesThePlaceOfItsName(t *testing.T) {
 
 // mixed is a color with share of color and the rest of base, as color-mix in srgb.
 func mixed(c, base ui.Color, share float32) ui.Color {
-	blend := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*float64(share) + float64(b)*float64(1-share))) }
+	blend := func(a, b uint8) uint8 {
+		return uint8(math.Round(float64(a)*float64(share) + float64(b)*float64(1-share)))
+	}
 	return ui.Color{R: blend(c.R, base.R), G: blend(c.G, base.G), B: blend(c.B, base.B), A: 255}
 }

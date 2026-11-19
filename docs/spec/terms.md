@@ -8,6 +8,8 @@ The term list is `terms.json` of the kit `soksak-app/kit`. Each entry has the te
 
 The request-local declaration table is defined in [native surfaces](native-surfaces.md).
 
+The activity of a tab, of the holders of tabs and the four activities are defined in [activity](activity.md#activities).
+
 The group card, its rectangle, its members, the level and the leader of a level are defined in [group cards](groups.md#model).
 
 The agent, the agent skill, the agent folder, the setup part and the MCP registration are defined in [command line](cli.md#agents).

@@ -28,7 +28,7 @@ unsafe extern "C" {
         delta_x: f64,
         delta_y: f64,
         clicks: i32,
-        done: extern "C" fn(*mut c_void, i32, *const SpInputHeld),
+        done: extern "C" fn(*mut c_void, i32, *const SpInputHeld, *mut c_void),
         context: *mut c_void,
     );
     fn sp_input_activate_at(
@@ -81,13 +81,20 @@ pub(super) struct SpInputHeld {
     pub(super) reason: *const c_char,
 }
 
-type Delivered = Box<dyn FnOnce(Delivery) + Send>;
+pub(super) type Delivered = Box<dyn FnOnce(Delivery, Option<Handle>) + Send>;
 
-extern "C" fn delivered(context: *mut c_void, result: i32, held: *const SpInputHeld) {
+/// view is the web view that a delivered press or release reached, and NULL for other input or another result.
+pub(super) extern "C" fn delivered(
+    context: *mut c_void,
+    result: i32,
+    held: *const SpInputHeld,
+    view: *mut c_void,
+) {
     // context is the value that pointer passed with Box::into_raw, and the library calls done once.
     let done = unsafe { Box::from_raw(context as *mut Delivered) };
+    let view = (result == SP_INPUT_DELIVERED && !view.is_null()).then_some(view as Handle);
     // The library keeps held valid until done returns.
-    done(delivery(result, unsafe { held.as_ref() }));
+    done(delivery(result, unsafe { held.as_ref() }), view);
 }
 
 /// The delivery of a result of sp_input_pointer_then and its state. The library passes held only for SP_INPUT_BUTTON_HELD,

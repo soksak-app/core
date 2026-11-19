@@ -18,8 +18,8 @@ void activateWindowAt(uintptr_t window, double x, double y, uintptr_t handle) {
     hostRunOnMain(^{ sp_input_activate_at((void *)window, x, y, activated, (void *)handle); });
 }
 
-static void delivered(void *context, sp_input_result result, const sp_input_held *held) {
-    hostRunOnWorker(^{ sp_host_callback_input_delivered((uintptr_t)context, (int)result, (sp_input_held *)held); });
+static void delivered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
+    hostRunOnWorker(^{ sp_host_callback_input_delivered((uintptr_t)context, (int)result, (sp_input_held *)held, (uintptr_t)view); });
 }
 // pointer is a C string that the block frees after the delivery took it.
 void injectPointer(uintptr_t window, char *pointer, double x, double y, int phase, int button, double deltaX, double deltaY, int clicks,

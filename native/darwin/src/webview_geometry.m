@@ -1033,6 +1033,50 @@ void webviewGetFrame(void *handle, double *out) {
 
 static const char hiddenResponderKey;
 
+// Records a visibility change of a surface that held the keyboard or that moved the keyboard as native.surface.hidden: whether the
+// surface was hidden before, the classes of the first responder before and after the change, of the view of the handle and of the
+// surface, whether the first responder was inside the surface, whether the host waited for a region and whether the host took the
+// keyboard back, so a key that reaches no view after a hide is located from the record.
+static void recordHiddenKeyboard(bool hidden, BOOL was, NSResponder *before, NSResponder *after, NSView *view, NSView *surface,
+    SPSurfaceHost *host, BOOL inside, BOOL restored) {
+    if (!sp_event_gate(SP_CLASS_INPUT, SP_EVENT_DEBUG)) return;
+    NSString *fields = [NSString stringWithFormat:
+        @"{\"hidden\":%s,\"was\":%s,\"before\":\"%@\",\"after\":\"%@\",\"view\":\"%@\",\"surface\":\"%@\",\"inside\":%s,"
+        "\"host\":%s,\"awaitsRegion\":%s,\"wanted\":%s,\"restored\":%s}",
+        hidden ? "true" : "false", was ? "true" : "false", before ? NSStringFromClass(before.class) : @"",
+        after ? NSStringFromClass(after.class) : @"", NSStringFromClass(view.class), NSStringFromClass(surface.class),
+        inside ? "true" : "false", host ? "true" : "false", host.awaitsRegion ? "true" : "false",
+        host.keyboardWanted ? "true" : "false", restored ? "true" : "false"];
+    sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, "native.surface.hidden", fields.UTF8String);
+}
+
+// Runs a change of the visibility of views of window; without a window it only runs the change. AppKit gives the keyboard to the window when a hide leaves the first responder
+// in a hidden view, the hide of another view included. A host that holds the keyboard itself for its region keeps the keys for that
+// region while it is hidden, so the host takes the keyboard back instead of leaving it with the window, where a key reaches no view;
+// the move to the window ended the want of the region, which the return restores (docs/spec/native-surfaces.md#keyboard-of-a-surface).
+// Returns whether the host took the keyboard back.
+static BOOL keepSurfaceKeyboard(NSWindow *window, void (^change)(void)) {
+    NSResponder *first = window.firstResponder;
+    // A host that holds the keyboard for its region, also while it is hidden because the decided call of a press gives it the keyboard
+    // before the placement that shows it.
+    SPSurfaceHost *holding = [first isKindOfClass:SPSurfaceHost.class] && ((SPSurfaceHost *)first).awaitsRegion ? (SPSurfaceHost *)first : nil;
+    BOOL wanted = holding.keyboardWanted;
+    change();
+    if (!holding || window.firstResponder == holding) return NO;
+    if (![window makeFirstResponder:holding]) {
+        sp_log_error("surface keyboard", [NSString stringWithFormat:@"%@ refused the keyboard back after a hide",
+            NSStringFromClass(holding.class)].UTF8String);
+        return NO;
+    }
+    holding.keyboardWanted = wanted;
+    return YES;
+}
+
+void sp_view_set_hidden(NSView *view, bool hidden) {
+    NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
+    if (view.hidden != hidden) keepSurfaceKeyboard(view.window, ^{ view.hidden = hidden; });
+}
+
 void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSCAssert(NSThread.isMainThread, @"webview geometry requires the UI thread");
     NSView *view = (NSView *)handle;
@@ -1040,14 +1084,20 @@ void webviewSetSurfaceHidden(void *handle, bool hidden) {
     NSView *surface = host ?: view;
     NSWindow *window = surface.window;
     NSResponder *first = window.firstResponder;
+    BOOL was = surface.hidden;
+    BOOL held = [first isKindOfClass:NSView.class] && [(NSView *)first isDescendantOf:surface];
     NSView *owner = hidden && !surface.hidden && [first isKindOfClass:NSView.class]
         && [(NSView *)first isDescendantOf:surface] ? (NSView *)first : nil;
     // The move of the first responder that the hide causes ends the wait of the page for a region.
     BOOL landed = host.keyboardWanted;
     // Native regions inspect the superview chain of the surface while applying geometry. The superview chain is settled
     // before applying again. Otherwise, after the surface is restored, that document stays hidden even after the host became visible.
-    surface.hidden = hidden;
-    view.hidden = hidden;
+    BOOL restored = keepSurfaceKeyboard(window, ^{
+        surface.hidden = hidden;
+        view.hidden = hidden;
+    });
+    if (restored && owner == window.firstResponder) owner = nil;
+    if (held || window.firstResponder != first) recordHiddenKeyboard(hidden, was, first, window.firstResponder, view, surface, host, held, restored);
     if (owner) {
         SPHiddenResponder *held = [[SPHiddenResponder new] autorelease];
         held.owner = owner;

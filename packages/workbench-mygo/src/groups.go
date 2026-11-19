@@ -75,7 +75,7 @@ type groupCreateParam struct {
 	Card    string          `json:"card"`
 	Side    string          `json:"side"`
 	Plugin  string          `json:"plugin"`
-	Params  json.RawMessage `json:"params"`
+	Params  json.RawMessage `json:"params,omitempty"`
 	Request json.RawMessage `json:"request,omitempty"`
 }
 
@@ -93,7 +93,8 @@ func groupRequest(value groupCreateParam) (string, error) {
 
 type groupParam struct {
 	Group string `json:"group"`
-	Name  string `json:"name"`
+	// Name is omitted when empty, so a run of the workbench gives a command only the members that it declares.
+	Name string `json:"name,omitempty"`
 }
 
 type cardMoveParam struct {
@@ -322,7 +323,7 @@ func (s *Shell) addGroupCard(id, plugin string, params json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	born, err := s.planes.AddCard(id, encoded)
+	born, err := s.planes.AddCard(id, encoded, s.cardSplitEven())
 	if err != nil {
 		// A refused command changes nothing, so the number of the title of the new tab is not taken.
 		s.tabsNamed--

@@ -2,6 +2,13 @@
   "description": "The check of the parameters of a command against its params schema before it runs (docs/spec/exposure.md#command-parameters). Each case names a command, its params schema and the parameters of a request, and the error text that the registry refuses them with, or null when the command runs. The registry of the page, the registry of the mygo workbench and the endpoints of the Go and Rust hosts run every case.",
   "cases": [
     {
+      "name": "a member of another type than its schema is refused",
+      "command": "core.group.create",
+      "schema": {"type": "object", "properties": {"card": {"type": "string"}, "side": {"enum": ["left", "right", "top", "bottom"]}, "plugin": {"type": "string"}, "params": {"type": "object"}, "request": {"type": "string"}}, "required": ["card", "side", "plugin"]},
+      "params": {"card": "main", "side": "right", "plugin": "plain", "request": 7},
+      "error": "invalid params for core.group.create"
+    },
+    {
       "name": "numbers of the declared types run",
       "command": "host.window.move",
       "schema": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "integer"}}, "required": ["x", "y"]},

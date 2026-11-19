@@ -1,7 +1,8 @@
 // The views of the layout probe, a core fixture that serves the layout checks of core
 // (docs/spec/plugin-processes.md#verification-boundaries). The tab view reports what core gives a view (its start values, its tab
 // reports, its size and theme, the document region and the settings of the plugin) through the statuses layoutprobe.view,
-// layoutprobe.surface and layoutprobe.document, and runs the tab reports and the document changes as commands. A section view
+// layoutprobe.surface and layoutprobe.document, and runs the tab reports and the document changes as commands. The status
+// layoutprobe.activity holds the value that the command layoutprobe.activity sets as the activity of the tab (docs/spec/activity.md). A section view
 // reports its section and size as layoutprobe.section; the follow section follows the surface that core.sidebars reports for it
 // (docs/spec/plugins.md#sections). Both views run core.file.open from themselves as layoutprobe.open. The module imports nothing: its owner test runs it on the view bridge and the exposure of core.
 
@@ -164,12 +165,26 @@ export async function startLayoutProbe({ bridge, expose, view }) {
     return null;
   });
   await bridge.commands.register("layoutprobe.open", (params) => openFile(bridge, params));
+  // The value of layoutprobe.activity, which core reads as the activity of the tab. The command takes any string, so a check can
+  // also give a value that core refuses.
+  let activity = null;
+  const activityListeners = new Set();
+  await bridge.commands.register("layoutprobe.activity", ({ value }) => {
+    if (value !== null && typeof value !== "string") throw new TypeError("layoutprobe.activity requires a string or null value");
+    activity = value;
+    for (const listener of activityListeners) listener(activity);
+    return null;
+  });
   await bridge.commands.register("layoutprobe.document.store", async ({ value }) => {
     if (typeof value !== "string") throw new TypeError("layoutprobe.document.store requires a string value");
     await page.post({ to: TO_DOCUMENT, store: value });
     return null;
   });
   // The statuses come after the commands: a check that waits for them as the ready entries of the tab runs the commands at once.
+  await expose.status("layoutprobe.activity", () => activity, (listener) => {
+    activityListeners.add(listener);
+    return () => activityListeners.delete(listener);
+  });
   await expose.status("layoutprobe.view", tab.read, tab.subscribe);
   await expose.status("layoutprobe.surface", size.read, size.subscribe);
   await expose.status("layoutprobe.document", region.read, region.subscribe);

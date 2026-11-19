@@ -41,7 +41,7 @@
     X(V, void, native_fullscreen_done, (uintptr_t context, int result, char *message), (context, result, message)) \
     X(V, void, surface_pressed, (uintptr_t owner, void *view), (owner, view)) \
     X(V, void, surface_point, (uintptr_t owner, int phase, double x, double y), (owner, phase, x, y)) \
-    X(V, void, input_delivered, (uintptr_t context, int result, sp_input_held *held), (context, result, held)) \
+    X(V, void, input_delivered, (uintptr_t context, int result, sp_input_held *held, uintptr_t view), (context, result, held, view)) \
     X(V, void, input_activated, (uintptr_t context, int result, char *frontmost), (context, result, frontmost)) \
     X(V, void, document_changed, (uintptr_t context, char *state), (context, state)) \
     X(V, void, document_message, (uintptr_t context, char *value), (context, value)) \

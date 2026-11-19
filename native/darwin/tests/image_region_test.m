@@ -36,7 +36,7 @@ static IMP originalAddObserverImplementation = NULL;
 
 typedef struct { BOOL done; sp_input_result result; } SPInputResultWait;
 
-static void inputResultWaitDone(void *context, sp_input_result result, const sp_input_held *held) {
+static void inputResultWaitDone(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     (void)held;
     SPInputResultWait *wait = context;
     wait->result = result;

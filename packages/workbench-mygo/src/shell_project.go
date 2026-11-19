@@ -774,6 +774,7 @@ func (s *Shell) dropProject(id string) {
 	}
 	s.forgetSurfaces(tabs)
 	delete(s.windowProjects, id)
+	defer s.activity.Sync()
 	for i := range s.projects {
 		if s.projects[i].ID == id {
 			s.projects = append(s.projects[:i:i], s.projects[i+1:]...)
@@ -1169,7 +1170,11 @@ func checkTabParams(plugin *LoadedPlugin, params json.RawMessage) (json.RawMessa
 	if plugin.Params == nil {
 		return nil, fmt.Errorf("plugin %s declares no tab params", plugin.ID)
 	}
-	if !MatchesSchema(plugin.Params, value) {
+	matched, err := matchesSchema(plugin.Params, value)
+	if err != nil {
+		return nil, fmt.Errorf("params of %s: %w", plugin.ID, err)
+	}
+	if !matched {
 		return nil, fmt.Errorf("params do not match %s surface.params", plugin.ID)
 	}
 	return params, nil

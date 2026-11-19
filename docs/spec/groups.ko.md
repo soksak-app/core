@@ -95,7 +95,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 | `core.group.create` | `card`가 window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
 | `core.group.create` | layout이 어떤 최소에서도 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, `top`, `bottom` 쪽이면 `<w>x0` |
 | `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 workbench order로 그런 첫 card, `<m>`은 `minSize` |
-| `core.group.create` | `request`가 1에서 128자의 문자열이 아님 | `core.group.create: request must be a string of 1 to 128 characters` |
+| `core.group.create` | `request`가 1자보다 짧거나 128자보다 긴 문자열임. 문자열이 아닌 `request`는 params schema가 `invalid params for core.group.create`로 거부한다(`docs/spec/exposure.md#command-parameters`) | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin`이나 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) |
 | `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group`이 content card나 window sidebar | `card <id> is not a group` |
 | `core.group.rename` | 양끝 공백을 지운 이름이 Unicode scalar value 1개 미만이거나 40개 초과 | `group name must be 1 to 40 characters: <name>` |
@@ -133,7 +133,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 
 ### Split 설정
 
-설정 `cardSplit`([값](settings.ko.md#값))은 split 뒤의 크기를 정한다. 기본값 `exact`에서 split은 나누는 상자만 나눈다. 곧 card의 사각형(layout library의 R4) 또는 group card의 사각형([group card의 사각형](#group-card의-사각형))이다. split은 grid의 사각형이 아니라 그리는 사각형을 나눈다: 위쪽 절반이 header 아래에 서는 `top` 또는 `bottom` 쪽 split은, `bottom` 쪽 group split 버튼의 split은 언제나 그러한데, 새 line에서 자르고 그 line을 두 그리는 사각형이 header를 뺀 뒤 같은 높이가 되는 곳에 놓으며, 그 line으로도 card가 최소보다 작게 그려질 때만 거부된다([최소 크기](#최소-크기)). `left` 또는 `right` 쪽 split과 위쪽 절반이 어떤 header 아래에도 서지 않는 split은 layout library처럼 나눈다. `even`에서는 workbench가 같은 변경에서 grid에 `core.layout.balance`의 balance([group card의 card command](#group-card에-대한-card-command))를 실행하므로, 모든 card가 공정한 크기를 받고 배치는 유지된다. 이것은 `core.card.split`과 split 버튼, `core.group.create`와 group split 버튼의 split, group에 card를 더하는 것, `side`가 있는 `core.layout.open`에 적용된다. `balance()`는 모든 card에 공정한 몫을 주고 그리는 최소를 검사하지 않으므로, `even`에서 workbench는 모든 operation처럼([최소 크기](#최소-크기)) 복사본에서 balance된 grid를 검사하고, content card가 최소보다 작게 그려지면 `card <id> cannot split toward <side>: cardSplit even would draw card <c> at <w>x<h>, below its minimum <m>x<m>`로, `balance()`가 throw하면 `card <id> cannot split toward <side>: cardSplit even cannot balance the grid: <the error of balance>`로 split 전체를 거부한다. `<c>`는 workbench order로 그런 첫 card다. 아무것도 바뀌지 않는다. `side`가 있는 `core.layout.open`의 반복은 두 값 모두에서 새 card를 `side` 쪽 이웃으로 찾으므로 그 idempotency가 유지된다.
+설정 `cardSplit`([값](settings.ko.md#값))은 split 뒤의 크기를 정한다. 기본값 `exact`에서 split은 나누는 상자만 나눈다. 곧 card의 사각형(layout library의 R4) 또는 group card의 사각형([group card의 사각형](#group-card의-사각형))이다. split은 grid의 사각형이 아니라 그리는 사각형을 나눈다: 위쪽 절반이 header 아래에 서는 `top` 또는 `bottom` 쪽 split은, `bottom` 쪽 group split 버튼의 split은 언제나 그러한데, 새 line에서 자르고 그 line을 두 그리는 사각형이 header를 빼고 그것을 담은 group의 frame 안에서 같은 높이가 되는 곳에 놓으며, 그 line으로도 card가 최소보다 작게 그려질 때만 거부된다([최소 크기](#최소-크기)). `left` 또는 `right` 쪽 split과 위쪽 절반이 어떤 header 아래에도 서지 않는 split은 layout library처럼 나눈다. `even`에서는 workbench가 같은 변경에서 grid에 `core.layout.balance`의 balance([group card의 card command](#group-card에-대한-card-command))를 실행하므로, 모든 card가 공정한 크기를 받고 배치는 유지된다. 이것은 `core.card.split`과 split 버튼, `core.group.create`와 group split 버튼의 split, group에 card를 더하는 것, `side`가 있는 `core.layout.open`에 적용된다. `balance()`는 모든 card에 공정한 몫을 주고 그리는 최소를 검사하지 않으므로, `even`에서 workbench는 모든 operation처럼([최소 크기](#최소-크기)) 복사본에서 balance된 grid만 검사하고 balance 전 split의 두 절반은 검사하지 않으며, content card가 최소보다 작게 그려지면 `card <id> cannot split toward <side>: cardSplit even would draw card <c> at <w>x<h>, below its minimum <m>x<m>`로, `balance()`가 throw하면 `card <id> cannot split toward <side>: cardSplit even cannot balance the grid: <the error of balance>`로 split 전체를 거부한다. `<c>`는 workbench order로 그런 첫 card다. 아무것도 바뀌지 않는다. `side`가 있는 `core.layout.open`의 반복은 두 값 모두에서 새 card를 `side` 쪽 이웃으로 찾으므로 그 idempotency가 유지된다.
 
 ### 닫기
 
@@ -213,6 +213,7 @@ group card는 기존 card 디자인의 container 하나로 그린다. 그 테두
 | element | `core.group` | The frames of the group cards in workbench order. |
 | element | `core.group.header` | The headers of the group cards in workbench order. |
 | element | `core.group.name` | The names in the group headers in workbench order; a double-click renames. |
+| element | `core.activity.group` | The activity icons before the names of the group headers that have an activity, in workbench order ([activity](activity.ko.md#그리기)). |
 | element | `core.group.split-x` | The vertical split buttons of the group headers in workbench order. |
 | element | `core.group.split-y` | The horizontal split buttons of the group headers in workbench order. |
 | element | `core.group.group-x` | The group split buttons toward right of the group headers in workbench order, enabled while the group card can be split into a new group toward right. |

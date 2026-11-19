@@ -211,7 +211,7 @@ func TestTheMoveCommandRefusesWhatADropCannotDo(t *testing.T) {
 		params map[string]string
 		text   string
 	}{
-		{map[string]string{"tab": tab, "card": other, "zone": "middle"}, "unknown zone middle"},
+		{map[string]string{"tab": tab, "card": other, "zone": "middle"}, "invalid params for core.tab.move"},
 		{map[string]string{"tab": tab, "card": "absent", "zone": "centre"}, "no card absent"},
 		{map[string]string{"tab": "absent", "card": other, "zone": "centre"}, "no tab absent"},
 		{map[string]string{"tab": only, "card": other, "zone": "left"}, "cannot move to the left of " + other},

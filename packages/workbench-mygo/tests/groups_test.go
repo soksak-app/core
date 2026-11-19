@@ -537,8 +537,13 @@ func TestTheGridReportsEveryCardInTheGroupForm(t *testing.T) {
 func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes")))
 	// The request is refused after the layout and the drawn minimum, so the check runs while the layout takes a group of main
-	// (docs/spec/groups.md#commands).
-	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`, `7`} {
+	// (docs/spec/groups.md#commands). A request that is no string is refused by the params schema, as every registry refuses it
+	// (docs/spec/exposure.md#command-parameters).
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": 7}`); err == nil ||
+		err.Error() != "invalid params for core.group.create" {
+		t.Errorf("the request 7 answered %v, not %q", err, "invalid params for core.group.create")
+	}
+	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`} {
 		want := "core.group.create: request must be a string of 1 to 128 characters"
 		if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": `+request+`}`); err == nil ||
 			err.Error() != want {

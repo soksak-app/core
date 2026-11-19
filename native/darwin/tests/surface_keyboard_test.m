@@ -337,6 +337,94 @@ int main(void) { @autoreleasepool {
     check([afterHide isEqual:@"ls"], [NSString stringWithFormat:@"the region receives the keys kept through the hide (got %@)", afterHide].UTF8String);
     sp_region_close(keepingRegion);
 
+    // A shown surface holds the keyboard for its region, which does not show yet, and a placement hides the surface before the region
+    // showed, as a preparation that keeps a new active tab invisible does: the surface keeps the keyboard through the hide, so the
+    // keys typed while it is hidden wait for its region.
+    void *rehiddenHost = sp_surface_create(composition);
+    webviewSetFrame(rehiddenHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(rehiddenHost, false);
+    WKWebView *rehiddenPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(rehiddenHost, rehiddenPage), "the page of the surface that hides before its region showed is placed");
+    sp_surface_focus_for_region(rehiddenHost);
+    check(window.firstResponder == (NSResponder *)rehiddenHost, "a surface that declared a region holds the keyboard itself");
+    webviewSetSurfaceHidden(rehiddenHost, true);
+    check(window.firstResponder == (NSResponder *)rehiddenHost, [NSString stringWithFormat:
+        @"a surface that holds the keyboard for its region keeps it through a hide (first responder %@)",
+        NSStringFromClass(window.firstResponder.class)].UTF8String);
+    typeKeys(window, "pwd");
+    void *rehiddenRegion = sp_region_create(rehiddenHost, "view", regionEvent, NULL);
+    NSString *rehiddenKeys = regionKeys(^{
+        webviewSetSurfaceHidden(rehiddenHost, false);
+        placeRegion(rehiddenRegion);
+    });
+    check(window.firstResponder == (NSResponder *)rehiddenRegion, "the region takes the keyboard when its surface shows");
+    check([rehiddenKeys isEqual:@"pwd"], [NSString stringWithFormat:
+        @"the region receives the keys typed while its surface was hidden (got %@)", rehiddenKeys].UTF8String);
+    sp_region_close(rehiddenRegion);
+
+    // The decided call of a press on a tab gives the keyboard to the surface of the tab before the placement that shows it, so the
+    // surface holds the keyboard for its region while it is hidden, and the placement hides the surface of the tab that was active:
+    // the hidden surface keeps the keyboard, so the keys typed then wait for its region.
+    void *shownHost = sp_surface_create(composition);
+    void *pressedHost = sp_surface_create(composition);
+    webviewSetFrame(shownHost, 0, 0, 400, 500);
+    webviewSetFrame(pressedHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(shownHost, false);
+    webviewSetSurfaceHidden(pressedHost, true);
+    WKWebView *shownPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    WKWebView *pressedPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(shownHost, shownPage), "the page of the surface of the active tab is placed");
+    check(sp_surface_place_view(pressedHost, pressedPage), "the page of the surface of the pressed tab is placed");
+    sp_surface_focus(shownHost);
+    sp_surface_focus_for_region(pressedHost);
+    check(window.firstResponder == (NSResponder *)pressedHost, "the hidden surface of the pressed tab holds the keyboard for its region");
+    webviewSetSurfaceHidden(shownHost, true);
+    check(window.firstResponder == (NSResponder *)pressedHost, [NSString stringWithFormat:
+        @"the hide of another surface leaves the keyboard with the hidden surface that holds it (first responder %@)",
+        NSStringFromClass(window.firstResponder.class)].UTF8String);
+    typeKeys(window, "cd");
+    void *pressedRegion = sp_region_create(pressedHost, "view", regionEvent, NULL);
+    NSString *pressedKeys = regionKeys(^{
+        webviewSetSurfaceHidden(pressedHost, false);
+        placeRegion(pressedRegion);
+    });
+    check(window.firstResponder == (NSResponder *)pressedRegion, "the region of the pressed tab takes the keyboard when its surface shows");
+    check([pressedKeys isEqual:@"cd"], [NSString stringWithFormat:
+        @"the region of the pressed tab receives the keys typed before its surface showed (got %@)", pressedKeys].UTF8String);
+    sp_region_close(pressedRegion);
+
+    // The hide of a region of another surface, as the placement of the documents of a window does, leaves the keyboard with the
+    // hidden surface that holds it for its region, so the keys typed then wait for that region.
+    void *regionHost = sp_surface_create(composition);
+    void *behindHost = sp_surface_create(composition);
+    webviewSetFrame(regionHost, 0, 0, 400, 500);
+    webviewSetFrame(behindHost, 0, 0, 400, 500);
+    webviewSetSurfaceHidden(regionHost, false);
+    webviewSetSurfaceHidden(behindHost, true);
+    WKWebView *regionPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    WKWebView *behindPage = [[[WKWebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 500)] autorelease];
+    check(sp_surface_place_view(regionHost, regionPage), "the page of the surface whose region hides is placed");
+    check(sp_surface_place_view(behindHost, behindPage), "the page of the hidden surface that waits for its region is placed");
+    void *shownRegion = sp_region_create(regionHost, "view", regionEvent, NULL);
+    placeRegion(shownRegion);
+    sp_surface_focus_for_region(behindHost);
+    check(window.firstResponder == (NSResponder *)behindHost, "the hidden surface that waits for its region holds the keyboard");
+    sp_region_place(shownRegion, 0, 0, 0, 0, false);
+    afterMainTurn(@"a turn of the main loop after the hide of the region");
+    check(window.firstResponder == (NSResponder *)behindHost, [NSString stringWithFormat:
+        @"the hide of a region of another surface leaves the keyboard with the hidden surface that holds it (first responder %@)",
+        NSStringFromClass(window.firstResponder.class)].UTF8String);
+    typeKeys(window, "ls");
+    void *behindRegion = sp_region_create(behindHost, "view", regionEvent, NULL);
+    NSString *behindKeys = regionKeys(^{
+        webviewSetSurfaceHidden(behindHost, false);
+        placeRegion(behindRegion);
+    });
+    check([behindKeys isEqual:@"ls"], [NSString stringWithFormat:
+        @"the region of the waiting surface receives the keys typed before its surface showed (got %@)", behindKeys].UTF8String);
+    sp_region_close(behindRegion);
+    sp_region_close(shownRegion);
+
     // The keyboard leaves before the region shows: the keys were typed into this surface, and its region still receives them.
     void *leftHost = sp_surface_create(composition);
     webviewSetFrame(leftHost, 0, 0, 400, 500);

@@ -953,16 +953,11 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		}
 		return nil, s.fullscreen(p.On == nil || *p.On)
 	case "host.window.resize":
-		var p struct {
-			Width, Height *float64
+		width, height, err := ContentSize(params)
+		if err != nil {
+			return nil, err
 		}
-		if err := json.Unmarshal(params, &p); err != nil {
-			return nil, rpcError(codeInvalidParams, "%v", err)
-		}
-		if *p.Width < 1 || *p.Height < 1 {
-			return nil, rpcError(codeInvalidParams, "width and height must be positive numbers")
-		}
-		s.window.SetSize(*p.Width, *p.Height)
+		s.window.SetSize(width, height)
 	case "host.window.move":
 		var p struct {
 			X, Y *float64
@@ -1061,23 +1056,14 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	type delivery struct {
 		result platform.PointerResult
 		held   platform.ButtonHeld
+		view   uintptr
 	}
 	done := make(chan delivery, 1)
-	var pressed uintptr
 	err = s.useWindow(func(window platform.Window) error {
-		return readPressThenDeliver(func() error {
-			if input.Phase != "down" {
-				return nil
-			}
-			var err error
-			pressed, err = viewAt(window, input.X, input.Y)
-			return err
-		}, func() error {
-			return system.InjectPointer(window, input.Pointer, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
-				input.DeltaX, input.DeltaY, input.Clicks, func(result platform.PointerResult, held platform.ButtonHeld) {
-					done <- delivery{result, held}
-				})
-		})
+		return system.InjectPointer(window, input.Pointer, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
+			input.DeltaX, input.DeltaY, input.Clicks, func(result platform.PointerResult, held platform.ButtonHeld, view uintptr) {
+				done <- delivery{result, held, view}
+			})
 	})
 	if err != nil {
 		return nativeError(codeNoInput, err)
@@ -1101,8 +1087,10 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerInterrupted:
 		return rpcError(codeInterrupted, "%s", got.held.Reason)
 	}
-	if pressed != 0 {
-		s.press(pressed)
+	// A direct injection does not pass through the local event monitor of AppKit, so the host publishes its surface press from the
+	// web view that the delivered press reached.
+	if input.Phase == "down" {
+		s.press(got.view)
 	}
 	return nil
 }
@@ -2263,4 +2251,19 @@ func (s *Surfaces) pageProcessStarted() {
 		s.waitsEnded = ""
 	}
 	s.mu.Unlock()
+}
+
+// ContentSize reads the {width, height} of host.window.resize, which the endpoint checked against its params schema. A width
+// or a height below 1 point is refused (docs/spec/exposure.md#host-entries).
+func ContentSize(params json.RawMessage) (float64, float64, error) {
+	var p struct {
+		Width, Height float64
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return 0, 0, rpcError(codeInvalidParams, "%v", err)
+	}
+	if p.Width < 1 || p.Height < 1 {
+		return 0, 0, rpcError(codeInvalidParams, "width and height must be at least 1")
+	}
+	return p.Width, p.Height, nil
 }

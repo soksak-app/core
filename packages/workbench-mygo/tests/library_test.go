@@ -206,7 +206,7 @@ func TestTheSortOrdersTheProjects(t *testing.T) {
 	if got := status[libraryRead](t, f, "core.library"); got.Sort != "open" || !slices.Equal(got.Shown, []string{opened, saved}) {
 		t.Fatalf("the open project is not first in %v of %s and %s", got.Shown, saved, opened)
 	}
-	if _, err := f.answer("core.library.sort", map[string]string{"order": "size"}); err == nil || err.Error() != "unknown sort size" {
+	if _, err := f.answer("core.library.sort", map[string]string{"order": "size"}); err == nil || err.Error() != "invalid params for core.library.sort" {
 		t.Fatalf("the command answered %v", err)
 	}
 }

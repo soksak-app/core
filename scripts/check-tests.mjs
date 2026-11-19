@@ -287,6 +287,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F958-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "WKWebView *view = final == SP_INPUT_DELIVERED ? target : nil;" },
+      { file: "packages/host/go/src/exposure.go", symbol: "s.press(got.view)" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn surface_of_view" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_test.m", id: "press attribution: the press is attributed to the web view" },
+      { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestADeliveredPressAnswersTheViewThatItReached" },
+      { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "a_delivered_press_answers_the_view_that_it_reached" },
+    ],
+    expected: "A press that waits for an open layout is attributed to the web view that it reached, so it moves the focus to its card in both page hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F967",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "function parameterRefusal(name, schema, params) {" },
@@ -456,6 +471,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F960",
+    implementation: [
+      { file: "e2e/benchmark/cases/raster-cards.mjs", symbol: "export async function openRasterGrid(s, { rows, columns, balance })" },
+      { file: "e2e/benchmark/cases/raster-cards.mjs", symbol: "export function boundaryMoves(start, now)" },
+      { file: "e2e/benchmark/cases/click-cpu.mjs", symbol: "export function clickOrder(cards, focused, count)" },
+      { file: "e2e/benchmark/cases/scroll-cpu.mjs", symbol: "export function wheelDelta(frame, lines)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function actionFrames(times, { action, from, to })" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function blankFigures(cards, base, counts)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function redrawActions(grid, line, leader)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function regionRaster(host, surface)" },
+    ],
+    tests: [
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the rows of the grid are the first content cards of one column of the start layout" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a row splits at its widest card, and the cleanup moves back each line that stands elsewhere" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the clicks visit each card in turn from the card after the focused one" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a wheel toward older lines has a negative distance of whole points, and a wheel that does not move that way fails" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "an action takes the last frame completed before it and the frames requested during it" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a frame is blank for a card that keeps no pixel of its colour" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the leader actions run only where the build declares core.group.leader" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the raster of a region is its frame in device pixels, also where the view rounds a half point" },
+    ],
+    expected: "The raster benchmarks open a grid of probe cards with the sidebars off, visit the cards, wheel toward older lines and count the blank card frames of each action from the recorded frames.",
+    levels: ["unit"],
+  },
+  {
     id: "F974",
     implementation: [
       { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },
@@ -482,6 +522,55 @@ const FEATURE_LINKS = [
       { file: "scripts/test/test-app.test.mjs", id: "a bundle whose executable no longer matches its signature fails its verification with the bundle path, and the start is skipped" },
     ],
     expected: "A bundle build writes and signs a staging bundle and installs it with one rename, so a launch finds a complete signed bundle, and a check run verifies the signature of each bundle before it starts it.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-2.1",
+    implementation: [
+      { file: "packages/window-check/core-events.json", symbol: "\"workbench.layout.change\": {" },
+    ],
+    tests: [
+      { file: "packages/window-check/test/catalog.test.mjs", id: "the core catalog that the package ships is docs/spec/events.json" },
+    ],
+    expected: "The catalog copy of the window checks equals docs/spec/events.json.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983",
+    implementation: [
+      { file: "scripts/test-app.mjs", symbol: "export function parseRunCount(text) {" },
+      { file: "native/darwin/src/surface_layout.m", symbol: "sp_event(SP_CLASS_INPUT, SP_EVENT_DEBUG, \"native.input.held\", fields.UTF8String);" },
+    ],
+    tests: [
+      { file: "scripts/test/test-app.test.mjs", id: "--count takes a whole number of runs of at least 1, and one run without it" },
+    ],
+    expected: "A full window run repeats a given number of times and stops at the first failed run, and the held keys write their steps to the event log.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983-1",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (!layoutOf(owner) && ![returning containsObject:[NSValue valueWithPointer:owner]]) releaseInput(owner);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkCommitDuringAReturnKeepsTheKeyOrder" },
+    ],
+    expected: "A commit during the return of earlier keys gives no later key back ahead of them.",
+    levels: ["unit"],
+  },
+  {
+    id: "F983-2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
+      { file: "native/darwin/src/image_region.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1);" },
+      { file: "native/darwin/src/document_view.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of another surface leaves the keyboard with the hidden surface that holds it" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of a region of another surface leaves the keyboard with the hidden surface that holds it" },
+    ],
+    expected: "A hide of a surface, an image region or a document view leaves the keyboard with a surface that holds it for its region, shown or hidden.",
     levels: ["unit"],
   },
   {
@@ -807,6 +896,34 @@ const FEATURE_LINKS = [
       { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
     ],
     expected: "A status declaration takes a boolean summary and refuses another value in the plugin-api, sok Go and sok Rust manifest checks.",
+    levels: ["unit"],
+  },
+  {
+    id: "F982",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "activity must be true" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "activity must be true" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "activity must be true" },
+      { file: "packages/workbench/activity.js", symbol: "export function createActivity(" },
+      { file: "packages/workbench/activity.js", symbol: "export function drawActivity(" },
+      { file: "packages/workbench-mygo/src/activity.go", symbol: "func NewActivityFollow(" },
+      { file: "packages/workbench-mygo/src/activity.go", symbol: "func (s *Shell) drawActivity(" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+      { file: "packages/workbench/test/activity.test.mjs", id: "activity of a tab: ${kase.name}" },
+      { file: "packages/workbench/test/activity.test.mjs", id: "activity of a window: ${kase.name}" },
+      { file: "packages/workbench/test/activity-follow.test.mjs", id: "the activity of a tab follows the watch of its surface, which starts when the surface registers and ends when the tab leaves" },
+      { file: "packages/workbench/test/activity-draw.test.mjs", id: "each activity draws its declared icon as an image named by the activity before the name" },
+      { file: "packages/workbench/test/activity-draw.test.mjs", id: "a change of activity redraws the one icon, an unchanged activity keeps it, and no activity removes it" },
+      { file: "packages/workbench/test/bar-tabs.test.mjs", id: "a project tab and a space tab show the icon of their activity before the name, and none without one" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestActivityCases" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestTheActivityOfATabFollowsTheWatchOfItsSurface" },
+      { file: "packages/workbench-mygo/tests/activity_test.go", id: "TestTheIconsOfAnActivityStandOnItsHolders" },
+    ],
+    expected: "A status marked activity: true reports the activity of its surface, the manifest checks refuse another form, and both workbenches derive the activities of the tabs, cards, group cards, spaces and projects of a window, report them as core.activity, show an invalid value in the error banner and draw the icon of each activity on its holder.",
     levels: ["unit"],
   },
   {
@@ -13951,9 +14068,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F417",
-    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func readPressThenDeliver" }],
-    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
-    expected: "An injected press reads its target before its delivery.",
+    implementation: [{ file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerDelivered, platform.ButtonHeld{}, view)" }],
+    tests: [{ file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestADeliveredPressAnswersTheViewThatItReached" }],
+    expected: "An injected press is attributed to the web view that its delivery reached (F958-1).",
     levels: ["unit"],
   },
   {
@@ -14517,7 +14634,7 @@ const FEATURE_LINKS = [
     id: "F965",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static const char *resizeEdgeAt(NSWindow *window, NSPoint point)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(" },
     ],
     tests: [
@@ -14545,7 +14662,7 @@ const FEATURE_LINKS = [
     id: "F962-2",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void interruptGestures(NSEvent *event)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(" },
     ],
     tests: [

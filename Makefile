@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-terminal-text measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners repeat-test-app
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -391,7 +391,7 @@ TAURI_DEBUG_FEATURES = diagnostics,dev
 WAILS_DEBUG_TAGS     = diagnostics dev
 # The declared core release candidate is the RELEASE constant of scripts/check-versions.mjs.
 DIAGNOSTIC_RELEASE := $(filter 0.0.%,$(shell sed -n 's/^export const RELEASE = "\(.*\)";$$/\1/p' scripts/check-versions.mjs))
-.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit build-gpuikit build-gpuikit-release test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
+.PHONY: build-native build-sok build-fixture-registry build-fixture-registry-from-sok copy-frontend-browser run-browser copy-frontend-wailsv3 copy-frontend-tauriv2 copy-frontend-mygo copy-frontend-gpuikit build-gpuikit build-gpuikit-release test-wailsv3 test-tauriv2 test-mygo test-hosts check-release-wailsv3 check-release-tauriv2 check-release-mygo check-rust-format check-rust-clippy check-go-format run-tauriv2 run-tauriv2-release build-tauriv2 build-tauriv2-release run-wailsv3 run-wailsv3-release build-wailsv3 build-wailsv3-release run-mygo run-mygo-release build-mygo build-mygo-release test-app test-app-capture-input-closetest-app-host-go test-app-host-go-library test-app-activation test-app-section-design test-app-activity-icons benchmark-input-latency measure-examples-size run-tauriv2 run-tauriv2-release run-wailsv3 run-wailsv3-release test-app
 
 # rustup installs cargo in $(CARGO_HOME)/bin, which is ~/.cargo/bin when CARGO_HOME is not set, and adds the path to
 # the shell profile. The shell of make does not read the profile, and a hosted runner sets CARGO_HOME outside HOME.
@@ -726,6 +726,10 @@ test-app-activation: $(E2E_BUILD)
 test-app-section-design: $(E2E_BUILD)
 	@node scripts/test-app.mjs --script test-app:section-design
 
+# Leaves stills of the activity icons in target/activity-icons for inspection at original resolution.
+test-app-activity-icons: $(E2E_BUILD)
+	@node scripts/test-app.mjs --script test-app:activity-icons
+
 test-app-card-sidebar-current:
 	@pnpm -F @soksak/e2e run test-app:card-sidebar-current
 
@@ -781,6 +785,13 @@ benchmark-layout-redraw:
 # default mygo, and SOKSAK_CONFIG_DIR the configuration folder that the application runs with.
 benchmark-input-latency:
 	@$(B3_BENCHMARK_ENV) SOKSAK_APP=$(or $(APP),mygo) node scripts/node-tests.mjs --script benchmark:input-latency --concurrency 1 --timeout 600
+
+# Repeats the full window run of one check file COUNT times (docs/operations/examples.md#end-to-end-run): each run starts the three debug
+# applications in a new root, runs the check and quits them; the repeat stops at the first failed run and reports the run and the load.
+repeat-test-app: check-app-tests $(E2E_BUILD)
+	@case "$(FILE)" in '') echo "repeat-test-app requires FILE=<test file> COUNT=<n>" >&2; exit 2;; esac
+	@case "$(COUNT)" in ''|*[!0-9]*|0) echo "repeat-test-app requires COUNT=<n> with n >= 1" >&2; exit 2;; esac
+	@node scripts/test-app.mjs --script test-app --only '$(FILE)' --count $(COUNT)
 
 repeat-app-test:
 	@case "$(FILE)" in '') echo "repeat-app-test requires FILE=<test file> NAME=<test name pattern> COUNT=<n>" >&2; exit 2;; esac

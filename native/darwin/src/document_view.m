@@ -1224,7 +1224,7 @@ static BOOL sameDocument(WKNavigationAction *action, NSURL *current) {
     CGFloat y = surface.isFlipped ? top : NSHeight(bounds) - top - height;
     self.frame = NSMakeRect(insets.left, y, MAX(width, 0), MAX(height, 0));
     self.pageZoom = self.zoom;
-    self.hidden = !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor;
+    sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor);
 }
 
 - (void)surfaceScaleChanged {

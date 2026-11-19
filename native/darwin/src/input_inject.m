@@ -964,22 +964,22 @@ sp_input_result sp_input_pointer_clicks(void *handle, double x, double y, int ph
 
 // Calls done and releases the reference of held. held is reported only when result is SP_INPUT_BUTTON_HELD,
 // SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED.
-static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held) {
+static void heldDone(sp_input_done done, void *context, sp_input_result result, SPHeld held, WKWebView *view) {
     if (result == SP_INPUT_RESIZE_EDGE || result == SP_INPUT_INTERRUPTED) {
         sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = NULL, .reason = held.why };
         [held.front release];
-        done(context, result, &report);
+        done(context, result, &report, NULL);
         return;
     }
     if (result == SP_INPUT_POINTER_HELD) {
         sp_input_held report = { .mask = 0, .pid = -1, .bundleIdentifier = NULL, .pointer = held.holder->name.UTF8String, .reason = held.why };
         [held.front release];
-        done(context, result, &report);
+        done(context, result, &report, NULL);
         return;
     }
     if (result != SP_INPUT_BUTTON_HELD) {
         [held.front release];
-        done(context, result, NULL);
+        done(context, result, NULL, (__bridge void *)view);
         return;
     }
     sp_input_held report = {
@@ -989,7 +989,7 @@ static void heldDone(sp_input_done done, void *context, sp_input_result result, 
         .pointer = NULL,
         .reason = NULL,
     };
-    done(context, result, &report);
+    done(context, result, &report, NULL);
     [held.front release];
 }
 
@@ -999,7 +999,7 @@ static void pointerNow(SPPointer *pointer, void *handle, double x, double y, int
     SPHeld held = {0, nil, nil, ""};
     sp_input_result result = pointerInput(pointer, handle, x, y, phase, button, deltaX, deltaY, clicks, &held);
     logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, result, held.why, held.holder);
-    heldDone(done, context, result, held);
+    heldDone(done, context, result, held, nil);
 }
 
 // The facts of view for the record of a press or release that its document did not receive: class, address, frame in window
@@ -1089,7 +1089,7 @@ static NSMutableArray<SPPointerRequest *> *pointerRequests;
 static BOOL pointerRequestRuns;
 static BOOL pointerRequestsStarting;
 
-static void pointerRequestAnswered(void *context, sp_input_result result, const sp_input_held *held);
+static void pointerRequestAnswered(void *context, sp_input_result result, const sp_input_held *held, void *view);
 
 static void startPointerRequests(void) {
     if (pointerRequestsStarting) return;
@@ -1105,9 +1105,9 @@ static void startPointerRequests(void) {
     pointerRequestsStarting = NO;
 }
 
-static void pointerRequestAnswered(void *context, sp_input_result result, const sp_input_held *held) {
+static void pointerRequestAnswered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPPointerRequest *request = context;
-    request->done(request->context, result, held);
+    request->done(request->context, result, held, view);
     [request release];
     pointerRequestRuns = NO;
     startPointerRequests();
@@ -1216,7 +1216,7 @@ static void observeWindowCloses(void) {
                 [pointerRequests removeObjectsInArray:ended];
                 for (SPPointerRequest *request in ended) {
                     sp_log_info("input inject", "a pointer request of a window that closed before its turn is answered rejected");
-                    request->done(request->context, SP_INPUT_REJECTED, NULL);
+                    request->done(request->context, SP_INPUT_REJECTED, NULL, NULL);
                 }
             });
     });
@@ -1280,7 +1280,7 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
             finished = YES;
             NSString *why = [NSString stringWithFormat:@"the web views did not hear the virtual key window before %@", end];
             logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, why.UTF8String, nil);
-            done(context, SP_INPUT_UNRECEIVED, NULL);
+            done(context, SP_INPUT_UNRECEIVED, NULL, NULL);
         }, nil);
         return;
     }
@@ -1292,7 +1292,7 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
         if (!window.isVisible || window.isMiniaturized) {
             logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED,
                 "the window is not shown, so the scroll target presents nothing until it shows", nil);
-            done(context, SP_INPUT_UNRECEIVED, NULL);
+            done(context, SP_INPUT_UNRECEIVED, NULL, NULL);
             return;
         }
         // A wheel event received before the scroll tree of a new document is rendered does not move the document. The event is
@@ -1306,7 +1306,7 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
             ends = nil;
             NSString *why = [NSString stringWithFormat:@"the scroll target did not present before %@", end];
             logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, SP_INPUT_UNRECEIVED, why.UTF8String, nil);
-            done(context, SP_INPUT_UNRECEIVED, NULL);
+            done(context, SP_INPUT_UNRECEIVED, NULL, NULL);
         }) retain];
         [target _doAfterNextPresentationUpdate:^{
             if (finished) return;
@@ -1358,11 +1358,13 @@ static void pointerThen(SPPointer *pointer, void *handle, double x, double y, in
             sp_input_result final = result == SP_INPUT_DELIVERED && received ? SP_INPUT_DELIVERED :
                 result == SP_INPUT_DELIVERED ? SP_INPUT_UNRECEIVED : result;
             if (final == SP_INPUT_UNRECEIVED) logUnreceived(window, target, reached, type, x, y);
+            // A received press or release reached the awaited document, so its web view is the target.
+            WKWebView *view = final == SP_INPUT_DELIVERED ? target : nil;
             [reached release];
             reached = nil;
             logPointer(pointer, x, y, phase, button, deltaX, deltaY, clicks, final,
                 final == SP_INPUT_UNRECEIVED ? "the document did not receive the press or release" : held.why, held.holder);
-            heldDone(done, context, final, held);
+            heldDone(done, context, final, held, view);
         });
     } @finally {
         if (hasPressContext) sp_input_press_context_pop(&pressContext);

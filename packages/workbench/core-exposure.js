@@ -5,6 +5,7 @@
 // A change of a status is announced by calling coreChanged(). The document calls it after the render of the
 // plane, after changes of projects and settings, and after the drawing of modals and the library; the
 // registry sends only the watched values that changed to the host.
+import { createActivity } from "./activity.js";
 import { contributionsState, onContributionsChange } from "./contributions.js";
 import { checkOpenPath } from "./file-open.js";
 import { registry, connectExposure, revisitRegistrations, whenRepliesSent } from "./exposure.js";
@@ -23,7 +24,7 @@ import {
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   drawnCardRects, focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
-  openInLayout, selectInLayout, moveInLayout, closeInLayout, layoutDescription, surfaceSpace,
+  openInLayout, selectInLayout, moveInLayout, closeInLayout, layoutDescription, surfaceSpace, activityLayout,
   cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
 } from "./plane.js";
 import { emitEvent, eventAdmits } from "./page-log.js";
@@ -38,7 +39,7 @@ import {
   behindDialog, filePlace, modalState, onFilesDropped, onModalState, onWindowResponder, orderedCallsAnswered, overlayElementRect,
 } from "./host.js";
 import { keyboardResponder } from "./keyboard.js";
-import { plugin, sectionSurfacePlugin } from "./registry.js";
+import { hasPlugin, plugin, sectionSurfacePlugin } from "./registry.js";
 import { compositionKindOf } from "./surface-composition-kind.js";
 import { retainedSurfaceEntries, surfaceKindOf } from "./surface-listing.js";
 import { liveMounts, onMountedChange, surfaceLeftOut } from "./surface-modules.js";
@@ -67,6 +68,52 @@ export function coreChanged() {
     scheduled = false;
     for (const run of watchers) run();
   });
+}
+
+/**
+ * The projects of this window for its activities (docs/spec/activity.md): the projects that the window opened, the shown space with
+ * its drawn layout.
+ */
+function activityProjects() {
+  const shown = projects.inLibrary() ? null : projects.active();
+  const drawn = activityLayout();
+  return projects.local().map((project) => (project.id !== shown?.id || drawn === null ? project : {
+    ...project, spaces: project.spaces.map((space) => (space.id === project.activeSpaceId ? { ...space, layout: drawn } : space)),
+  }));
+}
+
+/* The receivers of a change of the activities: the drawings of the icons. */
+const activityListeners = new Set();
+/* The receiver of the error of the activity values of a tab, which the error display of the page shows (docs/spec/activity.md). */
+let activityFailed = null;
+
+/* The activities of this window, which follow the statuses of the plugins that declare activity on each surface. */
+const activity = createActivity({
+  observe: (name, surface, fn) => registry.observe(name, surface, fn, { exact: true }),
+  // default: a tab of a plugin that is not loaded, and a plugin record without activity, follow no status.
+  statuses: (id) => (hasPlugin(id) ? plugin(id).activity ?? [] : []),
+  projects: activityProjects,
+  failed: (tab, text) => activityFailed(tab, text),
+  changed: () => {
+    for (const listener of activityListeners) listener();
+    coreChanged();
+  },
+});
+
+/** Starts and ends the watches of the activities after the layout, the projects or the plugins of the window changed. */
+export const syncActivity = () => activity.sync();
+
+/** The activities of this window, the value of core.activity. */
+export const activityState = () => activity.state();
+
+/** Sets the receiver of the error text of the activity values of a tab, null when it is withdrawn. */
+export function onActivityError(receiver) {
+  activityFailed = receiver;
+}
+
+/** Calls listener after the activities of this window changed. */
+export function onActivity(listener) {
+  activityListeners.add(listener);
 }
 
 /* The file last dropped on the window and the result of its handling: core.drop of docs/spec/native-surfaces.md. */
@@ -398,6 +445,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   onBinding(coreChanged);
   // default: core.workbench.error of a workbench that shows no error is null (exposure.json).
   status("core.workbench.error", () => document.getElementById("applicationError")?.textContent ?? null);
+  status("core.activity", activityState);
   status("core.projects", () => projects.all().map(withOpen));
   status("core.project", () => {
     const project = projects.active();

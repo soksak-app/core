@@ -274,6 +274,40 @@ func (s *Shell) layoutTabs() ([]MemorySurface, map[string]bool, error) {
 	return surfaces, shown, nil
 }
 
+// activityStatuses are the statuses of the plugin id that declare activity, and none for a plugin that is not loaded.
+func (s *Shell) activityStatuses(id string) []string {
+	if unit := s.units[id]; unit != nil {
+		return unit.Activity
+	}
+	return nil
+}
+
+// activityProjects are the projects that the window opened for their activities, each with the stored layout of each space and the
+// drawn layout in the place of the shown space once the plane is made (docs/spec/activity.md).
+func (s *Shell) activityProjects() ([]ActivityProject, error) {
+	var out []ActivityProject
+	for _, project := range s.projects {
+		if !s.windowProjects[project.ID] {
+			continue
+		}
+		entry := ActivityProject{ID: project.ID}
+		for _, space := range project.Spaces {
+			stored := space.Layout
+			if project.ID == s.active && space.ID == project.ActiveSpaceID && s.plane != nil && s.planes != nil {
+				groups, _, _ := s.planes.Stored()
+				drawn, err := json.Marshal(map[string]any{"state": map[string]any{"cards": s.contentCards()}, "groups": groups})
+				if err != nil {
+					return nil, fmt.Errorf("the drawn layout of space %s: %w", space.ID, err)
+				}
+				stored = drawn
+			}
+			entry.Spaces = append(entry.Spaces, ActivitySpace{ID: space.ID, Layout: stored})
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
 // eachLayoutTab visits the tabs of every space of the projects that the window opened, with the project and the space of each tab and
 // the plane in the place of the shown space once the plane is made; before that the stored layout of the shown space is its layout.
 func (s *Shell) eachLayoutTab(visit func(project, space string, tab layout.Tab, active bool)) error {
@@ -352,6 +386,8 @@ func (s *Shell) observeSections() {
 
 // tabsSettled brings these parts to the plane after each change of it.
 func (s *Shell) tabsSettled() {
+	// The layouts decide the tabs whose statuses the activities follow (docs/spec/activity.md).
+	s.activity.Sync()
 	if s.tabs == nil {
 		return
 	}

@@ -4,6 +4,7 @@
     "core.screen",
     "core.workbench.error",
     "core.workbench.audit",
+    "core.activity",
     "core.projects",
     "core.project",
     "core.layout",

@@ -102,7 +102,7 @@ type metrics struct {
 	libraryFormW, fieldPadY, selectArrowRoom, selectArrowInset, previewBorderMix, previewFillMix, previewInkMix, previewLineW,
 	lineHeight, lineHeightTight, projectColumnW, projectColumnGap, projectColumnPad, projectTabH, projectTabPad, projectTabXInset, projectTabAddH,
 	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
-	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
+	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, activityIcon, activityStroke, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
 	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
@@ -182,6 +182,8 @@ func readMetrics(declared *Declarations) (metrics, error) {
 	read("space-tab-h", &m.spaceTabH)
 	read("act-w", &m.actW)
 	read("notice-dot", &m.noticeDot)
+	read("activity-icon", &m.activityIcon)
+	read("activity-stroke", &m.activityStroke)
 	read("act-h", &m.actH)
 	read("act-icon", &m.actIcon)
 	read("tabs-gap", &m.tabsGap)
@@ -417,7 +419,9 @@ type Shell struct {
 	// windowSidebars holds the widths of the fixed sidebars of the shown space, which outlive their columns.
 	windowSidebars map[string]layout.WindowSidebar
 
-	units         map[string]*installedUnit
+	units map[string]*installedUnit
+	// activity follows the statuses that declare activity on the surface of each tab of the window (docs/spec/activity.md).
+	activity      *ActivityFollow
 	processes     pluginProcesses
 	contributions *Contributions
 	// lastDrop is the status core.drop, and notices the state of the notification center.
@@ -556,6 +560,10 @@ func NewShell(options ShellOptions) (*Shell, error) {
 	if s.units, err = readSurfaceUnits(installed); err != nil {
 		return nil, err
 	}
+	s.activity = NewActivityFollow(func(name, surface string, fn func(value any)) func() {
+		return s.registry.Observe(name, &surface, true, fn)
+	},
+		s.activityStatuses, s.activityProjects, s.options.Invalidate, s.activityError, s.fail)
 	s.contributions = NewContributions()
 	if err := s.contributions.Install(s.installed); err != nil {
 		return nil, err
