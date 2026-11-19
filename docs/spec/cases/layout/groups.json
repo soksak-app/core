@@ -1077,7 +1077,7 @@
    ]
   },
   {
-   "name": "a close that would break the rectangle of a group is refused with the group",
+   "name": "a close whose first fill side would break a group takes the next side that keeps it one rectangle",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -1153,7 +1153,51 @@
      "args": {
       "card": "card-4"
      },
-     "throws": "card card-4 cannot close: group card-5 would not cover one rectangle"
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.5,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       }
+      ]
+     }
     },
     {
      "call": "stored",
@@ -1268,6 +1312,204 @@
       "y": 0,
       "w": 1000,
       "h": 600
+     }
+    }
+   ]
+  },
+  {
+   "name": "a close takes the neighbours of the side whose result keeps every group one rectangle",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 900
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.25,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.3,
+      0.65,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 2,
+       "c1": 3,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 2,
+       "c1": 3,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-6",
+       "c0": 0,
+       "c1": 3,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-7",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     },
+     {
+      "card": "card-9",
+      "name": "그룹 2",
+      "leader": "card-8",
+      "members": [
+       {
+        "card": "card-8",
+        "name": "그룹 3",
+        "leader": "card-3",
+        "members": [
+         "card-3",
+         "card-4"
+        ]
+       },
+       "card-5",
+       "card-6"
+      ]
+     }
+    ],
+    "leader": "card-7",
+    "lastCard": 9
+   },
+   "steps": [
+    {
+     "call": "close",
+     "args": {
+      "card": "card-8"
+     },
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.3,
+       0.65,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 0,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-6",
+        "c0": 0,
+        "c1": 2,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-7",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       },
+       {
+        "card": "card-9",
+        "name": "그룹 2",
+        "leader": "card-5",
+        "members": [
+         "card-5",
+         "card-6"
+        ]
+       }
+      ],
+      "leader": "card-7",
+      "lastCard": 9
      }
     }
    ]
@@ -2095,7 +2337,7 @@
    ]
   },
   {
-   "name": "a move that would break the rectangle of a group is refused with the group",
+   "name": "a move beside a member of a group closes the card with the neighbour that keeps every group one rectangle",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -2173,7 +2415,80 @@
       "target": "card-1",
       "side": "left"
      },
-     "throws": "card card-4 cannot move to left of card-1: group card-5 would not cover one rectangle"
+     "returns": {
+      "card": "card-4"
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.25,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.5,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 3,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-4",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-4",
+         "card-1",
+         "card-2"
+        ]
+       }
+      ],
+      "leader": "card-5",
+      "lastCard": 5
+     }
     }
    ]
   },
