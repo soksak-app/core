@@ -13999,6 +13999,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F939",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "summary must be a boolean" },
+      { file: "packages/sok/go/src/manifest.go", symbol: "summary must be a boolean" },
+      { file: "packages/sok/rust/src/manifest.rs", symbol: "summary must be a boolean" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/manifest-validation.test.mjs", id: "manifest validation" },
+      { file: "packages/sok/go/tests/manifest_cases_test.go", id: "TestPluginInstallReplaysTheManifestCases" },
+      { file: "packages/sok/rust/tests/manifest_cases_test.rs", id: "plugin_install_replays_the_manifest_cases" },
+    ],
+    expected: "A status declaration takes a boolean summary and refuses another value in the plugin-api, sok Go and sok Rust manifest checks.",
+    levels: ["unit"],
+  },
+  {
     id: "F938",
     implementation: [
       { file: "packages/host/go/src/event_record.go", symbol: "func NotifyStartBegan() {" },

@@ -1265,6 +1265,9 @@ func checkExposes(owner string, raw any) error {
 			if kind == "element" {
 				allowed = append(allowed, "many")
 			}
+			if kind == "status" {
+				allowed = append(allowed, "summary")
+			}
 			if err := only(at, entry, allowed...); err != nil {
 				return err
 			}
@@ -1289,6 +1292,12 @@ func checkExposes(owner string, raw any) error {
 			if raw, has := entry["many"]; has {
 				if _, isBool := raw.(bool); !isBool {
 					return fmt.Errorf("%s: many must be a boolean", at)
+				}
+			}
+			// A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
+			if raw, has := entry["summary"]; has {
+				if _, isBool := raw.(bool); !isBool {
+					return fmt.Errorf("%s: summary must be a boolean", at)
 				}
 			}
 		}

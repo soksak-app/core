@@ -1244,7 +1244,7 @@ export function matchesSchema(schema, value) {
  * Validates one `exposes` declaration. Throws when the format is wrong and returns the received value otherwise.
  *
  *     owner   first part of the name: core, host or a plugin id
- *   status  {name, description, schema}
+ *   status  {name, description, schema, summary?}
  *     commands {name, description, params, result}. params is a schema of type object. A command has no time limit: its
  *                     reply or the end of its peer ends it, so a declaration with timeout is refused.
  *   element {name, description, many?}
@@ -1273,7 +1273,7 @@ export function validateExposes(owner, exposes) {
       // A command ends by its reply or by the end of its peer (docs/spec/exposure.md, command timeout), so the former member is
       // refused by its own name.
       if (key === "commands" && Object.hasOwn(entry, "timeout")) throw new Error(`${at}: timeout is not a member of a command declaration`);
-      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : [])]);
+      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : []), ...(key === "status" ? ["summary"] : [])]);
       if (!isText(entry.description)) throw new Error(`${at}: description is required`);
       for (const field of fields[key]) {
         if (entry[field] === undefined) throw new Error(`${at}: ${field} is required`);
@@ -1281,6 +1281,8 @@ export function validateExposes(owner, exposes) {
       }
       if (key === "commands" && entry.params.type !== "object") throw new Error(`${at}: params must be an object schema`);
       if (entry.many !== undefined && typeof entry.many !== "boolean") throw new Error(`${at}: many must be a boolean`);
+      // A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
+      if (entry.summary !== undefined && typeof entry.summary !== "boolean") throw new Error(`${at}: summary must be a boolean`);
     }
   }
   return exposes;
