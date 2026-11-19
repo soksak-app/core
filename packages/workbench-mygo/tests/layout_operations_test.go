@@ -864,3 +864,39 @@ func TestEveryLayoutCommandRecordsTheLayout(t *testing.T) {
 		t.Fatalf("the commands wrote the records %v, not %v", counts, want)
 	}
 }
+
+// The end of a pointer drag of a divider runs core.boundary.move with the position where the drag ends, which writes its record
+// workbench.layout.change as every command does: a continuous gesture has a command for its result (docs/spec/exposure.md).
+func TestADividerDragEndsWithTheBoundaryCommand(t *testing.T) {
+	host := recordingCommands(&storedHost{installed: layoutPlugins, common: map[string]any{},
+		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
+	f := newTabShell(t, host)
+	f.open(t)
+	answer, err := f.apply("core.card.split", `{"card":"main","side":"right","plugin":"plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var made struct{ Card string }
+	if err := json.Unmarshal([]byte(answer), &made); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	bar, _ := f.divider("main", made.Card)
+	x, y := bar.X+bar.W/2, bar.Y+bar.H/2
+	f.tester.Move(x, y)
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(x-80, y)
+	f.tester.Frame()
+	f.tester.Release(x-80, y)
+	f.settle()
+	moves := []map[string]any{}
+	for _, record := range host.written("workbench.layout.change") {
+		if fields := record["fields"].(map[string]any); fields["command"] == "core.boundary.move" {
+			moves = append(moves, fields)
+		}
+	}
+	if len(moves) != 1 {
+		t.Fatalf("the drag wrote %d records of core.boundary.move: %v", len(moves), moves)
+	}
+}
