@@ -353,3 +353,20 @@ test("core.group.create refuses the drawn minimum before the request and the plu
   await refuses(run("core.group.create", { card: "card-1", side: "right", plugin: PLAIN, request: "" }),
     "core.group.create: request must be a string of 1 to 128 characters");
 });
+
+// A card that the fullscreen of another card hides shows no head and no pane, so core.grid reports its acts and its pane as null, as for
+// a card without a head (docs/spec/example-model.md#card-fullscreen).
+test("core.grid reports no acts and no pane for a card that a fullscreen card hides", { timeout: 5000 }, async () => {
+  arrange();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await run("core.card.fullscreen", { card: "card-3" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const cards = (await status("core.grid")).cards;
+  const shown = cards.find((card) => card.id === "card-3");
+  assert.ok(shown.acts !== null && shown.pane === 0, `the fullscreen card-3 reports the acts ${JSON.stringify(shown.acts)} and the pane ${shown.pane}`);
+  for (const id of ["card-1", "card-2"]) {
+    const hidden = cards.find((card) => card.id === id);
+    assert.deepEqual({ acts: hidden.acts, pane: hidden.pane }, { acts: null, pane: null }, `the hidden ${id} reports acts and a pane`);
+  }
+  await run("core.card.fullscreen", { card: "card-3" });
+});

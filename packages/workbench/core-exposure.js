@@ -200,19 +200,21 @@ function gridState() {
     if (!card || !el) return null;
     const rect = rects.get(card.id);
     const tabs = tabsOf(card);
+    // A card that a fullscreen card hides shows no head and no pane (docs/spec/example-model.md#card-fullscreen).
+    const drawn = !el.hidden && el.querySelector(".chrome__acts") !== null;
     return {
       fullscreen: card.id === fullscreen,
       id: card.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h,
       c0: card.c0, c1: card.c1, r0: card.r0, r1: card.r1,
       // default: a card without a fixed px width has null width.
       fixed: Boolean(card.fixed), width: card.width ?? null, focused: card.id === focused(),
-      pane: el.querySelector(".chrome__acts") ? pane++ : null,
+      pane: drawn ? pane++ : null,
       tabs: tabs.map(({ id, plugin, title }) => ({ id, plugin, title, label: tabLabel(id), notice: tabNotice(id), footer: tabFooter(id),
         modified: tabModified(id), error: tabError(id) })),
       // Text that the content footer shows (docs/spec/example-model.md). default: a card that is not drawn yet has no footer text element, so the text is empty.
       status: el.querySelector(":scope > .status .status__text")?.textContent ?? "",
       active: tabs.length ? activeTab(card).id : null,
-      acts: cardActs(card.id),
+      acts: drawn ? cardActs(card.id) : null,
       sidebars: cardSidebars(card, presentedCardRect(card.id)),
       ...levelMembers(tree, card.id),
     };

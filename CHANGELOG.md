@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-44 (cards hidden by fullscreen in `core.grid`, page): the page reports `acts` and `pane` null for a card that a fullscreen card hides and counts the panes of the shown cards without it, as mygo does (`docs/spec/example-model.md#card-fullscreen`). Verification: the page test failed on the unchanged code and passes.
 - F937-43 (origin of the first tabs of a space, mygo): mygo stores the tabs of a new space, which the grid of the environment declares, with `origin: {directory: null}`, as the page does and `docs/spec/projects.md#tab-origin` states. Verification: the mygo test failed on the unchanged code and passes.
 - F937-37 (order of the refusals of a group create): both workbenches refuse `core.group.create` in the order of `docs/spec/groups.md#commands`: the window sidebar, the layout and the drawn minimum before an invalid `request`, and the plugin last; both checked the request first, and mygo checked the plugin before the drawn minimum. Verification: the page and mygo tests of the contract case `group.create.request-after-the-layout` failed on the unchanged code and pass.
 - F937-36 (menu of a disabled head button, mygo): `core.card.menu` of a split, group split or add button that is disabled is refused with `card <id> cannot <menu>` and opens no menu, as on the page; mygo opened the menu, whose pick then failed (`docs/spec/groups.md#headers`). Verification: the mygo test failed on the unchanged code and passes.
