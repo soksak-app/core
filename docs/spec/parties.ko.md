@@ -81,6 +81,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 ## 그리기
 
 - party 전체는 하나의 바깥 외곽선으로 그린다. 외곽선은 `packages/soksak`의 `outline`이 카드들의 표시된 사각형으로 만든다. 인접한 카드는 통로 간격의 절반에서 이어지며, 외곽선은 테두리 너비의 절반만큼 안쪽으로 옮긴다.
+- `drawing`을 가진 layout case(`docs/spec/cases/layout/parties.json`)는 그리드 크기만큼의 plane을 point 단위로 준다. 너비는 x축의 가장 큰 선 값에 `unit`을 곱한 값이고, 높이는 y축의 가장 큰 선 값에 `unit`을 곱한 값이다. 그리드는 plane을 배치 규칙으로 나누므로, 선이 값의 `unit`배 위치에 놓이는 것은 그리드가 plane을 같은 부분으로 나눌 때뿐이다. case의 외곽선은 point 단위다.
 - leader 카드가 외곽선 위에 가진 테두리 구간은 leader 색으로 그리고, leader 표시는 그 머리에 그린다.
 - party 외곽선이 rail과 겹치면 rail은 바깥에, party 외곽선은 안쪽에 두고 rail 너비만큼 떨어뜨려 두 선이 겹치지 않게 한다. 포커스 표시는 party 외곽선과 무관하다.
 - 요소 이름. party `<id>`의 바깥 외곽선은 요소 `path[data-party="<id>"]`이다. 그 leader 테두리 구간은 요소 `path[data-party-leader="<id>"]`이며, `stroke`가 leader 색이다. rail 외곽선은 workbench 문서의 요소 `#railPath`이다. 위 규칙을 검사하는 테스트는 `#railPath`의 `d` 값과 party 외곽선의 `d` 값을 비교한다.

@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-2: layout case가 그려진 외곽선을 가진다. `drawing`을 가진 case는 테마의 rail 너비, 그리드 선 값 하나의 point 수와 그리드 간격을 준다. `a party outline is inset by half the rail width inside the grid lines` case는 party 외곽선을 point 단위로 기대한다. Go party 모델의 `core.party.get`은 JavaScript party 모듈과 같이 외곽선을 가진 party 레코드를 반환하며, Go party 모델은 생성될 때 rail 너비를 받는다.
 - F908-2: 닿지 않음 거부 `cards are not touching: <ids>`는 party의 member와 닿지 않는 요청의 카드만 요청 순서대로 나열한다. `create`는 첫 카드의 묶음 밖의 카드를, `add`와 `take`는 추가하는 카드를 나열한다. `docs/spec/cases/layout/parties.json`의 case와 Go restore 테스트가 이 목록을 기대하며, party 모듈과 Go party 모델이 이를 낸다.
 - F908-2: `core.party.remove`는 party가 가지지 않은 카드를 `card <id> is not in party <party>`로 거부하고 아무것도 바꾸지 않는다. `docs/spec/cases/layout/parties.json`의 `removing a card that is not in the party is refused` case가 이 거부를 기대하며, party 모듈과 Go party 모델이 통과한다.
 - F898: sok가 Codex agent를 지원한다. `~/.codex`가 폴더이면 skill을 `~/.agents/skills/soksak/SKILL.md`에 쓰고, `sok mcp install`은 `PATH`에 `codex` 명령이 있으면 sok를 그 명령에 등록한다.

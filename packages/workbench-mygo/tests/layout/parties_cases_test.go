@@ -104,7 +104,12 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
 		Cases       []struct {
-			Name  string       `json:"name"`
+			Name    string `json:"name"`
+			Drawing *struct {
+				RailWidth string  `json:"theme-rail-w"`
+				Unit      float64 `json:"unit"`
+				Gap       float64 `json:"gap"`
+			} `json:"drawing"`
 			State layout.State `json:"state"`
 			Steps []struct {
 				Call    string          `json:"call"`
@@ -125,13 +130,23 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 			}
 			state := layout.State{Xs: sortedKeys(xs), Ys: sortedKeys(ys), Cards: kase.State.Cards}
 			gap := 0.0
+			if kase.Drawing != nil {
+				gap = kase.Drawing.Gap
+				// A drawn case states the rail width its theme declares, and its plane is unit points for each largest line value.
+				if rail := shownRailValue(t); rail != kase.Drawing.RailWidth {
+					t.Fatalf("%s: the rail width of the case is %s, the theme declares %s", kase.Name, kase.Drawing.RailWidth, rail)
+				}
+			}
 			options := layout.DefaultOptions()
 			options.Gap = &gap
 			grid, err := layout.New(&state, options)
 			if err != nil {
 				t.Fatalf("%s: the state of the case is refused: %v", kase.Name, err)
 			}
-			parties := layout.NewParties(shownPalette(t))
+			if kase.Drawing != nil {
+				grid.Resize(kase.Drawing.Unit*state.Xs[len(state.Xs)-1], kase.Drawing.Unit*state.Ys[len(state.Ys)-1])
+			}
+			parties := layout.NewParties(shownPalette(t), shownRail(t))
 			for i, s := range kase.Steps {
 				reply, err := parties.Run(grid, s.Call, s.Params)
 				if s.Error != nil {
@@ -163,4 +178,24 @@ func TestPartyCasesRunEverySteps(t *testing.T) {
 			}
 		})
 	}
+}
+
+// shownRail returns the rail width of the shown theme in points, which the party border takes (docs/spec/parties.md#drawing).
+func shownRail(t *testing.T) float64 {
+	t.Helper()
+	declared, err := workbench.ReadDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return declared.ChromeNumber("theme-rail-w", "px")
+}
+
+// shownRailValue returns the rail width of the shown theme as it is declared.
+func shownRailValue(t *testing.T) string {
+	t.Helper()
+	declared, err := workbench.ReadDeclarations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return declared.ChromeValue("theme-rail-w")
 }

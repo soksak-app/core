@@ -29,11 +29,11 @@ func TestPartyRecordsCarryTheStoredFieldsOutlineAndReason(t *testing.T) {
 		t.Fatal(err)
 	}
 	border := declared.ChromeNumber("theme-rail-w", "px")
-	parties := layout.NewParties(shownPalette(t))
+	parties := layout.NewParties(shownPalette(t), border)
 	if _, err := parties.Run(grid, "core.party.create", []byte(`{"cards":["a","b"],"leader":"a"}`)); err != nil {
 		t.Fatal(err)
 	}
-	records, err := parties.Records(grid, border)
+	records, err := parties.Records(grid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestPartyRecordsCarryTheStoredFieldsOutlineAndReason(t *testing.T) {
 	if record.ID != "p1" || record.Color != "#a06ce0" || record.Leader == nil || *record.Leader != "a" || record.Reason == nil || *record.Reason != "created" {
 		t.Fatalf("record %+v does not carry the stored fields and the reason of the create", record)
 	}
-	loops, err := parties.Outline(grid, "p1", border)
+	loops, err := parties.Outline(grid, "p1")
 	if err != nil {
 		t.Fatal(err)
 	}

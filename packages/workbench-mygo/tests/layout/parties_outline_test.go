@@ -33,11 +33,11 @@ func TestPartyOutlineIsTheOutlineOfItsCardRects(t *testing.T) {
 		t.Fatal(err)
 	}
 	border := declared.ChromeNumber("theme-rail-w", "px")
-	parties := layout.NewParties(shownPalette(t))
+	parties := layout.NewParties(shownPalette(t), border)
 	if _, err := parties.Run(grid, "core.party.create", []byte(`{"cards":["a","b"]}`)); err != nil {
 		t.Fatal(err)
 	}
-	got, err := parties.Outline(grid, "p1", border)
+	got, err := parties.Outline(grid, "p1")
 	if err != nil {
 		t.Fatal(err)
 	}

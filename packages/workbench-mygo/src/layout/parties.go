@@ -15,6 +15,8 @@ type Parties struct {
 	list []*party
 	// palette holds the party theme tokens of the shown theme and mode, token to #rrggbb value, read from the declaration.
 	palette map[string]string
+	// rail is the rail width of the theme in points. The party border takes it, and each outline is inset by half of it.
+	rail float64
 }
 
 // party is a group of touching cards. Cards keeps the order in which the cards joined the party.
@@ -91,8 +93,11 @@ type tabState struct {
 var partyTokens = []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6"}
 
 // NewParties returns a space with no party. palette holds the party theme tokens of the shown theme and mode, token to #rrggbb value,
-// as the declaration of workbench.json states them (docs/spec/parties.md#identity-and-values).
-func NewParties(palette map[string]string) *Parties { return &Parties{palette: palette} }
+// as the declaration of workbench.json states them (docs/spec/parties.md#identity-and-values). rail is the rail width of the theme in
+// points (docs/spec/parties.md#drawing).
+func NewParties(palette map[string]string, rail float64) *Parties {
+	return &Parties{palette: palette, rail: rail}
+}
 
 // Run runs one party command over the grid and returns its reply. An unknown command or an invalid parameter is an error.
 func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error) {
@@ -158,7 +163,7 @@ func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error)
 		if found == nil {
 			return nil, fmt.Errorf("unknown party %s", in.Party)
 		}
-		return p.view(found), nil
+		return p.record(g, found)
 	case "core.card.get":
 		var in struct {
 			Card string `json:"card"`
@@ -659,7 +664,7 @@ func sameSet(a, b []string) bool {
 
 // Outline returns the loops of the outer outline of a party: the outline of the presented rectangles of its cards, with adjacent
 // cards joined at half the gap and the outline inset by half the border width (docs/spec/parties.md#drawing).
-func (p *Parties) Outline(g *Grid, partyID string, border float64) ([][]Point, error) {
+func (p *Parties) Outline(g *Grid, partyID string) ([][]Point, error) {
 	target := p.find(partyID)
 	if target == nil {
 		return nil, fmt.Errorf("unknown party %s", partyID)
@@ -672,7 +677,7 @@ func (p *Parties) Outline(g *Grid, partyID string, border float64) ([][]Point, e
 		}
 		rects = append(rects, rect)
 	}
-	pad, inset := g.Gap()/2, border/2
+	pad, inset := g.Gap()/2, p.rail/2
 	return ComputeOutline(rects, OutlineOptions{Pad: &pad, Inset: &inset}).Loops, nil
 }
 
@@ -718,22 +723,31 @@ type Record struct {
 }
 
 // Records returns one record for each party, in the order of the parties (docs/spec/parties.md#commands).
-func (p *Parties) Records(g *Grid, border float64) ([]Record, error) {
+func (p *Parties) Records(g *Grid) ([]Record, error) {
 	out := []Record{}
 	for _, item := range p.list {
-		loops, err := p.Outline(g, item.ID, border)
+		record, err := p.record(g, item)
 		if err != nil {
 			return nil, err
 		}
-		pairs := [][][2]float64{}
-		for _, loop := range loops {
-			next := [][2]float64{}
-			for _, point := range loop {
-				next = append(next, [2]float64{point.X, point.Y})
-			}
-			pairs = append(pairs, next)
-		}
-		out = append(out, Record{ID: item.ID, Cards: slices.Clone(item.Cards), Leader: item.Leader, Color: item.Color, LeaderColor: item.LeaderColor, Outline: pairs, Reason: item.Reason})
+		out = append(out, record)
 	}
 	return out, nil
+}
+
+// record returns the record of a party, with its outline in points (docs/spec/parties.md#queries).
+func (p *Parties) record(g *Grid, target *party) (Record, error) {
+	loops, err := p.Outline(g, target.ID)
+	if err != nil {
+		return Record{}, err
+	}
+	pairs := [][][2]float64{}
+	for _, loop := range loops {
+		next := [][2]float64{}
+		for _, point := range loop {
+			next = append(next, [2]float64{point.X, point.Y})
+		}
+		pairs = append(pairs, next)
+	}
+	return Record{ID: target.ID, Cards: slices.Clone(target.Cards), Leader: target.Leader, Color: target.Color, LeaderColor: target.LeaderColor, Outline: pairs, Reason: target.Reason}, nil
 }

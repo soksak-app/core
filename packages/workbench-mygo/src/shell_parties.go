@@ -32,7 +32,7 @@ func (s *Shell) partyRecords() []layout.Record {
 	if s.plane == nil || s.parties == nil {
 		return []layout.Record{}
 	}
-	records, err := s.parties.Records(s.plane, s.registry.declared.ChromeNumber("theme-rail-w", "px"))
+	records, err := s.parties.Records(s.plane)
 	if err != nil {
 		s.fail(err)
 		return []layout.Record{}
@@ -81,7 +81,7 @@ func (s *Shell) restoreParties(project *projectRecord, space layout.Space, plane
 	if err != nil {
 		return err
 	}
-	parties := layout.NewParties(palette)
+	parties := layout.NewParties(palette, s.registry.declared.ChromeNumber("theme-rail-w", "px"))
 	if err := parties.Restore(plane, stored); err != nil {
 		return fmt.Errorf("parties: %w", err)
 	}

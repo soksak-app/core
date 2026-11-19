@@ -28,7 +28,7 @@ func TestStoredPartiesRestoreAndExportUnchanged(t *testing.T) {
 	}
 	leader := "a"
 	stored := []layout.StoredParty{{ID: "p1", Cards: []string{"a", "b"}, Leader: &leader, Color: "#112233"}}
-	parties := layout.NewParties(shownPalette(t))
+	parties := layout.NewParties(shownPalette(t), shownRail(t))
 	if err := parties.Restore(grid, stored); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestStoredPartyNotTouchingIsRefusedWithItsIdentifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	parties := layout.NewParties(shownPalette(t))
+	parties := layout.NewParties(shownPalette(t), shownRail(t))
 	err = parties.Restore(grid, []layout.StoredParty{{ID: "p1", Cards: []string{"a", "b"}, Color: "#112233"}})
 	if err == nil || err.Error() != "party p1: cards are not touching: b" {
 		t.Fatalf("restore error %v, want the party identifier and the touching refusal", err)

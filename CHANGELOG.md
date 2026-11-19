@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-2: The layout cases state a drawn outline. A case with `drawing` gives the rail width of its theme, the points of one grid line value and the grid gap; the case `a party outline is inset by half the rail width inside the grid lines` expects the outline of a party in points. `core.party.get` returns the party record with its outline in the Go party model, as the JavaScript party module does, and the Go party model takes the rail width when it is created.
 - F908-2: The touching refusal `cards are not touching: <ids>` lists only the cards of the request that touch no member of the party, in request order. `create` lists the cards outside the group of its first card, `add` and `take` list the added card. The cases of `docs/spec/cases/layout/parties.json` and the Go restore test expect this list, and the party module and the Go party model produce it.
 - F908-2: `core.party.remove` refuses a card that the party does not hold with `card <id> is not in party <party>`, and changes nothing. The case `removing a card that is not in the party is refused` in `docs/spec/cases/layout/parties.json` expects that refusal, and the party module and the Go party model pass it.
 - F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
