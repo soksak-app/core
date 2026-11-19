@@ -141,7 +141,7 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	if len(data.TabList()) == 1 {
 		options.CentreOnly = &drag.card
 	}
-	// The drop resolves from the root plane inward, so a point in the body of a group card finds a card of its child plane.
+	// The drop resolves from the root level inward, so a point inside a group card finds a card inside it.
 	drag.hit, drag.preview = s.planes.DropAt(float64(x)-origin.X, float64(y)-origin.Y, options, ""), nil
 	if drag.hit != nil && !isPlace(drag.hit.ID) {
 		drag.preview = s.dropRect(drag.card, drag.hit)
@@ -151,7 +151,7 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	}
 }
 
-// dropRect is the rectangle of the card that a drop produces, in the coordinates of the root plane, and nil when the layout refuses the
+// dropRect is the rectangle of the card that a drop produces, in the coordinates of the plane, and nil when the layout refuses the
 // drop. The drop runs on the tree and the tree is put back, since a cut shares the gap between its two pieces and a move closes before
 // it cuts, so half of the target is not where the card lands.
 func (s *Shell) dropRect(from string, hit *layout.ZoneHit) *layout.Rect {
@@ -174,7 +174,7 @@ func (s *Shell) dropRect(from string, hit *layout.ZoneHit) *layout.Rect {
 
 // dropCard makes the change of the layout of a drop of a tab of the card from on hit and returns the card that holds the tab after it:
 // a tab that is the only tab of its card moves its card, which cannot move beside itself, the centre of a group card takes a new card with data at the right edge of
-// its child plane, the centre of a content card changes no card, and a side takes a new card with data beside the target
+// its rectangle, the centre of a content card changes no card, and a side takes a new card with data beside the target
 // (docs/spec/groups.md#moving-and-dropping).
 func (s *Shell) dropCard(from string, hit *layout.ZoneHit, data json.RawMessage) (string, error) {
 	source, err := s.cardData(from)
@@ -301,8 +301,8 @@ func (s *Shell) drawDropPreview(c *ui.Context, inset float32) {
 		Background(faded(s.palette.Focus, s.metrics.dropMix)).Border(s.metrics.dropBorder, s.palette.Focus)
 }
 
-// dragGroupTo takes the drop of the dragged group card at x and y of the root plane: the resolution leaves out the group card and its
-// child plane, and the drop is the move of core.card.move, which the tree refuses or places (docs/spec/groups.md#moving-and-dropping).
+// dragGroupTo takes the drop of the dragged group card at x and y of the plane: the resolution leaves out the group card and the cards
+// inside it, and the drop is the move of core.card.move, which the tree refuses or places (docs/spec/groups.md#moving-and-dropping).
 func (s *Shell) dragGroupTo(drag *tabDrag, x, y float64, options layout.ZoneOptions) {
 	drag.hit, drag.preview = s.planes.DropAt(x, y, options, drag.card), nil
 	if drag.hit != nil && !isPlace(drag.hit.ID) && s.planes.CheckMove(drag.card, drag.hit.ID, drag.hit.Zone) == nil {

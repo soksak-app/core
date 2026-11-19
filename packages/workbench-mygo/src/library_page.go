@@ -415,32 +415,32 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*layout.Stat
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return nil, err.Error()
 	}
-	// The tree of planes is read as the space opens it, so the preview shows the refusal of a stored group (docs/spec/groups.md#storage).
-	if err := s.checkStoredTree(stored); err != nil {
+	// The group tree is read as the space opens it, so the preview shows the refusal of a stored group (docs/spec/groups.md#storage).
+	tree, err := s.readStoredTree(stored)
+	if err != nil {
 		failure := fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
 		frame.Children(func() {
 			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
 		})
 		return nil, failure
 	}
-	s.drawPreviewGrid(frame.Padding(padY, padX, padY, padX), c, stored.State)
+	s.drawPreviewGrid(frame.Padding(padY, padX, padY, padX), c, stored.State, tree)
 	return &stored.State, ""
 }
 
-// checkStoredTree reads the stored tree of planes of stored on a plane of its own, as loadSpace reads it, and returns its refusal.
-func (s *Shell) checkStoredTree(stored storedLayout) error {
+// readStoredTree reads the stored layout of stored on a grid of its own, as loadSpace reads it.
+func (s *Shell) readStoredTree(stored storedLayout) (*layout.GroupTree, error) {
 	gap := s.palette.PlaneGap()
-	root, err := layout.New(nil, layout.Options{Gap: &gap})
+	grid, err := layout.New(nil, layout.Options{Gap: &gap})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	_, err = layout.ReadPlanes(stored.State, stored.Leader, stored.LastCard, s.planeOptions(root.MinSize()), root)
-	return err
+	return layout.ReadTree(stored.State, stored.Groups, stored.Leader, stored.LastCard, s.groupOptions(), grid)
 }
 
-// drawPreviewGrid lays the cards of the plane state out in box as the grid of a preview, and draws a group card as a pane that holds the
-// grid of its child plane (docs/spec/groups.md#drawing).
-func (s *Shell) drawPreviewGrid(box ui.Element, c *ui.Context, state layout.State) {
+// drawPreviewGrid lays the cards of the grid state out in box as the grid of a preview, and draws each group card of tree as a frame
+// around the panes inside it (docs/spec/groups.md#drawing).
+func (s *Shell) drawPreviewGrid(box ui.Element, c *ui.Context, state layout.State, tree *layout.GroupTree) {
 	m := s.metrics
 	shares := previewShares(state)
 	columns := make([]ui.Track, len(shares))
@@ -453,29 +453,17 @@ func (s *Shell) drawPreviewGrid(box ui.Element, c *ui.Context, state layout.Stat
 	}
 	box.Grid().ColumnTracks(columns...).RowTracks(rows...).Gap(m.space2).Children(func() {
 		for _, card := range state.Cards {
-			if plane, group := previewGroup(card); group {
-				pane := ui.Box(c.Key(card.ID)).ColumnStart(card.C0+1).ColumnSpan(card.C1-card.C0).RowStart(card.R0+1).RowSpan(card.R1-card.R0).Clip().
-					Padding(m.space1).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, mixed(s.palette.Muted, s.palette.Card, m.previewBorderMix)).
-					Background(s.palette.Card)
-				s.drawPreviewGrid(pane, c, plane)
-				continue
-			}
 			s.drawPreviewPane(c, card)
 		}
+		for _, id := range tree.Cards() {
+			if !tree.IsGroup(id) {
+				continue
+			}
+			span, _ := tree.Card(id) // silent: Cards lists cards of the tree.
+			ui.Box(c.Key(id)).ColumnStart(span.C0+1).ColumnSpan(span.C1-span.C0).RowStart(span.R0+1).RowSpan(span.R1-span.R0).
+				Radius(s.radiusSmall()).Border(s.palette.BorderWidth, mixed(s.palette.Muted, s.palette.Card, m.previewBorderMix)).PassThrough()
+		}
 	})
-}
-
-// previewGroup is the child plane of a stored group card, and false for another card.
-func previewGroup(card layout.Card) (layout.State, bool) {
-	var record struct {
-		Group *struct {
-			Plane layout.State `json:"plane"`
-		} `json:"group"`
-	}
-	if json.Unmarshal(card.Data, &record) != nil || record.Group == nil {
-		return layout.State{}, false
-	}
-	return record.Group.Plane, true
 }
 
 // previewShares are the shares of the columns of state in the grid of a preview, where a column with only window sidebars takes less, as

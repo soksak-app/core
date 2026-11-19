@@ -40,7 +40,7 @@ func TestTheLeaderButtonMakesItsCardTheLeader(t *testing.T) {
 	f := groupedShell(t)
 	f.settle()
 	if got := itemsNamed(f.tester.ElementTree(), "core.card.leader"); !slices.Equal(got, []string{"main", "card-3"}) {
-		t.Fatalf("the leader buttons are %v; the root plane of one card shows none", got)
+		t.Fatalf("the leader buttons are %v; the root level of one card shows none", got)
 	}
 	f.click("core.card.leader", "card-3")
 	if cards := f.gridCards(); cards["card-3"]["leader"] != true || cards["main"]["leader"] == true {
@@ -59,7 +59,7 @@ func TestTheGroupButtonShowsWhileTheGroupFitsAndMakesAGroup(t *testing.T) {
 	f.click("core.card.group", "main")
 	f.click("core.picker.item", "plain")
 	cards := f.gridCards()
-	if cards["main"]["plane"] != "card-2" || cards["card-3"]["plane"] != "card-2" {
+	if cards["main"]["parent"] != "card-2" || cards["card-3"]["parent"] != "card-2" {
 		t.Fatalf("after the group menu the grid holds %v", cards)
 	}
 	f.tester.SetSize(420, 300)

@@ -3,33 +3,32 @@ package workbench
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// The group cards of the shown space (docs/spec/groups.md): the tree of planes that the workbench holds over the root plane, the
-// commands core.group.*, core.card.move and core.card.get, and the reads of the cards of every plane.
+// The group cards of the shown space (docs/spec/groups.md): the group tree that the workbench holds beside the grid, the commands
+// core.group.*, core.card.move and core.card.get, and the reads of the cards of every level.
 
-// planeOptions are the sizes that the tree of the shown space places its planes with: the gap of the plane, the smallest edge of a
-// card and the head height of a card.
-func (s *Shell) planeOptions(minimum float64) layout.PlaneOptions {
-	return layout.PlaneOptions{Gap: s.palette.PlaneGap(), MinSize: minimum, Head: float64(s.metrics.headH)}
+// groupOptions are the sizes that the group tree of the shown space draws with: the head height of a card.
+func (s *Shell) groupOptions() layout.GroupOptions {
+	return layout.GroupOptions{Head: float64(s.metrics.headH)}
 }
 
-// allCards is every card of every plane of the shown space in workbench order.
+// allCards is every card of every level of the shown space in workbench order, a group card with its span.
 func (s *Shell) allCards() []layout.Card {
 	if s.planes == nil {
 		return nil
 	}
 	cards := []layout.Card{}
-	for _, card := range s.planes.Cards() {
-		cards = append(cards, card.Card)
+	for _, id := range s.planes.Cards() {
+		card, _ := s.planes.Card(id) // silent: Cards lists cards of the space.
+		cards = append(cards, card)
 	}
 	return cards
 }
 
-// contentCards is the cards of every plane of the shown space that are not group cards, in workbench order.
+// contentCards is the cards of every level of the shown space that are not group cards, in workbench order.
 func (s *Shell) contentCards() []layout.Card {
 	cards := []layout.Card{}
 	for _, card := range s.allCards() {
@@ -125,18 +124,18 @@ func (s *Shell) registerGroups() {
 		if err := s.groupCard(value.Card); err != nil {
 			return nil, err
 		}
-		key, _ := s.planes.PlaneOf(value.Card) // silent: groupCard found the card.
+		key := s.planes.Parent(value.Card)
 		if leader, ok := s.planes.Leader(key); !ok || leader != value.Card {
 			if _, err := s.planes.SetLeader(value.Card); err != nil {
 				return nil, err
 			}
 			s.settle()
 		}
-		var plane *string
-		if key != layout.RootPlane {
-			plane = &key
+		var group *string
+		if key != "" {
+			group = &key
 		}
-		return map[string]any{"card": value.Card, "plane": plane}, nil
+		return map[string]any{"card": value.Card, "group": group}, nil
 	})
 	command(s, "core.card.move", func(value cardMoveParam) (any, error) {
 		if err := s.groupCard(value.Card); err != nil {
@@ -226,11 +225,11 @@ func (s *Shell) createGroup(value groupCreateParam) (any, error) {
 // createdGroup is the result of a core.group.create that already stands: card is a card of a group of exactly card and its neighbour
 // toward side, which holds a tab of plugin with params (docs/spec/groups.md#idempotency).
 func (s *Shell) createdGroup(value groupCreateParam) (map[string]string, bool, error) {
-	key, _ := s.planes.PlaneOf(value.Card) // silent: groupCard found the card.
-	if key == layout.RootPlane {
+	key := s.planes.Parent(value.Card)
+	if key == "" {
 		return nil, false, nil
 	}
-	cards := s.planes.PlaneCards(key)
+	cards := s.planes.Members(key)
 	neighbour := s.planes.Neighbour(value.Card, value.Side)
 	if len(cards) != 2 || neighbour == "" || s.isGroup(neighbour) {
 		return nil, false, nil
@@ -305,12 +304,12 @@ type groupOnPath struct {
 	Name string `json:"name"`
 }
 
-// groupCardRead is the group record of a group card that core.card.get returns, with its child plane in the tree form of core.layout.
+// groupCardRead is the group record of a group card that core.card.get returns, with its members in the tree form of core.layout.
 type groupCardRead struct {
-	Name   string       `json:"name"`
-	Level  int          `json:"level"`
-	Leader string       `json:"leader"`
-	Plane  layout.State `json:"plane"`
+	Name    string `json:"name"`
+	Level   int    `json:"level"`
+	Leader  string `json:"leader"`
+	Members []any  `json:"members"`
 }
 
 // groupState is a group card as core.card.get returns it: its id, its group path and its group record.
@@ -337,13 +336,8 @@ func (s *Shell) cardGet(id string, answer func(any, error)) {
 	}
 	if s.isGroup(id) {
 		record, _ := s.planes.Group(id) // silent: isGroup found the group card.
-		plane, err := s.planes.GroupTree(id)
-		if err != nil {
-			answer(nil, err)
-			return
-		}
 		answer(groupState{Card: id, Groups: path, Group: groupCardRead{Name: record.Name, Level: record.Level, Leader: record.Leader,
-			Plane: plane}}, nil)
+			Members: s.planes.ReportedMembers(id)}}, nil)
 		return
 	}
 	data, err := s.cardData(id)
@@ -417,7 +411,7 @@ func summaryStatuses(result any) (map[string]map[string]any, error) {
 	return out, nil
 }
 
-// closeGroupAsked closes the group card id with every card of its child plane, after each modified tab of them is saved or discarded
+// closeGroupAsked closes the group card id with every card inside it, after each modified tab of them is saved or discarded
 // in turn (docs/spec/groups.md#card-commands-on-a-group-card). It tells whether the group closed now.
 func (s *Shell) closeGroupAsked(id string) (bool, error) {
 	type asked struct {
@@ -453,20 +447,4 @@ func (s *Shell) closeGroupAsked(id string) (bool, error) {
 	}
 	next(0)
 	return false, nil
-}
-
-// storedCards is every card of a stored root plane and of the planes in its group records.
-func storedCards(state layout.State) []layout.Card {
-	cards := slices.Clone(state.Cards)
-	for _, card := range state.Cards {
-		var record struct {
-			Group *struct {
-				Plane layout.State `json:"plane"`
-			} `json:"group"`
-		}
-		if json.Unmarshal(card.Data, &record) == nil && record.Group != nil {
-			cards = append(cards, storedCards(record.Group.Plane)...)
-		}
-	}
-	return cards
 }

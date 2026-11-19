@@ -946,7 +946,7 @@ func (s *Shell) storedTextSize(surface string) (float64, bool) {
 			if (project.ID == s.active && space.ID == project.ActiveSpaceID) || json.Unmarshal(space.Layout, &stored) != nil {
 				continue // silent: the memory saver reports a stored layout that does not read.
 			}
-			for _, card := range storedCards(stored.State) {
+			for _, card := range stored.State.Cards {
 				data, err := layout.DecodeCardData(card.Data)
 				if err != nil || data == nil {
 					continue // silent: a place card has no tabs, and the shell refuses a stored card that does not read when it loads the space.

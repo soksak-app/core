@@ -98,17 +98,16 @@ func TestAGroupCreateWrapsTheCardAndFocusesTheNewCard(t *testing.T) {
 	if layout["leader"] != "card-2" || layout["lastCard"] != float64(3) {
 		t.Fatalf("core.layout holds the leader %v and lastCard %v", layout["leader"], layout["lastCard"])
 	}
-	cards := layout["state"].(map[string]any)["cards"].([]any)
-	group := cards[0].(map[string]any)["data"].(map[string]any)["group"].(map[string]any)
-	if group["name"] != "그룹 1" || group["level"] != float64(1) || group["leader"] != "main" {
-		t.Fatalf("core.layout holds the group record %v", group)
+	want := []any{map[string]any{"card": "card-2", "name": "그룹 1", "level": float64(1), "leader": "main", "members": []any{"main", "card-3"}}}
+	if !reflect.DeepEqual(layout["groups"], want) {
+		t.Fatalf("core.layout holds the groups %v, want %v", layout["groups"], want)
 	}
-	if ids := len(group["plane"].(map[string]any)["cards"].([]any)); ids != 2 {
-		t.Fatalf("the child plane holds %d cards", ids)
+	if cards := len(layout["state"].(map[string]any)["cards"].([]any)); cards != 4 {
+		t.Fatalf("the grid holds %d cards, not main, card-3 and the two window sidebars", cards)
 	}
 }
 
-func TestTheGridListsTheCardsOfTheChildPlanesWithTheirPlaneAndTheLeaders(t *testing.T) {
+func TestTheGridListsTheCardsWithTheGroupThatHoldsThemAndTheLeaders(t *testing.T) {
 	f := groupedShell(t)
 	cards := f.gridCards()
 	group, main, born := cards["card-2"], cards["main"], cards["card-3"]
@@ -119,30 +118,32 @@ func TestTheGridListsTheCardsOfTheChildPlanesWithTheirPlaneAndTheLeaders(t *test
 	if !reflect.DeepEqual(group["group"], want) || group["leader"] != true || len(group["tabs"].([]any)) != 0 {
 		t.Fatalf("core.grid lists the group card %v", group)
 	}
-	if main["plane"] != "card-2" || main["leader"] != true || born["plane"] != "card-2" || born["leader"] != nil {
+	if main["parent"] != "card-2" || main["leader"] != true || born["parent"] != "card-2" || born["leader"] != nil {
 		t.Fatalf("core.grid lists main %v and card-3 %v", main, born)
 	}
-	if main["x"].(float64) <= group["x"].(float64) || main["y"].(float64) <= group["y"].(float64) {
-		t.Fatalf("main at %v,%v stands outside the body of its group at %v,%v", main["x"], main["y"], group["x"], group["y"])
+	// The header of the group takes the top of its rectangle, and the left edge of main stays on the line of the grid.
+	if main["x"] != group["x"] || main["y"].(float64) <= group["y"].(float64) {
+		t.Fatalf("main at %v,%v does not stand under the header of its group at %v,%v", main["x"], main["y"], group["x"], group["y"])
 	}
 }
 
-func TestTheDescriptionHoldsAGroupCardWithTheTreeOfItsChildPlane(t *testing.T) {
+func TestTheDescriptionHoldsTheGridAndTheGroupTree(t *testing.T) {
 	f := groupedShell(t)
 	var described map[string]any
 	if err := json.Unmarshal([]byte(f.described()), &described); err != nil {
 		t.Fatal(err)
 	}
 	root := described["root"].(map[string]any)
-	group, ok := root["group"].(map[string]any)
-	if root["card"] != "card-2" || !ok || root["leader"] != true || root["tabs"] != nil {
+	children := root["children"].([]any)
+	if root["direction"] != "row" || len(children) != 2 || children[0].(map[string]any)["card"] != "main" ||
+		children[0].(map[string]any)["parent"] != "card-2" || children[0].(map[string]any)["leader"] != true {
 		t.Fatalf("the description holds the root %v", root)
 	}
-	inner := group["root"].(map[string]any)
-	children := inner["children"].([]any)
-	if group["name"] != "그룹 1" || group["level"] != float64(1) || inner["direction"] != "row" || len(children) != 2 ||
-		children[0].(map[string]any)["card"] != "main" || children[0].(map[string]any)["leader"] != true {
-		t.Fatalf("the description holds the group %v", group)
+	groups := described["groups"].([]any)
+	group := groups[0].(map[string]any)
+	if len(groups) != 1 || group["card"] != "card-2" || group["name"] != "그룹 1" || group["level"] != float64(1) || group["leading"] != true ||
+		!reflect.DeepEqual(group["members"], []any{"main", "card-3"}) || group["frame"].(map[string]any)["width"].(float64) <= 0 {
+		t.Fatalf("the description holds the groups %v", groups)
 	}
 }
 
@@ -154,7 +155,7 @@ func TestADissolveAnswersDissolvedAgainAndKeepsTheCards(t *testing.T) {
 		}
 	}
 	cards := f.gridCards()
-	if cards["card-2"] != nil || cards["main"] == nil || cards["card-3"] == nil || cards["main"]["plane"] != nil {
+	if cards["card-2"] != nil || cards["main"] == nil || cards["card-3"] == nil || cards["main"]["parent"] != nil {
 		t.Fatalf("core.grid lists %v after the dissolve", cards)
 	}
 	if _, err := f.apply("core.group.dissolve", `{"group": "main"}`); err == nil || err.Error() != "card main is not a group" {
@@ -168,18 +169,18 @@ func TestARenameAndALeaderAnswerTheSameAgain(t *testing.T) {
 		if answer, err := f.apply("core.group.rename", `{"group": "card-2", "name": "  작업  "}`); err != nil || answer != `{"group":"card-2","name":"작업"}` {
 			t.Fatalf("core.group.rename answered %s, %v", answer, err)
 		}
-		if answer, err := f.apply("core.group.leader", `{"card": "card-3"}`); err != nil || answer != `{"card":"card-3","plane":"card-2"}` {
+		if answer, err := f.apply("core.group.leader", `{"card": "card-3"}`); err != nil || answer != `{"card":"card-3","group":"card-2"}` {
 			t.Fatalf("core.group.leader answered %s, %v", answer, err)
 		}
 	}
-	if answer, err := f.apply("core.group.leader", `{"card": "card-2"}`); err != nil || answer != `{"card":"card-2","plane":null}` {
-		t.Fatalf("core.group.leader of the root plane answered %s, %v", answer, err)
+	if answer, err := f.apply("core.group.leader", `{"card": "card-2"}`); err != nil || answer != `{"card":"card-2","group":null}` {
+		t.Fatalf("core.group.leader of the root level answered %s, %v", answer, err)
 	}
 	group := f.gridCards()["card-2"]["group"].(map[string]any)
 	if group["name"] != "작업" || group["leader"] != "card-3" {
 		t.Fatalf("core.grid holds the group record %v", group)
 	}
-	if _, err := f.apply("core.group.rename", `{"group": "card-2", "name": " "}`); err == nil || err.Error() != "group name must be 1 to 40 characters:  " {
+	if _, err := f.apply("core.group.rename", `{"group": "card-2", "name": " "}`); err == nil || err.Error() != "group name must be 1 to 40 characters: " {
 		t.Fatalf("an empty name fails with %v", err)
 	}
 }
@@ -196,7 +197,7 @@ func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
 		}
 	}
 	cards := f.gridCards()
-	if cards["card-2"] != nil || cards["main"]["plane"] != nil || cards["card-3"]["plane"] != nil {
+	if cards["card-2"] != nil || cards["main"]["parent"] != nil || cards["card-3"]["parent"] != nil {
 		t.Fatalf("core.grid lists %v after the move", cards)
 	}
 	if f.layout().focusedCard() != "card-3" {
@@ -207,11 +208,8 @@ func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
 	}
 }
 
-func TestTheCardCommandsOfAGroupCardActOnItsChildPlane(t *testing.T) {
+func TestTheCardCommandsOfAGroupCardActOnItsRectangle(t *testing.T) {
 	f := groupedShell(t)
-	if _, err := f.apply("core.card.fullscreen", `{"card": "card-2"}`); err == nil || err.Error() != "card card-2 is a group; fullscreen shows a content card" {
-		t.Fatalf("a fullscreen of a group card fails with %v", err)
-	}
 	if _, err := f.apply("core.card.focus", `{"card": "card-2"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -223,14 +221,14 @@ func TestTheCardCommandsOfAGroupCardActOnItsChildPlane(t *testing.T) {
 	}
 	cards := f.gridCards()
 	added := cards["card-4"]
-	if added == nil || added["plane"] != "card-2" || added["x"].(float64) <= cards["card-3"]["x"].(float64) {
+	if added == nil || added["parent"] != "card-2" || added["x"].(float64) <= cards["card-3"]["x"].(float64) {
 		t.Fatalf("core.card.add-tab on the group card made %v", added)
 	}
-	if answer, err := f.apply("core.card.split", `{"card": "card-2", "side": "right", "plugin": "plain"}`); err != nil || !strings.Contains(answer, `"card":"card-5"`) {
+	if answer, err := f.apply("core.card.split", `{"card": "card-2", "side": "bottom", "plugin": "plain"}`); err != nil || !strings.Contains(answer, `"card":"card-5"`) {
 		t.Fatalf("core.card.split of the group card answered %s, %v", answer, err)
 	}
-	if f.gridCards()["card-5"]["plane"] != nil {
-		t.Fatal("the split of the group card put the new card into its child plane")
+	if f.gridCards()["card-5"]["parent"] != nil {
+		t.Fatal("the split of the group card put the new card into the group")
 	}
 	if answer, err := f.apply("core.card.close", `{"card": "card-2"}`); err != nil || answer != `{"closed":true}` {
 		t.Fatalf("core.card.close of the group card answered %s, %v", answer, err)
@@ -243,7 +241,7 @@ func TestTheCardCommandsOfAGroupCardActOnItsChildPlane(t *testing.T) {
 	}
 }
 
-func TestACardGetReadsAContentCardWithItsGroupPathAndAGroupCardWithItsPlane(t *testing.T) {
+func TestACardGetReadsAContentCardWithItsGroupPathAndAGroupCardWithItsMembers(t *testing.T) {
 	f := groupedShell(t)
 	if _, err := f.apply("core.group.rename", `{"group": "card-2", "name": "작업"}`); err != nil {
 		t.Fatal(err)
@@ -263,7 +261,7 @@ func TestACardGetReadsAContentCardWithItsGroupPathAndAGroupCardWithItsPlane(t *t
 	}
 	record := group["group"].(map[string]any)
 	if group["card"] != "card-2" || !reflect.DeepEqual(group["groups"], []any{}) || record["name"] != "작업" || record["level"] != float64(1) ||
-		record["leader"] != "main" || len(record["plane"].(map[string]any)["cards"].([]any)) != 2 || group["tabs"] != nil {
+		record["leader"] != "main" || !reflect.DeepEqual(record["members"], []any{"main", "card-3"}) || group["tabs"] != nil {
 		t.Fatalf("core.card.get card-2 answered %v", group)
 	}
 	if _, err := f.cardGet("card-9"); err == nil || err.Error() != "card card-9 is not in the layout of window main" {

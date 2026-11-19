@@ -290,7 +290,7 @@ func (s *Shell) eachLayoutTab(visit func(project, space string, tab layout.Tab, 
 			if err := json.Unmarshal(space.Layout, &stored); err != nil {
 				return fmt.Errorf("space %s: %w", space.ID, err)
 			}
-			eachTab(storedCards(stored.State), func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
+			eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { visit(project.ID, space.ID, tab, false) })
 		}
 	}
 	return nil

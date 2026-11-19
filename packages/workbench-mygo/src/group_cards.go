@@ -2,14 +2,15 @@ package workbench
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// The drawing of a group card (docs/spec/groups.md#drawing): a card of the existing design whose header shows the name of the group and
-// the head buttons of the group, and whose body holds the child plane, which drawWork draws after it. The close menu of a group header.
+// The drawing of a group card (docs/spec/groups.md#drawing): a frame of the card border around its rectangle and a card header at its
+// top that shows the name of the group and the head buttons of the group. The close menu of a group header.
 
 // groupMenuElements are the elements of the buttons of a group header that open the menus of core.card.menu.
 var groupMenuElements = map[string]string{"add": "core.group.add", "split-x": "core.group.split-x", "split-y": "core.group.split-y",
@@ -47,49 +48,40 @@ func (s *Shell) groupHeadTools(id string) []headTool {
 		Title: names["group-menu"], Icon: "card-close"}, true))
 }
 
-// drawGroupCard draws the group card id at its rectangle of the root plane: the card, its header and the elements of its tools that the
-// header folds.
+// drawGroupCard draws the group card id whose rectangle is rect (docs/spec/groups.md#drawing): its frame, the border of a card in the
+// corridor half the gap around the rectangle, and its header at the top of the rectangle. The content cards inside it draw over the
+// rest of the rectangle, and the grid draws its own lines between them.
 func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset float32) {
 	record, _ := s.planes.Group(id) // silent: drawWork draws a group card of the tree.
+	head, _ := s.groupHeadRect(id)  // silent: a group card has a header.
+	line := s.palette.CardBorder()
+	out := float32(s.plane.Gap()/2) + line/2
 	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
 	s.anchored("core.group/"+id, card)
-	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
-		Size(float32(rect.W), float32(rect.H)).Background(s.palette.Card).Border(s.palette.CardBorder(), s.palette.Edge).Radius(s.palette.CardRadius()).
-		Clip().Column().Draw(func(p *ui.Painter, r ui.Rect) { s.drawGroupRules(p, r, id, rect) }).Children(func() {
-		edge := s.palette.CardBorder()
-		inner := max(0, float32(rect.W)-2*edge)
-		head, _ := cardRows(float32(rect.H)-2*edge, s.metrics.headH, 0)
-		s.drawGroupHead(c, id, record.Name, inner, head)
-		// The body holds the room of the child plane, whose cards drawWork draws over it.
-		ui.Box(c).Size(inner, max(0, float32(rect.H)-2*edge-head))
+	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset-out).Top(float32(rect.Y)+inset-out).
+		Size(float32(rect.W)+2*out, float32(rect.H)+2*out).Border(line, s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
+	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).
+		Background(s.palette.Card).Radius(s.palette.CardRadius()).Clip().Children(func() {
+		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
 	})
 }
 
-// drawGroupRules paints the boundary lines of the child plane of the group card id, which stands at rect of the root plane, in the body of
-// the group card under the cards of the child plane. A line at the edge of the child plane goes on across the half gap around it to the
-// border of the group card, as a line at the edge of the root plane goes on to the line around the stage.
-func (s *Shell) drawGroupRules(p *ui.Painter, box ui.Rect, id string, rect layout.Rect) {
-	origin := s.planes.Origin(id)
-	s.paintPlaneRules(p, id, ui.Rect{X: box.X + float32(origin.X-rect.X), Y: box.Y + float32(origin.Y-rect.Y)}, false)
+// shownFullscreen tells whether the card id is drawn while a card is fullscreen: the fullscreen card and the cards inside it, or every
+// card while no card is fullscreen.
+func (s *Shell) shownFullscreen(id string) bool {
+	return s.fullscreen == "" || id == s.fullscreen || slices.Contains(s.planes.Groups(id), s.fullscreen)
 }
 
-// paintPlaneRules paints the boundary lines of the child plane of the group card id with its origin at body: the solid stretches and
-// the crossings drawn under the cards, or with over the crossings that the setting fullRule draws over the cards.
-func (s *Shell) paintPlaneRules(p *ui.Painter, id string, body ui.Rect, over bool) {
-	grid, _ := s.planes.Plane(id)                     // silent: the rules are painted for a group card of the tree.
-	place, _ := s.settings.Value("fullRule").(string) // silent: the settings store checks the type of the value.
-	for _, rule := range grid.Rules() {
-		color := s.palette.Rule
-		if rule.Virtual {
-			if place == "none" || (place == "over") != over {
-				continue
-			}
-			color = faded(color, s.metrics.lineCrossingMix)
-		} else if over {
-			continue
-		}
-		p.Fill(ruleRect(rule, grid.Width(), grid.Height(), body, 0, float32(s.planes.Options().Gap/2)), color, 0)
+// groupHeadRect is the header of the group card id in the plane: at the top of its rectangle, or of the rectangle that a fullscreen
+// group card gives it.
+func (s *Shell) groupHeadRect(id string) (layout.Rect, bool) {
+	head, ok := s.planes.HeadRect(id)
+	if !ok || s.fullscreen == "" {
+		return head, ok
 	}
+	from, _ := s.planes.Rect(id) // silent: HeadRect found the group card.
+	shown, ok := s.cardRect(id)
+	return layout.Rect{X: shown.X, Y: shown.Y + head.Y - from.Y, W: shown.W, H: head.H}, ok
 }
 
 // drawGroupHead draws the header of the group card id: its name in the place of the tab strip and its head buttons, folded into the tool
@@ -163,7 +155,7 @@ func (s *Shell) openGroupMenu(id, anchor string) error {
 	}
 	names := s.options.Declared.CardTools
 	items := []pickerItem{{Key: "close", Name: names["group-close"], Icon: s.headIconElements("card-close")}}
-	if s.fullscreen == "" && s.planes.CanDissolve(id) {
+	if s.fullscreen == "" && s.planes.IsGroup(id) {
 		items = append(items, pickerItem{Key: "dissolve", Name: names["group-dissolve"], Icon: s.headIconElements("card-group")})
 	}
 	s.openPicker(names["group-menu"], items, func(key string) error {

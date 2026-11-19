@@ -3,500 +3,469 @@ package layout
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
 
-// The tree of planes of a space (docs/spec/groups.md#model): the root plane, the child plane of each group card, the leader of each
-// plane and the card numbers that the space issued. Each plane is one Grid, unchanged; the tree places the child plane of a group card
-// in the body of that card and checks that no operation takes a group card below its smallest size (docs/spec/groups.md#minimum-size).
+// The groups of a space (docs/spec/groups.md#model): one grid, unchanged, and the tree of group cards stored beside it. Each group card
+// covers one rectangle of the grid, the cells of the content cards inside it; the tree checks after each operation that every group
+// card still covers one rectangle and that no content card it changed is drawn below minSize (docs/spec/groups.md#minimum-size).
 
-// RootPlane is the key of the root plane. Every other plane is keyed by the id of the group card that holds it.
-const RootPlane = ""
-
-// groupMark is the data of a group card in its plane while the tree holds it: the name, the leader and the child plane are members of
-// the tree, and the stored form writes them into the data (Stored).
-var groupMark = json.RawMessage(`{"group":{}}`)
-
-// PlaneOptions are the sizes that the tree places planes with: the gap of every plane, the smallest edge of a content card, and the
-// head height of a group card.
-type PlaneOptions struct {
-	Gap     float64
-	MinSize float64
-	Head    float64
+// GroupOptions are the sizes that the tree draws with: the head height of a group card.
+type GroupOptions struct {
+	Head float64
 }
 
-// Planes is the tree of planes of one space.
-type Planes struct {
-	root    *Grid
-	options PlaneOptions
-	groups  map[string]*groupPlane
-	// leaders holds the leader of each plane by its key; a root plane that holds only window sidebars has no entry.
-	leaders map[string]string
+// GroupTree is the grid of one space with its group tree.
+type GroupTree struct {
+	grid  *Grid
+	head  float64
+	roots []*node
+	// leader is the leader of the root level, or "" while the root level holds only window sidebars.
+	leader string
 	// last is the largest card number that the space issued (lastCard).
 	last int
 }
 
-// groupPlane is the child plane of a group card: its name and its grid. The plane that holds the group card is found by a walk of the
-// tree (docs/spec/groups.md#status-and-queries), so the tree states the containment of a card once.
-type groupPlane struct {
-	name string
-	grid *Grid
+// node is a member of a level: a group card with its name, its leader and its members, or a content card, which has no members.
+type node struct {
+	card    string
+	group   bool
+	name    string
+	leader  string
+	members []*node
 }
 
-// Group is the record of a group card: its name, the level of its child plane, the leader of its child plane and the cards of its
-// child plane in reading order.
+// Group is the record of a group card: its name, its level, the leader of its members and its members in reading order.
 type Group struct {
-	Name   string   `json:"name"`
-	Level  int      `json:"level"`
-	Leader string   `json:"leader"`
-	Cards  []string `json:"cards"`
+	Name    string   `json:"name"`
+	Level   int      `json:"level"`
+	Leader  string   `json:"leader"`
+	Members []string `json:"members"`
 }
 
-// PlaneCard is a card of the tree with the key of the plane that holds it.
-type PlaneCard struct {
-	Card
-	Plane string
+// NewGroupTree makes the tree of a grid that holds no group card, with the leader of the root level and the largest issued card number.
+func NewGroupTree(grid *Grid, options GroupOptions, leader string, last int) *GroupTree {
+	return &GroupTree{grid: grid, head: options.Head, leader: leader, last: last}
 }
 
-// NewPlanes makes the tree of a root grid that holds no group card, with the leader of the root plane and the largest issued card
-// number.
-func NewPlanes(root *Grid, options PlaneOptions, leader string, last int) *Planes {
-	p := &Planes{root: root, options: options, groups: map[string]*groupPlane{}, leaders: map[string]string{}, last: last}
-	if leader != "" {
-		p.leaders[RootPlane] = leader
-	}
-	p.fit()
-	return p
-}
+// Grid is the grid of the space.
+func (t *GroupTree) Grid() *Grid { return t.grid }
 
-// Root is the grid of the root plane.
-func (p *Planes) Root() *Grid { return p.root }
+// Head is the head height of a group card.
+func (t *GroupTree) Head() float64 { return t.head }
 
-// Options are the sizes that the tree places its planes with.
-func (p *Planes) Options() PlaneOptions { return p.options }
-
-// SetOptions changes the gap and the head height of every plane. It changes no arrangement: each plane keeps its proportions (R5).
-func (p *Planes) SetOptions(options PlaneOptions) {
-	p.options = options
-	p.root.SetGap(options.Gap)
-	for _, group := range p.groups {
-		group.grid.SetGap(options.Gap)
-		group.grid.SetMinSize(options.MinSize)
-	}
-	p.fit()
-}
+// SetHead changes the head height of a group card. It changes no arrangement.
+func (t *GroupTree) SetHead(head float64) { t.head = head }
 
 // LastCard is the largest card number that the space issued.
-func (p *Planes) LastCard() int { return p.last }
+func (t *GroupTree) LastCard() int { return t.last }
 
-// Resize sets the size of the root plane and places every child plane in the body of its group card.
-func (p *Planes) Resize(width, height float64) {
-	p.root.Resize(width, height)
-	p.fit()
-}
-
-// fit sizes the child plane of every group card to the body of the card, from the root plane inward.
-func (p *Planes) fit() {
-	for _, key := range p.planeKeys() {
-		if key == RootPlane {
-			continue
-		}
-		group := p.groups[key]
-		rect, ok := p.grid(p.parentOf(key)).Rect(key)
-		if !ok {
-			continue
-		}
-		width, height := p.childSize(rect)
-		group.grid.Resize(width, height)
-	}
-}
-
-// childSize is the size of the child plane of a group card drawn at rect.
-func (p *Planes) childSize(rect Rect) (float64, float64) {
-	return math.Max(0, rect.W-p.options.Gap), math.Max(0, rect.H-p.options.Head-p.options.Gap)
-}
-
-// planeKeys lists the root plane and then each child plane after the plane that holds its group card, in workbench order.
-func (p *Planes) planeKeys() []string {
-	keys := []string{}
-	var walk func(key string)
-	walk = func(key string) {
-		keys = append(keys, key)
-		for _, card := range p.planeOrder(key) {
-			if p.groups[card.ID] != nil {
-				walk(card.ID)
+// find walks the tree from the root level (docs/spec/groups.md#status-and-queries) and returns the group cards that hold id, outermost
+// first, and the node of id. A content card of the grid that the walk does not meet is a member of the root level with a nil node.
+func (t *GroupTree) find(id string) ([]*node, *node, bool) {
+	var walk func(level []*node, path []*node) ([]*node, *node)
+	walk = func(level []*node, path []*node) ([]*node, *node) {
+		for _, n := range level {
+			if n.card == id {
+				return path, n
 			}
-		}
-	}
-	walk(RootPlane)
-	return keys
-}
-
-// grid is the grid of the plane key, or nil.
-func (p *Planes) grid(key string) *Grid {
-	if key == RootPlane {
-		return p.root
-	}
-	if group := p.groups[key]; group != nil {
-		return group.grid
-	}
-	return nil
-}
-
-// Plane is the grid of the plane key: RootPlane or the id of a group card.
-func (p *Planes) Plane(key string) (*Grid, bool) {
-	grid := p.grid(key)
-	return grid, grid != nil
-}
-
-// planeOrder is the cards of the plane key in the order of workbench order: the root plane in the order of its cards, a child plane in
-// reading order.
-func (p *Planes) planeOrder(key string) []Card {
-	grid := p.grid(key)
-	if key == RootPlane {
-		return grid.Cards()
-	}
-	return readingOrder(grid.Cards())
-}
-
-// readingOrder orders cards by their first row line and then by their first column line (docs/spec/groups.md#model).
-func readingOrder(cards []Card) []Card {
-	slices.SortStableFunc(cards, func(a, b Card) int {
-		if a.R0 != b.R0 {
-			return a.R0 - b.R0
-		}
-		return a.C0 - b.C0
-	})
-	return cards
-}
-
-// Cards is every card of the tree in workbench order: the cards of the root plane in their order, each group card followed by the cards
-// of its child plane in reading order.
-func (p *Planes) Cards() []PlaneCard {
-	out := []PlaneCard{}
-	var walk func(key string)
-	walk = func(key string) {
-		for _, card := range p.planeOrder(key) {
-			out = append(out, PlaneCard{Card: card, Plane: key})
-			if p.groups[card.ID] != nil {
-				walk(card.ID)
-			}
-		}
-	}
-	walk(RootPlane)
-	return out
-}
-
-// find walks the tree from the root plane to the card id and returns the group cards that it passed, from the outermost to the
-// innermost, and false for no card of the tree.
-func (p *Planes) find(id string) ([]string, bool) {
-	var walk func(key string, path []string) ([]string, bool)
-	walk = func(key string, path []string) ([]string, bool) {
-		for _, card := range p.grid(key).list {
-			if card.ID == id {
-				return path, true
-			}
-		}
-		for _, card := range p.grid(key).list {
-			if p.groups[card.ID] != nil {
-				if found, ok := walk(card.ID, append(slices.Clone(path), card.ID)); ok {
-					return found, true
+			if n.group {
+				if found, at := walk(n.members, append(slices.Clone(path), n)); at != nil {
+					return found, at
 				}
 			}
 		}
-		return nil, false
+		return nil, nil
 	}
-	return walk(RootPlane, []string{})
+	if path, n := walk(t.roots, nil); n != nil {
+		return path, n, true
+	}
+	_, ok := t.grid.Card(id)
+	return nil, nil, ok
 }
 
-// PlaneOf is the key of the plane that holds the card id, and false for no card of the tree.
-func (p *Planes) PlaneOf(id string) (string, bool) {
-	path, ok := p.find(id)
-	if !ok {
-		return "", false
+// groupNode is the node of the group card id, or nil.
+func (t *GroupTree) groupNode(id string) *node {
+	_, n, _ := t.find(id) // silent: an id that is no card has no node.
+	if n == nil || !n.group {
+		return nil
 	}
-	if len(path) == 0 {
-		return RootPlane, true
-	}
-	return path[len(path)-1], true
-}
-
-// parentOf is the key of the plane that holds the group card key.
-func (p *Planes) parentOf(key string) string {
-	// silent: a key of the tree names a group card, which a plane of the tree holds.
-	parent, _ := p.PlaneOf(key)
-	return parent
-}
-
-// Card is the card id of any plane.
-func (p *Planes) Card(id string) (Card, bool) {
-	key, ok := p.PlaneOf(id)
-	if !ok {
-		return Card{}, false
-	}
-	return p.grid(key).Card(id)
+	return n
 }
 
 // IsGroup tells whether id is a group card.
-func (p *Planes) IsGroup(id string) bool { return p.groups[id] != nil }
+func (t *GroupTree) IsGroup(id string) bool { return t.groupNode(id) != nil }
 
 // Groups is the path of group cards that hold the card id, from the outermost to the innermost.
-func (p *Planes) Groups(id string) []string {
-	path, _ := p.find(id) // silent: a card that is not in the tree has no group card around it.
-	return path
+func (t *GroupTree) Groups(id string) []string {
+	path, _, _ := t.find(id) // silent: an id that is no card has no path.
+	out := []string{}
+	for _, n := range path {
+		out = append(out, n.card)
+	}
+	return out
 }
 
-// Level is the level of the plane key: 0 for the root plane, and one more than the plane that holds its group card.
-func (p *Planes) Level(key string) int {
-	if key == RootPlane {
-		return 0
+// Parent is the group card that holds the card id, or "" for a member of the root level.
+func (t *GroupTree) Parent(id string) string {
+	path := t.Groups(id)
+	if len(path) == 0 {
+		return ""
 	}
-	return len(p.Groups(key)) + 1
+	return path[len(path)-1]
 }
+
+// Level is the level of the card id: 0 for a member of the root level.
+func (t *GroupTree) Level(id string) int { return len(t.Groups(id)) }
 
 // GroupName is the name of the group card id.
-func (p *Planes) GroupName(id string) string {
-	if group := p.groups[id]; group != nil {
-		return group.name
+func (t *GroupTree) GroupName(id string) string {
+	if n := t.groupNode(id); n != nil {
+		return n.name
 	}
 	return ""
 }
 
 // Group is the record of the group card id.
-func (p *Planes) Group(id string) (Group, bool) {
-	group := p.groups[id]
-	if group == nil {
+func (t *GroupTree) Group(id string) (Group, bool) {
+	n := t.groupNode(id)
+	if n == nil {
 		return Group{}, false
 	}
-	cards := []string{}
-	for _, card := range readingOrder(group.grid.Cards()) {
-		cards = append(cards, card.ID)
-	}
-	return Group{Name: group.name, Level: p.Level(id), Leader: p.leaders[id], Cards: cards}, true
+	return Group{Name: n.name, Level: t.Level(id) + 1, Leader: n.leader, Members: t.Members(id)}, true
 }
 
-// Leader is the leader of the plane key, and false for a plane without a leader.
-func (p *Planes) Leader(key string) (string, bool) {
-	leader, ok := p.leaders[key]
-	return leader, ok
-}
-
-// Rect is the rectangle of the card id of any plane in the coordinates of the root plane.
-func (p *Planes) Rect(id string) (Rect, bool) {
-	key, ok := p.PlaneOf(id)
-	if !ok {
-		return Rect{}, false
-	}
-	rect, ok := p.grid(key).Rect(id)
-	if !ok {
-		return Rect{}, false
-	}
-	origin := p.Origin(key)
-	return Rect{X: rect.X + origin.X, Y: rect.Y + origin.Y, W: rect.W, H: rect.H}, true
-}
-
-// Origin is the position of the plane key in the coordinates of the root plane: the body of its group card inset by half the gap.
-func (p *Planes) Origin(key string) Rect {
-	if key == RootPlane {
-		return Rect{}
-	}
-	// silent: a group card is a card of the plane that holds it.
-	group, _ := p.Rect(key)
-	grid := p.groups[key].grid
-	return Rect{X: group.X + p.options.Gap/2, Y: group.Y + p.options.Head + p.options.Gap/2, W: grid.Width(), H: grid.Height()}
-}
-
-// Smallest is the smallest size of the card id: minSize on both axes for a content card, and for a group card the smallest extent of
-// its child plane plus the gap, and plus the head height on y (docs/spec/groups.md#minimum-size).
-func (p *Planes) Smallest(id string) (float64, float64) {
-	group := p.groups[id]
-	if group == nil {
-		return p.options.MinSize, p.options.MinSize
-	}
-	return p.extent(id, "x") + p.options.Gap, p.extent(id, "y") + p.options.Gap + p.options.Head
-}
-
-// extent is the smallest extent of the plane key on axis, computed on its slicing tree.
-func (p *Planes) extent(key string, axis Axis) float64 {
-	grid := p.grid(key)
-	tree := sliceTree(grid.list)
-	if tree == nil {
-		return 0
-	}
-	var of func(s *slice) float64
-	of = func(s *slice) float64 {
-		if s.card != nil {
-			w, h := p.Smallest(s.card.ID)
-			if axis == "x" {
-				return w
-			}
-			return h
+// level is the members of the level key: "" for the root level, whose members are its group cards and the cards of the grid that no
+// group card holds, or the id of a group card.
+func (t *GroupTree) level(key string) []*node {
+	if key != "" {
+		if n := t.groupNode(key); n != nil {
+			return n.members
 		}
-		total := 0.0
-		for i, side := range s.sides {
-			v := of(side)
-			if s.axis == axis {
-				total += v
-				if i > 0 {
-					total += p.options.Gap
-				}
-			} else {
-				total = math.Max(total, v)
-			}
-		}
-		return total
+		return nil
 	}
-	return of(tree)
-}
-
-// groupSizes is the drawn size of every group card.
-func (p *Planes) groupSizes() map[string]Rect {
-	out := map[string]Rect{}
-	for id := range p.groups {
-		if rect, ok := p.Rect(id); ok {
-			out[id] = rect
+	held := map[string]bool{}
+	for _, n := range t.roots {
+		for _, id := range t.inside(n) {
+			held[id] = true
+		}
+	}
+	out := slices.Clone(t.roots)
+	for _, card := range t.grid.Cards() {
+		if !held[card.ID] {
+			out = append(out, &node{card: card.ID})
 		}
 	}
 	return out
 }
 
-// belowSmallest is the first group card in workbench order whose drawn size differs from before and that is below its smallest size,
-// or "".
-func (p *Planes) belowSmallest(before map[string]Rect) string {
-	for _, card := range p.Cards() {
-		if p.groups[card.ID] == nil {
+// Members is the members of the level key in reading order.
+func (t *GroupTree) Members(key string) []string {
+	out := []string{}
+	for _, n := range t.ordered(t.level(key)) {
+		out = append(out, n.card)
+	}
+	return out
+}
+
+// Leader is the leader of the level key, and false for a level without a leader.
+func (t *GroupTree) Leader(key string) (string, bool) {
+	if key == "" {
+		return t.leader, t.leader != ""
+	}
+	if n := t.groupNode(key); n != nil {
+		return n.leader, true
+	}
+	return "", false
+}
+
+// setLeader sets the leader of the level key.
+func (t *GroupTree) setLeader(key, id string) {
+	if key == "" {
+		t.leader = id
+	} else if n := t.groupNode(key); n != nil {
+		n.leader = id
+	}
+}
+
+// LeadCount is the number of members of the level key that can lead it: its members that are not window sidebars. A level of two or
+// more shows the leader button in each of their headers.
+func (t *GroupTree) LeadCount(key string) int {
+	count := 0
+	for _, n := range t.level(key) {
+		if !IsWindowSide(n.card) {
+			count++
+		}
+	}
+	return count
+}
+
+// inside is the content cards that the node is or holds.
+func (t *GroupTree) inside(n *node) []string {
+	if !n.group {
+		return []string{n.card}
+	}
+	out := []string{}
+	for _, m := range n.members {
+		out = append(out, t.inside(m)...)
+	}
+	return out
+}
+
+// ContentInside is the content cards that the card id is or holds, in workbench order.
+func (t *GroupTree) ContentInside(id string) []string {
+	_, n, ok := t.find(id)
+	if !ok {
+		return nil
+	}
+	if n == nil {
+		return []string{id}
+	}
+	held := map[string]bool{}
+	for _, card := range t.inside(n) {
+		held[card] = true
+	}
+	out := []string{}
+	for _, card := range t.Cards() {
+		if held[card] && !t.IsGroup(card) {
+			out = append(out, card)
+		}
+	}
+	return out
+}
+
+// span is the line index span of the node: the span of a content card, or the smallest first and largest last lines of the content
+// cards inside a group card.
+func (t *GroupTree) span(n *node) (c0, c1, r0, r1 int) {
+	c0, r0 = math.MaxInt, math.MaxInt
+	for _, id := range t.inside(n) {
+		card, _ := t.grid.Card(id) // silent: the tree holds cards of the grid.
+		c0, c1, r0, r1 = min(c0, card.C0), max(c1, card.C1), min(r0, card.R0), max(r1, card.R1)
+	}
+	return c0, c1, r0, r1
+}
+
+// ordered is the nodes in reading order: by the first row line, then by the first column line.
+func (t *GroupTree) ordered(nodes []*node) []*node {
+	out := slices.Clone(nodes)
+	sort.SliceStable(out, func(i, j int) bool {
+		ac0, _, ar0, _ := t.span(out[i])
+		bc0, _, br0, _ := t.span(out[j])
+		if ar0 != br0 {
+			return ar0 < br0
+		}
+		return ac0 < bc0
+	})
+	return out
+}
+
+// Cards is every card of the space in workbench order: the members of the root level in reading order, each group card followed by
+// its members in reading order.
+func (t *GroupTree) Cards() []string {
+	out := []string{}
+	var walk func(level []*node)
+	walk = func(level []*node) {
+		for _, n := range t.ordered(level) {
+			out = append(out, n.card)
+			if n.group {
+				walk(n.members)
+			}
+		}
+	}
+	walk(t.level(""))
+	return out
+}
+
+// Card is the card id of the grid, or for a group card a card with its id and its span.
+func (t *GroupTree) Card(id string) (Card, bool) {
+	if card, ok := t.grid.Card(id); ok {
+		return card, true
+	}
+	n := t.groupNode(id)
+	if n == nil {
+		return Card{}, false
+	}
+	c0, c1, r0, r1 := t.span(n)
+	return Card{ID: id, C0: c0, C1: c1, R0: r0, R1: r1}, true
+}
+
+// SetData sets the data of the content card id.
+func (t *GroupTree) SetData(id string, data json.RawMessage) bool { return t.grid.SetData(id, data) }
+
+// heads is the number of group cards of path that start on the row line r0.
+func (t *GroupTree) heads(path []*node, r0 int) int {
+	k := 0
+	for _, n := range path {
+		if _, _, start, _ := t.span(n); start == r0 {
+			k++
+		}
+	}
+	return k
+}
+
+// Rect is the drawn rectangle of the card id (docs/spec/groups.md#drawn-rectangles): for a content card its rectangle in the grid moved
+// down and shortened by the headers of the group cards that hold it and start on its first row line, and for a group card the union of
+// the rectangles of the content cards inside it.
+func (t *GroupTree) Rect(id string) (Rect, bool) {
+	path, n, ok := t.find(id)
+	if !ok {
+		return Rect{}, false
+	}
+	if n == nil || !n.group {
+		rect, ok := t.grid.Rect(id)
+		card, _ := t.grid.Card(id) // silent: the grid holds the card.
+		k := float64(t.heads(path, card.R0))
+		rect.Y += k * t.head
+		rect.H -= k * t.head
+		return rect, ok
+	}
+	return t.union(n), true
+}
+
+// union is the union of the rectangles in the grid of the content cards inside the node.
+func (t *GroupTree) union(n *node) Rect {
+	x0, y0, x1, y1 := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, id := range t.inside(n) {
+		r, _ := t.grid.Rect(id) // silent: the tree holds cards of the grid.
+		x0, y0, x1, y1 = math.Min(x0, r.X), math.Min(y0, r.Y), math.Max(x1, r.X+r.W), math.Max(y1, r.Y+r.H)
+	}
+	return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
+}
+
+// HeadRect is the header of the group card id: a row of the head height at the top of its rectangle, below the headers of the group
+// cards that hold it and start on the same row line.
+func (t *GroupTree) HeadRect(id string) (Rect, bool) {
+	path, n, _ := t.find(id) // silent: an id that is no card has no node.
+	if n == nil || !n.group {
+		return Rect{}, false
+	}
+	_, _, r0, _ := t.span(n)
+	rect := t.union(n)
+	return Rect{X: rect.X, Y: rect.Y + float64(t.heads(path, r0))*t.head, W: rect.W, H: t.head}, true
+}
+
+// drawn is the drawn rectangle of each content card.
+func (t *GroupTree) drawn() map[string]Rect {
+	out := map[string]Rect{}
+	for _, card := range t.grid.Cards() {
+		if rect, ok := t.Rect(card.ID); ok && !IsWindowSide(card.ID) {
+			out[card.ID] = rect
+		}
+	}
+	return out
+}
+
+// below is the first content card in workbench order that the change from before draws differently and below minSize, or "". A grid
+// without its size draws nothing yet, as the layout library checks no size before the plane has one.
+func (t *GroupTree) below(before map[string]Rect) (string, Rect) {
+	if t.grid.Width() == 0 || t.grid.Height() == 0 {
+		return "", Rect{}
+	}
+	after := t.drawn()
+	least := t.grid.MinSize() - 1e-6
+	for _, id := range t.Cards() {
+		rect, content := after[id]
+		if !content {
 			continue
 		}
-		// silent: card is a card of the tree.
-		rect, _ := p.Rect(card.ID)
-		was, had := before[card.ID]
-		if had && math.Abs(was.W-rect.W) < 1e-6 && math.Abs(was.H-rect.H) < 1e-6 {
+		if was, had := before[id]; had && was == rect {
 			continue
 		}
-		w, h := p.Smallest(card.ID)
-		if rect.W < w-1e-6 || rect.H < h-1e-6 {
-			return card.ID
+		if rect.W < least || rect.H < least {
+			return id, rect
+		}
+	}
+	return "", Rect{}
+}
+
+// covers tells whether the group node covers one rectangle: the cells of the content cards inside it fill their span.
+func (t *GroupTree) covers(n *node) bool {
+	c0, c1, r0, r1 := t.span(n)
+	cells := 0
+	for _, id := range t.inside(n) {
+		card, _ := t.grid.Card(id) // silent: the tree holds cards of the grid.
+		cells += (card.C1 - card.C0) * (card.R1 - card.R0)
+	}
+	return cells == (c1-c0)*(r1-r0)
+}
+
+// broken is the first group card in workbench order that does not cover one rectangle, or "".
+func (t *GroupTree) broken() string {
+	for _, id := range t.Cards() {
+		if n := t.groupNode(id); n != nil && !t.covers(n) {
+			return id
 		}
 	}
 	return ""
 }
 
-// snapshot is the whole tree as it stands, which restore puts back.
 type snapshot struct {
-	states  map[string]State
-	grids   map[string]*Grid
-	groups  map[string]groupPlane
-	leaders map[string]string
-	last    int
+	state  State
+	roots  []*node
+	leader string
+	last   int
 }
 
-func (p *Planes) snapshot() snapshot {
-	s := snapshot{states: map[string]State{RootPlane: p.root.ToJSON()}, grids: map[string]*Grid{}, groups: map[string]groupPlane{},
-		leaders: map[string]string{}, last: p.last}
-	for key, group := range p.groups {
-		s.states[key] = group.grid.ToJSON()
-		s.grids[key] = group.grid
-		s.groups[key] = *group
+func copyNodes(nodes []*node) []*node {
+	out := make([]*node, len(nodes))
+	for i, n := range nodes {
+		kept := *n
+		kept.members = copyNodes(n.members)
+		out[i] = &kept
 	}
-	for key, leader := range p.leaders {
-		s.leaders[key] = leader
-	}
-	return s
+	return out
 }
 
-func (p *Planes) restore(s snapshot) {
-	p.root.reload(s.states[RootPlane])
-	p.groups = map[string]*groupPlane{}
-	for key, group := range s.groups {
-		kept := group
-		kept.grid = s.grids[key]
-		kept.grid.reload(s.states[key])
-		p.groups[key] = &kept
-	}
-	p.leaders = s.leaders
-	p.last = s.last
-	p.fit()
+func (t *GroupTree) snapshot() snapshot {
+	return snapshot{state: t.grid.ToJSON(), roots: copyNodes(t.roots), leader: t.leader, last: t.last}
 }
 
-// try runs change on the tree and keeps its result only when it succeeds and leaves no group card that it resized below its smallest
-// size; otherwise the tree is put back and the refusal is returned.
-func (p *Planes) try(change func() error, refusal func() error) error {
-	before := p.groupSizes()
-	kept := p.snapshot()
+func (t *GroupTree) restore(s snapshot) {
+	t.grid.reload(s.state)
+	t.roots, t.leader, t.last = copyNodes(s.roots), s.leader, s.last
+}
+
+// Probe runs change on the tree and puts the tree back, and returns what change returned: the drop preview asks what a drop would
+// make without making it.
+func (t *GroupTree) Probe(change func() error) error {
+	kept := t.snapshot()
+	defer t.restore(kept)
+	return change()
+}
+
+// try runs change, the operation op of the card id, and keeps its result only when every group card still covers one rectangle and
+// no content card that it changed is drawn below minSize; otherwise the tree is put back and the refusal is returned
+// (docs/spec/groups.md#commands).
+func (t *GroupTree) try(id, op string, change func() error) error {
+	before := t.drawn()
+	kept := t.snapshot()
 	if err := change(); err != nil {
-		p.restore(kept)
+		t.restore(kept)
 		return err
 	}
-	p.fit()
-	if p.belowSmallest(before) != "" {
-		p.restore(kept)
-		return refusal()
+	if group := t.broken(); group != "" {
+		t.restore(kept)
+		return fmt.Errorf("card %s cannot %s: group %s would not cover one rectangle", id, op, group)
+	}
+	if card, rect := t.below(before); card != "" {
+		t.restore(kept)
+		minimum := t.grid.MinSize()
+		return fmt.Errorf("card %s cannot %s: card %s would be %s, below its minimum %s", id, op, card, sizeText(rect.W, rect.H),
+			sizeText(minimum, minimum))
 	}
 	return nil
 }
 
 // issue returns the next card id of the space.
-func (p *Planes) issue() string {
-	p.last++
-	return "card-" + strconv.Itoa(p.last)
-}
-
-// newGrid is an empty child plane with the options of the tree.
-func (p *Planes) newGrid(state State) (*Grid, error) {
-	gap, minimum := p.options.Gap, p.options.MinSize
-	return New(&state, Options{Gap: &gap, MinSize: &minimum})
-}
-
-// leaderLeft keeps the leader rule of a card that left the plane key: the first remaining card in reading order that is not a window
-// sidebar leads, or the plane has no leader.
-func (p *Planes) leaderLeft(key, id string) {
-	if p.leaders[key] != id {
-		return
-	}
-	delete(p.leaders, key)
-	for _, card := range readingOrder(p.grid(key).Cards()) {
-		if !IsWindowSide(card.ID) {
-			p.leaders[key] = card.ID
-			return
-		}
-	}
-}
-
-// leaderEntered gives a plane without a leader the card that entered it.
-func (p *Planes) leaderEntered(key, id string) {
-	if _, ok := p.leaders[key]; !ok && !IsWindowSide(id) {
-		p.leaders[key] = id
-	}
-}
-
-// renameCard gives the card from of the plane key the id to, with its slot, its px sizes and the records of its payers.
-func (p *Planes) renameCard(key, from, to string, data json.RawMessage) error {
-	grid := p.grid(key)
-	state := grid.ToJSON()
-	for i := range state.Cards {
-		if state.Cards[i].ID == from {
-			state.Cards[i].ID = to
-			state.Cards[i].Data = data
-		}
-	}
-	paid := map[string]Paid{}
-	for id, record := range state.PaidBy {
-		if record.To == from {
-			record.To = to
-		}
-		if id == from {
-			id = to
-		}
-		paid[id] = record
-	}
-	state.PaidBy = paid
-	return grid.Replace(state)
+func (t *GroupTree) issue() string {
+	t.last++
+	return "card-" + strconv.Itoa(t.last)
 }
 
 // sizeText is a drawn size in whole points.
@@ -504,48 +473,245 @@ func sizeText(w, h float64) string {
 	return strconv.Itoa(int(math.Round(w))) + "x" + strconv.Itoa(int(math.Round(h)))
 }
 
-// CheckGroup is the refusal of a group of the card id and a new card toward side, or nil (docs/spec/groups.md#commands).
-func (p *Planes) CheckGroup(id string, side Side) error {
-	if IsWindowSide(id) {
-		return fmt.Errorf("card %s is a window sidebar; a group holds content cards and group cards", id)
-	}
-	if !isSide(side) {
-		return fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
-	}
-	rect, ok := p.Rect(id)
-	if !ok {
-		return fmt.Errorf("no card %s", id)
-	}
-	mw, mh := p.groupNeeds(id, side)
-	if rect.W < mw-1e-6 || rect.H < mh-1e-6 {
-		return fmt.Errorf("card %s cannot hold a group toward %s: it is %s and the group needs %s", id, side, sizeText(rect.W, rect.H), sizeText(mw, mh))
-	}
-	return nil
+// cellBox is a card of the grid with the coordinates of its lines.
+type cellBox struct {
+	card           Card
+	x0, x1, y0, y1 float64
 }
 
-// groupNeeds is the size that a group of the card id and a new content card toward side needs.
-func (p *Planes) groupNeeds(id string, side Side) (float64, float64) {
-	cw, ch := p.Smallest(id)
-	gap, minimum, head := p.options.Gap, p.options.MinSize, p.options.Head
-	if axisOf(side) == "x" {
-		return cw + minimum + 2*gap, math.Max(ch, minimum) + head + gap
+// boxes is the cards of the grid with their coordinates.
+func (t *GroupTree) boxes() ([]cellBox, map[string]Paid) {
+	state := t.grid.ToJSON()
+	out := []cellBox{}
+	for _, card := range state.Cards {
+		out = append(out, cellBox{card: card, x0: state.Xs[card.C0], x1: state.Xs[card.C1], y0: state.Ys[card.R0], y1: state.Ys[card.R1]})
 	}
-	return math.Max(cw, minimum) + gap, ch + minimum + head + 2*gap
+	return out, state.PaidBy
 }
 
-// GroupSide is the side of the group button of the card id: right when it is drawn wider than high, otherwise bottom.
-func (p *Planes) GroupSide(id string) Side {
-	if rect, ok := p.Rect(id); ok && rect.W > rect.H {
-		return "right"
+// install makes the grid of the boxes: the lines are the coordinates that the boxes use, so a line that no card uses is removed (tidy),
+// and the paidBy records of the cards in laid are dropped, because their lines moved. Replace checks the result.
+func (t *GroupTree) install(boxes []cellBox, paid map[string]Paid, laid map[string]bool) error {
+	lines := func(of func(b cellBox) [2]float64) ([]float64, map[float64]int) {
+		set := map[float64]bool{}
+		for _, b := range boxes {
+			ends := of(b)
+			set[ends[0]], set[ends[1]] = true, true
+		}
+		out := []float64{}
+		for v := range set {
+			out = append(out, v)
+		}
+		sort.Float64s(out)
+		index := map[float64]int{}
+		for i, v := range out {
+			index[v] = i
+		}
+		return out, index
 	}
-	return "bottom"
+	xs, xi := lines(func(b cellBox) [2]float64 { return [2]float64{b.x0, b.x1} })
+	ys, yi := lines(func(b cellBox) [2]float64 { return [2]float64{b.y0, b.y1} })
+	state := State{Xs: xs, Ys: ys, PaidBy: map[string]Paid{}}
+	for _, b := range boxes {
+		card := b.card
+		card.C0, card.C1, card.R0, card.R1 = xi[b.x0], xi[b.x1], yi[b.y0], yi[b.y1]
+		state.Cards = append(state.Cards, card)
+	}
+	for id, record := range paid {
+		if !laid[id] && !laid[record.To] {
+			state.PaidBy[id] = record
+		}
+	}
+	return t.grid.Replace(state)
+}
+
+// mapped is the coordinate v of the span [a0, b0] used in the span [a, b] (docs/spec/groups.md#the-rectangle-of-a-group-card). The ends of
+// the span are the ends of the new span exactly.
+func mapped(v, a0, b0, a, b float64) float64 {
+	switch v {
+	case a0:
+		return a
+	case b0:
+		return b
+	}
+	return a + (b-a)*(v-a0)/(b0-a0)
+}
+
+// bounds is the coordinates of the rectangle of the cards in ids among boxes.
+func bounds(boxes []cellBox, ids map[string]bool) (x0, x1, y0, y1 float64) {
+	x0, y0, x1, y1 = math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+	for _, b := range boxes {
+		if ids[b.card.ID] {
+			x0, x1, y0, y1 = math.Min(x0, b.x0), math.Max(x1, b.x1), math.Min(y0, b.y0), math.Max(y1, b.y1)
+		}
+	}
+	return x0, x1, y0, y1
+}
+
+func idSet(ids []string) map[string]bool {
+	out := map[string]bool{}
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
+}
+
+// splitRect splits the rectangle of the group node toward side: the new card id with data takes the half toward side, and the members
+// of the node are laid into the other half.
+func (t *GroupTree) splitRect(n *node, side Side, id string, data json.RawMessage) error {
+	boxes, paid := t.boxes()
+	ids := idSet(t.inside(n))
+	x0, x1, y0, y1 := bounds(boxes, ids)
+	born := cellBox{card: Card{ID: id, Data: data}, x0: x0, x1: x1, y0: y0, y1: y1}
+	tx0, tx1, ty0, ty1 := x0, x1, y0, y1
+	switch side {
+	case "right":
+		mid := (x0 + x1) / 2
+		born.x0, tx1 = mid, mid
+	case "left":
+		mid := (x0 + x1) / 2
+		born.x1, tx0 = mid, mid
+	case "bottom":
+		mid := (y0 + y1) / 2
+		born.y0, ty1 = mid, mid
+	default:
+		mid := (y0 + y1) / 2
+		born.y1, ty0 = mid, mid
+	}
+	for i, b := range boxes {
+		if ids[b.card.ID] {
+			boxes[i].x0, boxes[i].x1 = mapped(b.x0, x0, x1, tx0, tx1), mapped(b.x1, x0, x1, tx0, tx1)
+			boxes[i].y0, boxes[i].y1 = mapped(b.y0, y0, y1, ty0, ty1), mapped(b.y1, y0, y1, ty0, ty1)
+		}
+	}
+	ids[id] = true
+	return t.install(append(boxes, born), paid, ids)
+}
+
+// merged is the cards inside a group card that merge replaced with one card, with the rectangle they had.
+type merged struct {
+	boxes          []cellBox
+	x0, x1, y0, y1 float64
+}
+
+// merge replaces the content cards inside the group node with one card of the id of the node that covers its rectangle.
+func (t *GroupTree) merge(n *node) (merged, error) {
+	boxes, paid := t.boxes()
+	ids := idSet(t.inside(n))
+	saved := merged{}
+	saved.x0, saved.x1, saved.y0, saved.y1 = bounds(boxes, ids)
+	kept := []cellBox{}
+	for _, b := range boxes {
+		if ids[b.card.ID] {
+			saved.boxes = append(saved.boxes, b)
+		} else {
+			kept = append(kept, b)
+		}
+	}
+	kept = append(kept, cellBox{card: Card{ID: n.card}, x0: saved.x0, x1: saved.x1, y0: saved.y0, y1: saved.y1})
+	ids[n.card] = true
+	return saved, t.install(kept, paid, ids)
+}
+
+// unmerge lays the cards that merge saved into the rectangle of the card id, which replaced them.
+func (t *GroupTree) unmerge(id string, saved merged) error {
+	boxes, paid := t.boxes()
+	kept := []cellBox{}
+	var at cellBox
+	for _, b := range boxes {
+		if b.card.ID == id {
+			at = b
+		} else {
+			kept = append(kept, b)
+		}
+	}
+	ids := map[string]bool{id: true}
+	for _, b := range saved.boxes {
+		ids[b.card.ID] = true
+		kept = append(kept, cellBox{card: b.card,
+			x0: mapped(b.x0, saved.x0, saved.x1, at.x0, at.x1), x1: mapped(b.x1, saved.x0, saved.x1, at.x0, at.x1),
+			y0: mapped(b.y0, saved.y0, saved.y1, at.y0, at.y1), y1: mapped(b.y1, saved.y0, saved.y1, at.y0, at.y1)})
+	}
+	return t.install(kept, paid, ids)
+}
+
+// container is the members of the level that holds the card id, as a pointer that a change of the level writes through.
+func (t *GroupTree) container(id string) (*[]*node, string) {
+	path, _, _ := t.find(id) // silent: an id that is no card is held by the root level.
+	if len(path) == 0 {
+		return &t.roots, ""
+	}
+	parent := path[len(path)-1]
+	return &parent.members, parent.card
+}
+
+// detach takes the card id out of the tree's record of its level, keeps the leader rule of the level it leaves and returns the key of
+// that level. A content card of the root level has no record.
+func (t *GroupTree) detach(id string) string {
+	members, key := t.container(id)
+	*members = slices.DeleteFunc(*members, func(n *node) bool { return n.card == id })
+	if lead, _ := t.Leader(key); lead == id {
+		t.setLeader(key, "")
+		for _, n := range t.ordered(t.level(key)) {
+			if n.card != id && !IsWindowSide(n.card) {
+				t.setLeader(key, n.card)
+				break
+			}
+		}
+	}
+	return key
+}
+
+// attach puts the node into the level key and gives a level without a leader that card.
+func (t *GroupTree) attach(key string, n *node) {
+	if key == "" {
+		if n.group {
+			t.roots = append(t.roots, n)
+		}
+	} else if parent := t.groupNode(key); parent != nil {
+		parent.members = append(parent.members, n)
+	}
+	if lead, _ := t.Leader(key); lead == "" && !IsWindowSide(n.card) {
+		t.setLeader(key, n.card)
+	}
+}
+
+// collapse replaces the group card key, when it holds one member, with that member, which takes its slot and its leader mark
+// (docs/spec/groups.md#closing). It returns the member, or key.
+func (t *GroupTree) collapse(key string) string {
+	n := t.groupNode(key)
+	if n == nil || len(n.members) != 1 {
+		return key
+	}
+	sole := n.members[0]
+	members, outer := t.container(key)
+	at := slices.Index(*members, n)
+	if sole.group || outer != "" {
+		(*members)[at] = sole
+	} else {
+		*members = slices.Delete(*members, at, at+1)
+	}
+	if lead, _ := t.Leader(outer); lead == key {
+		t.setLeader(outer, sole.card)
+	}
+	return sole.card
+}
+
+// nodeOf is the node of the card id: its group node, or a node of a content card.
+func (t *GroupTree) nodeOf(id string) *node {
+	if n := t.groupNode(id); n != nil {
+		return n
+	}
+	return &node{card: id}
 }
 
 // groupName is the name 그룹 <n> with the smallest positive n that no group of the space has.
-func (p *Planes) groupName() string {
+func (t *GroupTree) groupName() string {
 	taken := map[string]bool{}
-	for _, group := range p.groups {
-		taken[group.name] = true
+	for _, id := range t.Cards() {
+		if n := t.groupNode(id); n != nil {
+			taken[n.name] = true
+		}
 	}
 	for n := 1; ; n++ {
 		name := "그룹 " + strconv.Itoa(n)
@@ -555,670 +721,583 @@ func (p *Planes) groupName() string {
 	}
 }
 
-// CreateGroup turns the card id into a group card of itself and a new content card with data toward side, and returns the group card
-// and the new card. even balances the child plane after its split (cardSplit even).
-func (p *Planes) CreateGroup(id string, side Side, data json.RawMessage, even bool) (string, string, error) {
-	if err := p.CheckGroup(id, side); err != nil {
+// requireCard refuses an id that is no card of the space.
+func (t *GroupTree) requireCard(id string) error {
+	if _, _, ok := t.find(id); !ok {
+		return fmt.Errorf("no card %s", id)
+	}
+	return nil
+}
+
+// splitCard puts the new card id with data beside the card target toward side: the split of the layout for a content card, or the
+// split of its rectangle for a group card. It is false when the layout refuses.
+func (t *GroupTree) splitCard(target string, side Side, id string, data json.RawMessage) (bool, error) {
+	if n := t.groupNode(target); n != nil {
+		return true, t.splitRect(n, side, id, data)
+	}
+	_, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data})
+	return ok, nil
+}
+
+// balanced runs the balance of cardSplit even after the split of the card id toward side (docs/spec/groups.md#split-setting) and keeps
+// it only when no content card that it changed is drawn below minSize.
+func (t *GroupTree) balanced(id string, side Side) error {
+	before := t.drawn()
+	kept := t.snapshot()
+	if _, err := t.grid.Balance(); err != nil {
+		t.restore(kept)
+		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance the grid: %w", id, side, err)
+	}
+	if card, rect := t.below(before); card != "" {
+		t.restore(kept)
+		minimum := t.grid.MinSize()
+		return fmt.Errorf("card %s cannot split toward %s: cardSplit even would draw card %s at %s, below its minimum %s", id, side, card,
+			sizeText(rect.W, rect.H), sizeText(minimum, minimum))
+	}
+	return nil
+}
+
+// CheckGroup is the refusal of a group of the card id toward side before the layout is asked, or nil.
+func (t *GroupTree) CheckGroup(id string, side Side) error {
+	if IsWindowSide(id) {
+		return fmt.Errorf("card %s is a window sidebar; a group holds content cards and group cards", id)
+	}
+	if !isSide(side) {
+		return fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
+	}
+	return t.requireCard(id)
+}
+
+// CreateGroup groups the card id with a new content card with data toward side, and returns the group card and the new card. even
+// balances the grid after the split (cardSplit even).
+func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even bool) (string, string, error) {
+	if err := t.CheckGroup(id, side); err != nil {
 		return "", "", err
 	}
-	group, born := "", ""
-	err := p.try(func() error {
-		key, _ := p.PlaneOf(id) // silent: CheckGroup found the card.
-		card, _ := p.Card(id)   // silent: CheckGroup found the card.
-		group = p.issue()
-		born = p.issue()
-		inner, err := p.newGrid(State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []Card{{ID: id, C0: 0, C1: 1, R0: 0, R1: 1, Data: card.Data}},
-			PaidBy: map[string]Paid{}})
-		if err != nil {
+	kept := t.snapshot()
+	var group, born string
+	err := t.try(id, "hold a group toward "+side, func() error {
+		name := t.groupName()
+		group, born = t.issue(), t.issue()
+		if ok, err := t.splitCard(id, side, born, data); err != nil || !ok {
+			if err == nil {
+				err = fmt.Errorf("card %s cannot hold a group toward %s", id, side)
+			}
 			return err
 		}
-		if err := p.renameCard(key, id, group, groupMark); err != nil {
-			return err
+		members, key := t.container(id)
+		n := &node{card: group, group: true, name: name, leader: id, members: []*node{t.nodeOf(id), {card: born}}}
+		if at := slices.IndexFunc(*members, func(m *node) bool { return m.card == id }); at >= 0 {
+			(*members)[at] = n
+		} else {
+			*members = append(*members, n)
 		}
-		p.groups[group] = &groupPlane{name: p.groupName(), grid: inner}
-		if p.leaders[key] == id {
-			p.leaders[key] = group
-		}
-		p.leaders[group] = id
-		p.fit()
-		if _, ok := inner.SplitToward(id, side, SplitInit{ID: &born, Data: data}); !ok {
-			return p.groupRefusal(id, side)
-		}
-		if even {
-			return p.balanceEven(group, id, side)
+		if lead, _ := t.Leader(key); lead == id {
+			t.setLeader(key, group)
 		}
 		return nil
-	}, func() error { return p.groupRefusal(id, side) })
+	})
+	if err == nil && even {
+		if err = t.balanced(id, side); err != nil {
+			t.restore(kept)
+		}
+	}
 	if err != nil {
 		return "", "", err
 	}
 	return group, born, nil
 }
 
-// groupRefusal is the refusal of a group of the card id toward side, with its size and the size that the group needs.
-func (p *Planes) groupRefusal(id string, side Side) error {
-	rect, _ := p.Rect(id) // silent: the refusal names a card of the tree.
-	mw, mh := p.groupNeeds(id, side)
-	return fmt.Errorf("card %s cannot hold a group toward %s: it is %s and the group needs %s", id, side, sizeText(rect.W, rect.H), sizeText(mw, mh))
-}
-
-// planeName is the plane key as a refusal names it: root or group <id>.
-func planeName(key string) string {
-	if key == RootPlane {
-		return "root"
-	}
-	return "group " + key
-}
-
-// balanceEven balances the plane key after the split of the card id toward side (cardSplit even) and refuses the split when the
-// balance fails or leaves a card of that plane or of a plane inside it below its smallest size (docs/spec/groups.md#minimum-size).
-func (p *Planes) balanceEven(key, id string, side Side) error {
-	ok, err := p.grid(key).Balance()
-	if err == nil && !ok {
-		err = fmt.Errorf("the plane is not a slicing plane")
-	}
-	if err != nil {
-		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance plane %s: %w", id, side, planeName(key), err)
-	}
-	p.fit()
-	for _, card := range p.Cards() {
-		// The cards of the plane key and of the planes inside it: every card for the root plane, else the cards whose group path holds key.
-		if key != RootPlane && card.Plane != key && !slices.Contains(p.Groups(card.ID), key) {
-			continue
-		}
-		rect, _ := p.Rect(card.ID) // silent: card is a card of the tree.
-		w, h := p.Smallest(card.ID)
-		if rect.W < w-1e-6 || rect.H < h-1e-6 {
-			return fmt.Errorf("card %s cannot split toward %s: cardSplit even would draw card %s of plane %s at %s, below its minimum %s",
-				id, side, card.ID, planeName(card.Plane), sizeText(rect.W, rect.H), sizeText(w, h))
-		}
-	}
-	return nil
-}
-
 // requireGroup refuses an id that is no group card.
-func (p *Planes) requireGroup(id string) (*groupPlane, error) {
-	group := p.groups[id]
-	if group == nil {
+func (t *GroupTree) requireGroup(id string) (*node, error) {
+	n := t.groupNode(id)
+	if n == nil {
 		return nil, fmt.Errorf("card %s is not a group", id)
 	}
-	return group, nil
+	return n, nil
 }
 
-// Dissolve replaces the group card id with the cards of its child plane inside its span (docs/spec/groups.md#commands).
-func (p *Planes) Dissolve(id string) error {
-	group, err := p.requireGroup(id)
+// Dissolve replaces the group card id with its members in the level that holds it. The grid does not change.
+func (t *GroupTree) Dissolve(id string) error {
+	n, err := t.requireGroup(id)
 	if err != nil {
 		return err
 	}
-	inner := readingOrder(group.grid.Cards())
-	return p.try(func() error {
-		if err := p.dissolve(id); err != nil {
-			return err
-		}
-		p.fit()
-		for _, card := range inner {
-			rect, _ := p.Rect(card.ID) // silent: the dissolve kept every card of the child plane.
-			w, h := p.Smallest(card.ID)
-			if rect.W < w-1e-6 || rect.H < h-1e-6 {
-				return fmt.Errorf("group %s cannot be dissolved: card %s would be %s, below its minimum %s", id, card.ID, sizeText(rect.W, rect.H), sizeText(w, h))
-			}
-		}
-		return nil
-	}, func() error { return fmt.Errorf("group %s cannot be dissolved", id) })
-}
-
-// dissolve maps the lines of the child plane of the group card id into its span in the parent plane, as numbers and without a
-// tolerance (R1), and puts the cards of the child plane there with their data and px sizes.
-func (p *Planes) dissolve(id string) error {
-	group := p.groups[id]
-	parentKey := p.parentOf(id)
-	parent := p.grid(parentKey)
-	state := parent.ToJSON()
-	inner := group.grid.ToJSON()
-	at := slices.IndexFunc(state.Cards, func(card Card) bool { return card.ID == id })
-	span := state.Cards[at]
-	mapped := map[Axis][]int{}
-	for _, axis := range axes {
-		lines, lo, hi := &state.Xs, span.C0, span.C1
-		innerLines := inner.Xs
-		if axis == "y" {
-			lines, lo, hi = &state.Ys, span.R0, span.R1
-			innerLines = inner.Ys
-		}
-		a, b := (*lines)[lo], (*lines)[hi]
-		indices := make([]int, len(innerLines))
-		for j, t := range innerLines {
-			switch {
-			case j == 0:
-				indices[j] = lo
-				continue
-			case j == len(innerLines)-1:
-				indices[j] = hi
-				continue
-			}
-			v := a + (b-a)*t
-			found := -1
-			for k := lo; k <= hi; k++ {
-				if (*lines)[k] == v {
-					found = k
-					break
-				}
-			}
-			if found < 0 {
-				found = hi
-				for k := lo + 1; k <= hi; k++ {
-					if (*lines)[k] > v {
-						found = k
-						break
-					}
-				}
-				*lines = slices.Insert(*lines, found, v)
-				hi++
-				for c := range state.Cards {
-					card := &state.Cards[c]
-					if axis == "x" {
-						card.C0, card.C1 = shifted(card.C0, found), shifted(card.C1, found)
-					} else {
-						card.R0, card.R1 = shifted(card.R0, found), shifted(card.R1, found)
-					}
-				}
-				for k := range indices[:j] {
-					indices[k] = shifted(indices[k], found)
-				}
-			}
-			indices[j] = found
-		}
-		mapped[axis] = indices
-		if axis == "x" {
-			span.C0, span.C1 = state.Cards[at].C0, state.Cards[at].C1
+	members, key := t.container(id)
+	at := slices.Index(*members, n)
+	inner := []*node{}
+	for _, m := range n.members {
+		if key != "" || m.group {
+			inner = append(inner, m)
 		}
 	}
-	state.Cards = slices.Delete(state.Cards, at, at+1)
-	for _, card := range inner.Cards {
-		card.C0, card.C1 = mapped["x"][card.C0], mapped["x"][card.C1]
-		card.R0, card.R1 = mapped["y"][card.R0], mapped["y"][card.R1]
-		state.Cards = append(state.Cards, card)
+	*members = slices.Concat((*members)[:at], inner, (*members)[at+1:])
+	if lead, _ := t.Leader(key); lead == id {
+		t.setLeader(key, n.leader)
 	}
-	paid := map[string]Paid{}
-	for card, record := range state.PaidBy {
-		if card != id && record.To != id {
-			paid[card] = record
-		}
-	}
-	for card, record := range inner.PaidBy {
-		paid[card] = record
-	}
-	state.PaidBy = paid
-	if err := parent.Replace(state); err != nil {
-		return err
-	}
-	if p.leaders[parentKey] == id {
-		p.leaders[parentKey] = p.leaders[id]
-	}
-	delete(p.leaders, id)
-	delete(p.groups, id)
 	return nil
-}
-
-// shifted is the index of a line after a line was inserted at the index at.
-func shifted(index, at int) int {
-	if index >= at {
-		return index + 1
-	}
-	return index
 }
 
 // Rename sets the name of the group card id to name with the white space at both ends removed, and returns the name.
-func (p *Planes) Rename(id, name string) (string, error) {
-	group, err := p.requireGroup(id)
+func (t *GroupTree) Rename(id, name string) (string, error) {
+	n, err := t.requireGroup(id)
 	if err != nil {
 		return "", err
 	}
 	trimmed := strings.TrimSpace(name)
 	if count := utf8.RuneCountInString(trimmed); count < 1 || count > 40 {
-		return "", fmt.Errorf("group name must be 1 to 40 characters: %s", name)
+		return "", fmt.Errorf("group name must be 1 to 40 characters: %s", trimmed)
 	}
-	group.name = trimmed
+	n.name = trimmed
 	return trimmed, nil
 }
 
-// SetLeader makes the card id the leader of its plane and returns the key of that plane.
-func (p *Planes) SetLeader(id string) (string, error) {
+// SetLeader makes the card id the leader of its level and returns the group card that holds it, or "" for the root level.
+func (t *GroupTree) SetLeader(id string) (string, error) {
 	if IsWindowSide(id) {
-		return "", fmt.Errorf("card %s is a window sidebar and cannot lead a plane", id)
+		return "", fmt.Errorf("card %s is a window sidebar and cannot lead a level", id)
 	}
-	key, ok := p.PlaneOf(id)
-	if !ok {
-		return "", fmt.Errorf("no card %s", id)
+	if err := t.requireCard(id); err != nil {
+		return "", err
 	}
-	p.leaders[key] = id
+	key := t.Parent(id)
+	t.setLeader(key, id)
 	return key, nil
 }
 
-// Split puts a new content card with data beside the card id toward side in the plane of the card and returns its id. even balances
-// that plane after the split (cardSplit even).
-func (p *Planes) Split(id string, side Side, data json.RawMessage, even bool) (string, error) {
-	refusal := func() error { return fmt.Errorf("card %s cannot split toward %s", id, side) }
-	key, ok := p.PlaneOf(id)
-	if !ok || !isSide(side) {
-		return "", refusal()
+// Split puts a new content card with data beside the card id toward side and returns its id: the new card of a content card joins the
+// group that holds the card, and the new card of a group card joins the level that holds the group card. even balances the grid after
+// the split (cardSplit even).
+func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool) (string, error) {
+	if !isSide(side) {
+		return "", fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
-	born := ""
-	err := p.try(func() error {
-		born = p.issue()
-		if _, ok := p.grid(key).SplitToward(id, side, SplitInit{ID: &born, Data: data}); !ok {
-			return refusal()
+	if err := t.requireCard(id); err != nil {
+		return "", err
+	}
+	kept := t.snapshot()
+	var born string
+	err := t.try(id, "split toward "+side, func() error {
+		born = t.issue()
+		if ok, err := t.splitCard(id, side, born, data); err != nil || !ok {
+			if err == nil {
+				err = fmt.Errorf("card %s cannot split toward %s", id, side)
+			}
+			return err
 		}
-		p.leaderEntered(key, born)
-		if even {
-			return p.balanceEven(key, id, side)
-		}
+		t.attach(t.Parent(id), &node{card: born})
 		return nil
-	}, refusal)
-	return born, err
-}
-
-// CanSplit tells whether Split of the card id toward side would succeed. A split changes the size of the card that it splits and of no
-// other card, so only the split of a group card can take a group card below its smallest size and runs on the tree; the split of a
-// content card is decided by its plane, as the head tools ask it for each card in each frame.
-func (p *Planes) CanSplit(id string, side Side) bool {
-	key, ok := p.PlaneOf(id)
-	if !ok || !isSide(side) || !p.grid(key).CanSplit(id, axisOf(side)) {
-		return false
+	})
+	if err == nil && even {
+		if err = t.balanced(id, side); err != nil {
+			t.restore(kept)
+		}
 	}
-	if p.groups[id] == nil {
-		return true
-	}
-	kept := p.snapshot()
-	_, err := p.Split(id, side, json.RawMessage(`{}`), false)
-	p.restore(kept)
-	return err == nil
-}
-
-// AddCard inserts a new content card with data at the right edge of the child plane of the group card id, reaching from its top to its
-// bottom, and returns its id.
-func (p *Planes) AddCard(id string, data json.RawMessage) (string, error) {
-	group, err := p.requireGroup(id)
 	if err != nil {
 		return "", err
 	}
-	refusal := func() error { return fmt.Errorf("group %s has no room for a card at its right edge", id) }
-	born := ""
-	err = p.try(func() error {
-		born = p.issue()
-		if _, ok := p.insertRight(group.grid, born, data); !ok {
-			return refusal()
+	return born, nil
+}
+
+// CanSplit tells whether Split of the card id toward side would succeed.
+func (t *GroupTree) CanSplit(id string, side Side) bool {
+	return t.Probe(func() error {
+		_, err := t.Split(id, side, nil, false)
+		return err
+	}) == nil
+}
+
+// AddCard puts a new content card with data into the group card id at the right edge of its rectangle and returns its id.
+func (t *GroupTree) AddCard(id string, data json.RawMessage) (string, error) {
+	n, err := t.requireGroup(id)
+	if err != nil {
+		return "", err
+	}
+	var born string
+	err = t.try(id, "split toward right", func() error {
+		born = t.issue()
+		if err := t.splitRect(n, "right", born, data); err != nil {
+			return err
 		}
-		p.leaderEntered(id, born)
+		t.attach(id, &node{card: born})
 		return nil
-	}, refusal)
+	})
 	return born, err
 }
 
-// insertRight inserts the card id with data at the last line on x of grid, as wide as a new card of the plane takes.
-func (p *Planes) insertRight(grid *Grid, id string, data json.RawMessage) (string, bool) {
-	columns := 0
-	for _, card := range grid.Cards() {
-		columns = max(columns, card.C1)
+// Close closes the card id with every card inside it and returns the content cards that it closed. A group card left with one member
+// is replaced by that member (docs/spec/groups.md#closing).
+func (t *GroupTree) Close(id string) ([]string, error) {
+	if err := t.requireCard(id); err != nil {
+		return nil, err
 	}
-	size := grid.Width() / float64(columns+1)
-	return grid.InsertAt("x", len(grid.Lines("x"))-1, InsertInit{ID: &id, Data: data, Size: &size})
-}
-
-// Close closes the card id with everything that it holds. A child plane left with one card is replaced by that card
-// (docs/spec/groups.md#closing). It returns the content cards that ended.
-func (p *Planes) Close(id string) ([]string, error) {
-	refusal := func() error { return fmt.Errorf("card %s cannot close", id) }
-	key, ok := p.PlaneOf(id)
-	if !ok {
-		return nil, refusal()
-	}
-	ended := p.ContentInside(id)
-	err := p.try(func() error {
-		if !p.grid(key).Close(id) {
-			return refusal()
+	closed := t.ContentInside(id)
+	err := t.try(id, "close", func() error {
+		if n := t.groupNode(id); n != nil {
+			if _, err := t.merge(n); err != nil {
+				return err
+			}
 		}
-		p.forget(id)
-		p.leaderLeft(key, id)
-		return p.collapse(key)
-	}, refusal)
+		if !t.grid.Close(id) {
+			return fmt.Errorf("card %s cannot close", id)
+		}
+		t.collapse(t.detach(id))
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return ended, nil
+	return closed, nil
 }
 
-// CanClose tells whether Close of the card id would succeed. A tree without group cards is one plane, which decides the close itself.
-func (p *Planes) CanClose(id string) bool {
-	if len(p.groups) == 0 {
-		return p.root.CanClose(id)
-	}
-	kept := p.snapshot()
-	_, err := p.Close(id)
-	p.restore(kept)
-	return err == nil
+// CanClose tells whether Close of the card id would succeed.
+func (t *GroupTree) CanClose(id string) bool {
+	return t.Probe(func() error {
+		_, err := t.Close(id)
+		return err
+	}) == nil
 }
 
-// ContentInside is the content cards that the card id is or holds, in workbench order.
-func (p *Planes) ContentInside(id string) []string {
-	if p.groups[id] == nil {
-		return []string{id}
+// CheckMove is the refusal of a move of the card id to side of target before the layout is asked, or nil
+// (docs/spec/groups.md#commands).
+func (t *GroupTree) CheckMove(id, target, side string) error {
+	if IsWindowSide(id) {
+		return fmt.Errorf("card %s is a window sidebar and does not move", id)
 	}
-	out := []string{}
-	for _, card := range p.planeOrder(id) {
-		out = append(out, p.ContentInside(card.ID)...)
+	if IsWindowSide(target) {
+		return fmt.Errorf("card %s is a window sidebar; a card does not move beside it", target)
 	}
-	return out
-}
-
-// forget removes the child planes that the closed card id held.
-func (p *Planes) forget(id string) {
-	group := p.groups[id]
-	if group == nil {
-		return
-	}
-	for _, card := range group.grid.Cards() {
-		p.forget(card.ID)
-	}
-	delete(p.groups, id)
-	delete(p.leaders, id)
-}
-
-// collapse replaces the group card of the child plane key with its one card when the plane holds one card: the card takes the slot,
-// the px sizes and the leader mark of the group card and keeps its id.
-func (p *Planes) collapse(key string) error {
-	group := p.groups[key]
-	if group == nil {
-		return nil
-	}
-	cards := group.grid.Cards()
-	if len(cards) != 1 {
-		return nil
-	}
-	only := cards[0]
-	parent := p.parentOf(key)
-	if err := p.renameCard(parent, key, only.ID, only.Data); err != nil {
+	if err := t.requireCard(id); err != nil {
 		return err
 	}
-	if p.leaders[parent] == key {
-		p.leaders[parent] = only.ID
+	if err := t.requireCard(target); err != nil {
+		return err
 	}
-	delete(p.leaders, key)
-	delete(p.groups, key)
-	return nil
-}
-
-// CheckMove is the refusal of a move of the card id to side of target, or nil (docs/spec/groups.md#commands).
-func (p *Planes) CheckMove(id, target string, side string) error {
-	switch {
-	case IsWindowSide(id):
-		return fmt.Errorf("card %s is a window sidebar and does not move", id)
-	case IsWindowSide(target):
-		return fmt.Errorf("card %s is a window sidebar; a card does not move beside it", target)
-	case target == id || slices.Contains(p.Groups(target), id):
+	if target == id || slices.Contains(t.Groups(target), id) {
 		return fmt.Errorf("card %s cannot move into itself", id)
-	case side == "centre" && !p.IsGroup(target):
+	}
+	if side == "centre" && !t.IsGroup(target) {
 		return fmt.Errorf("card %s is not a group; a card moves beside it", target)
+	}
+	if side != "centre" && !isSide(side) {
+		return fmt.Errorf("unknown side %s; use left, right, top, bottom or centre", side)
 	}
 	return nil
 }
 
 // Moved tells whether the card id already stands where a move to side of target puts it.
-func (p *Planes) Moved(id, target, side string) bool {
+func (t *GroupTree) Moved(id, target, side string) bool {
 	if side == "centre" {
-		key, ok := p.PlaneOf(id)
-		if !ok || key != target {
+		if t.Parent(id) != target {
 			return false
 		}
-		grid := p.grid(key)
-		card, _ := grid.Card(id) // silent: PlaneOf found the card.
-		return card.C1 == len(grid.Lines("x"))-1 && card.R0 == 0 && card.R1 == len(grid.Lines("y"))-1
+		card, _ := t.Card(id)      // silent: the parent holds the card.
+		group, _ := t.Card(target) // silent: target is a group card.
+		return card.C1 == group.C1 && card.R0 == group.R0 && card.R1 == group.R1
 	}
-	return p.Neighbour(target, side) == id
+	return t.Parent(id) == t.Parent(target) && t.Neighbour(target, side) == id
 }
 
-// Neighbour is the card of the plane of card whose edge lies on the line of the edge of card toward side and which spans the same two
+// Neighbour is the member of the level of card whose edge lies on the line of the edge of card toward side and which spans the same two
 // lines across that side, or "".
-func (p *Planes) Neighbour(card, side string) string {
-	key, ok := p.PlaneOf(card)
-	if !ok {
+func (t *GroupTree) Neighbour(card, side string) string {
+	if err := t.requireCard(card); err != nil {
 		return ""
 	}
-	grid := p.grid(key)
-	from, _ := grid.Card(card) // silent: PlaneOf found the card.
-	for _, other := range grid.Cards() {
-		if other.ID == card || IsWindowSide(other.ID) {
+	from, _ := t.Card(card) // silent: card is a card of the space.
+	for _, id := range t.Members(t.Parent(card)) {
+		if id == card || IsWindowSide(id) {
 			continue
 		}
+		other, _ := t.Card(id) // silent: a member is a card of the space.
 		rows := other.R0 == from.R0 && other.R1 == from.R1
 		columns := other.C0 == from.C0 && other.C1 == from.C1
 		if side == "right" && rows && other.C0 == from.C1 || side == "left" && rows && other.C1 == from.C0 ||
 			side == "bottom" && columns && other.R0 == from.R1 || side == "top" && columns && other.R1 == from.R0 {
-			return other.ID
+			return id
 		}
 	}
 	return ""
 }
 
-// Move moves the card id with its data or its child plane beside target on side, or with side centre into the right edge of the child
-// plane of the group card target (docs/spec/groups.md#commands). The card keeps its id.
-func (p *Planes) Move(id, target, side string) error {
-	if err := p.CheckMove(id, target, side); err != nil {
+// Move moves the card id beside target on side into the level of target, or with side centre into the group card target at the right
+// edge of its rectangle (docs/spec/groups.md#commands).
+func (t *GroupTree) Move(id, target, side string) error {
+	if err := t.CheckMove(id, target, side); err != nil {
 		return err
 	}
-	refusal := func() error { return fmt.Errorf("card %s cannot move to %s of %s", id, side, target) }
-	if side != "centre" && !isSide(side) {
-		return refusal()
-	}
-	from, ok := p.PlaneOf(id)
-	to, found := p.PlaneOf(target)
-	if !ok || !found {
-		return refusal()
-	}
-	if p.Moved(id, target, side) {
+	if t.Moved(id, target, side) {
 		return nil
 	}
-	if side != "centre" && from == to {
-		return p.try(func() error {
-			if !p.grid(from).Move(id, target, side) {
-				return refusal()
+	op := "move to " + side + " of " + target
+	refused := fmt.Errorf("card %s cannot %s", id, op)
+	return t.try(id, op, func() error {
+		moving := t.nodeOf(id)
+		if !moving.group && !t.IsGroup(target) && side != "centre" {
+			into := t.Parent(target)
+			if !t.grid.Move(id, target, side) {
+				return refused
 			}
+			from := t.detach(id)
+			t.attach(into, moving)
+			t.collapse(from)
 			return nil
-		}, refusal)
-	}
-	return p.try(func() error {
-		card, _ := p.Card(id) // silent: PlaneOf found the card.
-		if side == "centre" {
-			// The card enters the child plane first, so a group that the card leaves keeps two cards.
-			if _, ok := p.insertRight(p.groups[target].grid, movingID, card.Data); !ok {
-				return refusal()
-			}
-			if !p.grid(from).Close(id) {
-				return refusal()
-			}
-			if err := p.renameCard(target, movingID, id, card.Data); err != nil {
+		}
+		var saved merged
+		var data json.RawMessage
+		if moving.group {
+			var err error
+			if saved, err = t.merge(moving); err != nil {
 				return err
 			}
-			p.leaderLeft(from, id)
-			p.leaderEntered(target, id)
-			return p.collapse(from)
+		} else {
+			card, _ := t.grid.Card(id) // silent: CheckMove found the card.
+			data = card.Data
 		}
-		if !p.grid(from).Close(id) {
-			return refusal()
+		if !t.grid.Close(id) {
+			return refused
 		}
-		p.leaderLeft(from, id)
-		// The target is resolved before the replacement, so a target group that the replacement ends is the card that replaces it.
-		if group := p.groups[from]; group != nil && from == target && len(group.grid.Cards()) == 1 {
-			target = group.grid.Cards()[0].ID
+		// The target is decided before a group that the card leaves is replaced by its one member: a move beside that group lands
+		// beside the member, and a move into it keeps the group until the card is back.
+		from := t.detach(id)
+		if side != "centre" || from != target {
+			if member := t.collapse(from); from == target {
+				target = member
+			}
 		}
-		if err := p.collapse(from); err != nil {
+		into := t.Parent(target)
+		if side == "centre" {
+			into = target
+			if err := t.splitRect(t.groupNode(target), "right", id, data); err != nil {
+				return err
+			}
+		} else if ok, err := t.splitCard(target, side, id, data); err != nil || !ok {
+			if err == nil {
+				err = refused
+			}
 			return err
 		}
-		into, ok := p.PlaneOf(target)
-		if !ok {
-			return refusal()
-		}
-		width, height := card.Width, card.Height
-		landed, ok := p.grid(into).SplitToward(target, side, SplitInit{ID: &id, Data: card.Data})
-		if !ok {
-			return refusal()
-		}
-		grid := p.grid(into)
-		if axisOf(side) == "x" && width != nil {
-			grid.SetSize(landed, "x", width)
-		}
-		if axisOf(side) == "y" && height != nil {
-			grid.SetSize(landed, "y", height)
-		}
-		p.leaderEntered(into, id)
-		return nil
-	}, refusal)
-}
-
-// movingID is the id that a card takes while it stands in two planes during a move into a child plane.
-const movingID = "card-moving"
-
-// Balance balances each plane on its own from the root plane inward; when one plane refuses, nothing changes.
-func (p *Planes) Balance() error {
-	refusal := errors.New("the layout cannot be balanced")
-	return p.try(func() error {
-		for _, key := range p.planeKeys() {
-			if _, err := p.grid(key).Balance(); err != nil {
+		if moving.group {
+			if err := t.unmerge(id, saved); err != nil {
 				return err
 			}
-			p.fit()
 		}
+		t.attach(into, moving)
+		t.collapse(from)
 		return nil
-	}, func() error { return refusal })
+	})
 }
 
-// Focusable is the content card that a focus of the card id gives: the card itself, or for a group card the first content card in
-// reading order of its child plane, descending into the first group card.
-func (p *Planes) Focusable(id string) string {
-	for p.groups[id] != nil {
-		id = p.planeOrder(id)[0].ID
+// Balance balances the grid; it keeps the arrangement, so every group card keeps its rectangle.
+func (t *GroupTree) Balance() error {
+	before := t.drawn()
+	kept := t.snapshot()
+	if _, err := t.grid.Balance(); err != nil {
+		return err
 	}
-	return id
-}
-
-// SetData sets the data of the content card id of any plane.
-func (p *Planes) SetData(id string, data json.RawMessage) bool {
-	key, ok := p.PlaneOf(id)
-	if !ok || p.groups[id] != nil {
-		return false
-	}
-	return p.grid(key).SetData(id, data)
-}
-
-// Probe runs change on the tree and puts the tree back, and returns what change returned: the drop preview asks what a drop would
-// make without making it.
-func (p *Planes) Probe(change func() error) error {
-	kept := p.snapshot()
-	defer p.restore(kept)
-	return change()
-}
-
-// DropAt resolves a drop at x, y in the coordinates of the root plane from the root plane inward (docs/spec/groups.md#moving-and-dropping):
-// the centre of a group card goes on in its child plane at the same point, and a point on its header or one that its child plane
-// resolves to no card is the centre of the group card. A hit on the card without is no zone, so a dragged group card does not drop
-// on itself or into its child plane.
-func (p *Planes) DropAt(x, y float64, options ZoneOptions, without string) *ZoneHit {
-	key := RootPlane
-	for {
-		origin := p.Origin(key)
-		hit := p.grid(key).ZoneAt(x-origin.X, y-origin.Y, options)
-		if hit == nil {
-			if key == RootPlane {
-				return nil
-			}
-			return &ZoneHit{ID: key, Zone: "centre"}
-		}
-		if hit.ID == without && without != "" {
-			return nil
-		}
-		if p.groups[hit.ID] == nil || hit.Zone != "centre" {
-			return hit
-		}
-		// silent: hit names a card of the tree.
-		rect, _ := p.Rect(hit.ID)
-		if y < rect.Y+p.options.Head {
-			return hit
-		}
-		key = hit.ID
-	}
-}
-
-// groupRecord is the stored record of a group card: {group: {name, leader, plane}}.
-type groupRecord struct {
-	Group struct {
-		Name   string `json:"name"`
-		Leader string `json:"leader"`
-		Plane  State  `json:"plane"`
-	} `json:"group"`
-}
-
-// Stored is the stored form of the tree (docs/spec/groups.md#storage): the root plane with the record of each group card in its data,
-// the leader of the root plane, null without one, and lastCard.
-func (p *Planes) Stored() (State, *string, int, error) {
-	state, err := p.storedPlane(RootPlane, false)
-	return state, p.leaderOf(RootPlane), p.last, err
-}
-
-// leaderOf is the leader of the plane key, or nil.
-func (p *Planes) leaderOf(key string) *string {
-	if leader, ok := p.leaders[key]; ok {
-		return &leader
+	if card, rect := t.below(before); card != "" {
+		t.restore(kept)
+		minimum := t.grid.MinSize()
+		return fmt.Errorf("the layout cannot balance: card %s would be %s, below its minimum %s", card, sizeText(rect.W, rect.H),
+			sizeText(minimum, minimum))
 	}
 	return nil
 }
 
-// storedPlane is the state of the plane key with the record of each group card in its data; level adds the level of each child plane
-// for the tree that core.layout reports.
-func (p *Planes) storedPlane(key string, level bool) (State, error) {
-	state := p.grid(key).ToJSON()
-	for i, card := range state.Cards {
-		group := p.groups[card.ID]
-		if group == nil {
-			continue
-		}
-		plane, err := p.storedPlane(card.ID, level)
-		if err != nil {
-			return State{}, err
-		}
-		record := map[string]any{"name": group.name, "leader": p.leaders[card.ID], "plane": plane}
-		if level {
-			record["level"] = p.Level(card.ID)
-		}
-		if state.Cards[i].Data, err = json.Marshal(map[string]any{"group": record}); err != nil {
-			return State{}, fmt.Errorf("group %s: %w", card.ID, err)
+// MoveBoundary moves the boundary line of axis toward px, as Grid.MoveBoundary does across every group, and stops at the last position
+// at which every content card beside the line is drawn at least minSize (docs/spec/groups.md#minimum-size). It returns where the
+// boundary stands.
+func (t *GroupTree) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) float64 {
+	from := t.grid.BoundaryPos(axis, line)
+	before := t.drawn()
+	kept := t.snapshot()
+	moved := t.grid.MoveBoundary(axis, line, px, allowSnap)
+	if card, _ := t.below(before); card == "" {
+		return moved
+	}
+	// The drawn sizes change monotonically along the move, so the last position that keeps them is found by halving the distance
+	// between the start, which keeps them, and the refused position.
+	good, bad := from, moved
+	for range 40 {
+		middle := (good + bad) / 2
+		t.restore(kept)
+		t.grid.MoveBoundary(axis, line, middle, false)
+		if card, _ := t.below(before); card == "" {
+			good = middle
+		} else {
+			bad = middle
 		}
 	}
-	return state, nil
+	t.restore(kept)
+	return t.grid.MoveBoundary(axis, line, good, false)
 }
 
-// Tree is the tree that core.layout reports: the root plane with the record {name, level, leader, plane} of each group card in its
-// data, nested to the innermost plane.
-func (p *Planes) Tree() (State, error) { return p.storedPlane(RootPlane, true) }
+// Focusable is the content card that a focus of the card id gives: the card itself, or for a group card the first content card
+// inside it in workbench order.
+func (t *GroupTree) Focusable(id string) string {
+	if inside := t.ContentInside(id); len(inside) > 0 {
+		return inside[0]
+	}
+	return id
+}
 
-// GroupTree is the child plane of the group card id in the form of Tree.
-func (p *Planes) GroupTree(id string) (State, error) { return p.storedPlane(id, true) }
+// GroupSide is the side of the group button of the card id: right when it is drawn wider than high, otherwise bottom.
+func (t *GroupTree) GroupSide(id string) Side {
+	if rect, ok := t.Rect(id); ok && rect.W > rect.H {
+		return "right"
+	}
+	return "bottom"
+}
 
-// MaxCardNumber is the largest number n of a card id card-<n> of state and of the planes in its group records.
-func MaxCardNumber(state State) int {
-	most := 0
-	for _, card := range state.Cards {
-		if n, ok := CardNumber(card.ID); ok {
-			most = max(most, n)
-		}
-		var record groupRecord
-		if fields, _, ok := object(card.Data); ok {
-			if _, has := fields["group"]; has && json.Unmarshal(card.Data, &record) == nil {
-				most = max(most, MaxCardNumber(record.Group.Plane))
+// CanGroup tells whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would
+// succeed (docs/spec/groups.md#headers).
+func (t *GroupTree) CanGroup(id string) bool {
+	return t.Probe(func() error {
+		_, _, err := t.CreateGroup(id, t.GroupSide(id), nil, false)
+		return err
+	}) == nil
+}
+
+// DropAt resolves a drop at x, y from the root level inward (docs/spec/groups.md#moving-and-dropping): a point on the header of a group
+// card is its centre, a point in the outer edge fraction of its rectangle is that side, and every other point of it goes on to its
+// members; a point of no group card is the zone of the grid. A drop on the card without, or inside it, is no zone.
+func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *ZoneHit {
+	edge := 0.25
+	if options.Edge != nil && *options.Edge >= 0 && *options.Edge <= 0.5 {
+		edge = *options.Edge
+	}
+	excluded := func(id string) bool {
+		return without != "" && (id == without || slices.Contains(t.Groups(id), without))
+	}
+	level := t.roots
+	for {
+		var hit *node
+		for _, n := range level {
+			if !n.group {
+				continue
+			}
+			r := t.union(n)
+			if x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H {
+				hit = n
+				break
 			}
 		}
+		if hit == nil {
+			zone := t.grid.ZoneAt(x, y, options)
+			if zone == nil || excluded(zone.ID) {
+				return nil
+			}
+			return zone
+		}
+		if excluded(hit.card) {
+			return nil
+		}
+		head, _ := t.HeadRect(hit.card) // silent: hit is a group card.
+		if y <= head.Y+head.H {
+			return &ZoneHit{ID: hit.card, Zone: "centre"}
+		}
+		r := t.union(hit)
+		px, py := (x-r.X)/r.W, (y-r.Y)/r.H
+		if !(px > edge && px < 1-edge && py > edge && py < 1-edge) {
+			nearest := math.Min(math.Min(px, 1-px), math.Min(py, 1-py))
+			zone := "bottom"
+			switch nearest {
+			case px:
+				zone = "left"
+			case 1 - px:
+				zone = "right"
+			case py:
+				zone = "top"
+			}
+			return &ZoneHit{ID: hit.card, Zone: zone}
+		}
+		level = hit.members
 	}
-	return most
+}
+
+// Fullscreen is the rectangle of each card inside the group card id while it is shown across rect: the rectangle of the group card is
+// stretched onto rect on each axis (docs/spec/groups.md#card-commands-on-a-group-card).
+func (t *GroupTree) Fullscreen(id string, rect Rect) map[string]Rect {
+	n := t.groupNode(id)
+	if n == nil {
+		return nil
+	}
+	from := t.union(n)
+	fit := func(r Rect) Rect {
+		x0 := rect.X + (r.X-from.X)*rect.W/from.W
+		x1 := rect.X + (r.X+r.W-from.X)*rect.W/from.W
+		y0 := rect.Y + (r.Y-from.Y)*rect.H/from.H
+		y1 := rect.Y + (r.Y+r.H-from.Y)*rect.H/from.H
+		return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
+	}
+	out := map[string]Rect{}
+	for _, card := range t.Cards() {
+		if card != id && !slices.Contains(t.Groups(card), id) {
+			continue
+		}
+		r, _ := t.Rect(card) // silent: card is a card of the space.
+		if t.IsGroup(card) {
+			out[card] = fit(r)
+			continue
+		}
+		// A content card keeps the headers of the group cards above it at their height.
+		lib, _ := t.grid.Rect(card) // silent: card is a card of the grid.
+		fitted := fit(lib)
+		k := r.Y - lib.Y
+		fitted.Y += k
+		fitted.H -= k
+		out[card] = fitted
+	}
+	return out
+}
+
+// storedNode is the stored form of a group card (docs/spec/groups.md#storage).
+type storedNode struct {
+	Card    string `json:"card"`
+	Name    string `json:"name"`
+	Level   *int   `json:"level,omitempty"`
+	Leader  string `json:"leader"`
+	Members []any  `json:"members"`
+}
+
+// nodes is the stored form of the group cards of a level, each member in reading order; level adds the level of each node.
+func (t *GroupTree) nodes(level []*node, depth int, withLevel bool) []any {
+	out := []any{}
+	for _, n := range t.ordered(level) {
+		if !n.group {
+			out = append(out, n.card)
+			continue
+		}
+		stored := storedNode{Card: n.card, Name: n.name, Leader: n.leader, Members: t.nodes(n.members, depth+1, withLevel)}
+		if withLevel {
+			d := depth + 1
+			stored.Level = &d
+		}
+		out = append(out, stored)
+	}
+	return out
+}
+
+// Stored is the stored form of the group tree: the group cards of the root level, the leader of the root level, or nil, and lastCard.
+func (t *GroupTree) Stored() ([]any, *string, int) {
+	var leader *string
+	if t.leader != "" {
+		lead := t.leader
+		leader = &lead
+	}
+	return t.nodes(t.roots, 0, false), leader, t.last
+}
+
+// Reported is the group tree that core.layout reports: the stored form with the level of each node.
+func (t *GroupTree) Reported() []any { return t.nodes(t.roots, 0, true) }
+
+// ReportedMembers is the members of the group card id in the form of Reported.
+func (t *GroupTree) ReportedMembers(id string) []any {
+	path, n, _ := t.find(id) // silent: an id that is no card has no members.
+	if n == nil || !n.group {
+		return nil
+	}
+	return t.nodes(n.members, len(path)+1, true)
 }
 
 // CardNumber is n of a card id card-<n>.
@@ -1231,147 +1310,11 @@ func CardNumber(id string) (int, bool) {
 	return n, err == nil && n > 0 && strconv.Itoa(n) == text
 }
 
-// ReadPlanes reads the stored tree of a space: the root plane state, its leader and lastCard as stored, each refused with the text of
-// docs/spec/groups.md#storage. A member that is absent is nil.
-func ReadPlanes(state State, leader, lastCard json.RawMessage, options PlaneOptions, root *Grid) (*Planes, error) {
-	p := &Planes{root: root, options: options, groups: map[string]*groupPlane{}, leaders: map[string]string{}}
-	seen := map[string]bool{}
-	cards := []Card{}
-	for _, card := range state.Cards {
-		// Two root cards of one id are refused by the check of the root plane, with the text of the layout library.
-		seen[card.ID] = true
-	}
-	for _, card := range state.Cards {
-		kept, err := p.readCard(card, seen)
-		if err != nil {
-			return nil, err
-		}
-		cards = append(cards, kept)
-	}
-	if err := p.readLeader(RootPlane, "root", cards, leader); err != nil {
-		return nil, err
-	}
-	state.Cards = cards
-	if err := root.Replace(state); err != nil {
-		return nil, err
-	}
-	if err := p.readLast(lastCard, seen); err != nil {
-		return nil, err
-	}
-	p.fit()
-	return p, nil
-}
-
-// readCard reads one stored card: a group card takes its child plane into the tree and keeps groupMark as its data.
-func (p *Planes) readCard(card Card, seen map[string]bool) (Card, error) {
-	fields, keys, ok := object(card.Data)
-	if !ok {
-		return card, nil
-	}
-	if _, has := fields["group"]; !has {
-		return card, nil
-	}
-	refused := fmt.Errorf("card %s stores the group %s, which is not {name, leader, plane}", card.ID, compact(card.Data))
-	if len(keys) != 1 {
-		return card, refused
-	}
-	record, recordKeys, ok := object(fields["group"])
-	if !ok || len(recordKeys) != 3 {
-		return card, refused
-	}
-	for _, key := range []string{"name", "leader", "plane"} {
-		if _, has := record[key]; !has {
-			return card, refused
-		}
-	}
-	var name string
-	if json.Unmarshal(record["name"], &name) != nil || jsonKind(record["name"]) != '"' || utf8.RuneCountInString(name) < 1 ||
-		utf8.RuneCountInString(name) > 40 || strings.TrimSpace(name) != name {
-		return card, fmt.Errorf("group %s stores the name %s, which is not 1 to 40 characters", card.ID, compact(record["name"]))
-	}
-	var plane State
-	if err := json.Unmarshal(record["plane"], &plane); err != nil {
-		return card, refused
-	}
-	if err := CheckState(plane); err != nil {
-		return card, fmt.Errorf("group %s: %w", card.ID, err)
-	}
-	if len(plane.Cards) < 2 {
-		return card, fmt.Errorf("group %s holds fewer than two cards", card.ID)
-	}
-	inner := []Card{}
-	for _, child := range plane.Cards {
-		if IsWindowSide(child.ID) {
-			return card, fmt.Errorf("group %s holds the window sidebar %s", card.ID, child.ID)
-		}
-		if seen[child.ID] {
-			return card, fmt.Errorf("card %s is stored twice", child.ID)
-		}
-		seen[child.ID] = true
-		kept, err := p.readCard(child, seen)
-		if err != nil {
-			return card, err
-		}
-		inner = append(inner, kept)
-	}
-	if err := p.readLeader(card.ID, "group "+card.ID, inner, record["leader"]); err != nil {
-		return card, err
-	}
-	plane.Cards = inner
-	grid, err := p.newGrid(plane)
-	if err != nil {
-		return card, fmt.Errorf("group %s: %w", card.ID, err)
-	}
-	p.groups[card.ID] = &groupPlane{name: name, grid: grid}
-	card.Data = groupMark
-	return card, nil
-}
-
-// readLeader reads the stored leader of the plane key, named label in a refusal, among its cards.
-func (p *Planes) readLeader(key, label string, cards []Card, raw json.RawMessage) error {
-	lead := false
-	for _, card := range cards {
-		lead = lead || !IsWindowSide(card.ID)
-	}
-	if raw == nil || jsonKind(raw) == 'n' {
-		if lead || raw == nil {
-			return fmt.Errorf("plane %s has no leader", label)
-		}
-		return nil
-	}
-	var leader string
-	if jsonKind(raw) != '"' || json.Unmarshal(raw, &leader) != nil ||
-		!slices.ContainsFunc(cards, func(card Card) bool { return card.ID == leader }) {
-		return fmt.Errorf("plane %s names the leader %s, which is not a card of that plane", label, strings.Trim(compact(raw), `"`))
-	}
-	if IsWindowSide(leader) {
-		return fmt.Errorf("plane %s names the window sidebar %s as its leader", label, leader)
-	}
-	p.leaders[key] = leader
-	return nil
-}
-
-// readLast reads lastCard: a positive integer at least the number of every card id of the tree.
-func (p *Planes) readLast(raw json.RawMessage, seen map[string]bool) error {
-	refused := fmt.Errorf("layout stores lastCard %s, which is not the largest issued card number", compact(raw))
-	if raw == nil {
-		return fmt.Errorf("layout stores lastCard undefined, which is not the largest issued card number")
-	}
-	var last float64
-	if jsonKind(raw) != '0' || json.Unmarshal(raw, &last) != nil || last < 1 || last != math.Trunc(last) || last > math.MaxInt32 {
-		return refused
-	}
-	for id := range seen {
-		if n, ok := CardNumber(id); ok && n > int(last) {
-			return refused
-		}
-	}
-	p.last = int(last)
-	return nil
-}
-
-// compact is the text of a JSON value without white space.
+// compact is the text of a JSON value without white space, and undefined for an absent value.
 func compact(raw json.RawMessage) string {
+	if raw == nil {
+		return "undefined"
+	}
 	var out bytes.Buffer
 	if json.Compact(&out, raw) != nil {
 		return string(raw)
@@ -1379,80 +1322,144 @@ func compact(raw json.RawMessage) string {
 	return out.String()
 }
 
-// PlaneCards is the cards of the plane key in reading order.
-func (p *Planes) PlaneCards(key string) []string {
-	out := []string{}
-	if grid := p.grid(key); grid != nil {
-		for _, card := range readingOrder(grid.Cards()) {
-			out = append(out, card.ID)
+// ReadTree reads the stored layout of a space: the grid state, the group tree, the leader of the root level and lastCard as stored,
+// each refused with the text of docs/spec/groups.md#storage. A member that is absent is nil.
+func ReadTree(state State, groups, leader, lastCard json.RawMessage, options GroupOptions, grid *Grid) (*GroupTree, error) {
+	if err := grid.Replace(state); err != nil {
+		return nil, err
+	}
+	t := &GroupTree{grid: grid, head: options.Head}
+	items, ok := list(groups)
+	if !ok {
+		return nil, fmt.Errorf("layout stores groups %s, which is not a list of groups", compact(groups))
+	}
+	seen := map[string]bool{}
+	content := map[string]bool{}
+	for _, card := range state.Cards {
+		seen[card.ID] = true
+		content[card.ID] = !card.Fixed
+	}
+	held := map[string]bool{}
+	for _, raw := range items {
+		n, err := t.readNode(raw, seen, content, held)
+		if err != nil {
+			return nil, err
+		}
+		t.roots = append(t.roots, n)
+	}
+	if err := t.readLeader(leader); err != nil {
+		return nil, err
+	}
+	for _, id := range t.Cards() {
+		if n := t.groupNode(id); n != nil && !t.covers(n) {
+			return nil, fmt.Errorf("group %s does not cover one rectangle of the grid", id)
 		}
 	}
-	return out
-}
-
-// CanGroup tells whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would
-// succeed (docs/spec/groups.md#headers).
-func (p *Planes) CanGroup(id string) bool {
-	return p.CheckGroup(id, p.GroupSide(id)) == nil
-}
-
-// CanDissolve tells whether Dissolve of the group card id would succeed.
-func (p *Planes) CanDissolve(id string) bool {
-	if p.groups[id] == nil {
-		return false
+	if err := t.readLast(lastCard, seen); err != nil {
+		return nil, err
 	}
-	kept := p.snapshot()
-	err := p.Dissolve(id)
-	p.restore(kept)
-	return err == nil
+	return t, nil
 }
 
-// LeadCount is the number of cards of the plane key that can lead it: its cards that are not window sidebars. A plane of two or more
-// shows the leader button in each of their headers.
-func (p *Planes) LeadCount(key string) int {
-	count := 0
-	if grid := p.grid(key); grid != nil {
-		for _, card := range grid.list {
-			if !IsWindowSide(card.ID) {
-				count++
+// readNode reads one stored group card.
+func (t *GroupTree) readNode(raw json.RawMessage, seen, content, held map[string]bool) (*node, error) {
+	refused := fmt.Errorf("layout stores the group %s, which is not {card, name, leader, members}", compact(raw))
+	fields, keys, ok := object(raw)
+	if !ok || len(keys) != 4 {
+		return nil, refused
+	}
+	var id string
+	members, listed := list(fields["members"])
+	_, hasLeader := fields["leader"]
+	_, hasName := fields["name"]
+	if jsonKind(fields["card"]) != '"' || json.Unmarshal(fields["card"], &id) != nil || !listed || !hasLeader || !hasName {
+		return nil, refused
+	}
+	var name string
+	if jsonKind(fields["name"]) != '"' || json.Unmarshal(fields["name"], &name) != nil || utf8.RuneCountInString(name) < 1 ||
+		utf8.RuneCountInString(name) > 40 || strings.TrimSpace(name) != name {
+		return nil, fmt.Errorf("group %s stores the name %s, which is not 1 to 40 characters", id, compact(fields["name"]))
+	}
+	if seen[id] {
+		return nil, fmt.Errorf("card %s is stored twice", id)
+	}
+	seen[id] = true
+	if len(members) < 2 {
+		return nil, fmt.Errorf("group %s holds fewer than two cards", id)
+	}
+	n := &node{card: id, group: true, name: name}
+	for _, member := range members {
+		if jsonKind(member) != '"' {
+			inner, err := t.readNode(member, seen, content, held)
+			if err != nil {
+				return nil, err
 			}
+			n.members = append(n.members, inner)
+			continue
 		}
+		var card string
+		if err := json.Unmarshal(member, &card); err != nil {
+			return nil, refused
+		}
+		if IsWindowSide(card) {
+			return nil, fmt.Errorf("group %s holds the window sidebar %s", id, card)
+		}
+		if !content[card] {
+			return nil, fmt.Errorf("group %s holds %s, which is not a content card of the layout", id, compact(member))
+		}
+		if held[card] {
+			return nil, fmt.Errorf("card %s is stored twice", card)
+		}
+		held[card] = true
+		n.members = append(n.members, &node{card: card})
 	}
-	return count
+	lead, err := readLeader("group "+id, fields["leader"], n.members)
+	if err != nil {
+		return nil, err
+	}
+	n.leader = lead
+	return n, nil
 }
 
-// MoveBoundary moves the boundary line of axis of the plane key toward px, as Grid.MoveBoundary does, and stops at the last position at
-// which every group card that the move resizes keeps its smallest size (docs/spec/groups.md#minimum-size). It returns where the
-// boundary stands.
-func (p *Planes) MoveBoundary(key string, axis Axis, line int, px float64, allowSnap bool) float64 {
-	grid := p.grid(key)
-	from := grid.BoundaryPos(axis, line)
-	sizes := p.groupSizes()
-	kept := p.snapshot()
-	moved := grid.MoveBoundary(axis, line, px, allowSnap)
-	p.fit()
-	if p.belowSmallest(sizes) == "" {
-		return moved
-	}
-	// The sizes of the group cards change monotonically along the move, so the last position that keeps them is found by halving the
-	// distance between the start, which keeps them, and the refused position.
-	good, bad := from, moved
-	for range 40 {
-		middle := (good + bad) / 2
-		p.restore(kept)
-		grid.MoveBoundary(axis, line, middle, false)
-		p.fit()
-		if p.belowSmallest(sizes) == "" {
-			good = middle
-		} else {
-			bad = middle
+// readLeader reads the stored leader of the level label among its members.
+func readLeader(label string, raw json.RawMessage, members []*node) (string, error) {
+	lead := slices.ContainsFunc(members, func(n *node) bool { return !IsWindowSide(n.card) })
+	if raw == nil || jsonKind(raw) == 'n' {
+		if lead || raw == nil {
+			return "", fmt.Errorf("level %s has no leader", label)
 		}
+		return "", nil
 	}
-	p.restore(kept)
-	at := grid.MoveBoundary(axis, line, good, false)
-	p.fit()
-	return at
+	var leader string
+	if jsonKind(raw) != '"' || json.Unmarshal(raw, &leader) != nil ||
+		!slices.ContainsFunc(members, func(n *node) bool { return n.card == leader }) {
+		return "", fmt.Errorf("level %s names the leader %s, which is not a member of that level", label, strings.Trim(compact(raw), `"`))
+	}
+	if IsWindowSide(leader) {
+		return "", fmt.Errorf("level %s names the window sidebar %s as its leader", label, leader)
+	}
+	return leader, nil
 }
 
-// PlaneKeys lists the root plane and then each child plane after the plane that holds its group card, in workbench order.
-func (p *Planes) PlaneKeys() []string { return p.planeKeys() }
+// readLeader reads the stored leader of the root level.
+func (t *GroupTree) readLeader(raw json.RawMessage) error {
+	lead, err := readLeader("root", raw, t.level(""))
+	t.leader = lead
+	return err
+}
+
+// readLast reads lastCard: a positive integer at least the number of every card id of the layout.
+func (t *GroupTree) readLast(raw json.RawMessage, seen map[string]bool) error {
+	refused := fmt.Errorf("layout stores lastCard %s, which is not the largest issued card number", compact(raw))
+	var last float64
+	if raw == nil || jsonKind(raw) != '0' || json.Unmarshal(raw, &last) != nil || last < 1 || last != math.Trunc(last) || last > math.MaxInt32 {
+		return refused
+	}
+	for id := range seen {
+		if n, ok := CardNumber(id); ok && n > int(last) {
+			return refused
+		}
+	}
+	t.last = int(last)
+	return nil
+}

@@ -1,4 +1,4 @@
-// The boundaries, the tab drops and the header drags of the child planes in the mygo workbench (docs/spec/groups.md#drawing,
+// The lines, the tab drops and the header drags of group cards in the mygo workbench (docs/spec/groups.md#model,
 // docs/spec/groups.md#moving-and-dropping, docs/spec/groups.md#minimum-size), and the library preview of a group card.
 package workbench_test
 
@@ -6,53 +6,78 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"strings"
 	"testing"
 )
 
-// A divider of a child plane moves the boundary of that plane and leaves the group card where it stands.
-func TestADividerOfAChildPlaneMovesItsBoundary(t *testing.T) {
-	f := groupedShell(t)
+// quadShell is a layout shell of four cards in two rows, a, b over c, d, in a window large enough for groups inside it.
+func quadShell(t *testing.T) *tabShell {
+	t.Helper()
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
+		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes"))))
+	f.tester.SetSize(1400, 900)
 	f.settle()
-	divided := false
-	for _, item := range itemsNamed(f.tester.ElementTree(), "core.divider") {
-		divided = divided || strings.HasPrefix(item, "card-2/")
-	}
-	if !divided {
-		t.Fatal("the child plane of card-2 draws no divider")
-	}
-	before := f.gridCards()
-	if _, err := f.apply("core.boundary.move", `{"plane": "card-2", "axis": "x", "line": 1, "position": 300}`); err != nil {
+	return f
+}
+
+// A line that a group card and the cards outside it share is one line: the cards on it are drawn at one coordinate, and one move of
+// its boundary moves it in the group and outside it (docs/spec/groups.md#model).
+func TestALineAcrossAGroupIsOneLine(t *testing.T) {
+	f := quadShell(t)
+	if _, err := f.apply("core.group.create", `{"card": "card-1", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
-	after := f.gridCards()
-	if after["main"]["w"] == before["main"]["w"] || after["card-2"]["w"] != before["card-2"]["w"] {
-		t.Fatalf("the move changed main from %v to %v and card-2 from %v to %v", before["main"]["w"], after["main"]["w"],
-			before["card-2"]["w"], after["card-2"]["w"])
+	edges := func() (float64, float64) {
+		cards := f.gridCards()
+		return cards["card-6"]["x"].(float64) + cards["card-6"]["w"].(float64), cards["card-3"]["x"].(float64) + cards["card-3"]["w"].(float64)
+	}
+	if inside, outside := edges(); math.Abs(inside-outside) > 1e-6 {
+		t.Fatalf("the right edge of card-6 in the group is %v and of card-3 below it %v", inside, outside)
+	}
+	line := f.gridCards()["card-3"]["c1"]
+	if _, err := f.apply("core.boundary.move", fmt.Sprintf(`{"axis": "x", "line": %v, "position": 500}`, line)); err != nil {
+		t.Fatal(err)
+	}
+	if inside, outside := edges(); math.Abs(inside-outside) > 1e-6 {
+		t.Fatalf("after the move the right edge of card-6 is %v and of card-3 %v", inside, outside)
 	}
 }
 
-// A boundary of the root plane stops where the group card beside it reaches its smallest size.
-func TestARootBoundaryStopsAtTheSmallestSizeOfAGroupCard(t *testing.T) {
-	f := groupedShell(t)
-	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "right", "plugin": "plain"}`); err != nil {
+// A boundary stops where a content card under a group header is drawn at minSize (docs/spec/groups.md#minimum-size).
+func TestABoundaryStopsAtTheDrawnMinimumUnderAHeader(t *testing.T) {
+	f := quadShell(t)
+	if _, err := f.apply("core.group.create", `{"card": "card-1", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
-	group := f.gridCards()["card-2"]
-	move := fmt.Sprintf(`{"axis": "x", "line": %v, "position": %v}`, group["c1"], group["x"].(float64)+10)
+	move := fmt.Sprintf(`{"axis": "y", "line": %v, "position": 10}`, f.gridCards()["card-3"]["r0"])
 	if _, err := f.apply("core.boundary.move", move); err != nil {
 		t.Fatal(err)
 	}
-	gap, minSize := f.gridGap(t), 96.0
-	smallest := minSize + gap + minSize + gap
-	if width := f.gridCards()["card-2"]["w"].(float64); width < smallest-1e-6 || width > smallest+1 {
-		t.Fatalf("the group card is %v wide after the move, its smallest width is %v", width, smallest)
+	if height := f.gridCards()["card-1"]["h"].(float64); height < 96-1e-6 || height > 97 {
+		t.Fatalf("card-1 under the header is drawn %v high after the move, its minimum is 96", height)
 	}
 }
 
-// A tab dropped on a card of a child plane moves into that card, and a tab dropped on the header of a group card goes into a new card
-// at the right edge of its child plane.
-func TestATabDropResolvesIntoTheChildPlane(t *testing.T) {
+// A move that would leave a group card without one rectangle is refused with the group (docs/spec/groups.md#commands).
+func TestAMoveThatBreaksAGroupRectangleIsRefused(t *testing.T) {
+	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
+		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes")))
+	stored := space["layout"].(map[string]any)
+	stored["groups"] = []any{map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-2"}}}
+	stored["leader"], stored["lastCard"] = "card-5", 5
+	f := layoutShell(t, space)
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	if _, err := f.apply("core.card.move", `{"card": "card-4", "target": "card-1", "side": "left"}`); err == nil ||
+		err.Error() != "card card-4 cannot move to left of card-1: group card-5 would not cover one rectangle" {
+		t.Fatalf("the move fails with %v", err)
+	}
+}
+
+// A tab dropped on a card inside a group moves into that card, and a tab dropped on the header of a group card goes into a new card
+// at the right edge of its rectangle.
+func TestATabDropResolvesIntoTheGroup(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes"), tab("t2", "notes"), tab("t3", "notes")))
 	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
@@ -83,16 +108,16 @@ func TestATabDropResolvesIntoTheChildPlane(t *testing.T) {
 	}
 	right := 0.0
 	for id, card := range cards {
-		if card["plane"] == "card-2" && id != "card-4" {
+		if card["parent"] == "card-2" && id != "card-4" {
 			right = math.Max(right, card["x"].(float64)+card["w"].(float64))
 		}
 	}
-	if card := cards["card-4"]; card == nil || card["plane"] != "card-2" || card["x"].(float64) < right-1e-6 || !f.holdsTab("card-4", "t3") {
-		t.Fatalf("the new card is %v, not at the right edge of the child plane", card)
+	if card := cards["card-4"]; card == nil || card["parent"] != "card-2" || card["x"].(float64) < right-1e-6 || !f.holdsTab("card-4", "t3") {
+		t.Fatalf("the new card is %v, not at the right edge of the group", card)
 	}
 }
 
-// The library preview of a space with a group card draws it with the cards of its child plane and shows no refusal.
+// The library preview of a space with a group card draws the cards of the grid and shows no refusal.
 func TestTheLibraryPreviewDrawsAGroupCard(t *testing.T) {
 	f := groupedShell(t)
 	f.shellFixture.run("core.projects.browse", nil)
@@ -104,12 +129,12 @@ func TestTheLibraryPreviewDrawsAGroupCard(t *testing.T) {
 	for _, pane := range library.Previews["prj-a"] {
 		panes = append(panes, pane.Card)
 	}
-	if !slices.Contains(panes, "card-2") || slices.Contains(panes, "main") {
-		t.Fatalf("the preview holds the panes %v; the panes are the cards of the root plane", panes)
+	if slices.Contains(panes, "card-2") || !slices.Contains(panes, "main") || !slices.Contains(panes, "card-3") {
+		t.Fatalf("the preview holds the panes %v; the panes are the cards of the grid", panes)
 	}
 }
 
-// holdsTab tells whether the card of any plane holds the tab in core.grid.
+// holdsTab tells whether the card of any level holds the tab in core.grid.
 func (f *tabShell) holdsTab(card, tab string) bool {
 	entry, ok := f.gridCards()[card]
 	if !ok {
@@ -126,6 +151,8 @@ func (f *tabShell) holdsTab(card, tab string) bool {
 // A press and drag on the header of a group card moves the group card, and a release with no drop changes nothing.
 func TestAGroupCardIsDraggedByItsHeader(t *testing.T) {
 	f := groupedShell(t)
+	f.tester.SetSize(1400, 900)
+	f.settle()
 	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -151,10 +178,12 @@ func TestAGroupCardIsDraggedByItsHeader(t *testing.T) {
 }
 
 // outsideShell is a layout shell whose card main, with the tabs t1 and t2, is in the group card card-2 beside card-3, and the root
-// plane holds card-4 right of the group card.
+// level holds card-4 right of the group card.
 func outsideShell(t *testing.T) *tabShell {
 	t.Helper()
 	f := layoutShell(t, oneCard(tab("t1", "notes"), tab("t2", "notes")))
+	f.tester.SetSize(1400, 900)
+	f.settle()
 	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -175,9 +204,9 @@ func (f *tabShell) dropOnRightOf(t *testing.T, tab, card string) *dragRead {
 	return drag
 }
 
-// A tab of a card inside a group dropped on the right zone of a card of the root plane goes into a new card right of that card in the
-// root plane, and the card that it left keeps its other tab in the group.
-func TestATabOutOfAGroupSplitsACardOfTheRootPlane(t *testing.T) {
+// A tab of a card inside a group dropped on the right zone of a card of the root level goes into a new card right of that card in the
+// root level, and the card that it left keeps its other tab in the group.
+func TestATabOutOfAGroupSplitsACardOfTheRootLevel(t *testing.T) {
 	f := outsideShell(t)
 	// The narrow head of main shows its active tab only, so t2 is shown first.
 	f.shellFixture.run("core.tab.select", map[string]string{"tab": "t2"})
@@ -187,15 +216,15 @@ func TestATabOutOfAGroupSplitsACardOfTheRootPlane(t *testing.T) {
 	}
 	cards := f.gridCards()
 	born := cards["card-5"]
-	if born == nil || born["plane"] != nil || !f.holdsTab("card-5", "t2") || born["x"].(float64) <= cards["card-4"]["x"].(float64) {
+	if born == nil || born["parent"] != nil || !f.holdsTab("card-5", "t2") || born["x"].(float64) <= cards["card-4"]["x"].(float64) {
 		t.Fatalf("after the drop the new card is %v", born)
 	}
-	if !f.holdsTab("main", "t1") || f.holdsTab("main", "t2") || cards["main"]["plane"] != "card-2" {
+	if !f.holdsTab("main", "t1") || f.holdsTab("main", "t2") || cards["main"]["parent"] != "card-2" {
 		t.Fatalf("after the drop main is %v", cards["main"])
 	}
 }
 
-// The only tab of a card inside a group dropped on the right zone of a card of the root plane moves its card there, and the group card
+// The only tab of a card inside a group dropped on the right zone of a card of the root level moves its card there, and the group card
 // that keeps one card is replaced by that card.
 func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
 	f := outsideShell(t)
@@ -205,7 +234,7 @@ func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
 		t.Fatalf("the drag over the right of card-4 is %+v", drag)
 	}
 	cards := f.gridCards()
-	if _, kept := cards["card-2"]; kept || cards["main"]["plane"] != nil || cards["card-3"]["plane"] != nil ||
+	if _, kept := cards["card-2"]; kept || cards["main"]["parent"] != nil || cards["card-3"]["parent"] != nil ||
 		cards["card-3"]["x"].(float64) <= cards["card-4"]["x"].(float64) {
 		t.Fatalf("after the drop the grid holds %v", cards)
 	}

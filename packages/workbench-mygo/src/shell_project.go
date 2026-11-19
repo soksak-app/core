@@ -19,6 +19,7 @@ import (
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
 	State          layout.State    `json:"state"`
+	Groups         json.RawMessage `json:"groups"`
 	Leader         json.RawMessage `json:"leader"`
 	LastCard       json.RawMessage `json:"lastCard"`
 	Named          int             `json:"named"`
@@ -49,7 +50,7 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 		}
 		cards = append(cards, card)
 	}
-	// The leader of the root plane is its first card that is not a window sidebar, and lastCard the largest card number of the
+	// The leader of the root level is its first card that is not a window sidebar, and lastCard the largest card number of the
 	// declared cards, at least 1 (docs/spec/groups.md#storage).
 	var leader *string
 	last := 1
@@ -65,8 +66,8 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 			last = max(last, n)
 		}
 	}
-	return json.Marshal(map[string]any{"state": map[string]any{"xs": s.grid.Xs, "ys": s.grid.Ys, "cards": cards}, "leader": leader,
-		"lastCard": last, "named": 0})
+	return json.Marshal(map[string]any{"state": map[string]any{"xs": s.grid.Xs, "ys": s.grid.Ys, "cards": cards}, "groups": []any{},
+		"leader": leader, "lastCard": last, "named": 0})
 }
 
 // issueTab returns a new tab id that also differs from the tabs of the card that is being made.
@@ -476,12 +477,12 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if s.plane != nil {
 		width, height = s.plane.Width(), s.plane.Height()
 	}
-	root, err := layout.New(nil, layout.Options{Gap: &gap, Width: &width, Height: &height})
+	grid, err := layout.New(nil, layout.Options{Gap: &gap, Width: &width, Height: &height})
 	if err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
-	// The refusals of the stored tree carry the prefix of docs/spec/groups.md#storage.
-	plane, err := layout.ReadPlanes(stored.State, stored.Leader, stored.LastCard, s.planeOptions(root.MinSize()), root)
+	// The refusals of the stored layout carry the prefix of docs/spec/groups.md#storage.
+	plane, err := layout.ReadTree(stored.State, stored.Groups, stored.Leader, stored.LastCard, s.groupOptions(), grid)
 	if err != nil {
 		return fmt.Errorf("projects.json: project %s space %s: %w", project.Root, space.ID, err)
 	}
@@ -575,11 +576,11 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return err
 	}
-	root, leader, last, err := s.planes.Stored()
-	if err != nil {
+	groups, leader, last := s.planes.Stored()
+	if kept["state"], err = json.Marshal(s.plane.ToJSON()); err != nil {
 		return err
 	}
-	if kept["state"], err = json.Marshal(root); err != nil {
+	if kept["groups"], err = json.Marshal(groups); err != nil {
 		return err
 	}
 	if kept["leader"], err = json.Marshal(leader); err != nil {
@@ -805,12 +806,12 @@ func (s *Shell) dropProject(id string) {
 	})
 }
 
-// showPlane makes the tree planes, or none, the planes of the window. A gesture and a layer belong to the plane that they started on, so
+// showPlane makes the group tree planes, or none, the layout of the window. A gesture and a layer belong to the plane that they started on, so
 // they end here, as settle ends a layer: a question about a tab of a plane that left has nothing to close.
-func (s *Shell) showPlane(planes *layout.Planes) {
+func (s *Shell) showPlane(planes *layout.GroupTree) {
 	s.planes, s.plane, s.held, s.dragging = planes, nil, nil, nil
 	if planes != nil {
-		s.plane = planes.Root()
+		s.plane = planes.Grid()
 	}
 	s.closePicker()
 }
@@ -890,7 +891,7 @@ func (s *Shell) closeSpace(id string) error {
 	if err := json.Unmarshal(removed.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", id, err)
 	}
-	eachTab(storedCards(stored.State), func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
+	eachTab(stored.State.Cards, func(tab layout.Tab, _ bool) { dropped = append(dropped, tab.ID) })
 	for surface, held := range s.surfaces.held {
 		if held.section != nil && strings.HasPrefix(surface, id+"/") {
 			dropped = append(dropped, surface)
@@ -1067,9 +1068,6 @@ func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMe
 			return nil, err
 		}
 		from = data.ActiveTab()
-	}
-	if !s.planes.CanSplit(id, side) {
-		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
 	}
 	tab, err := s.newTabOf(known, from)
 	if err != nil {

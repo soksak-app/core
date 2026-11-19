@@ -351,8 +351,8 @@ type Shell struct {
 	// savedGeometry is the geometry that this window last stored for each project.
 	savedGeometry map[string]json.RawMessage
 	plane         *layout.Grid
-	// planes is the tree of planes of the shown space, whose root plane is plane (docs/spec/groups.md#model).
-	planes *layout.Planes
+	// planes is the group tree of the shown space beside its grid, plane (docs/spec/groups.md#model).
+	planes *layout.GroupTree
 	// dissolved holds the group cards that this window dissolved since its workbench started (docs/spec/groups.md#idempotency).
 	dissolved map[string]bool
 	focused   string

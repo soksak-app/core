@@ -48,7 +48,7 @@ func gridSpace(id string, xs, ys []float64, cards ...map[string]any) map[string]
 	return map[string]any{"id": id, "title": id, "layout": storedRoot(map[string]any{"xs": xs, "ys": ys, "paidBy": map[string]any{}, "cards": cards})}
 }
 
-// storedRoot is the stored layout of a root plane state without group cards (docs/spec/groups.md#storage): its leader is its first card
+// storedRoot is the stored layout of a grid state without group cards (docs/spec/groups.md#storage): its leader is its first card
 // that is not a window sidebar, and lastCard the largest number of a card id card-<n>, at least 1.
 func storedRoot(state map[string]any) map[string]any {
 	var leader any
@@ -63,7 +63,7 @@ func storedRoot(state map[string]any) map[string]any {
 			last = max(last, n)
 		}
 	}
-	return map[string]any{"state": state, "leader": leader, "lastCard": last}
+	return map[string]any{"state": state, "groups": []any{}, "leader": leader, "lastCard": last}
 }
 
 // gridProject is the stored project prj-a whose first space is active.

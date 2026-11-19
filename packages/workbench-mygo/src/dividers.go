@@ -15,8 +15,6 @@ import (
 // heldDivider is the boundary that a press holds. The press belongs to one element, so item stays the element of the hold while the
 // plane drops lines and renumbers line, and from and base read the pointer in plane coordinates.
 type heldDivider struct {
-	// plane is the plane of the boundary: the group card whose child plane it divides, or the root plane.
-	plane      string
 	item       string
 	axis       layout.Axis
 	line       int
@@ -32,14 +30,14 @@ func across(a, b layout.Divider, axis layout.Axis) float64 {
 	return min(a.X+a.W, b.X+b.W) - max(a.X, b.X)
 }
 
-// carry runs change, which moves the held boundary of grid, its plane, and returns where it stands, and keeps the hold on that boundary
-// when change dropped a line.
-func (s *Shell) carry(grid *layout.Grid, change func() float64) float64 {
+// carry runs change, which moves the held boundary and returns where it stands, and keeps the hold on that boundary when change
+// dropped a line.
+func (s *Shell) carry(change func() float64) float64 {
 	held := s.held
 	at := change()
 	line, near := held.line, math.Inf(1)
-	for k := min(held.line, len(grid.Lines(held.axis))-2); k >= 1; k-- {
-		if off := math.Abs(grid.BoundaryPos(held.axis, k) - at); off < near {
+	for k := min(held.line, len(s.plane.Lines(held.axis))-2); k >= 1; k-- {
+		if off := math.Abs(s.plane.BoundaryPos(held.axis, k) - at); off < near {
 			line, near = k, off
 		}
 	}
@@ -49,13 +47,13 @@ func (s *Shell) carry(grid *layout.Grid, change func() float64) float64 {
 
 // items returns the element of each divider: the key of the divider, except that the divider of the held boundary keeps the element
 // of the press. A hold whose boundary has no divider any more ends.
-func (s *Shell) items(dividers []layout.Divider, planes []string) []string {
+func (s *Shell) items(dividers []layout.Divider) []string {
 	out := make([]string, len(dividers))
 	seat := -1
 	if held := s.held; held != nil {
 		best := 0.0
 		for i, divider := range dividers {
-			if over := across(divider, held.span, held.axis); planes[i] == held.plane && divider.Axis == held.axis && divider.Line == held.line && over > best {
+			if over := across(divider, held.span, held.axis); divider.Axis == held.axis && divider.Line == held.line && over > best {
 				seat, best = i, over
 			}
 		}
@@ -97,23 +95,8 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		views[i] = DevicePixels(box, window.Scale)
 	}
 	origin := s.planeOrigin()
-	// The dividers of every plane in workbench order, each in the coordinates of the root plane. The item of a divider of a child plane
-	// names its group card, so the items of two planes differ.
-	var dividers []layout.Divider
-	var planes []string
-	for _, key := range s.planes.PlaneKeys() {
-		grid, _ := s.planes.Plane(key) // silent: PlaneKeys lists the planes of the tree.
-		at := s.planes.Origin(key)
-		for _, divider := range grid.Dividers() {
-			divider.X, divider.Y = divider.X+at.X, divider.Y+at.Y
-			if key != layout.RootPlane {
-				divider.Key = key + "/" + divider.Key
-			}
-			dividers = append(dividers, divider)
-			planes = append(planes, key)
-		}
-	}
-	items := s.items(dividers, planes)
+	dividers := s.plane.Dividers()
+	items := s.items(dividers)
 	grips := make([]dividerGrip, 0, len(dividers))
 	m := s.metrics
 	for i, divider := range dividers {
@@ -126,7 +109,7 @@ func (s *Shell) drawDividers(c *ui.Context, inset float32) []dividerGrip {
 		// element itself lets the pointer through, and its parts take it for the element.
 		box := ui.Box(c).Role(ui.RoleSplitter).Absolute().Left(float32(divider.X)+inset).Top(float32(divider.Y)+inset).
 			Size(float32(divider.W), float32(divider.H)).Cursor(cursor).Focusable().KeepFocus().FocusRing(false).PassThrough().
-			HandleInput(s.dividerInput(planes[i], divider, items[i]))
+			HandleInput(s.dividerInput(divider, items[i]))
 		area := layout.Rect{X: divider.X + origin.X, Y: divider.Y + origin.Y, W: divider.W, H: divider.H}
 		box.Children(func() {
 			for _, part := range outside(area, views) {
@@ -243,29 +226,18 @@ func (s *Shell) drawRules(p *ui.Painter, stage ui.Rect, inset float32, rules []l
 		}
 		p.Fill(ruleRect(rule, s.plane.Width(), s.plane.Height(), stage, inset, s.palette.StagePad()), color, 0)
 	}
-	// The crossings over the cards of a child plane stand over every card, so the stage paints them after the cards; the rest of a child
-	// plane lies in the body of its group card, which paints it.
-	if over && s.fullscreen == "" {
-		for _, key := range s.planes.PlaneKeys()[1:] {
-			origin := s.planes.Origin(key)
-			s.paintPlaneRules(p, key, ui.Rect{X: stage.X + inset + float32(origin.X), Y: stage.Y + inset + float32(origin.Y)}, true)
-		}
-	}
 }
 
 // dividerInput handles the pointer on divider. The position of an event is relative to the element, which stands at divider until
 // the next frame, so adding them gives the plane coordinate.
-func (s *Shell) dividerInput(plane string, divider layout.Divider, item string) func(ui.InputEvent) bool {
-	// divider stands in the coordinates of the root plane, and the boundary moves in the coordinates of its plane.
-	origin := s.planes.Origin(plane)
-	grid, _ := s.planes.Plane(plane) // silent: drawDividers takes the dividers of the planes of the tree.
+func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputEvent) bool {
 	return func(event ui.InputEvent) bool {
 		if !s.drawnPlaneShown() {
 			return false
 		}
-		at := float64(event.X) + divider.X - origin.X
+		at := float64(event.X) + divider.X
 		if divider.Axis == "y" {
-			at = float64(event.Y) + divider.Y - origin.Y
+			at = float64(event.Y) + divider.Y
 		}
 		switch event.Kind {
 		case ui.InputPointerDown:
@@ -274,22 +246,20 @@ func (s *Shell) dividerInput(plane string, divider layout.Divider, item string) 
 			}
 			if event.Clicks == 2 {
 				s.held = nil
-				grid.CenterBoundary(divider.Axis, divider.Line)
+				s.plane.CenterBoundary(divider.Axis, divider.Line)
 				s.settle()
 				return true
 			}
-			s.held = &heldDivider{plane: plane, item: item, axis: divider.Axis, line: divider.Line, from: at,
-				base: grid.BoundaryPos(divider.Axis, divider.Line), span: divider}
+			s.held = &heldDivider{item: item, axis: divider.Axis, line: divider.Line, from: at,
+				base: s.plane.BoundaryPos(divider.Axis, divider.Line), span: divider}
 			return true
 		case ui.InputPointerMove:
 			held := s.held
 			if held == nil || held.item != item {
 				return false
 			}
-			s.carry(grid, func() float64 {
-				return s.planes.MoveBoundary(plane, held.axis, held.line, held.base+at-held.from, true)
-			})
-			s.dragStepped(held, grid)
+			s.carry(func() float64 { return s.planes.MoveBoundary(held.axis, held.line, held.base+at-held.from, true) })
+			s.dragStepped(held)
 			s.options.Invalidate()
 			return true
 		case ui.InputPointerUp:
@@ -297,11 +267,11 @@ func (s *Shell) dividerInput(plane string, divider layout.Divider, item string) 
 			if held == nil || held.item != item {
 				return false
 			}
-			grid.MergeCoincident(held.axis, held.line)
+			s.plane.MergeCoincident(held.axis, held.line)
 			s.settle()
 			return true
 		case ui.InputKeyDown:
-			return s.dividerKey(plane, divider, event.Key)
+			return s.dividerKey(divider, event.Key)
 		}
 		return false
 	}
@@ -311,12 +281,11 @@ func (s *Shell) dividerInput(plane string, divider layout.Divider, item string) 
 const dividerKeyStep = 8
 
 // dividerKey handles a key on the focused divider: an arrow moves the boundary, and Enter or Space centers it.
-func (s *Shell) dividerKey(plane string, divider layout.Divider, key ui.Key) bool {
-	grid, _ := s.planes.Plane(plane) // silent: drawDividers takes the dividers of the planes of the tree.
+func (s *Shell) dividerKey(divider layout.Divider, key ui.Key) bool {
 	step := 0.0
 	switch key {
 	case ui.KeyEnter, ui.KeySpace:
-		grid.CenterBoundary(divider.Axis, divider.Line)
+		s.plane.CenterBoundary(divider.Axis, divider.Line)
 		s.settle()
 		return true
 	case ui.KeyLeft, ui.KeyUp:
@@ -326,7 +295,7 @@ func (s *Shell) dividerKey(plane string, divider layout.Divider, key ui.Key) boo
 	default:
 		return false
 	}
-	s.planes.MoveBoundary(plane, divider.Axis, divider.Line, grid.BoundaryPos(divider.Axis, divider.Line)+step, true)
+	s.planes.MoveBoundary(divider.Axis, divider.Line, s.plane.BoundaryPos(divider.Axis, divider.Line)+step, true)
 	s.settle()
 	return true
 }

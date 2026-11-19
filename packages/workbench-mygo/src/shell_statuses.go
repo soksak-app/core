@@ -45,9 +45,9 @@ type gridCardStatus struct {
 	Active     *string                                 `json:"active"`
 	Acts       map[string]any                          `json:"acts"`
 	Sidebars   map[layout.Side]layout.PresentedSidebar `json:"sidebars"`
-	// Plane is the group card whose child plane holds the card, absent for the root plane; Leader marks the leader of its plane; Group
-	// is the record of a group card (docs/spec/groups.md#status-and-queries).
-	Plane  string           `json:"plane,omitempty"`
+	// Parent is the group card that holds the card, absent for the root level; Leader marks the leader of its level; Group is the
+	// record of a group card (docs/spec/groups.md#status-and-queries).
+	Parent string           `json:"parent,omitempty"`
 	Leader bool             `json:"leader,omitempty"`
 	Group  *gridGroupStatus `json:"group,omitempty"`
 }
@@ -178,6 +178,11 @@ func (s *Shell) cardRect(id string) (layout.Rect, bool) {
 	}
 	rect, ok := s.planes.Rect(id)
 	if ok && s.fullscreen != "" {
+		// A fullscreen group card shows the cards inside it in its rectangle stretched onto the plane
+		// (docs/spec/groups.md#card-commands-on-a-group-card).
+		if shown, inside := s.planes.Fullscreen(s.fullscreen, layout.Rect{W: s.plane.Width(), H: s.plane.Height()})[id]; inside {
+			return shown, true
+		}
 		return layout.Rect{}, true
 	}
 	return rect, ok
@@ -223,17 +228,20 @@ func (s *Shell) gridState() (any, error) {
 		status.Fullscreen = &s.fullscreen
 	}
 	pane := 0
-	for _, placed := range s.planes.Cards() {
-		card := placed.Card
+	// The cards of the grid in workbench order, then the group cards in workbench order (docs/spec/groups.md#status-and-queries).
+	var groups []gridCardStatus
+	for _, id := range s.planes.Cards() {
+		card, _ := s.planes.Card(id) // silent: Cards lists cards of the space.
 		rect, ok := s.cardRect(card.ID)
 		if !ok {
 			continue
 		}
-		leader, _ := s.planes.Leader(placed.Plane) // silent: a plane without a leader has no card that carries the mark.
+		parent := s.planes.Parent(card.ID)
+		leader, _ := s.planes.Leader(parent) // silent: a level without a leader has no card that carries the mark.
 		if record, ok := s.planes.Group(card.ID); ok {
-			status.Cards = append(status.Cards, gridCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, C0: card.C0, C1: card.C1,
-				R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Tabs: []gridTabStatus{}, Acts: s.cardActs(card.ID),
-				Sidebars: map[layout.Side]layout.PresentedSidebar{}, Plane: placed.Plane, Leader: leader == card.ID, Group: &gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
+			groups = append(groups, gridCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, C0: card.C0, C1: card.C1,
+				R0: card.R0, R1: card.R1, Tabs: []gridTabStatus{}, Acts: s.cardActs(card.ID), Fullscreen: card.ID == s.fullscreen,
+				Sidebars: map[layout.Side]layout.PresentedSidebar{}, Parent: parent, Leader: leader == card.ID, Group: &gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
 			continue
 		}
 		data, err := layout.DecodeCardData(card.Data)
@@ -243,7 +251,7 @@ func (s *Shell) gridState() (any, error) {
 		entry := gridCardStatus{Fullscreen: card.ID == s.fullscreen, ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H,
 			C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Focused: card.ID == s.focused,
 			Tabs: []gridTabStatus{}, Status: s.cardStatusText(data), Acts: s.cardActs(card.ID), Sidebars: map[layout.Side]layout.PresentedSidebar{},
-			Plane: placed.Plane, Leader: leader == card.ID}
+			Parent: parent, Leader: leader == card.ID}
 		if data != nil {
 			if entry.Sidebars, err = s.presentCard(card.ID, data, rect); err != nil {
 				return nil, fmt.Errorf("card %s: %w", card.ID, err)
@@ -268,6 +276,7 @@ func (s *Shell) gridState() (any, error) {
 		}
 		status.Cards = append(status.Cards, entry)
 	}
+	status.Cards = append(status.Cards, groups...)
 	return status, nil
 }
 
@@ -298,12 +307,8 @@ func (s *Shell) layoutState() (any, error) {
 	if err := json.Unmarshal(space.Layout, &kept); err != nil {
 		return nil, err
 	}
-	// core.layout reports the stored form with the level of each group record (docs/spec/groups.md#status-and-queries).
-	tree, err := s.planes.Tree()
-	if err != nil {
-		return nil, err
-	}
-	if kept["state"], err = json.Marshal(tree); err != nil {
+	// core.layout reports the stored form with the level of each group node (docs/spec/groups.md#status-and-queries).
+	if kept["groups"], err = json.Marshal(s.planes.Reported()); err != nil {
 		return nil, err
 	}
 	return kept, nil
