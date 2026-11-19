@@ -342,7 +342,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			}
 		})
 		if s.renaming != nil && s.renaming.renameTarget == target {
-			ui.Row(c).Grow(1).Children(func() { s.drawRenameField(c, max(0, nameWidth)) })
+			// The field takes the place of the name: its text starts where the text of the name started, so it starts its outline and its
+			// padding less the padding of the name before the name, and it grows to the end of the name (docs/spec/groups.md#headers).
+			s.drawRenameField(c, 0).Grow(1).Shrink(1).MarginStart(m.tabPadX - s.palette.BorderWidth - s.frameLength(m.barTabRootPad))
 		} else {
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
 			// The name stands at the start of the place of the tab strip, where the first tab of a content card stands; a button centres its

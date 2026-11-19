@@ -10,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -644,4 +645,65 @@ func TestAGroupHeaderStandsInsideTheFrameOfItsGroupCard(t *testing.T) {
 	if want := (ui.Rect{X: frame.X + border, Y: frame.Y + border, W: frame.W - 2*border, H: head.H}); head != want {
 		t.Fatalf("the header of the group card card-2 is %+v in its frame %+v, want %+v inside the border %v", head, frame, want, border)
 	}
+}
+
+// The rename field of a group header is the rename field of a project or a space tab: its height, padding, outline and selection come
+// from the tokens of the theme, it takes the place of the name with its text where the text of the name started and its end where the
+// name ended, and the header keeps its height (docs/spec/groups.md#headers).
+func TestTheRenameFieldOfAGroupTakesThePlaceOfItsName(t *testing.T) {
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Chrome map[string]string `json:"chrome"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	token := func(name string) float32 {
+		value, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSuffix(declared.Chrome[name], "px"), "%"), 32)
+		if err != nil {
+			t.Fatalf("the token %s is %q: %v", name, declared.Chrome[name], err)
+		}
+		return float32(value)
+	}
+	padX, rootPad, rootH, headH := token("tab-pad-x"), token("bar-tab-root-pad"), token("bar-tab-root-h"), token("head-h")
+	f := groupedShell(t)
+	f.settle()
+	palette := f.palette()
+	name, header := f.box("core.group.name", "card-2"), f.box("core.group.header", "card-2")
+	f.run(t, "core.rename.begin", `{"kind": "group", "id": "card-2"}`)
+	f.settle()
+	field, after := f.box("core.rename.input", ""), f.box("core.group.header", "card-2")
+	border := palette.BorderWidth
+	if after != header || header.H != headH {
+		t.Errorf("the header %+v of %v points becomes %+v while the name is renamed", header, headH, after)
+	}
+	if want := (ui.Rect{X: name.X + padX - border - rootPad, Y: header.Y + (header.H-border-rootH)/2, W: name.X + name.W - (name.X + padX - border - rootPad), H: rootH}); field != want {
+		t.Errorf("the rename field is %+v for the name %+v, want %+v: its text where the text of the name started", field, name, want)
+	}
+	// The field selects its whole value when it opens; the selection is the color that covers most of the start of its text row, which
+	// the name of two letters and more fills.
+	counts := map[color.RGBA]int{}
+	y := field.Y + field.H/2
+	for x := field.X + border + rootPad; x < field.X+border+rootPad+16; x++ {
+		counts[f.pixelOf(x, y)]++
+	}
+	want := opaque(mixed(palette.Focus, palette.Bg, token("rename-selection-mix")/100))
+	most, seen := color.RGBA{}, 0
+	for c, n := range counts {
+		if n > seen {
+			most, seen = c, n
+		}
+	}
+	if !near(most, want) {
+		t.Errorf("the selection of the rename field is %v, want the focus color mixed into bg %v", most, want)
+	}
+}
+
+// mixed is a color with share of color and the rest of base, as color-mix in srgb.
+func mixed(c, base ui.Color, share float32) ui.Color {
+	blend := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*float64(share) + float64(b)*float64(1-share))) }
+	return ui.Color{R: blend(c.R, base.R), G: blend(c.G, base.G), B: blend(c.B, base.B), A: 255}
 }

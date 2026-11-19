@@ -104,7 +104,7 @@ type metrics struct {
 	barTabRootPad, barTabRootW, barTabRootH, dropMix, dropBorder, groupFocusFade, tabDraggingOpacity, actStroke, chromeActsGap, brandGap, brandLogoAtBase, chromeH, chromeRowH, spaceGap, spacePad, chromeGap, barGap, barXPad, barXOpacity, barAddText, barAddPad, textControlAtBase, textCaptionAtBase, chipMix, chipHoverMix, chipOnMix, projectTabMix float32
 	headH, footH, spaceTabH, actW, actH, actIcon, noticeDot, tabsGap, tabsPad, barTabGap, barTabMaxW, tabMaxW, tabPeekW, tabMinW float32
 	// The card head (.chrome of packages/workbench/app.css).
-	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, insetMix, tabXHoverMix float32
+	cardHeadGap, cardHeadPad, cardTabsGap, cardButton, cardIcon, cardActsGap, cardActsPad, cardActHalfOpacity, tabGap, tabPadY, tabPadX, tabXPad, tabXOpacity, iconStroke, disabledOpacity, noticeDotInset, radiusMiddleRatio, radiusSmallRatio, textSmallAtBase, textBase, chipSelMix, renameSelectionMix, insetMix, tabXHoverMix float32
 	// The error line (#applicationError of packages/workbench/app.css).
 	errorPadY, errorPadX, errorBorder float32
 	// debugW is the width of the debug view, and debugH its largest share of the window height.
@@ -222,6 +222,7 @@ func readMetrics(declared *Declarations) (metrics, error) {
 		*into = float32(value)
 	}
 	mix("chip-sel-mix", &m.chipSelMix)
+	mix("rename-selection-mix", &m.renameSelectionMix)
 	mix("preview-border-mix", &m.previewBorderMix)
 	mix("preview-fill-mix", &m.previewFillMix)
 	mix("preview-ink-mix", &m.previewInkMix)

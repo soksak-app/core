@@ -206,7 +206,7 @@ func (s *Shell) moveProject(id string, delta int, done func(error)) {
 }
 
 // drawRenameField draws the field in the place of the tab being renamed.
-func (s *Shell) drawRenameField(c *ui.Context, width float32) {
+func (s *Shell) drawRenameField(c *ui.Context, width float32) ui.Element {
 	m := s.metrics
 	held := s.renaming
 	value := held.Value
@@ -214,6 +214,8 @@ func (s *Shell) drawRenameField(c *ui.Context, width float32) {
 	field := s.binder.Bound(ui.TextInputBase(c, &value), "core.rename.input").Label(value).AutoFocus().Shrink(0).Width(width).Height(s.frameLength(m.barTabRootH)).PaddingX(s.frameLength(m.barTabRootPad)).
 		Border(s.palette.BorderWidth, s.palette.Focus).Radius(s.radiusSmall()).Background(s.palette.Bg).TextColor(s.palette.Fg).
 		FontSize(s.frameFont(s.textControl())).LineHeight(m.lineHeight).
+		// The selection is the focus color mixed into bg (docs/spec/groups.md#headers).
+		SelectionColor(mixed(s.palette.Focus, s.palette.Bg, m.renameSelectionMix)).
 		HandleInput(func(event ui.InputEvent) bool {
 			if event.Kind != ui.InputKeyDown || event.Key != ui.KeyEscape {
 				return false
@@ -235,4 +237,5 @@ func (s *Shell) drawRenameField(c *ui.Context, width float32) {
 	case held.held:
 		s.binder.run("core.rename.commit", nil)
 	}
+	return field
 }

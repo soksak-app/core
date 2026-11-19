@@ -135,6 +135,7 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .bar-tab--add:hover{background:var(--chip-hover)}
 .bar-tab__root{padding:0 var(--bar-tab-root-pad);border:var(--bw) solid var(--focus);border-radius:var(--r-xs);
   background:var(--bg);color:var(--fg);font:inherit;font-size:var(--text-control);width:var(--bar-tab-root-w);height:var(--bar-tab-root-h)}
+.bar-tab__root::selection{background:color-mix(in srgb,var(--focus) var(--rename-selection-mix),var(--bg));color:var(--fg)}
 
 /* Icon switches. */
 .act{display:inline-flex;align-items:center;justify-content:center;width:var(--act-w);height:var(--act-h);
@@ -204,12 +205,14 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    plane sets to group-focus-fade to the power of the levels up to it (docs/spec/groups.md#focus). Only the color of the frame line
    changes, so the mark adds no line, also at the seam. */
 :root[data-focus-ind=border] .group[data-focus]{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
-.group__rename{flex:1 1 auto;min-width:0}
+/* The rename field of a group takes the place of the name: its text starts where the text of the name started, and it grows over the
+   place of the name (docs/spec/groups.md#headers). */
+.group__rename{flex:1 1 0px;min-width:0;margin-left:calc(var(--tab-pad-x) - var(--bw) - var(--bar-tab-root-pad))}
 /* The header draws the line below it as the head of a card does, in the color that the plane writes from groupLook of group-look.js:
    edge with a gap and rule at the seam (docs/spec/groups.md#drawing). */
 .group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;
   border-bottom:var(--bw) solid}
-.group__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
+.group__name{flex:1 1 auto;min-width:0;padding-left:var(--tab-pad-x);padding-right:var(--tab-pad-x);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
   color:var(--fg);cursor:grab;user-select:none}
 /* The fit of a group header measures the name at the width of its text (docs/spec/groups.md#headers). */
 .group__head[data-measure] .group__name{flex:0 0 auto}
