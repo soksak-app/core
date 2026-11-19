@@ -67,6 +67,7 @@ function call(tree, grid, { call: name, args = {} }) {
     case "path": return tree.path(args.card);
     case "level": return tree.level(args.card);
     case "drop": return tree.dropAt(args.x, args.y, {});
+    case "balance": tree.balance(); return null;
   }
   throw new Error(`unknown call ${name}`);
 }

@@ -234,15 +234,32 @@ export class GroupTree {
   rect(id) {
     const found = this.find(id);
     if (!found) return undefined;
-    if (found.node) {
-      const rects = this.contents(found.node).map((card) => this.grid.rect(card));
-      const x = Math.min(...rects.map((r) => r.x)), y = Math.min(...rects.map((r) => r.y));
-      return { x, y, w: Math.max(...rects.map((r) => r.x + r.w)) - x, h: Math.max(...rects.map((r) => r.y + r.h)) - y };
-    }
-    const r = this.grid.rect(id);
-    const { r0 } = this.grid.card(id);
-    const headers = found.path.filter((node) => this.rectangle(node).r0 === r0).length * this.options.head;
+    // A content card and a group card are drawn below the headers of the group cards that hold them and start on their first row line.
+    const r = found.node ? this.union(found.node) : this.grid.rect(id);
+    const r0 = found.node ? this.rectangle(found.node).r0 : this.grid.card(id).r0;
+    const headers = this.headersAbove(found.path, r0) * this.headStep();
     return { x: r.x, y: r.y + headers, w: r.w, h: r.h - headers };
+  }
+
+  /** The union of the rectangles in the grid of the content cards inside a group node. */
+  union(node) {
+    const rects = this.contents(node).map((card) => this.grid.rect(card));
+    const x = Math.min(...rects.map((r) => r.x)), y = Math.min(...rects.map((r) => r.y));
+    return { x, y, w: Math.max(...rects.map((r) => r.x + r.w)) - x, h: Math.max(...rects.map((r) => r.y + r.h)) - y };
+  }
+
+  /** The header of the group card id: a row of the head height at the top of its drawn rectangle, across its whole width. */
+  headRect(id) {
+    const { x, y, w } = this.rect(id);
+    return { x, y, w, h: this.options.head };
+  }
+
+  /**
+   * How far one header moves the boxes below it down: the header and the corridor that separates it from them, as between two cards
+   * (docs/spec/groups.md#drawn-rectangles).
+   */
+  headStep() {
+    return this.options.head + this.grid.gap;
   }
 
   /** The number of group cards of path, the group cards outside a group card, that start on its first row line r0. */
@@ -327,6 +344,13 @@ export class GroupTree {
     this.grid.tidy();
     const state = this.grid.toJSON();
     if (Object.keys(state.paidBy).length) this.grid.replace({ ...state, paidBy: {} });
+    // Two lines at one coordinate, which a space without groups can hold, become one line.
+    for (const axis of ["x", "y"]) {
+      for (let k = this.grid.lines(axis).length - 2; k >= 1; k--) {
+        const lines = this.grid.lines(axis);
+        if (k < lines.length - 1 && Math.abs(lines[k] - lines[k - 1]) < EPSILON) this.grid.mergeCoincident(axis, k);
+      }
+    }
   }
 
   /**
@@ -363,14 +387,21 @@ export class GroupTree {
 
   /**
    * Moves the boundary line of axis toward px, as moveBoundary of the grid does across every group, and stops at the last position at
-   * which every content card that the move changes is drawn at least minSize and the form of the space holds (docs/spec/groups.md#minimum-size).
-   * Returns where the boundary stands.
+   * which every content card that the move changes is drawn at least minSize (docs/spec/groups.md#minimum-size). In a space with groups a
+   * line that ends on the coordinate of another line merges onto it, as at the end of a drag. Returns where the boundary stands.
    */
   moveBoundary(axis, line, px, allowSnap) {
+    const at = this.placeBoundary(axis, line, px, allowSnap);
+    this.keepForm();
+    return at;
+  }
+
+  /** moveBoundary without the merge of the lines that meet. */
+  placeBoundary(axis, line, px, allowSnap) {
     const from = this.grid.boundaryPos(axis, line);
     const before = this.drawnCards();
     const kept = this.snapshot();
-    const holds = () => !this.belowMinimum(before) && !this.formBreach() && this.nodes().every((node) => this.covers(node));
+    const holds = () => !this.belowMinimum(before);
     const moved = this.grid.moveBoundary(axis, line, px, allowSnap);
     if (holds()) return moved;
     // The drawn sizes change monotonically along the move, so the last position that keeps them is found by halving the distance between
@@ -572,12 +603,12 @@ export class GroupTree {
     return this.attempt(id, `hold a group toward ${side}`, () => {
       const group = this.issue();
       const born = this.issue();
-      if (found.node) this.splitRectangle(found.node, side, born, data);
-      else if (this.grid.splitToward(id, side, { id: born, data }) === null) throw new Error(`card ${id} cannot hold a group toward ${side}`);
+      if (!this.splitCard(id, side, born, data, true)) throw new Error(`card ${id} cannot hold a group toward ${side}`);
       const parent = this.parentOf(id);
       const node = { card: group, name: this.nextGroupName(), leader: id, members: [found.node ?? id, born] };
       this.replaceMember(parent, id, node);
       if (this.leaderOf(parent) === id) this.setLeaderOf(parent, group);
+      this.levelSplit(id, side, born);
       if (even) this.balanceEven(id, side, before);
       return { group, card: born };
     });
@@ -595,10 +626,10 @@ export class GroupTree {
     const before = this.drawnCards();
     return this.attempt(id, `split toward ${side}`, () => {
       const born = this.issue();
-      if (found.node) this.splitRectangle(found.node, side, born, data);
-      else if (this.grid.splitToward(id, side, { id: born, data }) === null) throw refusal();
+      if (!this.splitCard(id, side, born, data, false)) throw refusal();
       this.attach(found.parent, born);
       this.leaderEntered(found.parent, born);
+      this.levelSplit(id, side, born);
       if (even) this.balanceEven(id, side, before);
       return born;
     });
@@ -650,6 +681,39 @@ export class GroupTree {
       this.collapse();
     });
     return ended;
+  }
+
+  /**
+   * Splits the card target toward side into the card id with data, with the split of its rectangle for a group card. A split toward top or
+   * bottom whose upper card is drawn below headers, which the split of the group button always is (grouping), cuts at a new line
+   * (docs/spec/groups.md#split-setting). Returns false when the layout refuses.
+   */
+  splitCard(target, side, id, data, grouping) {
+    const node = this.node(target);
+    if (node) {
+      this.splitRectangle(node, side, id, data);
+      return true;
+    }
+    const newLine = (side === "top" || side === "bottom") && (grouping || this.rect(target).y > this.grid.rect(target).y + EPSILON);
+    return this.grid.splitToward(target, side, { id, data, newLine }) !== null;
+  }
+
+  /**
+   * Moves the line between the card target and the new card id of a split toward top or bottom, so that both are drawn at one height below
+   * the headers that the upper one stands under (docs/spec/groups.md#split-setting). A split across, and a line that other cards stand on,
+   * do not change it, so a split moves no line of another card.
+   */
+  levelSplit(target, side, id) {
+    if (side !== "top" && side !== "bottom") return;
+    const [upper, lower] = side === "top" ? [id, target] : [target, id];
+    const up = this.rect(upper), down = this.rect(lower);
+    const inside = (card) => (this.node(card) ? this.contents(this.node(card)) : [card]);
+    const lowerNode = this.node(lower);
+    const line = lowerNode ? this.rectangle(lowerNode).r0 : this.grid.card(lower).r0;
+    const pieces = new Set([...inside(upper), ...inside(lower)]);
+    if (this.grid.cards.some((card) => (card.r0 === line || card.r1 === line) && !pieces.has(card.id))) return;
+    const delta = (down.h - up.h) / 2;
+    if (Math.abs(delta) > EPSILON) this.grid.moveLinePast("y", line, this.grid.boundaryPos("y", line) + delta);
   }
 
   /**
@@ -809,9 +873,11 @@ export class GroupTree {
       this.collapse();
       const merged = found.node ? this.merge(found.node) : null;
       const beside = this.node(landing);
-      if (beside) {
+      if (beside || found.node) {
+        // A group card made one card, or any card beside a group card, closes and is split in beside its target, as the split of the
+        // target lays it.
         this.closeCell(id, operation, found.parent);
-        this.splitRectangle(beside, side, id, data);
+        if (!this.splitCard(landing, side, id, data, false)) throw refusal();
       } else {
         // The move closes the card with the sides that closeCell chose on the same state, then lands it beside landing.
         const kept = this.snapshot().state;
@@ -860,33 +926,34 @@ export class GroupTree {
     const { without = null, ...zone } = options;
     // default: edge is an optional option of zoneAt, documented as 0.25.
     const edge = zone.edge ?? 0.25;
+    // The dragged group card and the cards inside it are no target.
+    const excluded = (id) => without !== null && (id === without || (this.find(id)?.path ?? []).some((node) => node.card === without));
     let members = this.groups;
     for (;;) {
       const hit = members.find((member) => {
         if (typeof member === "string") return false;
-        const r = this.rect(member.card);
+        const r = this.union(member);
         return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
       });
-      if (!hit) break;
-      if (hit.card === without) return null;
-      const r = this.rect(hit.card);
-      const top = r.y + (this.headersAbove(this.find(hit.card).path, this.rectangle(hit).r0) + 1) * this.options.head;
-      const bottom = r.y + r.h;
-      if (y < top || bottom <= top || !(r.w > 0)) return { card: hit.card, zone: "centre" };
+      if (!hit) {
+        const found = this.grid.zoneAt(x, y, zone);
+        if (!found || excluded(found.id)) return null;
+        return { card: found.id, zone: found.zone };
+      }
+      if (excluded(hit.card)) return null;
+      const head = this.headRect(hit.card);
+      if (y <= head.y + head.h) return { card: hit.card, zone: "centre" };
+      const r = this.union(hit);
       const px = (x - r.x) / r.w;
-      const py = (y - top) / (bottom - top);
+      const py = (y - r.y) / r.h;
       if (!(px > edge && px < 1 - edge && py > edge && py < 1 - edge)) {
         const nearest = Math.min(px, 1 - px, py, 1 - py);
         return { card: hit.card, zone: nearest === px ? "left" : nearest === 1 - px ? "right" : nearest === py ? "top" : "bottom" };
       }
       members = hit.members;
     }
-    const hit = this.grid.zoneAt(x, y, zone);
-    if (!hit) return null;
-    const dragged = without ? this.node(without) : null;
-    if (dragged && this.contents(dragged).includes(hit.id)) return null;
-    return { card: hit.id, zone: hit.zone };
   }
+
 
   /** A group node in its stored form, its members in reading order; level adds the level of its members. */
   storedNode(node, level, depth) {

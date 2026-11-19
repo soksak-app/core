@@ -128,7 +128,7 @@ test("core.card.move moves a card into a group and the add, split and close of a
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
   await refuses(run("core.card.move", { card: "card-4", target: "card-1", side: "right" }), "card card-4 cannot move into itself");
   await refuses(run("core.card.split", { card: "card-4", side: "right", plugin: PLAIN }),
-    "card card-4 cannot split toward right: card card-1 would be 69x1168, below its minimum 96x96");
+    "card card-4 cannot split toward right: card card-1 would be 69x1156, below its minimum 96x96");
   const split = await run("core.card.split", { card: "card-4", side: "bottom", plugin: PLAIN });
   assert.equal(split.card, "card-6");
   assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5", "card-3"]);
