@@ -157,7 +157,7 @@ func (s *Shell) registerGroups() {
 		if err := s.planes.Move(value.Card, value.Target, value.Side); err != nil {
 			return nil, err
 		}
-		s.focusCard(value.Card)
+		s.focusCard(s.planes.Focusable(value.Card))
 		s.settle()
 		return map[string]string{"card": value.Card}, nil
 	})

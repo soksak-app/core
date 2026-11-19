@@ -1420,3 +1420,39 @@ func (p *Planes) LeadCount(key string) int {
 	}
 	return count
 }
+
+// MoveBoundary moves the boundary line of axis of the plane key toward px, as Grid.MoveBoundary does, and stops at the last position at
+// which every group card that the move resizes keeps its smallest size (docs/spec/groups.md#minimum-size). It returns where the
+// boundary stands.
+func (p *Planes) MoveBoundary(key string, axis Axis, line int, px float64, allowSnap bool) float64 {
+	grid := p.grid(key)
+	from := grid.BoundaryPos(axis, line)
+	sizes := p.groupSizes()
+	kept := p.snapshot()
+	moved := grid.MoveBoundary(axis, line, px, allowSnap)
+	p.fit()
+	if p.belowSmallest(sizes) == "" {
+		return moved
+	}
+	// The sizes of the group cards change monotonically along the move, so the last position that keeps them is found by halving the
+	// distance between the start, which keeps them, and the refused position.
+	good, bad := from, moved
+	for range 40 {
+		middle := (good + bad) / 2
+		p.restore(kept)
+		grid.MoveBoundary(axis, line, middle, false)
+		p.fit()
+		if p.belowSmallest(sizes) == "" {
+			good = middle
+		} else {
+			bad = middle
+		}
+	}
+	p.restore(kept)
+	at := grid.MoveBoundary(axis, line, good, false)
+	p.fit()
+	return at
+}
+
+// PlaneKeys lists the root plane and then each child plane after the plane that holds its group card, in workbench order.
+func (p *Planes) PlaneKeys() []string { return p.planeKeys() }

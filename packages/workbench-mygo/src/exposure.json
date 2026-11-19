@@ -2748,7 +2748,7 @@
       },
       {
         "name": "core.boundary.move",
-        "description": "Moves boundary line on axis to a position in plane coordinates and redraws; returns the resulting position.",
+        "description": "Moves boundary line on axis of the plane, the child plane of the group card plane or the root plane without it, to a position in the coordinates of that plane and redraws; returns the resulting position.",
         "params": {
           "type": "object",
           "properties": {
@@ -2763,6 +2763,9 @@
             },
             "position": {
               "type": "number"
+            },
+            "plane": {
+              "type": "string"
             }
           }
         },

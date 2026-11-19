@@ -159,7 +159,7 @@ member `leader`와 `lastCard`가 필수이므로 이 형태는 이전 release의
 
 ## 그리기
 
-group card는 기존 디자인의 card로 그린다. 그 background, border, radius, header, focus 처리는 theme과 chrome metrics에서 온 content card의 것이며, group을 위한 색, border, label은 더하지 않는다. child plane은 [모델](#모델)이 말하듯 body 안에 놓이고, child plane의 card는 그 안에서 기존 디자인의 card로 그린다. 각 plane은 자기 경계선과 divider(`sp-rule`, `sp-divider`)를 자기 사각형 안에 그린다. group card 옆의 parent plane divider는 group card의 크기를 바꾸고 child plane은 비율을 유지한다. rail은 지금처럼 focus된 content card와 그것이 override한 window sidebar의 외곽을 그린다([override context와 rail 테두리](external-sidebars.ko.md#오버라이드-컨텍스트와-레일-보더)). 두 workbench는 [native surfaces](native-surfaces.ko.md#인수-기준)의 수용 기준이 요구하듯 group card, 그 header, child plane을 card chrome과 native 화면과 같은 draw와 transaction에서 그린다. library의 layout 미리보기는 group card를 그 child plane의 도식을 담은 card로 그린다.
+group card는 기존 디자인의 card로 그린다. 그 background, border, radius, header, focus 처리는 theme과 chrome metrics에서 온 content card의 것이며, group을 위한 색, border, label은 더하지 않는다. child plane은 [모델](#모델)이 말하듯 body 안에 놓이고, child plane의 card는 그 안에서 기존 디자인의 card로 그린다. 각 plane은 자기 경계선과 divider(`sp-rule`, `sp-divider`)를 자기 사각형 안에 그린다. group card 옆의 parent plane divider는 group card의 크기를 바꾸고 child plane은 비율을 유지한다. child plane의 divider는 group card를 `plane`으로 하여 `core.boundary.move`를 실행하고, 어느 plane의 경계 이동이든 그것이 크기를 바꾸는 group card가 가장 작은 크기에 이르는 곳에서 멈춘다. rail은 지금처럼 focus된 content card와 그것이 override한 window sidebar의 외곽을 그린다([override context와 rail 테두리](external-sidebars.ko.md#오버라이드-컨텍스트와-레일-보더)). 두 workbench는 [native surfaces](native-surfaces.ko.md#인수-기준)의 수용 기준이 요구하듯 group card, 그 header, child plane을 card chrome과 native 화면과 같은 draw와 transaction에서 그린다. library의 layout 미리보기는 group card를 그 child plane의 도식을 담은 card로 그린다.
 
 ## 노출
 
@@ -175,6 +175,7 @@ group card는 기존 디자인의 card로 그린다. 그 background, border, rad
 | command | `core.card.move` | Moves a content card or a group card beside a card of any plane, or into a group, as a drop does. |
 | status | `core.layout` | The stored form of the current space layout with the level of each group record, or null. |
 | status | `core.grid` | The current grid as today, with the cards of the child planes, each with its plane, and each group card with its group record. |
+| command | `core.boundary.move` | Moves boundary line on axis of the plane, the child plane of the group card plane or the root plane without it, to a position in the coordinates of that plane and redraws; returns the resulting position. |
 | command | `core.card.get` | Reads the state of one content card of any plane with its group path, or one group card. |
 | element | `core.group` | The group cards in workbench order. |
 | element | `core.group.header` | The headers of the group cards in workbench order. |

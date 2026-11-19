@@ -415,21 +415,67 @@ func (s *Shell) drawPreview(c *ui.Context, project *projectRecord) (*layout.Stat
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return nil, err.Error()
 	}
-	shares := previewShares(stored.State)
+	// The tree of planes is read as the space opens it, so the preview shows the refusal of a stored group (docs/spec/groups.md#storage).
+	if err := s.checkStoredTree(stored); err != nil {
+		failure := fmt.Sprintf("projects.json: project %s space %s: %s", project.Root, project.ActiveSpaceID, err)
+		frame.Children(func() {
+			ui.Text(c, failure).Wrap().LineHeight(s.metrics.lineHeight).FontSize(s.textCaption()).TextColor(s.palette.No).Margin(padY, padX, padY, padX)
+		})
+		return nil, failure
+	}
+	s.drawPreviewGrid(frame.Padding(padY, padX, padY, padX), c, stored.State)
+	return &stored.State, ""
+}
+
+// checkStoredTree reads the stored tree of planes of stored on a plane of its own, as loadSpace reads it, and returns its refusal.
+func (s *Shell) checkStoredTree(stored storedLayout) error {
+	gap := s.palette.PlaneGap()
+	root, err := layout.New(nil, layout.Options{Gap: &gap})
+	if err != nil {
+		return err
+	}
+	_, err = layout.ReadPlanes(stored.State, stored.Leader, stored.LastCard, s.planeOptions(root.MinSize()), root)
+	return err
+}
+
+// drawPreviewGrid lays the cards of the plane state out in box as the grid of a preview, and draws a group card as a pane that holds the
+// grid of its child plane (docs/spec/groups.md#drawing).
+func (s *Shell) drawPreviewGrid(box ui.Element, c *ui.Context, state layout.State) {
+	m := s.metrics
+	shares := previewShares(state)
 	columns := make([]ui.Track, len(shares))
 	for i, share := range shares {
 		columns[i] = ui.Fr(share)
 	}
-	rows := make([]ui.Track, len(stored.State.Ys)-1)
+	rows := make([]ui.Track, len(state.Ys)-1)
 	for i := range rows {
 		rows[i] = ui.Fr(1)
 	}
-	frame.Grid().ColumnTracks(columns...).RowTracks(rows...).Gap(m.space2).Padding(padY, padX, padY, padX).Children(func() {
-		for _, card := range stored.State.Cards {
+	box.Grid().ColumnTracks(columns...).RowTracks(rows...).Gap(m.space2).Children(func() {
+		for _, card := range state.Cards {
+			if plane, group := previewGroup(card); group {
+				pane := ui.Box(c.Key(card.ID)).ColumnStart(card.C0+1).ColumnSpan(card.C1-card.C0).RowStart(card.R0+1).RowSpan(card.R1-card.R0).Clip().
+					Padding(m.space1).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, mixed(s.palette.Muted, s.palette.Card, m.previewBorderMix)).
+					Background(s.palette.Card)
+				s.drawPreviewGrid(pane, c, plane)
+				continue
+			}
 			s.drawPreviewPane(c, card)
 		}
 	})
-	return &stored.State, ""
+}
+
+// previewGroup is the child plane of a stored group card, and false for another card.
+func previewGroup(card layout.Card) (layout.State, bool) {
+	var record struct {
+		Group *struct {
+			Plane layout.State `json:"plane"`
+		} `json:"group"`
+	}
+	if json.Unmarshal(card.Data, &record) != nil || record.Group == nil {
+		return layout.State{}, false
+	}
+	return record.Group.Plane, true
 }
 
 // previewShares are the shares of the columns of state in the grid of a preview, where a column with only window sidebars takes less, as

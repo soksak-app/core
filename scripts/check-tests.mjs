@@ -13998,6 +13998,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "cardSplit even would draw card" },
       { file: "packages/workbench-mygo/src/groups.go", symbol: "func (s *Shell) registerGroups" },
       { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func (s *Shell) drawGroupCard" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (p *Planes) MoveBoundary" },
+      { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
     ],
     tests: [
       { file: "packages/workbench-mygo/tests/layout/groups_cases_test.go", id: "TestGroupCases" },
@@ -14005,6 +14007,9 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestACardGetCarriesTheSummaryStatusesOfEachTab" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupHeaderShowsItsNameAndItsButtons" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheCloseMenuOfAGroupDissolvesIt" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestARootBoundaryStopsAtTheSmallestSizeOfAGroupCard" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabDropResolvesIntoTheChildPlane" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestATabOutOfAGroupSplitsACardOfTheRootPlane" },
     ],
     expected: "The layout model of the mygo workbench holds the tree of planes of group cards and passes every case of the group layout cases, and its shell registers the group commands, the card query and the group members of its statuses.",
     levels: ["unit"],

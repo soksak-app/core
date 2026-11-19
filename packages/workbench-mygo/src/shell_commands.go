@@ -68,6 +68,8 @@ type boundaryParam struct {
 	Axis     layout.Axis `json:"axis"`
 	Line     int         `json:"line"`
 	Position *float64    `json:"position"`
+	// Plane is the group card whose child plane holds the boundary, and empty for the root plane.
+	Plane string `json:"plane"`
 }
 
 type tabParam struct {
@@ -252,15 +254,19 @@ func (s *Shell) register() {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
 		}
-		if !s.plane.HasBoundary(value.Axis, value.Line) {
+		// A boundary of a child plane names the group card of that plane (docs/spec/groups.md#drawing).
+		if value.Plane != "" && !s.isGroup(value.Plane) {
+			return nil, fmt.Errorf("card %s is not a group", value.Plane)
+		}
+		// silent: the root plane and the child plane of a group card are planes of the tree.
+		grid, _ := s.planes.Plane(value.Plane)
+		if !grid.HasBoundary(value.Axis, value.Line) {
 			return nil, fmt.Errorf("no %s boundary at line %d", value.Axis, value.Line)
 		}
 		if value.Position == nil {
 			return nil, fmt.Errorf("core.boundary.move: position is missing")
 		}
-		moved := s.plane.MoveBoundary(value.Axis, value.Line, *value.Position, false)
-		// The child planes take the bodies of the group cards that the move resized.
-		s.planes.Resize(s.plane.Width(), s.plane.Height())
+		moved := s.planes.MoveBoundary(value.Plane, value.Axis, value.Line, *value.Position, false)
 		s.settle()
 		return map[string]float64{"position": moved}, nil
 	})

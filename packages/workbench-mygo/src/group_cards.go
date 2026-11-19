@@ -106,7 +106,8 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		TabGap: float64(m.cardTabsGap), ActiveWidth: float64(nameWidth), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
 	s.heads[id] = fit
 	target := renameTarget{Kind: "group", ID: id}
-	ui.Row(s.binder.Name(c, "core.group.header", id)).Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
+	header := ui.Row(s.binder.Name(c, "core.group.header", id))
+	header.Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
 		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.cardLine()).Children(func() {
 		ui.Box(c).Absolute().Size(0, 0).Children(func() {
 			if fit.Tools == "bar" {
@@ -123,6 +124,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
 			label.KeepFocus().Grow(1).Shrink(1).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
 			s.renameOnDoubleClick(label, target)
+			// The name grows over the room that the buttons leave, so a press on the header outside its buttons drags the group card. The
+			// buttons take their own presses, so only the name starts the drag, and its release ends it.
+			label.HandleInput(s.groupHeadInput(id, label.Bounds()))
 			label.Children(func() {
 				ui.Text(c, name).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(size).TextColor(s.palette.Fg)
 			})

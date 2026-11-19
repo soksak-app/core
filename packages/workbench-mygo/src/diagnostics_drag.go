@@ -84,8 +84,8 @@ func (s *Shell) endDrag(_ json.RawMessage, answer func(any, error)) {
 }
 
 // dragStepped records the position of the held boundary after a step of a drag. A held line that the step dropped renumbers.
-func (s *Shell) dragStepped(held *heldDivider) {
+func (s *Shell) dragStepped(held *heldDivider, grid *layout.Grid) {
 	if s.drag != nil {
-		s.drag.boundary = append(s.drag.boundary, s.plane.BoundaryPos(held.axis, held.line))
+		s.drag.boundary = append(s.drag.boundary, grid.BoundaryPos(held.axis, held.line))
 	}
 }

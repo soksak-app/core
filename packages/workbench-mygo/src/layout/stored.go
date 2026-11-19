@@ -178,7 +178,8 @@ func list(raw json.RawMessage) ([]json.RawMessage, bool) {
 // isWindowSidebar is whether id names a fixed window sidebar.
 func isWindowSidebar(id string) bool { return IsWindowSide(id) }
 
-// CheckStoredLayout is the reason the stored layout of a space cannot be opened with the loaded plugins units, or nil when it can.
+// CheckStoredLayout is the reason the stored layout of a space cannot be opened with the loaded plugins units, or nil when it can. The
+// content cards of the child planes of the group cards are checked as the cards of the root plane, and ReadPlanes checks the tree.
 func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 	kept, _, ok := object(layout)
 	if !ok {
@@ -204,6 +205,22 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 		return errors.New("a stored layout has no cards")
 	}
 	content := map[string]bool{}
+	if err := checkStoredCards(cards, units, content); err != nil {
+		return err
+	}
+	for _, id := range sidebarIDs {
+		if strings.HasPrefix(id, "rail-") || strings.HasPrefix(id, "window:") {
+			return fmt.Errorf("obsolete stored sidebar %s", id)
+		}
+		if content[id] {
+			return fmt.Errorf("sidebar choice %s names card %s, an earlier form of %s:left", id, id, id)
+		}
+	}
+	return nil
+}
+
+// checkStoredCards checks the stored cards of a plane and marks in content each card that holds data.
+func checkStoredCards(cards []json.RawMessage, units []PluginUnit, content map[string]bool) error {
 	for _, raw := range cards {
 		card, _, ok := object(raw)
 		if !ok {
@@ -230,6 +247,12 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 			continue
 		}
 		fields, _, dataObject := object(data)
+		if record, group := fields["group"]; dataObject && group {
+			if err := checkStoredGroup(id, data, record, units, content); err != nil {
+				return err
+			}
+			continue
+		}
 		for _, key := range []string{"panels", "sidebar"} {
 			if _, has := fields[key]; dataObject && has {
 				return fmt.Errorf("card %s stores %s, an earlier form of sidebars", id, key)
@@ -270,15 +293,18 @@ func CheckStoredLayout(layout json.RawMessage, units []PluginUnit) error {
 			return fmt.Errorf("invalid stored active tab %s", id)
 		}
 	}
-	for _, id := range sidebarIDs {
-		if strings.HasPrefix(id, "rail-") || strings.HasPrefix(id, "window:") {
-			return fmt.Errorf("obsolete stored sidebar %s", id)
-		}
-		if content[id] {
-			return fmt.Errorf("sidebar choice %s names card %s, an earlier form of %s:left", id, id, id)
-		}
-	}
 	return nil
+}
+
+// checkStoredGroup checks the cards of the child plane of the group card id, whose data is data and whose group record is record.
+func checkStoredGroup(id string, data, record json.RawMessage, units []PluginUnit, content map[string]bool) error {
+	fields, _, ok := object(record)
+	plane, _, planeObject := object(fields["plane"])
+	cards, listed := list(plane["cards"])
+	if !ok || !planeObject || !listed {
+		return fmt.Errorf("card %s stores the group %s, which is not {name, leader, plane}", id, compact(data))
+	}
+	return checkStoredCards(cards, units, content)
 }
 
 // RestoreWindowSidebars reads the size records of the fixed window sidebars: an object from a window sidebar id to {width} for left
