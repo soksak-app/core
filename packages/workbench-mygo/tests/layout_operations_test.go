@@ -1089,3 +1089,46 @@ func TestADividerDoubleClickRunsTheCentreCommand(t *testing.T) {
 		t.Fatalf("the double click wrote %d records of core.boundary.center", centres)
 	}
 }
+
+// The tabs of a new space are written with their origin, null for the first tabs of a space, which have no source tab, so every tab of
+// the stored layout carries the member that the layout write that created it wrote (docs/spec/projects.md#tab-origin).
+func TestTheTabsOfANewSpaceAreStoredWithANullOrigin(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "plain")))
+	f.shellFixture.run("core.space.add", nil)
+	var stored []struct {
+		Spaces []struct {
+			ID     string `json:"id"`
+			Layout struct {
+				State struct {
+					Cards []struct {
+						Data struct {
+							Tabs []map[string]any `json:"tabs"`
+						} `json:"data"`
+					} `json:"cards"`
+				} `json:"state"`
+			} `json:"layout"`
+		} `json:"spaces"`
+	}
+	if err := json.Unmarshal([]byte(f.stored()), &stored); err != nil {
+		t.Fatal(err)
+	}
+	tabs := 0
+	for _, project := range stored {
+		for _, space := range project.Spaces {
+			if space.ID == "spc-aaaaaa" {
+				continue
+			}
+			for _, card := range space.Layout.State.Cards {
+				for _, item := range card.Data.Tabs {
+					tabs++
+					if origin, ok := item["origin"].(map[string]any); !ok || origin["directory"] != nil || len(origin) != 1 {
+						t.Errorf("the tab %v of the new space %s is stored with the origin %v", item["id"], space.ID, item["origin"])
+					}
+				}
+			}
+		}
+	}
+	if tabs == 0 {
+		t.Fatalf("the new space holds no tab: %s", f.stored())
+	}
+}
