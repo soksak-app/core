@@ -40,13 +40,20 @@ fn describe_lists_the_parties_first_and_each_card_party_and_leader() {
     let player = play_case("sok-describe-parties");
     let (code, stdout, stderr) = run(&["describe", "--config-dir", &player.dir()]);
     assert_eq!(code, 0, "{stderr}");
-    let parties_at = stdout.find("\"parties\"").expect("describe has a parties member");
-    assert!(parties_at < stdout.find("\"window\"").expect("window member"), "parties come first: {stdout}");
+    let parties_at = stdout
+        .find("\"parties\"")
+        .expect("describe has a parties member");
+    assert!(
+        parties_at < stdout.find("\"window\"").expect("window member"),
+        "parties come first: {stdout}"
+    );
     let description: Value = serde_json::from_str(&stdout).expect("describe is JSON");
     let parties = description["parties"].as_array().expect("parties list");
     assert_eq!(parties.len(), 1);
     assert_eq!(parties[0]["id"], "p1");
-    let cards = description["layout"]["root"]["children"].as_array().expect("cards");
+    let cards = description["layout"]["root"]["children"]
+        .as_array()
+        .expect("cards");
     assert_eq!(cards.len(), 2);
     assert_eq!(cards[0]["party"], "p1");
     assert_eq!(cards[0]["leader"], true);
@@ -59,10 +66,19 @@ fn describe_lists_the_parties_first_and_each_card_party_and_leader() {
 fn describe_summary_holds_summary_statuses_and_full_holds_every_status() {
     let player = play_case("sok-describe-summary-and-full");
     let (_, summary, stderr) = run(&["describe", "--config-dir", &player.dir()]);
-    assert!(summary.contains("\"probe.busy\""), "summary lacks the summary status: {stderr} {summary}");
-    assert!(!summary.contains("\"probe.detail\""), "summary holds a status that is not a summary: {summary}");
+    assert!(
+        summary.contains("\"probe.busy\""),
+        "summary lacks the summary status: {stderr} {summary}"
+    );
+    assert!(
+        !summary.contains("\"probe.detail\""),
+        "summary holds a status that is not a summary: {summary}"
+    );
     let (_, full, stderr) = run(&["describe", "--full", "--config-dir", &player.dir()]);
-    assert!(full.contains("\"probe.detail\"") && full.contains("\"probe.busy\""), "full lacks the tab statuses: {stderr} {full}");
+    assert!(
+        full.contains("\"probe.detail\"") && full.contains("\"probe.busy\""),
+        "full lacks the tab statuses: {stderr} {full}"
+    );
 }
 
 // contract: cli.status.core-parties-every-field
@@ -73,8 +89,19 @@ fn status_core_parties_returns_every_party_field() {
     assert_eq!(code, 0, "{stderr}");
     let parties: Value = serde_json::from_str(&stdout).expect("a JSON list");
     let record = &parties.as_array().expect("list of parties")[0];
-    for field in ["id", "cards", "leader", "color", "leaderColor", "outline", "reason"] {
-        assert!(record.get(field).is_some(), "party record lacks {field}: {record}");
+    for field in [
+        "id",
+        "cards",
+        "leader",
+        "color",
+        "leaderColor",
+        "outline",
+        "reason",
+    ] {
+        assert!(
+            record.get(field).is_some(),
+            "party record lacks {field}: {record}"
+        );
     }
 }
 
@@ -82,11 +109,26 @@ fn status_core_parties_returns_every_party_field() {
 #[test]
 fn party_get_and_card_get_answer_the_party_and_card_queries() {
     let player = play_case("sok-party-get-and-card-get");
-    let (code, stdout, stderr) = run(&["core.party.get", "--party", "p1", "--config-dir", &player.dir()]);
+    let (code, stdout, stderr) = run(&[
+        "core.party.get",
+        "--party",
+        "p1",
+        "--config-dir",
+        &player.dir(),
+    ]);
     assert_eq!(code, 0, "{stderr}");
     let party: Value = serde_json::from_str(&stdout).expect("party is JSON");
-    assert!(party.get("members").is_some(), "core.party.get lacks members: {party}");
-    let (code, stdout, stderr) = run(&["core.card.get", "--card", "b", "--config-dir", &player.dir()]);
+    assert!(
+        party.get("members").is_some(),
+        "core.party.get lacks members: {party}"
+    );
+    let (code, stdout, stderr) = run(&[
+        "core.card.get",
+        "--card",
+        "b",
+        "--config-dir",
+        &player.dir(),
+    ]);
     assert_eq!(code, 0, "{stderr}");
     let card: Value = serde_json::from_str(&stdout).expect("card is JSON");
     assert_eq!(card["party"], "p1");
@@ -97,7 +139,13 @@ fn party_get_and_card_get_answer_the_party_and_card_queries() {
 #[test]
 fn commands_query_party_lists_the_party_commands_only() {
     let player = play_case("sok-commands-query-party");
-    let (code, stdout, stderr) = run(&["commands", "--query", "party", "--config-dir", &player.dir()]);
+    let (code, stdout, stderr) = run(&[
+        "commands",
+        "--query",
+        "party",
+        "--config-dir",
+        &player.dir(),
+    ]);
     assert_eq!(code, 0, "{stderr}");
     let commands: Value = serde_json::from_str(&stdout).expect("a JSON list");
     let names: Vec<&str> = commands
@@ -106,8 +154,18 @@ fn commands_query_party_lists_the_party_commands_only() {
         .iter()
         .map(|command| command["name"].as_str().expect("name"))
         .collect();
-    for name in ["core.party.create", "core.party.update", "core.party.add", "core.party.remove", "core.party.delete", "core.party.get"] {
+    for name in [
+        "core.party.create",
+        "core.party.update",
+        "core.party.add",
+        "core.party.remove",
+        "core.party.delete",
+        "core.party.get",
+    ] {
         assert!(names.contains(&name), "query party lacks {name}: {names:?}");
     }
-    assert!(!names.contains(&"core.card.close"), "query party lists a command that is not a party command");
+    assert!(
+        !names.contains(&"core.card.close"),
+        "query party lists a command that is not a party command"
+    );
 }

@@ -1121,7 +1121,11 @@ fn with_card_parties(layout: &RawValue, records: &[PartyRecord]) -> Result<Raw, 
     fn walk(node: &mut serde_json::Value, records: &[PartyRecord]) {
         match node {
             serde_json::Value::Object(map) => {
-                if let Some(card) = map.get("card").and_then(|card| card.as_str()).map(str::to_owned) {
+                if let Some(card) = map
+                    .get("card")
+                    .and_then(|card| card.as_str())
+                    .map(str::to_owned)
+                {
                     let mut party = serde_json::Value::Null;
                     let mut leader = false;
                     for record in records {
@@ -1214,7 +1218,8 @@ fn describe_window(
         for (kind, entries) in &group.lists {
             for entry in entries {
                 // Without full, a tab holds only its summary statuses (docs/spec/parties.md#describe).
-                if !full && *kind == "status" && group.owner == "surface" && !summary_status(entry)? {
+                if !full && *kind == "status" && group.owner == "surface" && !summary_status(entry)?
+                {
                     continue;
                 }
                 rows.push(entry_row(name, group, kind, entry, full)?);
