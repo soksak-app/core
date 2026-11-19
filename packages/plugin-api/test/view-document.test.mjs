@@ -12,7 +12,7 @@ const coreNames = ["core.surface.clock", "core.surface.document", "core.surface.
 const declarations = {
   status: ["document", "input"].map((name) => ({ name: `core.surface.${name}`, description: name, schema: {} })),
   commands: [
-    { name: "core.surface.hit", description: "Hits the document.", params: { type: "object" }, result: { type: "boolean" } },
+    { name: "core.surface.hit", description: "Hits the document.", params: { type: "object", properties: { x: { type: "number" }, y: { type: "number" } } }, result: { type: "boolean" } },
     { name: "core.surface.clock", description: "Reads the document clock.", params: { type: "object" }, result: { type: "object" } },
   ],
   element: [],

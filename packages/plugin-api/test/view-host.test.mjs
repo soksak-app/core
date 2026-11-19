@@ -188,7 +188,7 @@ const CHECKS = {
   "view-calls-tab-notify-keep": (observed) => assert.deepEqual(observed.tab.notify, [{ text: "끝났습니다", policy: "system" }]),
   "view-calls-data-get-set": (observed) => assert.deepEqual(observed.data, [{ key: "note", value: "kept" }]),
   "view-calls-links-open": (observed) => assert.deepEqual(observed.links, ["https://example.test"]),
-  "view-calls-command-core-cids": (observed) => assert.deepEqual(observed.commands, [{ name: "core.tab.select", params: {}, cids: ["p1700000000000.5"] }]),
+  "view-calls-command-core-cids": (observed) => assert.deepEqual(observed.commands, [{ name: "core.tab.select", params: { tab: "current" }, cids: ["p1700000000000.5"] }]),
   "view-calls-command-core-shortcut": (observed) => assert.deepEqual(observed.events, [
     { level: "error", event: "workbench.input.shortcut.failed", fields: { plugin: "probe", command: "core.library.search.focus" } },
   ]),

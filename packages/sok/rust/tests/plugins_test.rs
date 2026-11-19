@@ -1482,14 +1482,14 @@ fn plugin_install_refuses_a_manifest_with_a_schema_outside_the_subset() {
             ),
             (
                 "plugins/probe/0.2.0/plugin.json",
-                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "required": ["path"]}}}"#,
+                r#"{"id": "probe", "name": "Probe", "description": "Sample.", "surface": {"params": {"type": "object", "additionalProperties": false}}}"#,
             ),
         ],
     );
     let (code, _, stderr) = run(&["plugin", "install", "probe", "--config-dir", config.text()]);
     assert_ne!(code, 0, "install succeeded");
     assert!(
-        stderr.contains("plugin probe surface params: unknown field required"),
+        stderr.contains("plugin probe surface params: unknown field additionalProperties"),
         "{stderr}"
     );
     assert!(!config.path().join("plugins/installed.json").exists());

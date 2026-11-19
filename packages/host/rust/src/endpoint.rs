@@ -2136,6 +2136,9 @@ fn host_request(method: &str, params: &Map<String, Value>) -> Result<(), Failure
             "params of {name} must be an object"
         )));
     }
+    if method == "command.run" {
+        crate::exposure::check_host_params(&name, params.get("params"))?;
+    }
     Ok(())
 }
 

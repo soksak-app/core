@@ -237,6 +237,10 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   }
   await refuses(run("core.layout.open", { card: "a", side: "middle", plugin: SESSION }), "invalid params for core.layout.open");
   assert.deepEqual(layout(), before);
+  // The registry names an unknown member and a missing member of the declaration (docs/spec/exposure.md#command-parameters).
+  await refuses(run("core.layout.open", { card: "a", plugin: SESSION, zone: "left" }), "command core.layout.open: unknown parameter zone");
+  await refuses(run("core.layout.move", { card: "a" }), "command core.layout.move: parameter tab is required");
+  assert.deepEqual(layout(), before);
   // A card narrower than two cards of the minimum size cannot split across.
   arrange([0, 0.97, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
     { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");

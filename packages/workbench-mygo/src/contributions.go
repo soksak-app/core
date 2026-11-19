@@ -113,11 +113,16 @@ func ResolveContributions(installed []InstalledPlugin) ([]ResolvedContribution, 
 	return resolved, nil
 }
 
-// MatchesSchema reports whether value, as JSON decodes it, matches schema: the keywords enum, type, properties and items.
+// MatchesSchema reports whether value, as JSON decodes it, matches schema: the keywords required, enum, type, properties and items.
 func MatchesSchema(schema, value any) bool {
 	keywords, ok := schema.(map[string]any)
 	if !ok {
 		return false
+	}
+	if names, ok := keywords["required"].([]any); ok {
+		if object, ok := value.(map[string]any); ok && slices.ContainsFunc(names, func(name any) bool { key, _ := name.(string); _, has := object[key]; return !has }) {
+			return false
+		}
 	}
 	if options, ok := keywords["enum"].([]any); ok && !slices.ContainsFunc(options, func(option any) bool { return reflect.DeepEqual(option, value) }) {
 		return false

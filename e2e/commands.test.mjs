@@ -99,7 +99,7 @@ for (const app of Object.values(APPS)) {
       await s.run("core.card.close", { card: result.card });
       await s.until("core.grid", (grid) => ids(grid).join() === ids(start).join(), `closing the ${side} split did not restore the layout`);
     }
-    await assert.rejects(s.run("core.card.split", { card: own, axis: "x", plugin: ADDED }), /unknown side undefined/);
+    await assert.rejects(s.run("core.card.split", { card: own, axis: "x", plugin: ADDED }), /command core.card.split: unknown parameter axis/);
 
     await s.run("core.card.tab-list", { card: own });
     const list = await s.until("core.picker", (picker) => picker.open, "core.card.tab-list did not open the tab list");

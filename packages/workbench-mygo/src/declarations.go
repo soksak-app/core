@@ -45,7 +45,7 @@ type Declarations struct {
 	// surface holds the entries of surfaceNames under the keys of the declaration file, and params the parameter schema of each
 	// command.
 	surface map[string][]map[string]any
-	params  map[string]any
+	params  map[string]json.RawMessage
 	many    map[string]bool
 	chrome  map[string]string
 	plain   map[string]string
@@ -259,9 +259,14 @@ func ReadDeclarations() (*Declarations, error) {
 		}
 		return set
 	}
-	params := make(map[string]any, len(exposes["commands"]))
+	// A schema is kept as its JSON text, which the check of the parameters of a request decodes (host.CommandParamsRefusal).
+	params := make(map[string]json.RawMessage, len(exposes["commands"]))
 	for _, entry := range exposes["commands"] {
-		params[entry["name"].(string)] = entry["params"]
+		text, err := json.Marshal(entry["params"])
+		if err != nil {
+			return nil, fmt.Errorf("exposure.json: params of %v: %w", entry["name"], err)
+		}
+		params[entry["name"].(string)] = text
 	}
 	many := map[string]bool{}
 	for _, entry := range exposes["element"] {
