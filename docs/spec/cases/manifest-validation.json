@@ -4633,6 +4633,73 @@
       ]
     },
     {
+      "id": "exposes.status-summary-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              },
+              "summary": true
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-summary-not-boolean",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "object"
+              },
+              "summary": "yes"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: summary must be a boolean",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "exposes.description-missing",
       "manifest": {
         "id": "probe",
