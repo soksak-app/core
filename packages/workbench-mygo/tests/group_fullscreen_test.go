@@ -1,4 +1,4 @@
-// The fullscreen of a group card in the mygo workbench (docs/spec/groups.md#commands): the group card with its child plane covers the
+// The fullscreen of a group card in the mygo workbench (docs/spec/groups.md#commands): the group card with the cards inside it covers the
 // work area, its header holds the fullscreen button, the layout does not change while it is fullscreen, and a content card inside a
 // group still goes fullscreen alone.
 package workbench_test
@@ -8,19 +8,20 @@ import (
 	"testing"
 )
 
-// fullscreenShell is a grouped shell whose root plane holds card-4 right of the group card card-2.
+// fullscreenShell is a grouped shell whose root level holds card-4 right of the group card card-2.
 func fullscreenShell(t *testing.T) *tabShell {
 	t.Helper()
 	f := groupedShell(t)
+	f.tester.SetSize(1400, 900)
+	f.settle()
 	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "right", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
 	return f
 }
 
-// A group card goes fullscreen with the cards of its child plane, a focus inside it keeps it, and the second press restores the
-// arrangement.
-func TestAGroupCardGoesFullscreenWithItsChildPlane(t *testing.T) {
+// A group card goes fullscreen with the cards inside it, a focus inside it keeps it, and the second press restores the arrangement.
+func TestAGroupCardGoesFullscreenWithTheCardsInsideIt(t *testing.T) {
 	f := fullscreenShell(t)
 	before := f.gridCards()
 	f.click("core.group.fullscreen", "card-2")
@@ -57,7 +58,7 @@ func TestAGroupCardGoesFullscreenWithItsChildPlane(t *testing.T) {
 	}
 }
 
-// While a group card is fullscreen the layout does not change, inside its child plane too.
+// While a group card is fullscreen the layout does not change, inside it too.
 func TestTheLayoutInsideAFullscreenGroupDoesNotChange(t *testing.T) {
 	f := fullscreenShell(t)
 	f.shellFixture.run("core.card.fullscreen", map[string]string{"card": "card-2"})

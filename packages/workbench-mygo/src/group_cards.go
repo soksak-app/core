@@ -25,7 +25,7 @@ func (s *Shell) cardMenuElement(card, menu string) string {
 }
 
 // groupHeadTools are the head buttons of the group card id in the order of docs/spec/groups.md#headers: add, the two splits, the group
-// button, the leader button and close.
+// button, the leader button, fullscreen and close.
 func (s *Shell) groupHeadTools(id string) []headTool {
 	names := s.options.Declared.CardTools
 	changes := func(tool headTool, can bool) headTool {
@@ -44,6 +44,14 @@ func (s *Shell) groupHeadTools(id string) []headTool {
 			Title: names["split-y"], Icon: "card-split-y"}, s.planes.CanSplit(id, "bottom")),
 	}
 	tools = append(tools, s.groupTools(id, "core.group.wrap", changes)...)
+	// The fullscreen button stays enabled while its group card is fullscreen, so a second press restores the arrangement.
+	fullscreen := s.fullscreen == id
+	whole := headTool{Do: "fullscreen", Status: "fullscreen", Name: "core.group.fullscreen", Command: "core.card.fullscreen", Params: cardParam{Card: id},
+		Title: names["fullscreen"], Icon: "card-expand", Enabled: true, Pressed: fullscreen}
+	if fullscreen {
+		whole.Title, whole.Icon = names["restore"], "card-restore"
+	}
+	tools = append(tools, whole)
 	return append(tools, changes(headTool{Do: "close", Status: "close", Name: "core.group.close", Command: "core.group.menu", Params: groupParam{Group: id},
 		Title: names["group-menu"], Icon: "card-close"}, true))
 }
@@ -130,7 +138,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		ui.Row(c).Gap(m.cardActsGap).Padding(m.cardActsPad).Radius(s.radiusSmall()).Border(s.palette.BorderWidth, s.palette.Edge).Shrink(0).Children(func() {
 			for _, tool := range tools {
 				button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed)
-				if tool.Do == "leader" {
+				if tool.Do == "fullscreen" || tool.Do == "leader" {
 					button.Checked(tool.Pressed)
 				}
 			}

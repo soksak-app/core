@@ -141,7 +141,7 @@
       },
       {
         "name": "core.layout",
-        "description": "The stored form of the current space layout with the level of each group record, or null.",
+        "description": "The stored form of the current space layout with the level of each group node, or null.",
         "schema": {
           "type": [
             "object",
@@ -212,7 +212,7 @@
       },
       {
         "name": "core.grid",
-        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. The cards of the child planes follow their group card, each with plane, the group card whose child plane holds it; the leader of each plane carries leader true, and a group card carries its group record {name, level, leader} and no tabs.",
+        "description": "The current grid: size, gap, boundary positions, and cards in workbench order with their rectangles in plane coordinates, or null, with each card's tabs (with the title a surface reported as label, its notice, the footer text it reported, whether it holds unsaved changes as modified, and the operation error it shows as error or null) and the text its content footer shows as status, tool buttons (enabled, hidden, title), header fit, and effective card sidebars by side with set, size, actual collapsed state, requestedCollapsed, autoCollapsed and collapseReason (null or insufficient-width/insufficient-height); fullscreen is the presented card ID or null, and card rectangles describe current presentation. Each card carries the group card that holds it, and the group cards follow with their rectangles.",
         "schema": {
           "type": [
             "object",
@@ -2748,7 +2748,7 @@
       },
       {
         "name": "core.boundary.move",
-        "description": "Moves boundary line on axis of the plane, the child plane of the group card plane or the root plane without it, to a position in the coordinates of that plane and redraws; returns the resulting position.",
+        "description": "Moves boundary line on axis to a position in plane coordinates and redraws; returns the resulting position.",
         "params": {
           "type": "object",
           "properties": {
@@ -2763,9 +2763,6 @@
             },
             "position": {
               "type": "number"
-            },
-            "plane": {
-              "type": "string"
             }
           }
         },
@@ -3292,7 +3289,7 @@
       },
       {
         "name": "core.card.fullscreen",
-        "description": "Toggles one content card across the work area without changing the saved arrangement or OS window state.",
+        "description": "Shows a content card or a group card across the work area, or restores the arrangement.",
         "params": {
           "type": "object",
           "properties": {
@@ -3637,7 +3634,7 @@
       },
       {
         "name": "core.group.create",
-        "description": "Turns a card into a group card that holds the card and a new content card toward side.",
+        "description": "Groups a card with a new content card toward side.",
         "params": {
           "type": "object",
           "properties": {
@@ -3677,7 +3674,7 @@
       },
       {
         "name": "core.group.dissolve",
-        "description": "Replaces a group card with the cards of its child plane inside its span.",
+        "description": "Replaces a group card with its members in the level that holds it.",
         "params": {
           "type": "object",
           "properties": {
@@ -3723,7 +3720,7 @@
       },
       {
         "name": "core.group.leader",
-        "description": "Makes a card the leader of its plane.",
+        "description": "Makes a card the leader of its level.",
         "params": {
           "type": "object",
           "properties": {
@@ -3764,7 +3761,7 @@
       },
       {
         "name": "core.card.move",
-        "description": "Moves a content card or a group card beside a card of any plane, or into a group, as a drop does.",
+        "description": "Moves a content card or a group card beside a card of any level, or into a group, as a drop does.",
         "params": {
           "type": "object",
           "properties": {
@@ -3796,7 +3793,7 @@
       },
       {
         "name": "core.card.get",
-        "description": "Reads the state of one content card of any plane with its group path, or one group card.",
+        "description": "Reads the state of one content card of any level with its group path, or one group card.",
         "params": {
           "type": "object",
           "properties": {
@@ -4559,7 +4556,7 @@
       },
       {
         "name": "core.group",
-        "description": "The group cards in workbench order.",
+        "description": "The frames of the group cards in workbench order.",
         "many": true
       },
       {
@@ -4589,7 +4586,12 @@
       },
       {
         "name": "core.group.wrap",
-        "description": "The group buttons of the group headers in workbench order, shown while the group card can hold a group of itself and a new card toward its longer axis.",
+        "description": "The group buttons of the group headers in workbench order, shown while the group card can be grouped with a new card toward its longer axis.",
+        "many": true
+      },
+      {
+        "name": "core.group.fullscreen",
+        "description": "The fullscreen buttons of the group headers in workbench order.",
         "many": true
       },
       {
@@ -4599,12 +4601,12 @@
       },
       {
         "name": "core.card.group",
-        "description": "The group buttons of the content card headers in workbench order, shown while the card can hold a group of itself and a new card toward its longer axis.",
+        "description": "The group buttons of the content card headers in workbench order, shown while the card can be grouped with a new card toward its longer axis.",
         "many": true
       },
       {
         "name": "core.card.leader",
-        "description": "The leader buttons of the card and group headers of planes of two or more cards in workbench order; pressed on the leader.",
+        "description": "The leader buttons of the card and group headers of levels of two or more members in workbench order; pressed on the leader.",
         "many": true
       },
       {
