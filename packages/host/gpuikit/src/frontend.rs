@@ -28,7 +28,10 @@ type Closing = Box<dyn Fn() -> bool + Send + Sync>;
 pub(crate) fn locked<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> {
     // default: a poisoned lock keeps the value that its sections stored, which the window records keep valid; the poison is logged here.
     mutex.lock().unwrap_or_else(|error| {
-        soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
+        soksak_host::application_log::log_error(
+            "frontend",
+            format!("lock {name} is poisoned; continuing with its value"),
+        );
         error.into_inner()
     })
 }
@@ -37,7 +40,10 @@ pub(crate) fn locked<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T
 pub(crate) fn read_locked<'a, T>(table: &'a RwLock<T>, name: &str) -> RwLockReadGuard<'a, T> {
     // default: a poisoned lock keeps the value that its sections stored, which the window records keep valid; the poison is logged here.
     table.read().unwrap_or_else(|error| {
-        soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
+        soksak_host::application_log::log_error(
+            "frontend",
+            format!("lock {name} is poisoned; continuing with its value"),
+        );
         error.into_inner()
     })
 }
@@ -46,11 +52,13 @@ pub(crate) fn read_locked<'a, T>(table: &'a RwLock<T>, name: &str) -> RwLockRead
 pub(crate) fn write_locked<'a, T>(table: &'a RwLock<T>, name: &str) -> RwLockWriteGuard<'a, T> {
     // default: a poisoned lock keeps the value that its sections stored, which the window records keep valid; the poison is logged here.
     table.write().unwrap_or_else(|error| {
-        soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
+        soksak_host::application_log::log_error(
+            "frontend",
+            format!("lock {name} is poisoned; continuing with its value"),
+        );
         error.into_inner()
     })
 }
-
 
 /// One window of the GPUI host: its GPUI handle, its native window and its web views by label, the main web view
 /// under the label of the window. The record changes its fields only on the main thread.
@@ -101,10 +109,7 @@ impl Record {
 
     /// The labels of the web views of the window.
     pub(crate) fn webview_labels(&self) -> Vec<String> {
-        locked(&self.webviews, "webviews")
-            .keys()
-            .cloned()
-            .collect()
+        locked(&self.webviews, "webviews").keys().cloned().collect()
     }
 
     /// The native web view with label, or an error when no such web view is open.
@@ -124,14 +129,12 @@ impl Record {
 
     /// Adds the web view with label to the record.
     pub(crate) fn add_webview(&self, label: String, view: *mut WebView) {
-        locked(&self.webviews, "webviews")
-            .insert(label, Webview(view));
+        locked(&self.webviews, "webviews").insert(label, Webview(view));
     }
 
     /// Removes the web view with label from the record.
     pub(crate) fn remove_webview(&self, label: &str) {
-        locked(&self.webviews, "webviews")
-            .remove(label);
+        locked(&self.webviews, "webviews").remove(label);
     }
 }
 
@@ -143,32 +146,24 @@ pub(crate) fn windows() -> &'static RwLock<HashMap<String, Arc<Record>>> {
 
 /// Registers the record of the window with label.
 pub(crate) fn register(_label: String, record: Arc<Record>) {
-    write_locked(windows(), "windows")
-        .insert(_label, record);
+    write_locked(windows(), "windows").insert(_label, record);
 }
 
 /// The labels of the open windows.
 pub(crate) fn labels() -> Vec<String> {
-    read_locked(windows(), "windows")
-        .keys()
-        .cloned()
-        .collect()
+    read_locked(windows(), "windows").keys().cloned().collect()
 }
 
 /// The record of the window with label.
 pub(crate) fn record(label: &str) -> Option<Arc<Record>> {
-    read_locked(windows(), "windows")
-        .get(label)
-        .cloned()
+    read_locked(windows(), "windows").get(label).cloned()
 }
 
 /// The record of the window that holds the web view with label, and the window label.
 pub(crate) fn record_of_webview(label: &str) -> Option<(Arc<Record>, String)> {
     let all = read_locked(windows(), "windows");
     for (window, record) in all.iter() {
-        if locked(&record.webviews, "webviews")
-            .contains_key(label)
-        {
+        if locked(&record.webviews, "webviews").contains_key(label) {
             return Some((Arc::clone(record), window.clone()));
         }
     }
@@ -402,9 +397,7 @@ impl port::Frontend for Frontend {
         size: LogicalSize,
     ) -> port::Result<String> {
         let main = self.record.webview(&self.record.label)? as usize;
-        let url = match builder.url {
-            WebviewUrl::External(url) => url,
-        };
+        let WebviewUrl::External(url) = builder.url;
         let label = builder.label;
         let background = builder.background_color;
         let focused = builder.focused;
@@ -444,7 +437,6 @@ impl port::Frontend for Frontend {
 
     fn reload(&self, webview: &str) -> port::Result<()> {
         with_webview_value(&self.record, webview, crate::platform::reload)
-            .map_err(port::Error::from)
     }
 
     fn eval(&self, webview: &str, script: &str) -> port::Result<()> {
@@ -452,7 +444,6 @@ impl port::Frontend for Frontend {
         with_webview_value(&self.record, webview, move |view| {
             crate::platform::evaluate_webview(view, &script)
         })
-        .map_err(port::Error::from)
     }
 
     fn navigate(&self, webview: &str, url: url::Url) -> port::Result<()> {
@@ -460,12 +451,10 @@ impl port::Frontend for Frontend {
         with_webview_value(&self.record, webview, move |view| {
             crate::platform::navigate(view, &url)
         })
-        .map_err(port::Error::from)
     }
 
     fn url(&self, webview: &str) -> port::Result<url::Url> {
-        with_webview_value(&self.record, webview, crate::platform::webview_url)
-            .map_err(port::Error::from)?
+        with_webview_value(&self.record, webview, crate::platform::webview_url)?
     }
 
     fn close_webview(&self, webview: &str) -> port::Result<()> {

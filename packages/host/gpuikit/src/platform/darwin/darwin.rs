@@ -93,7 +93,7 @@ pub(crate) fn close_window(window: *mut c_void) {
 }
 
 pub(crate) fn scale_factor(window: *mut c_void) -> f64 {
-    f64::from(ns_window(window).backingScaleFactor())
+    ns_window(window).backingScaleFactor()
 }
 
 /// The size of the content of the window, in points.
@@ -102,7 +102,7 @@ pub(crate) fn size(window: *mut c_void) -> LogicalSize {
         .contentView()
         .expect("the window has a content view")
         .frame();
-    LogicalSize::new(f64::from(frame.size.width), f64::from(frame.size.height))
+    LogicalSize::new(frame.size.width, frame.size.height)
 }
 
 /// The top left of the window in screen coordinates whose origin is the top left of the screen of the window.
@@ -110,8 +110,8 @@ pub(crate) fn position(window: *mut c_void) -> LogicalPosition {
     let frame = ns_window(window).frame();
     let visible = screen(window).frame();
     LogicalPosition::new(
-        f64::from(frame.origin.x),
-        f64::from(visible.origin.y + visible.size.height - frame.origin.y - frame.size.height),
+        frame.origin.x,
+        visible.origin.y + visible.size.height - frame.origin.y - frame.size.height,
     )
 }
 
@@ -127,9 +127,7 @@ pub(crate) fn set_position(window: *mut c_void, position: LogicalPosition) {
     let visible = screen(window).frame();
     let origin = objc2_foundation::NSPoint::new(
         position.x,
-        f64::from(visible.origin.y + visible.size.height)
-            - position.y
-            - f64::from(frame.size.height),
+        (visible.origin.y + visible.size.height) - position.y - frame.size.height,
     );
     ns_window(window).setFrameOrigin(origin);
 }
@@ -380,11 +378,12 @@ fn build_webview(
 
 // The window notifications of the port.
 
+/// A listener of the window events of one window.
+type WindowListener = Box<dyn Fn(&WindowEvent) + Send + Sync>;
+
 /// The listeners of the window events of each window, by the address of its NSWindow.
 static LISTENERS: std::sync::OnceLock<
-    std::sync::Mutex<
-        std::collections::HashMap<usize, Vec<Box<dyn Fn(&WindowEvent) + Send + Sync>>>,
-    >,
+    std::sync::Mutex<std::collections::HashMap<usize, Vec<WindowListener>>>,
 > = std::sync::OnceLock::new();
 
 /// The windows whose notifications a block of this adapter already observes.
@@ -402,7 +401,8 @@ pub(crate) fn observe_window(
         .entry(key)
         .or_default()
         .push(listener);
-    let mut observed = crate::frontend::locked(OBSERVED.get_or_init(Default::default), "observed windows");
+    let mut observed =
+        crate::frontend::locked(OBSERVED.get_or_init(Default::default), "observed windows");
     if !observed.insert(key) {
         return;
     }
@@ -447,7 +447,8 @@ pub(crate) fn observe_window(
 
 /// Reports event to every listener of the window with the address key.
 fn fire(key: usize, event: &WindowEvent) {
-    let listeners = crate::frontend::locked(LISTENERS.get_or_init(Default::default), "window listeners");
+    let listeners =
+        crate::frontend::locked(LISTENERS.get_or_init(Default::default), "window listeners");
     let Some(listeners) = listeners.get(&key) else {
         return;
     };
@@ -581,4 +582,3 @@ pub(crate) fn home_dir() -> Result<std::path::PathBuf, String> {
         .map(std::path::PathBuf::from)
         .ok_or_else(|| "the home directory of the user is not set".to_string())
 }
-

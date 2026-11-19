@@ -18,7 +18,8 @@ fn main() {
 /// The frontend folder beside the executable, where the staging step of the application writes the page files; a release
 /// build places it in the bundle.
 fn frontend_folder() -> Result<std::path::PathBuf, String> {
-    let executable = std::env::current_exe().map_err(|error| format!("the executable path is unknown: {error}"))?;
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("the executable path is unknown: {error}"))?;
     let folder = executable
         .parent()
         .ok_or_else(|| format!("the executable path {} has no folder", executable.display()))?;

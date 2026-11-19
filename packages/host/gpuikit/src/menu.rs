@@ -84,7 +84,7 @@ fn menu_item(
             (
                 Some(title),
                 key,
-                Some(Box::new(move || soksak_host::menu_event(&event_app, &id))
+                Some(Box::new(move || soksak_host::menu_event(&event_app, id))
                     as Box<dyn Fn() + Send + Sync>),
             )
         }
@@ -100,7 +100,7 @@ fn menu_item(
                     title
                 }
             });
-            let selector: objc2::runtime::Sel = match &role[..] {
+            let selector: objc2::runtime::Sel = match role {
                 "services" => {
                     // The system fills the services menu; the item holds the menu that the application
                     // names as its services menu.
@@ -135,7 +135,7 @@ fn menu_item(
                     )?;
                     unsafe {
                         view.setTitle(&NSString::from_str(&title));
-                        let (equivalent, mask) = key_equivalent(&key)?;
+                        let (equivalent, mask) = key_equivalent(key)?;
                         view.setKeyEquivalent(&NSString::from_str(&equivalent));
                         view.setKeyEquivalentModifierMask(mask);
                         view.setAction(Some(objc2::sel!(select:)));
@@ -161,7 +161,7 @@ fn menu_item(
             view.setTitle(&NSString::from_str(&title));
         }
         if let Some(key) = key {
-            let (equivalent, mask) = key_equivalent(&key)?;
+            let (equivalent, mask) = key_equivalent(key)?;
             view.setKeyEquivalent(&NSString::from_str(&equivalent));
             view.setKeyEquivalentModifierMask(mask);
         }
@@ -184,8 +184,7 @@ fn target_of(
     let allocated = ItemTarget::alloc().set_ivars(index);
     // default: the init of NSObject is the designated initializer of the target.
     let target: Retained<ItemTarget> = unsafe { objc2::msg_send![super(allocated), init] };
-    crate::frontend::locked(&TARGETS, "menu targets")
-        .push(target.clone());
+    crate::frontend::locked(&TARGETS, "menu targets").push(target.clone());
     Ok(target)
 }
 

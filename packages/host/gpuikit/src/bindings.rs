@@ -91,7 +91,7 @@ fn answer(app: &AppHandle, label: &str, body: &str) -> Result<(), String> {
     // The presentation of a preparation waits for the notice of the page, so it answers from its own future.
     if wire.method == "present_surfaces" {
         let result = argument::<PresentRequest>(&wire.method, "request", &body)
-            .and_then(|request| Ok((request, window.clone())));
+            .map(|request| (request, window.clone()));
         match result {
             Ok((request, window)) => {
                 let page = label.to_string();
@@ -524,7 +524,7 @@ fn dispatch(
             let y: f64 = argument(method, "y", body)?;
             let w: f64 = argument(method, "w", body)?;
             let h: f64 = argument(method, "h", body)?;
-            images::caret(&webview, request, x, y, w, h)
+            images::caret(webview, request, x, y, w, h)
                 .map_err(|error| images::image_call_error("imageCaret", error))?;
             Value::Null
         }

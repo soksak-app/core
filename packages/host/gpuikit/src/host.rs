@@ -65,7 +65,10 @@ impl Assets for StagedFrontend {
             // A missing file is a miss, which ReportingAssets reports for its path (packages/host/rust/src/assets.rs:38-44).
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => {
-                soksak_host::application_log::log_error("page asset", format!("{relative}: {error}"));
+                soksak_host::application_log::log_error(
+                    "page asset",
+                    format!("{relative}: {error}"),
+                );
                 None
             }
         }
@@ -111,11 +114,17 @@ pub(crate) fn page_file(assets: &dyn Assets, path: &str) -> http::Response<Vec<u
 
 /// The response that a builder produced. A builder error is logged with the path of the request and answered with 500,
 /// as packages/host/tauriv2/src/host.rs:276 logs a failed URL with its error.
-fn logged_response(path: &str, built: Result<http::Response<Vec<u8>>, http::Error>) -> http::Response<Vec<u8>> {
+fn logged_response(
+    path: &str,
+    built: Result<http::Response<Vec<u8>>, http::Error>,
+) -> http::Response<Vec<u8>> {
     match built {
         Ok(response) => response,
         Err(error) => {
-            soksak_host::application_log::log_error("page asset", format!("{path}: response: {error}"));
+            soksak_host::application_log::log_error(
+                "page asset",
+                format!("{path}: response: {error}"),
+            );
             let mut response = http::Response::new(Vec::new());
             *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
             response
@@ -262,13 +271,15 @@ pub fn run(frontend: Arc<dyn Assets>) {
         });
         platform::register_deep_links(startup_app.clone());
         // A platform that cannot provide this step ends with status 1 before it opens a window.
-        report_setup(soksak_host::startup::exit_on_failure(soksak_host::start_endpoint(&startup_app)));
+        report_setup(soksak_host::startup::exit_on_failure(
+            soksak_host::start_endpoint(&startup_app),
+        ));
         // The main window of the configuration comes from the framework: the application of GPUI has no
         // configuration that declares it, so the adapter creates it before the setup of the library.
         report_setup(soksak_host::startup::exit_on_failure(
             framework::create_main_window(&startup_app, cx)
                 .map(|_| ())
-                .map_err(|error| Box::<dyn std::error::Error>::from(error)),
+                .map_err(Box::<dyn std::error::Error>::from),
         ));
         report_setup(soksak_host::startup::exit_on_failure(soksak_host::setup(
             &startup_app,
