@@ -167,3 +167,32 @@ func TestNoDividerCrossesAGroupHeader(t *testing.T) {
 		}
 	}
 }
+
+// The corridor separates a group header from every box below it, as it separates two cards: no card and no nested header begins
+// within the gap below a header (docs/spec/groups.md#drawn-rectangles).
+func TestABoxBelowAGroupHeaderStandsAGapBelowIt(t *testing.T) {
+	f := nestedSideShell(t)
+	tree := f.tester.ElementTree()
+	cards := exposedAll(tree, "core.card")
+	heads := exposedAll(tree, "core.group.header")
+	gap := cards["card-3"].Y - (cards["card-1"].Y + cards["card-1"].H)
+	if gap <= 1 {
+		t.Fatalf("card-1 at %+v and card-3 at %+v stand no gap apart", cards["card-1"], cards["card-3"])
+	}
+	boxes := map[string]ui.Rect{}
+	for id, r := range cards {
+		boxes["core.card "+id] = r
+	}
+	for id, r := range heads {
+		boxes["core.group.header "+id] = r
+	}
+	for group, head := range heads {
+		bottom := head.Y + head.H
+		for name, box := range boxes {
+			across := min(head.X+head.W, box.X+box.W) - max(head.X, box.X)
+			if across > 1 && box.Y > bottom-1 && box.Y < bottom+gap-1 {
+				t.Fatalf("%s at %+v begins %v below the header of %s at %+v, within the gap %v", name, box, box.Y-bottom, group, head, gap)
+			}
+		}
+	}
+}
