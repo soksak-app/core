@@ -61,6 +61,15 @@ test("a heartbeat names the tests in flight with their running time", async () =
   assert.match(beat, /long \d+\.\d{3}s/);
 });
 
+test("a test without a runner limit that runs past the heartbeat is named by a RUNNING line until it exits", async () => {
+  // A listing has no runner limit (scripts/test-discovery.mjs), so only the heartbeat shows that it still waits.
+  const { results, lines } = await run([node("listing", sleeping(400), { timeoutMs: undefined })], { concurrency: 1 });
+  const beat = lines.find((line) => line.startsWith("RUNNING 1 test"));
+  assert.ok(beat, `no heartbeat: ${JSON.stringify(lines)}`);
+  assert.match(beat, /: listing \d+\.\d{3}s$/, beat);
+  assert.equal(results.get("listing").status, "pass", results.get("listing").detail);
+});
+
 test("the summary counts the results and lists the slowest tests, slowest first", async () => {
   const { lines, slowest, results } = await run([
     node("fast", sleeping(10)), node("middle", sleeping(150)), node("slowest", sleeping(300)),

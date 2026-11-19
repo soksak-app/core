@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F915 (progress): 실행 한도가 없는 목록도 `RUNNING` heartbeat 줄을 유지하며, 목록 단계의 이름과 실행 시간을 목록이 끝날 때까지 보고한다. 보호 test: `a test without a runner limit that runs past the heartbeat is named by a RUNNING line until it exits`(`scripts/test/test-runner.test.mjs`)는 변경 전 runner에서 통과했다. heartbeat가 이미 실행 중인 모든 단계를 다루기 때문이다.
 - F915: Go package와 Rust test executable의 discovery는 각 목록(Go package 목록, Go test binary의 test 목록, Rust executable의 test 목록)을 시간 한도 없이 실행한다. 목록은 process가 끝날 때 끝나며, 실패한 목록은 종료 상태와 출력을 보고한다. test의 한도는 test process에만 적용된다. Red: `a Go test binary whose listing ends after the limit of a test is still listed`와 `a Rust test binary whose listing ends after the limit of a test is still listed`(`scripts/test/test-discovery.test.mjs`)가 `exceeded 2.000s and was killed`로 실패했다. Green: `make install` 후 이 파일이 15/15 test를 통과한다.
 - F911-5: `sok message send FOLDER TEXT`가 `SOKSAK_SURFACE`가 밝히는 surface의 message를 FOLDER에 쓴다. Text는 임시 이름으로 쓴 뒤 `<surface>.<token>.txt`로 rename하며, 64 KiB를 넘는 text는 파일을 만들기 전에 거부한다. Rust 명령은 `packages/sok/rust/src/message.rs`, Go 명령은 `packages/sok/go/src/message.go`에 있고, 시험은 `message_test.rs`와 `message_test.go`다.
 - F909-1, F910-1, F911-1: 보낸 surface 규칙, cursor epoch로서의 registration, 임시 이름과 rename은 `docs/spec/messaging.md`와 한국어 번역이 정의한다. 이 규칙의 sidecar 구현은 alacritty-core 저장소에 있다.
