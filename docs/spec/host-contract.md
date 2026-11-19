@@ -889,6 +889,7 @@ Items:
 | `sidecars-transport.startup.exits-before-endpoint` | A started service that ends before its endpoint fails the send with "service exited before endpoint". | all |
 | `sidecars-transport.endpoint.replaces-dead-service-endpoint` | An endpoint left by a dead service is replaced by the new service endpoint. | all |
 | `sidecars-transport.endpoint.live-unreachable-reported-without-replacement` | An endpoint of a live but unreachable service fails the send and is not replaced. | all |
+| `sidecars-transport.endpoint.replaces-the-endpoint-of-a-reused-pid` | An endpoint whose pid names a live process that started after the modification time of `endpoint.json` is stale: the host removes it and the new service endpoint replaces it ([endpoint publisher](persistent-services.md#endpoint-publisher)). | all |
 | `sidecars-transport.stop.close-owner-then-shutdown` | Stop sends close-owner and, after a successful reply, shutdown. | all |
 | `sidecars-transport.stop.own-close-is-not-a-read-error` | Closing the service connection during a stop writes no `persistent read` error line, because the host itself closed it. | all |
 | `sidecars-transport.stop.accepts-close-answers-sent-before-stop` | A persistent service's answer to a closed notice sent before the stop, arriving after the stop began, is accepted; stop still sends shutdown and no surface stays closing. | all |
@@ -916,7 +917,7 @@ Items:
 | `sidecars-transport.replace.waits-for-the-first-layout-list` | Before the first list of the layouts, a surface that closes does not replace an outdated service. | all |
 | `sidecars-transport.persistent.starts-in-new-session` | A persistent service that the host starts is the leader of a new session, so it receives no signal of the application's process group or terminal. | all |
 | `sidecars-transport.endpoint.zombie-service-does-not-exist` | A zombie service pid does not count as an existing service, so its stale endpoint is replaced. | all |
-| `sidecars-transport.endpoint.foreign-service-process-exists` | A service pid of a process that another user owns counts as an existing service, because the refused signal check shows that the process exists. | all |
+| `sidecars-transport.endpoint.foreign-service-process-exists` | A service pid of a process that another user owns counts as an existing service, because the process table of the kernel lists it for every user. | all |
 | `sidecars-transport.endpoint.waits-for-the-end-of-a-service-process` | Waiting for the end of a service process answers true when the process ends, also when it does not exist, and false when its stop comes while it runs; no time limit ends the wait. | all |
 | `sidecars-transport.replace.waits-for-the-end-of-the-service-process` | A replaced persistent service starts the installed service only after the process of its endpoint has exited, which the host learns as its exit event; a stop during that wait fails the replacement with "sidecars are stopped" and leaves the sidecar outdated. | all |
 | `sidecars-transport.persistent.revive-failure-is-reported` | A failed restart reports the disconnection and its reason to the owning surface. | all |
