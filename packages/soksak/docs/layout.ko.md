@@ -418,75 +418,73 @@ grid.balance();
 
 ## Cuts
 
-`even(boxes)`는 slicing tree의 모든 cut의 모든 child에 같은 몫을 준다. 그래서
-결과는 배치를 만든 operation의 순서가 아니라 배치에 달려 있다. 다섯 카드의
-row는 절반씩 만들었든 셋으로 나눠 만들었든 같은 다섯 카드이고, 같은 수의
-카드를 가진 두 row는 line을 함께 쓴다. tree는 `sliceTree`의 tree다. cut은
-사각형을 한 축을 따라 `n`개의 child로 나누며, 각 child는 카드, box, 또는
-다른 축을 따라가는 cut이다. 한 cut이 나눌 수 있는 모든 line을 한 번에 잡으므로
-다섯 카드의 row는 다섯 child를 가진 cut 하나다. line이 두 축 모두로 child 집합을
-자를 수 있으면 `x`를 따라가는 cut이 바깥 cut이다.
+`even()`은 tree([모델](#모델))의 모든 cut의 모든 kid에 같은 share를 준다. 그래서
+결과는 배치를 만든 operation의 순서가 아니라 배치에 달려 있다. 다섯 카드의 row는
+절반씩 만들었든 셋으로 나눠 만들었든 같은 다섯 카드이고, 같은 수의 카드를 가진 두
+row는 seam을 같은 line에 그린다.
 
-box는 tree가 child 하나로 유지하는 host의 사각형이다. `boxes`는 어느 box에도
-들지 않는 box를 `{id, head, members}`로 나열한다. `members`는 카드 id와 box이고,
-`head`는 host가 box 안쪽 위에 member 위로 그리는 px다. 어느 box에도 들지 않는
-카드는 plane의 member다. box의 member는 box 사각형 안에 자기 tree를 가지므로
-어떤 cut도 box를 가로지르지 않는다.
+box `{box, data?, inner}`는 tree가 그 cut의 kid 하나로 유지하는 host의 사각형이므로
+어떤 cut도 그것을 가로지르지 않는다. `setHeads({id: px})`는 host가 각 box 안쪽 위,
+inner node 위에 그리는 px를 준다. 항목이 없는 box는 head가 없다. `setHeads`는 box가
+아닌 id에 `soksak: heads name "<id>", which is no box`를, 음수 head에 `soksak: the
+head of "<id>" is below zero`를 던지며, head는 state의 일부가 아니다.
 
-child의 크기는 그려진 크기다. 곧 그 카드들의 그려진 사각형의 범위이며, `y`
-축에서는 그 위 box의 head를 뺀다. 그래서 box의 head는 box의 몫 안에 있고,
-크기가 같은 두 child는 같은 크기로 그려진다. slot은 plane 전체에 대한 span에서
-corridor를 뺀 크기로 그려지므로(R5) 같은 span이 같은 크기는 아니다. `even`은
-모든 cut을 같은 span으로 놓고, 그려진 사각형을 읽고, 각 span을 그려진 크기와
-같은 크기의 차이만큼 옮기며, 가장 큰 차이가 1000분의 1 px 아래가 될 때까지
-반복한다. corridor는 span에 따라 바뀌지 않으므로 한 번의 보정으로 cut 하나가
-정확히 놓이고, 중첩된 cut은 한 번 더 걸린다. cut의 축에 px 크기를 가진 카드와
-`fixed` 카드는 자기 span을 유지하고 몫을 받지 않는다. 10억분의 1 안에 있는
-좌표는 한 line이다(R1). `even`은 `balance`처럼 `paidBy` 기록을 유지한다.
-slicing이 아닌 배치는 `the grid is not a slicing arrangement`를, grid의 카드가
-아닌 box member는 `card <id> is not a member of the layout`을, minimum 아래의
-결과는 아래와 같이 던지며, 던지면 아무것도 바뀌지 않는다.
+kid의 크기는 그려진 크기다. 곧 그 카드들의 그려진 사각형의 첫 가장자리부터 마지막
+가장자리까지의 범위이며 그 사이의 gap을 포함하고, `y` 축에서는 그 위 box의 head를
+뺀다. 그래서 box의 head는 box의 share 안에 있고, 크기가 같은 두 kid는 같은 크기로
+그려진다. slot은 plane 전체에 대한 span에서 corridor를 뺀 크기로 그려지므로(R5) 같은
+share가 같은 크기는 아니다. `even`은 모든 cut을 같은 share로 놓고, 그려진 사각형을
+읽고, 각 share를 그려진 크기와 같은 크기의 차이만큼 옮기며, 가장 큰 차이가 1000분의
+1 px 아래가 될 때까지 반복한다. corridor는 share에 따라 바뀌지 않으므로 한 번의
+보정으로 cut 하나가 정확히 놓이고, 중첩된 cut은 한 번 더 걸린다. cut의 축에 px
+크기를 가진 카드와 `fixed` 카드는 자기 span을 유지하고 share를 받지 않는다. `even`은
+`paidBy` 기록을 유지한다. minimum 아래의 결과는 아래와 같이 던지며, 던지면 아무것도
+바뀌지 않는다.
 
-node의 minimum은 재귀적이며 head와 corridor를 고정 비용으로 센다. 카드는
-`minSize`와 `y`에서 그 사각형 안에 그려지는 head를 필요로 하고, box는 그
-member가 필요로 하는 것을, cut은 자기 축에서 child의 필요와 그 사이 corridor의
-합을, 가로 축에서 child 필요의 최댓값을 필요로 하며, span을 유지하는 child는
-그려진 크기를 필요로 한다. operation 뒤에 사각형이 바뀐 모든 카드와 box를
-바깥부터 판정하고, 필요보다 작게 그려지는 첫 카드나 box가 `card <id> would be
-<w>x<h>, below its minimum <w>x<h>`를 던진다. 이 문구는 그 카드나 box를 가리킨다.
+node의 minimum은 재귀적이며 head와 corridor를 고정 비용으로 센다. 카드는 `minSize`와
+`y`에서 그 사각형 안에 그려지는 head를 필요로 하고, box는 그 inner node가 필요로 하는
+것과 그 head를, cut은 자기 축에서 kid의 필요와 그 사이 corridor의 합을, 가로 축에서
+kid 필요의 최댓값을 필요로 하며, span을 유지하는 kid는 그려진 크기를 필요로 한다.
+operation 뒤에 사각형이 바뀐 모든 카드와 box를 바깥부터 판정하고, 필요보다 작게
+그려지는 첫 카드나 box가 `card <id> would be <w>x<h>, below its minimum <w>x<h>`를
+던진다. 이 문구는 그 카드나 box를 가리킨다.
+
+모든 operation은 건드리는 node 수에 선형이다. tree는 각 id에서 그 node로, 각
+좌표에서 그 line으로 가는 map을 유지하므로, 어떤 operation도 카드 하나를 위해 tree
+전체를 훑지 않는다. `visits`는 마지막 operation이 방문한 node 수를 읽으며, test는
+시간 대신 큰 tree에서 그것을 제한한다.
 
 ```js
-grid.even([]);                                                        // 모든 cut을 고르게
-grid.even([{ id: "group-1", head: 44, members: ["card-1", "card-2"] }]); // head를 가진 box
+grid.setHeads({ "group-1": 44 }); // box의 head
+grid.even();                      // 모든 cut을 고르게
+grid.visits;                      // even이 방문한 node 수
 ```
 
 ### Add and remove
 
-`withdraw(boxes, id)`는 카드나 box인 member `id`를 그 cut에서 꺼낸다. cut의
-다른 child는 크기에 비례해 그 자리를 나눠 가지며, child가 하나만 남은 cut은
-그 child로 바뀐다. 떠난 것 `{id, data?, box?, above, cards}`를 돌려주고
-`insert`가 그것을 받으므로, box는 member의 비율을 유지한 채 놓인다. 마지막
-카드와 `fixed` 카드는 거부된다.
+`withdraw(id)`는 카드나 box인 node `id`를 그 cut에서 꺼낸다. cut의 다른 kid는 크기에
+비례해 그 자리를 나눠 가지며, kid가 하나만 남은 cut은 그 kid로 바뀐다. 떠난 node, 곧
+카드 node이거나 inner node를 가진 box node를 돌려주고 `insert`가 그것을 받으므로,
+box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 카드는 거부된다.
 
-`insert(boxes, target, side, card)`는 새 카드 `{id, data?}`나 `withdraw`가
-돌려준 것인 `card`를 `target` 옆 `side` 쪽에 더하고 그 id를 돌려준다.
-`target`은 member id이거나 한 cut의 이웃한 child들이 가진 id들이다. target의
-cut을 따라서는, child의 크기가 하나인(반 px 안) cut은 카드에 cut의 1/(k+1)을
-주고 모든 비율을 유지하며, child의 크기가 다른 cut은 카드에 target의 절반에서
-새 corridor를 뺀 크기를 주고 다른 모든 크기를 유지한다. target이 cut 자체이면
-`side` 쪽 끝의 child가 target이다. cut을 가로질러서는 target을 두 절반의 새
-cut으로 감싼다. operation이 바꾼 cut만 다시 놓으므로 다른 모든 카드는 사각형을
-유지한다. move는 `withdraw`와 `insert`다.
+`insert(target, side, node)`는 새 카드 `{card, data?}`나 `withdraw`가 돌려준 것인
+`node`를 `target` 옆 `side` 쪽에 더하고 그 id를 돌려준다. `target`은 id이거나 한
+cut의 이웃한 kid들이 가진 id들이다. target의 cut을 따라서는, kid의 크기가 하나인(반
+px 안) cut은 node에 cut의 1/(k+1)을 주고 모든 비율을 유지하며, kid의 크기가 다른
+cut은 node에 target의 절반에서 새 corridor를 뺀 크기를 주고 다른 모든 크기를
+유지한다. target이 cut 자체이면 `side` 쪽 끝의 kid가 target이다. cut을 가로질러서는
+target을 두 절반의 새 cut으로 감싼다. operation이 바꾼 cut만 다시 놓으므로 다른 모든
+카드는 사각형을 유지한다. move는 `withdraw`와 `insert`다.
 
 ```js
-const left = grid.withdraw([], "card-3");      // row가 비율대로 빈자리를 메운다
-grid.insert([], "card-1", "right", left);      // card-3이 card-1 오른쪽에 놓인다
-grid.insert([], ["card-1", "card-2"], "bottom", { id: "card-9" }); // 둘 아래에 새 row
+const left = grid.withdraw("card-3");             // row가 비율대로 빈자리를 메운다
+grid.insert("card-1", "right", left);             // card-3이 card-1 오른쪽에 놓인다
+grid.insert(["card-1", "card-2"], "bottom", { card: "card-9" }); // 둘 아래에 새 row
 ```
 
 이 규칙의 제안은 [layout sizes](../../../docs/plans/layout-sizes.ko.md)이며,
-`docs/spec/cases/layout/invariants.json`이 그 invariant를 두 언어에서 생성한
-layout에 대해 검사한다.
+`docs/spec/cases/layout/invariants.json`이 그 불변식을 두 언어에서 생성한 layout에
+대해 검사한다.
 
 ## 균등 배치
 
@@ -641,9 +639,9 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | `moveLinePast(axis, line, px)` | line을 `moveBoundary` 처럼 옮기고, 둘 사이에 카드가 없는 곳에서 닿는 각 line을 지나간다. 다른 line 위에 멈춘 line은 그 line에 합쳐진다 |
 | `shareLines(axis, extra?)` | 그 axis의 모든 line index를 유지하고, px 크기를 가진 카드가 차지하지 않은 모든 slot에 자기 corridor, `extra[slot]` px, 그리고 free length의 같은 몫을 준다. free length는 extent에서 corridor, 고정 크기와 extra를 뺀 값이다. 고정된 slot은 자기 span을 유지한다. 알 수 없는 axis, slot 수와 길이가 다른 extra 목록, 공유 slot이 길이를 갖지 못하는 axis에는 throw 한다 |
 | `balance()` | 배치를 유지하고 모든 카드에 공정한 몫을 준다 |
-| `even(boxes)` | host의 box를 child로 하여 slicing tree의 모든 cut의 모든 child에 같은 몫을 준다 ([cuts](#cuts)) |
-| `withdraw(boxes, id)` | 카드나 box를 그 cut에서 꺼낸다. 나머지가 비율대로 그 자리를 나눈다 ([add and remove](#add-and-remove)) |
-| `insert(boxes, target, side, card)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
+| `even()`, `setHeads(heads)`, `visits` | 모든 cut의 모든 kid에 같은 share를 준다. box의 head. 마지막 operation이 방문한 node 수 ([cuts](#cuts)) |
+| `withdraw(id)` | 카드나 box를 그 cut에서 꺼낸다. 나머지가 비율대로 그 자리를 나눈다 ([add and remove](#add-and-remove)) |
+| `insert(target, side, node)` | target 옆에 카드를 더한다. 고른 cut에서는 1/(k+1), 고르지 않은 cut에서는 target의 절반, 가로질러서는 두 절반으로 감싼다 ([add and remove](#add-and-remove)) |
 | `sliceTree(cards)` | 배치의 slicing tree(`Slice`: 카드 하나, 또는 한 축을 따라 판의 처음부터 나눈 쪽들), 아니면 null |
 | `mergeCoincident(axis, line)` | 이제 같은 자리에 있는 이웃 선으로 접는다 |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | 가상 선 |

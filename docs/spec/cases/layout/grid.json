@@ -415,17 +415,17 @@
   {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":494.5,"y":0,"w":11,"h":800},{"key":"x:2:0","axis":"x","line":2,"x":744.5,"y":0,"w":11,"h":800}]},
   {"call":"canMove","args":["c","a","top"],"returns":true},
   {"call":"move","args":["c","a","top"],"returns":true},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.74375,"node":{"card":"c","fixed":false}},{"share":0.25625,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}},
-  {"call":"rects","returns":{"b":{"x":0,"y":0,"w":745,"h":800},"a":{"x":755,"y":600,"w":245,"h":200},"c":{"x":755,"y":0,"w":245,"h":590}}},
-  {"call":"rules","returns":[{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":749.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":749.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":594.5,"w":1000,"h":1},{"key":"sy:1:2","axis":"y","line":1,"virtual":false,"x":750,"y":594.5,"w":250,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:2:0","axis":"x","line":2,"x":744.5,"y":0,"w":11,"h":800},{"key":"y:1:2","axis":"y","line":1,"x":755,"y":589.5,"w":245,"h":11}]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}},
+  {"call":"rects","returns":{"b":{"x":0,"y":0,"w":745,"h":800},"a":{"x":755,"y":405,"w":245,"h":395},"c":{"x":755,"y":0,"w":245,"h":395}}},
+  {"call":"rules","returns":[{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":749.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":749.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:2","axis":"y","line":1,"virtual":false,"x":750,"y":399.5,"w":250,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:2:0","axis":"x","line":2,"x":744.5,"y":0,"w":11,"h":800},{"key":"y:1:2","axis":"y","line":1,"x":755,"y":394.5,"w":245,"h":11}]},
   {"call":"move","args":["a","a","left"],"returns":false},
   {"call":"move","args":["a","none","left"],"returns":false},
   {"call":"canMove","args":["a","b","middle"],"returns":false},
   {"call":"move","args":["a","b","middle"],"returns":false},
   {"call":"setFixed","args":["b",true],"returns":true},
   {"call":"move","args":["b","a","left"],"returns":false},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":true}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.74375,"node":{"card":"c","fixed":false}},{"share":0.25625,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}}
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":true}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}}
  ]},
  {"name":"a frame takes one gap of the corridor on its side, so a card stands one gap from the frame around it and the frame one gap from the neighbour","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},"steps":[
   {"call":"resize","args":[1000,600]},
@@ -505,7 +505,7 @@
   {"call":"lines","args":["x"],"returns":[0,0.4,1]}
  ]},
  {"name":"even gives every child of every cut an equal share","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.4,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.125,"node":{"card":"c"}},{"share":0.0625,"node":{"card":"d"}},{"share":0.0625,"node":{"card":"e"}}]}},{"share":0.6,"node":{"cut":"x","kids":[{"share":0.3,"node":{"card":"f"}},{"share":0.7,"node":{"card":"g"}}]}}]}},"steps":[
-  {"call":"even","args":[[]]},
+  {"call":"even","args":[]},
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.1941935483870968,"node":{"card":"a","fixed":false}},{"share":0.20387096774193547,"node":{"card":"b","fixed":false}},{"share":0.20387096774193536,"node":{"card":"c","fixed":false}},{"share":0.20387096774193558,"node":{"card":"d","fixed":false}},{"share":0.1941935483870968,"node":{"card":"e","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"f","fixed":false}},{"share":0.5,"node":{"card":"g","fixed":false}}]}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":228.8,"h":288}},
   {"call":"rect","args":["b"],"returns":{"x":252.8,"y":0,"w":228.8,"h":288}},
@@ -516,20 +516,21 @@
   {"call":"rect","args":["g"],"returns":{"x":632,"y":312,"w":608,"h":288}}
  ]},
  {"name":"even gives two rows of the same count the same lines","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.2,"node":{"card":"a"}},{"share":0.39999999999999997,"node":{"card":"b"}},{"share":0.4,"node":{"card":"c"}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3,"node":{"card":"d"}},{"share":0.39999999999999997,"node":{"card":"e"}},{"share":0.30000000000000004,"node":{"card":"f"}}]}}]}},"steps":[
-  {"call":"even","args":[[]]},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"d","fixed":false}}]}},{"share":0.3397849462365592,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"e","fixed":false}}]}},{"share":0.3301075268817204,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"f","fixed":false}}]}}]},"paidBy":{}}}
+  {"call":"even","args":[]},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"d","fixed":false}},{"share":0.3397849462365592,"node":{"card":"e","fixed":false}},{"share":0.3301075268817204,"node":{"card":"f","fixed":false}}]}}]},"paidBy":{}}}
  ]},
- {"name":"even counts the head of a box, so the member below the head and its sibling are drawn at one height below it","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"even","args":[[{"id":"g","head":56,"members":["a","b"]}]]},
-  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a","fixed":false}},{"share":0.45333333333333337,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
+ {"name":"even counts the head of a box, so the member below the head and its sibling are drawn at one height below it","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
+  {"call":"setHeads","args":[{"g":56}]},
+  {"call":"even","args":[]},
+  {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a","fixed":false}},{"share":0.45333333333333337,"node":{"card":"b","fixed":false}}]}}},{"share":0.5,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":608,"h":316}},
   {"call":"rect","args":["b"],"returns":{"x":0,"y":340,"w":608,"h":260}}
  ]},
  {"name":"four inserts toward right from the last card give five cards of one drawn width (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"card":"a"}},"steps":[
-  {"call":"insert","args":[[],"a","right",{"id":"b"}],"returns":"b"},
-  {"call":"insert","args":[[],"b","right",{"id":"c"}],"returns":"c"},
-  {"call":"insert","args":[[],"c","right",{"id":"d"}],"returns":"d"},
-  {"call":"insert","args":[[],"d","right",{"id":"e"}],"returns":"e"},
+  {"call":"insert","args":["a","right",{"card":"b"}],"returns":"b"},
+  {"call":"insert","args":["b","right",{"card":"c"}],"returns":"c"},
+  {"call":"insert","args":["c","right",{"card":"d"}],"returns":"d"},
+  {"call":"insert","args":["d","right",{"card":"e"}],"returns":"e"},
   {"call":"lines","args":["x"],"returns":[0,0.1941935483870968,0.3980645161290325,0.601935483870968,0.8058064516129033,1]},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":228.8,"h":600}},
   {"call":"rect","args":["b"],"returns":{"x":252.8,"y":0,"w":228.8,"h":600}},
@@ -538,61 +539,62 @@
   {"call":"rect","args":["e"],"returns":{"x":1011.2,"y":0,"w":228.8,"h":600}}
  ]},
  {"name":"inserts toward right from one card put each new card beside it at 1/(n+1) of the row (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"card":"a"}},"steps":[
-  {"call":"insert","args":[[],"a","right",{"id":"b"}],"returns":"b"},
-  {"call":"insert","args":[[],"a","right",{"id":"c"}],"returns":"c"},
-  {"call":"insert","args":[[],"a","right",{"id":"d"}],"returns":"d"},
+  {"call":"insert","args":["a","right",{"card":"b"}],"returns":"b"},
+  {"call":"insert","args":["a","right",{"card":"c"}],"returns":"c"},
+  {"call":"insert","args":["a","right",{"card":"d"}],"returns":"d"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a","fixed":false}},{"share":0.2548387096774194,"node":{"card":"d","fixed":false}},{"share":0.2548387096774194,"node":{"card":"c","fixed":false}},{"share":0.2451612903225806,"node":{"card":"b","fixed":false}}]},"paidBy":{}}}
  ]},
  {"name":"a withdraw from a row of four gives its space to the three others in proportion (P1)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a"}},{"share":0.2548387096774194,"node":{"card":"b"}},{"share":0.2548387096774194,"node":{"card":"c"}},{"share":0.2451612903225806,"node":{"card":"d"}}]}},"steps":[
-  {"call":"withdraw","args":[[],"b"],"returns":{"id":"b","box":null,"above":0,"cards":[{"card":{"id":"b","fixed":false},"x0":0.24516129032258063,"x1":0.5,"y0":0,"y1":1,"rect":{"x":316,"y":0,"w":292,"h":600}}]}},
+  {"call":"withdraw","args":["b"],"returns":{"card":"b","fixed":false}},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"c","fixed":false}},{"share":0.3301075268817204,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":397.3333333333333,"h":600}},
   {"call":"rect","args":["c"],"returns":{"x":421.3333333333333,"y":0,"w":397.3333333333334,"h":600}},
   {"call":"rect","args":["d"],"returns":{"x":842.6666666666667,"y":0,"w":397.33333333333326,"h":600}}
  ]},
  {"name":"a withdraw keeps the proportions of the cards that take the space (P1)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}}]}},"steps":[
-  {"call":"withdraw","args":[[],"b"],"returns":{"id":"b","box":null,"above":0,"cards":[{"card":{"id":"b","fixed":false},"x0":0.5,"x1":0.75,"y0":0,"y1":1,"rect":{"x":632,"y":0,"w":286,"h":600}}]}},
+  {"call":"withdraw","args":["b"],"returns":{"card":"b","fixed":false}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":816.0353200883002,"h":600}},
   {"call":"rect","args":["c"],"returns":{"x":840.0353200883002,"y":0,"w":399.9646799116998,"h":600}}
  ]},
  {"name":"an insert across a row wraps the target in a new cut at half of its rectangle and makes no box (P3)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]},"paidBy":{}},"steps":[
-  {"call":"insert","args":[[],"b","bottom",{"id":"d"}],"returns":"d"},
+  {"call":"insert","args":["b","bottom",{"card":"d"}],"returns":"d"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b","fixed":false}},{"share":0.5,"node":{"card":"d","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
   {"call":"rect","args":["b"],"returns":{"x":421.3333333333333,"y":0,"w":397.3333333333334,"h":288}},
   {"call":"rect","args":["d"],"returns":{"x":421.3333333333333,"y":312,"w":397.3333333333334,"h":288}}
  ]},
  {"name":"an insert beside neighbouring children wraps them as one target","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},{"share":0.5,"node":{"card":"d"}}]}},"steps":[
-  {"call":"insert","args":[[],["a","b"],"bottom",{"id":"e"}],"returns":"e"},
+  {"call":"insert","args":[["a","b"],"bottom",{"card":"e"}],"returns":"e"},
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.6698924731182796,"node":{"cut":"y","kids":[{"share":0.48,"node":{"cut":"x","kids":[{"share":0.49277688603531294,"node":{"card":"a","fixed":false}},{"share":0.5072231139646871,"node":{"card":"b","fixed":false}}]}},{"share":0.52,"node":{"card":"e","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"card":"d","fixed":false}}]},"paidBy":{}}},
-  {"call":"insert","args":[[],["a","c"],"bottom",{"id":"f"}],"throws":"cards a, c are not neighbours of one cut"}
+  {"call":"insert","args":[["a","c"],"bottom",{"card":"f"}],"throws":"cards a, c are not neighbours of one cut"}
  ]},
- {"name":"an insert along a column of a box with a head gives the three members one height below the head (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a"}},{"share":0.45333333333333337,"node":{"card":"b"}}]}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"insert","args":[[{"id":"g","head":56,"members":["a","b"]}],"b","bottom",{"id":"d"}],"returns":"d"},
+ {"name":"an insert along a column of a box with a head gives the three members one height below the head (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a"}},{"share":0.45333333333333337,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
+  {"call":"setHeads","args":[{"g":56}]},
+  {"call":"insert","args":["b","bottom",{"card":"d"}],"returns":"d"},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":608,"h":221.33333333333334}},
   {"call":"rect","args":["b"],"returns":{"x":0,"y":245.33333333333334,"w":608,"h":165.3333333333333}},
   {"call":"rect","args":["d"],"returns":{"x":0,"y":434.66666666666663,"w":608,"h":165.33333333333337}}
  ]},
  {"name":"a move is a withdraw and an insert","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]},"paidBy":{}},"steps":[
-  {"call":"insert","args":[[],"c","bottom",{"id":"a","box":null,"above":0,"cards":[{"card":{"id":"a","fixed":false},"x0":0,"x1":0.3301075268817204,"y0":0,"y1":1,"rect":{"x":0,"y":0,"w":397.3333333333333,"h":600}}]}],"throws":"card a is a member of the layout"},
-  {"call":"withdraw","args":[[],"a"],"returns":{"id":"a","box":null,"above":0,"cards":[{"card":{"id":"a","fixed":false},"x0":0,"x1":0.3301075268817204,"y0":0,"y1":1,"rect":{"x":0,"y":0,"w":397.3333333333333,"h":600}}]}},
-  {"call":"insert","args":[[],"c","bottom",{"id":"a","box":null,"above":0,"cards":[{"card":{"id":"a","fixed":false},"x0":0,"x1":0.3301075268817204,"y0":0,"y1":1,"rect":{"x":0,"y":0,"w":397.3333333333333,"h":600}}]}],"returns":"a"},
+  {"call":"insert","args":["c","bottom",{"card":"a","fixed":false}],"throws":"card a is a member of the layout"},
+  {"call":"withdraw","args":["a"],"returns":{"card":"a","fixed":false}},
+  {"call":"insert","args":["c","bottom",{"card":"a","fixed":false}],"returns":"a"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5000000000000001,"node":{"card":"b","fixed":false}},{"share":0.4999999999999999,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false}}]}}]},"paidBy":{}}}
  ]},
- {"name":"a withdrawn box lands with its members in their proportions","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
-  {"call":"withdraw","args":[[{"id":"g","head":0,"members":["a","b"]}],"g"],"returns":{"id":"g","box":{"id":"g","head":0,"members":["a","b"]},"above":0,"cards":[{"card":{"id":"a","fixed":false},"x0":0,"x1":0.25,"y0":0,"y1":1,"rect":{"x":0,"y":0,"w":298,"h":600}},{"card":{"id":"b","fixed":false},"x0":0.25,"x1":0.5,"y0":0,"y1":1,"rect":{"x":322,"y":0,"w":286,"h":600}}]}},
-  {"call":"insert","args":[[],"c","bottom",{"id":"g","box":{"id":"g","head":0,"members":["a","b"]},"above":0,"cards":[{"card":{"id":"a","fixed":false},"x0":0,"x1":0.25,"y0":0,"y1":1,"rect":{"x":0,"y":0,"w":298,"h":600}},{"card":{"id":"b","fixed":false},"x0":0.25,"x1":0.5,"y0":0,"y1":1,"rect":{"x":322,"y":0,"w":286,"h":600}}]}],"returns":"g"},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.510075121520106,"node":{"card":"a","fixed":false}},{"share":0.48992487847989397,"node":{"card":"b","fixed":false}}]}}]},"paidBy":{}}}
+ {"name":"a withdrawn box lands with its members in their proportions","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
+  {"call":"withdraw","args":["g"],"returns":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},
+  {"call":"insert","args":["c","bottom",{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}],"returns":"g"},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.510075121520106,"node":{"card":"a","fixed":false}},{"share":0.48992487847989397,"node":{"card":"b","fixed":false}}]}}}]},"paidBy":{}}}
  ]},
  {"name":"the cut operations refuse an unknown side, a card that is no member, the last card and a fixed card","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"s","fixed":true}}]}},"steps":[
-  {"call":"insert","args":[[],"a","up",{"id":"x"}],"throws":"unknown side up; use left, right, top or bottom"},
-  {"call":"insert","args":[[],"zz","right",{"id":"x"}],"throws":"card zz is not a member of the layout"},
-  {"call":"insert","args":[[],"a","right",{"id":"s"}],"throws":"card s is a member of the layout"},
-  {"call":"withdraw","args":[[],"zz"],"throws":"card zz is not a member of the layout"},
-  {"call":"withdraw","args":[[],"a"],"throws":"card a is the last card of the layout"},
-  {"call":"withdraw","args":[[],"s"],"throws":"card s is fixed and does not leave"}
+  {"call":"insert","args":["a","up",{"card":"x"}],"throws":"unknown side up; use left, right, top or bottom"},
+  {"call":"insert","args":["zz","right",{"card":"x"}],"throws":"card zz is not a member of the layout"},
+  {"call":"insert","args":["a","right",{"card":"s"}],"throws":"card s is a member of the layout"},
+  {"call":"withdraw","args":["zz"],"throws":"card zz is not a member of the layout"},
+  {"call":"withdraw","args":["a"],"throws":"card a is the last card of the layout"},
+  {"call":"withdraw","args":["s"],"throws":"card s is fixed and does not leave"}
  ]},
  {"name":"a drop on the right zone of the first card of an even row of three adds a card along the row, which gives four quarters","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},"steps":[
-  {"call":"insert","args":[[],"a","right",{"id":"n"}],"returns":"n"},
+  {"call":"insert","args":["a","right",{"card":"n"}],"returns":"n"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a","fixed":false}},{"share":0.2548387096774194,"node":{"card":"n","fixed":false}},{"share":0.2548387096774194,"node":{"card":"b","fixed":false}},{"share":0.2451612903225806,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":292,"h":600}},
   {"call":"rect","args":["n"],"returns":{"x":316,"y":0,"w":292,"h":600}},
@@ -600,7 +602,7 @@
   {"call":"rect","args":["c"],"returns":{"x":948,"y":0,"w":292,"h":600}}
  ]},
  {"name":"a drop on the line between the first and the second card of an even row of three gives four quarters","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},"steps":[
-  {"call":"insert","args":[[],"a","right",{"id":"n"}],"returns":"n"},
+  {"call":"insert","args":["a","right",{"card":"n"}],"returns":"n"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.24516129032258063,"node":{"card":"a","fixed":false}},{"share":0.2548387096774194,"node":{"card":"n","fixed":false}},{"share":0.2548387096774194,"node":{"card":"b","fixed":false}},{"share":0.2451612903225806,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":292,"h":600}},
   {"call":"rect","args":["n"],"returns":{"x":316,"y":0,"w":292,"h":600}},
@@ -608,7 +610,7 @@
   {"call":"rect","args":["c"],"returns":{"x":948,"y":0,"w":292,"h":600}}
  ]},
  {"name":"a drop on the top edge of the plane wraps the row in a column of two halves, and the row keeps its proportions","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a"}},{"share":0.3397849462365592,"node":{"card":"b"}},{"share":0.3301075268817204,"node":{"card":"c"}}]}},"steps":[
-  {"call":"insert","args":[[],["a","b","c"],"top",{"id":"n"}],"returns":"n"},
+  {"call":"insert","args":[["a","b","c"],"top",{"card":"n"}],"returns":"n"},
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"n","fixed":false}},{"share":0.5,"node":{"cut":"x","kids":[{"share":0.3301075268817204,"node":{"card":"a","fixed":false}},{"share":0.3397849462365592,"node":{"card":"b","fixed":false}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}}]},"paidBy":{}}},
   {"call":"rect","args":["n"],"returns":{"x":0,"y":0,"w":1240,"h":288}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":312,"w":397.3333333333333,"h":288}},
@@ -616,8 +618,8 @@
   {"call":"rect","args":["c"],"returns":{"x":842.6666666666667,"y":312,"w":397.33333333333326,"h":288}}
  ]},
  {"name":"a move of the third card of an even row of eight below the last card leaves seven cards of one width in the row","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.11774193548387096,"node":{"card":"a"}},{"share":0.12741935483870967,"node":{"card":"b"}},{"share":0.12741935483870967,"node":{"card":"c"}},{"share":0.1274193548387097,"node":{"card":"d"}},{"share":0.1274193548387097,"node":{"card":"e"}},{"share":0.1274193548387097,"node":{"card":"f"}},{"share":0.1274193548387097,"node":{"card":"g"}},{"share":0.11774193548387091,"node":{"card":"h"}}]}},"steps":[
-  {"call":"withdraw","args":[[],"c"],"returns":{"id":"c","box":null,"above":0,"cards":[{"card":{"id":"c","fixed":false},"x0":0.24516129032258063,"x1":0.3725806451612903,"y0":0,"y1":1,"rect":{"x":316,"y":0,"w":134,"h":600}}]}},
-  {"call":"insert","args":[[],"h","bottom",{"id":"c","box":null,"above":0,"cards":[{"card":{"id":"c","fixed":false},"x0":0.24516129032258063,"x1":0.3725806451612903,"y0":0,"y1":1,"rect":{"x":316,"y":0,"w":134,"h":600}}]}],"returns":"c"},
+  {"call":"withdraw","args":["c"],"returns":{"card":"c","fixed":false}},
+  {"call":"insert","args":["h","bottom",{"card":"c","fixed":false}],"returns":"c"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.1359447004608295,"node":{"card":"a","fixed":false}},{"share":0.14562211981566822,"node":{"card":"b","fixed":false}},{"share":0.1456221198156682,"node":{"card":"d","fixed":false}},{"share":0.1456221198156682,"node":{"card":"e","fixed":false}},{"share":0.1456221198156683,"node":{"card":"f","fixed":false}},{"share":0.1456221198156682,"node":{"card":"g","fixed":false}},{"share":0.1359447004608294,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"h","fixed":false}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":156.57142857142856,"h":600}},
   {"call":"rect","args":["b"],"returns":{"x":180.57142857142856,"y":0,"w":156.57142857142856,"h":600}},
@@ -629,7 +631,7 @@
   {"call":"rect","args":["c"],"returns":{"x":1083.4285714285716,"y":312,"w":156.57142857142844,"h":288}}
  ]},
  {"name":"an add along a cut that is not even takes half of the target and keeps every other size","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}}]}},"steps":[
-  {"call":"insert","args":[[],"b","right",{"id":"n"}],"returns":"n"},
+  {"call":"insert","args":["b","right",{"card":"n"}],"returns":"n"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.125,"node":{"card":"b","fixed":false}},{"share":0.125,"node":{"card":"n","fixed":false}},{"share":0.25,"node":{"card":"c","fixed":false}}]},"paidBy":{}}},
   {"call":"rect","args":["a"],"returns":{"x":0,"y":0,"w":608,"h":600}},
   {"call":"rect","args":["b"],"returns":{"x":632,"y":0,"w":131,"h":600}},
@@ -637,15 +639,16 @@
   {"call":"rect","args":["c"],"returns":{"x":942,"y":0,"w":298,"h":600}}
  ]},
  {"name":"an add at the end of a cut that is not even takes half of the child at that end","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}},{"share":0.25,"node":{"card":"c"}}]}},"steps":[
-  {"call":"insert","args":[[],["a","b","c"],"right",{"id":"n"}],"returns":"n"},
+  {"call":"insert","args":[["a","b","c"],"right",{"card":"n"}],"returns":"n"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.25,"node":{"card":"b","fixed":false}},{"share":0.12983870967741928,"node":{"card":"c","fixed":false}},{"share":0.12016129032258072,"node":{"card":"n","fixed":false}}]},"paidBy":{}}}
  ]},
  {"name":"an add that would draw a card below its minimum is refused, names the card, its size and its minimum, and changes nothing","options":{"width":500,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.238,"node":{"card":"a"}},{"share":0.262,"node":{"card":"b"}},{"share":0.262,"node":{"card":"c"}},{"share":0.238,"node":{"card":"d"}}]}},"steps":[
-  {"call":"insert","args":[[],"b","right",{"id":"n"}],"throws":"card a would be 81x600, below its minimum 96x96"},
+  {"call":"insert","args":["b","right",{"card":"n"}],"throws":"card a would be 81x600, below its minimum 96x96"},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.238,"node":{"card":"a","fixed":false}},{"share":0.262,"node":{"card":"b","fixed":false}},{"share":0.262,"node":{"card":"c","fixed":false}},{"share":0.238,"node":{"card":"d","fixed":false}}]},"paidBy":{}}}
  ]},
- {"name":"an add that would draw a box below the minimum of its members and its head names the box","options":{"width":400,"height":300,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}]}},"steps":[
-  {"call":"insert","args":[[{"id":"g","head":44,"members":["b","c"]}],"g","bottom",{"id":"n"}],"throws":"card g would be 188x138, below its minimum 96x260"}
+ {"name":"an add that would draw a box below the minimum of its members and its head names the box","options":{"width":400,"height":300,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5,"node":{"card":"b"}},{"share":0.5,"node":{"card":"c"}}]}}}]}},"steps":[
+  {"call":"setHeads","args":[{"g":44}]},
+  {"call":"insert","args":["g","bottom",{"card":"n"}],"throws":"card g would be 188x138, below its minimum 96x260"}
  ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root, paidBy}","steps":[]},
  {"name":"a node that is no card, box or cut is refused","state":{"root":{"id":"a"}},"throws":"soksak: the node {\"id\":\"a\"} is not a card, a box or a cut","steps":[]},

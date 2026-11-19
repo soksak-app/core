@@ -458,77 +458,77 @@ grid.balance();
 
 ## Cuts
 
-`even(boxes)` gives every child of every cut of the slicing tree an equal
-share, so the result depends on the arrangement and not on the order of the
-operations that built it: a row of five cards is five equal cards, whether it
-was built by halves or by thirds, and two rows that hold the same number of
-cards share their lines. The tree is the tree of `sliceTree`: a cut divides a
-rectangle along one axis into `n` children, each a card, a box or a cut along
-the other axis, and every line one cut can divide at is taken at once, so a
-row of five cards is one cut of five children; where the lines let both axes
-cut a set of children, the cut along `x` is the outer one.
+`even()` gives every kid of every cut of the tree ([the model](#the-model)) an
+equal share, so the result depends on the arrangement and not on the order of
+the operations that built it: a row of five cards is five equal cards, whether
+it was built by halves or by thirds, and two rows that hold the same number of
+cards draw their seams on the same lines.
 
-A box is a rectangle of the host that the tree keeps as one child: `boxes`
-lists the boxes that no box holds, each `{id, head, members}`, whose `members`
-are card ids and boxes and whose `head` is the px that the host draws inside
-the top of the box above its members. A card that no box holds is a member of
-the plane. The members of a box have a tree of their own inside the rectangle
-of the box, so no cut crosses a box.
+A box `{box, data?, inner}` is a rectangle of the host that the tree keeps as
+one kid of its cut, so no cut crosses it. `setHeads({id: px})` gives the px
+that the host draws inside the top of each box above its inner node; a box
+without an entry has no head. `setHeads` throws `soksak: heads name "<id>",
+which is no box` for an id that is no box and `soksak: the head of "<id>" is
+below zero` for a negative head, and the heads are no part of the state.
 
-The size of a child is its drawn size: the extent of the drawn rectangles of
-its cards, less on the `y` axis the heads of the boxes above it, so the head of
-a box is inside the share of the box and two children of equal size are drawn
-at equal sizes. A slot is drawn at its span of the whole plane less its
-corridor (R5), so equal spans are not equal sizes: `even` lays every cut by
-equal spans, reads the drawn rectangles and moves each span by the difference
-between its drawn size and the equal size, until the largest difference is
-below a thousandth of a px; a corridor does not change with a span, so one
-correction lays a cut exactly and a nested cut takes one more. A card with a px
-size on the axis of its cut, and a `fixed` card, keeps its span and takes no
-share. Coordinates within a billionth are one line (R1). `even` keeps the
-`paidBy` records, as `balance` does. An arrangement that is not slicing throws
-`the grid is not a slicing arrangement`, a box member that is no card of the
-grid throws `card <id> is not a member of the layout`, a result below a
-minimum throws as below, and a throw changes nothing.
+The size of a kid is its drawn size: the extent of the drawn rectangles of its
+cards, from the first edge to the last, gaps between them included, less on
+the `y` axis the heads of the boxes above it, so the head of a box is inside
+the share of the box and two kids of equal size are drawn at equal sizes. A
+slot is drawn at its span of the whole plane less its corridor (R5), so equal
+shares are not equal sizes: `even` lays every cut by equal shares, reads the
+drawn rectangles and moves each share by the difference between its drawn size
+and the equal size, until the largest difference is below a thousandth of a px;
+a corridor does not change with a share, so one correction lays a cut exactly
+and a nested cut takes one more. A card with a px size on the axis of its cut,
+and a `fixed` card, keeps its span and takes no share. `even` keeps the
+`paidBy` records. A result below a minimum throws as below, and a throw
+changes nothing.
 
 The minimum of a node is recursive, with the heads and the corridors as fixed
 costs: a card needs `minSize` and on `y` the heads drawn inside its rectangle,
-a box needs what its members need, a cut needs on its own axis the needs of its
-children and the corridors between them and across it the largest need of its
-children, and a child that keeps its span needs the size it is drawn at. After
-an operation, every card and box whose rectangle changed is judged from the
-outside in, and the first one drawn below its need throws `card <id> would be
-<w>x<h>, below its minimum <w>x<h>`, which names that card or box.
+a box needs what its inner node needs and its head, a cut needs on its own axis
+the needs of its kids and the corridors between them and across it the largest
+need of its kids, and a kid that keeps its span needs the size it is drawn at.
+After an operation, every card and box whose rectangle changed is judged from
+the outside in, and the first one drawn below its need throws `card <id> would
+be <w>x<h>, below its minimum <w>x<h>`, which names that card or box.
+
+Every operation is linear in the nodes that it touches: the tree keeps a map
+from each id to its node and from each coordinate to its line, so no operation
+scans the whole tree for one card. `visits` reads the number of nodes that the
+last operation visited, which a test bounds on a large tree instead of a time.
 
 ```js
-grid.even([]);                                                        // every cut even
-grid.even([{ id: "group-1", head: 44, members: ["card-1", "card-2"] }]); // a box with its head
+grid.setHeads({ "group-1": 44 }); // the head of a box
+grid.even();                      // every cut even
+grid.visits;                      // the nodes that even visited
 ```
 
 ### Add and remove
 
-`withdraw(boxes, id)` takes the member `id`, a card or a box, out of its cut;
-the other children of the cut take its space in proportion to their sizes, and
-a cut left with one child is replaced by that child. It returns what left,
-`{id, data?, box?, above, cards}`, which `insert` takes, so a box lands with
-its members in their proportions. The last card and a `fixed` card are
+`withdraw(id)` takes the node `id`, a card or a box, out of its cut; the other
+kids of the cut take its space in proportion to their sizes, and a cut left
+with one kid is replaced by that kid. It returns the node that left, a card
+node or a box node with its inner node, which `insert` takes, so a box lands
+with its members in their proportions. The last card and a `fixed` card are
 refused.
 
-`insert(boxes, target, side, card)` adds `card`, a new card `{id, data?}` or
-what `withdraw` returned, beside `target` toward `side` and returns its id;
-`target` is a member id or the ids that neighbouring children of one cut hold.
-Along the cut of the target, a cut whose children have one size (within half a
-px) gives the card 1/(k+1) of the cut and keeps every ratio, and a cut whose
-children differ gives the card half of the target less the new corridor and
-keeps every other size; when the target is the cut itself, the child at the
-end toward `side` is the target. Across the cut, the target is wrapped in a new
-cut of two halves. Only the cuts that the operation changes are laid again, so
-every other card keeps its rectangle. A move is a `withdraw` and an `insert`.
+`insert(target, side, node)` adds `node`, a new card `{card, data?}` or what
+`withdraw` returned, beside `target` toward `side` and returns its id;
+`target` is an id or the ids that neighbouring kids of one cut hold. Along the
+cut of the target, a cut whose kids have one size (within half a px) gives the
+node 1/(k+1) of the cut and keeps every ratio, and a cut whose kids differ
+gives the node half of the target less the new corridor and keeps every other
+size; when the target is the cut itself, the kid at the end toward `side` is
+the target. Across the cut, the target is wrapped in a new cut of two halves.
+Only the cuts that the operation changes are laid again, so every other card
+keeps its rectangle. A move is a `withdraw` and an `insert`.
 
 ```js
-const left = grid.withdraw([], "card-3");      // the row closes the gap in proportion
-grid.insert([], "card-1", "right", left);      // card-3 lands to the right of card-1
-grid.insert([], ["card-1", "card-2"], "bottom", { id: "card-9" }); // a new row below both
+const left = grid.withdraw("card-3");             // the row closes the gap in proportion
+grid.insert("card-1", "right", left);             // card-3 lands to the right of card-1
+grid.insert(["card-1", "card-2"], "bottom", { card: "card-9" }); // a new row below both
 ```
 
 The proposal of this rule is [layout sizes](../../../docs/plans/layout-sizes.md),
@@ -697,9 +697,9 @@ first.
 | `moveLinePast(axis, line, px)` | move a line as `moveBoundary` does and past each line that it reaches where no card lies between the two; a line that stops on another line merges onto it |
 | `shareLines(axis, extra?)` | keep every line index of the axis and give every slot that no card with a size in px holds its corridor, `extra[slot]` px and an equal share of the free length, the extent less the corridors, the held sizes and the extras; a held slot keeps its span; throws for an unknown axis, an extra list of another length than the slots and an axis whose shared slots take no length |
 | `balance()` | give every card a fair share and keep the arrangement |
-| `even(boxes)` | give every child of every cut of the slicing tree an equal share, with the boxes of the host as children ([cuts](#cuts)) |
-| `withdraw(boxes, id)` | take a card or a box out of its cut; the others take its space in proportion ([add and remove](#add-and-remove)) |
-| `insert(boxes, target, side, card)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
+| `even()`, `setHeads(heads)`, `visits` | give every kid of every cut an equal share; the heads of the boxes; the nodes that the last operation visited ([cuts](#cuts)) |
+| `withdraw(id)` | take a card or a box out of its cut; the others take its space in proportion ([add and remove](#add-and-remove)) |
+| `insert(target, side, node)` | add a card beside a target: 1/(k+1) of an even cut, half of the target in an uneven cut, a wrap of two halves across ([add and remove](#add-and-remove)) |
 | `sliceTree(cards)` | the slicing tree of an arrangement (`Slice`: a card, or a cut along an axis into sides from the plane's start), or null |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | virtual lines |
