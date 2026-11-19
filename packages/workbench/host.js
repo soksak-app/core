@@ -726,7 +726,9 @@ export const surfaces = native ? {
           // Every placement waits for the matching app DOM and required rasters;
           // settled distinguishes the final update from a continuing gesture.
           settled: record.settled !== false,
-          overlays: windowOverlays(),
+          // The window overlays: the bounds of a shown modal and the grab area of each divider of the layout, in which this document
+          // takes the pointer before the native views (docs/spec/native-surfaces.md#surface-host-container).
+          overlays: [...windowOverlays(), ...record.grabs.map(toPage)],
           surfaces: requestedSurfaces,
           // The height (pt) of the first row that the next drawing will show. The host sets the window title bar to this height in the transaction of this preparation.
           titlebar: record.titlebar,
@@ -930,9 +932,8 @@ let onInput = () => {};
  *
  *   press(id)   A press on a surface. A surface is a native view, so a click on it does not
  *               reach this document. The application passes the surface id.
- *               input(step) Press, move and release of the left button. The coordinates belong to this document. The grab area of a divider
- *               is wider than the gap, so when the gap is one line wide, that whole area lies
- *               below the surface.
+ *               input(step) Press, move and release of the left button on a surface. The coordinates belong to this document. The
+ *               grab area of a divider is a window overlay, so such a press lies outside every grab area.
  */
 /* The command that the host application menu asked this window to run. */
 let onMenu = () => {};

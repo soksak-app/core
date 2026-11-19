@@ -1069,6 +1069,47 @@ test("commit reports the rects the render writes", () => {
   view.destroy();
 });
 
+// A host whose native views cover the cards gives the grab areas the pointer over them, so it needs them before the draw, where the
+// elements still stand at the layout before (docs/spec/native-surfaces.md#surface-host-container).
+test("commit reports the grab areas the draw writes, and none in fullscreen", () => {
+  const seen = [];
+  let pending = null;
+  const { window, host, grid, view } = mount({
+    commit: (rects, draw, dividers) => {
+      seen.push(dividers);
+      pending = draw;
+    },
+  });
+  pending();
+  const divider = host.querySelector('[role="separator"]');
+  const at = grid.boundaryPos("x", 1);
+  const doc = window.document;
+  divider.dispatchEvent(new window.MouseEvent("mousedown", {
+    clientX: at, clientY: 100, bubbles: true, button: 0, buttons: 1,
+  }));
+  doc.dispatchEvent(new window.MouseEvent("mousemove", {
+    clientX: at + 30.7, clientY: 100, bubbles: true, buttons: 1,
+  }));
+  const reported = seen[seen.length - 1];
+  assert.ok(Array.isArray(reported), `commit receives the dividers of the layout, not ${reported}`);
+  assert.equal(reported.length, 1, "one boundary between two cards");
+  const [area] = reported;
+  assert.equal(divider.style.left, `${at - Math.max(grid.gap, grid.grabSize) / 2}px`, "the element still stands at the layout before the draw");
+  pending();
+  assert.deepEqual({ axis: area.axis, line: area.line }, { axis: "x", line: Number(divider.dataset.line) });
+  assert.deepEqual([area.x, area.y, area.w, area.h],
+    [parseFloat(divider.style.left), parseFloat(divider.style.top), parseFloat(divider.style.width), parseFloat(divider.style.height)],
+    "the grab area is the rectangle that the draw wrote to the divider");
+  doc.dispatchEvent(new window.MouseEvent("mouseup", {
+    clientX: at + 30.7, clientY: 100, bubbles: true, button: 0, buttons: 0,
+  }));
+  pending();
+  view.fullscreen("card");
+  pending();
+  assert.deepEqual(seen[seen.length - 1], [], "a fullscreen card has no grab area");
+  view.destroy();
+});
+
 test("a card created later is drawn under the rules and the dividers", () => {
   const { host, grid, view } = mount();
   grid.split("card", "y");

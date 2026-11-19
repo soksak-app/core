@@ -29,7 +29,7 @@ test("a prediction names the grid of its layout for a kept section of a hidden w
   }));
 
   const pending = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]),
-    new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]));
+    new Map([["card", { id: "surface", dim: false, inset: { left: 2, top: 30, width: 4, height: 50 }, grid: 2 }]]), undefined, []);
   // The prediction holds the card surface and the hidden kept section, so verify V7c judges both on the grid of the layout.
   const prediction = ahead();
   assert.ok(prediction, "a layout whose card surfaces were all measured is a prediction");
@@ -40,7 +40,7 @@ test("a prediction names the grid of its layout for a kept section of a hidden w
 
   // A layout without a card seat names no grid, so a record that holds only kept sections is no prediction.
   card.remove();
-  const bare = publishAhead(new Map(), new Map());
+  const bare = publishAhead(new Map(), new Map(), undefined, []);
   assert.equal(ahead(), null, "a record without the grid of its layout is published as a prediction");
   answer();
   await bare;
@@ -74,13 +74,13 @@ test("a layout that shows a hidden window sidebar again is no prediction of its 
 
   // The next layout holds the card of the side: its draw places the kept section into that card, at a seat that the document
   // before the draw does not show, so the record measures no place of it.
-  const shown = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }], ["left", { x: 0, y: 0, w: 20, h: 150 }]]), seated);
+  const shown = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }], ["left", { x: 0, y: 0, w: 20, h: 150 }]]), seated, undefined, []);
   assert.equal(ahead(), null, "a layout that shows the sidebar of a kept section again is published as a prediction");
   answer();
   await shown;
 
   // A layout that keeps the side hidden keeps the section hidden, so it stays a prediction.
-  const hidden = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]), seated);
+  const hidden = publishAhead(new Map([["card", { x: 20, y: 0, w: 180, h: 150 }]]), seated, undefined, []);
   assert.deepEqual(ahead()?.surfaces.map((surface) => [surface.id, surface.visible]), [["surface", true], ["kept", false]],
     "a layout that keeps the sidebar hidden is no prediction");
   answer();

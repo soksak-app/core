@@ -59,7 +59,7 @@ const page = createPageLayout({
 });
 await connectExposure({ settled: page.drawn, report });
 /** The plane schedules a layout. The preparation of that layout fails. */
-const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () => true); };
+const schedule = () => { page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []); };
 
 test("a layout failure of a project switch started from the interface writes one workbench error line", async () => {
   reportRejectionsAsPage();
@@ -127,7 +127,7 @@ test("the last placement answers after the layout that waited behind the running
     }, textSize: () => 1, rendered: async () => {},
     waitSurfaceCompositionAnswered: async () => {},
   });
-  const layout = () => page.onLayout(new Map(), () => {}, new Map(), 40, () => true);
+  const layout = () => page.onLayout(new Map(), () => {}, new Map(), 40, () => true, []);
   layout();
   await begun(0);
   layout();

@@ -66,7 +66,7 @@ test("a settled preparation keeps the run active until its drawing has presented
   await moving;
 
   gesture(false);
-  const prepared = compositor.publishAhead(new Map(), new Map(), 0);
+  const prepared = compositor.publishAhead(new Map(), new Map(), 0, []);
   answers.shift().present();
   await prepared;
   assert.equal(runState.runActive(), true, "a preparation shows nothing, so the run continues");
@@ -99,7 +99,7 @@ test("a cancelled preparation ends a run that waited for its drawing", async () 
   await moving;
 
   gesture(false);
-  const prepared = compositor.publishAhead(new Map(), new Map(), 0);
+  const prepared = compositor.publishAhead(new Map(), new Map(), 0, []);
   answers.shift().present();
   await prepared;
   assert.equal(runState.runActive(), true);

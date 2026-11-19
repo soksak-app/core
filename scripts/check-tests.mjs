@@ -1855,17 +1855,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F584-5-2",
-    implementation: [
-      { file: "packages/workbench-mygo/src/dividers.go", symbol: "func outside(area layout.Rect, holes []layout.Rect) []layout.Rect {" },
-    ],
-    tests: [
-      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestAViewTakesThePointerUpToItsEdges" },
-    ],
-    expected: "Each native view of the mygo workbench takes the pointer up to its edges, and the grab area of a boundary takes the pointer only beside the views.",
-    levels: ["unit"],
-  },
-  {
     id: "F619",
     implementation: [
       { file: "packages/host/go/src/windows.go", symbol: "current, err := platform.Current()" },
@@ -14008,6 +13997,21 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/stored_space_test.go", id: "TestASpaceThatHoldsPartiesIsRefusedByName" },
     ],
     expected: "Both workbenches refuse a stored space that holds the removed member parties with an error that names projects.json, the project, the space and the member.",
+    levels: ["unit"],
+  },
+  {
+    id: "F949",
+    implementation: [
+      { file: "packages/soksak/src/dom.ts", symbol: "this.options.commit(on, drawn, snapshot.dividers.map((divider) => ({ ...divider, ...onGrid(divider, step) })));" },
+      { file: "packages/workbench/host.js", symbol: "overlays: [...windowOverlays(), ...record.grabs.map(toPage)]," },
+      { file: "packages/workbench-mygo/src/dividers.go", symbol: "Size(float32(divider.W), float32(divider.H)).Cursor(cursor).Focusable().KeepFocus().FocusRing(false)." },
+    ],
+    tests: [
+      { file: "packages/soksak/test/dom.test.mjs", id: "commit reports the grab areas the draw writes, and none in fullscreen" },
+      { file: "packages/workbench/test/overlay-routing.test.mjs", id: "native surface synchronization includes the grab areas of the dividers of the prepared layout" },
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestTheGrabAreaOfABoundaryTakesThePointerOverTheEdgesOfAView" },
+    ],
+    expected: "The grab area of each boundary takes the pointer over its whole area in both workbenches, also over the edge of a native view of a card beside it: a window overlay of the page, and an element that covers the native views in mygo.",
     levels: ["unit"],
   },
   {

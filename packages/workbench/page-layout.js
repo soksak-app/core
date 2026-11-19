@@ -207,9 +207,11 @@ export function createPageLayout({
     /**
      * Schedules the layout that the plane produced (receiver of onLayout of plane.js). held tells whether the seats of the layout still
      * name what the cards show; a layout whose seats moved does not draw and hands its preparation to the next layout (drawPrepared).
+     * grabs are the dividers of the layout with the grab areas that its draw writes.
      */
-    onLayout(made, draw, seated, titlebar, held) {
+    onLayout(made, draw, seated, titlebar, held, grabs) {
       if (typeof held !== "function") throw new TypeError("a layout of the plane needs held, the check of its seats");
+      if (!Array.isArray(grabs)) throw new TypeError("a layout of the plane needs the grab areas of its dividers");
       const epoch = layoutEpoch;
       const id = ++layoutTraceId;
       const mark = (phase) => trace("layout", { phase, id, t: performance.now() });
@@ -218,7 +220,7 @@ export function createPageLayout({
         epoch, current: () => layoutEpoch, held,
         prepare: async () => {
           mark("prepare");
-          const result = await compositor.publishAhead(made, seated, titlebar);
+          const result = await compositor.publishAhead(made, seated, titlebar, grabs);
           mark("prepared");
           return result;
         },
