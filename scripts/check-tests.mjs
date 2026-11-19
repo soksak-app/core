@@ -287,6 +287,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F958-1",
+    implementation: [
+      { file: "native/darwin/src/input_inject.m", symbol: "WKWebView *view = final == SP_INPUT_DELIVERED ? target : nil;" },
+      { file: "packages/host/go/src/exposure.go", symbol: "s.press(got.view)" },
+      { file: "packages/host/rust/src/surfaces.rs", symbol: "pub(crate) fn surface_of_view" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_test.m", id: "press attribution: the press is attributed to the web view" },
+      { file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestADeliveredPressAnswersTheViewThatItReached" },
+      { file: "packages/host/rust/src/platform/darwin/input_test.rs", id: "a_delivered_press_answers_the_view_that_it_reached" },
+    ],
+    expected: "A press that waits for an open layout is attributed to the web view that it reached, so it moves the focus to its card in both page hosts.",
+    levels: ["unit"],
+  },
+  {
     id: "F967",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "function parameterRefusal(name, schema, params) {" },
@@ -13951,9 +13966,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F417",
-    implementation: [{ file: "packages/host/go/src/surfaces.go", symbol: "func readPressThenDeliver" }],
-    tests: [{ file: "packages/host/go/src/surfaces_test.go", id: "TestAPressReadsItsTargetBeforeItsDelivery" }],
-    expected: "An injected press reads its target before its delivery.",
+    implementation: [{ file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerDelivered, platform.ButtonHeld{}, view)" }],
+    tests: [{ file: "packages/host/go/src/platform/darwin/input_test.go", id: "TestADeliveredPressAnswersTheViewThatItReached" }],
+    expected: "An injected press is attributed to the web view that its delivery reached (F958-1).",
     levels: ["unit"],
   },
   {
@@ -14517,7 +14532,7 @@ const FEATURE_LINKS = [
     id: "F965",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static const char *resizeEdgeAt(NSWindow *window, NSPoint point)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(" },
     ],
     tests: [
@@ -14545,7 +14560,7 @@ const FEATURE_LINKS = [
     id: "F962-2",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void interruptGestures(NSEvent *event)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(" },
     ],
     tests: [

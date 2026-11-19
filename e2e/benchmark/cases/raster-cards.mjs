@@ -48,10 +48,18 @@ export function boundaryMoves(start, now) {
 
 /**
  * Opens a grid of `rows` rows of `columns` raster probe cards in the window of `s` (see the top of the file) and waits until every
- * tab is ready (rasterReady). `balance` runs core.layout.balance after the splits. Returns the cards row by row as
- * `{card, surface}`; the cleanup of the check restores the start layout.
+ * tab is ready (rasterReady). `balance` turns the left and the right window sidebar off before the grid and runs
+ * core.layout.balance after the splits: a split halves the card that it splits, so beside the window sidebars of the start layout a
+ * row of five cards would ask a card of a quarter of the row for a half below the minimum size of a card. Returns the cards row by
+ * row as `{card, surface}`; the cleanup of the check restores the start layout and the window sidebars.
  */
 export async function openRasterGrid(s, { rows, columns, balance }) {
+  if (balance) {
+    const { left, right } = (await s.get("core.settings")).values;
+    s.cleanup(() => s.run("core.settings.set", { patch: { left, right }, scope: "common" }));
+    await s.run("core.settings.set", { patch: { left: false, right: false }, scope: "common" });
+    await s.presented();
+  }
   const start = await s.get("core.grid");
   const added = { cards: [], tabs: [] };
   s.cleanup(async () => {

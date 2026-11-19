@@ -811,6 +811,38 @@
       },
       "description": "One decision of the keyboard of the page workbench: `cause` is what asked for it (`ring` a move of the focus ring, `press` the release of a left press of the page, `placed` the answer of a drawn placement, `responder` a first responder that reached the workbench, `modal` a change of the modal state, `focusin` and `focusout` the element focus), `target` the surface it chose or null for the workbench, `sent` and `owed` the state before it, `decided` whether a released press waits for this decision, and `decision` whether it sent the call `surfaceFocus` (`send`), sent it for the same target (`same`), waited for a placement that holds the target (`wait`), or kept the keyboard in an open modal (`modal`)."
     },
+    "host.surface.press": {
+      "layer": "host",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "view": { "type": "integer", "minimum": 0 },
+          "surface": { "type": ["string", "null"] }
+        },
+        "required": ["view", "surface"]
+      },
+      "description": "One press of the left button that the host read over a native view of a window: `view` the handle of the web view under the press, 0 when the press reached none, and `surface` the surface that owns that view, which the host passes to the page as `surface-pressed`, or null when no surface owns it and the host passes nothing."
+    },
+    "workbench.surface.press": {
+      "layer": "workbench",
+      "class": "input",
+      "level": "debug",
+      "fields": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "surface": { "type": "string" },
+          "card": { "type": ["string", "null"] },
+          "focused": { "type": ["string", "null"] },
+          "decision": { "enum": ["focus", "focused", "no-slot"] }
+        },
+        "required": ["surface", "card", "focused", "decision"]
+      },
+      "description": "One press on a surface that the host passed to the page workbench (`surface-pressed`): `surface` the tab of the surface, `card` the card that holds its slot or null, `focused` the focused card before the press, and `decision` whether the press runs `core.card.focus` (`focus`), finds its card focused (`focused`) or finds no slot of the surface (`no-slot`)."
+    },
     "host.trace.exposure.request": {
       "layer": "host",
       "class": "call",

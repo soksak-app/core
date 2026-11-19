@@ -90,8 +90,10 @@ typedef struct {
 } sp_input_held;
 
 // held is non-NULL only when result is SP_INPUT_BUTTON_HELD, SP_INPUT_POINTER_HELD, SP_INPUT_RESIZE_EDGE or SP_INPUT_INTERRUPTED,
-// and it is valid only until done returns.
-typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held);
+// and it is valid only until done returns. view is the web view that a delivered press or release reached when it was sent, which
+// can differ from the web view at the coordinates when the request started, because a press waits for an open layout to reach the
+// screen; it is NULL for any other input or result.
+typedef void (*sp_input_done)(void *context, sp_input_result result, const sp_input_held *held, void *view);
 
 // Same as sp_input_pointer, except that for a press and a release done is called after the document that owns the gesture
 // has received the event. When an input field has focus, WebKit first passes mouse events to the input method

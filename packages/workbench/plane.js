@@ -80,8 +80,11 @@ const dimmed = (cardId) =>
 const pressSurface = (tabId) => {
   const slot = document.querySelector(
     `[data-native-surface-id="${tabId}"][data-native-surface]`);
-  if (!slot) return;
-  slot.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  // default: a press whose surface has no slot reaches no card (null); the record names it.
+  const card = slot?.closest(".card")?.dataset.cardId ?? null;
+  const decision = !slot ? "no-slot" : card === focusedId ? "focused" : "focus";
+  emitEvent("debug", "workbench.surface.press", { surface: tabId, card, focused: focusedId, decision });
+  slot?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
 };
 
 /* The divider that holds a drag passed by the host. It is set on press and cleared on release. */

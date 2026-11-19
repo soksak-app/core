@@ -3378,40 +3378,39 @@ impl Host {
         }
         let (tx, rx) = mpsc::channel();
         let target = window.clone();
-        // The delivery takes the pointer, so the press reading and the answer keep their own copies.
-        let (phase, x, y) = (pointer.phase, pointer.x, pointer.y);
+        // The delivery takes the pointer, so the answer keeps its own copy of the name.
+        let phase = pointer.phase;
         let name = pointer.pointer.clone();
-        let pressed = with_native_owner(window, move |handle| {
-            crate::surfaces::read_press_then_deliver(
-                || {
-                    if phase != 1 {
-                        return Ok(None);
+        with_native_owner(window, move |handle| {
+            platform.input_pointer(
+                handle,
+                pointer,
+                Box::new(move |delivery, view| {
+                    // A direct injection does not pass through the AppKit local event monitor, so the host publishes its surface
+                    // press from the web view that the delivered press reached, while the window is open in this main thread step.
+                    let pressed = match view {
+                        Some(view) if phase == 1 => crate::surfaces::surface_of_view(&target, view),
+                        _ => Ok(None),
+                    };
+                    if tx.send((delivery, pressed)).is_err() {
+                        crate::application_log::log_info(
+                            "exposure",
+                            "pointer delivery arrived after its request ended",
+                        );
                     }
-                    crate::surfaces::surface_at(platform, handle, &target, x, y)
-                },
-                || {
-                    platform.input_pointer(
-                        handle,
-                        pointer,
-                        Box::new(move |delivery| {
-                            if tx.send(delivery).is_err() {
-                                crate::application_log::log_info(
-                                    "exposure",
-                                    "pointer delivery arrived after its request ended",
-                                );
-                            }
-                        }),
-                    )
-                },
+                }),
             )
         })
         .map_err(native_failure(window.label(), NO_INPUT))?;
         // The library calls done with Unreceived at the event that ended the wait without the receipt, so the result always arrives.
-        match rx
+        let (delivery, pressed) = rx
             .recv()
-            .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?
-        {
+            .map_err(|e| Failure::new(NO_INPUT, e.to_string()))?;
+        match delivery {
             Delivery::Delivered => {
+                let pressed = pressed.map_err(|error| {
+                    native_failure(window.label(), NO_INPUT)(NativeFailure::Failed(error))
+                })?;
                 if let Some(id) = pressed {
                     crate::windows::emit_window(window, "surface-pressed", id).map_err(
                         |error| {

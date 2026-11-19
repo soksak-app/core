@@ -167,7 +167,7 @@ static NSDictionary *pressSurface(NSWindow *window, WKWebView *surface, double o
     return pressSurfaceAt(window, surface, frame[2] / 2, offset);
 }
 
-static void scrollDone(void *context, sp_input_result result, const sp_input_held *held) { *(sp_input_result *)context = result; }
+static void scrollDone(void *context, sp_input_result result, const sp_input_held *held, void *view) { *(sp_input_result *)context = result; }
 
 static WKWebView *webViewAtTopPoint(NSWindow *window, double x, double y) {
     NSView *content = window.contentView;
@@ -375,7 +375,7 @@ static NSMutableArray<NSString *> *inputOrder;
 - (void)keyDown:(NSEvent *)event { [inputOrder addObject:@"key"]; }
 @end
 
-static void pressDelivered(void *context, sp_input_result result, const sp_input_held *held) {
+static void pressDelivered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     *(sp_input_result *)context = result;
 }
 
