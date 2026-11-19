@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-8: The party colors of a space are stored in `projects.json` as `#rrggbb` values in the `parties` member of the space layout, and a reader refuses another form with the storage error of the spec, `projects.json: project <root>, space <space id>: parties <found JSON>`, with the file unchanged.
 - F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
 - F905-4: The Codex contract test does not include the shared `policy` helper it does not call, which failed the clippy check with warnings denied in the F898 CI check (`packages/sok/rust/tests/codex_test.rs`).
 - F899-6: The contract that refuses destructive shell commands of hosted agents before they run, fail-closed, is in the persistent services specification. The implementations are in the sidecar repositories (alacritty S121, vt S181).
