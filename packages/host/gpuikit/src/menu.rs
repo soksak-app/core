@@ -55,6 +55,7 @@ pub(crate) fn set_menu(app: &AppHandle, menus: Vec<Menu>) -> Result<(), String> 
     for submenu in menus {
         let menu = NSMenu::new(mtm);
         menu.setTitle(&NSString::from_str(
+            // default: a menu without a title takes the application name, as packages/host/tauriv2/src/menu.rs:25-26 does.
             &submenu.title.unwrap_or_else(|| name.to_string()),
         ));
         for item in submenu.items {

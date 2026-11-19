@@ -54,6 +54,7 @@ impl StagedFrontend {
 
 impl Assets for StagedFrontend {
     fn get(&self, key: &str) -> Option<std::borrow::Cow<'_, [u8]>> {
+        // default: a key without the leading separator names the same file, as the test the_staged_frontend_reads_a_file_named_without_the_leading_separator in packages/host/gpuikit/tests/page_files/page_files_test.rs asserts.
         let relative = key.strip_prefix('/').unwrap_or(key);
         std::fs::read(self.0.join(relative))
             .ok()
@@ -67,6 +68,7 @@ impl Assets for StagedFrontend {
 pub(crate) fn page_file(assets: &dyn Assets, path: &str) -> http::Response<Vec<u8>> {
     let path = if path == "/" { "/index.html" } else { path };
     let found = assets.get(path);
+    // default: a path without a known extension is application/octet-stream, as packages/host/rust/src/installed.rs:423-434 does.
     let content_type = match path.rsplit('.').next().unwrap_or_default() {
         "html" => "text/html; charset=utf-8",
         "js" | "mjs" => "text/javascript; charset=utf-8",

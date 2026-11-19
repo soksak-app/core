@@ -76,6 +76,7 @@ impl Record {
             .unwrap_or_else(|error| error.into_inner())
             .as_ref()
             .map(|hook| hook())
+            // default: with no closing hook no close is prevented, as packages/host/tauriv2/src/frontend.rs:195-203 does, so the window closes.
             .unwrap_or(false)
     }
 
