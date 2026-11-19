@@ -247,3 +247,24 @@ func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
 		t.Fatalf("after the drop the grid holds %v", cards)
 	}
 }
+
+// A group card that moves inside its own level does not leave it, so it keeps the leader mark of the level, and every level names one
+// of its members as its leader (docs/spec/groups.md#leader).
+func TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark(t *testing.T) {
+	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 1, tab("t2", "notes")),
+		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")), gridCard("card-4", 1, 2, 1, 2, tab("t4", "notes")))
+	stored := space["layout"].(map[string]any)
+	stored["groups"] = []any{map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-2"}}}
+	stored["leader"], stored["lastCard"] = "card-5", 5
+	f := layoutShell(t, space)
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	if _, err := f.apply("core.card.move", `{"card": "card-5", "target": "card-4", "side": "bottom"}`); err != nil {
+		t.Fatal(err)
+	}
+	layout := f.read("core.layout")
+	if layout["leader"] != "card-5" {
+		t.Fatalf("the root level names the leader %v after the move of the group card card-5 inside it, want card-5", layout["leader"])
+	}
+}

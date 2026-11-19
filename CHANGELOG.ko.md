@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-57 (level 안 이동 뒤 level의 leader): 두 workbench에서 자기 level 안에서 옮겨지는 card는 level의 leader 표시를 지킨다; page는 옮겨진 group card의 member를 root level의 leader로 저장해 project의 다음 열기가 거부했고, mygo는 표시를 다음 member에 넘겼다. 검증: page header drag test와 `TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark`가 이전 코드에서 Red였고 Green이며, page suite와 mygo package가 통과한다.
 - F937-56 (capture된 group header의 double-click): Wails와 Tauri host의 page에서도 mygo처럼 group card 이름의 double-click이 rename을 시작한다; 누름이 header의 pointer capture를 잡아 WebKit이 double-click을 header에 보내므로, page는 이제 double-click의 점으로 정한다. 검증: page test가 이전 코드에서 Red였고 Green이며, page suite가 통과한다.
 - F937-49 (mygo snapshot item의 text content): mygo library의 replacement가 element tree의 각 element에 text content를 주는 `v0.7.4-244-g4abb83d-soksak.15`로 바뀌고, mygo에서 `exposure.snapshot` element item의 `text`는 page처럼 accessible label이 아닌 그 text content이다. 검증: mygo window snapshot test가 이전 코드에서 Red였고 Green이며, mygo package 전체가 통과한다.
 - F937-53 (group header를 두르는 테두리): 두 workbench에서 group card의 header는 frame 사각형 맨 위의 `head-h` 띠이고, 테두리의 선과 radius는 header의 양 끝 위로 card 전체를 두른다; mygo는 header 색을 테두리 선과 모서리 위에 그렸고, page는 header를 테두리 안쪽 border 하나만큼 들여 그렸다. 검증: `TestTheFrameOfAGroupCardRunsAroundItsHeader`와 `group-frame.test.mjs`가 이전 코드에서 Red였고 Green이며, mygo group test와 page suite가 통과한다.

@@ -156,6 +156,10 @@ test("a drag of a group header previews its move, reports the drag and runs core
   assert.ok(placed["card-1"][0] >= placed["card-3"][1] && placed["card-2"][0] >= placed["card-3"][1],
     `the release did not move card-4 to the right of card-3: ${JSON.stringify(placed)}`);
   assert.equal(plane.focused(), "card-1", "the move of the group card did not focus the first card inside it");
+  // The group card moves inside its own level, so it keeps the leader mark of the level, and the stored layout names a member of each
+  // level as its leader (docs/spec/groups.md#leader).
+  const layout = await status("core.layout");
+  assert.equal(layout.leader, "card-4", "the move of the group card inside its level changed the leader of the level");
   assert.deepEqual(drag.preview, plane.currentTree().rect("card-4"), "the preview is not the rectangle that the move gave the group card");
   // A release with no zone changes nothing.
   const before = JSON.stringify(plane.currentGrid().toJSON());

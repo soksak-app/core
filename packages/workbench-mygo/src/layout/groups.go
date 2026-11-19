@@ -1345,6 +1345,15 @@ func (t *GroupTree) Move(id, target, side string) error {
 	refused := fmt.Errorf("card %s cannot %s", id, op)
 	return t.try(id, op, func() error {
 		moving := t.nodeOf(id)
+		// A card that moves inside its own level does not leave it, so it keeps the leader mark of the level that detach passes on
+		// (docs/spec/groups.md#leader).
+		_, level := t.container(id)
+		lead, _ := t.Leader(level)
+		keep := func(into string) {
+			if lead == id && into == level {
+				t.setLeader(into, id)
+			}
+		}
 		if !moving.group && !t.IsGroup(target) && side != "centre" {
 			into := t.Parent(target)
 			var closing error
@@ -1359,6 +1368,7 @@ func (t *GroupTree) Move(id, target, side string) error {
 			}
 			from := t.detach(id)
 			t.attach(into, moving)
+			keep(into)
 			t.collapse(from)
 			return nil
 		}
@@ -1402,6 +1412,7 @@ func (t *GroupTree) Move(id, target, side string) error {
 			}
 		}
 		t.attach(into, moving)
+		keep(into)
 		t.collapse(from)
 		return nil
 	})

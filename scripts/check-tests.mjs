@@ -364,6 +364,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-56",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "const name = e.target.closest?.(\".group__head\")?.querySelector(\":scope > .group__name\");" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-header.test.mjs", id: "a double-click on the name of a group card that its header captured begins the rename" },
+    ],
+    expected: "A double-click on the name of a group card begins its rename on the page, also when the header holds the pointer capture of the press.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-57",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "if (parent !== found.parent) this.leaderLeft(found.parent, id);" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "if lead == id && into == level {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-header.test.mjs", id: "a drag of a group header previews its move, reports the drag and runs core.card.move at the release" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark" },
+    ],
+    expected: "A card that moves inside its own level keeps the leader mark of the level, and every stored level names one of its members as its leader.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-49",
     implementation: [
       { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "snapshotText(node.Text)" },
