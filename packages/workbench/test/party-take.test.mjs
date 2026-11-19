@@ -31,8 +31,9 @@ test("a take that leaves the former party with fewer than 2 cards deletes that p
     await window.run("core.party.create", { cards: ["c", "d"] });
     const reply = await window.run("core.party.add", { party: "p2", card: "b", take: true });
     assert.deepEqual(reply.taken, [{ card: "b", from: "p1" }]);
+    // A deleted party lists every card it held before the change, including the card that stays in the layout (docs/spec/parties.md#commands).
     assert.deepEqual([...reply.changed].sort((x, y) => x.party.localeCompare(y.party)), [
-      { party: "p1", removed: ["b"], leader: null, deleted: true },
+      { party: "p1", removed: ["a", "b"], leader: null, deleted: true },
       { party: "p2", removed: [], leader: null, deleted: false },
     ]);
     await assert.rejects(window.run("core.party.get", { party: "p1" }), /^Error: unknown party p1$/);
