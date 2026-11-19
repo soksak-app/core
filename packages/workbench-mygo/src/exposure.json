@@ -3680,6 +3680,9 @@
             },
             "params": {
               "type": "object"
+            },
+            "request": {
+              "type": "string"
             }
           }
         },

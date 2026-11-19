@@ -2,7 +2,9 @@ package workbench
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -69,10 +71,23 @@ func (s *Shell) cardSplitEven() bool {
 }
 
 type groupCreateParam struct {
-	Card   string          `json:"card"`
-	Side   string          `json:"side"`
-	Plugin string          `json:"plugin"`
-	Params json.RawMessage `json:"params"`
+	Card    string          `json:"card"`
+	Side    string          `json:"side"`
+	Plugin  string          `json:"plugin"`
+	Params  json.RawMessage `json:"params"`
+	Request json.RawMessage `json:"request,omitempty"`
+}
+
+// groupRequest is the request of value, "" without one, or the refusal of a request that is no string of 1 to 128 characters.
+func groupRequest(value groupCreateParam) (string, error) {
+	if value.Request == nil {
+		return "", nil
+	}
+	var request string
+	if err := json.Unmarshal(value.Request, &request); err != nil || request == "" || utf8.RuneCountInString(request) > 128 {
+		return "", errors.New("core.group.create: request must be a string of 1 to 128 characters")
+	}
+	return request, nil
 }
 
 type groupParam struct {
@@ -175,14 +190,24 @@ func (s *Shell) registerGroups() {
 // createGroup runs core.group.create: the refusals in the order of docs/spec/groups.md#commands, the repetition that finds the group
 // that the same command made, and the group with a new card of plugin toward side.
 func (s *Shell) createGroup(value groupCreateParam) (any, error) {
+	request, err := groupRequest(value)
+	if err != nil {
+		return nil, err
+	}
+	// A request that the space answered answers again with its first answer; a new request groups also where the group stands.
+	if answer, ok := s.groupRequests[s.planeSpace][request]; request != "" && ok {
+		return answer, nil
+	}
 	if err := s.groupCard(value.Card); err != nil {
 		return nil, err
 	}
 	if err := s.layoutChangeable(value.Card); err != nil {
 		return nil, err
 	}
-	if repeated, ok, err := s.createdGroup(value); err != nil || ok {
-		return repeated, err
+	if request == "" {
+		if repeated, ok, err := s.createdGroup(value); err != nil || ok {
+			return repeated, err
+		}
 	}
 	if err := s.planes.CheckGroup(value.Card, value.Side); err != nil {
 		return nil, err
@@ -222,7 +247,21 @@ func (s *Shell) createGroup(value groupCreateParam) (any, error) {
 	}
 	s.focusCard(born)
 	s.settle()
-	return map[string]string{"group": group, "card": born, "tab": tab.ID}, nil
+	answer := map[string]string{"group": group, "card": born, "tab": tab.ID}
+	if request != "" {
+		if s.groupRequests[s.planeSpace] == nil {
+			s.groupRequests[s.planeSpace] = map[string]map[string]string{}
+		}
+		s.groupRequests[s.planeSpace][request] = answer
+	}
+	return answer, nil
+}
+
+// newGroupRequest is a request of core.group.create that the shown space has not answered, for one press of the group button.
+func (s *Shell) newGroupRequest() json.RawMessage {
+	id := issueID(s.options.Random, "req-", func(id string) bool { _, ok := s.groupRequests[s.planeSpace][id]; return ok })
+	encoded, _ := json.Marshal(id) // silent: a string always encodes.
+	return encoded
 }
 
 // createdGroup is the result of a core.group.create that already stands: card is a card of a group of exactly card and its neighbour

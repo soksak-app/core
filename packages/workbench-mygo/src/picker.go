@@ -137,8 +137,10 @@ func (s *Shell) openAddMenu(anchor, tool, card string) {
 			return err
 		}
 		if tool == "group" {
-			_, err := s.createGroup(groupCreateParam{Card: card, Side: string(s.planes.GroupSide(card)), Plugin: plugin})
-			return err
+			// Each press sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
+			s.binder.run("core.group.create", groupCreateParam{Card: card, Side: string(s.planes.GroupSide(card)), Plugin: plugin,
+				Request: s.newGroupRequest()})
+			return nil
 		}
 		side := "right"
 		if tool == "y" {
