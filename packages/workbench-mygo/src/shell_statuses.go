@@ -21,7 +21,8 @@ type gridStatus struct {
 	Gap        float64              `json:"gap"`
 	Plane      layout.Rect          `json:"plane"`
 	Lines      map[string][]float64 `json:"lines"`
-	Cards      []gridCardStatus     `json:"cards"`
+	// Cards holds a gridCardStatus for each card of the grid and then a gridGroupCardStatus for each group card.
+	Cards []any `json:"cards"`
 }
 
 // gridCardStatus is a card of core.grid.
@@ -45,11 +46,22 @@ type gridCardStatus struct {
 	Active     *string                                 `json:"active"`
 	Acts       map[string]any                          `json:"acts"`
 	Sidebars   map[layout.Side]layout.PresentedSidebar `json:"sidebars"`
-	// Parent is the group card that holds the card, absent for the root level; Leader marks the leader of its level; Group is the
-	// record of a group card (docs/spec/groups.md#status-and-queries).
-	Parent string           `json:"parent,omitempty"`
-	Leader bool             `json:"leader,omitempty"`
-	Group  *gridGroupStatus `json:"group,omitempty"`
+	// Parent is the group card that holds the card, null in the root level, and Leader whether it is the leader of its level
+	// (docs/spec/groups.md#status-and-queries).
+	Parent *string `json:"parent"`
+	Leader bool    `json:"leader"`
+}
+
+// gridGroupCardStatus is a group card of core.grid: its drawn rectangle, the members of its level and its group record, and no tabs.
+type gridGroupCardStatus struct {
+	ID     string          `json:"id"`
+	X      float64         `json:"x"`
+	Y      float64         `json:"y"`
+	W      float64         `json:"w"`
+	H      float64         `json:"h"`
+	Parent *string         `json:"parent"`
+	Leader bool            `json:"leader"`
+	Group  gridGroupStatus `json:"group"`
 }
 
 // gridGroupStatus is the group record of a group card of core.grid.
@@ -223,25 +235,27 @@ func (s *Shell) gridState() (any, error) {
 	origin := s.planeOrigin()
 	plane := layout.Rect{X: origin.X, Y: origin.Y, W: s.plane.Width(), H: s.plane.Height()}
 	status := gridStatus{Width: s.plane.Width(), Height: s.plane.Height(), Gap: s.plane.Gap(), Plane: plane,
-		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []gridCardStatus{}}
+		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []any{}}
 	if s.fullscreen != "" {
 		status.Fullscreen = &s.fullscreen
 	}
 	pane := 0
 	// The cards of the grid in workbench order, then the group cards in workbench order (docs/spec/groups.md#status-and-queries).
-	var groups []gridCardStatus
+	var groups []any
 	for _, id := range s.planes.Cards() {
 		card, _ := s.planes.Card(id) // silent: Cards lists cards of the space.
 		rect, ok := s.cardRect(card.ID)
 		if !ok {
 			continue
 		}
-		parent := s.planes.Parent(card.ID)
-		leader, _ := s.planes.Leader(parent) // silent: a level without a leader has no card that carries the mark.
+		var parent *string
+		if holder := s.planes.Parent(card.ID); holder != "" {
+			parent = &holder
+		}
+		leader, _ := s.planes.Leader(s.planes.Parent(card.ID)) // silent: a level without a leader has no card that leads it.
 		if record, ok := s.planes.Group(card.ID); ok {
-			groups = append(groups, gridCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, C0: card.C0, C1: card.C1,
-				R0: card.R0, R1: card.R1, Tabs: []gridTabStatus{}, Acts: s.cardActs(card.ID), Fullscreen: card.ID == s.fullscreen,
-				Sidebars: map[layout.Side]layout.PresentedSidebar{}, Parent: parent, Leader: leader == card.ID, Group: &gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
+			groups = append(groups, gridGroupCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Parent: parent,
+				Leader: leader == card.ID, Group: gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
 			continue
 		}
 		data, err := layout.DecodeCardData(card.Data)
