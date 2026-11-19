@@ -50,9 +50,11 @@ type Options struct {
 func DefaultOptions() Options { return Options{} }
 
 // SplitInit names the new card of a split and its payload. A nil ID lets the grid issue one.
+// NewLine cuts at a new line at the centre even where a line that the card spans across lies inside it.
 type SplitInit struct {
-	ID   *string         `json:"id"`
-	Data json.RawMessage `json:"data"`
+	ID      *string         `json:"id"`
+	Data    json.RawMessage `json:"data"`
+	NewLine bool            `json:"newLine"`
 }
 
 // InsertInit is a SplitInit with the px size of the inserted slot, which is required.
@@ -1221,10 +1223,10 @@ func (g *Grid) MergeCoincident(axis Axis, line int) bool {
 	return true
 }
 
-// moveLinePast moves the line toward px as MoveBoundary does, and past each line of the axis that it reaches, where no card lies
+// MoveLinePast moves the line toward px as MoveBoundary does, and past each line of the axis that it reaches, where no card lies
 // between the two, by exchanging their places; a line that stops on another line merges onto it, so that no two lines stand at one
 // coordinate.
-func (g *Grid) moveLinePast(axis Axis, line int, px float64) {
+func (g *Grid) MoveLinePast(axis Axis, line int, px float64) {
 	lo, hi := span(axis)
 	for {
 		at := g.MoveBoundary(axis, line, px, false)
@@ -1422,12 +1424,8 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 
 // Split cuts one card in two and returns the new card's id. The original keeps its id and the near half; the new card takes the far
 // half. It is false when the halves do not fit.
+// With init.NewLine the cut inserts a new line at the centre instead of taking an existing line.
 func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
-	return g.split(id, axis, init, false)
-}
-
-// split is Split, with a fresh cut that inserts a new line instead of taking an existing line.
-func (g *Grid) split(id string, axis Axis, init SplitInit, newLine bool) (string, bool) {
 	if noAxis(axis) {
 		return "", false
 	}
@@ -1438,7 +1436,7 @@ func (g *Grid) split(id string, axis Axis, init SplitInit, newLine bool) (string
 	if card == nil {
 		return "", false
 	}
-	cutLine, cutValue, cuts := g.cutAt(card, axis, newLine)
+	cutLine, cutValue, cuts := g.cutAt(card, axis, init.NewLine)
 	if !cuts {
 		return "", false
 	}
@@ -1510,11 +1508,6 @@ func isSide(side Side) bool {
 
 // SplitToward cuts a card and puts the new one on a named side. The ids are not swapped.
 func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) {
-	return g.splitToward(id, side, init, false)
-}
-
-// splitToward is SplitToward, with the fresh cut of split.
-func (g *Grid) splitToward(id string, side Side, init SplitInit, newLine bool) (string, bool) {
 	if !isSide(side) {
 		return "", false
 	}
@@ -1527,9 +1520,9 @@ func (g *Grid) splitToward(id string, side Side, init SplitInit, newLine bool) (
 		return "", false
 	}
 	if !isAhead(side) {
-		return g.split(id, axis, init, newLine)
+		return g.Split(id, axis, init)
 	}
-	born, ok := g.split(id, axis, init, newLine)
+	born, ok := g.Split(id, axis, init)
 	if !ok {
 		return "", false
 	}
@@ -1556,20 +1549,35 @@ func (g *Grid) nextID() string {
 	}
 }
 
-// Fill is the neighbours that would expand over a card if it closed, as copies, or nil.
-func (g *Grid) Fill(id string) *Fill {
-	found := g.fillOf(id)
+// FillSides is the sides that a close tries, in the order of fillOrder.
+func (g *Grid) FillSides() []string { return slices.Clone(fillOrders[g.order]) }
+
+// checkFillSides refuses a side that is no fill side.
+func checkFillSides(sides []string) error {
+	for _, side := range sides {
+		if !slices.Contains(fillOrders["v"], side) {
+			return errors.New("unknown fill side " + side)
+		}
+	}
+	return nil
+}
+
+// Fill is the neighbours that would expand over a card if it closed, as copies, or nil. sides names the sides to try in their order,
+// FillSides for the order of fillOrder.
+func (g *Grid) Fill(id string, sides []string) (*Fill, error) {
+	if err := checkFillSides(sides); err != nil {
+		return nil, err
+	}
+	found := g.fillAlong(id, sides)
 	if found == nil {
-		return nil
+		return nil, nil
 	}
 	cards := make([]Card, len(found.cards))
 	for i, c := range found.cards {
 		cards[i] = copyCard(c)
 	}
-	return &Fill{Side: found.side, Grow: spanNames[found.grow], Cards: cards}
+	return &Fill{Side: found.side, Grow: spanNames[found.grow], Cards: cards}, nil
 }
-
-func (g *Grid) fillOf(id string) *fill { return g.fillAlong(id, fillOrders[g.order]) }
 
 // fillAlong is the fill of the card id that tries the sides in that order.
 func (g *Grid) fillAlong(id string, sides []string) *fill {
@@ -1621,7 +1629,7 @@ func (g *Grid) CanClose(id string) bool {
 	if card == nil {
 		return false
 	}
-	if g.fillOf(id) != nil {
+	if g.fillAlong(id, fillOrders[g.order]) != nil {
 		return true
 	}
 	_, ok := g.soleSlots(card)
@@ -1646,8 +1654,14 @@ func (g *Grid) removeCard(card *Card) {
 }
 
 // Close removes a card. A row of neighbours expands over the space when one matches the side; otherwise the card's slots are removed.
-// It is false when neither applies, when the card is fixed, or when it is the last card.
-func (g *Grid) Close(id string) bool { return g.closeAlong(id, fillOrders[g.order]) }
+// It is false when neither applies, when the card is fixed, or when it is the last card. sides names the sides whose row of neighbours may
+// expand, tried in their order, FillSides for the order of fillOrder, and an empty list only removes the slots.
+func (g *Grid) Close(id string, sides []string) (bool, error) {
+	if err := checkFillSides(sides); err != nil {
+		return false, err
+	}
+	return g.closeAlong(id, sides), nil
+}
 
 // closeAlong is Close whose row of neighbours is the first that covers one of sides, in that order. The group tree of the workbench
 // passes one side at a time, because the fill order of the library does not know which neighbours keep a group one rectangle.
@@ -2102,9 +2116,12 @@ func (g *Grid) Standings(axis Axis, without string) []int {
 	return out
 }
 
-// Move moves a card to one side of another, keeping its id and its payload.
-func (g *Grid) Move(id, targetID string, side Side) bool {
-	return g.moveWith(id, targetID, side, func() bool { return g.Close(id) })
+// Move moves a card to one side of another, keeping its id and its payload. sides is the sides of its close, as Close takes them.
+func (g *Grid) Move(id, targetID string, side Side, sides []string) (bool, error) {
+	if err := checkFillSides(sides); err != nil {
+		return false, err
+	}
+	return g.moveWith(id, targetID, side, func() bool { return g.closeAlong(id, sides) }), nil
 }
 
 // moveWith is Move whose close of the card is close: the group tree closes it with a row of neighbours that keeps every group card
@@ -2165,7 +2182,7 @@ func (g *Grid) CanMove(id, targetID string, side Side) bool {
 	seq := g.seq
 	probing := g.probing
 	g.probing = true
-	ok := g.Move(id, targetID, side)
+	ok := g.moveWith(id, targetID, side, func() bool { return g.closeAlong(id, fillOrders[g.order]) })
 	g.restore(before)
 	g.probing = probing
 	g.seq = seq

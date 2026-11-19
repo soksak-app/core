@@ -14008,7 +14008,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CenterBoundary" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) MoveBoundaryTo" },
       { file: "packages/workbench-mygo/src/shell_commands.go", symbol: "func (s *Shell) watchLayout" },
-      { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func (g *Grid) moveLinePast" },
+      { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func (g *Grid) MoveLinePast" },
       { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
     ],
     tests: [

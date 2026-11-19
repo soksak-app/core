@@ -843,7 +843,7 @@ func (t *GroupTree) splitCard(target string, side Side, id string, data json.Raw
 		grid, _ := t.grid.Rect(target)
 		fresh = grouping || drawn.Y > grid.Y
 	}
-	_, ok := t.grid.splitToward(target, side, SplitInit{ID: &id, Data: data}, fresh)
+	_, ok := t.grid.SplitToward(target, side, SplitInit{ID: &id, Data: data, NewLine: fresh})
 	return ok, nil
 }
 
@@ -872,7 +872,7 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 		}
 	}
 	if delta := (down.H - up.H) / 2; math.Abs(delta) > eps {
-		t.grid.moveLinePast("y", line, t.grid.BoundaryPos("y", line)+delta)
+		t.grid.MoveLinePast("y", line, t.grid.BoundaryPos("y", line)+delta)
 	}
 }
 

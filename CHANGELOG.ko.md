@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-20
+
+- F937-2 (library export): mygo layout library는 닫기의 변, split의 새 line, moveLinePast를 group tree 안에만 두었다. 이제 Go grid는 `Fill`, `Close`, `Move`에서 `sides`를 받고, `FillSides`를 읽으며, `SplitInit`에서 `newLine`을 받고 `MoveLinePast`를 export하고, 다른 변을 `unknown fill side <side>`로 거부한다(`packages/soksak/docs/layout.md`의 API 표). Red: `docs/spec/cases/layout/grid.json`의 grid case 여섯이 변, 새 line을 넘기거나 moveLinePast를 부르지 못했다. Green: Go runner와 page library의 runner에서 통과하고, mygo shell, layout test가 통과한다.
+
 ## 2026-11-19
 
 - F937-2 (균등 배치): mygo layout library에 `arrange("even")`가 없어서 `core.layout.balance`가 `cardArrange` `even`을 무시했다. 이제 library는 card를 같은 크기 grid에 배치하고(`packages/soksak/docs/layout.md#even-arrangement`), group 없는 space의 balance는 `cardArrange` `even`에 그것을 실행하며, `the layout cannot balance: no equal grid keeps every card at its minimum size`로 거부하고, 빈 card를 `lastCard`에 센다(`docs/spec/groups.md#card-commands-on-a-group-card`). Red: Go runner에 grid case 넷과 group case 둘의 arrange 호출이 없었다. Green: 두 runner에서 case가 통과하고, mygo shell, layout test가 통과한다.

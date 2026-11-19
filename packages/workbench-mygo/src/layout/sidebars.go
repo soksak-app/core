@@ -562,7 +562,7 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 		// A sidebar that cannot leave yet waits until another window sidebar has left.
 		for _, id := range left {
 			g.SetFixed(id, false)
-			if g.Close(id) {
+			if g.closeAlong(id, fillOrders[g.order]) {
 				closed = true
 				break
 			}

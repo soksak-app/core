@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-20
+
+- F937-2 (library exports): the mygo layout library kept the sides of a close, the new line of a split and moveLinePast internal to its group tree. The Go grid now takes `sides` in `Fill`, `Close` and `Move`, reads `FillSides`, takes `newLine` in `SplitInit` and exports `MoveLinePast`, and refuses another side with `unknown fill side <side>` (the API table of `packages/soksak/docs/layout.md`). Red: six grid cases of `docs/spec/cases/layout/grid.json` could not pass the sides, the new line or call moveLinePast. Green: they pass in the Go runner and in the runner of the page library, and the mygo shell and layout tests pass.
+
 ## 2026-11-19
 
 - F937-2 (even arrangement): the mygo layout library had no `arrange("even")`, so `core.layout.balance` ignored `cardArrange` `even`. The library now arranges the cards into an equal grid (`packages/soksak/docs/layout.md#even-arrangement`), and the balance of a space without groups runs it for `cardArrange` `even`, refuses with `the layout cannot balance: no equal grid keeps every card at its minimum size` and counts the empty card in `lastCard` (`docs/spec/groups.md#card-commands-on-a-group-card`). Red: the Go runners had no arrange call for the four grid cases and the two group cases. Green: the cases pass in both runners, and the mygo shell and layout tests pass.
