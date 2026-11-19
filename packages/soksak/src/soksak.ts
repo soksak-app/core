@@ -162,6 +162,13 @@ export function checkState(state: SoksakState): void {
 // before it would build one.
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
+/** Refuses a side of a close that is no fill side, before the operation judges its card. */
+function checkFillSides(sides: readonly Fill['side'][]): void {
+  for (const side of sides) {
+    if (!ORDER.v.includes(side)) throw new Error(`unknown fill side ${String(side)}`);
+  }
+}
+
 export class Soksak {
   private xs: number[];
   private ys: number[];
@@ -1595,9 +1602,7 @@ export class Soksak {
 
   /** The same result holding the stored cards, so `close` can modify them. */
   private fillOf(id: string, sides: readonly Fill['side'][] = this.fillSides): Fill | null {
-    for (const side of sides) {
-      if (!ORDER.v.includes(side)) throw new Error(`unknown fill side ${String(side)}`);
-    }
+    checkFillSides(sides);
     const card = this.find(id);
     return card ? fillFor(this.list, card, sides, this.sliceMemo) : null;
   }
@@ -1646,6 +1651,8 @@ export class Soksak {
    * order does not know which neighbours keep such a region one rectangle.
    */
   close(id: string, sides: readonly Fill['side'][] = this.fillSides): boolean {
+    // The sides are checked before the card, so a card that cannot close refuses another side as fill does.
+    checkFillSides(sides);
     const card = this.removable(id);
     if (!card) return false;
 
@@ -2100,7 +2107,9 @@ export class Soksak {
    */
   move(id: string, targetId: string, side: Side, sides: readonly Fill['side'][] = this.fillSides): boolean {
     // `splitToward` below rejects an invalid side and the close before it is
-    // rolled back, so no check is needed here.
+    // rolled back, so no check of `side` is needed here. The close sides are
+    // checked before the cards, as `close` checks them.
+    checkFillSides(sides);
     const card = this.find(id);
     const target = this.find(targetId);
     if (!card || !target || card === target || card.fixed) return false;

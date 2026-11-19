@@ -14073,6 +14073,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid reports the group card of each card, the leaders and the group cards after the cards" },
       { file: "packages/soksak/test/layout-cases.test.mjs", id: "grid: ${kase.name}" },
       { file: "packages/soksak/test/lines.test.mjs", id: "setFrames refuses a count below zero as below zero, a fraction included, and keeps the frames it had" },
+      { file: "packages/soksak/test/close.test.mjs", id: "close and move refuse another side before they judge the card" },
       { file: "packages/workbench/test/settings.test.mjs", id: "group.tint refuses a value that is no integer from 0 to 100" },
     ],
     expected: "The group tree of the page workbench holds the groups of a space beside its one grid and passes every case of the group layout cases, the page reads, writes and issues the cards of the group tree of a stored space layout, and its registry runs the group commands, the card query of any level, core.layout.open on a group card, the drop resolution on group cards and the group members of core.layout and core.grid.",

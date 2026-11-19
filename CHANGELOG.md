@@ -3,6 +3,10 @@
 
 [한국어](CHANGELOG.ko.md)
 
+## 2026-11-20
+
+- F937-3 (side check of close and move, page library): `close(id, sides)` and `move(id, targetId, side, sides)` of the layout library refuse a side other than `below`, `above`, `right` and `left` with `unknown fill side <side>` before they judge the card, as `fill` and the Go port do, so a fixed card, the last card, a card with a paidBy record or a missing card no longer answers false or true for another side. The API table of `packages/soksak/docs/layout.md` states the refusal. Verification: the test `close and move refuse another side before they judge the card` of `packages/soksak/test/close.test.mjs` failed on the unchanged code and passes; 67 grid cases and 479 of 479 layout library tests pass.
+
 ## 2026-11-19
 
 - F937-3 (lastCard after an even balance, page): a balance with `cardArrange` `even` in a space without groups raises lastCard to the number of the empty card that the even arrangement adds, so the stored lastCard stays the largest issued card number. The case runner of the page passes `arrange` to the balance of the tree. Verification: the group case that counts the empty card in lastCard failed on the unchanged code (lastCard 3, not 4) and passes; 52 group cases and 61 grid cases pass.

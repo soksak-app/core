@@ -3,6 +3,10 @@
 
 [English](CHANGELOG.md)
 
+## 2026-11-20
+
+- F937-3 (close와 move의 변 검사, page library): layout library의 `close(id, sides)`와 `move(id, targetId, side, sides)`는 `fill`과 Go port처럼 카드를 판정하기 전에 `below`, `above`, `right`, `left`가 아닌 변을 `unknown fill side <side>`로 거부하므로, 고정된 카드, 마지막 카드, paidBy 기록을 가진 카드, 없는 카드가 다른 변에 더 이상 false나 true를 답하지 않는다. `packages/soksak/docs/layout.md`의 API 표가 그 거부를 밝힌다. 검증: `packages/soksak/test/close.test.mjs`의 test `close and move refuse another side before they judge the card`가 바뀌지 않은 code에서 실패했고 통과한다. grid case 67개와 layout library test 479개 중 479개가 통과한다.
+
 ## 2026-11-19
 
 - F937-3 (even balance 뒤의 lastCard, page): group이 없는 space에서 `cardArrange` `even`의 balance는 even arrangement가 더하는 빈 card의 번호로 lastCard를 올리므로, 저장된 lastCard는 발급된 가장 큰 card 번호로 남는다. page의 case runner는 `arrange`를 tree의 balance에 넘긴다. 검증: 빈 card를 lastCard에 세는 group case가 바뀌지 않은 code에서 실패했고(lastCard 3, 4가 아님) 통과한다. group case 52개와 grid case 61개가 통과한다.
