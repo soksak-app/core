@@ -762,7 +762,9 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 		color, text = s.palette.No, "표면 오류 · "+reason
 		s.errors.Show(where, text, "")
 	}
-	ui.Row(c).Shrink(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
+	// The state shrinks with the status row and cuts its text with an ellipsis, so an error stays on the one line of the row; its whole
+	// text is the label and the tooltip of the text.
+	ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap).Margin(0, m.surfaceStatusMargin, 0, 0).Children(func() {
 		size, border, turn := m.spinner, m.spinnerBorder, m.spinnerTurn
 		ui.Box(c).Size(size, size).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) {
 			cx, cy, radius := r.X+r.W/2, r.Y+r.H/2, r.W/2
@@ -789,7 +791,7 @@ func (s *Shell) drawSurfaceStatus(c *ui.Context, card, tab string) {
 			}
 			p.StrokePath(&ring, border, color)
 		})
-		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text)
+		ui.Text(c, text).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(color).Label(text).Tooltip(text)
 	})
 }
 
@@ -813,7 +815,9 @@ func (s *Shell) drawStatus(c *ui.Context, id string, data *layout.CardData, fold
 			where := "tab error " + active.ID
 			if report := s.surfaces.reports[active.ID]; report != nil && report.Error != "" {
 				s.errors.Show(where, report.Error, "")
-				ui.Text(c, report.Error).FontSize(s.textCaption()).TextColor(s.palette.No)
+				// The error stays on the one line of the row, cut with an ellipsis; its whole text is the label and the tooltip.
+				ui.Text(c, report.Error).SingleLine().Ellipsis("…").MinWidth(0).Shrink(1).FontSize(s.textCaption()).TextColor(s.palette.No).
+					Label(report.Error).Tooltip(report.Error)
 			} else {
 				s.errors.Hide(where)
 			}

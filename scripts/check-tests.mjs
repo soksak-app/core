@@ -310,6 +310,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F954",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap)" },
+      { file: "packages/workbench/surface-status.js", symbol: "export function setTabError(status, tab, text)" },
+      { file: "packages/workbench/app.css", symbol: ".surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/surfaces_test.go", id: "TestALongErrorStaysOnOneLineInsideTheStatusRow" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row stays on one line and is cut with an ellipsis" },
+      { file: "packages/workbench/test/status-errors.test.mjs", id: "an error of the status row carries its whole text as its tooltip until it is withdrawn" },
+    ],
+    expected: "The error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, with the whole text as the tooltip.",
+    levels: ["unit"],
+  },
+  {
     id: "F956",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX+inset, shiftY+inset" },

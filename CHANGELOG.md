@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F954 (errors of a narrow card footer): the error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, and carry their whole text as their tooltip; the error display still writes each to the application log when it appears. Verification: the status row tests of both workbenches failed on the unchanged code and pass.
 - F968 (fold stage of a head and the selected tab): the fold stage of a card head takes the widest tab of the card in both workbenches, so a header shows the same tabs whichever tab is selected, and the selected tab is always among them. Verification: the shared head cases and the mygo head test failed on the unchanged code and pass.
 - F937-16 (fullscreen toggle of a narrow head): a card or group header too narrow for its tools keeps the fullscreen toggle beside ⋯ in both workbenches, and the tool menu no longer holds it. Verification: the narrow head tests of both workbenches failed on the unchanged code and pass.
 - F956 (text size scope of the stage and of keys): a press on the stage around the plane makes the frame the scope of the text size in both workbenches, and the native input monitor reports no press for a key input, so a Command = no longer moves the scope to the card that holds the keyboard (`docs/spec/text-size.md#scope`). Verification: the scope tests of both workbenches failed on the unchanged code and pass.

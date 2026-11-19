@@ -396,8 +396,12 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   border-top:var(--bw) solid var(--edge);color:var(--muted);
   overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .status__text{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.surface-status{display:inline-flex;align-items:center;gap:var(--surface-status-gap);flex:0 0 auto;margin-right:var(--surface-status-margin);color:var(--muted)}
-.surface-status::before{content:"";width:var(--spinner);height:var(--spinner);border:var(--spinner-border) solid currentColor;border-top-color:transparent;
+/* The state of the surface and the error of the tab shrink with the row and cut their text with an ellipsis, so an error stays on the
+   one line of the row; the whole text is the tooltip of the element. An ellipsis needs a block container, so the spinner is an inline block. */
+.surface-status,.status__error{display:block;flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.surface-status{margin-right:var(--surface-status-margin);color:var(--muted)}
+.surface-status::before{content:"";display:inline-block;vertical-align:middle;margin-right:var(--surface-status-gap);
+  width:var(--spinner);height:var(--spinner);border:var(--spinner-border) solid currentColor;border-top-color:transparent;
   border-radius:var(--circle);animation:surface-status-spin var(--spinner-turn) linear infinite}
 .surface-status[data-surface-status=error]::before{border:0;background:currentColor;animation:none}
 .surface-status[hidden]{display:none}
