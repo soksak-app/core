@@ -14029,6 +14029,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryBoxStandsOneGapFromTheBoxBesideIt" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupIsFilledWithTheColorOfItsLevel" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestARuleInsideAGroupStaysInsideItsFrame" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryGroupLevelStandsApartFromItsSurfaceAndTheCards" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestALineAcrossAGroupIsOneLine" },
       { file: "packages/workbench-mygo/tests/group_fullscreen_test.go", id: "TestAGroupCardGoesFullscreenWithTheCardsInsideIt" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheSplitSettingBalancesTheGrid" },
