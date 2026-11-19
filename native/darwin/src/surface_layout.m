@@ -539,9 +539,13 @@ static void watchInput(void) {
         Method discard = class_getInstanceMethod(application, @selector(discardEventsMatchingMask:beforeEvent:));
         applicationDiscard = (void (*)(id, SEL, NSEventMask, NSEvent *))method_getImplementation(discard);
         method_setImplementation(discard, (IMP)discardAfterLayout);
-        // A press or key event ends the layout hold at once (docs/spec/native-surfaces.md#layout-transaction).
+        // A press or a key down ends the layout hold at once; a key up and a modifier change continue an action that came before
+        // them and end no hold, so the key up of a keystroke that changed the layout does not commit it before its views presented
+        // (docs/spec/native-surfaces.md#layout-transaction).
         if (!actionObservers) actionObservers = [[NSMutableArray alloc] init];
-        [actionObservers addObject:[[^(NSEvent *event) { endHoldByInput(); } copy] autorelease]];
+        [actionObservers addObject:[[^(NSEvent *event) {
+            if (event.type != NSEventTypeKeyUp && event.type != NSEventTypeFlagsChanged) endHoldByInput();
+        } copy] autorelease]];
     });
 }
 

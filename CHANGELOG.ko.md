@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F973 (key up과 배치 hold): key up이나 modifier 변경은 더는 배치 hold를 끝내지 않으므로, key down이 배치를 바꾼 key의 뗌이 view가 표시하기 전에 그 변경을 커밋하지 않는다. mygo는 Command = keystroke에서 `host view presentation: surface <tab> had not presented when input ended the hold`를 더는 쓰지 않는다. 검증: native hold test가 바뀌지 않은 library에서 실패했고 통과한다. keystroke 36번의 창 측정은 수정 전 mygo에서 이 오류 14번, 수정 뒤 mygo, Wails, Tauri에서 0번을 기록했다.
 - F956 (text size scope의 창 검증): mygo, Wails, Tauri의 debug build에서 plane 둘레 stage의 누름이 frame을 scope로 만들었고, Command = 세 번이 frame 배율 1.1, 1.25, 1.5로 그것을 유지했다. test inventory check의 feature link는 `drawWork`의 현재 stage 경계를 가리킨다.
 - F972 (checkout 사이의 bundle guard): native build의 bundle guard는 실행 중인 process의 상대 실행 파일 경로를 그 process의 작업 디렉터리 기준으로 풀므로, 같은 상대 bundle 경로를 실행하는 다른 checkout의 process가 더는 build를 막지 않는다. 검증: bundle preparation test가 바뀌지 않은 guard에서 실패했고 통과한다.
 - F937-4 (view의 card 배경): 계약은 view의 테마가 모든 view에서 같은 창 테마이고, plugin이 페이지 배경으로 칠하는 card 배경 `--card`를 담는다고 적는다. group card는 토큰을 바꾸지 않으므로 `setTheme`은 surface 하나하나의 토큰을 담지 않는다. 검증: 이미 `--card`를 보내던 두 workbench에서 두 workbench의 테마 test가 통과한다.
