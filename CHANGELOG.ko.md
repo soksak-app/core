@@ -13,6 +13,7 @@
 - F831-1 정정: agent skill 원본은 `packages/sok/go/src/agents/SKILL.md`이고, `packages/sok/go/src/agents/mcp.json`은 MCP tool을 열세 개 나열한다. 아래 F831 항목은 열한 개와 `packages/sok/agents/SKILL.md`라고 적었다. 코드와 `docs/spec/cli.md`는 여기 적은 값을 따른다.
 - F898: sok가 Codex agent를 지원한다. `~/.codex`가 폴더이면 skill을 `~/.agents/skills/soksak/SKILL.md`에 쓰고, `sok mcp install`은 `PATH`에 `codex` 명령이 있으면 sok를 그 명령에 등록한다.
 - F905-4: Codex 계약 시험이 호출하지 않는 공유 `policy` helper를 include하지 않는다. 이 include가 F898 CI 검사에서 경고를 거부하는 clippy 검사를 실패시켰다(`packages/sok/rust/tests/codex_test.rs`).
+- F906-1: 복사 경로의 screen 메시지 답은 `docs/spec/native-surfaces.md#copy-path-frames`에 정의하며, 계약 사례 `images.copy-path.screen-answer-accepted`, `images.copy-path.screen-answer-refused`, `images.copy-path.screen-malformed-names-its-member`는 `docs/spec/host-contract.md`에 나열한다. 이 사례의 Go와 Rust host 시험은 이 checkout에 native 라이브러리가 없어 아직 실행하지 않았다. 두 호스트가 공급자의 screen 메시지를 판단해 답하며, malformed 답은 멤버를 이름 붙인다. 이 구현도 아직 실행하지 않았다.
 - F899-6: 호스팅하는 agent의 파괴적 셸 명령을 실행 전에 거부하는 계약은 persistent services 사양에 있다. 구현은 sidecar 저장소에 있다(alacritty S121, vt S181).
 - F899-2: `sok conversation read`가 디스크의 session file에서 agent 대화를 읽고, 읽은 file을 함께 보고한다(Claude Code, Codex). 계약은 `docs/spec/agent-conversation.md`에 있고, Rust 읽기 구현은 `packages/sok/rust/src/conversation.rs`, Go 읽기 구현은 `packages/sok/go/src/conversation.go`에 있다.
 - F899-2.1: Go sok가 F899-2 계약으로 `sok conversation read`를 실행한다. `packages/sok/go/tests/conversation_test.go`의 시험은 Rust 시험과 이름이 같다.
