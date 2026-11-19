@@ -8,6 +8,7 @@ description = "soksak layout running in GPUI"
 [features]
 diagnostics = ["soksak-host-gpuikit/diagnostics"]
 dev = ["soksak-host-gpuikit/dev"]
+gpuikit = ["soksak-host-gpuikit/gpuikit"]
 
 [dependencies]
 soksak-host-gpuikit = { path = "../../packages/host/gpuikit" }

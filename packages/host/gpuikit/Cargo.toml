@@ -12,6 +12,8 @@ path = "src/host.rs"
 [features]
 diagnostics = ["soksak-host/diagnostics"]
 dev = ["soksak-host/dev"]
+# gpuikit selects the identifier of the application of the sok command.
+gpuikit = ["soksak-sok/gpuikit"]
 
 [dependencies]
 gpui-kit = "=0.9.1"

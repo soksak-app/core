@@ -5,6 +5,8 @@ edition = "2024"
 description = "Command line sok in Rust"
 
 [features]
+# gpuikit selects the identifier of the GPUI application; a build without it serves the Tauri application.
+gpuikit = []
 # diagnostics adds the diagnostic command (capture); debug bundles and 0.0.x releases set it.
 diagnostics = []
 # dev selects the .dev identifier, so a debug bundle does not use the data of the installed application.
