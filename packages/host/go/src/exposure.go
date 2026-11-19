@@ -953,7 +953,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		}
 		return nil, s.fullscreen(p.On == nil || *p.On)
 	case "host.window.resize":
-		width, height, err := contentSize(params)
+		width, height, err := ContentSize(params)
 		if err != nil {
 			return nil, err
 		}
@@ -2253,9 +2253,9 @@ func (s *Surfaces) pageProcessStarted() {
 	s.mu.Unlock()
 }
 
-// contentSize reads the {width, height} of host.window.resize, which the endpoint checked against its params schema. A width
+// ContentSize reads the {width, height} of host.window.resize, which the endpoint checked against its params schema. A width
 // or a height below 1 point is refused (docs/spec/exposure.md#host-entries).
-func contentSize(params json.RawMessage) (float64, float64, error) {
+func ContentSize(params json.RawMessage) (float64, float64, error) {
 	var p struct {
 		Width, Height float64
 	}
