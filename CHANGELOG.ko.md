@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-2: 변경으로 party가 삭제되면 그 변경 행의 `removed` 목록은 변경 전 party의 모든 카드를 담으며, 분할이나 take가 남긴 카드도 포함한다. `a split that leaves fewer than 2 cards lists every card as removed`와 `taking the only other card of a party deletes that party` case가 이를 기대한다.
 - F908-2: `core.party.create`와 `core.party.add`는 window sidebar(id가 side 이름인 카드)를 `card <id> is a window sidebar`로 거부한다. Go party 모델도 JavaScript party 모듈과 같이 거부한다. `docs/spec/cases/layout/parties.json`의 `a window sidebar is refused` case가 이를 기대하며, case 상태는 그런 카드를 `fixed: true`로 표시한다.
 - F908-2: layout case가 그려진 외곽선을 가진다. `drawing`을 가진 case는 테마의 rail 너비, 그리드 선 값 하나의 point 수와 그리드 간격을 준다. `a party outline is inset by half the rail width inside the grid lines` case는 party 외곽선을 point 단위로 기대한다. Go party 모델의 `core.party.get`은 JavaScript party 모듈과 같이 외곽선을 가진 party 레코드를 반환하며, Go party 모델은 생성될 때 rail 너비를 받는다.
 - F908-2: 닿지 않음 거부 `cards are not touching: <ids>`는 party의 member와 닿지 않는 요청의 카드만 요청 순서대로 나열한다. `create`는 첫 카드의 묶음 밖의 카드를, `add`와 `take`는 추가하는 카드를 나열한다. `docs/spec/cases/layout/parties.json`의 case와 Go restore 테스트가 이 목록을 기대하며, party 모듈과 Go party 모델이 이를 낸다.

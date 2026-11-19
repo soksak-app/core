@@ -392,7 +392,7 @@ func (p *Parties) settle(g *Grid, target *party, before []string, reason string)
 	target.Reason = &reasonText
 	removed := []string{}
 	for _, card := range before {
-		if !slices.Contains(target.Cards, card) {
+		if deleted || !slices.Contains(target.Cards, card) {
 			removed = append(removed, card)
 		}
 	}

@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-2: When a change deletes a party, the `removed` list of its changed row holds every card of the party before the change, including the card that a split or a take kept. The cases `a split that leaves fewer than 2 cards lists every card as removed` and `taking the only other card of a party deletes that party` expect it.
 - F908-2: `core.party.create` and `core.party.add` refuse a window sidebar (a card whose id is a side name) with `card <id> is a window sidebar`, in the Go party model as the JavaScript party module does. The case `a window sidebar is refused` in `docs/spec/cases/layout/parties.json` expects it, and the case state marks such a card with `fixed: true`.
 - F908-2: The layout cases state a drawn outline. A case with `drawing` gives the rail width of its theme, the points of one grid line value and the grid gap; the case `a party outline is inset by half the rail width inside the grid lines` expects the outline of a party in points. `core.party.get` returns the party record with its outline in the Go party model, as the JavaScript party module does, and the Go party model takes the rail width when it is created.
 - F908-2: The touching refusal `cards are not touching: <ids>` lists only the cards of the request that touch no member of the party, in request order. `create` lists the cards outside the group of its first card, `add` and `take` list the added card. The cases of `docs/spec/cases/layout/parties.json` and the Go restore test expect this list, and the party module and the Go party model produce it.

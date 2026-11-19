@@ -37,6 +37,7 @@ All commands are idempotent: the same request in the same state gives the same r
 | `core.card.get` | `{card}` | the card query of [queries](#queries) | Reads one card, whether or not a party holds it. |
 
 `taken` lists `{card, from}` for each card that changed party, where `from` is the former party identifier or `null`. A card that is already in the target party is not listed. `changed` lists `{party, removed, leader, deleted}` for each party that changed, including a party that `create` or `add` made: `removed` lists the cards that left that party, `leader` is its leader after the change or `null`, and `deleted` is true when the party no longer exists.
+When the party is deleted, `removed` lists every card of the party before the change, including the card that a split or a take kept.
 
 `core.party.delete` replies with `party` as `{id}`, the identifier of the deleted party only.
 

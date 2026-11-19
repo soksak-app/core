@@ -130,8 +130,8 @@ function settle(party, reason, before) {
   }
   const deleted = party.cards.length < 2;
   party.reason = deleted ? "too-few" : finalReason;
-  // default: a party with no recorded member before the change removes no card (docs/spec/parties.md#changes-of-the-layout).
-  const removed = (before ?? []).filter((card) => !party.cards.includes(card));
+  // default: a party with no recorded member before the change removes no card, and a deleted party lists every card it had (docs/spec/parties.md#commands).
+  const removed = (before ?? []).filter((card) => deleted || !party.cards.includes(card));
   return { party: party.id, removed, leader: deleted ? null : party.leader, deleted };
 }
 

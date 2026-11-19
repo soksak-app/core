@@ -37,6 +37,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 | `core.card.get` | `{card}` | [조회](#조회)의 카드 조회 | 카드 하나를 읽는다. party에 없어도 된다. |
 
 `taken`은 party가 바뀐 카드마다 `{card, from}`을 담으며, `from`은 이전 party 식별자 또는 `null`이다. 목표 party에 이미 있는 카드는 나오지 않는다. `changed`는 바뀐 party마다 `{party, removed, leader, deleted}`를 담으며, `create`나 `add`가 만든 party도 포함한다. `removed`는 그 party를 떠난 카드들, `leader`는 바뀐 뒤의 leader 또는 `null`, `deleted`는 party가 더는 없으면 true다.
+party가 삭제되면 `removed`는 변경 전 party의 모든 카드를 나열하며, 분할이나 take가 남긴 카드도 포함한다.
 
 `core.party.delete`는 `party`를 `{id}`로 돌려준다. 삭제된 party의 식별자만 담는다.
 
