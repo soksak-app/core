@@ -1204,6 +1204,322 @@
           "error": "card a is listed more than once"
         }
       ]
+    },
+    {
+      "name": "taking the leader out of a party leaves the former party without a leader",
+      "state": {
+        "cards": [
+          {
+            "id": "e",
+            "c0": 0,
+            "c1": 1,
+            "r0": 1,
+            "r1": 2
+          },
+          {
+            "id": "f",
+            "c0": 1,
+            "c1": 2,
+            "r0": 1,
+            "r1": 2
+          },
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c"
+            ],
+            "leader": "a"
+          }
+        },
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "e",
+              "f"
+            ]
+          }
+        },
+        {
+          "call": "core.party.add",
+          "params": {
+            "party": "p2",
+            "card": "a",
+            "take": true
+          },
+          "returns": {
+            "party": {
+              "id": "p2",
+              "cards": [
+                "e",
+                "f",
+                "a"
+              ],
+              "leader": null,
+              "color_token": "party-2",
+              "leaderColor": null
+            },
+            "taken": [
+              {
+                "card": "a",
+                "from": "p1"
+              }
+            ],
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "a"
+                ],
+                "leader": null,
+                "deleted": false
+              },
+              {
+                "party": "p2",
+                "removed": [],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        },
+        {
+          "call": "core.party.get",
+          "params": {
+            "party": "p1"
+          },
+          "returns": {
+            "id": "p1",
+            "cards": [
+              "b",
+              "c"
+            ],
+            "leader": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "removing a card that splits a party keeps the part with the most cards",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "e",
+            "c0": 4,
+            "c1": 5,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "f",
+            "c0": 5,
+            "c1": 6,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e",
+              "f"
+            ]
+          }
+        },
+        {
+          "call": "core.party.remove",
+          "params": {
+            "party": "p1",
+            "card": "d"
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "a",
+                "b",
+                "c"
+              ],
+              "leader": null,
+              "color_token": "party-1",
+              "leaderColor": null,
+              "reason": "split-most-cards"
+            },
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "d",
+                  "e",
+                  "f"
+                ],
+                "leader": null,
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "removing a card that splits a party keeps the part with the leader",
+      "state": {
+        "cards": [
+          {
+            "id": "a",
+            "c0": 0,
+            "c1": 1,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "b",
+            "c0": 1,
+            "c1": 2,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "c",
+            "c0": 2,
+            "c1": 3,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "d",
+            "c0": 3,
+            "c1": 4,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "e",
+            "c0": 4,
+            "c1": 5,
+            "r0": 0,
+            "r1": 1
+          },
+          {
+            "id": "f",
+            "c0": 5,
+            "c1": 6,
+            "r0": 0,
+            "r1": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "call": "core.party.create",
+          "params": {
+            "cards": [
+              "a",
+              "b",
+              "c",
+              "d",
+              "e",
+              "f"
+            ],
+            "leader": "e"
+          }
+        },
+        {
+          "call": "core.party.remove",
+          "params": {
+            "party": "p1",
+            "card": "d"
+          },
+          "returns": {
+            "party": {
+              "id": "p1",
+              "cards": [
+                "e",
+                "f"
+              ],
+              "leader": "e",
+              "color_token": "party-1",
+              "leaderColor": null,
+              "reason": "split-leader"
+            },
+            "changed": [
+              {
+                "party": "p1",
+                "removed": [
+                  "a",
+                  "b",
+                  "c",
+                  "d"
+                ],
+                "leader": "e",
+                "deleted": false
+              }
+            ]
+          }
+        }
+      ]
     }
   ]
 }
