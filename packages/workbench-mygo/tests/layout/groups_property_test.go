@@ -17,7 +17,7 @@ import (
 // line is unused and no two lines of an axis stand at one coordinate, which hold in a space with groups.
 func groupInvariants(tree *layout.GroupTree) string {
 	grid := tree.Grid()
-	state := grid.ToJSON()
+	state := grid.Cells()
 	grouped := slices.ContainsFunc(tree.Cards(), tree.IsGroup)
 	if grouped && len(state.PaidBy) > 0 {
 		return fmt.Sprintf("paidBy records %v", state.PaidBy)
@@ -30,11 +30,6 @@ func groupInvariants(tree *layout.GroupTree) string {
 		for k := 1; k < len(lines) && grouped; k++ {
 			if math.Abs(lines[k]-lines[k-1]) < 1e-9 {
 				return fmt.Sprintf("%s lines %d and %d stand at %v", axis, k-1, k, lines[k])
-			}
-		}
-		for k := 1; k < len(lines)-1 && grouped; k++ {
-			if grid.IsVirtual(axis, k) {
-				return fmt.Sprintf("%s line %d is used by no card", axis, k)
 			}
 		}
 	}
@@ -77,7 +72,7 @@ func groupInvariants(tree *layout.GroupTree) string {
 // describeTree is the grid and the stored group tree, as text.
 func describeTree(tree *layout.GroupTree) string {
 	groups, leader, last := tree.Stored()
-	text, err := json.Marshal(map[string]any{"state": tree.Grid().ToJSON(), "groups": groups, "leader": leader, "lastCard": last})
+	text, err := json.Marshal(map[string]any{"state": tree.Grid().Cells(), "groups": groups, "leader": leader, "lastCard": last})
 	if err != nil {
 		return err.Error()
 	}
@@ -108,7 +103,7 @@ func TestRandomGroupOperationsKeepTheInvariants(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "card-1", C0: 0, C1: 1, R0: 0, R1: 1}},
+		state := layout.Cells{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "card-1", C0: 0, C1: 1, R0: 0, R1: 1}},
 			PaidBy: map[string]layout.Paid{}}
 		tree, err := layout.ReadTree(state, json.RawMessage(`[]`), json.RawMessage(`"card-1"`), json.RawMessage(`1`),
 			layout.GroupOptions{Head: 32}, grid)

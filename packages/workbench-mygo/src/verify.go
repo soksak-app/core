@@ -379,8 +379,6 @@ func Verify(in VerifyInput) ([]VerifyRow, error) {
 	}
 	add("V4 담았다 되돌리면 그대로", rebuilt == 0, fmt.Sprintf("사본 %.4fpx · 그려진 최소 변 %.0fpx", rebuilt, smallest))
 
-	add("V5 배치가 slicing", grid.IsSlicing(), "한 영역을 통째로 자른 결과만 가능")
-
 	open, closable := 0, 0
 	for _, card := range cards {
 		if !card.Fixed {

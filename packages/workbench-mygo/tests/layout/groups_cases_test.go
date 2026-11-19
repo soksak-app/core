@@ -14,7 +14,7 @@ import (
 // storedGroups is the stored form of a space layout: the grid, the group tree, the leader of the root level and lastCard, each absent
 // as nil.
 type storedGroups struct {
-	State    layout.State    `json:"state"`
+	State    layout.Cells    `json:"state"`
 	Groups   json.RawMessage `json:"groups"`
 	Leader   json.RawMessage `json:"leader"`
 	LastCard json.RawMessage `json:"lastCard"`
@@ -130,7 +130,7 @@ func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (
 	case "move":
 		return map[string]string{"card": a.Card}, true, tree.Move(a.Card, a.Target, a.Side)
 	case "grid":
-		state := tree.Grid().ToJSON()
+		state := tree.Grid().Cells()
 		cards := []map[string]any{}
 		for _, card := range state.Cards {
 			cards = append(cards, map[string]any{"id": card.ID, "c0": card.C0, "c1": card.C1, "r0": card.R0, "r1": card.R1, "fixed": card.Fixed})

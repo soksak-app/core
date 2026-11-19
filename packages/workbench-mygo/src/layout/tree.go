@@ -15,11 +15,59 @@ type TreeNode struct {
 	Card      string
 }
 
-// Tree derives the tree of the content cards of state from its lines and cards; a window side card is a place card and is outside the
+// Tree is the tree of the content cards of the stored tree of state: a cut along x is a row and a cut along y a column, a box is the
+// node inside it, and a window side card is a place card and is outside the tree, so a cut that holds one gives its share to its other
+// kids in proportion. A state without content cards has no tree.
+func Tree(state State) (*TreeNode, error) {
+	if err := CheckState(state); err != nil {
+		return nil, err
+	}
+	var of func(n *Node) *TreeNode
+	of = func(n *Node) *TreeNode {
+		switch {
+		case n.isBox():
+			return of(n.Inner)
+		case !n.isCut():
+			if IsWindowSide(n.Card) {
+				return nil
+			}
+			return &TreeNode{Card: n.Card}
+		}
+		kids, total := []TreeNode{}, 0.0
+		shares := []float64{}
+		for _, kid := range n.Kids {
+			if node := of(kid.Node); node != nil {
+				kids, shares, total = append(kids, *node), append(shares, kid.Share), total+kid.Share
+			}
+		}
+		switch len(kids) {
+		case 0:
+			return nil
+		case 1:
+			return &kids[0]
+		}
+		for i := range kids {
+			kids[i].Size = shares[i] / total
+		}
+		direction := "row"
+		if n.Cut == "y" {
+			direction = "column"
+		}
+		return &TreeNode{Direction: direction, Children: kids}
+	}
+	root := of(state.Root)
+	if root != nil {
+		root.Size = 1
+	}
+	return root, nil
+}
+
+// TreeOfCells derives the tree of the content cards of lines and cells of the earlier form, for the workbench until it keeps the tree
+// (F966-2-4); a window side card is a place card and is outside the
 // tree. A region is a row when a vertical line crosses it from edge to edge, else a column, and the children of a split are its parts
 // between the lines that cross it from edge to edge, so one arrangement has one tree. A state without content cards has no tree, and
 // cards that no line divides are refused, because the tree describes a slicing arrangement.
-func Tree(state State) (*TreeNode, error) {
+func TreeOfCells(state Cells) (*TreeNode, error) {
 	var cards []Card
 	for _, card := range state.Cards {
 		if !IsWindowSide(card.ID) {
@@ -42,7 +90,7 @@ func Tree(state State) (*TreeNode, error) {
 }
 
 // treeOf is the node of the cards that fill region, the lines c0, c1, r0 and r1, with no size.
-func treeOf(state State, cards []Card, region [4]int) (TreeNode, error) {
+func treeOf(state Cells, cards []Card, region [4]int) (TreeNode, error) {
 	if len(cards) == 1 {
 		return TreeNode{Card: cards[0].ID}, nil
 	}

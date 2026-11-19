@@ -584,15 +584,6 @@ func (t *GroupTree) keepLines() {
 		return
 	}
 	clear(t.grid.paidBy)
-	t.grid.Tidy()
-	// Two lines at one coordinate, which a space without groups can hold, become one line.
-	for _, axis := range axes {
-		for k := len(t.grid.arr(axis)) - 2; k >= 1; k-- {
-			if a := t.grid.arr(axis); k < len(a)-1 && math.Abs(a[k]-a[k-1]) < eps {
-				t.grid.MergeCoincident(axis, k)
-			}
-		}
-	}
 	t.reframe()
 }
 
@@ -615,7 +606,7 @@ type cellBox struct {
 
 // boxes is the cards of the grid with their coordinates.
 func (t *GroupTree) boxes() ([]cellBox, map[string]Paid) {
-	state := t.grid.ToJSON()
+	state := t.grid.Cells()
 	out := []cellBox{}
 	for _, card := range state.Cards {
 		out = append(out, cellBox{card: card, x0: state.Xs[card.C0], x1: state.Xs[card.C1], y0: state.Ys[card.R0], y1: state.Ys[card.R1]})
@@ -650,7 +641,7 @@ func (t *GroupTree) install(boxes []cellBox, paid map[string]Paid, laid map[stri
 	}
 	xs, xi := lines(func(b cellBox) [2]float64 { return [2]float64{b.x0, b.x1} })
 	ys, yi := lines(func(b cellBox) [2]float64 { return [2]float64{b.y0, b.y1} })
-	state := State{Xs: xs, Ys: ys, PaidBy: map[string]Paid{}}
+	state := Cells{Xs: xs, Ys: ys, PaidBy: map[string]Paid{}}
 	for _, b := range boxes {
 		card := b.card
 		card.C0, card.C1, card.R0, card.R1 = xi[b.x0], xi[b.x1], yi[b.y0], yi[b.y1]
@@ -661,7 +652,7 @@ func (t *GroupTree) install(boxes []cellBox, paid map[string]Paid, laid map[stri
 			state.PaidBy[id] = record
 		}
 	}
-	return t.grid.Replace(state)
+	return t.grid.replaceCells(state, nil)
 }
 
 // mapped is the coordinate v of the span [a0, b0] used in the span [a, b] (docs/spec/groups.md#the-rectangle-of-a-group-card). The ends of
@@ -920,7 +911,7 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 		}
 	}
 	if delta := (down.H - up.H) / 2; math.Abs(delta) > eps {
-		t.grid.MoveLinePast("y", line, t.grid.BoundaryPos("y", line)+delta)
+		t.grid.MoveBoundary("y", line, t.grid.BoundaryPos("y", line)+delta, false)
 	}
 }
 
@@ -1504,7 +1495,6 @@ func (t *GroupTree) CenterBoundary(axis Axis, line int) float64 {
 	before := t.drawn()
 	kept := t.snapshot()
 	at := t.grid.CenterBoundary(axis, line)
-	t.grid.MergeCoincident(axis, line)
 	t.keepLines()
 	if card, _ := t.below(before); card != "" {
 		t.restore(kept)
@@ -1522,12 +1512,11 @@ func (t *GroupTree) MoveBoundaryTo(axis Axis, line int, px float64) float64 {
 	return at
 }
 
-// MergeCoincident merges the boundary line of axis onto a neighbour at its coordinate at the end of a drag, as Grid.MergeCoincident
-// does, and keeps no line that no card uses while the space holds a group card.
+// MergeCoincident ends a drag of the boundary line of axis and keeps no line that no card uses while the space holds a group card. It
+// reports false: the grid holds a line at a coordinate once, so a boundary that reached a neighbour is already one line with it.
 func (t *GroupTree) MergeCoincident(axis Axis, line int) bool {
-	merged := t.grid.MergeCoincident(axis, line)
 	t.keepLines()
-	return merged
+	return false
 }
 
 // Focusable is the content card that a focus of the card id gives: the card itself, or for a group card the first content card
@@ -1702,8 +1691,8 @@ func compact(raw json.RawMessage) string {
 
 // ReadTree reads the stored layout of a space: the grid state, the group tree, the leader of the root level and lastCard as stored,
 // each refused with the text of docs/spec/groups.md#storage. A member that is absent is nil.
-func ReadTree(state State, groups, leader, lastCard json.RawMessage, options GroupOptions, grid *Grid) (*GroupTree, error) {
-	if err := grid.Replace(state); err != nil {
+func ReadTree(state Cells, groups, leader, lastCard json.RawMessage, options GroupOptions, grid *Grid) (*GroupTree, error) {
+	if err := grid.replaceCells(state, nil); err != nil {
 		return nil, err
 	}
 	t := &GroupTree{grid: grid, head: options.Head, seam: options.Seam}
@@ -1746,17 +1735,10 @@ func ReadTree(state State, groups, leader, lastCard json.RawMessage, options Gro
 }
 
 // readLines refuses a paidBy record and a line that no card uses in a layout with groups.
-func (t *GroupTree) readLines(state State) error {
+func (t *GroupTree) readLines(state Cells) error {
 	if len(state.PaidBy) > 0 {
 		ids := slices.Sorted(maps.Keys(state.PaidBy))
 		return fmt.Errorf("layout with groups stores the paidBy record of card %s; a layout with groups keeps none", ids[0])
-	}
-	for _, axis := range axes {
-		for k := 1; k < len(t.grid.arr(axis))-1; k++ {
-			if t.grid.IsVirtual(axis, k) {
-				return fmt.Errorf("layout with groups stores the %s line %d, which no card uses; a layout with groups keeps none", axis, k)
-			}
-		}
 	}
 	return nil
 }

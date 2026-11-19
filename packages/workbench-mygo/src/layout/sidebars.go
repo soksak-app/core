@@ -572,8 +572,6 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 		if !closed {
 			return true, fmt.Errorf("cannot remove window sidebars %s", strings.Join(left, ", "))
 		}
-		// A closed card leaves its lines, and a sidebar that opens again adds new ones, so the lines would pile up in one slot.
-		g.Tidy()
 	}
 	var unplaceable []string
 	for i := len(arranged) - 1; i >= 0; i-- {

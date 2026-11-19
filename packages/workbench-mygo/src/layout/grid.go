@@ -3,7 +3,6 @@ package layout
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"maps"
 	"math"
 	"slices"
@@ -15,23 +14,6 @@ import (
 // slicing floorplan and every card can be closed.
 
 const eps = 1e-9
-
-// Paid is where a card's slot came from: the side and the card its width came from, the side its span came from ("lo", "hi" or
-// "all"), and which of the payer's slots gave the width, counted from its first. Span and At are absent when they were not recorded.
-type Paid struct {
-	Side string `json:"side"`
-	To   string `json:"to"`
-	Span string `json:"span,omitempty"`
-	At   *int   `json:"at,omitempty"`
-}
-
-// State is the stored arrangement: the lines, the cards and which side each card took its slot from.
-type State struct {
-	Xs     []float64       `json:"xs"`
-	Ys     []float64       `json:"ys"`
-	Cards  []Card          `json:"cards"`
-	PaidBy map[string]Paid `json:"paidBy"`
-}
 
 // Options are the layout options. A field that is nil takes its default: gap 24, minSize 96, grabSize 11, snapDistance 7, snap
 // "merge", fillOrder "v", width and height 0.
@@ -64,16 +46,22 @@ type InsertInit struct {
 	Size *float64        `json:"size"`
 }
 
-// Grid holds the state and the operations of the layout.
+// Grid holds the state and the operations of the layout. root and paidBy are the state; xs, ys, list, at and leaves are derived from
+// root after every change (state.go).
 type Grid struct {
-	xs, ys    []float64
-	list      []*Card
+	root   *Node
+	paidBy map[string]string
+	xs, ys []float64
+	list   []*Card
+	at     map[*Node]nodeLines
+	leaves map[string]*Node
+	// byID is the card of each id, and up the node that holds each node with its index, as derive built them.
+	byID      map[string]*Card
+	up        map[*Node]holding
 	w, h      float64
 	seq       int
-	sliceMemo map[string]bool
 	splitMemo map[string]bool
 	probes    int
-	paidBy    map[string]Paid
 	probing   bool
 	gap       float64
 	min       float64
@@ -84,6 +72,8 @@ type Grid struct {
 	frames    frameRead
 	// cardFrames is the frames of each card by id that SetFrames set.
 	cardFrames map[string]Frames
+	// heads is the px that the host draws inside the top of each box by id, which SetHeads set.
+	heads map[string]float64
 	// dockToken is the plane state that the last dock of the window sidebars saw, and dockRefused is the arrangement of a dock it
 	// could not place (sidebars.go): a settle whose plane state differs docks again, so a sidebar reduced for lack of room takes its
 	// saved size when the room returns and a refused arrangement is not attempted again while the plane stands still.
@@ -93,56 +83,9 @@ type Grid struct {
 
 func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 
-// CheckState rejects a state that cannot describe a plane and reports which field is wrong.
-func CheckState(state State) error {
-	bad := func(why string) error { return errors.New("soksak: " + why) }
-	for _, axis := range []struct {
-		name  string
-		lines []float64
-	}{{"xs", state.Xs}, {"ys", state.Ys}} {
-		if len(axis.lines) < 2 {
-			return bad(axis.name + " needs at least two lines")
-		}
-		for i, v := range axis.lines {
-			if !finite(v) {
-				return bad(axis.name + "[" + itoa(i) + "] is " + jsString(v))
-			}
-			if i > 0 && v < axis.lines[i-1] {
-				return bad(axis.name + "[" + itoa(i) + "] is before " + axis.name + "[" + itoa(i-1) + "]")
-			}
-		}
-	}
-	if len(state.Cards) == 0 {
-		return bad("cards is empty")
-	}
-	seen := map[string]bool{}
-	for _, c := range state.Cards {
-		if c.ID == "" {
-			return bad("a card has no id")
-		}
-		if seen[c.ID] {
-			return bad("two cards are called " + c.ID)
-		}
-		seen[c.ID] = true
-		for _, s := range []struct {
-			lo, hi, axis string
-			from, to     int
-			lines        []float64
-		}{{"c0", "c1", "xs", c.C0, c.C1, state.Xs}, {"r0", "r1", "ys", c.R0, c.R1, state.Ys}} {
-			if s.from < 0 || s.to > len(s.lines)-1 {
-				return bad(c.ID + "." + s.lo + "/" + s.hi + " is outside " + s.axis)
-			}
-			if s.to <= s.from {
-				return bad(c.ID + "." + s.hi + " is not past " + c.ID + "." + s.lo)
-			}
-		}
-	}
-	return nil
-}
-
 // New makes a grid from a state, or, with no state, one card filling the plane.
 func New(state *State, options Options) (*Grid, error) {
-	g := &Grid{sliceMemo: map[string]bool{}, splitMemo: map[string]bool{}, paidBy: map[string]Paid{}, gap: 24}
+	g := &Grid{splitMemo: map[string]bool{}, paidBy: map[string]string{}, gap: 24}
 	if options.Gap != nil {
 		g.SetGap(*options.Gap)
 	}
@@ -180,27 +123,22 @@ func New(state *State, options Options) (*Grid, error) {
 		}
 		g.load(*state)
 	} else {
-		g.xs = []float64{0, 1}
-		g.ys = []float64{0, 1}
-		g.list = []*Card{{ID: "card", C0: 0, C1: 1, R0: 0, R1: 1}}
+		g.root = &Node{Card: "card"}
+		g.derive()
 	}
 	g.agreeSizes()
+	g.commit()
 	return g, nil
 }
 
-// load takes the lines, the cards and the payers of a state as copies.
+// load takes the tree and the payers of a state as copies and derives the lines and the cells.
 func (g *Grid) load(state State) {
-	g.xs = slices.Clone(state.Xs)
-	g.ys = slices.Clone(state.Ys)
-	g.list = make([]*Card, len(state.Cards))
-	for i := range state.Cards {
-		c := copyCard(&state.Cards[i])
-		g.list[i] = &c
-	}
-	g.paidBy = make(map[string]Paid, len(state.PaidBy))
+	g.root = cloneNode(state.Root)
+	g.paidBy = make(map[string]string, len(state.PaidBy))
 	for id, paid := range state.PaidBy {
 		g.paidBy[id] = paid
 	}
+	g.derive()
 }
 
 // Gap is the gap between two cards, in px.
@@ -236,7 +174,6 @@ func (g *Grid) SetFillOrder(value string) {
 		return
 	}
 	g.order = value
-	clear(g.sliceMemo)
 	clear(g.splitMemo)
 }
 
@@ -321,6 +258,7 @@ func (g *Grid) SetData(id string, data json.RawMessage) bool {
 		return false
 	}
 	card.Data = data
+	g.leaves[id].Data = data
 	return true
 }
 
@@ -331,8 +269,8 @@ func (g *Grid) SetFixed(id string, fixed bool) bool {
 		return false
 	}
 	card.Fixed = fixed
+	g.leaves[id].Fixed = fixed
 	clear(g.splitMemo)
-	clear(g.sliceMemo)
 	return true
 }
 
@@ -364,71 +302,6 @@ func (g *Grid) SetSize(id string, axis Axis, px *float64) bool {
 	return true
 }
 
-// ShareLines keeps every line index of axis and gives every slot that no card with a size in px holds its corridor, extra[slot] px and
-// an equal share of the free length: the extent less the corridors, the held sizes and the extras. A slot that a card with a size in
-// px holds keeps its span, and a plane too small for its corridors shares nothing. It refuses an unknown axis, an extra list of another
-// length than the slots, and an axis whose shared slots take no length; nil gives no slot an extra.
-func (g *Grid) ShareLines(axis Axis, extra []float64) error {
-	if noAxis(axis) {
-		return errors.New("unknown axis " + string(axis))
-	}
-	p := g.plane()
-	a := slices.Clone(g.arr(axis))
-	count := len(a) - 1
-	if extra == nil {
-		extra = make([]float64, count)
-	}
-	if len(extra) != count {
-		return fmt.Errorf("shareLines takes one extra for each of the %d slots of %s, found %d", count, axis, len(extra))
-	}
-	read := linesRead(p, axis)
-	held := heldSizes(p, axis)
-	want := make([]float64, count)
-	free, shared, sharedSpan := g.size(axis), 0, 0.0
-	for i := range count {
-		want[i] = corridorOf(p, axis, i, read)
-		free -= want[i]
-		if held[i].ok {
-			free -= held[i].v
-			continue
-		}
-		want[i] += extra[i]
-		free -= extra[i]
-		shared++
-		sharedSpan += a[i+1] - a[i]
-	}
-	if shared == 0 {
-		return nil
-	}
-	free = math.Max(0, free)
-	total := 0.0
-	for i := range count {
-		if !held[i].ok {
-			want[i] += free / float64(shared)
-			total += want[i]
-		}
-	}
-	if total <= 0 {
-		return fmt.Errorf("the %s axis of the plane has no length", axis)
-	}
-	next := make([]float64, count+1)
-	for i := range count {
-		span := a[i+1] - a[i]
-		if !held[i].ok {
-			span = sharedSpan * want[i] / total
-		}
-		next[i+1] = next[i] + span
-	}
-	next[count] = 1
-	state := g.ToJSON()
-	if axis == "x" {
-		state.Xs = next
-	} else {
-		state.Ys = next
-	}
-	return g.Replace(state)
-}
-
 // SetFrames sets the frames of each card by id (R5): a card without an entry has none. It rejects an id that is no card of the grid
 // and a count below zero.
 func (g *Grid) SetFrames(frames map[string]Frames) error {
@@ -450,14 +323,7 @@ func (g *Grid) SetFrames(frames map[string]Frames) error {
 	return nil
 }
 
-func (g *Grid) find(id string) *Card {
-	for _, c := range g.list {
-		if c.ID == id {
-			return c
-		}
-	}
-	return nil
-}
+func (g *Grid) find(id string) *Card { return g.byID[id] }
 
 // Lines is a copy of the line coordinates of an axis, normalised 0..1.
 func (g *Grid) Lines(axis Axis) []float64 {
@@ -469,15 +335,11 @@ func (g *Grid) Lines(axis Axis) []float64 {
 
 // ToJSON is the state of the grid, as copies.
 func (g *Grid) ToJSON() State {
-	cards := make([]Card, len(g.list))
-	for i, c := range g.list {
-		cards[i] = copyCard(c)
-	}
-	paid := make(map[string]Paid, len(g.paidBy))
+	paid := make(map[string]string, len(g.paidBy))
 	for id, p := range g.paidBy {
 		paid[id] = p
 	}
-	return State{Xs: slices.Clone(g.xs), Ys: slices.Clone(g.ys), Cards: cards, PaidBy: paid}
+	return State{Root: cloneNode(g.root), PaidBy: paid}
 }
 
 // Replace replaces the arrangement while keeping the plane and the options.
@@ -493,9 +355,9 @@ func (g *Grid) Replace(state State) error {
 // that grid took it.
 func (g *Grid) reload(state State) {
 	g.load(state)
-	clear(g.sliceMemo)
 	clear(g.splitMemo)
 	g.agreeSizes()
+	g.commit()
 }
 
 func (g *Grid) plane() *plane {
@@ -516,11 +378,6 @@ func (g *Grid) setArr(axis Axis, a []float64) {
 	} else {
 		g.ys = a
 	}
-}
-
-// insertLine is Array.prototype.splice(at, 0, value) on the lines of an axis.
-func (g *Grid) insertLine(axis Axis, at int, value float64) {
-	g.setArr(axis, slices.Insert(slices.Clone(g.arr(axis)), at, value))
 }
 
 func noAxis(axis Axis) bool { return axis != "x" && axis != "y" }
@@ -567,31 +424,6 @@ func (g *Grid) CardsCrossing(axis Axis, line int) []Card {
 	}
 	return out
 }
-
-// IsVirtual is true when no card reads this line.
-func (g *Grid) IsVirtual(axis Axis, line int) bool {
-	if noAxis(axis) {
-		return false
-	}
-	p := g.plane()
-	return isVirtual(linesRead(p, axis), line)
-}
-
-// VirtualCount is the number of interior lines no card reads.
-func (g *Grid) VirtualCount() int {
-	n := 0
-	for _, axis := range axes {
-		for _, k := range interiorLines(g.plane(), axis) {
-			if g.IsVirtual(axis, k) {
-				n++
-			}
-		}
-	}
-	return n
-}
-
-// IsSlicing is whether the arrangement is a slicing floorplan.
-func (g *Grid) IsSlicing() bool { return isSlicing(spansOf(g.list), g.sliceMemo) }
 
 // declare sets the px size every card in a slot declares.
 func (g *Grid) declare(axis Axis, slot int, size float64) {
@@ -826,16 +658,6 @@ func (g *Grid) BoundaryPos(axis Axis, line int) float64 {
 	return 0
 }
 
-// realNeighbour is the nearest line on that side that at least one card references.
-func (g *Grid) realNeighbour(axis Axis, line, step int) int {
-	last := len(g.arr(axis)) - 1
-	at := line + step
-	for at > 0 && at < last && g.IsVirtual(axis, at) {
-		at += step
-	}
-	return at
-}
-
 // HasBoundary is whether line is an interior line index.
 func (g *Grid) HasBoundary(axis Axis, line int) bool {
 	if noAxis(axis) {
@@ -861,8 +683,8 @@ func (g *Grid) BoundaryRange(axis Axis, line int) [2]float64 {
 	}
 	along := linePositions(g.plane(), axis)
 	lo, hi := span(axis)
-	first := along[g.realNeighbour(axis, line, -1)]
-	last := along[g.realNeighbour(axis, line, 1)]
+	first := along[line-1]
+	last := along[line+1]
 	low, high := first, last
 	p := g.plane()
 	read := linesRead(p, axis)
@@ -904,7 +726,6 @@ func (g *Grid) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) flo
 			}
 		}
 	}
-	line = g.forgetLinesPassed(axis, line, target)
 	if holder := g.holderAt(axis, line); holder != nil {
 		lo, hi := span(axis)
 		along := linePositions(g.plane(), axis)
@@ -945,19 +766,6 @@ func (g *Grid) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) flo
 	return g.BoundaryPos(axis, line)
 }
 
-// forgetLinesPassed removes the unreferenced lines the move passes and returns the new index of the moved line.
-func (g *Grid) forgetLinesPassed(axis Axis, line int, target float64) int {
-	at := func(k int) float64 { return linePositions(g.plane(), axis)[k] }
-	for line-1 >= 1 && g.IsVirtual(axis, line-1) && target < at(line-1) {
-		g.removeLine(axis, line-1, "lo")
-		line--
-	}
-	for line+1 <= len(g.arr(axis))-2 && g.IsVirtual(axis, line+1) && target > at(line+1) {
-		g.removeLine(axis, line+1, "lo")
-	}
-	return line
-}
-
 // CenterBoundary moves a boundary so the two cards beside it are drawn at the same size, and returns the position it reaches.
 func (g *Grid) CenterBoundary(axis Axis, line int) float64 {
 	if noAxis(axis) {
@@ -968,7 +776,8 @@ func (g *Grid) CenterBoundary(axis Axis, line int) float64 {
 	}
 	r := g.BoundaryRange(axis, line)
 	at := g.BoundaryPos(axis, line)
-	for pass := 0; pass < 8; pass++ {
+	// A move onto another line joins the two lines, as the derived lines of the tree hold one coordinate once, so the boundary can end.
+	for pass := 0; pass < 8 && g.HasBoundary(axis, line); pass++ {
 		middle := clamp(g.middleOf(axis, line), r[0], r[1])
 		if math.Abs(middle-at) < 0.01 {
 			break
@@ -1038,111 +847,47 @@ func (g *Grid) Arrange(mode string) (bool, error) {
 		}
 		return out
 	}
+	xs, ys := lines(columns, g.w), lines(rows, g.h)
+	cut := func(axis Axis, lines []float64, kids []*Node) *Node {
+		if len(kids) == 1 {
+			return kids[0]
+		}
+		out := &Node{Cut: axis}
+		for i, kid := range kids {
+			out.Kids = append(out.Kids, Kid{Share: lines[i+1] - lines[i], Node: kid})
+		}
+		return out
+	}
+	// The cards fill the grid in reading order: by the line their rectangle starts at, the top first, then the left.
+	reading := slices.Clone(g.list)
+	slices.SortStableFunc(reading, func(p, q *Card) int {
+		if p.R0 != q.R0 {
+			return p.R0 - q.R0
+		}
+		return p.C0 - q.C0
+	})
+	cards := []*Node{}
+	for _, c := range reading {
+		leaf := cloneNode(g.leaves[c.ID])
+		leaf.Width, leaf.Height = nil, nil
+		cards = append(cards, leaf)
+	}
+	for range empty {
+		cards = append(cards, &Node{Card: g.nextID()})
+	}
+	// Every line crosses the plane, and the tree takes the cut along x outside, as every arrangement whose lines allow both.
+	columnNodes := []*Node{}
+	for c := range columns {
+		column := []*Node{}
+		for r := range rows {
+			column = append(column, cards[r*columns+c])
+		}
+		columnNodes = append(columnNodes, cut("y", ys, column))
+	}
 	state := g.ToJSON()
-	state.Xs, state.Ys = lines(columns, g.w), lines(rows, g.h)
-	for k := range state.Cards {
-		card := &state.Cards[k]
-		card.Width, card.Height = nil, nil
-		card.C0, card.C1, card.R0, card.R1 = k%columns, k%columns+1, k/columns, k/columns+1
-	}
-	for k := range empty {
-		at := n + k
-		state.Cards = append(state.Cards, Card{ID: g.nextID(), C0: at % columns, C1: at%columns + 1, R0: at / columns, R1: at/columns + 1})
-	}
+	state.Root = cut("x", xs, columnNodes)
 	if err := g.Replace(state); err != nil {
 		return false, err
-	}
-	return true, nil
-}
-
-// Balance gives every card a fair share of the plane and keeps the arrangement. It is false when the arrangement is not slicing,
-// which leaves it unchanged, and an error when the balanced state cannot describe a plane.
-func (g *Grid) Balance() (bool, error) {
-	tree := sliceTree(g.list)
-	if tree == nil {
-		return false, nil
-	}
-	rects := g.Rects()
-	drawn := func(card *Card, axis Axis) float64 {
-		r := rects[card.ID]
-		if axis == "x" {
-			return r.W
-		}
-		return r.H
-	}
-	regions := map[string]region{}
-	balanceRegions(tree, region{x0: 0, x1: g.w, y0: 0, y1: g.h, left: true, right: true, top: true, bottom: true}, g.gap, drawn, regions)
-	linesOf := func(axis Axis, size float64) []float64 {
-		var at []float64
-		for _, r := range regions {
-			from, to := r.ends(axis)
-			at = append(at, *from, *to)
-		}
-		slices.Sort(at)
-		out := []float64{}
-		for _, v := range at {
-			if len(out) == 0 || v-out[len(out)-1] > 0.01 {
-				out = append(out, v)
-			}
-		}
-		out[0] = 0
-		out[len(out)-1] = size
-		return out
-	}
-	xs := linesOf("x", g.w)
-	ys := linesOf("y", g.h)
-	index := func(lines []float64, value float64) int {
-		best := 0
-		for i := 1; i < len(lines); i++ {
-			if math.Abs(lines[i]-value) < math.Abs(lines[best]-value) {
-				best = i
-			}
-		}
-		return best
-	}
-	cards := make([]Card, len(g.list))
-	for i, card := range g.list {
-		r := regions[card.ID]
-		c := copyCard(card)
-		c.C0, c.C1, c.R0, c.R1 = index(xs, r.x0), index(xs, r.x1), index(ys, r.y0), index(ys, r.y1)
-		cards[i] = c
-	}
-	normal := func(lines []float64, size float64) []float64 {
-		out := make([]float64, len(lines))
-		for i, v := range lines {
-			out[i] = v / size
-		}
-		return out
-	}
-	if err := g.Replace(State{Xs: normal(xs, g.w), Ys: normal(ys, g.h), Cards: cards, PaidBy: g.ToJSON().PaidBy}); err != nil {
-		return false, err
-	}
-	for pass := 0; pass < 8; pass++ {
-		moved := false
-		for _, axis := range axes {
-			lines := xs
-			if axis == "y" {
-				lines = ys
-			}
-			for line := 1; line < len(lines)-1; line++ {
-				if !g.HasBoundary(axis, line) {
-					continue
-				}
-				if math.Abs(g.BoundaryPos(axis, line)-lines[line]) < 0.01 {
-					continue
-				}
-				r := g.BoundaryRange(axis, line)
-				target := clamp(lines[line], r[0], r[1])
-				if math.Abs(g.BoundaryPos(axis, line)-target) < 0.01 {
-					continue
-				}
-				g.MoveBoundary(axis, line, target, false)
-				moved = true
-			}
-		}
-		if !moved {
-			break
-		}
 	}
 	return true, nil
 }
@@ -1174,114 +919,6 @@ func (g *Grid) middleOf(axis Axis, line int) float64 {
 		insEnd = inset(near, axis, line+1, "hi", seen)
 	}
 	return (start+end)/2 + (insStart-insEnd)/2
-}
-
-// MergeCoincident merges a line onto a neighbour at the same coordinate. It is false when a card spans both lines, which would leave
-// it zero size.
-func (g *Grid) MergeCoincident(axis Axis, line int) bool {
-	if noAxis(axis) || g.snapMode == "off" {
-		return false
-	}
-	a := g.arr(axis)
-	lo, hi := span(axis)
-	if line < 0 || line >= len(a) {
-		// a[line] is undefined in the model, so no neighbour stands at its coordinate.
-		return false
-	}
-	found := -1
-	for _, i := range []int{line - 1, line + 1} {
-		if i >= 0 && i < len(a) && math.Abs(a[i]-a[line]) < eps {
-			found = i
-			break
-		}
-	}
-	if found < 0 {
-		return false
-	}
-	border := func(i int) bool { return i == 0 || i == len(a)-1 }
-	keep, drop := found, line
-	if border(line) {
-		keep, drop = line, found
-	}
-	at := func(card *Card, k spanKey) int {
-		if card.get(k) == drop {
-			return keep
-		}
-		return card.get(k)
-	}
-	for _, c := range g.list {
-		if at(c, lo) == at(c, hi) {
-			return false
-		}
-	}
-	for _, card := range g.list {
-		card.set(lo, at(card, lo))
-		card.set(hi, at(card, hi))
-	}
-	g.removeLine(axis, drop, "lo")
-	g.changed()
-	return true
-}
-
-// MoveLinePast moves the line toward px as MoveBoundary does, and past each line of the axis that it reaches, where no card lies
-// between the two, by exchanging their places; a line that stops on another line merges onto it, so that no two lines stand at one
-// coordinate.
-func (g *Grid) MoveLinePast(axis Axis, line int, px float64) {
-	lo, hi := span(axis)
-	for {
-		at := g.MoveBoundary(axis, line, px, false)
-		a := g.arr(axis)
-		next := line + 1
-		if px < at {
-			next = line - 1
-		}
-		if math.Abs(at-px) < eps || next <= 0 || next >= len(a)-1 || math.Abs(a[next]-a[line]) >= eps {
-			// A line that the bounds of the cards stop on another line merges onto it.
-			for _, k := range []int{line - 1, line + 1} {
-				if k > 0 && k < len(a)-1 && math.Abs(a[k]-a[line]) < eps {
-					g.MergeCoincident(axis, line)
-					break
-				}
-			}
-			return
-		}
-		for _, c := range g.list {
-			if c.get(lo) == min(line, next) && c.get(hi) == max(line, next) {
-				g.MergeCoincident(axis, line)
-				return
-			}
-		}
-		for _, c := range g.list {
-			for _, k := range []spanKey{lo, hi} {
-				switch c.get(k) {
-				case line:
-					c.set(k, next)
-				case next:
-					c.set(k, line)
-				}
-			}
-		}
-		g.changed()
-		line = next
-	}
-}
-
-// Tidy removes the lines no card references and returns how many were removed.
-func (g *Grid) Tidy() int {
-	dropped := 0
-	for _, axis := range axes {
-		for k := len(g.arr(axis)) - 2; k >= 1; k-- {
-			if !g.IsVirtual(axis, k) {
-				continue
-			}
-			g.removeLine(axis, k, "lo")
-			dropped++
-		}
-	}
-	if dropped > 0 {
-		g.changed()
-	}
-	return dropped
 }
 
 // cutAt is the position to cut a card at: the unreferenced line nearest the card's centre that leaves both halves their minimum, or a
@@ -1424,77 +1061,12 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 
 // Split cuts one card in two and returns the new card's id. The original keeps its id and the near half; the new card takes the far
 // half. It is false when the halves do not fit.
-// With init.NewLine the cut inserts a new line at the centre instead of taking an existing line.
+// With init.NewLine the cut takes a new position at the centre instead of a line that the card spans across.
 func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
 	if noAxis(axis) {
 		return "", false
 	}
-	if init.ID != nil && g.find(*init.ID) != nil {
-		return "", false
-	}
-	card := g.find(id)
-	if card == nil {
-		return "", false
-	}
-	cutLine, cutValue, cuts := g.cutAt(card, axis, init.NewLine)
-	if !cuts {
-		return "", false
-	}
-	was := g.extents(axis)
-	empty := g.flat()
-	undo := g.ToJSON()
-	lo, hi := span(axis)
-	whole := fixedSize(card, axis)
-	from := g.arr(axis)[card.get(lo)]
-	to := g.arr(axis)[card.get(hi)]
-	line := cutLine
-	if line < 0 {
-		a := g.arr(axis)
-		line = card.get(lo) + 1
-		for line < card.get(hi) && a[line] <= cutValue+eps {
-			line++
-		}
-		value := math.Min(math.Max(cutValue, a[line-1]), a[line])
-		g.insertLine(axis, line, value)
-		for _, o := range g.list {
-			if o.get(lo) >= line {
-				o.set(lo, o.get(lo)+1)
-			}
-			if o.get(hi) >= line {
-				o.set(hi, o.get(hi)+1)
-			}
-		}
-	}
-	freshID := ""
-	if init.ID != nil {
-		freshID = *init.ID
-	} else {
-		freshID = g.nextID()
-	}
-	fresh := &Card{ID: freshID, C0: card.C0, C1: card.C1, R0: card.R0, R1: card.R1, Data: init.Data}
-	across := other(axis)
-	if alongside := fixedSize(card, across); alongside != nil {
-		setSizeOn(fresh, across, *alongside)
-	}
-	if whole != nil {
-		f := 0.5
-		if to-from > eps {
-			f = (g.arr(axis)[line] - from) / (to - from)
-		}
-		setSizeOn(card, axis, *whole*f)
-		setSizeOn(fresh, axis, *whole*(1-f))
-	}
-	fresh.set(lo, line)
-	card.set(hi, line)
-	g.list = append(g.list, fresh)
-	at := line - card.get(lo) - 1
-	g.paidBy[fresh.ID] = Paid{Side: "lo", To: card.ID, At: &at}
-	g.changed()
-	if !g.stillFits(axis, was, empty) {
-		g.restore(undo)
-		return "", false
-	}
-	return fresh.ID, true
+	return g.splitAt(id, axis, init, false)
 }
 
 func isSide(side Side) bool {
@@ -1511,32 +1083,75 @@ func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) 
 	if !isSide(side) {
 		return "", false
 	}
+	return g.splitAt(id, axisOf(side), init, isAhead(side))
+}
+
+// splitAt cuts the card id along axis at the position of cutAt: the card keeps its part of the extent before the cut and the new card
+// takes the part after it, or with first the new card takes the part before it. A px size of the card on the axis is divided between
+// the two parts, and one across it is given to the new card as well. The new card is recorded as paid by the card.
+func (g *Grid) splitAt(id string, axis Axis, init SplitInit, first bool) (string, bool) {
 	if init.ID != nil && g.find(*init.ID) != nil {
 		return "", false
 	}
-	axis := axisOf(side)
 	card := g.find(id)
 	if card == nil {
 		return "", false
 	}
-	if !isAhead(side) {
-		return g.Split(id, axis, init)
-	}
-	born, ok := g.Split(id, axis, init)
-	if !ok {
+	cutLine, cutValue, cuts := g.cutAt(card, axis, init.NewLine)
+	if !cuts {
 		return "", false
 	}
-	// The split keeps the cards it does not refuse, so card is still the stored card.
-	fresh := g.find(born)
+	was := g.extents(axis)
+	empty := g.flat()
+	undo := g.ToJSON()
 	lo, hi := span(axis)
-	near := [2]int{card.get(lo), card.get(hi)}
-	card.set(lo, fresh.get(lo))
-	card.set(hi, fresh.get(hi))
-	fresh.set(lo, near[0])
-	fresh.set(hi, near[1])
-	g.paidBy[fresh.ID] = Paid{Side: "hi", To: card.ID}
+	a := g.arr(axis)
+	from, to := a[card.get(lo)], a[card.get(hi)]
+	at := cutValue
+	if cutLine >= 0 {
+		at = a[cutLine]
+	}
+	f := 0.5
+	if to-from > eps {
+		f = (at - from) / (to - from)
+	}
+	freshID := ""
+	if init.ID != nil {
+		freshID = *init.ID
+	} else {
+		freshID = g.nextID()
+	}
+	leaf := g.leaves[id]
+	fresh := &Node{Card: freshID, Data: init.Data}
+	freshCard := &Card{}
+	if alongside := fixedSize(card, other(axis)); alongside != nil {
+		setSizeOn(freshCard, other(axis), *alongside)
+	}
+	near, far := f, 1-f
+	if whole := fixedSize(card, axis); whole != nil {
+		mine, theirs := *whole*(1-f), *whole*f
+		if !first {
+			mine, theirs = *whole*f, *whole*(1-f)
+		}
+		leafCard := &Card{Width: leaf.Width, Height: leaf.Height}
+		setSizeOn(leafCard, axis, mine)
+		leaf.Width, leaf.Height = leafCard.Width, leafCard.Height
+		setSizeOn(freshCard, axis, theirs)
+	}
+	fresh.Width, fresh.Height = freshCard.Width, freshCard.Height
+	kids := []Kid{{Share: near, Node: leaf}, {Share: far, Node: fresh}}
+	if first {
+		kids = []Kid{{Share: near, Node: fresh}, {Share: far, Node: leaf}}
+	}
+	g.put(leaf, &Node{Cut: axis, Kids: kids})
+	g.paidBy[freshID] = id
+	g.derive()
 	g.changed()
-	return born, true
+	if !g.stillFits(axis, was, empty) {
+		g.restore(undo)
+		return "", false
+	}
+	return freshID, true
 }
 
 func (g *Grid) nextID() string {
@@ -1579,31 +1194,60 @@ func (g *Grid) Fill(id string, sides []string) (*Fill, error) {
 	return &Fill{Side: found.side, Grow: spanNames[found.grow], Cards: cards}, nil
 }
 
-// fillAlong is the fill of the card id that tries the sides in that order.
+// departing is the node that leaves with the card of leaf: the card, or the box around it that holds nothing else.
+func (g *Grid) departing(leaf *Node) *Node {
+	node := leaf
+	for {
+		h, i := g.holder(node)
+		if h == nil || i >= 0 {
+			return node
+		}
+		node = h
+	}
+}
+
+// holdsFixed is whether a fixed card stands inside a node.
+func holdsFixed(n *Node) bool {
+	return slices.ContainsFunc(cardsOf(n), func(c *Node) bool { return c.Fixed })
+}
+
+// fillAlong is the neighbour that takes the space of the card id when it closes, by the first of sides that names a kid of the cut of the
+// card beside it with no fixed card, or nil. A close gives the space to a kid of the card's own cut, so it never crosses the structure of
+// another cut.
 func (g *Grid) fillAlong(id string, sides []string) *fill {
-	card := g.find(id)
+	card := g.removable(id)
 	if card == nil {
 		return nil
 	}
-	return fillFor(g.list, card, sides, g.sliceMemo)
-}
-
-// soleSlots is the axis whose slots hold no other card, or false.
-func (g *Grid) soleSlots(card *Card) (Axis, bool) {
-	for _, axis := range axes {
-		lo, hi := span(axis)
-		trapped := false
-		for _, o := range g.list {
-			if o != card && o.get(lo) >= card.get(lo) && o.get(hi) <= card.get(hi) {
-				trapped = true
-				break
+	node := g.departing(g.leaves[id])
+	h, i := g.holder(node)
+	if h == nil || i < 0 {
+		return nil
+	}
+	for _, side := range sides {
+		dir := directions[side]
+		axis, step := "y", 1
+		switch side {
+		case "above":
+			step = -1
+		case "right":
+			axis = "x"
+		case "left":
+			axis, step = "x", -1
+		}
+		j := i + step
+		if h.Cut != axis || j < 0 || j >= len(h.Kids) || holdsFixed(h.Kids[j].Node) {
+			continue
+		}
+		row := []*Card{}
+		for _, leaf := range cardsOf(h.Kids[j].Node) {
+			if c := g.find(leaf.Card); c != nil && dir.touches(c, card) {
+				row = append(row, c)
 			}
 		}
-		if !trapped {
-			return axis, true
-		}
+		return &fill{side: side, grow: dir.grow, cards: row, cut: h, at: i, to: j}
 	}
-	return "", false
+	return nil
 }
 
 func (g *Grid) removable(id string) *Card {
@@ -1625,14 +1269,7 @@ func (g *Grid) removable(id string) *Card {
 
 // CanClose is whether Close would remove the card.
 func (g *Grid) CanClose(id string) bool {
-	card := g.removable(id)
-	if card == nil {
-		return false
-	}
-	if g.fillAlong(id, fillOrders[g.order]) != nil {
-		return true
-	}
-	_, ok := g.soleSlots(card)
+	_, _, _, ok := g.closing(id, fillOrders[g.order])
 	return ok
 }
 
@@ -1649,13 +1286,54 @@ func slotOrder(from, count, back int) []int {
 	return out
 }
 
-func (g *Grid) removeCard(card *Card) {
-	g.list = slices.DeleteFunc(slices.Clone(g.list), func(c *Card) bool { return c == card })
+// closing is the cut that holds the node leaving with the card id, the kid that takes its space, -1 for every other kid in proportion to
+// its share, and whether that kid grows over the space as a neighbour. A card that spans the plane across the root cut and took its space
+// from a card gives it back: to every kid in proportion when it took a share of every kid (paidBy ""), else to the kid after it, or
+// before it at the end of the plane. Otherwise the card it took its space from takes it when it stands beside it, else the neighbour of
+// the first of sides that fills it, else every other kid in proportion. It is false when the card cannot close: it is fixed or the last
+// card, or no kid of its cut without a fixed card can take the space.
+func (g *Grid) closing(id string, sides []string) (*Node, int, bool, bool) {
+	if g.removable(id) == nil {
+		return nil, 0, false, false
+	}
+	node := g.departing(g.leaves[id])
+	h, i := g.holder(node)
+	if h == nil || i < 0 {
+		return nil, 0, false, false
+	}
+	paid, hasPaid := g.paidBy[id]
+	if hasPaid && h == g.root {
+		switch {
+		case paid == "":
+			return h, -1, false, true
+		case i+1 < len(h.Kids):
+			return h, i + 1, false, true
+		}
+		return h, i - 1, false, true
+	}
+	if hasPaid {
+		for _, j := range []int{i - 1, i + 1} {
+			if j >= 0 && j < len(h.Kids) && !h.Kids[j].Node.isCut() && !h.Kids[j].Node.isBox() && h.Kids[j].Node.Card == paid &&
+				!h.Kids[j].Node.Fixed {
+				return h, j, true, true
+			}
+		}
+	}
+	if f := g.fillAlong(id, sides); f != nil {
+		return h, f.to, true, true
+	}
+	for k, kid := range h.Kids {
+		if k != i && !holdsFixed(kid.Node) {
+			return h, -1, false, true
+		}
+	}
+	return nil, 0, false, false
 }
 
-// Close removes a card. A row of neighbours expands over the space when one matches the side; otherwise the card's slots are removed.
-// It is false when neither applies, when the card is fixed, or when it is the last card. sides names the sides whose row of neighbours may
-// expand, tried in their order, FillSides for the order of fillOrder, and an empty list only removes the slots.
+// Close removes a card. Its space goes to a kid of its own cut: the card it took its space from when that card stands beside it, else the
+// neighbour that the first of sides names, else every other kid in proportion to its share. It is false when the card is fixed, when it is
+// the last card, or when no kid of its cut without a fixed card can take the space. sides names the sides whose neighbour may expand, tried
+// in their order, FillSides for the order of fillOrder, and an empty list gives the space to every kid in proportion.
 func (g *Grid) Close(id string, sides []string) (bool, error) {
 	if err := checkFillSides(sides); err != nil {
 		return false, err
@@ -1663,195 +1341,79 @@ func (g *Grid) Close(id string, sides []string) (bool, error) {
 	return g.closeAlong(id, sides), nil
 }
 
-// closeAlong is Close whose row of neighbours is the first that covers one of sides, in that order. The group tree of the workbench
-// passes one side at a time, because the fill order of the library does not know which neighbours keep a group one rectangle.
+// closeAlong is Close whose neighbour is the first that one of sides names, in that order. The group tree of the workbench passes one
+// side at a time.
 func (g *Grid) closeAlong(id string, sides []string) bool {
-	card := g.removable(id)
-	if card == nil {
-		return false
-	}
-	paid, hasPaid := g.paidBy[id]
-	if hasPaid {
-		for _, axis := range axes {
-			lo, hi := span(axis)
-			if card.get(hi)-card.get(lo) != 1 {
-				continue
-			}
-			alone := true
-			for _, c := range g.list {
-				if !(c == card || c.get(hi) <= card.get(lo) || c.get(lo) >= card.get(hi)) {
-					alone = false
-					break
-				}
-			}
-			if !alone {
-				continue
-			}
-			last := len(g.arr(axis)) - 1
-			from := paid.Side
-			switch {
-			case paid.Span == "lo" || paid.Span == "hi":
-				from = paid.Span
-			case card.get(lo) == 0:
-				from = "hi"
-			case card.get(hi) == last:
-				from = "lo"
-			}
-			gone := card.get(hi)
-			if from == "lo" {
-				gone = card.get(lo)
-			}
-			if gone <= 0 || gone >= last {
-				continue
-			}
-			held := slotWidths(g.plane(), axis)
-			mine := card.get(lo)
-			took := g.arr(axis)[card.get(hi)] - g.arr(axis)[card.get(lo)]
-			g.removeCard(card)
-			g.removeLine(axis, gone, from)
-			delete(g.paidBy, id)
-			merged := mine
-			if from == "lo" {
-				merged = mine - 1
-			}
-			if paid.Span == "all" && took < 1-eps {
-				b := g.arr(axis)
-				spans := make([]float64, len(b)-1)
-				for i := range spans {
-					spans[i] = b[i+1] - b[i]
-				}
-				spans[merged] = math.Max(0, spans[merged]-took)
-				at := b[0]
-				for i := range spans {
-					at += spans[i] / (1 - took)
-					b[i+1] = at
-				}
-				b[len(b)-1] = 1
-			}
-			back := g.find(paid.To)
-			want := []opt{}
-			for i, w := range held {
-				if i != mine {
-					want = append(want, some(w))
-				}
-			}
-			first := merged
-			if back != nil {
-				paidAt := back.get(lo)
-				if paid.At != nil {
-					paidAt += *paid.At
-				}
-				if paidAt >= back.get(lo) && paidAt < back.get(hi) {
-					first = paidAt
-				}
-			}
-			order := []int{}
-			if paid.To != "" {
-				order = slotOrder(first, len(want), first-1)
-			}
-			g.settleOn(axis, want, order)
-			g.changed()
-			return true
-		}
-	}
-
-	if filling := g.fillAlong(id, sides); filling != nil {
-		axis := "y"
-		if filling.grow == keyC0 || filling.grow == keyC1 {
-			axis = "x"
-		}
-		stood := make([]float64, len(g.arr(axis)))
-		for k := range stood {
-			stood[k] = g.BoundaryPos(axis, k)
-		}
-		lo, hi := span(axis)
-		from, to := card.get(lo), card.get(hi)
-		widths := slotWidths(g.plane(), axis)
-		want := make([]opt, len(widths))
-		for i, w := range widths {
-			want[i] = some(w)
-		}
-		var back *Card
-		if hasPaid {
-			back = g.find(paid.To)
-		}
-		paidAt := -1
-		if back != nil {
-			paidAt = back.get(lo)
-			if paid.At != nil {
-				paidAt += *paid.At
-			}
-		}
-		gives := back != nil && !slices.Contains(filling.cards, back) && paidAt >= back.get(lo) && paidAt < back.get(hi) &&
-			(paidAt < from || paidAt >= to)
-		if gives {
-			for i := from; i < to; i++ {
-				want[i] = some(0)
-			}
-		}
-		for _, neighbour := range filling.cards {
-			neighbour.set(filling.grow, card.get(filling.grow))
-		}
-		g.removeCard(card)
-		order := slotOrder(from, len(want), to-1)
-		if gives {
-			order = slotOrder(paidAt, len(want), paidAt-1)
-		}
-		g.settleOn(axis, want, order)
-		g.standAgain(axis, stood)
-		g.changed()
-		return true
-	}
-
-	axis, ok := g.soleSlots(card)
+	h, to, grows, ok := g.closing(id, sides)
 	if !ok {
 		return false
 	}
-	lo, hi := span(axis)
-	from := card.get(lo)
-	count := card.get(hi) - from
-	held := slotWidths(g.plane(), axis)
-	g.removeCard(card)
-	for i := 0; i < count; i++ {
-		g.dropSlot(axis, from)
-	}
-	kept := []opt{}
-	for i, w := range held {
-		if i < from || i >= from+count {
-			kept = append(kept, some(w))
+	node := g.departing(g.leaves[id])
+	_, i := g.holder(node)
+	axis := h.Cut
+	before := g.slotsOf(axis)
+	payer := g.paidBy[id]
+	if to >= 0 {
+		// A neighbour that grows over the space takes no px size on the axis, as a card spanning more than one slot carries none (R5).
+		if kid := h.Kids[to].Node; grows && !kid.isCut() && !kid.isBox() {
+			if axis == "x" {
+				kid.Width = nil
+			} else {
+				kid.Height = nil
+			}
+		}
+		if payer == "" {
+			for _, c := range cardsOf(h.Kids[to].Node) {
+				payer = c.Card
+				break
+			}
 		}
 	}
-	g.settleOn(axis, kept, slotOrder(min(from, len(kept)-1), len(kept), min(from, len(kept)-1)-1))
+	g.drop(h, i, to)
+	delete(g.paidBy, id)
+	g.derive()
+	g.settle(axis, before, payer)
 	g.changed()
 	return true
 }
 
-// standAgain restores unreferenced lines to their previous px positions, by iteration.
-func (g *Grid) standAgain(axis Axis, stood []float64) {
+// slots is the lines of an axis and the drawn width of each of its slots.
+type slots struct {
+	lines, widths []float64
+}
+
+func (g *Grid) slotsOf(axis Axis) slots {
+	return slots{slices.Clone(g.arr(axis)), slotWidths(g.plane(), axis)}
+}
+
+// settle draws again every slot of axis that stood between the same two lines before a change at the width it had, where the axis has a
+// card with a px size: the slots that the change made share what is left, the slots of the card payer first absorbing the difference. On
+// an axis without a px size the coordinates are already the drawn sizes and nothing moves.
+func (g *Grid) settle(axis Axis, before slots, payer string) {
+	held := heldSizes(g.plane(), axis)
+	if !slices.ContainsFunc(held, func(o opt) bool { return o.ok }) {
+		return
+	}
 	a := g.arr(axis)
-	for k := 1; k < len(a)-1; k++ {
-		if k >= len(stood) || !g.IsVirtual(axis, k) {
-			continue
-		}
-		want := stood[k]
-		for pass := 0; pass < 8; pass++ {
-			at := g.BoundaryPos(axis, k)
-			off := want - at
-			if math.Abs(off) < 1e-9 {
-				break
+	want := make([]opt, len(a)-1)
+	for i := range want {
+		for k := 0; k+1 < len(before.lines); k++ {
+			if math.Abs(before.lines[k]-a[i]) < eps && math.Abs(before.lines[k+1]-a[i+1]) < eps {
+				want[i] = some(before.widths[k])
 			}
-			spanned := a[k+1] - a[k-1]
-			room := g.BoundaryPos(axis, k+1) - g.BoundaryPos(axis, k-1)
-			if spanned < eps || room < eps {
-				break
-			}
-			next := a[k] + (off*spanned)/room
-			if !(next > a[k-1] && next < a[k+1]) {
-				break
-			}
-			a[k] = next
 		}
 	}
+	order := []int{}
+	if c := g.find(payer); c != nil {
+		lo, hi := span(axis)
+		order = slotOrder(c.get(lo), len(want), c.get(hi)-1)
+	}
+	for i := range want {
+		if !want[i].ok && !slices.Contains(order, i) {
+			order = append(order, i)
+		}
+	}
+	g.settleOn(axis, want, order)
 }
 
 // CanInsertAt is whether a card spanning the whole plane can be placed on this boundary: no card spans across the line, apart from
@@ -1871,8 +1433,34 @@ func (g *Grid) CanInsertAt(axis Axis, line int, without string) bool {
 	return true
 }
 
+// standing is where a card spanning the whole plane on the other axis goes in at line: the index among the kids of the root, which is a
+// cut along axis or becomes one, or false when line is no edge of the plane and no seam of the root. A line that no card crosses but
+// that two cuts of the root share by chance is no seam of the root, so nothing goes in there.
+func (g *Grid) standing(axis Axis, line int) (int, bool) {
+	last := len(g.arr(axis)) - 1
+	if !g.root.isCut() || g.root.Cut != axis {
+		switch line {
+		case 0:
+			return 0, true
+		case last:
+			return 1, true
+		}
+		return 0, false
+	}
+	for j, kid := range g.root.Kids {
+		if lo, _ := g.at[kid.Node].on(axis); lo == line {
+			return j, true
+		}
+	}
+	if line == last {
+		return len(g.root.Kids), true
+	}
+	return 0, false
+}
+
 // InsertAt inserts a card at a boundary, spanning the whole plane on the other axis, and returns its id. It is false when a card
-// spans the boundary, the size is not smaller than the plane, or the result would leave a card with no area.
+// spans the boundary, the line is no seam of the root, the size is not smaller than the plane, or the result would leave a card with no
+// area.
 func (g *Grid) InsertAt(axis Axis, line int, init InsertInit) (string, bool) {
 	if noAxis(axis) {
 		return "", false
@@ -1887,216 +1475,111 @@ func (g *Grid) InsertAt(axis Axis, line int, init InsertInit) (string, bool) {
 	if !g.CanInsertAt(axis, line, "") {
 		return "", false
 	}
+	at, ok := g.standing(axis, line)
+	if !ok {
+		return "", false
+	}
 	was := g.extents(axis)
 	empty := g.flat()
 	undo := g.ToJSON()
 	lo, hi := span(axis)
-	across := other(axis)
-	alo, ahi := span(across)
 	held := slotWidths(g.plane(), axis)
-	gave := g.openSlot(axis, line, *init.Size/extent)
 	freshID := ""
 	if init.ID != nil {
 		freshID = *init.ID
 	} else {
 		freshID = g.nextID()
 	}
-	fresh := &Card{ID: freshID, C0: 0, C1: 1, R0: 0, R1: 1, Data: init.Data}
-	fresh.set(lo, line)
-	fresh.set(hi, line+1)
-	fresh.set(alo, 0)
-	fresh.set(ahi, len(g.arr(across))-1)
-	setSizeOn(fresh, axis, *init.Size)
-	g.list = append(g.list, fresh)
+	fresh := &Node{Card: freshID, Data: init.Data}
+	sized := &Card{}
+	setSizeOn(sized, axis, *init.Size)
+	fresh.Width, fresh.Height = sized.Width, sized.Height
+	if !g.root.isCut() || g.root.Cut != axis {
+		g.root = &Node{Cut: axis, Kids: []Kid{{Share: 1, Node: g.root}}}
+	}
+	// The new kid takes its span from the kid after it, else from the kid before it, else from every kid in proportion; the settle
+	// below draws every slot at the width it had.
+	spanned := *init.Size / extent
+	kids := g.root.Kids
+	switch {
+	case at < len(kids) && kids[at].Share > spanned:
+		kids[at].Share -= spanned
+	case at > 0 && kids[at-1].Share > spanned:
+		kids[at-1].Share -= spanned
+	default:
+		for k := range kids {
+			kids[k].Share *= 1 - spanned
+		}
+	}
+	g.root.Kids = slices.Insert(kids, at, Kid{Share: spanned, Node: fresh})
+	g.derive()
 	want := make([]opt, len(g.arr(axis))-1)
 	for i := range want {
 		want[i] = some(0)
 	}
 	for i, w := range held {
 		if i >= line {
-			want[i+1] = some(w)
+			if i+1 < len(want) {
+				want[i+1] = some(w)
+			}
 		} else {
 			want[i] = some(w)
 		}
 	}
 	want[line] = some(*init.Size)
 	pays := g.settleOn(axis, want, slotOrder(line+1, len(want), line-1))
-	var payer *Card
 	if pays >= 0 {
 		for _, c := range g.list {
-			if c.get(lo) <= pays && c.get(hi) > pays && c != fresh {
-				payer = c
+			if c.get(lo) <= pays && c.get(hi) > pays && c.ID != freshID {
+				g.paidBy[freshID] = c.ID
 				break
 			}
 		}
-	}
-	if payer != nil || pays < 0 {
-		side := "lo"
-		if pays > line {
-			side = "hi"
-		}
-		record := Paid{Side: side, Span: gave}
-		if payer != nil {
-			record.To = payer.ID
-			at := pays - payer.get(lo)
-			record.At = &at
-		}
-		g.paidBy[fresh.ID] = record
+	} else {
+		g.paidBy[freshID] = ""
 	}
 	g.changed()
 	if !g.stillFits(axis, was, empty) {
 		g.restore(undo)
 		return "", false
 	}
-	return fresh.ID, true
+	return freshID, true
 }
 
-// spansPlane is whether a card occupies one slot on one axis and spans the whole other axis.
-func (g *Grid) spansPlane(card *Card, axis Axis) bool {
-	lo, hi := span(axis)
-	alo, ahi := span(other(axis))
-	return card.get(hi)-card.get(lo) == 1 && card.get(alo) == 0 && card.get(ahi) == len(g.arr(other(axis)))-1
-}
-
-// openSlot inserts a slot at a boundary with the given span and returns the side the span came from, or "all" when every slot gave a
-// share of it.
-func (g *Grid) openSlot(axis Axis, line int, spanned float64) string {
-	a := g.arr(axis)
-	after, before := 0.0, 0.0
-	if line < len(a)-1 {
-		after = a[line+1] - a[line]
-	}
-	if line > 0 {
-		before = a[line] - a[line-1]
-	}
-	var gave string
-	switch {
-	case after >= spanned:
-		g.insertLine(axis, line+1, a[line]+spanned)
-		gave = "hi"
-	case before >= spanned:
-		at := a[line]
-		a[line] = at - spanned
-		g.insertLine(axis, line+1, at)
-		gave = "lo"
-	default:
-		keep := 1 - spanned
-		// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-		at := float64(a[line]*keep) + spanned
-		for k := range a {
-			if k <= line {
-				a[k] = a[k] * keep
-			} else {
-				// float64 rounds each product before it is added, as JavaScript does; without it Go may fuse them (number.go).
-				a[k] = float64(a[k]*keep) + spanned
-			}
-		}
-		g.insertLine(axis, line+1, at)
-		b := g.arr(axis)
-		b[len(b)-1] = 1
-		gave = "all"
-	}
-	g.openIndex(axis, line)
-	return gave
-}
-
-// openIndex shifts the spans that referenced a boundary past a new slot there.
-func (g *Grid) openIndex(axis Axis, line int) {
-	lo, hi := span(axis)
-	for _, card := range g.list {
-		if card.get(lo) >= line {
-			card.set(lo, card.get(lo)+1)
-		}
-		if card.get(hi) > line {
-			card.set(hi, card.get(hi)+1)
-		}
-	}
-}
-
-// removeLine removes one line and shifts the spans that referenced it. into selects which neighbouring slot absorbs the removed one.
-func (g *Grid) removeLine(axis Axis, gone int, into string) {
-	g.setArr(axis, slices.Delete(slices.Clone(g.arr(axis)), gone, gone+1))
-	lo, hi := span(axis)
-	for _, card := range g.list {
-		if card.get(lo) >= gone {
-			card.set(lo, card.get(lo)-1)
-		}
-		if (into == "lo" && card.get(hi) > gone) || (into != "lo" && card.get(hi) >= gone) {
-			card.set(hi, card.get(hi)-1)
-		}
-	}
-}
-
-// dropSlot removes one slot by removing the interior line beside it.
-func (g *Grid) dropSlot(axis Axis, slot int) {
-	last := slot+1 >= len(g.arr(axis))-1
-	if last {
-		g.removeLine(axis, slot, "lo")
-	} else {
-		g.removeLine(axis, slot+1, "hi")
-	}
-}
-
-// MoveTo moves a plane-spanning card to another boundary. The card's slot is removed and a slot of the same span is inserted at the
-// target.
+// MoveTo moves a card that spans the whole plane, a kid of the root cut along axis, to another boundary of the root: its kid moves to that
+// place with its share, the kids it passes shift by its span and every other line keeps its coordinate.
 func (g *Grid) MoveTo(id string, axis Axis, line int) bool {
 	if noAxis(axis) {
 		return false
 	}
 	card := g.find(id)
-	if card == nil || !g.spansPlane(card, axis) {
+	if card == nil || !g.root.isCut() || g.root.Cut != axis {
+		return false
+	}
+	from := slices.IndexFunc(g.root.Kids, func(k Kid) bool { return k.Node == g.leaves[id] })
+	if from < 0 {
 		return false
 	}
 	lo, hi := span(axis)
-	from := card.get(lo)
-	if line == from || line == card.get(hi) {
+	if line == card.get(lo) || line == card.get(hi) {
 		return true
+	}
+	if !g.CanInsertAt(axis, line, id) {
+		return false
+	}
+	at, ok := g.standing(axis, line)
+	if !ok {
+		return false
 	}
 	before := g.ToJSON()
 	empty := g.flat()
-	was := slices.Clone(g.arr(axis))
-	spanned := was[from+1] - was[from]
-	g.removeCard(card)
-	g.removeLine(axis, from+1, "hi")
-	target := line
-	if line > from+1 {
-		target = line - 1
+	kid := g.root.Kids[from]
+	kids := slices.Delete(slices.Clone(g.root.Kids), from, from+1)
+	if at > from {
+		at--
 	}
-	if !g.CanInsertAt(axis, target, "") {
-		g.restore(before)
-		return false
-	}
-	g.insertLine(axis, target, 0)
-	g.openIndex(axis, target)
-	a := g.arr(axis)
-	if target <= from {
-		for k := 0; k <= target; k++ {
-			a[k] = was[k]
-		}
-		for k := target + 1; k <= from+1; k++ {
-			a[k] = was[k-1] + spanned
-		}
-		for k := from + 2; k < len(a); k++ {
-			a[k] = was[k]
-		}
-	} else {
-		for k := 0; k <= from; k++ {
-			a[k] = was[k]
-		}
-		for k := from + 1; k < target; k++ {
-			a[k] = was[k+1] - spanned
-		}
-		a[target] = was[line] - spanned
-		for k := target + 1; k < len(a); k++ {
-			a[k] = was[k]
-		}
-	}
-	alo, ahi := span(other(axis))
-	card.set(lo, target)
-	card.set(hi, target+1)
-	card.set(alo, 0)
-	card.set(ahi, len(g.arr(other(axis)))-1)
-	g.list = append(g.list, card)
+	g.root.Kids = slices.Insert(kids, at, kid)
+	g.derive()
 	g.changed()
 	if !g.hasArea(empty) {
 		g.restore(before)
@@ -2190,13 +1673,13 @@ func (g *Grid) CanMove(id, targetID string, side Side) bool {
 	return ok
 }
 
-// changed runs after every operation that changes the arrangement.
+// changed runs after every operation that changes the arrangement: the sizes agree and the tree takes the lines and the attributes.
 func (g *Grid) changed() {
 	if !g.probing {
 		clear(g.splitMemo)
 	}
 	g.agreeSizes()
-	clear(g.sliceMemo)
+	g.commit()
 }
 
 // agreeSizes writes the largest declared px size to every card in a slot, and removes the size from a card that no longer spans one
@@ -2236,8 +1719,6 @@ func (g *Grid) agreeSizes() {
 // restore restores the arrangement to a state returned earlier by ToJSON.
 func (g *Grid) restore(state State) {
 	g.load(state)
-	g.agreeSizes()
-	clear(g.sliceMemo)
 	if !g.probing {
 		clear(g.splitMemo)
 	}

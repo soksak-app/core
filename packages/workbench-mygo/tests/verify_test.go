@@ -18,10 +18,9 @@ func number64(v float64) *float64 { return &v }
 func threeCards(t *testing.T) *layout.Grid {
 	t.Helper()
 	var state layout.State
-	text := `{"xs":[0,0.5,1],"ys":[0,0.5,1],"cards":[
-		{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"data":{}},
-		{"id":"b","c0":0,"c1":1,"r0":1,"r1":2,"data":{}},
-		{"id":"c","c0":1,"c1":2,"r0":0,"r1":2,"data":{}}]}`
+	text := `{"root":{"cut":"x","kids":[
+		{"share":0.5,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"a","data":{}}},{"share":0.5,"node":{"card":"b","data":{}}}]}},
+		{"share":0.5,"node":{"card":"c","data":{}}}]}}`
 	if err := json.Unmarshal([]byte(text), &state); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +87,7 @@ func TestVerifyPassesADrawnPlane(t *testing.T) {
 			names = append(names, name)
 		}
 	}
-	want := "V1 V2 V3 V4 V5 V6 V7a V7b V10 R D T5"
+	want := "V1 V2 V3 V4 V6 V7a V7b V10 R D T5"
 	if got := strings.Join(names, " "); got != want {
 		t.Fatalf("the rows are %s, want %s", got, want)
 	}
@@ -218,9 +217,7 @@ func TestVerifyFailsAPlacementThatStaysUnanswered(t *testing.T) {
 // A window sidebar stands at its edge at full height.
 func TestVerifyFindsAMisplacedWindowSidebar(t *testing.T) {
 	var state layout.State
-	text := `{"xs":[0,0.2,1],"ys":[0,1],"cards":[
-		{"id":"a","c0":0,"c1":1,"r0":0,"r1":1,"data":{}},
-		{"id":"left","c0":1,"c1":2,"r0":0,"r1":1,"fixed":true}]}`
+	text := `{"root":{"cut":"x","kids":[{"share":0.2,"node":{"card":"a","data":{}}},{"share":0.8,"node":{"card":"left","fixed":true}}]}}`
 	if err := json.Unmarshal([]byte(text), &state); err != nil {
 		t.Fatal(err)
 	}

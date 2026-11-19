@@ -18,7 +18,7 @@ import (
 
 // storedLayout is a stored layout: the state of the plane with the other members as they are stored.
 type storedLayout struct {
-	State          layout.State    `json:"state"`
+	State          layout.Cells    `json:"state"`
 	Groups         json.RawMessage `json:"groups"`
 	Leader         json.RawMessage `json:"leader"`
 	LastCard       json.RawMessage `json:"lastCard"`
@@ -573,7 +573,7 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 		return err
 	}
 	groups, leader, last := s.planes.Stored()
-	if kept["state"], err = json.Marshal(s.plane.ToJSON()); err != nil {
+	if kept["state"], err = json.Marshal(s.plane.Cells()); err != nil {
 		return err
 	}
 	if kept["groups"], err = json.Marshal(groups); err != nil {

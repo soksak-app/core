@@ -53,7 +53,7 @@ func (s *Shell) layoutText() []byte {
 		return nil
 	}
 	groups, leader, last := s.planes.Stored()
-	text, err := json.Marshal(map[string]any{"state": s.plane.ToJSON(), "groups": groups, "leader": leader, "lastCard": last})
+	text, err := json.Marshal(map[string]any{"state": s.plane.Cells(), "groups": groups, "leader": leader, "lastCard": last})
 	if err != nil {
 		return []byte(fmt.Sprintf("unserializable: %v", err))
 	}

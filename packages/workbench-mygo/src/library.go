@@ -33,7 +33,7 @@ type libraryState struct {
 	// drawnPreviews holds the layout of each preview that the last frame drew in the grid of its card, nil for a preview without panes,
 	// previews the panes where that frame laid them out, which the step after the frame reads (readPreviews), and previewErrors the
 	// reason of each project whose stored layout cannot be opened.
-	drawnPreviews map[string]*layout.State
+	drawnPreviews map[string]*layout.Cells
 	previews      map[string][]previewPane
 	previewErrors map[string]string
 }

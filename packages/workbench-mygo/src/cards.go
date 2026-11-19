@@ -948,14 +948,14 @@ func (s *Shell) LayoutDescription() (*LayoutDescription, error) {
 // describeLevel is the tree of the members of the level key, content cards and group cards, from the lines of the grid inside the
 // rectangle of the level (layout.Tree), and nil for a level without a card.
 func (s *Shell) describeLevel(key string) (*LayoutNode, error) {
-	state := s.plane.ToJSON()
+	state := s.plane.Cells()
 	var members []layout.Card
 	for _, id := range s.planes.Members(key) {
 		if card, ok := s.planes.Card(id); ok {
 			members = append(members, card)
 		}
 	}
-	tree, err := layout.Tree(layout.State{Xs: state.Xs, Ys: state.Ys, Cards: members})
+	tree, err := layout.TreeOfCells(layout.Cells{Xs: state.Xs, Ys: state.Ys, Cards: members})
 	if err != nil || tree == nil {
 		return nil, err
 	}
