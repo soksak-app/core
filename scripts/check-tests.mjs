@@ -299,6 +299,30 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F987",
+    implementation: [
+      { file: "packages/sok/go/src/conversation.go", symbol: "return fmt.Errorf(\"HOME is not UTF-8: %s\", escapedBytes(home))" },
+      { file: "packages/sok/rust/src/files.rs", symbol: "pub(crate) fn utf8_path(path: PathBuf) -> Result<PathBuf, String> {" },
+    ],
+    tests: [
+      { file: "packages/sok/go/tests/conversation_test.go", id: "TestHomeThatIsNotUTF8IsRefusedWithItsBytesEscaped" },
+      { file: "packages/sok/rust/tests/conversation_test.rs", id: "home_that_is_not_utf8_is_refused_with_its_bytes_escaped" },
+    ],
+    expected: "Both sok readers refuse a HOME whose bytes are not UTF-8 and show its bytes escaped, so every path that they write is UTF-8.",
+    levels: ["unit"],
+  },
+  {
+    id: "F988",
+    implementation: [
+      { file: "packages/host/go/src/diagnostics.go", symbol: "action, isText := p.Action.(string)" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/diagnostics_input_person_test.go", id: "TestInputPersonRefusesParametersOutOfTheirForm" },
+    ],
+    expected: "diagnostics.input.person refuses an action that is not text with the error of the other invalid actions.",
+    levels: ["unit"],
+  },
+  {
     id: "F975",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "export function installBundle(" },
