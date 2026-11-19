@@ -44,7 +44,7 @@ This proposal states one rule of sizes for every operation that changes the layo
 - Hit areas are drawn on the current layout, and the result is computed on the tree after REMOVE(moving).
 - Each segment of a line belongs to one level of the tree; a line that runs on across levels is separate segments with separate previews. The face of a line segment is the side of the pointer.
 - A target that names the moving node or its vacated place maps to the vacated slot (level, index, fraction), whose ADD is the inverse of the REMOVE, so a drop back is no change.
-- Nested sides that share one screen line get bands of a minimum width in points, ordered by depth from the outside in, whatever the gap; targets whose results are equal are one band.
+- Nested sides that share one screen line get bands ordered by depth from the outside in, whatever the gap; targets whose results are equal are one band. The bands of a card have their standard width in points while the card holds them all; otherwise every band of that card narrows by one factor, so that they end short of the centre of the card. A side is chosen by the distance of the point from it divided by the distance that side has, because a fixed band width cannot keep every side reachable (I4) in a card of the minimum size.
 - A run is chosen by the point where the drag entered the line and the current point.
 - No target is excluded because the pointer is over the dragged card: a drop is no change exactly when its result equals the current layout. Both workbenches now resolve a drop of the only tab of a card over that card as its centre, which leaves the full-width side of the plane below a card that stood under another unreachable.
 

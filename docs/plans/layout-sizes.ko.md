@@ -44,7 +44,7 @@
 - hit 영역은 현재 layout에 그려지고, 결과는 REMOVE(moving) 뒤의 tree에서 계산된다.
 - line의 각 조각은 tree의 한 level에 속한다. level을 넘어 이어지는 line은 각각 preview를 가진 별개의 조각이다. line 조각의 면은 pointer 쪽이다.
 - 움직이는 node나 그 빈 자리를 가리키는 target은 빈 slot(level, index, fraction)에 대응하며, 그 ADD는 REMOVE의 역이므로 제자리 drop은 변경이 없다.
-- 한 화면 line을 공유하는 중첩된 side는 gap과 관계없이 point 단위의 최소 폭을 가진 띠를 받으며, 띠는 바깥에서 안쪽으로 깊이 순서다. 결과가 같은 target은 한 띠다.
+- 한 화면 line을 공유하는 중첩된 side는 gap과 관계없이 바깥에서 안쪽으로 깊이 순서인 띠를 받는다. 결과가 같은 target은 한 띠다. card가 그 띠를 모두 담는 동안 그 card의 띠는 point 단위의 표준 폭을 가지며, 그렇지 않으면 그 card의 모든 띠가 한 비율로 좁아져 card의 가운데 앞에서 끝난다. side는 점이 그 side에서 떨어진 거리를 그 side가 가진 거리로 나눈 값으로 고른다. 고정된 띠 폭으로는 최소 크기의 card에서 모든 side에 닿을 수 없기(I4) 때문이다.
 - 범위는 drag가 line에 들어온 점과 현재 점으로 고른다.
 - pointer가 끌리는 card 위에 있다는 이유로 제외되는 target은 없다. drop은 그 결과가 현재 layout과 같을 때 정확히 변경이 없다. 지금 두 workbench는 card의 유일한 tab을 그 card 위에 놓는 drop을 그 가운데로 정하므로, 다른 card 아래에 있던 card 밑의 plane 전체 폭 side에 닿을 수 없다.
 
