@@ -1061,6 +1061,7 @@ fn parties_of(groups: &[SnapshotGroup]) -> Result<Option<(Raw, Vec<PartyRecord>)
         .iter()
         .find(|(kind, _)| *kind == "status")
         .map(|(_, entries)| entries.as_slice())
+        // default: a core group without a status list has no status entries, so no party is found.
         .unwrap_or(&[]);
     for raw in statuses {
         let entry: serde_json::Value = serde_json::from_str(raw.get()).map_err(|_| {
@@ -1072,10 +1073,12 @@ fn parties_of(groups: &[SnapshotGroup]) -> Result<Option<(Raw, Vec<PartyRecord>)
         if entry.get("name").and_then(|name| name.as_str()) != Some("core.parties") {
             continue;
         }
-        let value = entry
-            .get("value")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
+        let value = entry.get("value").cloned().ok_or_else(|| {
+            Failure::Other(format!(
+                "exposure.snapshot status core.parties has no value: {}",
+                raw.get()
+            ))
+        })?;
         let unexpected = || {
             Failure::Other(format!(
                 "core.parties of exposure.snapshot has an unexpected value: {value}"
