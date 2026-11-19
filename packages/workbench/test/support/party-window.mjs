@@ -35,12 +35,16 @@ let started = null;
  * Starts the page once per process and returns the window: registry, run, get, reset. cardIds is the row of the first start in the
  * process, so a test file that needs another order of the cards starts its own process with that row.
  */
-export function openPartyWindow(cardIds = CARDS) {
-  started ??= start(cardIds);
+export function openPartyWindow(cardIds = CARDS, { overrides = false } = {}) {
+  started ??= start(cardIds, overrides);
   return started;
 }
 
-async function start(cardIds) {
+/**
+ * With overrides, each window sidebar also has the override link window-<side> of probe-plain, so a focused card of probe-plain is
+ * joined with its window sidebars by the rail (docs/spec/external-sidebars.md#override-context-and-rail-border).
+ */
+async function start(cardIds, overrides) {
   const markup = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
   // pretendToBeVisual gives the document the animation frame that the page draws with.
   const dom = new JSDOM(markup, { url: "http://localhost/", pretendToBeVisual: true });
@@ -67,7 +71,8 @@ async function start(cardIds) {
     // A window sidebar is a card of the plane while its side has a link to a set (docs/spec/external-sidebars.md).
     sidebars: {
       sets: windowSides.length ? [{ id: "set-side", title: "Side", sections: ["probe-plain.side"], layout: "list" }] : [],
-      links: windowSides.map((side) => ({ place: side, plugin: null, set: "set-side" })),
+      links: windowSides.flatMap((side) => [{ place: side, plugin: null, set: "set-side" },
+        ...(overrides ? [{ place: `window-${side}`, plugin: "probe-plain", set: "set-side" }] : [])]),
     },
   };
   const { installEnvironment } = await import("../../environment.js");

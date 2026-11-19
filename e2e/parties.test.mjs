@@ -1,6 +1,7 @@
 // Checks the parties of a window on each host (docs/spec/parties.md): the party commands and their replies and refusals, the watch of
 // core.parties, which delivers a value for each change of the composition and none for other work, the queries core.party.get and
-// core.card.get, the outline of a party against the rail, and the parties that a save and a reload keep in projects.json.
+// core.card.get, the outline of a party against the rail, and the parties that a save and a reload keep in projects.json. The order in
+// which a host paints the rail and the party line is checked by the unit tests of each host; a window check judges no pixel.
 //
 // The drawn paths of a page workbench (path[data-party], path[data-party-leader] and #railPath) are no declared entry, so the drawing is
 // judged by the loops that the drawing is built from: `outline` of core.parties and the loops of the rail groups of core.rail. Both are
@@ -15,8 +16,8 @@ import { APPS, keepCommonSettings, open } from "@soksak/window-check/app.mjs";
 import { fresh } from "./fixture.mjs";
 import { projectRecords } from "./projects-file.mjs";
 
-/** The border width of a party, which is the rail width of the theme (docs/spec/parties.md#rules). */
-const RAIL_WIDTH = parseFloat(workbench.chrome["theme-rail-w"]);
+/** The party width, the stroke of a party outline, which is `theme-rail-w` of the chrome metrics (docs/spec/parties.md#rules). */
+const PARTY_WIDTH = parseFloat(workbench.chrome["theme-rail-w"]);
 const HEX = /^#[0-9a-f]{6}$/i;
 // A difference of coordinates below this is the same coordinate: the outline and the rail are computed in floating point.
 const SAME = 0.01;
@@ -239,7 +240,7 @@ for (const app of Object.values(APPS)) {
     await refused(s, "core.card.get", { card: "missing-card" }, "unknown card missing-card");
   });
 
-  test(`${app.name}: a party outline joins its cards and stays inside the rail by the rail width`, { timeout: 120000 }, async (t) => {
+  test(`${app.name}: a party outline joins its cards and shows no party colour outside the rail`, { timeout: 120000 }, async (t) => {
     const s = await open(t, app);
     const { plugin, top, bottom, lowest } = await partyCards(s);
     // The right override of the layout probe ties the window sidebar right to the focused card, so the rail outlines that card with
@@ -251,14 +252,14 @@ for (const app of Object.values(APPS)) {
     await s.run("core.settings.link", { place: "window-right", plugin, set: set.id, scope: "common" });
 
     await s.run("core.party.create", { cards: [bottom, lowest], leader: bottom });
-    // With the focus outside the party, the outline is the bounds of its cards padded by half the gap and inset by half the border.
+    // With the focus outside the party, the outline is the bounds of its cards padded by half the gap and inset by half the party width.
     await s.run("core.card.focus", { card: top });
     await s.presented();
     const grid = await s.get("core.grid");
     const [party] = await s.get("core.parties");
     assert.equal(party.outline.length, 1, `the party of two touching cards has ${party.outline.length} loops, expected 1`);
     const rects = party.cards.map((card) => grid.cards.find((item) => item.id === card));
-    const offset = grid.gap / 2 - RAIL_WIDTH / 2;
+    const offset = grid.gap / 2 - PARTY_WIDTH / 2;
     const expected = {
       x0: Math.min(...rects.map((r) => r.x)) - offset, y0: Math.min(...rects.map((r) => r.y)) - offset,
       x1: Math.max(...rects.map((r) => r.x + r.w)) + offset, y1: Math.max(...rects.map((r) => r.y + r.h)) + offset,
@@ -268,39 +269,42 @@ for (const app of Object.values(APPS)) {
       assert.ok(Math.abs(bounds[key] - expected[key]) < SAME, `the outline bound ${key} is ${bounds[key]}, expected ${expected[key]}: outline ${JSON.stringify(party.outline)}, cards ${JSON.stringify(rects)}, gap ${grid.gap}`);
     }
 
-    // With the focus on the leader, the rail outlines the leader and the sidebar: each side of the party outline on a side of the
-    // leader that the rail also outlines lies the rail width inside the rail, and no side of the two lines coincides.
+    // The focus on the leader changes no party record (docs/spec/parties.md#queries), and the rail outlines the leader and the sidebar.
     await s.run("core.card.focus", { card: bottom });
     await s.presented();
+    assert.deepEqual(await s.get("core.parties"), [party], "core.parties changed with the focus");
     const rail = await s.get("core.rail");
-    const group = rail.groups.find((item) => item.card === bottom);
-    assert.ok(group, `the rail has no group of the focused card ${bottom}: ${JSON.stringify(rail.groups.map((item) => item.card))}`);
-    const [drawn] = await s.get("core.parties");
+    assert.ok(rail.groups.some((item) => item.card === bottom),
+      `the rail has no group of the focused card ${bottom}: ${JSON.stringify(rail.groups.map((item) => item.card))}`);
+    // No party colour shows outside the rail: on each side of the leader that both outline, the outer edge of the rail band, of the
+    // stroke bw of the theme, is not nearer the card than the outer edge of the party band (docs/spec/parties.md#drawing).
+    const { theme } = (await s.get("core.settings")).values;
+    const bw = parseFloat(workbench.themes.find((item) => item.name === theme)?.shape.bw);
+    assert.ok(Number.isFinite(bw), `the theme ${theme} declares no border width bw`);
     const railSides = sidesOf(rail.groups.flatMap((item) => item.loops));
-    const partySides = sidesOf(drawn.outline);
-    const coinciding = partySides.filter((side) => railSides.some((other) => other.vertical === side.vertical
-      && Math.abs(other.at - side.at) < SAME && overlap(side, other) >= SAME));
-    assert.deepEqual(coinciding, [], `sides of the party outline coincide with the rail: rail ${rail.path}, party ${JSON.stringify(drawn.outline)}`);
-    const card = (await s.get("core.grid")).cards.find((item) => item.id === bottom);
+    const partySides = sidesOf(party.outline);
+    const card = grid.cards.find((item) => item.id === bottom);
     const edges = [
-      { vertical: true, at: card.x, inward: 1, from: card.y, to: card.y + card.h },
-      { vertical: true, at: card.x + card.w, inward: -1, from: card.y, to: card.y + card.h },
-      { vertical: false, at: card.y, inward: 1, from: card.x, to: card.x + card.w },
-      { vertical: false, at: card.y + card.h, inward: -1, from: card.x, to: card.x + card.w },
+      { vertical: true, at: card.x, outward: -1, from: card.y, to: card.y + card.h },
+      { vertical: true, at: card.x + card.w, outward: 1, from: card.y, to: card.y + card.h },
+      { vertical: false, at: card.y, outward: -1, from: card.x, to: card.x + card.w },
+      { vertical: false, at: card.y + card.h, outward: 1, from: card.x, to: card.x + card.w },
     ];
     const near = (side, edge) => side.vertical === edge.vertical && Math.abs(side.at - edge.at) <= grid.gap / 2 + SAME && overlap(side, edge) >= SAME;
-    const close = [];
+    const outside = [];
     let compared = 0;
     for (const edge of edges) {
-      for (const outer of railSides.filter((side) => near(side, edge))) {
-        for (const inner of partySides.filter((side) => near(side, edge) && overlap(side, outer) >= SAME)) {
+      for (const railSide of railSides.filter((side) => near(side, edge))) {
+        for (const partySide of partySides.filter((side) => near(side, edge) && overlap(side, railSide) >= SAME)) {
           compared += 1;
-          if ((inner.at - outer.at) * edge.inward < RAIL_WIDTH - SAME) close.push({ edge, rail: outer, party: inner });
+          const railOuter = (railSide.at - edge.at) * edge.outward + bw / 2;
+          const partyOuter = (partySide.at - edge.at) * edge.outward + PARTY_WIDTH / 2;
+          if (railOuter - partyOuter < -SAME) outside.push({ edge, railSide, partySide, railOuter, partyOuter });
         }
       }
     }
     assert.ok(compared > 0, `no side of the party outline lies on a side of ${bottom} that the rail outlines: rail ${JSON.stringify(railSides)}, party ${JSON.stringify(partySides)}`);
-    assert.deepEqual(close, [], `the party outline is not the rail width ${RAIL_WIDTH} inside the rail`);
+    assert.deepEqual(outside, [], `the party band reaches outside the rail band (rail stroke ${bw}, party stroke ${PARTY_WIDTH})`);
   });
 
   test(`${app.name}: a save and a reload keep the parties of the space`, { timeout: 120000 }, async (t) => {
