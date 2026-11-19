@@ -1,6 +1,7 @@
 // The pixels of a frame. A frame is the declared color of its session, filled over the whole raster; the requested rows, painted
 // from the top as bands of the row color one cell tall, each ending in a line of the session color so that the bands can be
-// counted; and the identity marker, a square one cell tall at the bottom right whose color carries the frame identity: red is the
+// counted, and each as many cells long as the columns less the number of the line it shows modulo the columns, so that a frame of
+// another viewport of the retained lines differs; and the identity marker, a square one cell tall at the bottom right whose color carries the frame identity: red is the
 // low byte of the generation, green and blue the two low bytes of the sequence. The pixels are opaque premultiplied BGRA.
 
 /// The cell of the grid at text size factor 1 in points; the cell in device pixels is this times the factor times the scale.
@@ -59,6 +60,8 @@ pub struct Scene {
     pub color: Rgb,
     /// The bands to paint, at most the rows of the grid.
     pub rows: u32,
+    /// The number of the line that the top row shows: the retained history less the scrollback offset.
+    pub top: u64,
     pub generation: u64,
     pub sequence: u64,
 }
@@ -92,9 +95,12 @@ pub fn paint(buffer: &mut [u8], stride: usize, scene: &Scene) {
     fill(buffer, stride, 0, 0, scene.width, scene.height, scene.color);
     let band = scene.color.contrast();
     let cell = scene.grid.cell_height;
+    let cols = u64::from(scene.grid.cols.max(1));
     for row in 0..scene.rows.min(scene.grid.rows) {
         let top = row * cell;
-        fill(buffer, stride, 0, top, scene.width, top + cell - 1, band);
+        let cells = cols - (scene.top + u64::from(row)) % cols;
+        let right = u32::try_from(cells).map_or(scene.width, |cells| (cells * scene.grid.cell_width).min(scene.width));
+        fill(buffer, stride, 0, top, right, top + cell - 1, band);
     }
     let side = scene.marker_side();
     fill(buffer, stride, scene.width - side, scene.height - side, scene.width, scene.height, scene.marker());
@@ -131,7 +137,7 @@ mod tests {
         let (width, height) = (40, 30);
         let grid = Grid::of(width, height, 1.0, 0.5);
         assert_eq!(grid, Grid { cell_width: 4, cell_height: 8, rows: 3, cols: 10 });
-        let scene = Scene { width, height, grid, color: Rgb(0, 80, 180), rows: 2, generation: 0x103, sequence: 0x0204 };
+        let scene = Scene { width, height, grid, color: Rgb(0, 80, 180), rows: 2, top: 0, generation: 0x103, sequence: 0x0204 };
         let stride = width as usize * 4 + 16;
         let mut buffer = vec![0; stride * height as usize];
         paint(&mut buffer, stride, &scene);
@@ -150,7 +156,7 @@ mod tests {
     fn requested_rows_beyond_the_grid_paint_the_rows_that_fit() {
         let (width, height) = (16, 20);
         let grid = Grid::of(width, height, 1.0, 0.5);
-        let scene = Scene { width, height, grid, color: Rgb(250, 250, 250), rows: 9, generation: 1, sequence: 1 };
+        let scene = Scene { width, height, grid, color: Rgb(250, 250, 250), rows: 9, top: 0, generation: 1, sequence: 1 };
         let mut buffer = vec![0; width as usize * 4 * height as usize];
         paint(&mut buffer, width as usize * 4, &scene);
         assert_eq!(pixel(&buffer, width as usize * 4, 0, 8), Rgb(0, 0, 0), "a light color takes black bands");

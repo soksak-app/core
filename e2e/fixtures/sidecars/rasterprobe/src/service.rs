@@ -9,6 +9,12 @@
 //   rows {count}                             the number of row bands that the frames paint. Answer: the event rows.
 //   color {color}                            the color `#rrggbb` of the frames. Answer: the event color.
 //   textSize {factor}                        the text size factor that sizes the cells of the grid. Answer: the event textSize.
+//   history {count}                          the number of lines that the session retains above its screen, as a terminal retains
+//                                            its scrollback; the offset stays within it. Answer: the event scrollback
+//                                            {offset, history}.
+//   scroll {sequence, lines}                 moves the viewport `lines` toward older lines (negative toward newer), within 0 and
+//                                            the history, as the wheel of a terminal does. Answer: the event scrollback
+//                                            {sequence, offset, history}; a scroll that moves the viewport makes a frame due.
 //   state                                    Answer: the event state, the session as the event session describes it.
 //   input {sequence, ..}                     Answer: the event input with the body it received; the request event keeps its cids.
 //                                            Each input makes a frame due, and the event frame of the frame that the service draws
@@ -16,7 +22,8 @@
 //                                            `inputs`, so a page tells which frame presents the state after an input.
 //   close                                    closes the session and its child process. Answer: the event closed.
 //   kill                                     ends the service process at once with SIGKILL, without an answer.
-// Each frame that the service sends is followed by the event frame with its identity, its raster, its grid and its rows.
+// Each frame that the service sends is followed by the event frame with its identity, its raster, its grid, its rows and its
+// scrollback {offset, history}.
 // The host reads the member `image` of every body that the service sends as an image envelope (docs/spec/sidecars.md#image-envelope),
 // so only a frame and a detach answer carry it.
 use std::collections::HashMap;
@@ -138,6 +145,9 @@ struct Session {
     color: Rgb,
     rows: u32,
     factor: f64,
+    /// The lines retained above the screen and the number of them that the viewport is above the newest line.
+    history: u64,
+    offset: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -567,6 +577,7 @@ impl Service {
             "color": session.color.text(),
             "rows": session.rows,
             "textSize": session.factor,
+            "scrollback": {"offset": session.offset, "history": session.history},
             "frames": state.image.as_ref().map_or(0, |image| image.frames),
             "error": state.image.as_ref().and_then(|image| image.error.clone()),
         })
@@ -611,6 +622,26 @@ impl Service {
                 session.factor = factor;
                 state.image.iter_mut().for_each(|image| image.dirty = true);
                 answer(out, json!({"event": "textSize", "factor": factor}));
+            }
+            "history" => {
+                let count = fields.get("count").and_then(Value::as_u64).ok_or("history requires a non-negative integer count")?;
+                session.history = count;
+                session.offset = session.offset.min(count);
+                state.image.iter_mut().for_each(|image| image.dirty = true);
+                answer(out, json!({"event": "scrollback", "offset": session.offset, "history": count}));
+            }
+            "scroll" => {
+                let sequence = fields.get("sequence").and_then(Value::as_u64);
+                let lines = fields.get("lines").and_then(Value::as_i64);
+                let (Some(sequence), Some(lines)) = (sequence, lines) else {
+                    return Err("scroll requires a non-negative integer sequence and an integer lines".to_string());
+                };
+                let offset = session.offset.saturating_add_signed(lines).min(session.history);
+                if offset != session.offset {
+                    session.offset = offset;
+                    state.image.iter_mut().for_each(|image| image.dirty = true);
+                }
+                answer(out, json!({"event": "scrollback", "sequence": sequence, "offset": offset, "history": session.history}));
             }
             "input" => {
                 let sequence = fields.get("sequence").and_then(Value::as_u64).ok_or("input requires a non-negative integer sequence")?;
@@ -670,7 +701,7 @@ impl Service {
             let child = Child::start(&self.executable, &id)?;
             let state = self.surfaces.get_mut(key).expect("the surface message entered the surface");
             let root = state.root.clone();
-            state.session = Some(Session { id, root, child, color, rows, factor });
+            state.session = Some(Session { id, root, child, color, rows, factor, history: 0, offset: 0 });
         }
         let state = self.surfaces.get_mut(key).expect("the surface message entered the surface");
         if let Some(name) = image {
@@ -886,6 +917,7 @@ impl Service {
             grid,
             color: session.color,
             rows: session.rows.min(grid.rows),
+            top: session.history - session.offset,
             generation,
             sequence,
         };
@@ -955,6 +987,7 @@ impl Service {
             "rows": scene.rows,
             "color": scene.color.text(),
             "marker": scene.marker().text(),
+            "scrollback": {"offset": session.offset, "history": session.history},
             "surface": transfer.id(),
             "draw_us": draw_us,
             "inputs": inputs,

@@ -4,7 +4,9 @@
 // may have ended, and a request before the open would reach a surface without a session. It forwards the text size factor of the surface and the input of the region to the sidecar, opens the session again on each
 // connection notice of the sidecar, and reports the view, the session, the last frame and the input of the region as statuses. A
 // primary press on the region gives it the keyboard focus, as a view whose region takes text does (a press passes through the
-// region to the page, docs/spec/native-surfaces.md#image-regions). A hide, a show and a reload of the view are the host's: the host
+// region to the page, docs/spec/native-surfaces.md#image-regions). A wheel over the region scrolls the lines that the session
+// retains as the wheel of a terminal does: its distance in cells of the grid of the last frame, with the part of a cell carried to
+// the next wheel, and each wheel is one scroll request numbered by the view, so the answer of each wheel can be waited for. A hide, a show and a reload of the view are the host's: the host
 // detaches the image of a reloaded page and the new page opens the same session again, so the view keeps no state of its own.
 
 export const SIDECAR = "@sok-check/sidecar-rasterprobe";
@@ -61,6 +63,12 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   const inputStatus = statusCell({ focused: false, transactions: 0, preedit: null, actions: [], errors: [], log: [], pointer: [],
     pressFocus: 0 });
   const changeInput = (change) => inputStatus.set({ ...inputStatus.read(), ...change(inputStatus.read()) });
+  // The number of the wheels that the view sent as scroll requests, and of the last one that the sidecar answered.
+  let wheels = 0;
+  let answered = 0;
+  // The scrollback of a session or state event with the number of the last answered wheel; a body of a sidecar that names no
+  // scrollback adds none.
+  const scrollbackOf = (body) => (body.scrollback === undefined ? {} : { scrollback: { ...body.scrollback, sequence: answered } });
 
   const measure = () => {
     const rect = element.getBoundingClientRect();
@@ -119,7 +127,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
     switch (body?.event) {
       case "session":
       case "state":
-        sessionStatus.set({ ...body, connected: true, failure: null, error: null });
+        sessionStatus.set({ ...body, ...scrollbackOf(body), connected: true, failure: null, error: null });
         return;
       case "frame":
         frameStatus.set(body);
@@ -133,6 +141,11 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
         return;
       case "textSize":
         sessionStatus.set({ ...sessionStatus.read(), textSize: body.factor });
+        return;
+      case "scrollback":
+        // default: the answer of a history request names no wheel and keeps the number of the last answered one.
+        answered = body.sequence ?? answered;
+        sessionStatus.set({ ...sessionStatus.read(), scrollback: { offset: body.offset, history: body.history, sequence: answered } });
         return;
       case "closed":
         sessionStatus.set({ ...NO_SESSION, connected: true });
@@ -208,6 +221,24 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   };
   element.addEventListener("pointerdown", pointer);
   element.addEventListener("pointerup", pointer);
+  // A positive line count is toward older lines, as a wheel that moves the content down shows them.
+  let carry = 0;
+  const wheel = (event) => {
+    event.preventDefault();
+    const frame = frameStatus.read();
+    if (frame === null) {
+      report("a wheel reached the region before its first frame, so its distance has no cell");
+      return;
+    }
+    const cell = frame.grid.cellHeight / frame.scale;
+    const cells = event.deltaMode === 1 ? event.deltaY : event.deltaMode === 2 ? event.deltaY * frame.grid.rows : event.deltaY / cell;
+    carry -= cells;
+    const lines = Math.trunc(carry);
+    carry -= lines;
+    wheels += 1;
+    send({ operation: "scroll", sequence: wheels, lines }).catch((error) => report(`scroll: ${error.message}`));
+  };
+  element.addEventListener("wheel", wheel, { passive: false });
   image.on("action", () => {});
   image.on("error", (event) => report(`image ${REGION}: ${event.reason}`));
 
@@ -222,6 +253,7 @@ export async function startRasterProbe({ bridge, expose, document, view }) {
   await command("rasterprobe.input.clear", () => changeInput(() => ({ log: [], pointer: [] })));
   await command("rasterprobe.close", () => send({ operation: "close" }));
   await command("rasterprobe.kill", () => send({ operation: "kill" }));
+  await command("rasterprobe.history", ({ count }) => send({ operation: "history", count }));
   const status = (name, cell) => expose.status(name, cell.read, cell.subscribe);
   await status("rasterprobe.view", viewStatus);
   await status("rasterprobe.session", sessionStatus);
