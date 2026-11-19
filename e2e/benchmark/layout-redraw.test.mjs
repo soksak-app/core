@@ -4,7 +4,7 @@
 import test from "node:test";
 
 import { APPS, open } from "@soksak/window-check/app.mjs";
-import { runRedraw } from "./cases/layout-redraw.mjs";
+import { runRedraw, stageLine } from "./cases/layout-redraw.mjs";
 
 for (const app of Object.values(APPS)) {
   test(`${app.name}: the frames of six image region cards during a balance, a divider drag and a leader change report blank cards`,
@@ -16,11 +16,7 @@ for (const app of Object.values(APPS)) {
         const blank = cards.reduce((sum, { blank: count }) => sum + count, 0);
         t.diagnostic(`${app.name}: ${action}: ${during} frames, ${blank} blank card frames; ` +
           cards.map(({ card, blank: count, fewestShare }) => `${card} ${count} blank, fewest ${(fewestShare * 100).toFixed(0)}%`).join("; "));
-        if (stages !== null) {
-          const spread = (name) => `${name} ${stages.cadence[name].count} median ${stages.cadence[name].median?.toFixed(1)} p90 ${stages.cadence[name].p90?.toFixed(1)} ms`;
-          t.diagnostic(`${app.name}: ${action}: transactions by commit path ${JSON.stringify(stages.paths)}; ` +
-            ["interval", "drawing", "waiting", "committing", "total"].map(spread).join("; "));
-        }
+        if (stages !== null) t.diagnostic(`${app.name}: ${action}: ${stageLine(stages)}`);
       }
     });
 }

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { clickOrder, displayFrames, focusTimes } from "../benchmark/cases/click-cpu.mjs";
-import { actionFrames, blankFigures, dragStages, redrawActions, regionRaster } from "../benchmark/cases/layout-redraw.mjs";
+import { actionFrames, blankFigures, dragStages, redrawActions, regionRaster, stageLine } from "../benchmark/cases/layout-redraw.mjs";
 import { boundaryMoves, startRows, widestCard } from "../benchmark/cases/raster-cards.mjs";
 import { steppedOffset, wheelDelta } from "../benchmark/cases/scroll-cpu.mjs";
 
@@ -85,4 +85,10 @@ test("the time from a press to the display of its focus counts the display perio
   assert.deepEqual(displayFrames([8.4, 16.7, 25], 120), { count: 3, medianFrames: 2.004, p90Frames: 3, maxFrames: 3 });
   assert.deepEqual(displayFrames([33.4, 16.7], 60), { count: 2, medianFrames: 1.002, p90Frames: 2.004, maxFrames: 2.004 });
   assert.throws(() => displayFrames([10], 0), /refresh rate 0/);
+});
+
+test("the line of the drag stages names a drag without layout transactions instead of empty figures", { timeout: 5000 }, () => {
+  assert.equal(stageLine(dragStages([])), "no layout transaction: the workbench drew the drag without a native layout transaction");
+  const layout = (begun, committed) => ({ ticket: begun, begun, requested: begun + 1, presented: begun + 2, committed, commitPath: "present" });
+  assert.match(stageLine(dragStages([layout(0, 4), layout(10, 13)])), /^transactions by commit path \{"present":2\}; interval 1 median 10\.0 p90 10\.0 ms; /);
 });

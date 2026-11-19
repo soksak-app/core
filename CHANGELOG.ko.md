@@ -5,6 +5,8 @@
 
 ## 2026-11-20
 
+- F950-2 (transaction 없는 drag 단계): layout redraw benchmark는 빈 수치를 출력하는 대신, workbench가 그 drag를 native layout transaction 없이 그렸다고 말한다. 검증: 단계 줄 test가 그 함수 없이 실패했고 통과한다.
+- F960 (결과): click, scroll, layout redraw benchmark가 F958-1의 press 수정과 함께 mygo, Wails, Tauri에서 실행되었다. 수치는 checklist 항목에 있다.
 - F958-2 (press부터 표시까지): click benchmark가 press부터 그 focus가 표시된 frame까지의 시간을 millisecond와 window refresh rate의 display 주기 수로 보고한다. 검증: display 주기 test가 그 함수 없이 실패했고 통과한다.
 - F950-1 (drag 단계): layout redraw benchmark가 divider drag의 layout transaction의 commit path와 단계 시간을 보고한다. 검증: drag 단계 test가 그 함수 없이 실패했고 통과한다.
 - F960 (click benchmark의 sidebar): raster benchmark의 balance하는 grid는 실행하는 동안 window sidebar를 끈다. 그 옆에서는 다섯 card짜리 줄을 정확히 절반으로 split할 수 없기 때문이다. 검증: `card terminal cannot split toward right`로 실패하던 click benchmark가 Wails에서 grid를 연다.

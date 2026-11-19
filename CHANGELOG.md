@@ -5,6 +5,8 @@
 
 ## 2026-11-20
 
+- F950-2 (drag stages without transactions): the layout redraw benchmark states that a workbench drew the drag without a native layout transaction instead of printing empty figures. Verification: the stage line test failed without the function and passes.
+- F960 (result): the click, scroll and layout redraw benchmarks ran on mygo, Wails and Tauri with the press fix of F958-1; the figures are in the checklist entry.
 - F958-2 (press to display): the click benchmark reports the time from a press to the displayed frame of its focus in milliseconds and in display periods of the refresh rate of the window. Verification: the display period test failed without the function and passes.
 - F950-1 (drag stages): the layout redraw benchmark reports the commit paths and the stage times of the layout transactions of its divider drag. Verification: the drag stage test failed without the function and passes.
 - F960 (click benchmark sidebars): the balanced grid of the raster benchmarks turns the window sidebars off while it runs, because a row of five cards beside them cannot be split at the exact half. Verification: the click benchmark that failed with `card terminal cannot split toward right` opens its grid on Wails.

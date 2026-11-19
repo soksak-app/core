@@ -112,6 +112,16 @@ export function dragStages(layouts) {
   return { paths, cadence: transactionCadence(layouts) };
 }
 
+/**
+ * The report line of the stages `stages` (dragStages). A workbench that draws a drag without a native layout transaction, as the
+ * mygo workbench does, has no stage to spread, and the line says so instead of printing empty figures.
+ */
+export function stageLine(stages) {
+  if (stages.cadence.total.count === 0) return "no layout transaction: the workbench drew the drag without a native layout transaction";
+  const spread = (name) => `${name} ${stages.cadence[name].count} median ${stages.cadence[name].median.toFixed(1)} p90 ${stages.cadence[name].p90.toFixed(1)} ms`;
+  return `transactions by commit path ${JSON.stringify(stages.paths)}; ` + ["interval", "drawing", "waiting", "committing", "total"].map(spread).join("; ");
+}
+
 /** The actions of the benchmark for the grid `grid` (rows of {card}), with the leader actions when `leader` is declared. */
 export function redrawActions(grid, line, leader) {
   const actions = [
