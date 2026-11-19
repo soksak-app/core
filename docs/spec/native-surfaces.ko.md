@@ -415,7 +415,7 @@ Terminal의 `terminal.screen` status는 rows를 담고 JSON 값이 같으면 not
 - `{"image":{"screen":{"accepted":{"request":"opaque-id","name":"region-name","generation":2,"raster":7}}}}`는 그 행을 같은 generation과 raster의 다음 화면 요청의 기준으로 삼는다.
 - `{"image":{"screen":{"error":"notAttached","request":"opaque-id","name":"region-name","generation":2,"raster":7}}}` 또는 `{"image":{"screen":{"error":"stale", ...}}}`은 그 행을 거절하며 기준을 바꾸지 않는다. `notAttached`는 region이나 generation이 현재 composition에 없음을, `stale`은 generation이나 raster가 오래되었음을 뜻하며, envelope 표와 같다([sidecars](sidecars.ko.md#그림-봉투)).
 
-유효한 요청과 rows를 담은 screen 메시지는 다음과 같이 답한다. 메시지를 보낸 쪽이 region을 소유하고, generation과 raster가 현재이며, 요청이 응답되지 않은 요청이면 host는 `accepted`로 답하고 응답되지 않은 요청을 끝낸다. 이때 rows가 기준이 된다. 보낸 쪽이 region을 소유하지 않으면 host는 `notAttached`로, generation, raster 또는 요청 식별자가 오래되었으면 `stale`로 `error`를 답한다. 거절된 메시지는 응답되지 않은 요청을 그대로 두므로 region은 새 요청을 받지 않는다. 멤버가 없거나 타입이 틀린 메시지, 또는 `row`나 `cells`가 없는 행을 담은 메시지는 거절된다. host는 멤버 이름을 담은 오류 기록을 쓰고 답하지 않는다.
+유효한 요청과 rows를 담은 screen 메시지는 다음과 같이 답한다. 메시지를 보낸 쪽이 region을 소유하고, generation과 raster가 현재이며, 요청이 응답되지 않은 요청이면 host는 `accepted`로 답하고 응답되지 않은 요청을 끝낸다. 이때 rows가 기준이 된다. 보낸 쪽이 region을 소유하지 않으면 host는 `notAttached`로, generation, raster 또는 요청 식별자가 오래되었으면 `stale`로 `error`를 답한다. 거절된 메시지는 응답되지 않은 요청을 그대로 두므로 region은 새 요청을 받지 않는다. `request`, `name`, `generation` 또는 `raster`가 없거나 타입이 틀린 메시지, `rows`가 배열이 아닌 메시지, 또는 음이 아닌 정수 `row`나 `cells`가 없는 행을 담은 메시지는 `malformed` 오류와 `member`로 답한다. `member`는 첫 번째 그런 멤버를 `rows.0.cells`처럼 점으로 이은 경로로 이름 붙인다. 답은 메시지가 타입이 맞게 담은 `request`, `name`, `generation`, `raster`를 그대로 되풀이하고 나머지는 뺀다. 잘못된 메시지도 거절된 메시지와 같이 응답되지 않은 요청을 그대로 둔다.
 
 ## 인수 기준
 
