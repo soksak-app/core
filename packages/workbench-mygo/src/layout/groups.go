@@ -541,6 +541,18 @@ func boxData(name, leader string) json.RawMessage {
 	return json.RawMessage(`{"name":` + strconv.Quote(name) + `,"leader":` + strconv.Quote(leader) + `}`)
 }
 
+// Arrange runs change, which builds an arrangement on the grid and draws the ids of new cards from issue, gives the cards their frames,
+// and puts the tree back when change fails (docs/spec/cli.md#planning-an-arrangement).
+func (t *GroupTree) Arrange(change func(issue func() string) error) error {
+	kept := t.snapshot()
+	if err := change(t.issue); err != nil {
+		t.restore(kept)
+		return err
+	}
+	t.reframe()
+	return nil
+}
+
 // issue returns the next card id of the space.
 func (t *GroupTree) issue() string {
 	t.last++

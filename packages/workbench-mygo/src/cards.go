@@ -1167,6 +1167,7 @@ type layoutOpenParam struct {
 
 // registerLayout registers the layout operations.
 func (s *Shell) registerLayout() {
+	s.registerLayoutPlan()
 	command(s, "core.layout.open", func(value layoutOpenParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
