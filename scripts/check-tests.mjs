@@ -364,6 +364,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-55",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_text.go", symbol: "func drawCutText(" },
+      { file: "packages/workbench/app.css", symbol: ".tab__name{overflow:hidden;text-overflow:ellipsis;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestTheCutNameOfATabKeepsItsFirstCharacter" },
+      { file: "packages/workbench/test/tab-name-cut.test.mjs", id: "the name of the active tab of a head that fits one tab is cut with an ellipsis on one line" },
+    ],
+    expected: "A cut tab name keeps as many leading characters as fit beside the ellipsis, and its first character is cut rather than replaced by the ellipsis, in mygo and on the page.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-50",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: ".filter((item) => item !== null) }));" },

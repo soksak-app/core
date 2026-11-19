@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/go-text/typesetting/segmenter"
 
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -126,6 +127,30 @@ func (s *Shell) textCaption() float32 {
 func spanWidth(c *ui.Context, span ui.Span) float32 {
 	width, _ := c.MeasureText(0, span) // silent: the second result is the height, which a width does not read.
 	return width
+}
+
+// tabEllipsis is the mark that ends a cut name.
+const tabEllipsis = "…"
+
+// drawCutText draws text on one line cut to width as CSS text-overflow: ellipsis cuts it: as many leading graphemes as fit beside
+// the ellipsis, which ends them. The first grapheme of a line is cut at the end of the room rather than replaced by the ellipsis, so
+// a room narrower than that grapheme and the ellipsis shows the grapheme clipped without the ellipsis
+// (docs/spec/example-model.md#card-tabs); the ellipsis of the mygo library would draw the ellipsis alone there. A text element does
+// not clip its own glyphs, so a box of the width of the room clips the line.
+func drawCutText(c *ui.Context, text string, size, lineHeight float32, family string, color ui.Color, width float32) {
+	if spanWidth(c, ui.Span{Text: text, Size: size, Font: family}) > width {
+		var graphemes segmenter.Segmenter
+		graphemes.Init([]rune(text))
+		first := graphemes.GraphemeIterator()
+		first.Next()
+		if spanWidth(c, ui.Span{Text: string(first.Grapheme().Text) + tabEllipsis, Size: size, Font: family}) > width {
+			ui.Box(c).Width(max(width, 0)).Clip().Children(func() {
+				ui.Text(c, text).NoWrap().LineHeight(lineHeight).FontSize(size).TextColor(color)
+			})
+			return
+		}
+	}
+	ui.Text(c, text).SingleLine().Ellipsis(tabEllipsis).LineHeight(lineHeight).FontSize(size).MaxWidth(width).TextColor(color)
 }
 
 // firstPart is the part of text before the first separator.

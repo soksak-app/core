@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/egoist/mygo v0.7.4
+	github.com/go-text/typesetting v0.3.5
 	github.com/soksak-app/core/packages/host/go v0.0.0
 )
 
@@ -11,7 +12,6 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/soksak-app/core/packages/sok/go v0.0.0
 	golang.org/x/image v0.46.0 // indirect
 	golang.org/x/net v0.59.0 // indirect
