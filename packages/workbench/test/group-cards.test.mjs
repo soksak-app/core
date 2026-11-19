@@ -80,7 +80,7 @@ function arrange() {
   plane.settle();
 }
 const run = (name, params) => registry.run(name, params);
-const { currentGroupLook, groupFill } = await import("../settings.js");
+const { currentGroupLook } = await import("../settings.js");
 
 /** The rectangle at which the element of a card or a group card stands, as {x, y, w, h}. */
 const placed = (element) => ({ x: parseFloat(element.style.left), y: parseFloat(element.style.top), w: parseFloat(element.style.width),
@@ -102,10 +102,12 @@ test("a group card is one container at its drawn rectangle with the fill of its 
   assert.equal(group.hidden, false);
   near(placed(group), tree.rect("card-4"), "the frame of card-4");
   const probe = document.createElement("i");
-  probe.style.background = groupFill(1);
-  assert.equal(group.style.background, probe.style.background, "the frame is filled with the color of level 1");
+  probe.style.background = currentGroupLook(1).body;
+  assert.equal(group.style.background, probe.style.background, "the frame is filled with the body of level 1");
   const header = group.querySelector('[data-expose="core.group.header"]');
   assert.ok(header, "the group card has its header");
+  probe.style.backgroundColor = currentGroupLook(1).head;
+  assert.equal(header.style.backgroundColor, probe.style.backgroundColor, "the header is drawn in the color of the head of a card");
   probe.style.borderBottomColor = currentGroupLook(1).line;
   assert.equal(header.style.borderBottomColor, probe.style.borderBottomColor, "the header draws the line below it in the color of groupLook");
   assert.equal(header.querySelector('[data-expose="core.group.name"]').textContent, "그룹 1");

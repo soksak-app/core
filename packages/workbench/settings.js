@@ -33,6 +33,7 @@ import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { reportTraceAtStart, setTraceEnabled } from "./performance.js";
 import { setLogPolicy } from "./log-policy.js";
 import { groupLook } from "./group-look.js";
+import { CHROME } from "./chrome-metrics.js";
 import { logPolicyOf } from "./log-gate.js";
 import { CLASSES } from "./event-classes.js";
 import { beginOperation } from "./operations.js";
@@ -108,8 +109,6 @@ export const defaults = {
 /* The range of memorySaverDelay in minutes (docs/spec/settings.md#values). */
 export const MEMORY_SAVER_DELAY = declaration.settings.memorySaverDelay;
 
-/* The range of group.tint in percent, the share of the group colours that the group cards show (docs/spec/settings.md#values). */
-export const GROUP_TINT = declaration.settings["group.tint"];
 
 /* The range of the layout values. Only integers are accepted. The three values share one range so that the same value is at the same slider position. */
 export const LAYOUT_RANGES = declaration.settings.layoutRanges;
@@ -217,9 +216,6 @@ function validateValue(key, value) {
   if (key === "memorySaverDelay" && (!Number.isInteger(value) || value < MEMORY_SAVER_DELAY[0] || value > MEMORY_SAVER_DELAY[1])) {
     throw new Error(`Invalid setting memorySaverDelay: ${JSON.stringify(value)}`);
   }
-  if (key === "group.tint" && (!Number.isInteger(value) || value < GROUP_TINT[0] || value > GROUP_TINT[1])) {
-    throw new Error(`Invalid setting group.tint: ${JSON.stringify(value)}`);
-  }
   const range = RANGES[key];
   if (range && (!Number.isInteger(value) || value < range[0] || value > range[1])) {
     throw new Error(`Invalid setting ${key}: ${JSON.stringify(value)} is not an integer from ${range[0]} to ${range[1]}`);
@@ -246,7 +242,7 @@ function validateValue(key, value) {
 export function settingType(key) {
   if (SWITCHES.includes(key)) return "boolean";
   if (STRUCTURED.includes(key) || Object.hasOwn(ORDERS, key)) return "object";
-  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay" || key === "group.tint") return "number";
+  if (Object.hasOwn(RANGES, key) || key === "memorySaverDelay") return "number";
   if (CHOICES[key]) return typeof CHOICES[key][0];
   const definition = pluginDefinitions.get(key);
   if (!definition) throw new Error(`Unknown setting: ${key}`);
@@ -647,20 +643,12 @@ export const linkedSet = (place, plugin) => resolveSidebar(settings.links, setti
 /** Returns the current theme name and mode. */
 export const themeName = () => settings.theme;
 
-/**
- * The fill of a group card whose members stand on level (docs/spec/groups.md#drawing): the theme color bg mixed with the theme color
- * group-<level> by group.tint in percent, each channel rounded, group-3 for a level above 3.
- */
-export function groupFill(level) {
-  const colors = themeOf(settings.theme)[settings.mode];
-  const share = settings["group.tint"] / 100;
-  const rgb = (hex) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
-  const group = rgb(colors[`group-${Math.min(Math.max(level, 1), 3)}`]);
-  const bg = rgb(colors.bg);
-  return `#${group.map((c, i) => Math.round(c * share + bg[i] * (1 - share)).toString(16).padStart(2, "0")).join("")}`;
-}
+/** The share of bg in the body of a group card for each level, the chrome value group-fill-fade (docs/spec/groups.md#drawing). */
+const GROUP_FILL_FADE = Number(CHROME["group-fill-fade"]);
+
 /** The colors of a group card whose members stand on level in the current theme, mode and gap (groupLook of group-look.js). */
-export const currentGroupLook = (level) => groupLook(themeOf(settings.theme)[settings.mode], level, { seam: settings.gap === 0 });
+export const currentGroupLook = (level) => groupLook(themeOf(settings.theme)[settings.mode], level,
+  { seam: settings.gap === 0, fade: GROUP_FILL_FADE });
 export const modeName = () => settings.mode;
 
 /**

@@ -9,6 +9,6 @@ const cases = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/group-lo
 
 for (const kase of cases) {
   test(`group look: ${kase.name}`, { timeout: 5000 }, () => {
-    assert.deepEqual(groupLook(kase.tokens, kase.level, { seam: kase.seam }), kase.returns);
+    assert.deepEqual(groupLook(kase.tokens, kase.level, { seam: kase.seam, fade: kase.fade }), kase.returns);
   });
 }

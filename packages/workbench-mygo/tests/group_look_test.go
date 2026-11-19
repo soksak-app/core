@@ -30,6 +30,7 @@ func TestGroupLookCases(t *testing.T) {
 			Tokens  map[string]string `json:"tokens"`
 			Level   int               `json:"level"`
 			Seam    bool              `json:"seam"`
+			Fade    float64           `json:"fade"`
 			Returns map[string]string `json:"returns"`
 		} `json:"cases"`
 	}
@@ -45,8 +46,8 @@ func TestGroupLookCases(t *testing.T) {
 			if kase.Seam {
 				palette.Gap = 0
 			}
-			look := palette.GroupLook(kase.Level)
-			if got := map[string]string{"line": hexOf(look.Line)}; fmt.Sprint(got) != fmt.Sprint(kase.Returns) {
+			look := palette.GroupLook(kase.Level, kase.Fade)
+			if got := map[string]string{"head": hexOf(look.Head), "line": hexOf(look.Line), "body": hexOf(look.Body)}; fmt.Sprint(got) != fmt.Sprint(kase.Returns) {
 				t.Errorf("the look is %v, want %v", got, kase.Returns)
 			}
 		})

@@ -44,7 +44,7 @@
 
 ## 그리기
 
-- 각 plane은 corridor를 그 level의 background로 그린다. theme token `group-1`부터 `group-n`에 setting `group.tint`(opacity 0~100 percent)를 적용한다. corridor가 0이면 group은 header와 tint로 구분된다.
+- 각 plane은 corridor를 그 level의 몸통, 곧 stage 색을 level마다 `group-fill-fade`만큼 card 색에 섞은 색으로 그린다([그리기](../spec/groups.ko.md#그리기)). corridor가 0이면 group은 header와 몸통으로 구분된다.
 - 각 content card surface는 token `--card`를 받는다. `--card`는 card background에 그 plane의 tint를 섞은 값이고, per-surface theme channel(F926-5 `setTheme {scheme, tokens, surfaces}`)로 전달된다. plugin은 `--card`를 칠하고 자기 background를 칠하지 않는다.
 - rail은 지금처럼 focus된 content card의 외곽선을 그린다. leader border는 theme token `group-leader`를 쓴다.
 

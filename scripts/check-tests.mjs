@@ -283,10 +283,27 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F970",
+    implementation: [
+      { file: "packages/workbench/group-look.js", symbol: "export function groupLook(colors, level, { seam, fade })" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) GroupLook(level int, fade float64) GroupLook {" },
+      { file: "packages/workbench/workbench.json", symbol: "\"group-fill-fade\": \".6\"," },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-look.test.mjs", id: "group look: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/group_look_test.go", id: "TestGroupLookCases" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupDrawsItsHeaderAndBodyFromTheCardTokens" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card is one container at its drawn rectangle with the fill of its level and its header inside the frame" },
+      { file: "packages/workbench/test/settings.test.mjs", id: "stored settings of a plugin that is not loaded are kept and not applied" },
+    ],
+    expected: "A group card draws its header in card, the line under it as under the head of a card and its body in bg mixed into card by group-fill-fade to the power of the level of its members in both workbenches, by the shared cases of docs/spec/cases/group-look.json, and group.tint is no setting.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-17",
     implementation: [
-      { file: "packages/workbench/group-look.js", symbol: "export function groupLook(colors, level, { seam })" },
-      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) GroupLook(level int) GroupLook {" },
+      { file: "packages/workbench/group-look.js", symbol: "line: seam ? colors.rule : colors.edge" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "return GroupLook{Head: p.Card, Line: line, Body: body}" },
     ],
     tests: [
       { file: "packages/workbench/test/group-look.test.mjs", id: "group look: ${kase.name}" },
@@ -14175,9 +14192,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerKeyRunsTheBoundaryCommand" },
       { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerDoubleClickRunsTheCentreCommand" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryBoxStandsOneGapFromTheBoxBesideIt" },
-      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupIsFilledWithTheColorOfItsLevel" },
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAGroupDrawsItsHeaderAndBodyFromTheCardTokens" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestARuleInsideAGroupStaysInsideItsFrame" },
-      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryGroupLevelStandsApartFromItsSurfaceAndTheCards" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheGridReportsEveryCardInTheGroupForm" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestARequestMakesAGroupCreateIdempotentByThatRequest" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestEachPressOfTheGroupMenuGroupsTheCard" },
@@ -14214,7 +14230,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/group-tree.js", symbol: "frameRect(node, path)" },
       { file: "packages/workbench/group-tree.js", symbol: "fullscreen(id, area)" },
       { file: "packages/workbench/group-tree.js", symbol: "drawnRules(rules)" },
-      { file: "packages/workbench/settings.js", symbol: "export function groupFill(level)" },
+      { file: "packages/workbench/settings.js", symbol: "export const currentGroupLook = (level) =>" },
       { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused })" },
       { file: "packages/workbench/plane.js", symbol: "export function drawnCardRects()" },
       { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroup, leads, leader, fullscreen })" },
@@ -14261,8 +14277,6 @@ const FEATURE_LINKS = [
       { file: "packages/soksak/test/dom.test.mjs", id: "the drawn option places the cards, rules and dividers of the host and shows a host box fullscreen" },
       { file: "packages/workbench/test/group-drawn.test.mjs", id: "a fullscreen group card is laid out as the whole area with every frame and header one gap inside it" },
       { file: "packages/workbench/test/group-drawn.test.mjs", id: "no divider crosses a group header, and a rule inside a group card stays inside its frame below its header" },
-      { file: "packages/workbench/test/settings.test.mjs", id: "group.tint refuses a value that is no integer from 0 to 100" },
-      { file: "packages/workbench/test/settings.test.mjs", id: "groupFill mixes the group color of a level into bg by group.tint" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card is one container at its drawn rectangle with the fill of its level and its header inside the frame" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "a group card that the tree no longer holds is removed from the plane" },
       { file: "packages/workbench/test/group-cards.test.mjs", id: "a fullscreen group card is laid out as the whole area and a focus inside it keeps it fullscreen" },

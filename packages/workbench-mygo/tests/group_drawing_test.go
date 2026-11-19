@@ -4,6 +4,7 @@ package workbench_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"math"
 	"os"
@@ -337,48 +338,61 @@ func TestEveryBoxStandsOneGapFromTheBoxBesideIt(t *testing.T) {
 	}
 }
 
-// A group card is one container filled with the color of the level of its members, its header included, and the setting group.tint
-// mixes that color into bg (docs/spec/groups.md#drawing).
-func TestAGroupIsFilledWithTheColorOfItsLevel(t *testing.T) {
+// A group card draws its header in the color of the head of a card and the area around its members in bg mixed into card by
+// group-fill-fade to the power of the level of its members, in the dark and the light mode (docs/spec/groups.md#drawing).
+func TestAGroupDrawsItsHeaderAndBodyFromTheCardTokens(t *testing.T) {
 	f := nestedSideShell(t)
-	f.tester.Frame()
 	raw, err := os.ReadFile("../src/workbench.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var declared struct {
 		Themes []struct {
-			Dark map[string]string `json:"dark"`
+			Dark  map[string]string `json:"dark"`
+			Light map[string]string `json:"light"`
 		} `json:"themes"`
+		Chrome map[string]string `json:"chrome"`
 	}
 	if err := json.Unmarshal(raw, &declared); err != nil {
 		t.Fatal(err)
 	}
-	colors := declared.Themes[0].Dark
-	tree := f.tester.ElementTree()
-	cards, frames, heads := exposedAll(tree, "core.card"), exposedAll(tree, "core.group"), exposedAll(tree, "core.group.header")
-	// The points stand a quarter of the gap from a box, away from the line in the middle of the corridor, where the grid draws its rule.
-	quarter := (cards["card-3"].Y - cards["card-1"].Y - cards["card-1"].H) / 4
-	outer := frames["card-5"].X + frames["card-5"].W + quarter
-	points := []struct {
-		name  string
-		x, y  float32
-		color string
-	}{
-		{"the gap between card-5 and card-2 in card-6", outer, cards["card-2"].Y + cards["card-2"].H/2, "group-1"},
-		{"the gap between card-1 and card-3 in card-5", cards["card-1"].X + cards["card-1"].W/2,
-			cards["card-1"].Y + cards["card-1"].H + quarter, "group-2"},
-		{"the header of card-6", heads["card-6"].X + heads["card-6"].W/2, heads["card-6"].Y + 3, "group-1"},
+	fade, err := strconv.ParseFloat(declared.Chrome["group-fill-fade"], 64)
+	if err != nil {
+		t.Fatalf("the chrome value group-fill-fade: %v", err)
 	}
-	for _, p := range points {
-		if got, want := f.pixelOf(p.x, p.y), opaque(ui.Hex(colors[p.color])); !near(got, want) {
-			t.Errorf("%s at %v,%v is %v, want %s %v", p.name, p.x, p.y, got, p.color, want)
+	// body is bg mixed into card by fade to the power level, each channel rounded (docs/spec/cases/group-look.json).
+	body := func(colors map[string]string, level int) color.RGBA {
+		bg, card, share := ui.Hex(colors["bg"]), ui.Hex(colors["card"]), math.Pow(fade, float64(level))
+		mix := func(a, b uint8) uint8 { return uint8(math.Round(float64(a)*share + float64(b)*(1-share))) }
+		return color.RGBA{R: mix(bg.R, card.R), G: mix(bg.G, card.G), B: mix(bg.B, card.B), A: 255}
+	}
+	for _, mode := range []string{"dark", "light"} {
+		colors := declared.Themes[0].Dark
+		if mode == "light" {
+			colors = declared.Themes[0].Light
 		}
-	}
-	f.run(t, "core.settings.set", `{"patch": {"group.tint": 0}}`)
-	f.tester.Frame()
-	if got, want := f.pixelOf(points[0].x, points[0].y), opaque(ui.Hex(colors["bg"])); !near(got, want) {
-		t.Errorf("with group.tint 0 %s is %v, want bg %v", points[0].name, got, want)
+		f.run(t, "core.settings.set", fmt.Sprintf(`{"patch": {"mode": %q}}`, mode))
+		f.tester.Frame()
+		tree := f.tester.ElementTree()
+		cards, frames, heads := exposedAll(tree, "core.card"), exposedAll(tree, "core.group"), exposedAll(tree, "core.group.header")
+		// The points stand a quarter of the gap from a box, away from the line in the middle of the corridor, where the grid draws its rule.
+		quarter := (cards["card-3"].Y - cards["card-1"].Y - cards["card-1"].H) / 4
+		outer := frames["card-5"].X + frames["card-5"].W + quarter
+		for _, p := range []struct {
+			name string
+			x, y float32
+			want color.RGBA
+		}{
+			{"the gap between card-5 and card-2 in card-6", outer, cards["card-2"].Y + cards["card-2"].H/2, body(colors, 1)},
+			{"the gap between card-1 and card-3 in card-5", cards["card-1"].X + cards["card-1"].W/2, cards["card-1"].Y + cards["card-1"].H + quarter,
+				body(colors, 2)},
+			{"the header of card-6", heads["card-6"].X + heads["card-6"].W/2, heads["card-6"].Y + 3, opaque(ui.Hex(colors["card"]))},
+			{"the header of card-5", heads["card-5"].X + heads["card-5"].W/2, heads["card-5"].Y + 3, opaque(ui.Hex(colors["card"]))},
+		} {
+			if got := f.pixelOf(p.x, p.y); !near(got, p.want) {
+				t.Errorf("%s: %s at %v,%v is %v, want %v", mode, p.name, p.x, p.y, got, p.want)
+			}
+		}
 	}
 }
 
@@ -406,53 +420,6 @@ func TestARuleInsideAGroupStaysInsideItsFrame(t *testing.T) {
 	} {
 		if got := f.pixelOf(p.x, p.y); !near(got, p.want) {
 			t.Errorf("the rule reaches %s at %v,%v: %v, not %v", p.name, p.x, p.y, got, p.want)
-		}
-	}
-}
-
-// lightness is the CIELAB L* of an sRGB color.
-func lightness(c ui.Color) float64 {
-	linear := func(v uint8) float64 {
-		x := float64(v) / 255
-		if x <= 0.04045 {
-			return x / 12.92
-		}
-		return math.Pow((x+0.055)/1.055, 2.4)
-	}
-	y := 0.2126*linear(c.R) + 0.7152*linear(c.G) + 0.0722*linear(c.B)
-	if y > 216.0/24389 {
-		return 116*math.Cbrt(y) - 16
-	}
-	return y * 24389 / 27
-}
-
-// The group colors of every theme in both modes differ from the surface that each level stands on, bg for level 1 and the color of
-// the level above for the others, and from the card fill by at least 4 units of CIELAB L* (docs/spec/groups.md#drawing).
-func TestEveryGroupLevelStandsApartFromItsSurfaceAndTheCards(t *testing.T) {
-	f := nestedSideShell(t)
-	var themes []struct {
-		ID    string            `json:"name"`
-		Dark  map[string]string `json:"dark"`
-		Light map[string]string `json:"light"`
-	}
-	if err := json.Unmarshal([]byte(f.status("core.themes")), &themes); err != nil {
-		t.Fatal(err)
-	}
-	if len(themes) == 0 {
-		t.Fatal("core.themes lists no theme")
-	}
-	for _, theme := range themes {
-		for mode, colors := range map[string]map[string]string{"dark": theme.Dark, "light": theme.Light} {
-			card := lightness(ui.Hex(colors["card"]))
-			under := lightness(ui.Hex(colors["bg"]))
-			for _, level := range []string{"group-1", "group-2", "group-3"} {
-				own := lightness(ui.Hex(colors[level]))
-				if math.Abs(own-under) < 4 || math.Abs(own-card) < 4 {
-					t.Errorf("%s %s: %s %s has L* %.1f beside %.1f under it and %.1f of the cards", theme.ID, mode, level, colors[level], own,
-						under, card)
-				}
-				under = own
-			}
 		}
 	}
 }

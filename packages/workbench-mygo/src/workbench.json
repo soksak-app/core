@@ -18,10 +18,7 @@
         "rule": "#22242f",
         "rail": "#7279ff",
         "focus": "#ffb36b",
-        "no": "#ff7c7c",
-        "group-1": "#24262f",
-        "group-2": "#2f313a",
-        "group-3": "#3b3c45"
+        "no": "#ff7c7c"
       },
       "light": {
         "bg": "#eef0f4",
@@ -32,10 +29,7 @@
         "rule": "#e3e6ec",
         "rail": "#5962e8",
         "focus": "#c06a1f",
-        "no": "#c62c2c",
-        "group-1": "#dfe1e6",
-        "group-2": "#d0d2d8",
-        "group-3": "#c2c4cb"
+        "no": "#c62c2c"
       }
     },
     {
@@ -56,10 +50,7 @@
         "rule": "#3a4150",
         "rail": "#81a1c1",
         "focus": "#ebcb8b",
-        "no": "#bf616a",
-        "group-1": "#414855",
-        "group-2": "#4d5460",
-        "group-3": "#59606c"
+        "no": "#bf616a"
       },
       "light": {
         "bg": "#eceff4",
@@ -70,10 +61,7 @@
         "rule": "#e3e8ef",
         "rail": "#5e81ac",
         "focus": "#b48a2f",
-        "no": "#a3454e",
-        "group-1": "#dde0e6",
-        "group-2": "#ced2d8",
-        "group-3": "#c0c4cb"
+        "no": "#a3454e"
       }
     },
     {
@@ -94,10 +82,7 @@
         "rule": "#073642",
         "rail": "#268bd2",
         "focus": "#cb4b16",
-        "no": "#dc322f",
-        "group-1": "#143e47",
-        "group-2": "#234a51",
-        "group-3": "#32565b"
+        "no": "#dc322f"
       },
       "light": {
         "bg": "#fdf6e3",
@@ -108,10 +93,7 @@
         "rule": "#f0e7d0",
         "rail": "#268bd2",
         "focus": "#cb4b16",
-        "no": "#dc322f",
-        "group-1": "#ede7d6",
-        "group-2": "#ddd9ca",
-        "group-3": "#cecbbe"
+        "no": "#dc322f"
       }
     },
     {
@@ -132,10 +114,7 @@
         "rule": "#1a241f",
         "rail": "#3f8f6b",
         "focus": "#d9a441",
-        "no": "#e0736d",
-        "group-1": "#1e2823",
-        "group-2": "#28332e",
-        "group-3": "#333f39"
+        "no": "#e0736d"
       },
       "light": {
         "bg": "#eef4f0",
@@ -146,10 +125,7 @@
         "rule": "#e2ebe6",
         "rail": "#2f7a58",
         "focus": "#a8761f",
-        "no": "#b1453f",
-        "group-1": "#dfe6e1",
-        "group-2": "#d0d8d3",
-        "group-3": "#c2cac5"
+        "no": "#b1453f"
       }
     },
     {
@@ -170,10 +146,7 @@
         "rule": "#271c18",
         "rail": "#c4603a",
         "focus": "#e8a33d",
-        "no": "#e05252",
-        "group-1": "#2b211e",
-        "group-2": "#362c28",
-        "group-3": "#413733"
+        "no": "#e05252"
       },
       "light": {
         "bg": "#faf0ea",
@@ -184,10 +157,7 @@
         "rule": "#f3e6dd",
         "rail": "#b1552f",
         "focus": "#a56a17",
-        "no": "#b23a3a",
-        "group-1": "#ece1db",
-        "group-2": "#ded2cc",
-        "group-3": "#d0c4be"
+        "no": "#b23a3a"
       }
     },
     {
@@ -208,10 +178,7 @@
         "rule": "#2c3036",
         "rail": "#6b7480",
         "focus": "#c7ced8",
-        "no": "#d97070",
-        "group-1": "#272a2e",
-        "group-2": "#323539",
-        "group-3": "#3e4145"
+        "no": "#d97070"
       },
       "light": {
         "bg": "#f1f3f5",
@@ -222,10 +189,7 @@
         "rule": "#dcdfe4",
         "rail": "#7b8593",
         "focus": "#3d4854",
-        "no": "#b1453f",
-        "group-1": "#e2e4e7",
-        "group-2": "#d3d6d9",
-        "group-3": "#c5c8cb"
+        "no": "#b1453f"
       }
     },
     {
@@ -246,10 +210,7 @@
         "rule": "#1d2531",
         "rail": "#4c6c88",
         "focus": "#8ec5ea",
-        "no": "#dd7a74",
-        "group-1": "#232b34",
-        "group-2": "#2e363e",
-        "group-3": "#3a424a"
+        "no": "#dd7a74"
       },
       "light": {
         "bg": "#eef2f5",
@@ -260,10 +221,7 @@
         "rule": "#e3eaf0",
         "rail": "#6f92ad",
         "focus": "#2f6f9f",
-        "no": "#b8453f",
-        "group-1": "#dfe3e7",
-        "group-2": "#d0d5d9",
-        "group-3": "#c2c7cc"
+        "no": "#b8453f"
       }
     },
     {
@@ -284,10 +242,7 @@
         "rule": "#221a2e",
         "rail": "#8a5cd6",
         "focus": "#e07bd0",
-        "no": "#e4707f",
-        "group-1": "#282031",
-        "group-2": "#332b3c",
-        "group-3": "#3e3647"
+        "no": "#e4707f"
       },
       "light": {
         "bg": "#f4eefb",
@@ -298,10 +253,7 @@
         "rule": "#ebe2f5",
         "rail": "#7a4fc0",
         "focus": "#a8459a",
-        "no": "#b6455a",
-        "group-1": "#e6dfed",
-        "group-2": "#d8d0df",
-        "group-3": "#cac2d2"
+        "no": "#b6455a"
       }
     },
     {
@@ -322,10 +274,7 @@
         "rule": "#26221c",
         "rail": "#8a7752",
         "focus": "#d7b46a",
-        "no": "#cf6f62",
-        "group-1": "#2d2a23",
-        "group-2": "#38352d",
-        "group-3": "#444038"
+        "no": "#cf6f62"
       },
       "light": {
         "bg": "#f2ede4",
@@ -336,10 +285,7 @@
         "rule": "#eae3d7",
         "rail": "#a8926b",
         "focus": "#7a5c2e",
-        "no": "#a8443c",
-        "group-1": "#e3ded5",
-        "group-2": "#d4cfc6",
-        "group-3": "#c6c1b8"
+        "no": "#a8443c"
       }
     },
     {
@@ -360,10 +306,7 @@
         "rule": "#26262a",
         "rail": "#6a6a70",
         "focus": "#e0e0e2",
-        "no": "#c96a6a",
-        "group-1": "#202022",
-        "group-2": "#2b2b2d",
-        "group-3": "#363638"
+        "no": "#c96a6a"
       },
       "light": {
         "bg": "#ffffff",
@@ -374,10 +317,7 @@
         "rule": "#e2e2e5",
         "rail": "#a0a0a6",
         "focus": "#1a1a1c",
-        "no": "#b53a3a",
-        "group-1": "#ececed",
-        "group-2": "#ddddde",
-        "group-3": "#cececf"
+        "no": "#b53a3a"
       }
     }
   ],
@@ -455,8 +395,7 @@
       "sidebarMaxWidth": 480,
       "sidebarWidth": 190,
       "memorySaver": true,
-      "memorySaverDelay": 120,
-      "group.tint": 100
+      "memorySaverDelay": 120
     },
     "layoutRanges": {
       "sidebarMinWidth": [
@@ -489,10 +428,6 @@
     "memorySaverDelay": [
       5,
       720
-    ],
-    "group.tint": [
-      0,
-      100
     ],
     "choices": {
       "projectOpening": [
@@ -666,6 +601,7 @@
     "fill": "100%",
     "focus-outline": "2px",
     "group-focus-fade": ".6",
+    "group-fill-fade": ".6",
     "chrome-row-h": "36px",
     "chrome-h": "40px",
     "head-h": "32px",

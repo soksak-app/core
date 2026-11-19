@@ -67,7 +67,7 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
 	s.anchored("core.group/"+id, card)
 	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
-		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupFill(s.planes.Level(id)+1)).
+		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade).Body).
 		Border(s.palette.CardBorder(), s.frameColor(id)).Radius(s.palette.CardRadius()).PassThrough()
 	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
@@ -324,9 +324,10 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 		TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
 	s.heads[id] = fit
 	target := renameTarget{Kind: "group", ID: id}
+	look := s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade)
 	header := ui.Row(s.binder.Name(c, "core.group.header", id))
 	header.Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
-		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.GroupLook(s.planes.Level(id) + 1).Line).Children(func() {
+		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(look.Line).Background(look.Head).Children(func() {
 		ui.Box(c).Absolute().Size(0, 0).Children(func() {
 			if fit.Tools == "bar" {
 				s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
