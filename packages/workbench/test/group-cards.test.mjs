@@ -190,3 +190,21 @@ test("core.card.menu on a group card opens the menu of its header, whose items a
   assert.equal(plane.currentTree().node("card-4").members.length, 2, "a split of the group card puts the new card beside it");
   assert.equal(plane.currentTree().levelMembers(null).length, 3);
 });
+
+const status = async (name) => (await registry.handle({ id: 1, method: "status.get", params: { name } })).result;
+
+test("core.grid reports the drawn rectangle of each card and group card, and the fullscreen layout of a group card", { timeout: 5000 }, async () => {
+  arrange();
+  const tree = plane.currentTree();
+  const reported = async () => new Map((await status("core.grid")).cards.map(({ id, x, y, w, h, fullscreen }) => [id, { x, y, w, h, fullscreen }]));
+  let cards = await reported();
+  for (const id of ["card-1", "card-2", "card-3", "card-4"]) near(cards.get(id), tree.rect(id), `the reported rectangle of ${id}`);
+  await run("core.card.fullscreen", { card: "card-4" });
+  const grid = plane.currentGrid();
+  const shown = tree.fullscreen("card-4", { x: 0, y: 0, w: grid.width, h: grid.height });
+  cards = await reported();
+  for (const id of ["card-1", "card-2", "card-4"]) near(cards.get(id), shown.get(id), `the reported fullscreen rectangle of ${id}`);
+  near(cards.get("card-3"), { x: 0, y: 0, w: 0, h: 0 }, "the reported rectangle of card-3 outside the fullscreen group card");
+  assert.equal(cards.get("card-4").fullscreen, true);
+  await run("core.card.fullscreen", { card: "card-4" });
+});
