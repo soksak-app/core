@@ -285,6 +285,17 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F974",
+    implementation: [
+      { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },
+    ],
+    tests: [
+      { file: "scripts/test/fixture-registry.test.mjs", id: "the plugin.json of each fixture plugin has the description of 1 to 200 characters that an installation requires" },
+    ],
+    expected: "Every fixture plugin.json has a description of 1 to 200 characters, so sok install accepts every fixture plugin.",
+    levels: ["unit"],
+  },
+  {
     id: "F972",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },
