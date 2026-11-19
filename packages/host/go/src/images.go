@@ -364,6 +364,8 @@ func (i *Images) DrawingChanges() []ImageDrawing {
 		var configure *ImageConfigure
 		if drawing && !state.Configured && state.Width > 0 {
 			state.Configured = true
+			// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again.
+			state.PresentationError = ""
 			configure = &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
 				Width: state.Width, Height: state.Height, Scale: state.Scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}
 		}
@@ -716,6 +718,8 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		return nil, nil
 	}
 	state.Configured = true
+	// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again.
+	state.PresentationError = ""
 	return &ImageConfigure{Name: key.Name, Generation: state.Generation, Raster: state.Raster,
 		Width: width, Height: height, Scale: scale, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner}, nil
 }

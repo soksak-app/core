@@ -971,8 +971,12 @@ impl Images {
             state.presented_sequence = 0;
             // The raster of a lost connection that a wait waits for never presents, so that wait ends here with the
             // supplier that ended; the configure of the new connection clears it.
-            state.presentation_error =
-                waited.then(|| format!("the supplier connection of {sidecar} ended"));
+            state.presentation_error = waited.then(|| {
+                format!(
+                    "the supplier {sidecar} of the image region {}/{} ended",
+                    key.0, key.1
+                )
+            });
             // The service of the new connection has no drawing state and no screen of the region either.
             state.drawing_sent = None;
             state.end_screen();

@@ -13975,6 +13975,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F935",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "// A configuration ends the error of an ended supplier connection, because the supplier draws the raster again." },
+      { file: "packages/host/rust/src/images.rs", symbol: "the supplier {sidecar} of the image region {}/{} ended" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestTheEndOfASupplierFailsTheWaitUntilTheRegionIsConfiguredAgain" },
+      { file: "packages/host/rust/src/images_test.rs", id: "the_end_of_a_supplier_fails_the_wait_until_the_region_is_configured_again" },
+    ],
+    expected: "Both hosts fail a wait after the end of a supplier connection with the error that names the supplier and the region, and end it at the next configuration.",
+    levels: ["unit"],
+  },
+  {
     id: "F934",
     implementation: [{ file: "packages/host/go/src/images.go", symbol: "if owner == nil || owner.SidecarName == \"\" || owner.SidecarOwner == nil {" }],
     tests: [
