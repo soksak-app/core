@@ -1572,6 +1572,7 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
 
 완료 항목과 해당 범위의 증거는 이후 기록에서도 과거 상태로 보존한다.
 
+- [o] F915-1 — P1, F915에 연결: F915가 discovery 목록의 시간 제한을 없앴다. 목록은 자기 프로세스의 종료 상태로 끝나기 때문이다. 입력: F239-109(Rust test 목록)와 F829(Go test 목록)가 목록이 끝나지 않으면 제한에서 실패한다고 주장하는 test에 연결되어 있었고, F915가 그 test의 이름을 바꾸어 `make check-tests`가 feature link 오류 두 개를 보고했다. 기대: F239-109와 F829의 연결은 이름이 바뀐 test `each Rust list step reports its start and elapsed time, and a list that exits with a failure fails with its exit status and the executable`와 `each Go test list step reports its start and elapsed time, and a binary whose listing exits with a failure fails with its exit status and output`를 가리키며, 제거된 제한을 주장하는 test는 `a Rust test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit`와 `a Go test binary whose listing ends after the limit of a test is still listed, because its listing ends by its own exit`이다. 결과: F239-109와 F829의 상태와 본문은 바뀌지 않으며, 연결 대상은 `scripts/test/test-discovery.test.mjs`의 이름이 바뀐 test다.
 - [~] F900 — P1: 병렬 작업의 완료된 문서와 sidecar 변경을 커밋하고 push하며 그 CI 결과를 확인한다. 입력: core의 F899 문서 commit, F899-7 등록 commit, vt S175 commit, alacritty S117 commit은 커밋되었으나 push되지 않았고 CI 상태는 읽지 않았다. F901–F905의 역할 규칙: 에이전트는 코드 변경과 개발만 하고, 빌드·캡처·측정·검증은 lead만 실행한다.
   - [ ] F900-1 — core `main`을 push한다. 로컬에서 `make check-push`가 통과한 뒤 `gh run view`로 CI 결과를 읽고 기록한다.
   - [ ] F900-2 — vt와 alacritty `main`을 push한다. 각 저장소의 로컬 검사가 통과한 뒤 `gh run view`로 CI 결과를 읽는다.
