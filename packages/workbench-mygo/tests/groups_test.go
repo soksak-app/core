@@ -503,3 +503,38 @@ func TestEachPressOfTheGroupMenuGroupsTheCard(t *testing.T) {
 		}
 	}
 }
+
+// core.layout.open with side on the last card of a group finds its neighbour only among the members of the group: a card outside the
+// group whose edge lies on the same line is no neighbour, so a row of a group grows inside the group
+// (docs/spec/groups.md#card-commands-on-a-group-card).
+func TestOpenTowardASideFromAGroupMemberStaysInsideTheGroup(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	f.tester.SetSize(2400, 600)
+	f.settle()
+	outside, err := f.apply("core.layout.open", `{"card": "main", "side": "right", "plugin": "plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created struct{ Group, Card string }
+	answer, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`)
+	if err != nil || json.Unmarshal([]byte(answer), &created) != nil {
+		t.Fatalf("core.group.create answered %s, %v", answer, err)
+	}
+	opened, err := f.apply("core.layout.open", `{"card": "`+created.Card+`", "side": "right", "plugin": "plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct{ Card string }
+	if err := json.Unmarshal([]byte(opened), &result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(outside, `"`+result.Card+`"`) {
+		t.Fatalf("core.layout.open from %s answered %s, the card outside the group %s", created.Card, opened, outside)
+	}
+	for _, group := range f.read("core.layout")["groups"].([]any) {
+		entry := group.(map[string]any)
+		if entry["card"] == created.Group && !slices.Contains(entry["members"].([]any), any(result.Card)) {
+			t.Fatalf("the new card %s is not a member of %s: %v", result.Card, created.Group, entry["members"])
+		}
+	}
+}

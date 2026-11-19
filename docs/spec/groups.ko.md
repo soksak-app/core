@@ -122,6 +122,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 
 - `core.card.add-tab {card: <group>, plugin, params?}`는 tab을 담은 content card를 group 안, 그 사각형의 오른쪽 가장자리에 더한다. 곧 새 card가 group의 member가 되는 `right` 쪽 사각형 split이며, content card와 같이 `{tab}`을 돌려준다.
 - `core.layout.open {card: <group>, plugin, params?}`는 group 안의 content card 중에서 workbench order로 `plugin`과 `params`의 첫 tab을 고르고, 없으면 `core.card.add-tab`처럼 card를 더한다. `side`가 있으면 group card를 담은 level에서 그 사각형을 `side` 쪽으로 나눈다.
+- 어떤 level의 card든 `core.layout.open {card, side, plugin, params?}`는 `side` 쪽 이웃을 `card`의 level의 member 중에서만 찾는다: 가장자리가 같은 line 위에 있고 같은 두 line에 걸친 다른 level의 card는 이웃이 아니므로, group의 마지막 card에서 group 가장자리 쪽으로의 open은 group 밖 card가 같은 tab을 가져도 그 card를 group 안에서 나눈다. `core.group.create`와 `side`를 가진 `core.layout.open`의 반복도 같은 규칙으로 card를 찾는다.
 - `core.card.menu {card: <group>, menu}`는 group header의 add, split, group menu를 연다. content card의 menu가 content card에 실행하듯, 그 item은 group card에 `core.card.add-tab`, `core.card.split`, `core.group.create {card: <group>, side, plugin}`을 실행한다.
 - `core.card.split {card: <group>, side, plugin}`은 사각형의 split으로 group card 사각형 옆에 새 content card를 둔다. 새 card는 group card를 담은 level의 member가 된다.
 - `core.card.close {card: <group>}`은 group card를 그 안의 모든 card와 함께 닫는다. group card를 card 하나로 만들고 library의 close(R7)로 닫는다. `core.card.close`가 card 하나의 tab을 묻듯 수정된 각 tab을 먼저 묻고, 물은 모든 tab이 저장되거나 버려질 때까지 결과는 `closed: false`다.

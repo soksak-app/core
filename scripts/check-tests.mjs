@@ -283,6 +283,21 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-7",
+    implementation: [
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) Neighbour(card, side string) string" },
+      { file: "packages/workbench/group-tree.js", symbol: "neighbour(card, side) {" },
+      { file: "packages/sok/go/src/agents/SKILL.md", symbol: "looks for the neighbour toward `side` only among the cards of that plane" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestOpenTowardASideFromAGroupMemberStaysInsideTheGroup" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.open toward a side from the last card of a group finds its neighbour only inside the group" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+    ],
+    expected: "core.layout.open with side on a card inside a group takes its neighbour only among the members of the level of the card in both workbenches, so the row recipe of the agent skill grows the group, and the skill states that rule.",
+    levels: ["unit"],
+  },
+  {
     id: "F952",
     implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "Run on a card that is already inside a group, it nests a new group inside that plane, so run it once per group." }],
     tests: [

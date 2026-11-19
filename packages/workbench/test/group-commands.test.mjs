@@ -156,6 +156,16 @@ test("core.layout.open on a group card selects an equal tab inside it, adds a ca
   await refuses(run("core.layout.open", { card: "card-10", plugin: PLAIN }), "card card-10 is in space spc-bbbbbb, which is not active");
 });
 
+test("core.layout.open toward a side from the last card of a group finds its neighbour only inside the group", { timeout: 5000 }, async () => {
+  arrange();
+  // card-3 outside the group holds a tab of the same plugin on the line of the right edge of card-2, so a neighbour of the whole grid
+  // would select it; the neighbour is a member of the level of card-2, so the open adds a card to the group
+  // (docs/spec/groups.md#card-commands-on-a-group-card).
+  const opened = await run("core.layout.open", { card: "card-2", side: "right", plugin: PLAIN });
+  assert.notEqual(opened.card, "card-3", "the open left the group for the card outside it");
+  assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", opened.card]);
+});
+
 test("a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card", { timeout: 5000 }, async () => {
   arrange();
   const tree = plane.currentTree();
