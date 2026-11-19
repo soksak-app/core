@@ -76,7 +76,7 @@ Project activation과 library 정리는 활성 project의 registry 제거에 따
 
 스페이스의 배치는 `sidebars`를 저장한다. 사이드바 ID(`left`, `right`, 카드 내부 사이드바의 `카드id:변`)마다 `{tab, folded, sizes}`이며 `tabs` 세트에서 고른 섹션 ID 또는 null과 `list` 세트에서 접은 섹션 ID, 그리고 섹션 ID에서 사람이 끌어 정한 높이(32에서 4096의 정수)로 가는 객체 `sizes`다. sidebar의 어떤 섹션도 크기를 바꾸지 않았으면 배치는 `sizes`를 생략한다([섹션](plugins.ko.md#섹션)). 다른 형태의 `sizes` 값은 `sidebar <sidebar> stores an invalid size of <section>: <value>`로 거부된다. 선택은 스페이스마다 둔다. 오버라이드는 동일한 고정 사이드바의 내용을 바꾸며 식별자를 바꾸지 않는다. 선택을 바꾸면 다른 배치 변경처럼 저장된 스페이스가 바뀐다. `sidebars`가 없는 배치에는 저장된 선택이 없고 저장 섹션 선택은 해당 섹션이 선택 세트에 있을 때만 적용된다.
 
-party가 있는 space의 배치는 `parties`를 저장하며, 이는 `{id, cards, leader, color, leaderColor}`의 배열이다. `color`는 party가 정한 `#rrggbb` 값이며 테마 token의 이름이 아니다. `leaderColor`는 `#rrggbb` 값이거나, leader 색이 테마 token `party-leader`를 따를 때의 `null`이다. `leader`는 카드 식별자 또는 `null`이다. party 규칙은 [party 저장](parties.ko.md#저장)에 있다. `parties`가 없는 space 객체는 빈 목록으로 읽으며, party가 없는 space는 `parties` 멤버를 쓰지 않는다. `null`이거나 배열이 아닌 `parties` 값, 또는 party 규칙을 어기는 party는 파일 `projects.json`, project 루트, space 식별자, 발견한 값을 적은 오류로 실패하며 파일은 바뀌지 않는다.
+space 객체는 멤버 `parties`를 갖지 않는다. 현재의 어느 space 형태에도 그 멤버가 없다. 그 멤버를 가진 space 객체는 읽을 때 파일, project root, space, 멤버를 대는 `projects.json: project <root>, space <id>: obsolete member parties`로 실패하며, 변환되지 않는다.
 
 스페이스 배치는 space가 낸 가장 큰 card 번호 `lastCard`와 root plane의 leader인 `leader`를 저장하고, 각 group card를 `data`가 child plane을 가진 `{group: {name, leader, plane}}`인 카드로 저장한다. 그 형태와 거부는 [group 저장](groups.ko.md#저장)을 따른다.
 

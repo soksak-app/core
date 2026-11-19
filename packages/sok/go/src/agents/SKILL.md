@@ -40,8 +40,6 @@ A repeated operation with the returned identifiers gives the same identifiers an
 
 After a step, find the commands of the plugin of a tab with `exposure_search` or `window_describe {surface}` and run them with `command_run {surface}`. A request can name any window and any surface.
 
-Find party entries with `sok commands --query party` or `exposure_search`; read a party with `sok status core.parties` or `core.party.get`, and a card with `core.card.get`, which both return the same card state shape; change parties only through the `core.party.*` commands with the parameters of their schema, where a repeated request with the same parameters leaves the state unchanged.
-
 ## Running and observing
 
 - Run a declared command with the parameters of its schema: `sok <command> [--<parameter> <value>]... [--params <json>]`, or `command_run {name, params}`.

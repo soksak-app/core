@@ -9,7 +9,7 @@ held by unrelated work nor shipped with partial work.
 
 - the rows already in `main` and marked complete,
 - the rows that have a branch in progress now: F914 (gpuikit adapter), F915 and its follow-up F915-1 (discovery
-  listing limit), F906-1 (screen message answers), the F906 row close, and the party rows F908 to F908-9,
+  listing limit), F906-1 (screen message answers), and the F906 row close,
 - the rows that CI needs in order to pass the release gate.
 
 Every other open row stays open, unchanged, for 0.0.46 and later.

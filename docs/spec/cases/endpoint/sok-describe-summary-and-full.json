@@ -64,46 +64,7 @@
         "groups": [
           {
             "owner": "core",
-            "status": [
-              {
-                "name": "core.parties",
-                "description": "The parties of the window.",
-                "schema": {},
-                "value": [
-                  {
-                    "id": "p1",
-                    "cards": [
-                      "a",
-                      "b"
-                    ],
-                    "leader": "a",
-                    "color": "#112233",
-                    "leaderColor": null,
-                    "outline": [
-                      [
-                        [
-                          0,
-                          40
-                        ],
-                        [
-                          1200,
-                          40
-                        ],
-                        [
-                          1200,
-                          800
-                        ],
-                        [
-                          0,
-                          800
-                        ]
-                      ]
-                    ],
-                    "reason": "taken"
-                  }
-                ]
-              }
-            ],
+            "status": [],
             "commands": [],
             "element": []
           },

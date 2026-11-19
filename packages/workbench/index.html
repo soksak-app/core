@@ -68,7 +68,6 @@ import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTab
 import {
   activeTab, currentGrid, nameWindow, onLayout, onRender, plane, setGap, settle, settleModifiedTabsToClose, tabsOf,
 } from "./plane.js";
-import { drawParties } from "./parties.js";
 import { observePlaneGrid } from "./device-grid.js";
 
 /* Reads the plane and the compositor and verifies them. It changes nothing, so those two do not
@@ -383,8 +382,6 @@ onCommit((record) => {
    so they are connected in this document. */
 let presented = Promise.resolve();
 onRender(() => {
-  // The party outlines are drawn with the cards in the same render (docs/spec/parties.md#drawing).
-  drawParties();
   const done = publish();
   presented = Promise.resolve(done);
   const record = latest();

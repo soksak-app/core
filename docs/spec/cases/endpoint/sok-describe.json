@@ -200,12 +200,6 @@
             "owner": "core",
             "status": [
               {
-                "name": "core.parties",
-                "description": "The parties of the window.",
-                "schema": {},
-                "value": []
-              },
-              {
                 "name": "core.screen",
                 "description": "Current screen, e.g. home. Long value.",
                 "schema": {},

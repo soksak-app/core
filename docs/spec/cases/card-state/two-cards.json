@@ -1,9 +1,0 @@
-{
-  "name": "two-cards",
-  "description": "Two cards of one party: core.card.get and the describe card items answer the party and the leader of each card, with the same values.",
-  "party": {"cards": ["a", "b"], "leader": "a"},
-  "expected": [
-    {"card": "a", "party": "p1", "leader": true},
-    {"card": "b", "party": "p1", "leader": false}
-  ]
-}

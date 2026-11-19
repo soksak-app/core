@@ -13961,13 +13961,6 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
-    id: "F924",
-    implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "if p.drawn != nil && slices.EqualFunc(inputs, p.drawnFrom, sameDrawingInput) {" }],
-    tests: [{ file: "packages/workbench-mygo/tests/layout/parties_drawing_cache_test.go", id: "TestPartyDrawingsAreComputedOncePerChange" }],
-    expected: "The mygo host computes the party drawings once for each change of the parties, the card rectangles or the gap.",
-    levels: ["unit"],
-  },
-  {
     id: "F922",
     implementation: [{ file: "packages/host/go/src/images.go", symbol: "logAnswerError(\"image reply \"+d.Name, sendResponse(d.Name, d.JSON))" }],
     tests: [{ file: "packages/host/go/src/images_test.go", id: "TestARefusedFrameIsAnsweredToItsSupplier" }],
@@ -13996,6 +13989,19 @@ const FEATURE_LINKS = [
       { file: "native/darwin/tests/surface_layout_observe_test.m", id: "a cancelled ticket whose transaction the key committed does not commit" },
     ],
     expected: "A presentation whose layout transaction a press or key event committed answers that commit once, also after a newer layout of the window began.",
+    levels: ["unit"],
+  },
+  {
+    id: "F936",
+    implementation: [
+      { file: "packages/workbench/projects.js", symbol: "obsolete member parties" },
+      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "obsolete member parties" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/stored-space.test.mjs", id: "a space that holds the member parties is refused with an error that names projects.json, the project, the space and the member" },
+      { file: "packages/workbench-mygo/tests/stored_space_test.go", id: "TestASpaceThatHoldsPartiesIsRefusedByName" },
+    ],
+    expected: "Both workbenches refuse a stored space that holds the removed member parties with an error that names projects.json, the project, the space and the member.",
     levels: ["unit"],
   },
   {
@@ -14069,17 +14075,9 @@ const FEATURE_LINKS = [
   },
   {
     id: "F925",
-    implementation: [
-      { file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" },
-      { file: "packages/host/rust/tests/endpoint_cases_test.rs", symbol: "\"sok-commands-query-party\"," },
-      { file: "packages/sok/rust/tests/mcp_server_test.rs", symbol: "let many = &rows[4];" },
-    ],
-    tests: [
-      { file: "packages/host/rust/tests/page_wire_test.rs", id: "every_page_wire_case_with_replay_true_gives_its_recorded_reply" },
-      { file: "packages/host/rust/tests/endpoint_cases_test.rs", id: "every_replayed_case_is_played_or_excluded" },
-      { file: "packages/sok/rust/tests/mcp_server_test.rs", id: "an_oversized_row_is_a_page_and_pages_follow_a_changing_window" },
-    ],
-    expected: "The Rust tests read the page-wire, endpoint and MCP paging cases that F908 changed as the Go tests do.",
+    implementation: [{ file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" }],
+    tests: [{ file: "packages/host/rust/tests/page_wire_test.rs", id: "every_page_wire_case_with_replay_true_gives_its_recorded_reply" }],
+    expected: "The Rust page-wire producer reads the filter member of a case as the Go producer does.",
     levels: ["unit"],
   },
   {
@@ -14087,20 +14085,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" }],
     tests: [{ file: "packages/host/rust/tests/page_wire_test.rs", id: "every_page_wire_case_with_replay_true_gives_its_recorded_reply" }],
     expected: "The Rust page-wire producer reads the filter member of a case and refuses a name that the reader does not answer, as the Go producer does.",
-    levels: ["unit"],
-  },
-  {
-    id: "F925-2",
-    implementation: [{ file: "packages/host/rust/tests/endpoint_cases_test.rs", symbol: "\"sok-commands-query-party\"," }],
-    tests: [{ file: "packages/host/rust/tests/endpoint_cases_test.rs", id: "every_replayed_case_is_played_or_excluded" }],
-    expected: "The Rust endpoint runner lists the party endpoint cases that a page answers outside it, as the Go runner does.",
-    levels: ["unit"],
-  },
-  {
-    id: "F925-3",
-    implementation: [{ file: "packages/sok/rust/tests/mcp_server_test.rs", symbol: "let many = &rows[4];" }],
-    tests: [{ file: "packages/sok/rust/tests/mcp_server_test.rs", id: "an_oversized_row_is_a_page_and_pages_follow_a_changing_window" }],
-    expected: "The Rust MCP paging test expects the core.parties row of the describe pages case, as the Go test does.",
     levels: ["unit"],
   },
   {
@@ -14150,23 +14134,6 @@ const FEATURE_LINKS = [
     implementation: [{ file: "packages/workbench-mygo/src/settings_draw.go", symbol: "type sliderDrag struct {" }],
     tests: [{ file: "packages/workbench-mygo/tests/gap_test.go", id: "TestSliderDragWritesOnce" }],
     expected: "A drag of a settings slider of the mygo host writes the setting once, at its release.",
-    levels: ["unit"],
-  },
-  {
-    id: "F920",
-    implementation: [
-      { file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Reconcile(g *Grid, change LayoutChange) ([]partyChange, error) {" },
-      { file: "packages/workbench/parties.js", symbol: "export function reconcile({ moved, split }) {" },
-    ],
-    tests: [{ file: "packages/workbench-mygo/tests/layout/parties_cases_test.go", id: "TestPartyCasesRunEverySteps" }],
-    expected: "Both hosts correct parties after a close, split, move or boundary drag, and a card split from a member joins its party.",
-    levels: ["unit"],
-  },
-  {
-    id: "F919",
-    implementation: [{ file: "packages/workbench-mygo/src/layout/parties.go", symbol: "func (p *Parties) Drawings(g *Grid) ([]Drawing, error) {" }],
-    tests: [{ file: "packages/workbench-mygo/tests/party_drawing_test.go", id: "TestAPartyDrawsItsOutlineInItsColorAndTheLeaderBorder" }],
-    expected: "The mygo host draws each party outline in its party color and the leader border on the leader card.",
     levels: ["unit"],
   },
   {
@@ -15870,7 +15837,7 @@ const REMOVED_COMPLETIONS = new Set(["F239-189", "F239-47-40-3", "F239-123", "F2
   "F239-201", "F239-229", "F608", "F684", "F239-294", "F275", "F275-1", "F275-2", "F664-4",
   "F556", "F239-173", "F239-177", "F239-179", "F212.12-2-1-1", "F239-239", "F94", "F95",
   "F239-47-15", "F239-47-16", "F239-47-18", "F239-47-20", "F239-47-26", "F239-47-27", "F239-47-29", "F239-47-31", "F239-47-35",
-  "F239-60", "F428", "F239-141", "F212.14-5-32", "F239-152"]);
+  "F239-60", "F428", "F239-141", "F212.14-5-32", "F239-152", "F919", "F920", "F924"]);
 
 export function auditCompletedFeatureLinks(features, checklistSource = readFileSync(`${ROOT}docs/features.md`, "utf8")) {
   const linked = new Set(features.map((feature) => feature.id));

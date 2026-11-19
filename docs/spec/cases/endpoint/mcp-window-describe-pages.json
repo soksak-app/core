@@ -73,12 +73,6 @@
                   "description": "Status core.gone.",
                   "schema": {},
                   "value": 2
-                },
-                {
-                  "name": "core.parties",
-                  "description": "The parties of the window.",
-                  "schema": {},
-                  "value": []
                 }
               ],
               "commands": [],
@@ -535,12 +529,6 @@
                   "description": "Status core.added.",
                   "schema": {},
                   "value": 3
-                },
-                {
-                  "name": "core.parties",
-                  "description": "The parties of the window.",
-                  "schema": {},
-                  "value": []
                 }
               ],
               "commands": [],
@@ -997,12 +985,6 @@
                   "description": "Status core.added.",
                   "schema": {},
                   "value": 3
-                },
-                {
-                  "name": "core.parties",
-                  "description": "The parties of the window.",
-                  "schema": {},
-                  "value": []
                 }
               ],
               "commands": [],
@@ -1437,15 +1419,6 @@
               "value": 3
             },
             {
-              "description": "The parties of the window.",
-              "group": "core",
-              "key": "core status core.parties",
-              "kind": "status",
-              "name": "core.parties",
-              "schema": {},
-              "value": []
-            },
-            {
               "description": "Many items.",
               "group": "core",
               "items": [
@@ -1831,7 +1804,7 @@
               "name": "core.many"
             }
           ],
-          "total": 5
+          "total": 4
         }
       },
       {
