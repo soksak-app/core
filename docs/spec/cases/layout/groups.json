@@ -246,19 +246,19 @@
         "fixed": false
        },
        {
-        "id": "card-6",
-        "c0": 0,
-        "c1": 2,
-        "r0": 1,
-        "r1": 2,
-        "fixed": false
-       },
-       {
         "id": "card-3",
         "c0": 0,
         "c1": 2,
         "r0": 2,
         "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-6",
+        "c0": 0,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
         "fixed": false
        }
       ]
@@ -881,19 +881,19 @@
         "fixed": false
        },
        {
-        "id": "card-5",
-        "c0": 2,
-        "c1": 3,
-        "r0": 0,
-        "r1": 1,
-        "fixed": false
-       },
-       {
         "id": "card-3",
         "c0": 0,
         "c1": 3,
         "r0": 1,
         "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
         "fixed": false
        }
       ]

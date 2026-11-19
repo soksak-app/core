@@ -1,8 +1,9 @@
-// The shared layout cases of docs/spec/cases/layout/groups.json run against the tree of planes of the Go layout model
+// The shared layout cases of docs/spec/cases/layout/groups.json run against the group tree of the Go layout model
 // (docs/spec/groups.md).
 package layout_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -10,11 +11,32 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
-// storedTree is the stored form of the tree of a space: the root plane, its leader and lastCard, each absent as nil.
-type storedTree struct {
+// storedGroups is the stored form of a space layout: the grid, the group tree, the leader of the root level and lastCard, each absent
+// as nil.
+type storedGroups struct {
 	State    layout.State    `json:"state"`
+	Groups   json.RawMessage `json:"groups"`
 	Leader   json.RawMessage `json:"leader"`
 	LastCard json.RawMessage `json:"lastCard"`
+}
+
+// groupStep is one step of groups.json: a call with its named arguments and the value it returns or the text it throws.
+type groupStep struct {
+	Call    string          `json:"call"`
+	Args    json.RawMessage `json:"args"`
+	Returns json.RawMessage `json:"returns"`
+	Throws  *string         `json:"throws"`
+}
+
+// groupArgs are the named arguments of a step.
+type groupArgs struct {
+	Card   string  `json:"card"`
+	Group  string  `json:"group"`
+	Target string  `json:"target"`
+	Side   string  `json:"side"`
+	Name   string  `json:"name"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
 }
 
 // TestGroupCases runs each case of groups.json.
@@ -30,22 +52,21 @@ func TestGroupCases(t *testing.T) {
 				Width   float64 `json:"width"`
 				Height  float64 `json:"height"`
 			} `json:"options"`
-			Layout storedTree `json:"layout"`
-			Throws *string    `json:"throws"`
-			Steps  []step     `json:"steps"`
+			Layout storedGroups `json:"layout"`
+			Throws *string      `json:"throws"`
+			Steps  []groupStep  `json:"steps"`
 		} `json:"cases"`
 	}
 	caseFile(t, "groups.json", &file)
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
 			o := kase.Options
-			root, err := layout.New(&layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "card", C1: 1, R1: 1}}},
-				layout.Options{Gap: &o.Gap, MinSize: &o.MinSize, Width: &o.Width, Height: &o.Height})
+			grid, err := layout.New(nil, layout.Options{Gap: &o.Gap, MinSize: &o.MinSize, Width: &o.Width, Height: &o.Height})
 			if err != nil {
 				t.Fatal(err)
 			}
-			planes, err := layout.ReadPlanes(kase.Layout.State, kase.Layout.Leader, kase.Layout.LastCard,
-				layout.PlaneOptions{Gap: o.Gap, MinSize: o.MinSize, Head: o.Head}, root)
+			tree, err := layout.ReadTree(kase.Layout.State, kase.Layout.Groups, kase.Layout.Leader, kase.Layout.LastCard,
+				layout.GroupOptions{Head: o.Head}, grid)
 			if kase.Throws != nil {
 				if err == nil || err.Error() != *kase.Throws {
 					t.Fatalf("the read throws %v, not %q", err, *kase.Throws)
@@ -56,105 +77,74 @@ func TestGroupCases(t *testing.T) {
 				t.Fatal(err)
 			}
 			for i, s := range kase.Steps {
-				checkStep(t, s, fmt.Sprintf("step %d %s", i+1, s.Call), func() (any, bool, error) { return groupCall(t, planes, s) })
+				var args groupArgs
+				decoder := json.NewDecoder(bytes.NewReader(s.Args))
+				decoder.DisallowUnknownFields()
+				if err := decoder.Decode(&args); err != nil {
+					t.Fatalf("step %d %s: %v", i+1, s.Call, err)
+				}
+				checkStep(t, step{Call: s.Call, Returns: s.Returns, Throws: s.Throws}, fmt.Sprintf("step %d %s", i+1, s.Call),
+					func() (any, bool, error) { return groupCall(t, tree, s.Call, args) })
 			}
 		})
 	}
 }
 
-// groupCall runs one step on the tree of planes.
-func groupCall(t *testing.T, p *layout.Planes, s step) (any, bool, error) {
+// groupCall runs one step on the group tree.
+func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (any, bool, error) {
 	t.Helper()
-	var (
-		id, target, side, name string
-		data                   json.RawMessage
-		x, y                   float64
-		even                   bool
-	)
-	switch s.Call {
+	switch call {
 	case "create":
-		arg(t, s, 0, &id)
-		arg(t, s, 1, &side)
-		arg(t, s, 2, &data)
-		arg(t, s, 3, &even)
-		group, born, err := p.CreateGroup(id, side, data, even)
-		return []string{group, born}, true, err
+		group, born, err := tree.CreateGroup(a.Card, a.Side, nil, false)
+		return map[string]string{"group": group, "card": born}, true, err
 	case "split":
-		arg(t, s, 0, &id)
-		arg(t, s, 1, &side)
-		arg(t, s, 2, &data)
-		arg(t, s, 3, &even)
-		born, err := p.Split(id, side, data, even)
-		return born, true, err
-	case "addCard":
-		arg(t, s, 0, &id)
-		arg(t, s, 1, &data)
-		born, err := p.AddCard(id, data)
-		return born, true, err
+		born, err := tree.Split(a.Card, a.Side, nil, false)
+		return map[string]string{"card": born}, true, err
 	case "close":
-		arg(t, s, 0, &id)
-		ended, err := p.Close(id)
-		return ended, true, err
+		_, err := tree.Close(a.Card)
+		return map[string]bool{"closed": true}, true, err
 	case "dissolve":
-		arg(t, s, 0, &id)
-		return nil, false, p.Dissolve(id)
+		return map[string]bool{"dissolved": true}, true, tree.Dissolve(a.Group)
 	case "rename":
-		arg(t, s, 0, &id)
-		arg(t, s, 1, &name)
-		named, err := p.Rename(id, name)
-		return named, true, err
+		named, err := tree.Rename(a.Group, a.Name)
+		return map[string]string{"group": a.Group, "name": named}, true, err
 	case "leader":
-		arg(t, s, 0, &id)
-		key, err := p.SetLeader(id)
-		if key == layout.RootPlane {
-			return nil, true, err
+		group, err := tree.SetLeader(a.Card)
+		var holder any
+		if group != "" {
+			holder = group
 		}
-		return key, true, err
+		return map[string]any{"card": a.Card, "group": holder}, true, err
 	case "move":
-		arg(t, s, 0, &id)
-		arg(t, s, 1, &target)
-		arg(t, s, 2, &side)
-		return nil, false, p.Move(id, target, side)
-	case "smallest":
-		arg(t, s, 0, &id)
-		w, h := p.Smallest(id)
-		return []float64{w, h}, true, nil
+		return map[string]string{"card": a.Card}, true, tree.Move(a.Card, a.Target, a.Side)
+	case "grid":
+		state := tree.Grid().ToJSON()
+		cards := []map[string]any{}
+		for _, card := range state.Cards {
+			cards = append(cards, map[string]any{"id": card.ID, "c0": card.C0, "c1": card.C1, "r0": card.R0, "r1": card.R1, "fixed": card.Fixed})
+		}
+		return map[string]any{"xs": state.Xs, "ys": state.Ys, "cards": cards}, true, nil
+	case "stored":
+		groups, leader, last := tree.Stored()
+		return map[string]any{"groups": groups, "leader": leader, "lastCard": last}, true, nil
 	case "rect":
-		arg(t, s, 0, &id)
-		rect, ok := p.Rect(id)
+		rect, ok := tree.Rect(a.Card)
 		return rect, ok, nil
-	case "groups":
-		arg(t, s, 0, &id)
-		return p.Groups(id), true, nil
-	case "group":
-		arg(t, s, 0, &id)
-		group, ok := p.Group(id)
-		return group, ok, nil
-	case "planeCards":
-		var key *string
-		arg(t, s, 0, &key)
-		plane := layout.RootPlane
-		if key != nil {
-			plane = *key
+	case "path":
+		path := []map[string]string{}
+		for _, group := range tree.Groups(a.Card) {
+			path = append(path, map[string]string{"card": group, "name": tree.GroupName(group)})
 		}
-		return p.PlaneCards(plane), true, nil
+		return path, true, nil
+	case "level":
+		return tree.Level(a.Card), true, nil
 	case "drop":
-		var options struct {
-			layout.ZoneOptions
-			Without string `json:"without"`
-		}
-		arg(t, s, 0, &x)
-		arg(t, s, 1, &y)
-		arg(t, s, 2, &options)
-		hit := p.DropAt(x, y, options.ZoneOptions, options.Without)
+		hit := tree.DropAt(a.X, a.Y, layout.ZoneOptions{}, "")
 		if hit == nil {
 			return nil, true, nil
 		}
-		return hit, true, nil
-	case "stored":
-		state, leader, last, err := p.Stored()
-		return map[string]any{"state": state, "leader": leader, "lastCard": last}, true, err
+		return map[string]string{"card": hit.ID, "zone": hit.Zone}, true, nil
 	}
-	t.Fatalf("unknown call %s", s.Call)
+	t.Fatalf("unknown call %s", call)
 	return nil, false, nil
 }
