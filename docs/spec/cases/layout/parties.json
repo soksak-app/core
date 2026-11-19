@@ -1098,6 +1098,7 @@
               {
                 "party": "p1",
                 "removed": [
+                  "a",
                   "b"
                 ],
                 "leader": null,
