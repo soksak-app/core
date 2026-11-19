@@ -283,6 +283,16 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F952",
+    implementation: [{ file: "packages/sok/go/src/agents/SKILL.md", symbol: "Run on a card that is already inside a group, it nests a new group inside that plane, so run it once per group." }],
+    tests: [
+      { file: "scripts/test/skill-groups.test.mjs", id: "the agent skill describes group cards after acting on a layout" },
+      { file: "scripts/test/skill-groups.test.mjs", id: "the MCP instructions name the command that makes a group and its nesting" },
+    ],
+    expected: "The agent skill and the MCP instructions state that core.group.create nests a new group on a card inside a group and runs once per group, and how a card is added to the plane of a group.",
+    levels: ["unit"],
+  },
+  {
     id: "F898",
     implementation: [{ file: "packages/sok/go/src/skill.go", symbol: "codexHome := false" }],
     tests: [
