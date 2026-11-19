@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
 
 use soksak_host::framework::{
     self as port, AppHandle, LogicalPosition, LogicalSize, PlatformWebview, PresentationDone,
@@ -21,6 +21,17 @@ unsafe impl Sync for Webview {}
 
 /// The closing hook of a window.
 type Closing = Box<dyn Fn() -> bool + Send + Sync>;
+
+/// Locks a mutex of a window record. A poisoned lock means that a thread panicked while it held the lock; the panic
+/// was reported where it happened. The poison is logged here with the name of the lock, and the guard of the value is
+/// returned, because the sections that hold these locks only store or read a value, so the value stays valid.
+pub(crate) fn locked<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> {
+    mutex.lock().unwrap_or_else(|error| {
+        soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
+        error.into_inner()
+    })
+}
+
 
 /// One window of the GPUI host: its GPUI handle, its native window and its web views by label, the main web view
 /// under the label of the window. The record changes its fields only on the main thread.
@@ -71,9 +82,7 @@ impl Record {
 
     /// Runs the closing hook of the window; no hook keeps the window open to close it.
     pub(crate) fn closing_kept(&self) -> bool {
-        self.closing
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        locked(&self.closing, "closing")
             .as_ref()
             .map(|hook| hook())
             // default: with no closing hook no close is prevented, as packages/host/tauriv2/src/frontend.rs:195-203 does, so the window closes.
@@ -82,9 +91,7 @@ impl Record {
 
     /// The labels of the web views of the window.
     pub(crate) fn webview_labels(&self) -> Vec<String> {
-        self.webviews
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        locked(&self.webviews, "webviews")
             .keys()
             .cloned()
             .collect()
@@ -92,9 +99,7 @@ impl Record {
 
     /// The native web view with label, or an error when no such web view is open.
     pub(crate) fn webview(&self, label: &str) -> port::Result<*mut WebView> {
-        self.webviews
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        locked(&self.webviews, "webviews")
             .get(label)
             .map(|view| view.0)
             .ok_or_else(|| port::Error::from(format!("webview {label} is not open")))
@@ -102,26 +107,20 @@ impl Record {
 
     /// The raw main web view of the window, for the platform layer.
     pub(crate) fn raw_webview(&self, label: &str) -> Option<*mut WebView> {
-        self.webviews
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        locked(&self.webviews, "webviews")
             .get(label)
             .map(|view| view.0)
     }
 
     /// Adds the web view with label to the record.
     pub(crate) fn add_webview(&self, label: String, view: *mut WebView) {
-        self.webviews
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        locked(&self.webviews, "webviews")
             .insert(label, Webview(view));
     }
 
     /// Removes the web view with label from the record.
     pub(crate) fn remove_webview(&self, label: &str) {
-        self.webviews
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        locked(&self.webviews, "webviews")
             .remove(label);
     }
 }
