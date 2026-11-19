@@ -19,6 +19,19 @@ import (
 // stageInset is the space around the plane: the margin of the stage, half the gap, and the border of the stage.
 func (s *Shell) stageInset() float32 { return s.palette.StagePad() + s.palette.BorderWidth }
 
+// stageShare is how far the stage reaches over the bottom line of the space bar above it and over the right line of the project column
+// at its left: at the seam the stage shares those lines and draws its own line on them, so the edge of the plane is one line on each
+// side (docs/spec/settings.md#values); with a gap the stage stands beside the bars.
+func (s *Shell) stageShare() (left, top float32) {
+	if !s.palette.Seam() {
+		return 0, 0
+	}
+	if s.projectColumnWidth() > 0 {
+		left = s.palette.BorderWidth
+	}
+	return left, s.palette.BorderWidth
+}
+
 // drawWork draws the spaces and the stage of the shown project.
 func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	s.surfaces.drawnPlane = s.plane
@@ -30,6 +43,7 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	// The plane stands on the device pixel grid, so the stage holds it moved by the part of a device pixel that the rows above and
 	// left of it leave.
 	shiftX, shiftY := s.alignPlane(width, stage)
+	shareLeft, shareTop := s.stageShare()
 	s.plane.Resize(s.planeBox.W, s.planeBox.H)
 	held := float32(s.planeBox.W) + 2*inset
 	heldHeight := float32(s.planeBox.H) + 2*inset
@@ -47,13 +61,14 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 	rules := s.planeRules()
 	var grips []dividerGrip
 	ui.Box(c).Size(width, stage).Children(func() {
-		ui.Box(c).Absolute().Left(shiftX).Top(shiftY).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
+		ui.Box(c).Absolute().Left(shiftX-shareLeft).Top(shiftY-shareTop).Size(held, heldHeight).Draw(func(p *ui.Painter, r ui.Rect) { s.drawRules(p, r, inset, rules, false) }).DrawOver(func(p *ui.Painter, r ui.Rect) {
 			s.drawRail(p, r, inset)
 			paintGrips(p, r, inset, grips)
 			s.drawRules(p, r, inset, rules, true)
 		}).Children(func() {
-			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid.
-			s.drawStageEdge(c, -shiftX, -shiftY, width, stage)
+			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid, and at the seam over
+			// the lines of the bars that it shares.
+			s.drawStageEdge(c, -shiftX, -shiftY, width+shareLeft, stage+shareTop)
 			// Every card of every level in workbench order: a group card stands before the cards inside it, which lie over its rectangle.
 			cards := s.allCards()
 			s.forgetCardReads(cards)
@@ -100,13 +115,15 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 
 // alignPlane puts the plane of the stage of width by height on the device pixel grid of the window, as alignPlane of
 // packages/workbench/device-grid.js does: whatever lies above or left of the stage, the plane starts and ends on a grid line. It
-// is the one place that sets planeBox. It returns how far the plane moved right and down from where the rows leave it. A window
-// whose scale cannot be read shows that failure and keeps the plane where the rows leave it.
+// is the one place that sets planeBox. At the seam the stage starts on the lines of the bars that it shares (stageShare). It returns
+// how far the plane moved right and down from where the rows and the shared lines leave it. A window whose scale cannot be read shows
+// that failure and keeps the plane where the rows leave it.
 func (s *Shell) alignPlane(width, stage float32) (float32, float32) {
 	inset := s.stageInset()
+	left, top := s.stageShare()
 	area := layout.Rect{
-		X: float64(s.projectColumnWidth() + inset), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset),
-		W: float64(width - 2*inset), H: float64(stage - 2*inset),
+		X: float64(s.projectColumnWidth() + inset - left), Y: float64(s.chromeHeight() + s.workBanner + s.spaceRowHeight() + inset - top),
+		W: float64(width - 2*inset + left), H: float64(stage - 2*inset + top),
 	}
 	s.planeBox = area
 	window, err := s.windowView()

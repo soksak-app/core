@@ -478,7 +478,7 @@ function fontOf(id) {
  * There is no separate setting for it. With two values there could be a state with gap 0 and a seam of gap, and
  * there is nothing to draw in that state.
  */
-const seam = () => (settings.gap === 0 ? "line" : "gap");
+export const seam = () => (settings.gap === 0 ? "line" : "gap");
 
 /* A page that the application serves is a separate document and does not inherit the style sheet of this document.
    It receives the token values that are sent and sets them on its own root. */

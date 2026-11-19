@@ -970,6 +970,7 @@ func (s *Shell) applyPalette() error {
 	// The plane of the shown space takes the gap of the settings at once; the settle after the change stores and draws it.
 	if s.plane != nil {
 		s.plane.SetGap(palette.PlaneGap())
+		s.planes.SetSeam(palette.Seam())
 	}
 	s.tellTheme()
 	return nil

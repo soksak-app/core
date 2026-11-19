@@ -18,15 +18,18 @@ import (
 // covers one rectangle of the grid, the cells of the content cards inside it; the tree checks after each operation that every group
 // card still covers one rectangle and that no content card it changed is drawn below minSize (docs/spec/groups.md#minimum-size).
 
-// GroupOptions are the sizes that the tree draws with: the head height of a group card.
+// GroupOptions are the sizes that the tree draws with: the head height of a group card, and whether the cards share one line at the
+// seam, where a frame and a header take no gap (docs/spec/groups.md#drawn-rectangles).
 type GroupOptions struct {
 	Head float64
+	Seam bool
 }
 
 // GroupTree is the grid of one space with its group tree.
 type GroupTree struct {
 	grid  *Grid
 	head  float64
+	seam  bool
 	roots []*node
 	// leader is the leader of the root level, or "" while the root level holds only window sidebars.
 	leader string
@@ -59,7 +62,7 @@ type Group struct {
 
 // NewGroupTree makes the tree of a grid that holds no group card, with the leader of the root level and the largest issued card number.
 func NewGroupTree(grid *Grid, options GroupOptions, leader string, last int) *GroupTree {
-	return &GroupTree{grid: grid, head: options.Head, leader: leader, last: last}
+	return &GroupTree{grid: grid, head: options.Head, seam: options.Seam, leader: leader, last: last}
 }
 
 // Grid is the grid of the space.
@@ -70,6 +73,12 @@ func (t *GroupTree) Head() float64 { return t.head }
 
 // SetHead changes the head height of a group card. It changes no arrangement.
 func (t *GroupTree) SetHead(head float64) { t.head = head }
+
+// SetSeam changes whether the cards share one line, and gives the grid the frames of that drawing. It changes no arrangement.
+func (t *GroupTree) SetSeam(seam bool) {
+	t.seam = seam
+	t.reframe()
+}
 
 // LastCard is the largest card number that the space issued.
 func (t *GroupTree) LastCard() int { return t.last }
@@ -376,16 +385,30 @@ func (t *GroupTree) place(onto *Rect, whole *node, holders []*node, c0, c1, r0, 
 	if onto != nil {
 		ox, ow, oy, oh = onto.X, onto.W, onto.Y, onto.H
 	}
-	x0 := pos(&f.x, c0, w0, w1, ox, ow) + inset(f.x.lo, c0, w0, w1) + float64(left)*f.x.unit
-	x1 := pos(&f.x, c1, w0, w1, ox, ow) - inset(f.x.hi, c1, w0, w1) - float64(right)*f.x.unit
+	x0 := pos(&f.x, c0, w0, w1, ox, ow) + inset(f.x.lo, c0, w0, w1) + float64(left)*t.frameUnit(&f.x)
+	x1 := pos(&f.x, c1, w0, w1, ox, ow) - inset(f.x.hi, c1, w0, w1) - float64(right)*t.frameUnit(&f.x)
 	y0 := pos(&f.y, r0, v0, v1, oy, oh) + inset(f.y.lo, r0, v0, v1) + float64(t.heads(holders, r0))*t.headStep()
-	y1 := pos(&f.y, r1, v0, v1, oy, oh) - inset(f.y.hi, r1, v0, v1) - float64(bottom)*f.y.unit
+	y1 := pos(&f.y, r1, v0, v1, oy, oh) - inset(f.y.hi, r1, v0, v1) - float64(bottom)*t.frameUnit(&f.y)
 	return Rect{X: x0, Y: y0, W: math.Max(0, x1-x0), H: math.Max(0, y1-y0)}
 }
 
+// frameUnit is the length that one frame takes on the axle a: the corridor of the library, and none at the seam, where a frame takes no
+// gap (docs/spec/groups.md#drawn-rectangles).
+func (t *GroupTree) frameUnit(a *axle) float64 {
+	if t.seam {
+		return 0
+	}
+	return a.unit
+}
+
 // headStep is how far one header moves the boxes below it down: the header and the corridor that separates it from them, as between
-// two cards (docs/spec/groups.md#drawn-rectangles).
-func (t *GroupTree) headStep() float64 { return t.head + t.grid.Gap() }
+// two cards, and the header alone at the seam, where its bottom line is the line between them (docs/spec/groups.md#drawn-rectangles).
+func (t *GroupTree) headStep() float64 {
+	if t.seam {
+		return t.head
+	}
+	return t.head + t.grid.Gap()
+}
 
 // HeadRect is the header of the group card id: a row of the head height at the top of its rectangle, below the headers of the group
 // cards that hold it and start on the same row line.
@@ -485,9 +508,14 @@ func (t *GroupTree) restore(s snapshot) {
 
 // reframe gives the grid the frames of every content card (docs/spec/groups.md#drawn-rectangles): on its left, right and bottom
 // side the number of group cards that hold it and end on the line of that side. The top takes no frame, because the header of a group
-// card stands inside its frame at the top.
+// card stands inside its frame at the top. At the seam a frame takes no gap, so no card has a frame.
 func (t *GroupTree) reframe() {
 	frames := map[string]Frames{}
+	if t.seam {
+		t.grid.cardFrames = frames
+		t.grid.changed()
+		return
+	}
 	for _, card := range t.grid.Cards() {
 		path, _, _ := t.find(card.ID) // silent: a card outside the tree, a window sidebar, has no path and no frames.
 		var f Frames
@@ -1075,11 +1103,11 @@ func (t *GroupTree) answer(key string, change func() error) bool {
 }
 
 // layoutToken describes everything that an answer of CanSplit, CanGroup or CanClose reads: the lines, the cards with their spans and
-// sizes, the paidBy records, the size, gap, minimum size, fill order and head of the plane, and the group cards with their members.
+// sizes, the paidBy records, the size, gap, minimum size, fill order, head and seam of the plane, and the group cards with their members.
 func (t *GroupTree) layoutToken() string {
 	g := t.grid
 	var b strings.Builder
-	fmt.Fprintf(&b, "%v|%v|%v|%v|%v|%v|%s|%v|%v|", g.xs, g.ys, g.w, g.h, g.gap, g.min, g.order, t.head, g.paidBy)
+	fmt.Fprintf(&b, "%v|%v|%v|%v|%v|%v|%s|%v|%v|%v|", g.xs, g.ys, g.w, g.h, g.gap, g.min, g.order, t.head, t.seam, g.paidBy)
 	size := func(px *float64) string {
 		if px == nil {
 			return "-"
@@ -1665,7 +1693,7 @@ func ReadTree(state State, groups, leader, lastCard json.RawMessage, options Gro
 	if err := grid.Replace(state); err != nil {
 		return nil, err
 	}
-	t := &GroupTree{grid: grid, head: options.Head}
+	t := &GroupTree{grid: grid, head: options.Head, seam: options.Seam}
 	items, ok := list(groups)
 	if !ok {
 		return nil, fmt.Errorf("layout stores groups %s, which is not a list of groups", compact(groups))

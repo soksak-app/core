@@ -64,3 +64,51 @@ test("no divider crosses a group header, and a rule inside a group card stays in
   assert.ok(outside.length > 0 && outside.every((rule) => rule.bleed), "a rule outside every group card keeps the bleed");
   for (const rule of rules) for (const head of heads) assert.ok(!overlap(rule, head), `the rule ${rule.key} crosses a header`);
 });
+
+/**
+ * The tree at the seam, whose gap is the border width LINE: card-7 holds card-6 and card-2, card-6 holds card-5 above card-4, and card-5
+ * holds card-1 and card-3 side by side; card-8 stands outside every group at the right. So the left edge of the plane ends three group
+ * cards beside card-1, the line between card-3 and card-2 ends two, and the headers of card-7, card-6 and card-5 stack at the top.
+ */
+const LINE = 1;
+function seam() {
+  const grid = new Soksak(undefined, { gap: LINE, minSize: MIN, width: W, height: H });
+  const layout = {
+    state: { xs: [0, 0.25, 0.5, 0.75, 1], ys: [0, 0.5, 1], cards: [
+      { id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "card-3", c0: 1, c1: 2, r0: 0, r1: 1 }, { id: "card-4", c0: 0, c1: 2, r0: 1, r1: 2 },
+      { id: "card-2", c0: 2, c1: 3, r0: 0, r1: 2 }, { id: "card-8", c0: 3, c1: 4, r0: 0, r1: 2 }] },
+    groups: [{ card: "card-7", name: "그룹 3", leader: "card-6", members: [
+      { card: "card-6", name: "그룹 2", leader: "card-5", members: [
+        { card: "card-5", name: "그룹 1", leader: "card-1", members: ["card-1", "card-3"] }, "card-4"] }, "card-2"] }],
+    leader: "card-7", lastCard: 8,
+  };
+  return readGroupTree(layout, { gap: LINE, minSize: MIN, head: HEAD, seam: true }, grid);
+}
+
+test("at the seam every line between two boxes and under a header is one line of the border width, however many group cards end on it", () => {
+  const tree = seam();
+  const r = (id) => tree.rect(id);
+  const right = (id) => r(id).x + r(id).w;
+  const bottom = (id) => r(id).y + r(id).h;
+  const head = (id) => tree.headRect(id);
+  const apart = (a, b, where) => near(b - a, LINE, `${where}: the distance between the boxes`);
+  apart(right("card-3"), r("card-2").x, "between card-3 and card-2, where card-5 and card-6 end");
+  apart(right("card-4"), r("card-2").x, "between card-4 and card-2, where card-6 ends");
+  apart(right("card-2"), r("card-8").x, "between card-2 and card-8, where card-7 ends");
+  apart(bottom("card-1"), r("card-4").y, "between card-1 and card-4, where card-5 ends");
+  apart(right("card-1"), r("card-3").x, "between card-1 and card-3 inside card-5");
+  for (const id of ["card-5", "card-6", "card-7"]) near(r(id).x, r("card-1").x, `the left side of the frame of ${id} and of card-1`);
+  near(r("card-7").x, 0, "the left side of card-7 at the edge of the plane");
+  near(right("card-5"), right("card-3"), "the right side of the frame of card-5 and of card-3");
+  near(right("card-6"), right("card-4"), "the right side of the frame of card-6 and of card-4");
+  near(right("card-7"), right("card-2"), "the right side of the frame of card-7 and of card-2");
+  for (const id of ["card-6", "card-7"]) near(bottom(id), bottom("card-4"), `the bottom of the frame of ${id} and of card-4`);
+  near(bottom("card-7"), H, "the bottom of card-7 at the edge of the plane");
+  near(head("card-6").y, head("card-7").y + head("card-7").h, "the header of card-6 under the header of card-7");
+  near(head("card-5").y, head("card-6").y + head("card-6").h, "the header of card-5 under the header of card-6");
+  near(r("card-1").y, head("card-5").y + head("card-5").h, "card-1 under the header of card-5");
+  near(r("card-2").y, head("card-7").y + head("card-7").h, "card-2 under the header of card-7");
+  const shown = tree.fullscreen("card-7", { x: 0, y: 0, w: W, h: H });
+  near(shown.get("card-1").x, 0, "card-1 at the left of card-7 shown fullscreen");
+  near(shown.get("card-1").y, 3 * HEAD, "card-1 under the three headers of card-7 shown fullscreen");
+});

@@ -567,13 +567,10 @@ func TestEveryGroupCardThatHoldsTheFocusMarksItsFrame(t *testing.T) {
 	if got := []any{focusOf("card-5"), focusOf("card-6")}; got[0] != nil || got[1] != 1.0 {
 		t.Errorf("with card-2 focused core.card.get reports the focus %v of card-5 and card-6, want null and 1", got)
 	}
-	// At the seam the frames draw their line as the fill of their edge, card-5 and card-6 one line apart at the bottom; the mark recolors
-	// those lines and leaves the points outside the outer frame as the frames draw them without a mark.
+	// At the seam a frame draws no line of its own: the marks color the one line of the plane outside the frames, and the innermost mark
+	// owns the line that card-5 and card-6 both end on (docs/spec/groups.md#drawing); TestTheInnermostMarkOwnsASeamLine checks every line
+	// of the seam.
 	f.run(t, "core.settings.change", `{"key": "gap", "value": 0, "scope": "common"}`)
 	f.run(t, "core.card.focus", `{"card": "card-1"}`)
-	f.run(t, "core.settings.change", `{"key": "focusInd", "value": "corner", "scope": "common"}`)
-	plain := lines()
-	f.run(t, "core.settings.change", `{"key": "focusInd", "value": "border", "scope": "common"}`)
-	check("card-1 focused at the seam", map[string]color.RGBA{"card-6 left": marked(2), "card-5 bottom": marked(1), "card-6 bottom": marked(2),
-		"outside card-6 left": plain["outside card-6 left"], "below card-6": plain["below card-6"]})
+	check("card-1 focused at the seam", map[string]color.RGBA{"outside card-6 left": marked(1), "below card-6": marked(1)})
 }
