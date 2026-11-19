@@ -868,7 +868,7 @@ type LayoutGroup struct {
 	Name    string      `json:"name"`
 	Level   int         `json:"level"`
 	Leader  string      `json:"leader"`
-	Leading bool        `json:"leading,omitempty"`
+	Leading bool        `json:"leading"`
 	Frame   LayoutFrame `json:"frame"`
 	Members []string    `json:"members"`
 }
@@ -890,7 +890,9 @@ type LayoutTab struct {
 	Params json.RawMessage `json:"params"`
 }
 
-// MarshalJSON writes a split as {direction, size, frame, children} and a card as {card, size, frame, tabs}.
+// MarshalJSON writes a split as {direction, size, frame, children}, a group card as {card, size, frame, leader, group} and a content
+// card as {card, size, frame, tabs} with parent inside a group card and leader on the member that leads its level
+// (docs/spec/exposure.md#window-snapshot).
 func (n LayoutNode) MarshalJSON() ([]byte, error) {
 	if n.Direction != "" {
 		return json.Marshal(struct {
@@ -905,10 +907,9 @@ func (n LayoutNode) MarshalJSON() ([]byte, error) {
 			Card   string           `json:"card"`
 			Size   float64          `json:"size"`
 			Frame  LayoutFrame      `json:"frame"`
-			Leader bool             `json:"leader,omitempty"`
-			Parent string           `json:"parent,omitempty"`
+			Leader bool             `json:"leader"`
 			Group  *LayoutGroupNode `json:"group"`
-		}{n.Card, n.Size, n.Frame, n.Leader, n.Parent, n.Group})
+		}{n.Card, n.Size, n.Frame, n.Leader, n.Group})
 	}
 	tabs := n.Tabs
 	if tabs == nil {

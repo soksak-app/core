@@ -198,6 +198,40 @@ func TestTheDescriptionHoldsTheGroupCardsInItsTree(t *testing.T) {
 	}
 }
 
+// A group card node of the description always carries leader and carries no parent, and an entry of groups always carries leading,
+// so a reader of a group card sees one shape (docs/spec/exposure.md#window-snapshot).
+func TestAGroupNodeOfTheDescriptionCarriesItsLeaderAndNoParent(t *testing.T) {
+	f := groupedShell(t)
+	f.tester.SetSize(1600, 900)
+	f.settle()
+	if _, err := f.apply("core.group.create", `{"card": "card-3", "side": "bottom", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	var described map[string]any
+	if err := json.Unmarshal([]byte(f.described()), &described); err != nil {
+		t.Fatal(err)
+	}
+	outer := described["root"].(map[string]any)
+	inner := outer["group"].(map[string]any)["root"].(map[string]any)["children"].([]any)[1].(map[string]any)
+	if inner["card"] != "card-4" {
+		t.Fatalf("the second member of card-2 is %v, not the group card card-4", inner)
+	}
+	for _, node := range []map[string]any{outer, inner} {
+		if leader, ok := node["leader"]; !ok || leader != (node["card"] == "card-2") {
+			t.Errorf("the group node %v carries the leader %v, %v", node["card"], leader, ok)
+		}
+		if parent, ok := node["parent"]; ok {
+			t.Errorf("the group node %v carries the parent %v", node["card"], parent)
+		}
+	}
+	for _, entry := range described["groups"].([]any) {
+		group := entry.(map[string]any)
+		if leading, ok := group["leading"]; !ok || leading != (group["card"] == "card-2") {
+			t.Errorf("the entry of %v in groups carries leading %v, %v", group["card"], leading, ok)
+		}
+	}
+}
+
 func TestADissolveAnswersDissolvedAgainAndKeepsTheCards(t *testing.T) {
 	f := groupedShell(t)
 	for range 2 {
