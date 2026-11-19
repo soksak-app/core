@@ -196,3 +196,39 @@ func TestABoxBelowAGroupHeaderStandsAGapBelowIt(t *testing.T) {
 		}
 	}
 }
+
+// A fullscreen group card is laid out as the whole work area at every level: its header at the top of the area, each card inside it the
+// gap below the header above it, the header of a group card inside it drawn, and no line of the hidden cards
+// (docs/spec/groups.md#card-commands-on-a-group-card).
+func TestAFullscreenGroupIsLaidOutAsTheWholeArea(t *testing.T) {
+	for _, group := range []string{"card-6", "card-5"} {
+		t.Run(group, func(t *testing.T) {
+			f := nestedSideShell(t)
+			tree := f.tester.ElementTree()
+			cards := exposedAll(tree, "core.card")
+			gap := cards["card-3"].Y - (cards["card-1"].Y + cards["card-1"].H)
+			outer := exposedAll(tree, "core.group.header")["card-6"]
+			f.click("core.group.fullscreen", group)
+			tree = f.tester.ElementTree()
+			heads, cards := exposedAll(tree, "core.group.header"), exposedAll(tree, "core.card")
+			head, ok := heads[group]
+			if !ok || math.Abs(float64(head.Y-outer.Y)) > 1 || head.W < outer.W {
+				t.Fatalf("the header of the fullscreen %s is %+v, the area starts at %+v", group, head, outer)
+			}
+			below := "card-1"
+			if group == "card-6" {
+				nested, ok := heads["card-5"]
+				if !ok || math.Abs(float64(nested.Y-(head.Y+head.H+gap))) > 1 {
+					t.Fatalf("the header of card-5 is %+v (%v), the gap below %+v", nested, ok, head)
+				}
+				head = nested
+			}
+			if card := cards[below]; math.Abs(float64(card.Y-(head.Y+head.H+gap))) > 1 {
+				t.Fatalf("%s starts at %v, %v below the header %+v, not the gap %v", below, card.Y, card.Y-head.Y-head.H, head, gap)
+			}
+			if dividers := exposedAll(tree, "core.divider"); len(dividers) > 0 {
+				t.Fatalf("the fullscreen shows the dividers %v", dividers)
+			}
+		})
+	}
+}
