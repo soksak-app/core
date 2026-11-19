@@ -791,3 +791,37 @@ func TestSurfaceWindowAnswersTheSpaceNullForASeatedSection(t *testing.T) {
 		}
 	}
 }
+
+// A command that changes the layout writes the record workbench.layout.change with its name, its parameters, its answer and the stored
+// layout after it, and a command that changes nothing writes none (docs/spec/events.json).
+func TestALayoutCommandRecordsTheLayoutItLeaves(t *testing.T) {
+	host := recordingCommands(&storedHost{installed: layoutPlugins, common: map[string]any{},
+		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
+	f := newTabShell(t, host)
+	f.open(t)
+	if _, err := f.apply("core.card.split", `{"card":"main","side":"right","plugin":"plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.apply("core.card.focus", `{"card":"main"}`); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	records := host.written("workbench.layout.change")
+	if len(records) != 1 {
+		t.Fatalf("the commands wrote %d records workbench.layout.change: %v", len(records), records)
+	}
+	fields := records[0]["fields"].(map[string]any)
+	var layout struct {
+		State struct {
+			Cards []struct{ ID string } `json:"cards"`
+		} `json:"state"`
+	}
+	if err := json.Unmarshal([]byte(fields["layout"].(string)), &layout); err != nil {
+		t.Fatalf("the layout of the record is no JSON: %v", err)
+	}
+	if fields["command"] != "core.card.split" || fields["params"] != `{"card":"main","side":"right","plugin":"plain"}` || fields["paramsTruncated"] != false ||
+		!slices.ContainsFunc(layout.State.Cards, func(c struct{ ID string }) bool { return strings.Contains(fields["result"].(string), c.ID) }) ||
+		fields["layoutTruncated"] != false {
+		t.Fatalf("the record is %v", fields)
+	}
+}

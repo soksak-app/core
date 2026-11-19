@@ -121,6 +121,7 @@ const EXACT = new Map([
   ["workbench.fixture.step", "lifecycle"],
   ["workbench.input.shortcut.failed", "input"],
   ["workbench.keyboard.follow", "input"],
+  ["workbench.layout.change", "call"],
   ["workbench.log.clock", "lifecycle"],
   ["workbench.log.dropped", "lifecycle"],
   ["workbench.log.gated", "lifecycle"],
