@@ -1,0 +1,12 @@
+{
+  "name": "window-check-presses-interrupted",
+  "description": "A drag that the host refuses with 1013 after an action of a person ended the synthetic gesture leaves no open press, so the cleanup sends no release.",
+  "replay": false,
+  "reason": "The case sends native pointer input and the interruption is an action of a person, so the replay cannot arrange it.",
+  "steps": [
+    {"send": {"jsonrpc": "2.0", "id": 1, "method": "input.pointer", "params": {"window": "main", "x": 10, "y": 20, "phase": "down"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 1, "result": null}},
+    {"send": {"jsonrpc": "2.0", "id": 2, "method": "input.pointer", "params": {"window": "main", "x": 12, "y": 20, "phase": "drag"}}},
+    {"reply": {"jsonrpc": "2.0", "id": 2, "error": {"code": 1013, "message": "a person's move at (40, 40) in the window of the gesture ended the synthetic gesture of pointer main, whose press was released at (10, 20)"}}}
+  ]
+}

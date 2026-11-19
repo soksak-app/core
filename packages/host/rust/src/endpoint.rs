@@ -100,6 +100,7 @@ const DIAGNOSTICS: &[&str] = &[
     "diagnostics.window.draw-covered",
     "diagnostics.input.source",
     "diagnostics.input.reference",
+    "diagnostics.input.person",
     "diagnostics.log.flush",
     "diagnostics.host.relaunch",
     "diagnostics.test.mark",
@@ -2484,6 +2485,15 @@ mod input_reference_declaration_test {
     #[test]
     fn input_reference_method_is_declared() {
         assert!(super::declared("diagnostics.input.reference"));
+    }
+}
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod input_person_declaration_test {
+    // contract: diagnostics.input-person.declared
+    #[test]
+    fn input_person_method_is_declared() {
+        assert!(super::declared("diagnostics.input.person"));
     }
 }
 

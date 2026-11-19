@@ -286,6 +286,7 @@ NATIVE_TESTS = observe_test \
   input_inject_test \
   input_resize_edge_test \
   input_person_press_test \
+  input_person_test \
   input_virtual_test \
   input_activate_test \
   input_virtual_key_equivalent_test \
