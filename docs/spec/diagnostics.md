@@ -86,8 +86,6 @@ Three forms of record exist, and each fact has the form that fits it. The two li
 
 A row shows a record without its time, as `<level> <layer> <where>: <text>`.
 
-A Rust lock that a thread poisoned by a panic is read with `PoisonError::into_inner`, and its value is used. The panic hook records the panic as the event `host.panic` (row of the table below), so the recovery does not hide the fault.
-
 | Failure | Record |
 |---|---|
 | a module of the main page fails to load or throws while it loads | `error workbench start: <text> @ <file>:<line>` ([page start](native-host.md#page-start)) |
