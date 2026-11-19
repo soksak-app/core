@@ -460,6 +460,9 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
+	if err := s.restoreParties(project, *space, plane); err != nil {
+		return fmt.Errorf("space %s: %w", space.ID, err)
+	}
 	s.windowSidebars = map[string]layout.WindowSidebar{}
 	if len(stored.WindowSidebars) > 0 {
 		if s.windowSidebars, err = layout.RestoreWindowSidebars(stored.WindowSidebars); err != nil {
@@ -572,6 +575,16 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	for i := range project.Spaces {
 		if project.Spaces[i].ID == space.ID {
 			project.Spaces[i].Layout = next
+			// default: a shown space without parties state writes no party, which is the stored form of a space with no party.
+			parties := []layout.StoredParty{}
+			if s.parties != nil {
+				parties = s.parties.Stored()
+			}
+			storedParties, err := layout.WriteStoredParties(parties)
+			if err != nil {
+				return err
+			}
+			project.Spaces[i].Parties = storedParties
 		}
 	}
 	return nil

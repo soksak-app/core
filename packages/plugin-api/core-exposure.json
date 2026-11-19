@@ -36,7 +36,8 @@
     "core.focus",
     "core.text",
     "core.chrome",
-    "core.rail"
+    "core.rail",
+    "core.parties"
   ],
   "commands": [
     "core.settings.set",
@@ -158,6 +159,13 @@
     "core.rename.cancel",
     "core.focus.set",
     "core.surface.hit",
-    "core.surface.clock"
+    "core.surface.clock",
+    "core.party.create",
+    "core.party.update",
+    "core.party.add",
+    "core.party.remove",
+    "core.party.delete",
+    "core.party.get",
+    "core.card.get"
   ]
 }

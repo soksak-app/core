@@ -33,6 +33,7 @@ import { declaredIcons, icon } from "./icons.js";
 import { issueId } from "./ids.js";
 import { bind, delegate, mark, run, runOn } from "./commands.js";
 import { fillPicker, pickerAnswer, pickerColumns, pickerGroups, pickerItems } from "./picker-layer.js";
+import { groupCandidates, partyMenuItems } from "./parties.js";
 import { mountSurface, mountedSurface, placePluginPlaceholder, surfaceForTab } from "./surface-modules.js";
 import { emitEvent } from "./page-log.js";
 import { trace } from "./performance.js";
@@ -807,6 +808,13 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   pickerEl.setAttribute("aria-label", ask);
   // A list with group titles has many items, so it is drawn taller.
   pickerEl.classList.toggle("picker--grouped", groups.some((group) => group.heading));
+  // An item with a command runs that command after the layer closes, so every item closes the layer through the same pick path
+  // (docs/spec/parties.md#card-menu).
+  const commands = new Map(groups.flatMap((group) => group.items).filter((it) => it.command).map((it) => [it.key, it]));
+  const choose = (key) => {
+    const it = commands.get(key);
+    return it ? run(it.command, it.params) : pick(key);
+  };
   const keys = fillPicker(pickerEl, ask, groups, (b, index, it) => {
     mark(b, "core.picker.pick", { index });
     if (it.notice) {
@@ -828,7 +836,7 @@ function openLayer(anchor, ask, items, pick, align = "right", groups = [{ headin
   };
   pickerEl.style.left = `${rect.x}px`;
   pickerEl.style.top = `${rect.y}px`;
-  picker = { anchor, pick, rect, keys, columns: pickerColumns(pickerEl) };
+  picker = { anchor, pick: choose, rect, keys, columns: pickerColumns(pickerEl) };
   pickerChanged();
   // DOM cannot be drawn over a native view, and a web view is a native view that renders DOM. The application receives this
   // element and renders it in such a view, so the surfaces below keep running. The whole element is passed, so the
@@ -1805,13 +1813,37 @@ export function openCardTools(id) {
     viewBox: b.querySelector("svg").getAttribute("viewBox"),
     active: b.getAttribute("aria-pressed") === "true",
   }));
+  // The group item opens the chooser of the touching cards (docs/spec/parties.md#card-menu).
+  if (groupCandidates(id).length) items.push({ key: "group", name: "카드 묶기", mark: "", svg: "", expose: "core.party.menu.group", active: false });
+  // The party items of the card: each is an element of its name that runs its own command (docs/spec/parties.md#card-menu).
+  for (const [index, item] of partyMenuItems(id).entries()) {
+    items.push({ key: `party-${index}`, name: item.label, mark: "", svg: "", expose: item.element, command: item.command, params: item.params, active: false });
+  }
   focusOn(id);
   settle();
   openLayer(anchor, "카드 도구", items, (key) => {
     if (key.startsWith("side-")) return run("core.card.sidebar.toggle", { card: id, side: key.slice(5) });
     if (key === "fullscreen") return run("core.card.fullscreen", { card: id });
     if (key === "close") return run("core.card.close", { card: id });
+    if (key === "group") return openGroupChooser(anchor, id, []);
     return openPicker(anchor, key, id);
+  });
+}
+
+/**
+ * Opens the group chooser of a card in no party: one picker item per touching card in no party, and the confirm item once a card
+ * is selected. A press on a card selects it, or clears it when it is selected, and reopens the chooser with the selection. The confirm
+ * item runs core.party.create with the card and the selected cards (docs/spec/parties.md#card-menu).
+ */
+function openGroupChooser(anchor, cardId, chosen) {
+  const items = groupCandidates(cardId).map((other) => ({ key: `card-${other}`, name: other, mark: "", svg: "", active: chosen.includes(other) }));
+  if (chosen.length) {
+    items.push({ key: "confirm", name: `카드 ${chosen.length + 1}개 묶기`, mark: "", svg: "", expose: "core.party.menu.group",
+      command: "core.party.create", params: { cards: [cardId, ...chosen] }, active: false });
+  }
+  openLayer(anchor, "묶을 카드 고르기", items, (key) => {
+    const other = key.slice("card-".length);
+    return openGroupChooser(anchor, cardId, chosen.includes(other) ? chosen.filter((card) => card !== other) : [...chosen, other]);
   });
 }
 

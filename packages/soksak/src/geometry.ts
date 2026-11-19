@@ -555,6 +555,19 @@ export interface Touching {
   starts: Map<number, Card[]>;
 }
 
+/**
+ * Whether two cards touch: a side of one meets a side of the other across the gap, and the two cards overlap on the other axis with a
+ * positive length. A card is a span of slots with exclusive ends c1 and r1, so cards in adjacent slots meet when one c1 equals the other c0.
+ */
+export function touches(
+  a: { c0: number; c1: number; r0: number; r1: number },
+  b: { c0: number; c1: number; r0: number; r1: number },
+): boolean {
+  const overlapRows = a.r0 < b.r1 && b.r0 < a.r1;
+  const overlapCols = a.c0 < b.c1 && b.c0 < a.c1;
+  return (overlapRows && (a.c1 === b.c0 || b.c1 === a.c0)) || (overlapCols && (a.r1 === b.r0 || b.r1 === a.r0));
+}
+
 export function touching(plane: Plane, axis: Axis): Touching {
   const [lo, hi] = SPAN[axis];
   const ends = new Map<number, Card[]>();

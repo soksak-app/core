@@ -139,6 +139,21 @@ export interface Touching {
     ends: Map<number, Card[]>;
     starts: Map<number, Card[]>;
 }
+/**
+ * Whether two cards touch: a side of one meets a side of the other across the gap, and the two cards overlap on the other axis with a
+ * positive length. A card is a span of slots with exclusive ends c1 and r1, so cards in adjacent slots meet when one c1 equals the other c0.
+ */
+export declare function touches(a: {
+    c0: number;
+    c1: number;
+    r0: number;
+    r1: number;
+}, b: {
+    c0: number;
+    c1: number;
+    r0: number;
+    r1: number;
+}): boolean;
 export declare function touching(plane: Plane, axis: Axis): Touching;
 /**
  * Index stretches where cards actually break on a line.

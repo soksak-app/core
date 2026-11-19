@@ -90,6 +90,7 @@ func (s *Shell) requirePlane() error {
 func (s *Shell) register() {
 	s.registerLibrary()
 	s.registerRename()
+	s.registerParties()
 	s.registerSettings()
 	s.registerPicker()
 	Functions{Text: s.text, Focus: s.exposedFocus, Pointer: s.pointer, Contributions: s.contributions}.Register(s.registry)

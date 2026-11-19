@@ -70,6 +70,7 @@
     "layout-tree.js",
     "closed-tabs.js",
     "page-layout.js",
+    "parties.js",
     "plane.js",
     "picker-layer.js",
     "projects.js",

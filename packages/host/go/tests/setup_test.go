@@ -115,7 +115,9 @@ func newSetupHome(t *testing.T, zshrc string) setupHome {
 		}
 	}
 	log := filepath.Join(t.TempDir(), "commands.log")
-	zprofile := fmt.Sprintf("export PATH=%q:%q:$PATH\nexport CLAUDE_CONFIG_DIR=%q\n", filepath.Dir(bundle), tools, config)
+	// The login PATH leaves out every directory that holds a codex command, so the registration with codex runs the same way on any
+	// machine; the codex registration has its own case (docs/spec/cli.md#mcp-registration).
+	zprofile := fmt.Sprintf("export PATH=%q:%q:$PATH\nwithout=\"\"\nfor dir in ${(s,:,)PATH}; do [ -x \"$dir/codex\" ] || without=\"$without:$dir\"; done\nexport PATH=\"${without#:}\"\nexport CLAUDE_CONFIG_DIR=%q\n", filepath.Dir(bundle), tools, config)
 	for name, text := range map[string]string{".zprofile": zprofile, ".zshrc": zshrc} {
 		if err := os.WriteFile(filepath.Join(home, name), []byte(text), 0o644); err != nil {
 			t.Fatal(err)
