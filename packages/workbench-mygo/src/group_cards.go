@@ -57,20 +57,18 @@ func (s *Shell) groupHeadTools(id string) []headTool {
 		Title: names["group-menu"], Icon: "card-close"}, true))
 }
 
-// drawGroupCard draws the group card id whose rectangle is rect (docs/spec/groups.md#drawing): its frame, the border of a card in the
-// corridor half the gap around the rectangle, and its header at the top of the rectangle. The content cards inside it draw over the
-// rest of the rectangle, and the grid draws its own lines between them.
+// drawGroupCard draws the group card id whose rectangle is rect as one container (docs/spec/groups.md#drawing): its frame, the border
+// and the radius of a card on the rectangle, filled with the color of the level of its members, and its header, the top band inside
+// the frame. The cards inside it draw over the rest of the rectangle, one gap inside the frame.
 func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset float32) {
 	record, _ := s.planes.Group(id) // silent: drawWork draws a group card of the tree.
 	head, _ := s.groupHeadRect(id)  // silent: a group card has a header.
-	line := s.palette.CardBorder()
-	out := float32(s.plane.Gap()/2) + line/2
 	card := s.binder.Press(c, "core.group", "core.card.focus", id, cardParam{Card: id})
 	s.anchored("core.group/"+id, card)
-	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset-out).Top(float32(rect.Y)+inset-out).
-		Size(float32(rect.W)+2*out, float32(rect.H)+2*out).Border(line, s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
-	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).
-		Background(s.palette.Card).Radius(s.palette.CardRadius()).Clip().Children(func() {
+	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
+		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupFill(s.planes.Level(id)+1)).
+		Border(s.palette.CardBorder(), s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
+	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
 	})
 }

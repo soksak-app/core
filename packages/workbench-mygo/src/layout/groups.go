@@ -328,13 +328,53 @@ func (t *GroupTree) Rect(id string) (Rect, bool) {
 		rect.H -= k * t.headStep()
 		return rect, ok
 	}
-	// A group card is drawn below the headers of the group cards that hold it and start on its first row line, as a content card is.
-	rect := t.union(n)
-	_, _, r0, _ := t.span(n)
-	k := float64(t.heads(path, r0))
-	rect.Y += k * t.headStep()
-	rect.H -= k * t.headStep()
-	return rect, true
+	// A group card is its frame: the lines around it inset by the corridor and by one gap for each group card that holds it on that
+	// line, and at the top by the headers of the group cards that hold it and start on its first row line.
+	c0, c1, r0, r1 := t.span(n)
+	return t.place(nil, n, path, c0, c1, r0, r1), true
+}
+
+// place is the rectangle between the lines c0, c1, r0 and r1 of a card that the group cards holders hold
+// (docs/spec/groups.md#drawn-rectangles): each line inset by its corridor and by one gap for each holder that ends on it, the top
+// line by the headers of the holders that start on it. With onto, the lines of the group card whole, the first of holders or the card
+// itself, are stretched onto onto and its own lines take no corridor, as the border of the plane takes none.
+func (t *GroupTree) place(onto *Rect, whole *node, holders []*node, c0, c1, r0, r1 int) Rect {
+	f := frameOf(t.grid.plane())
+	w0, w1, v0, v1 := t.span(whole)
+	pos := func(a *axle, line, lo, hi int, from, size float64) float64 {
+		if onto == nil {
+			return a.at[line]
+		}
+		return from + (a.at[line]-a.at[lo])*size/(a.at[hi]-a.at[lo])
+	}
+	inset := func(a []float64, line, lo, hi int) float64 {
+		if onto != nil && (line == lo || line == hi) {
+			return 0
+		}
+		return a[line]
+	}
+	var left, right, bottom int
+	for _, g := range holders {
+		g0, g1, _, h1 := t.span(g)
+		if g0 == c0 {
+			left++
+		}
+		if g1 == c1 {
+			right++
+		}
+		if h1 == r1 {
+			bottom++
+		}
+	}
+	var ox, ow, oy, oh float64
+	if onto != nil {
+		ox, ow, oy, oh = onto.X, onto.W, onto.Y, onto.H
+	}
+	x0 := pos(&f.x, c0, w0, w1, ox, ow) + inset(f.x.lo, c0, w0, w1) + float64(left)*f.x.unit
+	x1 := pos(&f.x, c1, w0, w1, ox, ow) - inset(f.x.hi, c1, w0, w1) - float64(right)*f.x.unit
+	y0 := pos(&f.y, r0, v0, v1, oy, oh) + inset(f.y.lo, r0, v0, v1) + float64(t.heads(holders, r0))*t.headStep()
+	y1 := pos(&f.y, r1, v0, v1, oy, oh) - inset(f.y.hi, r1, v0, v1) - float64(bottom)*f.y.unit
+	return Rect{X: x0, Y: y0, W: math.Max(0, x1-x0), H: math.Max(0, y1-y0)}
 }
 
 // headStep is how far one header moves the boxes below it down: the header and the corridor that separates it from them, as between
@@ -444,6 +484,35 @@ func (t *GroupTree) snapshot() snapshot {
 func (t *GroupTree) restore(s snapshot) {
 	t.grid.reload(s.state)
 	t.roots, t.leader, t.last = copyNodes(s.roots), s.leader, s.last
+	t.reframe()
+}
+
+// reframe gives the grid the frames of every content card (docs/spec/groups.md#drawn-rectangles): on its left, right and bottom
+// side the number of group cards that hold it and end on the line of that side. The top takes no frame, because the header of a group
+// card stands inside its frame at the top.
+func (t *GroupTree) reframe() {
+	frames := map[string]Frames{}
+	for _, card := range t.grid.Cards() {
+		path, _, _ := t.find(card.ID) // silent: a card outside the tree, a window sidebar, has no path and no frames.
+		var f Frames
+		for _, n := range path {
+			c0, c1, _, r1 := t.span(n)
+			if c0 == card.C0 {
+				f.Left++
+			}
+			if c1 == card.C1 {
+				f.Right++
+			}
+			if r1 == card.R1 {
+				f.Bottom++
+			}
+		}
+		if f != (Frames{}) {
+			frames[card.ID] = f
+		}
+	}
+	t.grid.cardFrames = frames
+	t.grid.changed()
 }
 
 // Probe runs change on the tree and puts the tree back, and returns what change returned: the drop preview asks what a drop would
@@ -482,6 +551,7 @@ func (t *GroupTree) try(id, op string, change func() error) error {
 // cells of a card to its neighbours without moving the lines of other groups, and a later split does not land on a seam of another
 // group (docs/spec/groups.md#model).
 func (t *GroupTree) keepLines() {
+	t.reframe()
 	if len(t.roots) == 0 {
 		return
 	}
@@ -495,6 +565,7 @@ func (t *GroupTree) keepLines() {
 			}
 		}
 	}
+	t.reframe()
 }
 
 // issue returns the next card id of the space.
@@ -1470,66 +1541,29 @@ func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *Z
 	}
 }
 
-// gridBox is the rectangle in the grid of the card id with the node n, nil for a content card outside the tree: the union of the
-// cards inside a group card, and the first row line of it.
-func (t *GroupTree) gridBox(id string, n *node) (Rect, int) {
-	if n != nil && n.group {
-		_, _, r0, _ := t.span(n) // silent: the first row line is the one value of the span that the headers read.
-		return t.union(n), r0
-	}
-	rect, _ := t.grid.Rect(id) // silent: id is a card of the grid.
-	card, _ := t.grid.Card(id) // silent: id is a card of the grid.
-	return rect, card.R0
-}
-
 // Fullscreen is the rectangle of each card inside the group card id while it is shown across rect, laid out as if the group card were
-// the whole space (docs/spec/groups.md#card-commands-on-a-group-card): the lines inside it are stretched onto rect while every corridor
-// keeps the gap, its header stands at the top of rect, and each card inside it stands below the headers of the group cards between it
-// and id that start on its first row line.
+// the whole space (docs/spec/groups.md#card-commands-on-a-group-card): its frame is rect, the lines inside it are stretched onto rect
+// while every corridor and frame keeps the gap, and each card inside it stands below the headers of the group cards between it and id
+// that start on its first row line.
 func (t *GroupTree) Fullscreen(id string, rect Rect) map[string]Rect {
-	n := t.groupNode(id)
-	if n == nil {
+	whole := t.groupNode(id)
+	if whole == nil {
 		return nil
-	}
-	from := t.union(n)
-	half := t.grid.Gap() / 2
-	// edge maps a coordinate of an edge of a card in the grid onto rect: the line beside the edge, half a gap away, moves in proportion
-	// between the lines around the group card, and the edge keeps half a gap from it.
-	edge := func(v, lo, size, onto, ontoSize float64, low bool) float64 {
-		switch {
-		case math.Abs(v-lo) < eps:
-			return onto
-		case math.Abs(v-(lo+size)) < eps:
-			return onto + ontoSize
-		}
-		line := v + half
-		if !low {
-			line = v - half
-		}
-		mapped := onto - half + (line-(lo-half))*(ontoSize+2*half)/(size+2*half)
-		if low {
-			return mapped - half
-		}
-		return mapped + half
-	}
-	fit := func(r Rect) Rect {
-		x0, x1 := edge(r.X, from.X, from.W, rect.X, rect.W, false), edge(r.X+r.W, from.X, from.W, rect.X, rect.W, true)
-		y0, y1 := edge(r.Y, from.Y, from.H, rect.Y, rect.H, false), edge(r.Y+r.H, from.Y, from.H, rect.Y, rect.H, true)
-		return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
 	}
 	out := map[string]Rect{id: rect}
 	for _, card := range t.Cards() {
 		path, inner, _ := t.find(card)
-		at := slices.IndexFunc(path, func(g *node) bool { return g.card == id })
+		at := slices.IndexFunc(path, func(g *node) bool { return g == whole })
 		if card == id || at < 0 {
 			continue
 		}
-		lib, r0 := t.gridBox(card, inner)
-		fitted := fit(lib)
-		k := float64(t.heads(path[at:], r0)) * t.headStep()
-		fitted.Y += k
-		fitted.H -= k
-		out[card] = fitted
+		if inner != nil && inner.group {
+			c0, c1, r0, r1 := t.span(inner)
+			out[card] = t.place(&rect, whole, path[at:], c0, c1, r0, r1)
+			continue
+		}
+		c, _ := t.grid.Card(card) // silent: card is a content card of the grid.
+		out[card] = t.place(&rect, whole, path[at:], c.C0, c.C1, c.R0, c.R1)
 	}
 	return out
 }
@@ -1646,6 +1680,7 @@ func ReadTree(state State, groups, leader, lastCard json.RawMessage, options Gro
 	if err := t.readLast(lastCard, seen); err != nil {
 		return nil, err
 	}
+	t.reframe()
 	return t, nil
 }
 

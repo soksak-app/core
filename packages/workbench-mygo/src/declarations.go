@@ -141,8 +141,17 @@ func (d *Declarations) HeightMetric(name string) (float64, bool) {
 // Palette is the colors and the shape of a theme in one mode.
 type Palette struct {
 	Bg, Card, Fg, Muted, Edge, Rule, Rail, Focus, No ui.Color
+	// Groups are the theme colors group-1 to group-3, and GroupTint the setting group.tint as a share from 0 to 1.
+	Groups    [3]ui.Color
+	GroupTint float32
 	// Gap is the gap setting: the full distance between two adjacent cards, 0 for the seam (docs/spec/settings.md#values).
 	Radius, Gap, BorderWidth float32
+}
+
+// GroupFill is the fill of a group card whose members stand on level: bg mixed with group-<level> by group.tint, group-3 for a level
+// above 3 (docs/spec/groups.md#drawing).
+func (p Palette) GroupFill(level int) ui.Color {
+	return mixed(p.Groups[min(max(level, 1), 3)-1], p.Bg, p.GroupTint)
 }
 
 // Seam is whether the cards share one line: the gap is 0 (seam of packages/workbench/settings.js).
@@ -208,7 +217,8 @@ func (d *Declarations) DefaultPalette() (Palette, error) {
 		return float32(number)
 	}
 	return Palette{Bg: color("bg"), Card: color("card"), Fg: color("fg"), Muted: color("muted"), Edge: color("edge"), Rule: color("rule"),
-		Rail: color("rail"), Focus: color("focus"), No: color("no"), Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
+		Rail: color("rail"), Focus: color("focus"), No: color("no"), Groups: [3]ui.Color{color("group-1"), color("group-2"), color("group-3")},
+		GroupTint: 1, Radius: length("r"), Gap: length("gap"), BorderWidth: length("bw")}, failed
 }
 
 // Declared returns the declarations of the embedded copies.

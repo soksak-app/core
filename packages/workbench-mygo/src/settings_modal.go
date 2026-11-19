@@ -487,6 +487,7 @@ func (s *Shell) buildGeneral(b *settingsBuilder) error {
 		choice("포커스 표시", "focusInd", map[string]string{"border": "테두리", "corner": "꺽쇠"}),
 		choice("카드 자동 정렬", "cardArrange", map[string]string{"resize": "크기맞춤", "even": "균등"}),
 		choice("카드 분할", "cardSplit", map[string]string{"exact": "정확히 분할", "even": "균등"}),
+		s.row(b, "그룹 색", s.slide(b, "group.tint", catalog.Settings.GroupTint, "%")),
 		choice("경계선", "fullRule", map[string]string{"under": "가림", "over": "보임", "none": "숨김"}),
 		s.row(b, "포커스 밖 흐리게", s.toggle(b, "dim")))
 
@@ -1090,10 +1091,12 @@ func (s *SettingsStore) Palette() (Palette, error) {
 	if err != nil {
 		return Palette{}, fmt.Errorf("theme %s: shape bw: %w", theme.Name, err)
 	}
-	radius, _ := s.Value("radius").(float64) // silent: the settings store checks the type of the value.
-	gap, _ := s.Value("gap").(float64)       // silent: the settings store checks the type of the value.
+	radius, _ := s.Value("radius").(float64)   // silent: the settings store checks the type of the value.
+	gap, _ := s.Value("gap").(float64)         // silent: the settings store checks the type of the value.
+	tint, _ := s.Value("group.tint").(float64) // silent: the settings store checks the type of the value.
 	return Palette{Bg: color("bg"), Card: color("card"), Fg: color("fg"), Muted: color("muted"), Edge: color("edge"), Rule: color("rule"), Rail: color("rail"),
-		Focus: color("focus"), No: color("no"), Radius: float32(radius), Gap: float32(gap), BorderWidth: float32(border)}, nil
+		Focus: color("focus"), No: color("no"), Groups: [3]ui.Color{color("group-1"), color("group-2"), color("group-3")},
+		GroupTint: float32(tint / 100), Radius: float32(radius), Gap: float32(gap), BorderWidth: float32(border)}, nil
 }
 
 // settingsParam is the parameter of a change of the settings.

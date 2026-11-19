@@ -37,6 +37,28 @@ type Card struct {
 	Data   json.RawMessage `json:"data,omitempty"`
 }
 
+// Frames is the number of frames that stand between a card and each of its four lines (docs: R5 of packages/soksak/docs/layout.md):
+// each takes one gap of the corridor on that side of the card.
+type Frames struct {
+	Left   int `json:"left"`
+	Right  int `json:"right"`
+	Top    int `json:"top"`
+	Bottom int `json:"bottom"`
+}
+
+// side is the frames of the card on the lo or the hi side of axis.
+func (f Frames) side(axis Axis, s string) int {
+	switch {
+	case axis == "x" && s == "lo":
+		return f.Left
+	case axis == "x":
+		return f.Right
+	case s == "lo":
+		return f.Top
+	}
+	return f.Bottom
+}
+
 // spanKeys names the two span fields of an axis.
 type spanKey int
 

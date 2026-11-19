@@ -19,6 +19,8 @@ type plane struct {
 	height  float64
 	gap     float64
 	minSize float64
+	// frames is the frames of each card by id; a card without an entry has none.
+	frames map[string]Frames
 	// read keeps the last frame of a plane, for a plane of a grid.
 	read *frameRead
 }
@@ -70,7 +72,46 @@ func corridorOf(p *plane, axis Axis, slot int, read lineSet) float64 {
 	for k := slot + 2; k < len(a) && blank(p, axis, k-1); k++ {
 		hi = math.Max(hi, inset(p, axis, k, "hi", read))
 	}
-	return lo + hi
+	return lo + hi + float64(slotFrames(p, axis, slot))*corridor(p, axis, read)
+}
+
+// slotFrames is the number of frames a slot carries: the most frames of a card that starts on its lower line on that side, and the
+// most of a card that ends on its upper line on that side, a run of lines at one position counting as its slot.
+func slotFrames(p *plane, axis Axis, slot int) int {
+	if len(p.frames) == 0 {
+		return 0
+	}
+	a := p.lines(axis)
+	lo, hi := span(axis)
+	from, to := slot, slot+1
+	for from > 0 && blank(p, axis, from-1) {
+		from--
+	}
+	for to < len(a)-1 && blank(p, axis, to) {
+		to++
+	}
+	low, high := 0, 0
+	for _, card := range p.cards {
+		f := p.frames[card.ID]
+		if start := card.get(lo); start >= from && start <= slot {
+			low = max(low, f.side(axis, "lo"))
+		}
+		if end := card.get(hi); end >= slot+1 && end <= to {
+			high = max(high, f.side(axis, "hi"))
+		}
+	}
+	return low + high
+}
+
+// cardInset is how far the edge of card on side stands from its line: the corridor of the line on that side and one gap for each
+// frame of the card on that side.
+func cardInset(p *plane, axis Axis, card *Card, side string, read lineSet) float64 {
+	lo, hi := span(axis)
+	line := card.get(hi)
+	if side == "lo" {
+		line = card.get(lo)
+	}
+	return inset(p, axis, line, side, read) + float64(p.frames[card.ID].side(axis, side))*corridor(p, axis, read)
 }
 
 // corridorWhenWide is the corridor a slot holds once it has a width.
@@ -94,7 +135,7 @@ func corridorWhenWide(p *plane, axis Axis, slot int, read lineSet) float64 {
 	for k := slot + 2; k < len(a) && blank(p, axis, k-1); k++ {
 		hi = math.Max(hi, edge(k, k == len(a)-1))
 	}
-	return lo + hi
+	return lo + hi + float64(slotFrames(p, axis, slot))*corridor(p, axis, read)
 }
 
 // blank is true when a slot draws at zero width: no span to take a share with and no px size.
@@ -364,6 +405,11 @@ func corridor(p *plane, axis Axis, read lineSet) float64 {
 	if read.has(len(a) - 1) {
 		real--
 	}
+	for slot := 0; slot < len(a)-1; slot++ {
+		if !blank(p, axis, slot) {
+			real += slotFrames(p, axis, slot)
+		}
+	}
 	if real <= 0 {
 		return p.gap
 	}
@@ -412,14 +458,16 @@ func halfCorridor(p *plane, axis Axis, read lineSet) float64 {
 	return corridor(p, axis, read) / 2
 }
 
-// axle is the line positions and edge insets of one axis.
+// axle is the line positions and edge insets of one axis, and the gap that one frame takes on it.
 type axle struct {
 	at, lo, hi []float64
+	unit       float64
 }
 
-// frame is the axles of both axes.
+// frame is the axles of both axes and the frames of the cards.
 type frame struct {
-	x, y axle
+	x, y   axle
+	frames map[string]Frames
 }
 
 func (f *frame) of(axis Axis) *axle {
@@ -444,10 +492,11 @@ type cardSpan struct {
 	c0, c1, r0, r1 int
 	width, height  opt
 	fixed          bool
+	frames         Frames
 }
 
-func cardSpanOf(card *Card) cardSpan {
-	span := cardSpan{c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed}
+func cardSpanOf(p *plane, card *Card) cardSpan {
+	span := cardSpan{c0: card.C0, c1: card.C1, r0: card.R0, r1: card.R1, fixed: card.Fixed, frames: p.frames[card.ID]}
 	if card.Width != nil {
 		span.width = some(*card.Width)
 	}
@@ -464,7 +513,7 @@ func (r *frameRead) holds(p *plane) bool {
 		return false
 	}
 	for i, card := range p.cards {
-		if r.spans[i] != cardSpanOf(card) {
+		if r.spans[i] != cardSpanOf(p, card) {
 			return false
 		}
 	}
@@ -475,7 +524,7 @@ func (r *frameRead) holds(p *plane) bool {
 func (r *frameRead) take(p *plane, f frame) {
 	spans := r.spans[:0]
 	for _, card := range p.cards {
-		spans = append(spans, cardSpanOf(card))
+		spans = append(spans, cardSpanOf(p, card))
 	}
 	*r = frameRead{held: true, xs: append(r.xs[:0], p.xs...), ys: append(r.ys[:0], p.ys...), width: p.width, height: p.height,
 		gap: p.gap, minSize: p.minSize, spans: spans, frame: f}
@@ -508,22 +557,23 @@ func computeFrame(p *plane) frame {
 			lo[i] = inset(p, axis, i, "lo", read)
 			hi[i] = inset(p, axis, i, "hi", read)
 		}
-		return axle{at: at, lo: lo, hi: hi}
+		return axle{at: at, lo: lo, hi: hi, unit: corridor(p, axis, read)}
 	}
-	return frame{x: axleOf("x"), y: axleOf("y")}
+	return frame{x: axleOf("x"), y: axleOf("y"), frames: p.frames}
 }
 
 func rectIn(f frame, card *Card) Rect {
-	x, w := spanIn(&f.x, card.C0, card.C1)
-	y, h := spanIn(&f.y, card.R0, card.R1)
+	frames := f.frames[card.ID]
+	x, w := spanIn(&f.x, card.C0, card.C1, frames.Left, frames.Right)
+	y, h := spanIn(&f.y, card.R0, card.R1, frames.Top, frames.Bottom)
 	return Rect{X: x, Y: y, W: w, H: h}
 }
 
-// spanIn is one axis of a rect: the card's start position and size. A card whose two lines are at one position is drawn at zero
-// width in the middle of the slots it spans.
-func spanIn(a *axle, lo, hi int) (float64, float64) {
-	near := a.at[lo] + a.lo[lo]
-	far := a.at[hi] - a.hi[hi]
+// spanIn is one axis of a rect: the card's start position and size, inset by one gap for each of its frames on each side. A card
+// whose two edges cross is drawn at zero width in the middle of the slots it spans.
+func spanIn(a *axle, lo, hi, framesLo, framesHi int) (float64, float64) {
+	near := a.at[lo] + a.lo[lo] + float64(framesLo)*a.unit
+	far := a.at[hi] - a.hi[hi] - float64(framesHi)*a.unit
 	if far >= near-1e-6 {
 		return near, math.Max(0, far-near)
 	}

@@ -3,8 +3,10 @@ package layout
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"math"
 	"slices"
+	"strconv"
 )
 
 // The grid over shared lines. xs and ys hold every coordinate; a card is a span of indices into them, so two cards that meet
@@ -77,6 +79,8 @@ type Grid struct {
 	snapAt    float64
 	snapMode  string
 	frames    frameRead
+	// cardFrames is the frames of each card by id that SetFrames set.
+	cardFrames map[string]Frames
 	// dockToken is the plane state that the last dock of the window sidebars saw, and dockRefused is the arrangement of a dock it
 	// could not place (sidebars.go): a settle whose plane state differs docks again, so a sidebar reduced for lack of room takes its
 	// saved size when the room returns and a refused arrangement is not attempted again while the plane stands still.
@@ -357,6 +361,22 @@ func (g *Grid) SetSize(id string, axis Axis, px *float64) bool {
 	return true
 }
 
+// SetFrames sets the frames of each card by id (R5): a card without an entry has none. It rejects an id that is no card of the grid
+// and a count below zero.
+func (g *Grid) SetFrames(frames map[string]Frames) error {
+	for id, f := range frames {
+		if g.find(id) == nil {
+			return errors.New("soksak: frames name " + strconv.Quote(id) + ", which is no card")
+		}
+		if f.Left < 0 || f.Right < 0 || f.Top < 0 || f.Bottom < 0 {
+			return errors.New("soksak: the frames of " + strconv.Quote(id) + " count below zero")
+		}
+	}
+	g.cardFrames = maps.Clone(frames)
+	g.changed()
+	return nil
+}
+
 func (g *Grid) find(id string) *Card {
 	for _, c := range g.list {
 		if c.ID == id {
@@ -406,7 +426,8 @@ func (g *Grid) reload(state State) {
 }
 
 func (g *Grid) plane() *plane {
-	return &plane{xs: g.xs, ys: g.ys, cards: g.list, width: g.w, height: g.h, gap: g.gap, minSize: g.min, read: &g.frames}
+	return &plane{xs: g.xs, ys: g.ys, cards: g.list, width: g.w, height: g.h, gap: g.gap, minSize: g.min, frames: g.cardFrames,
+		read: &g.frames}
 }
 
 func (g *Grid) arr(axis Axis) []float64 {
@@ -773,8 +794,8 @@ func (g *Grid) BoundaryRange(axis Axis, line int) [2]float64 {
 	p := g.plane()
 	read := linesRead(p, axis)
 	for _, card := range g.list {
-		near := inset(p, axis, card.get(lo), "lo", read)
-		far := inset(p, axis, card.get(hi), "hi", read)
+		near := cardInset(p, axis, card, "lo", read)
+		far := cardInset(p, axis, card, "hi", read)
 		if card.get(hi) == line {
 			low = math.Max(low, along[card.get(lo)]+g.min+near+far)
 		}
@@ -990,11 +1011,11 @@ func (g *Grid) middleOf(axis Axis, line int) float64 {
 	for _, card := range g.list {
 		if card.get(hi) == line && along[card.get(lo)] > start {
 			start = along[card.get(lo)]
-			insStart = inset(near, axis, card.get(lo), "lo", seen)
+			insStart = cardInset(near, axis, card, "lo", seen)
 		}
 		if card.get(lo) == line && along[card.get(hi)] < end {
 			end = along[card.get(hi)]
-			insEnd = inset(near, axis, card.get(hi), "hi", seen)
+			insEnd = cardInset(near, axis, card, "hi", seen)
 		}
 	}
 	if math.IsInf(start, -1) {
@@ -1141,8 +1162,8 @@ func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	p := g.plane()
 	read := linesRead(p, axis)
 	half := halfCorridor(p, axis, read)
-	lowest := a[card.get(lo)] + (g.min+inset(p, axis, card.get(lo), "lo", read)+half)/per
-	highest := a[card.get(hi)] - (g.min+half+inset(p, axis, card.get(hi), "hi", read))/per
+	lowest := a[card.get(lo)] + (g.min+cardInset(p, axis, card, "lo", read)+half)/per
+	highest := a[card.get(hi)] - (g.min+half+cardInset(p, axis, card, "hi", read))/per
 	if lowest > highest {
 		return 0, 0, false
 	}
