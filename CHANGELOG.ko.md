@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F928: 복사 경로의 응답되지 않은 screen 요청은 새 generation, 새 raster, 공급자 연결의 끝에서 답 없이 끝나며, 연결의 끝은 받아들인 화면도 버린다. 그래서 다음 요청은 `full: true`이고 끝난 요청의 늦은 답은 `stale`이다(`docs/spec/native-surfaces.md#copy-path-frames`, 계약 사례 `images.copy-path.screen-request-ends`). 두 호스트가 요청을 그 답까지 유지했으므로, 답 전에 raster가 바뀌거나 공급자가 다시 시작한 region은 다시 요청을 받지 못했다. Red와 Green: Go `TestAnUnanswerableScreenRequestEndsAndTheNextRequestIsFull`와 Rust `an_unanswerable_screen_request_ends_and_the_next_request_is_full`.
 - F925-1: Rust page-wire producer가 Go producer처럼 선언된 case 멤버 `filter`를 읽고 `notificationState`, `setTheme`, `setMenuLanguage` 외의 이름을 거부한다. `every_page_wire_case_with_replay_true_gives_its_recorded_reply`는 `party-watch-composition`에서 모르는 멤버를 거부해 실패했고 이제 통과한다.
 - F914: `docs/spec/hosts.md`의 framework 표가 `make check-host-files`가 Wails counterpart 없이 보고한 gpuikit 전용 test 파일 네 개를 선언한다. row H100(poisoned-lock helper와 log하는 response, 파일 helper), H101(`exit_on_failure` 뒤의 setup 결과), H102(view의 native window와 `harness = false` target의 main-thread runner)다. row H75, H76, H96은 `none` gpuikit cell을, 구분 row는 여섯째 column을 얻어 이유 text가 gpuikit 파일 목록으로 읽히지 않는다.
 - F914-5: GPUI host가 ready에 도달한다. soksak scheme은 주소의 owner의 start document를 응답하고, main thread에서 post한 task는 `post`가 return하기 전에 실행되며, app scheme과 staged frontend(adapter의 `StagedFrontend`)는 page 파일을 앞 구분자가 있거나 없는 page 경로로 읽는다. 검증: `packages/host/gpuikit`의 service와 page file test가 변경 전 adapter에서 실패했고 통과한다. debug bundle이 `ready:true`를 보고하고 project library를 보인다.

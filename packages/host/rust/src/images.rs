@@ -160,6 +160,16 @@ fn answer_screen_locked(
     }
 }
 
+impl RasterState {
+    /// Ends the unanswered screen request of a region without an answer and drops its accepted screen, because no message can answer
+    /// the request any more: the generation or the raster of the region changed, or the connection of its supplier ended. The next
+    /// request of the region is then full (docs/spec/native-surfaces.md#copy-path-frames).
+    fn end_screen(&mut self) {
+        self.screen_request = None;
+        self.screen_baseline = None;
+    }
+}
+
 impl Inner {
     /// Records and returns the screen request of a drawing region that has no unanswered request, or None when the region gets none.
     fn new_screen_request(&mut self, key: &Key, cids: Vec<String>) -> Option<ScreenRequest> {
@@ -241,6 +251,7 @@ impl Inner {
                 state.last_sequence = 0;
                 state.presented_raster = 0;
                 state.presented_sequence = 0;
+                state.end_screen();
             }
         }
         generation
@@ -735,6 +746,7 @@ impl Images {
                     state.last_sequence = 0;
                     state.presented_sequence = 0;
                     state.presentation_error = None;
+                    state.end_screen();
                 }
             }
         }
@@ -951,8 +963,9 @@ impl Images {
             // supplier that ended; the configure of the new connection clears it.
             state.presentation_error =
                 waited.then(|| format!("the supplier connection of {sidecar} ended"));
-            // The service of the new connection has no drawing state either.
+            // The service of the new connection has no drawing state and no screen of the region either.
             state.drawing_sent = None;
+            state.end_screen();
             invalidated += 1;
         }
         if invalidated > 0 {
@@ -1011,6 +1024,7 @@ impl Images {
             state.configured = false;
             state.presented_sequence = 0;
             state.presentation_error = None;
+            state.end_screen();
             self.changed();
         }
         // A supplier opens the session of a region at the size of its configuration, so a region of a window that is off

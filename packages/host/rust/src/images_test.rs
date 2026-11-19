@@ -1548,6 +1548,66 @@ fn screen_message_of_the_supplier_is_accepted_over_the_wire() {
     );
 }
 
+/// A step that ends the unanswered screen request of the region of screen_fixture: (case, the change).
+type ScreenRequestEnd = (&'static str, fn(&super::Images, &super::Key));
+
+// contract: images.copy-path.screen-request-ends
+// An unanswered screen request ends without an answer when its region moves to a new generation, when the raster of the region changes
+// and when the connection of its supplier ends; the end of the connection also drops the accepted screen. The region then receives a new
+// request with full true, and a message that answers the ended request is stale (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn an_unanswerable_screen_request_ends_and_the_next_request_is_full() {
+    let (images, key, _, _, first) = screen_fixture();
+    images.answer_screen(&key, &first, true).unwrap();
+    let baseline = images.screen_requests();
+    assert!(
+        baseline.len() == 1 && !baseline[0].full,
+        "after an accepted screen the request is {baseline:?}: one request, full false"
+    );
+    let steps: [ScreenRequestEnd; 4] = [
+        ("the end of the supplier connection", |images, _| {
+            images.invalidate_sidecar("sidecar-a");
+        }),
+        ("a new raster size", |images, key| {
+            images.configure_raster(key, 1000, 600, 2.0, true).unwrap();
+        }),
+        ("the showing of the hidden surface", |images, key| {
+            images.set_surface_visible(&key.0, false);
+            images.set_surface_visible(&key.0, true);
+        }),
+        ("a new generation", |images, key| {
+            images.begin_generation(&key.0);
+        }),
+    ];
+    let mut ended = baseline[0].clone();
+    for (case, end) in steps {
+        end(&images, &key);
+        let requests = images.screen_requests();
+        assert!(
+            requests.len() == 1 && requests[0].full && requests[0].request != ended.request,
+            "after {case} the requests are {requests:?}: one request, full true, new identifier"
+        );
+        let late = serde_json::json!({ "image": { "screen": {
+            "request": ended.request, "name": "copy", "generation": ended.generation, "raster": ended.raster,
+            "rows": [{ "row": 0, "cells": "row-0" }],
+        } } });
+        let (handled, answers) = handle_screen_message(&images, &late, "sidecar-a", &key.0);
+        assert!(
+            handled,
+            "{case}: the answer of the ended request is consumed"
+        );
+        assert_eq!(
+            answers,
+            vec![serde_json::json!({ "image": { "screen": {
+                "error": "stale", "request": ended.request, "name": "copy",
+                "generation": ended.generation, "raster": ended.raster,
+            } } })],
+            "after {case} the answer of the ended request"
+        );
+        ended = requests[0].clone();
+    }
+}
+
 /// A refused screen message: (case, sender, generation offset, raster offset, request identifier override, reason).
 type ScreenRefusal = (
     &'static str,

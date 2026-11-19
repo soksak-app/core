@@ -271,6 +271,14 @@ func (i *Images) answerScreenLocked(key ImageKey, request ImageScreenRequest, ac
 	return nil
 }
 
+// endScreenLocked ends the unanswered screen request of a region without an answer and drops its accepted screen, because no message
+// can answer the request any more: the generation or the raster of the region changed, or the connection of its supplier ended. The
+// next request of the region is then full (docs/spec/native-surfaces.md#copy-path-frames). Call it while holding i.mu.
+func endScreenLocked(state *ImageRasterState) {
+	state.ScreenRequest = ImageScreenRequest{}
+	state.ScreenAccepted = false
+}
+
 // ImageTick is the clock tick of a drawing region (docs/spec/native-surfaces.md#copy-path-frames). Sequence counts the ticks of the window
 // clock from 1, and RefreshRate is the refresh rate that the caller read at the tick.
 type ImageTick struct {
@@ -420,6 +428,7 @@ func (i *Images) BeginGeneration(surface string) uint64 {
 			state.LastSequence = 0
 			state.PresentedRaster = 0
 			state.PresentedSequence = 0
+			endScreenLocked(state)
 		}
 	}
 	i.changedLocked()
@@ -467,6 +476,7 @@ func (i *Images) SetSurfaceVisible(surface string, visible bool) {
 			state.LastSequence = 0
 			state.PresentedSequence = 0
 			state.PresentationError = ""
+			endScreenLocked(state)
 		}
 	}
 	i.changedLocked()
@@ -659,8 +669,9 @@ func (i *Images) InvalidateSidecar(sidecar string) int {
 		if waited {
 			state.PresentationError = fmt.Sprintf("the supplier %s of the image region %s/%s ended", sidecar, key.Surface, key.Name)
 		}
-		// The service of the new connection has no drawing state either.
+		// The service of the new connection has no drawing state and no screen of the region either.
 		state.DrawingSent = false
+		endScreenLocked(state)
 		invalidated++
 	}
 	if invalidated > 0 {
@@ -695,6 +706,7 @@ func (i *Images) ConfigureRaster(key ImageKey, width, height int, scale float64,
 		state.Configured = false
 		state.PresentedSequence = 0
 		state.PresentationError = ""
+		endScreenLocked(state)
 		i.changedLocked()
 	}
 	// A supplier opens the session of a region at the size of its configuration, so a region of a window that is off

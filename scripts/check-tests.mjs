@@ -13975,6 +13975,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F928",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "func endScreenLocked(state *ImageRasterState) {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "fn end_screen(&mut self) {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestAnUnanswerableScreenRequestEndsAndTheNextRequestIsFull" },
+      { file: "packages/host/rust/src/images_test.rs", id: "an_unanswerable_screen_request_ends_and_the_next_request_is_full" },
+    ],
+    expected: "An unanswered screen request ends at a new generation, a new raster and the end of the supplier connection, and the next request is full.",
+    levels: ["unit"],
+  },
+  {
     id: "F925",
     implementation: [
       { file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" },

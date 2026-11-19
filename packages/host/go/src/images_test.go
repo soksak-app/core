@@ -910,6 +910,56 @@ func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
 	}
 }
 
+// contract: images.copy-path.screen-request-ends
+// An unanswered screen request ends without an answer when its region moves to a new generation, when the raster of the region changes and
+// when the connection of its supplier ends; the end of the connection also drops the accepted screen. The region then receives a new request
+// with full true, and a message that answers the ended request is stale (docs/spec/native-surfaces.md#copy-path-frames).
+func TestAnUnanswerableScreenRequestEndsAndTheNextRequestIsFull(t *testing.T) {
+	images, key, _, first := screenFixture(t)
+	if err := images.AnswerScreen(key, first, true); err != nil {
+		t.Fatalf("answer screen request: %v", err)
+	}
+	baseline := images.ScreenRequests()
+	if len(baseline) != 1 || baseline[0].Full {
+		t.Fatalf("after an accepted screen the request is %+v, want one request with full false", baseline)
+	}
+	steps := []struct {
+		name string
+		end  func()
+	}{
+		{"the end of the supplier connection", func() { images.InvalidateSidecar("sidecar-a") }},
+		{"a new raster size", func() {
+			if _, err := images.ConfigureRaster(key, 1000, 600, 2, true); err != nil {
+				t.Fatalf("configure image: %v", err)
+			}
+		}},
+		{"the showing of the hidden surface", func() {
+			images.SetSurfaceVisible(key.Surface, false)
+			images.SetSurfaceVisible(key.Surface, true)
+		}},
+		{"a new generation", func() { images.BeginGeneration(key.Surface) }},
+	}
+	ended := baseline[0]
+	for _, step := range steps {
+		step.end()
+		requests := images.ScreenRequests()
+		if len(requests) != 1 || !requests[0].Full || requests[0].Request == ended.Request {
+			t.Fatalf("after %s the requests are %+v, want one request with full true and a new identifier", step.name, requests)
+		}
+		late := screenMessageBody(t, map[string]any{
+			"request": ended.Request, "name": "copy", "generation": ended.Generation, "raster": ended.Raster,
+			"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+		})
+		handled, answers, err := handleScreenMessage(images, late, "sidecar-a", key.Surface)
+		want := fmt.Sprintf(`{"image":{"screen":{"error":"stale","generation":%d,"name":"copy","raster":%d,"request":%q}}}`,
+			ended.Generation, ended.Raster, ended.Request)
+		if err != nil || !handled || !reflect.DeepEqual(answers, []string{want}) {
+			t.Fatalf("after %s the answer of the ended request: handled %t, answers %v, error %v; want [%s]", step.name, handled, answers, err, want)
+		}
+		ended = requests[0]
+	}
+}
+
 // contract: images.copy-path.clock-tick
 // The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate that
 // the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).

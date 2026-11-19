@@ -508,7 +508,8 @@ fn invalid_json_closes_connection() {
 | `verification.trace-switch.requires-the-test-switch` | test switch를 쥐지 않고 performance trace를 전환하는 test는 첫 호출에서 실패한다. 이 test-only case는 전환 자체를 검증하지 않는다. | tauriv2 only: 이 guard는 Rust host의 lib test에 속한다 |
 | `verification.case-player.plays-the-frames-before-the-client-close` | `sok` test의 case player는 남은 step 중 하나가 client의 close이면, client가 write와 같은 turn에 닫아도 client가 connection을 닫기 전에 쓴 frame을 재생한다. 이 test-only case는 host를 검증하지 않는다. | all |
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |
-| `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답할 때까지 새 요청을 받지 않는다. | all |
+| `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답하거나 그 요청이 끝날 때까지 새 요청을 받지 않는다. | all |
+| `images.copy-path.screen-request-ends` | 응답되지 않은 screen 요청은 새 generation, 새 raster, 공급자 연결의 끝에서 답 없이 끝나며, 연결의 끝은 받아들인 화면도 버린다. 다음 요청은 `full: true`이고, 끝난 요청에 답하는 메시지는 `stale`이다. | all |
 | `images.copy-path.clock-tick` | 드로잉 region은 window 시계의 매 tick마다 sequence와 window의 refresh rate를 담은 tick을 하나씩 받는다. 드로잉 중이 아닌 region은 tick을 받지 않는다. | all |
 | `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 닿으면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
 | `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
