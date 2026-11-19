@@ -2711,3 +2711,39 @@ test("fullscreen commit snapshots keep their own visibility through deferred res
     assert.deepEqual(view.painted("card"), grid.rect("card"));
   } finally { view.destroy(); dom.window.close(); }
 });
+
+test("the boundary option moves, centres and merges every divider gesture", () => {
+  const calls = [];
+  let grid = null;
+  const boundary = {
+    move: (axis, line, px) => (calls.push(["move", axis, line]), grid.moveBoundary(axis, line, px)),
+    center: (axis, line) => (calls.push(["center", axis, line]), grid.centerBoundary(axis, line)),
+    merge: (axis, line) => (calls.push(["merge", axis, line]), grid.mergeCoincident(axis, line)),
+  };
+  const mounted = mount({ boundary });
+  grid = mounted.grid;
+  const { window, host } = mounted;
+  const el = host.querySelector('.sp-divider[data-axis="x"]');
+
+  pointer(window, el, "pointerdown", 1, 600, 300);
+  pointer(window, el, "pointermove", 1, 500, 300);
+  pointer(window, el, "pointerup", 1, 500, 300);
+  assert.deepEqual(calls, [["move", "x", 1], ["merge", "x", 1]], "a pointer drag moves through the option and merges at its end");
+
+  calls.length = 0;
+  el.dispatchEvent(new window.MouseEvent("mousedown", { clientX: 500, clientY: 300, button: 0, buttons: 1, bubbles: true }));
+  window.document.dispatchEvent(new window.MouseEvent("mousemove", { clientX: 450, clientY: 300, button: 0, buttons: 1, bubbles: true }));
+  window.document.dispatchEvent(new window.MouseEvent("mouseup", { clientX: 450, clientY: 300, button: 0, buttons: 0, bubbles: true }));
+  assert.deepEqual(calls, [["move", "x", 1], ["merge", "x", 1]], "a mouse drag moves through the option and merges at its end");
+
+  calls.length = 0;
+  el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.deepEqual(calls, [["move", "x", 1], ["center", "x", 1]], "a key moves and centres through the option");
+
+  calls.length = 0;
+  pointer(window, el, "pointerdown", 2, 600, 300);
+  pointer(window, el, "pointerup", 2, 600, 300);
+  pointer(window, el, "pointerdown", 3, 600, 300);
+  assert.deepEqual(calls.at(-1), ["center", "x", 1], "a double press centres through the option");
+});
