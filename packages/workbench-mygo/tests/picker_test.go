@@ -223,7 +223,8 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 	}
 	f.click("core.card.tools", card)
 	menu := f.menu()
-	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:3], []string{"add", "y", "fullscreen"}) {
+	// The plane holds two cards, so each head has the leader button (docs/spec/groups.md#headers).
+	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:4], []string{"add", "y", "leader", "fullscreen"}) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 	f.click("core.picker.item", "add")
