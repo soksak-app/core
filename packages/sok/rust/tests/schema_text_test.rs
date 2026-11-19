@@ -12,7 +12,10 @@ fn the_schema_matcher_matches_each_case_of_the_subset() {
     let text = std::fs::read_to_string(path).expect("schema subset case table");
     let table: Value = serde_json::from_str(&text).expect("schema subset case table JSON");
     let cases = table["cases"].as_array().expect("schema subset cases");
-    assert!(!cases.is_empty(), "the schema subset case table holds no case");
+    assert!(
+        !cases.is_empty(),
+        "the schema subset case table holds no case"
+    );
     let mut failed = vec![];
     for case in cases {
         let schema = case["schema"].as_object().expect("a schema object");
@@ -21,5 +24,8 @@ fn the_schema_matcher_matches_each_case_of_the_subset() {
             failed.push(case["id"].as_str().expect("id").to_string());
         }
     }
-    assert!(failed.is_empty(), "the cases {failed:?} do not match as the table says");
+    assert!(
+        failed.is_empty(),
+        "the cases {failed:?} do not match as the table says"
+    );
 }
