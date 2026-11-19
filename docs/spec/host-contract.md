@@ -1458,6 +1458,7 @@ Items:
 | `conversation.reads-an-unchosen-file-only-to-its-session-record` | A candidate file that is not chosen is read only up to its session record, so a malformed line after that record is not read. | all |
 | `conversation.refuses-a-relative-cwd` | A `--cwd` that is not an absolute path is refused with `cwd is not an absolute path: <cwd>`. | all |
 | `conversation.refuses-a-session-working-directory-that-is-not-a-string` | A session file whose working directory is missing or not a string is refused with the working directory message. | all |
+| `conversation.refuses-a-home-that-is-not-utf-8` | A `HOME` whose bytes are not UTF-8 is refused with `HOME is not UTF-8: <escaped>`, which shows its bytes escaped. | all |
 | `conversation.refuses-an-unknown-agent` | An agent that is neither `claude-code` nor `codex` is refused with `unknown agent <agent>`. | all |
 | `conversation.refuses-an-unreadable-file-with-its-reason` | A candidate or chosen file that cannot be read is refused with its path and the operating system reason in lower case. | all |
 | `conversation.refuses-when-no-file-matches` | When no candidate matches the working directory, the read is refused with `no <agent> session file has the working directory <cwd>`. | all |

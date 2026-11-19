@@ -509,3 +509,15 @@ func TestClaudeImageOnlyMessageIsEmittedWithItsKind(t *testing.T) {
 		t.Fatalf("output %v, want %v", got, want)
 	}
 }
+
+// contract: conversation.refuses-a-home-that-is-not-utf-8
+func TestHomeThatIsNotUTF8IsRefusedWithItsBytesEscaped(t *testing.T) {
+	newAgentHome(t)
+	t.Setenv("HOME", "/nonexistent/h\xffme")
+
+	code, stdout, stderr := convRun(t, "--agent", "claude-code", "--cwd", "/work/project")
+
+	if code != 1 || stdout != "" || stderr != "sok: HOME is not UTF-8: /nonexistent/h\\xffme\n" {
+		t.Fatalf("status %d stdout %q stderr %q", code, stdout, stderr)
+	}
+}
