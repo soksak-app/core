@@ -343,8 +343,8 @@ function updateCard(el, card, rect) {
       // The content of an ordinary sidebar has no card-surface link and no rail.
       drawSet(holder, card.id, set, { ...owner, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     } else {
-      clearSet(holder);
-      holder.replaceChildren();
+      // The place shows no set; it draws its status line, and core.sidebars reports it with a null set.
+      drawSet(holder, card.id, null, { card: null, surface: null, space: heldSpace, orientation: windowOrientation(side), window: true, plugin: kind, side });
     }
     setText(statusText, `${SIDE_NAMES[side]} 창 사이드바${kind ? ` · ${kind}` : ""}`);
     // The fold button at the end of the status line turns this sidebar off. The button that turns it on again is in the window head (docs/spec/plugins.md#sections).

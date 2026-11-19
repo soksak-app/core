@@ -310,6 +310,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F945",
+    implementation: [
+      { file: "packages/workbench-mygo/src/sidebars.go", symbol: "drawn := &drawnSidebar{frame: frame, owner: owner}" },
+      { file: "packages/workbench/sidebar-sections.js", symbol: "drawn.set(container, { container, sidebar, key: null, set: null, layout: null, context, entries: [] });" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/shell_sidebars_test.go", id: "TestCoreSidebarsReportsAWindowSidebarThatShowsNoSet" },
+      { file: "packages/workbench/test/window-sidebar-unset.test.mjs", id: "core.sidebars reports a window sidebar that shows no set with its rectangle and a null set" },
+    ],
+    expected: "core.sidebars reports a fixed window sidebar that shows no set with a null set and layout, no sections and its rectangle in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F954",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "ui.Row(c).Shrink(1).MinWidth(0).AlignItems(ui.Center).Gap(m.surfaceStatusGap)" },
