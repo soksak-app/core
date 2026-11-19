@@ -1,0 +1,18 @@
+[package]
+name = "sok-gpuikit"
+version = "0.0.45"
+edition = "2024"
+description = "soksak layout running in GPUI"
+
+# diagnostics adds the diagnostic endpoint methods of the host; dev selects the .dev identifier of a debug build.
+[features]
+diagnostics = ["soksak-host-gpuikit/diagnostics"]
+dev = ["soksak-host-gpuikit/dev"]
+gpuikit = ["soksak-host-gpuikit/gpuikit"]
+
+[dependencies]
+soksak-host-gpuikit = { path = "../../packages/host/gpuikit" }
+soksak-host = { path = "../../packages/host/rust" }
+
+[lints]
+workspace = true

@@ -61,6 +61,16 @@ importers:
         specifier: ^6.2.5
         version: 6.2.5
 
+  apps/gpuikit:
+    dependencies:
+      '@soksak/workbench':
+        specifier: workspace:*
+        version: link:../../packages/workbench
+    devDependencies:
+      '@soksak/plugin-api':
+        specifier: workspace:*
+        version: link:../../packages/plugin-api
+
   apps/mygo:
     dependencies:
       '@soksak/workbench':
@@ -115,6 +125,8 @@ importers:
   packages/client: {}
 
   packages/host/go: {}
+
+  packages/host/gpuikit: {}
 
   packages/host/mygo: {}
 

@@ -229,6 +229,23 @@ pub(crate) fn buffered_fields_of(name: &str, surface: &str) -> Vec<serde_json::V
         .collect()
 }
 
+/// The text of each buffered error record of the host whose place is place, in the order of the buffer. The tests of a framework
+/// adapter read them through the test-seam feature of this crate.
+#[cfg(feature = "test-seam")]
+pub fn buffered_host_error_texts(place: &str) -> Vec<String> {
+    records()
+        .buffer
+        .iter()
+        .filter(|record| record.event == "host.record.error")
+        .map(|record| {
+            serde_json::from_str::<serde_json::Value>(record.fields.text.get())
+                .expect("a buffered record is JSON")
+        })
+        .filter(|fields| fields["where"] == place)
+        .filter_map(|fields| fields["text"].as_str().map(str::to_string))
+        .collect()
+}
+
 /// Stores an observation of the trace of the host as the event `host.<kind>.<event>`, where kind is `trace` for the layer
 /// `host` and `sampler` for the layer `sampler`. The fields hold the name of the event in `event`, which the name of the
 /// stored event replaces.

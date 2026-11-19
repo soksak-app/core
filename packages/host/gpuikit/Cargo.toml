@@ -1,0 +1,75 @@
+[package]
+name = "soksak-host-gpuikit"
+version = "0.0.45"
+edition = "2024"
+description = "GPUI framework adapter of the soksak host"
+
+[lib]
+path = "src/host.rs"
+
+# diagnostics adds the diagnostic endpoint methods and the diagnostic command line; debug builds and 0.0.x releases
+# set it. dev selects the .dev identifier of a debug build.
+[features]
+diagnostics = ["soksak-host/diagnostics"]
+dev = ["soksak-host/dev"]
+# gpuikit selects the identifier of the application of the sok command.
+gpuikit = ["soksak-sok/gpuikit"]
+# test-seam exposes the window pointer of a view to the main-thread window test; no production build has it.
+test-seam = []
+
+[dependencies]
+gpui-kit = "=0.9.1"
+wry = "0.57"
+http = "1"
+futures = "0.3"
+tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
+block2 = "0.6"
+soksak-host = { path = "../rust" }
+soksak-sok = { path = "../../sok/rust" }
+serde_json = { version = "1", features = ["raw_value"] }
+serde = { version = "1", features = ["derive"] }
+url = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = [
+    "NSApplication",
+    "NSMenu",
+    "NSWindow",
+    "NSOpenPanel",
+    "NSSavePanel",
+    "NSView",
+    "NSResponder",
+    "NSEvent",
+    "NSPasteboard",
+] }
+objc2-foundation = { version = "0.3", features = [
+    "NSAppleEventDescriptor",
+    "NSAppleEventManager",
+    "objc2-core-services",
+    "NSString",
+    "NSArray",
+    "NSEnumerator",
+    "NSProcessInfo",
+] }
+objc2-web-kit = { version = "0.3", default-features = false, features = [
+    "WKWebView",
+    "WKWebViewConfiguration",
+    "objc2-app-kit",
+] }
+raw-window-handle = "0.6"
+
+[dev-dependencies]
+tempfile = "3"
+soksak-host = { path = "../rust", features = ["test-seam"] }
+objc2-app-kit = { version = "0.3", features = ["NSEvent"] }
+
+[lints]
+workspace = true
+
+# The native window of a view is read only on the main thread, so this target runs its tests there (harness = false).
+[[test]]
+name = "darwin_window_test"
+path = "tests/platform/darwin/darwin_window_test.rs"
+harness = false
+required-features = ["test-seam"]

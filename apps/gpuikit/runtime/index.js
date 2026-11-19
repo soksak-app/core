@@ -1,0 +1,402 @@
+// GPUI.
+//
+// Invokes a host call by name over the call channel that the adapter injects
+// before the page scripts, so no waiting is needed. Surface pages and modal
+// pages use the same interface.
+import { HostWorkspaceStore } from "@soksak/workbench/host-store.js";
+import { hostWindows } from "@soksak/workbench/host-windows.js";
+import { settlingCalls } from "@soksak/workbench/host-calls.js";
+import { surfaceCalls } from "@soksak/workbench/surface-calls.js";
+import { createClipboardBridge } from "@soksak/plugin-api";
+import { platformClock } from "@soksak/plugin-api/log-batch.js";
+import { createLifecycleListener } from "./listener-lifecycle.js";
+
+const COMMAND = {
+  workspace: "workspace",
+  windowNew: "window_new", folderChoose: "folder_choose", projectCreate: "project_create",
+  projectFolder: "project_folder", projectOpen: "project_open", projectShown: "project_shown", projectRelease: "project_release", projectRemoveAsk: "project_remove_ask", projectRemoveAnswer: "project_remove_answer",
+  windowState: "window_state", performance: "performance", log: "log", windowReady: "window_ready", windowClose: "window_close", windowCloseKept: "window_close_kept", appUpdateState: "app_update_state", appUpdateStage: "app_update_stage", appUpdateApply: "app_update_apply",
+  syncSurfaces: "sync_surfaces",
+  presentSurfaces: "present_surfaces",
+  cancelSurfaces: "cancel_surfaces",
+  surfaceFocus: "surface_focus",
+  waitPresented: "wait_presented",
+  setTheme: "set_theme",
+  setMenuLanguage: "set_menu_language",
+  theme: "theme",
+
+  overlayShow: "overlay_show",
+  overlayPlace: "overlay_place",
+  setShape: "set_shape",
+  clearShape: "clear_shape",
+  overlayUpdate: "overlay_update",
+  overlayHide: "overlay_hide",
+  windowControls: "window_controls",
+  exposureReply: "exposure_reply",
+  exposureChanged: "exposure_changed",
+  exposureForward: "exposure_forward",
+  exposureRegister: "exposure_register",
+  imageAttach: "image_attach",
+  compositionDeclare: "composition_declare",
+  compositionPlace: "composition_place",
+  imageFocus: "image_focus",
+  imageCaret: "image_caret",
+  imageText: "image_text",
+  imageDetach: "image_detach",
+  documentAttach: "document_attach",
+  documentLoad: "document_load",
+  documentZoom: "document_zoom",
+  documentGo: "document_go",
+  documentQuery: "document_query",
+  documentInteractionState: "document_interaction_state",
+  documentPost: "document_post",
+  viewRequest: "view_request",
+  viewEvent: "view_event",
+  viewSidecarRoute: "view_sidecar_route",
+  viewSidecarSend: "view_sidecar_send",
+  sidecarListen: "sidecar_listen",
+  viewReply: "view_reply",
+  viewSourceOrigins: "view_source_origins",
+  documentDetach: "document_detach",
+  documentSubscribe: "document_subscribe",
+  documentUnsubscribe: "document_unsubscribe",
+  sidecarSend: "sidecar_send",
+  sidecarsRetain: "sidecars_retain",
+  sidecarsReplace: "sidecars_replace",
+  sidecarsOutdated: "sidecars_outdated",
+  clipboardRead: "clipboard_read",
+  linkOpen: "link_open",
+  notify: "notify",
+  notificationRemove: "notification_remove",
+  notificationState: "notification_state",
+  clipboardWriteText: "clipboard_write_text",
+  clipboardPersistPNG: "clipboard_persist_png",
+  clipboardReadViewPNG: "clipboard_read_view_png",
+  clipboardPersistViewPNG: "clipboard_persist_view_png",
+  pluginsState: "plugins_state",
+  debugFiles: "debug_files",
+  debugRecord: "debug_record",
+  debugSave: "debug_save",
+  debugSaveText: "debug_save_text",
+  filePlace: "file_place",
+  logQuery: "log_query",
+  debugSaveAll: "debug_save_all",
+  debugRead: "debug_read",
+  pluginsRun: "plugins_run",
+  pluginsUseRegistry: "plugins_use_registry",
+  pluginsStarter: "plugins_starter",
+  setupState: "setup_state",
+  setupInstall: "setup_install",
+};
+
+// The argument names differ per command. The Rust signature determines the names.
+const ARG = {
+  workspace: (request) => ({ request }),
+  windowNew: () => ({}), folderChoose: () => ({}), projectCreate: (request) => ({ request }),
+  projectFolder: (root) => ({ root }), projectOpen: (request) => ({ request }), projectShown: (request) => ({ request }), projectRelease: (id) => ({ id }),
+  projectRemoveAsk: (id) => ({ id }), projectRemoveAnswer: (answer) => ({ answer }),
+  windowState: () => ({}), windowReady: () => ({}), windowClose: () => ({}), windowCloseKept: () => ({}), appUpdateState: () => ({}), appUpdateStage: (request) => ({ request }), appUpdateApply: (request) => ({ request }),
+  viewSourceOrigins: () => ({}),
+  syncSurfaces: (v) => ({ request: v }),
+  presentSurfaces: (v) => ({ request: v }),
+  cancelSurfaces: (v) => ({ request: v }),
+  surfaceFocus: (v) => ({ request: v }),
+  waitPresented: () => ({}),
+  setTheme: (v) => ({ theme: v }),
+  setMenuLanguage: (v) => {
+    if (!/^[a-z]{2,8}$/.test(v)) throw new TypeError(`menu language must be a language tag, got ${v}`);
+    return { language: v };
+  },
+  theme: () => ({}),
+  overlayShow: (v) => ({ request: v }),
+  overlayPlace: (v) => ({ request: v }),
+  setShape: (v) => ({ request: v }),
+  clearShape: (v) => ({ id: v }),
+  overlayUpdate: (v) => ({ request: v }),
+  overlayHide: (v) => ({ id: v }),
+  windowControls: () => ({}),
+  // Responses and state values are sent as JSON text, so the host relays the key order of the page value unchanged
+  // (docs/spec/exposure.md).
+  exposureReply: (request) => ({ request: JSON.stringify(request) }),
+  exposureChanged: (request) => ({ request: { ...request, value: JSON.stringify(request.value) } }),
+  exposureForward: (request) => ({ request }),
+  exposureRegister: (request) => ({ request }),
+  imageAttach: (request) => ({ request }),
+  compositionDeclare: (request) => ({ request }),
+  performance: (request) => ({ request }),
+  log: (request) => ({ request }),
+  compositionPlace: (request) => ({ request }),
+  imageFocus: (request) => ({ request }),
+  imageCaret: ({ surface, name, x, y, width, height }) => ({ request: { surface, name }, x, y, w: width, h: height }),
+  imageText: ({ surface, name, text }) => ({ request: { surface, name }, text }),
+  imageDetach: (request) => ({ request }),
+  documentAttach: (request) => ({ request }),
+  documentLoad: (request) => ({ request }),
+  documentZoom: (request) => ({ request }),
+  documentGo: (request) => ({ request }),
+  documentQuery: (request) => ({ request }),
+  documentInteractionState: (request) => ({ request }),
+  documentPost: (request) => ({ request }),
+  viewRequest: (request) => ({ request }),
+  viewEvent: (request) => ({ request }),
+  viewSidecarRoute: (request) => ({ request }),
+  viewSidecarSend: (request) => ({ request }),
+  sidecarListen: (request) => ({ request }),
+  viewReply: (request) => ({ request }),
+  documentDetach: (request) => ({ request }),
+  documentSubscribe: (request) => ({ request }),
+  documentUnsubscribe: (request) => ({ request }),
+  sidecarSend: ({ sidecar, surface, body, cids }) => ({ sidecar, surface, body, cids }),
+  sidecarsRetain: (request) => ({ request }),
+  sidecarsReplace: (request) => ({ request }),
+  sidecarsOutdated: () => ({}),
+  clipboardRead: (request) => ({ request }),
+  linkOpen: (request) => ({ request }),
+  notify: (request) => ({ request }),
+  notificationRemove: (request) => ({ request }),
+  notificationState: () => ({}),
+  clipboardWriteText: (text) => ({ text }),
+  clipboardPersistPNG: (request) => ({ request }),
+  clipboardReadViewPNG: (request) => ({ request }),
+  clipboardPersistViewPNG: (request) => ({ request }),
+  pluginsState: () => ({}),
+  debugFiles: () => ({}),
+  debugRecord: (request) => ({ request }),
+  debugSave: (request) => ({ request }),
+  debugSaveText: (request) => ({ request }),
+  filePlace: (request) => ({ request }),
+  logQuery: (request) => ({ request }),
+  debugSaveAll: () => ({}),
+  debugRead: (request) => ({ request }),
+  pluginsRun: (request) => ({ request }),
+  pluginsUseRegistry: (request) => ({ request }),
+  pluginsStarter: (request) => ({ request }),
+  setupState: () => ({}),
+  setupInstall: (request) => ({ request }),
+};
+
+/**
+ * Host invoke over the call channel of the adapter. A host command failure rejects with the error text of the host,
+ * which the call channel already wraps in an Error, so the value passes through unchanged.
+ */
+export function hostInvoke() {
+  return (command, args) => window.__soksak.call(command, args === undefined ? {} : args);
+}
+
+export const host = (() => {
+  const invoke = hostInvoke();
+  const orderedWindowEvents = new Set([
+    "view-source-registered", "view-source-ended",
+    "view-call", "view-reply", "view-process-ended", "view-stopped", "view-responsiveness",
+  ]);
+  const orderedSubscribers = new Map();
+  let orderedStreamReady = null;
+  const reportListenerError = (event, error) => {
+    const message = `native event ${event}: ${error?.message ?? error}`; // default: thrown non-Error values are retained as error text.
+    globalThis.dispatchEvent(new ErrorEvent("error", { message, error }));
+  };
+  const dispatchOrderedEvent = (message) => {
+    if (message === null || typeof message !== "object" || typeof message.name !== "string" || !Object.hasOwn(message, "value")) {
+      reportListenerError("ordered stream", new TypeError("ordered event requires name and value"));
+      return;
+    }
+    if (!orderedWindowEvents.has(message.name)) {
+      reportListenerError("ordered stream", new TypeError(`unknown event ${message.name}`));
+      return;
+    }
+    // default: view lifecycle notifications may arrive after their surface subscription is removed; required calls are emitted only after their listener readiness gates.
+    for (const listener of [...(orderedSubscribers.get(message.name) ?? [])]) {
+      try {
+        const result = listener(message.value);
+        if (result && typeof result.then === "function") result.catch((error) => reportListenerError(message.name, error));
+      } catch (error) {
+        reportListenerError(message.name, error);
+      }
+    }
+  };
+  const registerOrderedListener = (event, listener) => {
+    let subscribers = orderedSubscribers.get(event);
+    if (!subscribers) {
+      subscribers = new Set();
+      orderedSubscribers.set(event, subscribers);
+    }
+    subscribers.add(listener);
+    const ready = Promise.resolve().then(() => {
+      if (orderedStreamReady === null) {
+        window.__soksak.onStream(dispatchOrderedEvent);
+        orderedStreamReady = invoke("view_source_event_stream", {});
+      }
+      return orderedStreamReady;
+    });
+    return ready.then(() => () => {
+      subscribers.delete(listener);
+      if (subscribers.size === 0) orderedSubscribers.delete(event);
+    }, (error) => {
+      subscribers.delete(listener);
+      if (subscribers.size === 0) orderedSubscribers.delete(event);
+      throw error;
+    });
+  };
+  // The adapter delivers each event to the entry of its own page, so no window or webview is named.
+  const listen = createLifecycleListener((event, fn) => orderedWindowEvents.has(event)
+    ? registerOrderedListener(event, fn)
+    : window.__soksak.on(event, fn));
+  // Calls of the main page. Counts them so that every call sent before the page reloads itself receives a reply (docs/spec/native-host.md#page-reload).
+  const mainCalls = settlingCalls((name, arg, options) => {
+    const command = COMMAND[name];
+    if (!command) return Promise.reject(new Error(`unknown host call: ${name}`));
+    // The correlation identifiers of the operation travel beside the arguments of the command (docs/spec/logging.md#operation-chains).
+    return invoke(command, options.cids ? { ...ARG[name](arg), cids: options.cids } : ARG[name](arg));
+  });
+  return {
+    // options.cids are the correlation identifiers of the operation that the call carries out (operations.js).
+    call: (name, arg, options) => (options?.cids ? mainCalls.callContinuing(options.cids, name, arg) : mainCalls.call(name, arg)),
+    // Reloads this page after every sent call has received a reply. Calls after that are not sent.
+    reload: () => mainCalls.settle().then(() => location.reload()),
+    // Events arrive with their value alone, so the listener reads the value directly.
+    on: (event, fn) => listen(event, fn),
+    // The title bar is transparent and the content extends under it. The adapter owns the drag of the
+    // first row, so this document marks the drag area of the title bar.
+    draggable(el) {
+      el.setAttribute("data-soksak-drag-region", "");
+    },
+  };
+})();
+
+/** The clock of the page that its event batcher reads (docs/spec/plugins.md#runtime-module). */
+export const clock = platformClock;
+export const clipboard = createClipboardBridge((name, payload) => host.call(name, payload), { allowPersist: true });
+
+/*
+ * The commands that a document of a surface calls, by the name its events carry (docs/spec/logging.md#entrances),
+ * and the arguments of each command from the arguments of the call. The names and arguments are those of the Wails runtime.
+ */
+function surfaceWire(surface) {
+  const request = (name, command) => [name, { command, arguments: (value) => ({ request: value }) }];
+  return Object.fromEntries([
+    ["theme", { command: "theme", arguments: () => ({}) }],
+    ["sidecarSend", { command: "sidecar_send", arguments: (sidecar, from, body, cids) => ({ sidecar, surface: from, body, cids }) }],
+    request("exposureRegister", "exposure_register"),
+    ["exposureReply", { command: "exposure_reply", arguments: (reply) => ({ request: JSON.stringify({ ...reply, ...(surface ? { surface } : {}) }) }) }],
+    request("documentAttach", "document_attach"),
+    request("documentLoad", "document_load"),
+    request("documentZoom", "document_zoom"),
+    request("documentGo", "document_go"),
+    request("documentDetach", "document_detach"),
+    request("documentSubscribe", "document_subscribe"),
+    request("documentUnsubscribe", "document_unsubscribe"),
+    request("imageAttach", "image_attach"),
+    request("imageFocus", "image_focus"),
+    ["imageCaret", { command: "image_caret", arguments: (value, x, y, w, h) => ({ request: value, x, y, w, h }) }],
+    ["imageText", { command: "image_text", arguments: (value, text) => ({ request: value, text }) }],
+    request("imageDetach", "image_detach"),
+    request("compositionPlace", "composition_place"),
+    ["modalContent", { command: "overlay_content", arguments: (id, instance) => ({ id, instance }) }],
+    ["modalReady", { command: "overlay_ready", arguments: (id, instance) => ({ id, instance }) }],
+    ["overlayPick", { command: "overlay_pick", arguments: (id, instance, key, value) => ({ id, instance, key, value }) }],
+  ]);
+}
+
+export const page = (() => {
+  const invoke = hostInvoke();
+  const wire = surfaceWire(new URLSearchParams(location.search).get("id"));
+  const listen = createLifecycleListener((event, fn) => window.__soksak.on(event, fn));
+  const calls = surfaceCalls({
+    send: (name, ...args) => {
+      const entry = wire[name];
+      if (!entry) throw new Error(`unknown surface call: ${name}`);
+      return invoke(entry.command, entry.arguments(...args));
+    },
+    log: (request) => invoke("log", { request }),
+    listen: (event, fn) => listen(event, fn),
+  });
+  const call = calls.call;
+  // The surface id is the id in the document address. The workbench opens the surface with that tab id.
+  const surface = new URLSearchParams(location.search).get("id");
+  // A document of a surface or a modal names its id and takes the log policy from the host; the main page has no id.
+  if (surface) calls.followPolicy();
+  return {
+    theme(fn) {
+      call("theme").then(fn);
+      listen("theme", (payload) => fn(payload));
+    },
+    // Stores a record of this document in the event log of the host as the event `workbench.record.<level>`, in the batch of the
+    // events of its turn (docs/spec/diagnostics.md#forms, docs/spec/logging.md#writers).
+    report: async (record) => {
+      if (!record || typeof record !== "object" || typeof record.level !== "string" || typeof record.where !== "string" || typeof record.text !== "string") {
+        throw new TypeError("report requires {level, where, text} strings");
+      }
+      return calls.record(record.level, `workbench.record.${record.level}`, { where: record.where, text: record.text });
+    },
+    sidecar: (name) => ({
+      send: (surface, body, cids = []) => call("sidecarSend", name, surface, body, cids),
+      // Sidecar events are received by every page of the window. Only the events that match the sidecar and the surface are handled.
+      on: (surface, fn) => listen("sidecar-message", (payload) => {
+        if (payload.sidecar === name && payload.surface === surface) fn(payload.body);
+      }),
+      // Sidecar failures are also received by every page of the window (docs/spec/sidecars.md#failure).
+      onFailure: (surface, fn) => listen("sidecar-failure", (payload) => {
+        if (payload.sidecar === name && payload.surface === surface) fn(payload.reason);
+      }),
+    }),
+    // Registration and requests of exposed entries. When a request event has a surface, only the events of this surface are handled.
+    exposure: {
+      register: (kind, name) => call("exposureRegister", { surface, kind, name }),
+      onRequest: (fn) => listen("exposure-request", (payload) => {
+        if (payload.surface === undefined || payload.surface === surface) fn(payload);
+      }),
+      reply: (id, payload) => call("exposureReply", { id, ...payload }),
+      // A modal document reports its state through the modal answer channel and has no status watch route
+      // (docs/spec/exposure.md#modal-documents), so a watched value is refused with that reason.
+      changed: (name) => {
+        throw new Error(`status ${name} of document ${surface} cannot be sent: a modal document has no status watch route`);
+      },
+      // A reply that the host refuses is stored as an error record of this document, as report stores one.
+      report: (text) => calls.record("error", "workbench.record.error", { where: "exposure", text }),
+    },
+    // The document region of this surface. The host verifies that the calling webview is the surface and sends the state only to this surface.
+    document: {
+      attach: (document) => call("documentAttach", { surface, document }),
+      load: (document, url) => call("documentLoad", { surface, document, url }),
+      zoom: (document, zoom) => call("documentZoom", { surface, document, zoom }),
+      go: (document, action, offset) => call("documentGo", offset === undefined ? { surface, document, action } : { surface, document, action, offset }),
+      detach: (document) => call("documentDetach", { surface, document }),
+      onState: (fn) => listen("document-state", (payload) => {
+        if (payload.surface === surface) fn(payload.document, payload.state);
+      }),
+    },
+    // The image region of this surface. The host verifies that the calling webview is the surface and sends events only to this surface.
+    image: {
+      attach: (name, sidecar) => call("imageAttach", { surface, name, sidecar }),
+      focus: (name) => call("imageFocus", { surface, name }),
+      caret: (name, x, y, w, h) => call("imageCaret", { surface, name }, x, y, w, h),
+      text: (name, text) => call("imageText", { surface, name }, text),
+      detach: (name) => call("imageDetach", { surface, name }),
+      on: (fn) => listen("image-event", (payload) => {
+        if (payload.surface === surface) fn(payload.name, payload.event);
+      }),
+    },
+    composition: {
+      place: (revision, regions, overlays) =>
+        call("compositionPlace", { surface, revision, regions, overlays }),
+    },
+    modal: {
+      content(id, instance, fn, place) {
+        // Events are received by every page. Only the events of its own modal are taken.
+        return Promise.all([listen("modal-content", (payload) => {
+          if (payload.id === id && payload.instance === instance) fn({ revision: payload.revision, content: payload.content });
+        }), listen("modal-position", (payload) => {
+          if (payload.id === id && payload.instance === instance) place({ revision: payload.revision, card: payload.card });
+        })]).then(() => call("modalContent", id, instance)).then(fn);
+      },
+      ready: (id, instance) => call("modalReady", id, instance),
+      answer: (id, instance, key, value) => call("overlayPick", id, instance, key, value),
+    },
+  };
+})();
+
+/** The native host stores settings and the project list. */
+export const openStore = async () => new HostWorkspaceStore(host);
+
+/** The native host manages windows and project folders. */
+export const windows = hostWindows(host);

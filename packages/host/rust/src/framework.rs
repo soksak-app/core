@@ -56,7 +56,7 @@ pub trait Framework: Send + Sync {
     /// The end of a window title, as "Tauri v2".
     fn display_name(&self) -> &'static str;
     /// Runs task as a step of the main thread and returns without waiting for it from another thread. On the main thread
-    /// a framework may run it before it returns.
+    /// the framework runs it before it returns, because the library waits on the posting thread for a task that it posts.
     fn post(&self, task: Box<dyn FnOnce() + Send>) -> Result<()>;
     /// Runs task on the blocking threads of the asynchronous runtime of the framework. The future ends with the value of
     /// the task when the task ended; dropping it leaves the task running and drops its value.

@@ -1,0 +1,16 @@
+{
+  "name": "@soksak/gpuikit",
+  "version": "0.0.45",
+  "private": true,
+  "type": "module",
+  "description": "GPUI application hosting the workbench with native webview surfaces.",
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@soksak/workbench": "workspace:*"
+  },
+  "devDependencies": {
+    "@soksak/plugin-api": "workspace:*"
+  }
+}

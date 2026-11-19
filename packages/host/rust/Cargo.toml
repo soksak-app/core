@@ -14,6 +14,8 @@ diagnostics = ["soksak-sok/diagnostics"]
 dev = ["soksak-sok/dev"]
 # host-test links the native host test library (native/darwin/tests/support) for the tests that run a handled crash child.
 host-test = []
+# test-seam exposes the buffered error records of the host to the tests of the framework adapters.
+test-seam = []
 
 # The fatal tests start a child whose crash exceptions the host test library answers; they need host-test.
 [[test]]
