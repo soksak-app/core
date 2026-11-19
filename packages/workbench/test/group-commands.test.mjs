@@ -137,6 +137,25 @@ test("core.card.move moves a card into a group and the add, split and close of a
   assert.deepEqual(plane.currentGrid().cards.map((card) => card.id), ["card-6"]);
 });
 
+test("core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle", { timeout: 5000 }, async () => {
+  arrange();
+  // The first equal tab among the content cards inside the group card in workbench order is selected.
+  assert.deepEqual(await run("core.layout.open", { card: "card-4", plugin: PLAIN }), { card: "card-1", tab: "tab-aaaaa1" });
+  // Otherwise a content card with the tab is added inside the group card, and the same open answers the same.
+  const added = await run("core.layout.open", { card: "card-4", plugin: SESSION, params: { name: "a" } });
+  assert.equal(added.card, "card-5");
+  assert.equal(plane.focused(), "card-5");
+  assert.deepEqual((await stored()).groups[0].members, ["card-1", "card-2", "card-5"]);
+  assert.deepEqual(await run("core.layout.open", { card: "card-4", plugin: SESSION, params: { name: "a" } }), added);
+  // With side the rectangle of the group card splits toward side in the level that holds it; the neighbour of a content card is a
+  // member of its level, so the same open selects the tab of the new card.
+  const below = await run("core.layout.open", { card: "card-4", plugin: SESSION, params: { name: "b" }, side: "bottom" });
+  assert.equal(below.card, "card-6");
+  assert.equal((await stored()).groups[0].members.includes("card-6"), false);
+  assert.deepEqual(await run("core.layout.open", { card: "card-4", plugin: SESSION, params: { name: "b" }, side: "bottom" }), below);
+  await refuses(run("core.layout.open", { card: "card-10", plugin: PLAIN }), "card card-10 is in space spc-bbbbbb, which is not active");
+});
+
 test("core.card.get reads a content card with its group path and a group card with its node", { timeout: 5000 }, async () => {
   arrange();
   assert.deepEqual(await run("core.card.get", { card: "card-2" }), {
