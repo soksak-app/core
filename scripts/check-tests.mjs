@@ -14140,7 +14140,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "export function cardState(id, summary)" },
       { file: "packages/workbench/plane.js", symbol: "targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));" },
       { file: "packages/workbench/plane.js", symbol: "export function dropHit(x, y, fromId, band)" },
-      { file: "packages/workbench/plane.js", symbol: "return { space: heldSpace, focused: focusedId, root, groups: tree.tree().map(describe) };" },
+      { file: "packages/workbench/plane.js", symbol: "return { space: heldSpace, focused: focusedId, root: level(null), groups };" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.group.create\"" },
       { file: "packages/workbench/core-exposure.js", symbol: "function watchLayout(name, params)" },
       { file: "packages/workbench/exposure.js", symbol: "const ended = watcher ? watcher(name, params) : null;" },
