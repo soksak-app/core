@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F972 (bundle guard across checkouts): the bundle guard of a native build resolves a relative executable path of a running process against the working directory of that process, so a process of another checkout that runs the same relative bundle path no longer blocks the build. Verification: the bundle preparation test failed on the unchanged guard and passes.
 - F937-4 (card background of the views): the contract states that the theme of the views is the window theme, the same for every view, and holds `--card`, the card background, which a plugin paints as the background of its page; a group card changes no token, so `setTheme` carries no tokens of single surfaces. Verification: the theme tests of both workbenches pass on the workbenches, which already sent `--card`.
 - F945 (window sidebar without a set): `core.sidebars` reports a fixed window sidebar that shows no set and draws only its status line, with the set and the layout `null`, no sections and its rectangle, in both workbenches. Verification: the sidebar tests of both workbenches failed on the unchanged code and pass.
 - F954 (errors of a narrow card footer): the error of a surface and the operation error of a tab stay on the one line of the card footer in both workbenches, cut with an ellipsis, and carry their whole text as their tooltip; the error display still writes each to the application log when it appears. Verification: the status row tests of both workbenches failed on the unchanged code and pass.

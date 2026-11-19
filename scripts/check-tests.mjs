@@ -310,6 +310,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F972",
+    implementation: [
+      { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },
+    ],
+    tests: [
+      { file: "scripts/test/platform/darwin/bundle-preparation.test.mjs", id: "bundle preparation attributes a relative executable path by the working directory of its process" },
+    ],
+    expected: "A running process is attributed to a bundle only by its absolute executable path, a relative one resolved against the working directory of the process.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-4",
     implementation: [
       { file: "packages/workbench/settings.js", symbol: "const pageTheme = () => ({ scheme: settings.mode, tokens: themeTokens() });" },
