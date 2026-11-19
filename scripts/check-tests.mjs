@@ -394,7 +394,7 @@ const FEATURE_LINKS = [
       { file: "packages/host/rust/src/installed.rs", symbol: "\"host.sidecar.path\"," },
     ],
     tests: [
-      { file: "packages/host/go/tests/installed_test.go", id: "TestTheStartRecordsTheFolderThatTheSidecarsPutFirstOnPath" },
+      { file: "packages/host/go/tests/sidecar_path_test.go", id: "TestTheStartRecordsTheFolderThatTheSidecarsPutFirstOnPath" },
       { file: "packages/host/rust/tests/sidecar_path_test.rs", id: "the_start_records_the_folder_that_the_sidecars_put_first_on_path" },
     ],
     expected: "The start of the channel of the installed sidecars records host.sidecar.path at the level info with the folder of the host executable and the sok in it.",

@@ -1410,51 +1410,189 @@ fn drawing_region_receives_one_screen_request_until_it_is_answered() {
     );
 }
 
-// contract: images.copy-path.clock-tick
-// The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate
-// that the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).
-#[test]
-fn window_clock_ticks_each_drawing_region_with_its_sequence() {
+// frame_fixture returns a window with the drawing region copy and the region idle, which is not drawing, both of sidecar-a, and the
+// generation of copy.
+fn frame_fixture() -> (super::Images, super::Key, super::Key, u64) {
     let images = super::Images::default();
-    assert!(
-        images.tick(120).is_empty(),
-        "a window without image regions gets no ticks"
-    );
     let surface = "tab-1";
     images.begin_generation(surface);
+    let mut generation = 0;
     for (name, visible) in [("copy", true), ("idle", false)] {
         let key = (surface.to_string(), name.to_string());
-        images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+        images.reserve(&key, "owner", "sidecar-a").unwrap();
         assert!(images.set(&key, 1));
-        images
+        let configure = images
             .configure_raster(&key, 800, 600, 2.0, visible)
             .unwrap();
+        if name == "copy" {
+            generation = configure
+                .expect("a drawing region with a size has a raster configuration")
+                .generation;
+        }
     }
-    let ticks = images.tick(120);
+    (
+        images,
+        (surface.to_string(), "copy".to_string()),
+        (surface.to_string(), "idle".to_string()),
+        generation,
+    )
+}
+
+// handle_frame_request sends a frame request body of a supplier through handle_envelope and returns whether the host consumed it, each
+// answer it sent and the number of main-thread steps that asked the native region for a display frame.
+fn handle_frame_request(
+    images: &super::Images,
+    want: serde_json::Value,
+    sender: &str,
+) -> (bool, Vec<serde_json::Value>, usize) {
+    let body = serde_json::json!({ "image": { "want": want } });
+    let answers = Arc::new(Mutex::new(Vec::new()));
+    let sent = Arc::clone(&answers);
+    let asked = Arc::new(Mutex::new(0));
+    let steps = Arc::clone(&asked);
+    let handled = super::handle_envelope(
+        &body.to_string(),
+        sender,
+        "tab-1",
+        images,
+        move |_work| {
+            *steps.lock().unwrap() += 1;
+            Ok(())
+        },
+        move |_image, response| {
+            sent.lock().unwrap().push(response);
+            Ok(())
+        },
+    );
+    let answers = answers.lock().unwrap().clone();
+    let asked = *asked.lock().unwrap();
+    (handled, answers, asked)
+}
+
+// contract: images.copy-path.frame-request-tick
+// A frame request of the owner of a drawing region asks for one display frame, a second request before the tick asks nothing more, and
+// the display frame gives one tick with the sequence of the region from 1 and the refresh rate that the native region read; a display
+// frame without a refresh rate gives no tick and ends the request (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn a_frame_request_asks_for_one_display_frame_and_its_tick_carries_the_refresh_rate() {
+    let (images, key, _, generation) = frame_fixture();
+    let want = serde_json::json!({ "name": "copy", "generation": generation });
     assert_eq!(
-        ticks.len(),
-        1,
-        "only the drawing region receives the tick: {ticks:?}"
+        handle_frame_request(&images, want.clone(), "sidecar-a"),
+        (true, Vec::new(), 1),
+        "the first frame request asks for one display frame with no answer"
     );
     assert_eq!(
-        (
-            ticks[0].name.as_str(),
-            ticks[0].sequence,
-            ticks[0].refresh_rate
-        ),
-        ("copy", 2, 120),
-        "the tick after one earlier tick carries sequence 2 and refresh rate 120"
+        handle_frame_request(&images, want, "sidecar-a"),
+        (true, Vec::new(), 0),
+        "a request before the tick asks for nothing more"
     );
-    let body = serde_json::to_value(serde_json::json!({ "image": { "tick": &ticks[0] } })).unwrap();
+    let tick = images
+        .frame_tick(&key, Some(120))
+        .expect("the display frame of the request gives a tick");
     assert_eq!(
-        body,
+        serde_json::json!({ "image": { "tick": &tick } }),
         serde_json::json!({ "image": { "tick": {
-            "name": "copy",
-            "generation": ticks[0].generation,
-            "sequence": 2,
-            "refreshRate": 120,
+            "name": "copy", "generation": generation, "sequence": 1, "refreshRate": 120,
         } } })
     );
+    assert_eq!(
+        images.want_frame(&key, "sidecar-a", generation),
+        Ok(true),
+        "a request after the tick asks for one display frame"
+    );
+    assert!(
+        images.frame_tick(&key, None).is_none(),
+        "a display frame without a refresh rate gives no tick"
+    );
+    assert_eq!(
+        images.want_frame(&key, "sidecar-a", generation),
+        Ok(true),
+        "a display frame without a refresh rate ends the request"
+    );
+    let next = images
+        .frame_tick(&key, Some(60))
+        .map(|tick| (tick.sequence, tick.refresh_rate));
+    assert_eq!(next, Some((2, 60)), "the next tick");
+}
+
+// contract: images.copy-path.frame-request-refused
+// A frame request from a sender that does not own the region is answered notAttached, one of a generation that is not current stale, and
+// a request for a region that is not drawing asks no display frame (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn frame_request_refusals_name_the_reason() {
+    let (images, _, idle, generation) = frame_fixture();
+    for (case, sender, generation, reason) in [
+        ("other sender", "sidecar-b", generation, "notAttached"),
+        ("stale generation", "sidecar-a", generation + 1, "stale"),
+    ] {
+        assert_eq!(
+            handle_frame_request(
+                &images,
+                serde_json::json!({ "name": "copy", "generation": generation }),
+                sender
+            ),
+            (
+                true,
+                vec![serde_json::json!({ "image": { "want": {
+                    "error": reason, "name": "copy", "generation": generation,
+                } } })],
+                0
+            ),
+            "{case}"
+        );
+    }
+    let idle_generation = images.lock().states[&idle].generation;
+    assert_eq!(
+        handle_frame_request(
+            &images,
+            serde_json::json!({ "name": "idle", "generation": idle_generation }),
+            "sidecar-a"
+        ),
+        (true, Vec::new(), 0),
+        "a request for a region that is not drawing asks for no display frame"
+    );
+}
+
+// contract: images.copy-path.frame-request-malformed
+// A frame request with a missing, mistyped or null generation is answered malformed with the member, and a request without a valid name
+// is consumed with no answer (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn malformed_frame_request_names_its_member() {
+    let (images, _, _, _) = frame_fixture();
+    for (case, want) in [
+        ("missing generation", serde_json::json!({ "name": "copy" })),
+        (
+            "string generation",
+            serde_json::json!({ "name": "copy", "generation": "2" }),
+        ),
+        (
+            "null generation",
+            serde_json::json!({ "name": "copy", "generation": null }),
+        ),
+    ] {
+        assert_eq!(
+            handle_frame_request(&images, want, "sidecar-a"),
+            (
+                true,
+                vec![serde_json::json!({ "image": { "want": {
+                    "error": "malformed", "member": "generation", "name": "copy",
+                } } })],
+                0
+            ),
+            "{case}"
+        );
+    }
+    for (case, want) in [
+        ("missing name", serde_json::json!({ "generation": 1 })),
+        ("null request", serde_json::Value::Null),
+    ] {
+        assert_eq!(
+            handle_frame_request(&images, want, "sidecar-a"),
+            (true, Vec::new(), 0),
+            "{case}"
+        );
+    }
 }
 
 // contract: images.copy-path.input-draw

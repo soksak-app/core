@@ -45,3 +45,4 @@ void main_sp_region_text(void *region, const char *utf8) { hostRunOnMain(^{ sp_r
 void main_sp_region_background(void *region, bool enabled) { hostRunOnMain(^{ sp_region_background(region, enabled); }); }
 const char *main_sp_region_facts(void *region) { return ON_MAIN(const char *, sp_region_facts(region)); }
 void main_sp_region_close(void *region) { hostRunOnMain(^{ sp_region_close(region); }); }
+void main_sp_region_want_frame(void *region) { hostRunOnMain(^{ sp_region_want_frame(region); }); }

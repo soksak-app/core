@@ -717,3 +717,7 @@ func (implementation) FactsImage(unsafe.Pointer) (string, error) {
 func (implementation) CloseImage(unsafe.Pointer) {
 	unreachable("image removal")
 }
+
+func (implementation) WantImageFrame(unsafe.Pointer) error {
+	return unsupported("image frame request")
+}
