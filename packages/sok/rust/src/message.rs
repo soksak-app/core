@@ -91,11 +91,19 @@ fn send(folder: &str, surface: &str, text: &str) -> Result<String, Error> {
             std::fs::rename(&temporary, folder.join(&name))
                 .map_err(|error| Error::Failed(file_error(folder.join(&name).display(), &error)))
         });
-    if result.is_err() {
+    match result {
+        Ok(()) => Ok(name),
         // The file was created by this call and holds no message; a failed write or rename removes it.
-        let _ = std::fs::remove_file(&temporary);
+        Err(error) => match std::fs::remove_file(&temporary) {
+            Ok(()) => Err(error),
+            Err(removal) => Err(Error::Failed(format!(
+                "{}; the temporary file was not removed: {removal}",
+                match error {
+                    Error::Failed(text) | Error::Usage(text) => text,
+                }
+            ))),
+        },
     }
-    result.map(|()| name)
 }
 
 /// A token that holds no dot and is unique for this process and time, so two sends never share a message name.

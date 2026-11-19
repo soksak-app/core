@@ -7,6 +7,7 @@ package sok
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -76,12 +77,13 @@ func sendMessage(folder, surface, text string) (string, error) {
 	}
 	// The file was created by this call and holds no message until the rename, so a failure removes it.
 	fail := func(err error) (string, error) {
-		_ = os.Remove(temporary)
+		if removal := os.Remove(temporary); removal != nil {
+			return "", fmt.Errorf("%w; the temporary file was not removed: %v", err, removal)
+		}
 		return "", err
 	}
 	if _, err := file.WriteString(text); err != nil {
-		_ = file.Close()
-		return fail(fileError(temporary, err))
+		return fail(errors.Join(fileError(temporary, err), file.Close()))
 	}
 	if err := file.Close(); err != nil {
 		return fail(fileError(temporary, err))
