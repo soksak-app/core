@@ -41,19 +41,20 @@ pub(crate) fn ns_window_of(window: &gpui::Window) -> Result<*mut c_void, String>
             HasWindowHandle::window_handle(window).expect("the GPUI window has a raw handle");
         let view = handle.as_raw();
         let RawWindowHandle::AppKit(handle) = view else {
-            return Ok(std::ptr::null_mut());
+            return Err("the window is not an AppKit window".to_string());
         };
         let view: &objc2_app_kit::NSView = &*handle.ns_view.as_ptr().cast();
         window_pointer(view)
     }
 }
 
-/// The raw NSWindow of a view. Red state: a view without a window still yields a null pointer.
+/// The raw NSWindow of a view, or an error when the view is not in a window: a view outside a window has no content view for the
+/// web views of the host.
 fn window_pointer(view: &objc2_app_kit::NSView) -> Result<*mut c_void, String> {
     let window: Option<Retained<NSWindow>> = unsafe { msg_send![view, window] };
-    Ok(window
+    window
         .map(|window| Retained::into_raw(window) as *mut c_void)
-        .unwrap_or(std::ptr::null_mut()))
+        .ok_or_else(|| "the view is not in a window".to_string())
 }
 
 /// The window pointer of a view for the main-thread window test. Only the test-seam feature compiles it.
@@ -246,7 +247,7 @@ pub(crate) fn main_webview(
     label: &str,
     background: port::Color,
 ) -> Result<*mut WebView, String> {
-    let ns_window = ns_window_of(window).unwrap_or(std::ptr::null_mut());
+    let ns_window = ns_window_of(window)?;
     let parent = ParentView(content_view(ns_window)?);
     let view = build_webview(parent, app, label, None, Some(background), true, None)?;
     let platform = soksak_host::platform::current()?;

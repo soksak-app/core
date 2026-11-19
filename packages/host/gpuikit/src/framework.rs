@@ -234,7 +234,7 @@ fn open_window(
                 &options.label,
                 options.background,
             );
-            let window = crate::platform::ns_window_of(window).unwrap_or(std::ptr::null_mut());
+            let window = crate::platform::ns_window_of(window);
             (view, window)
         })
         .map_err(|_| port::Error::from("the window ended before it opened"))?;
@@ -242,6 +242,10 @@ fn open_window(
     let view = view.map_err(|error| {
         soksak_host::application_log::log_error("new window", error.clone());
         port::Error::from("the main web view of the window could not be created")
+    })?;
+    let window = window.map_err(|error| {
+        soksak_host::application_log::log_error("new window", error.clone());
+        port::Error::from("the native window of the window could not be read")
     })?;
     record.set_window(window);
     record.add_webview(options.label.clone(), view);
