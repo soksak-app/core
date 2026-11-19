@@ -1160,6 +1160,8 @@ function drawCardSidebars(el, card, rect) {
  */
 function settle() {
   if (!grid) return;
+  // A change of the layout ends the preview of a drag: the release runs its command from the layout that it finds then.
+  previewed = null;
   closePicker("settled");
   // The sides that have a choice hold a sidebar while their switch is on, arranged in the order (docs/spec/external-sidebars.md).
   arrangeWindowSidebars(grid, value("sidebarOrder"), windowSidebarCards(pluginUnits(), value("links"), focusedPlugin()).map(item => item.id),
@@ -1564,6 +1566,21 @@ function endBoundary(axis, line) {
   return false;
 }
 
+/**
+ * An arrow key or a centring of a divider: the command name with params, the operation that the group tree previews, runs from the
+ * layout before the gesture, which it changes as the preview does, so the position where the preview leaves the boundary is the answer
+ * for the view.
+ */
+function boundaryCommand(preview, name, params) {
+  const kept = tree.snapshot();
+  const at = preview();
+  tree.restore(kept);
+  run(name, params).catch((error) => {
+    report(`boundary ${params.axis} ${params.line} ${name} failed: ${error.message}`);
+  });
+  return at;
+}
+
 /** Rebuilds the plane from the start. */
 function build(kept) {
   const restored = restoreWindowState(kept);
@@ -1588,7 +1605,8 @@ function build(kept) {
     // (docs/spec/groups.md#minimum-size).
     boundary: {
       move: previewBoundary,
-      center: (axis, line) => tree.centerBoundary(axis, line),
+      step: (axis, line, px) => boundaryCommand(() => tree.moveBoundary(axis, line, px, false), "core.boundary.move", { axis, line, position: px }),
+      center: (axis, line) => boundaryCommand(() => tree.centerBoundary(axis, line), "core.boundary.center", { axis, line }),
       end: endBoundary,
     },
     // Drawing writes the frame scale of the current settings into the document. Preparation includes the first-row height at

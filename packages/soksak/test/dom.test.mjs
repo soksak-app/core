@@ -2717,6 +2717,7 @@ test("the boundary option moves, centres and ends every divider gesture", () => 
   let grid = null;
   const boundary = {
     move: (axis, line, px) => (calls.push(["move", axis, line]), grid.moveBoundary(axis, line, px)),
+    step: (axis, line, px) => (calls.push(["step", axis, line]), grid.moveBoundary(axis, line, px)),
     center: (axis, line) => (calls.push(["center", axis, line]), grid.centerBoundary(axis, line)),
     end: (axis, line) => (calls.push(["end", axis, line]), grid.mergeCoincident(axis, line)),
   };
@@ -2739,7 +2740,7 @@ test("the boundary option moves, centres and ends every divider gesture", () => 
   calls.length = 0;
   el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  assert.deepEqual(calls, [["move", "x", 1], ["center", "x", 1]], "a key moves and centres through the option");
+  assert.deepEqual(calls, [["step", "x", 1], ["center", "x", 1]], "a key steps and centres through the option");
 
   calls.length = 0;
   pointer(window, el, "pointerdown", 2, 600, 300);

@@ -166,6 +166,7 @@ export class SoksakView {
         // default: `boundary` is optional and documented as the grid's own operations.
         this.boundary = (_b = options.boundary) !== null && _b !== void 0 ? _b : {
             move: (axis, line, px) => grid.moveBoundary(axis, line, px),
+            step: (axis, line, px) => grid.moveBoundary(axis, line, px),
             center: (axis, line) => grid.centerBoundary(axis, line),
             end: (axis, line) => grid.mergeCoincident(axis, line),
         };
@@ -975,7 +976,7 @@ export class SoksakView {
             e.preventDefault();
             this.pressed = held;
             try {
-                this.commit('drag', () => this.carry(() => this.boundary.move(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
+                this.commit('drag', () => this.carry(() => this.boundary.step(axis, line, this.grid.boundaryPos(axis, line) + step * 8), el));
             }
             finally {
                 this.pressed = null;

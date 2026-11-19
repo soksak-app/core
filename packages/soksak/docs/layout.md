@@ -588,7 +588,8 @@ It is writable on the view — `view.bleed = px` — because a host that lets a
 person change its gap changes this with it.
 
 `boundary` is a `BoundaryModel`, the boundary operations that every divider
-gesture runs: `move(axis, line, px)` for a drag step and an arrow key,
+gesture runs: `move(axis, line, px)` for a drag step, `step(axis, line, px)`
+for an arrow key,
 `center(axis, line)` for the second press of a pair and Enter, and
 `end(axis, line)` at the end of a drag, which returns whether a line merged.
 Without it the view runs `moveBoundary`, `centerBoundary` and

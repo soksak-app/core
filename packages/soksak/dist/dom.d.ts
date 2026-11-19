@@ -24,8 +24,10 @@ export type ChangeReason = 'drag' | 'center' | 'merge' | 'resize' | 'render';
  * for a line, supplies them; the default is the grid's own.
  */
 export interface BoundaryModel {
-    /** A drag step and an arrow key: as `moveBoundary(axis, line, px)` of the grid. Returns where the boundary stands. */
+    /** A drag step: as `moveBoundary(axis, line, px)` of the grid. Returns where the boundary stands. */
     move(axis: Axis, line: number, px: number): number;
+    /** An arrow key: as `moveBoundary(axis, line, px)` of the grid, one step away. Returns where the boundary stands. */
+    step(axis: Axis, line: number, px: number): number;
     /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
     center(axis: Axis, line: number): number;
     /**

@@ -742,6 +742,16 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     return { position: moved };
   });
 
+  registry.command("core.boundary.center", ({ axis, line }) => {
+    const grid = currentGrid();
+    if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);
+    // The group tree centres the line, leaves it where a card would be drawn below its minimum and merges the lines that meet
+    // (docs/spec/groups.md#commands).
+    const centred = currentTree().centerBoundary(axis, line);
+    settle();
+    return { position: centred };
+  });
+
   // The setting cardArrange chooses the operation: resize keeps the layout and gives every card a fair share
   // (packages/soksak/docs/layout.md#balancing), even replaces it with an equal grid (packages/soksak/docs/layout.md#even-arrangement).
   registry.command("core.layout.balance", () => {
