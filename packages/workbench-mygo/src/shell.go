@@ -466,6 +466,8 @@ type Shell struct {
 	// order; settingsWaits are the commands that wait for writes. They belong to the main thread.
 	settingsIssued, settingsWritten int
 	settingsWaits                   []*settingsWait
+	// sliderDrag is the slider that the pointer drags and the value it shows; the setting takes the value once, at the release.
+	sliderDrag *sliderDrag
 }
 
 // NewShell returns the shell of a window, with its commands in the registry.

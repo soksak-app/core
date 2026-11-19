@@ -79,7 +79,7 @@ if (!defaultTheme) throw new Error(`the default theme ${declaration.settings.def
  *   fullRule         where the boundary line of the section that a card crosses is drawn. over = over the surface, under = under the card,
  *                    none = not drawn
  *   gap, radius, font, size
- *                    the half width (px) of the gap (0 = the cards share one line), the corner radius (px) of a card (--r-sm and --r-xs are
+ *                    the distance (px) between two adjacent cards (0 = the cards share one line), the corner radius (px) of a card (--r-sm and --r-xs are
  *                    derived from it), the font (an id of FONTS) and the font size (px). They start at the shape of the default theme, and
  *                    from then on the value the user specified is used. Choosing the theme again returns them to the values of that theme
  *   textSize         the scale of the text size applied to the frame chrome and every card: a value of TEXT_STEPS (docs/spec/text-size.md)
@@ -639,14 +639,15 @@ export const themeName = () => settings.theme;
 export const modeName = () => settings.mode;
 
 /**
- * The half width (px) of the gap. The plane sets gap to twice this value.
+ * Half the distance (px) between two adjacent cards: half the gap setting. The plane sets its gap to twice this value, and the
+ * stage margin is this value (docs/spec/settings.md#values).
  *
  * When the setting is 0, returns half the line width. With a gap of 0 the rects of the cards touch, so
  * there is no place to draw the boundary line, and two native surfaces also touch, so the line goes behind the surfaces.
  * If the cards are separated by one line, that place becomes the border that the two cards share.
  */
 export function halfGap() {
-  if (settings.gap > 0) return settings.gap;
+  if (settings.gap > 0) return settings.gap / 2;
   return parseFloat(themeOf(settings.theme).shape.bw) / 2;
 }
 

@@ -385,9 +385,9 @@ func (s *Shell) drawSwatch(c *ui.Context, control *SettingsControl, pane setting
 		}
 		return value
 	}
-	// The box is small, so the passage is halved, and a theme without a passage keeps the line that its cards share.
+	// The box is small, so the gap is quartered, and a theme without a gap keeps the line that its cards share.
 	gap := shape("gap")
-	slit, between := float32(max(2, math.Round(gap/2))), ui.Hex(colors["bg"])
+	slit, between := float32(max(2, math.Round(gap/4))), ui.Hex(colors["bg"])
 	if gap == 0 {
 		slit, between = 1, ui.Hex(colors["rule"])
 	}
@@ -486,12 +486,26 @@ func (s *Shell) drawSelect(c *ui.Context, control *SettingsControl, pane setting
 	}
 }
 
-// drawSlider draws a bounded number, the .set-slide of packages/workbench/app.css.
+// sliderDrag is a slider of the settings that the pointer drags: the item of its control and the value that the drag reached.
+type sliderDrag struct {
+	item  string
+	value float64
+}
+
+// drawSlider draws a bounded number, the .set-slide of packages/workbench/app.css. A drag shows each value beside the slider and runs
+// the command once, with the value at the release, as the page reports a range only on change; a key runs it for each step.
 func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane settingsPane) {
 	value, err := strconv.ParseFloat(*control.Value, 64)
 	if err != nil {
 		s.fail(fmt.Errorf("the setting %s is not a number: %s", control.item(), *control.Value))
 		return
+	}
+	drag := s.sliderDrag
+	if drag != nil && drag.item != control.item() {
+		drag = nil
+	}
+	if drag != nil {
+		value = drag.value
 	}
 	ui.Row(c).Grow(1).Gap(pane.slideGap).AlignItems(ui.Center).Children(func() {
 		s.binder.Control(c, control.Name, control.Command.Name, control.item())
@@ -499,8 +513,22 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 		reach := (pane.thumb - pane.trackH) / 2
 		slider := s.binder.Bound(ui.SliderBase(c, &value, control.lo, control.hi), control.Name).Label(control.item()).Grow(1).Height(pane.trackH).
 			HitOutset(reach).PaddingX(pane.thumb / 2)
-		if slider.Changed() {
+		switch {
+		case slider.Pressed():
+			if slider.Changed() || drag == nil {
+				s.sliderDrag = &sliderDrag{item: control.item(), value: math.Round(value)}
+			}
+		case drag != nil:
+			s.sliderDrag = nil
+			if !slider.PressCanceled() && valueText(drag.value) != *control.Value {
+				s.runControl(control, drag.value)
+			}
+		case slider.Changed():
 			s.runControl(control, math.Round(value))
+		}
+		shown := *control.Value
+		if drag := s.sliderDrag; drag != nil && drag.item == control.item() {
+			shown = valueText(drag.value)
 		}
 		share := float32((value - control.lo) / (control.hi - control.lo))
 		track, thumb, thumbColor, trackH := faded(s.palette.Fg, s.metrics.insetMix), pane.thumb, s.palette.Focus, pane.trackH
@@ -516,7 +544,7 @@ func (s *Shell) drawSlider(c *ui.Context, control *SettingsControl, pane setting
 				plain.ring(p, ui.Rect{X: r.X, Y: r.Y - reach, W: r.W, H: thumb}, thumb/2, ring)
 			}
 		})
-		ui.Text(c, *control.Value+control.unit).Width(s.chLength(c, "slide-value-w", s.textSmall())).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)
+		ui.Text(c, shown+control.unit).Width(s.chLength(c, "slide-value-w", s.textSmall())).TextAlign(ui.End).FontSize(s.textSmall()).TextColor(s.palette.Muted)
 	})
 }
 

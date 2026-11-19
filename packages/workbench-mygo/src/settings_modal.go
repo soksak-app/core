@@ -965,6 +965,10 @@ func (s *Shell) applyPalette() error {
 		return err
 	}
 	s.palette = palette
+	// The plane of the shown space takes the gap of the settings at once; the settle after the change stores and draws it.
+	if s.plane != nil {
+		s.plane.SetGap(palette.PlaneGap())
+	}
 	s.tellTheme()
 	return nil
 }
@@ -985,7 +989,9 @@ func (s *SettingsStore) pageTheme() (map[string]any, error) {
 	for _, key := range []string{"bg", "card", "fg", "muted", "edge", "rule", "rail", "focus", "no"} {
 		tokens["--"+key] = colors[key]
 	}
+	// --half-gap is half the gap setting, and half the border width at the seam (halfGap of packages/workbench/settings.js).
 	gap, _ := values["gap"].(float64) // silent: the settings store checks the type of the value.
+	gap /= 2
 	if gap == 0 {
 		width, err := strconv.ParseFloat(strings.TrimSuffix(theme.Shape["bw"], "px"), 64)
 		if err != nil {
