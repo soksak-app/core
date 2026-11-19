@@ -283,6 +283,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-18",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "function fitGroupHead(head) {" },
+      { file: "packages/workbench/plane.js", symbol: "function foldHead(row, { lead, tabWidths, tabGap }) {" },
+      { file: "packages/workbench/plane.js", symbol: 'if (key === "leader") return run("core.group.leader", { card: id });' },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a group header too narrow for its buttons folds them into its tool menu, which runs them" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "the leader keeps its leader mark in a head too narrow for its tools, and its tool menu does not hold it" },
+    ],
+    expected: "The page folds a group header by fitHead with its name as the one tab, keeping the fullscreen toggle, the leader mark and the tool menu, whose items run the folded buttons.",
+    levels: ["unit"],
+  },
+  {
     id: "F963",
     implementation: [
       { file: "packages/workbench/card-tools.js", symbol: 'export const CARD_TOOL_MENUS = { add: "add", x: "split-x", y: "split-y", gx: "group-x", gy: "group-y" };' },

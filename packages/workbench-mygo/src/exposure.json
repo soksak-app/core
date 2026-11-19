@@ -3527,7 +3527,7 @@
       },
       {
         "name": "core.card.tools",
-        "description": "Opens or closes a card's tool menu, which a narrow card header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
+        "description": "Opens or closes the tool menu of a card or a group card, which a narrow header shows instead of its tools; its items run the same commands as the sidebar buttons and the enabled tools.",
         "params": {
           "type": "object",
           "properties": {
@@ -5158,7 +5158,7 @@
       },
       {
         "name": "core.card.tools",
-        "description": "The tool menu buttons of the cards, in card order.",
+        "description": "The tool menu buttons of the headers of the cards and the group cards, in workbench order.",
         "many": true
       },
       {

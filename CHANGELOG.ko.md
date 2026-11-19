@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-18 (group header의 fit, page): page가 card head의 header fit으로 group header를 접으며, 그 이름이 tab 하나의 자리에 선다: 버튼에 비해 좁으면 fullscreen toggle, leader의 leader mark와 ⋯를 지키고, 그 tool menu가 다른 버튼을 담아 각각을 그 버튼처럼 실행한다. tool menu의 leader 항목은 이제 plugin menu를 여는 대신 그 card를 leader로 만든다(`docs/spec/groups.md#headers`). 검증: group header와 leader 항목의 test가 바뀌지 않은 page에서 실패했고 통과한다.
 - F963, F937-11 (head의 분할 버튼): card head와 group head가 상자의 긴 축을 쓰던 group 버튼 그룹으로 묶기 대신 결과와 방향으로 이름 지은 분할 버튼 넷, 세로로 나누기, 가로로 나누기, 그룹으로 세로 분할, 그룹으로 가로 분할을 가진다. group split 버튼은 그 group이 거부될 동안 꺼지고 숨지 않으며, group header는 add 버튼을 가지지 않고 그 add menu는 이유와 함께 거부된다(`docs/spec/groups.md#headers`). 검증: 두 workbench의 head test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F937-19 (group create의 request, page): page의 `core.group.create`가 mygo처럼 `request`를 받는다: 답한 request의 반복은 첫 답을 돌려주고 아무것도 바꾸지 않으며, 새 request는 group이 선 곳에서도 card를 묶고, group menu 항목의 각 누름이 새 request를 보낸다(`docs/spec/groups.md#idempotency`). 검증: page의 request test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F970 (group card의 색): 두 workbench가 group card를 한 규칙으로 card의 token에서 그린다: header는 content card head처럼 `card`로, 그 아래 선은 그 head 아래 선처럼, 몸통은 `bg`를 `card`에 chrome 값 `group-fill-fade`(0.6)의 member level 거듭제곱만큼 섞은 색으로 그리므로, 모든 theme과 mode에서 중첩 level마다 card에 한 걸음씩 가까워진다(`docs/spec/groups.md#drawing`, `docs/spec/cases/group-look.json`). theme 색 `group-1`부터 `group-3`과 설정 `group.tint`(그룹 색)는 없어졌다. `settings.json`에 저장된 `group.tint`는 어떤 설정의 key도 아닌 값으로 남고 효과가 없다. 검증: 공유 case, 두 workbench의 그리기 test와 설정 test가 바뀌지 않은 코드에서 실패했고 통과한다.

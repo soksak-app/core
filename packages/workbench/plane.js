@@ -796,7 +796,7 @@ function openPicker(anchor, what, cardId) {
     plugins().map((p) => ({ key: p.id, name: p.name, mark: p.mark, svg: p.svg })),
     // Each press of a group item sends a new request, so it groups the card again where its group stands (docs/spec/groups.md#idempotency).
     (k) => (what === "gx" || what === "gy" ? createGroup(cardId, TOOL_SPLIT_SIDE[what], k, null, newGroupRequest())
-      : tree.isGroup(cardId) ? (what === "add" ? addTabTo(cardId, k, null) : splitCard(cardId, TOOL_SPLIT_SIDE[what], k))
+      : tree.isGroup(cardId) ? splitCard(cardId, TOOL_SPLIT_SIDE[what], k)
       : what === "add" ? addTab(cardId, k, null) : splitWith(cardId, TOOL_SPLIT_SIDE[what], k, null)));
 }
 
@@ -1369,42 +1369,60 @@ function centreTab(strip, activeId) {
 const PEEK = parseFloat(CHROME["tab-peek-w"]), MIN_TAB = parseFloat(CHROME["tab-min-w"]);
 
 function fitChrome(chrome, strip) {
-  const acts = chrome.querySelector(".chrome__acts");
-  if (!acts) return;
+  if (!chrome.querySelector(".chrome__acts")) return;
   // To measure at every stage, it starts with all tabs and the tool row shown.
   chrome.dataset.fit = "strip";
   chrome.dataset.tools = "bar";
-  // The side margins of the head, the gap between the elements inside it, and the widths of ≡ and ⋯ are decided by the
-  // stylesheet, so they are obtained by measuring. If they were written here, they would diverge from the stylesheet, and the
-  // width at which the header folds would shift by that difference. It is the same reason as measuring the gap between tabs.
-  const head = getComputedStyle(chrome);
-  // default: the computed value normal of columnGap is not a number and is 0 in flex.
-  const gap = parseFloat(head.columnGap) || 0;
   // The head starts with ≡, or with the space app button in a fullscreen card, so it is fitted at a width reduced by the width
   // of that button.
   const apps = chrome.querySelector(".chrome__apps");
   const lead = parseFloat(getComputedStyle(chrome.closest(".card")?.dataset.fullscreen === "true" && apps
     ? apps : chrome.querySelector(".chrome__ham")).width);
+  foldHead(chrome, {
+    lead,
+    tabWidths: [...strip.querySelectorAll(".tab")].map((tab) => tab.getBoundingClientRect().width),
+    // The gap between tabs is a value that the tab list holds.
+    // default: the computed value normal of columnGap is not a number and is 0 in flex.
+    tabGap: parseFloat(getComputedStyle(strip).columnGap) || 0,
+  });
+}
+
+/**
+ * Folds the header of a group card by the fit of a card head: its name stands in the place of the one tab and nothing leads it
+ * (docs/spec/groups.md#headers).
+ */
+function fitGroupHead(head) {
+  head.dataset.fit = "strip";
+  head.dataset.tools = "bar";
+  foldHead(head, { lead: 0, tabWidths: [head.querySelector(".group__name").scrollWidth], tabGap: 0 });
+}
+
+/**
+ * Writes the stage of fitHead to the head row whose leading button is lead wide and whose tabs are tabWidths wide, tabGap apart. The side
+ * margins of the head, the gap between the elements inside it and the width of ⋯ are decided by the stylesheet, so they are measured: if
+ * they were written here, they would diverge from the stylesheet, and the width at which the header folds would shift by that difference.
+ */
+function foldHead(row, { lead, tabWidths, tabGap }) {
+  const acts = row.querySelector(".chrome__acts");
+  const head = getComputedStyle(row);
+  // default: the computed value normal of columnGap is not a number and is 0 in flex.
+  const gap = parseFloat(head.columnGap) || 0;
   // The head keeps the leader mark and the fullscreen toggle beside ⋯ in the menu stage, so the menu stage needs the room of each
   // (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tools).
   const mark = leaderMark(acts);
   const kept = keptTools(acts);
   const { fit, tools } = fitHead({
-    width: chrome.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
+    width: row.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
     toolsWidth: acts.getBoundingClientRect().width,
     // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
-    moreWidth: parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width)
+    moreWidth: parseFloat(getComputedStyle(row.querySelector(".chrome__more")).width)
       + kept.reduce((sum, b) => sum + b.getBoundingClientRect().width + gap, 0),
-    tabWidths: [...strip.querySelectorAll(".tab")].map((tab) => tab.getBoundingClientRect().width),
-    // The gap between tabs is a value that the tab list holds.
-    // default: the computed value normal of columnGap is not a number and is 0 in flex.
-    tabGap: parseFloat(getComputedStyle(strip).columnGap) || 0,
-    peek: PEEK, minTab: MIN_TAB,
+    tabWidths, tabGap, peek: PEEK, minTab: MIN_TAB,
   });
-  chrome.dataset.fit = fit;
-  chrome.dataset.tools = tools;
-  if (mark && tools === "menu") chrome.dataset.mark = "leader";
-  else delete chrome.dataset.mark;
+  row.dataset.fit = fit;
+  row.dataset.tools = tools;
+  if (mark && tools === "menu") row.dataset.mark = "leader";
+  else delete row.dataset.mark;
 }
 
 /** The pressed leader button of the tool row acts, the leader mark, or null on a card that does not lead. */
@@ -1424,6 +1442,7 @@ function centreTabs() {
     fitChrome(chrome, strip);
     if (!tabDrag) centreTab(strip, card.data.activeId);
   }
+  for (const head of plane.querySelectorAll(".group:not([hidden]) > .group__head")) fitGroupHead(head);
 }
 
 /**
@@ -1951,11 +1970,14 @@ export function openCardMenu(id, menu) {
  * and splitting ask for the plugin of the new tab under the same button.
  */
 export function openCardTools(id) {
-  paneCard(id);
-  const anchor = cardElement(id)?.querySelector(".chrome__more");
+  // A group header folds its buttons into the same tool menu (docs/spec/groups.md#headers).
+  const group = tree?.isGroup(id);
+  if (!group) paneCard(id);
+  const holder = group ? plane.querySelector(`.group[data-group-card="${CSS.escape(id)}"] > .group__head`) : cardElement(id);
+  const anchor = holder?.querySelector(".chrome__more");
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
-  const acts = cardElement(id).querySelector(".chrome__acts");
+  const acts = holder.querySelector(".chrome__acts");
   // The head keeps the leader mark and the fullscreen toggle, so the menu does not hold them (docs/spec/groups.md#headers).
   const kept = keptTools(acts);
   const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden && !kept.includes(b)).map((b) => ({
@@ -1967,12 +1989,14 @@ export function openCardTools(id) {
     viewBox: b.querySelector("svg").getAttribute("viewBox"),
     active: b.getAttribute("aria-pressed") === "true",
   }));
-  focusOn(id);
+  focusOn(group ? tree.focusable(id) : id);
   settle();
   openLayer(anchor, "카드 도구", items, (key) => {
     if (key.startsWith("side-")) return run("core.card.sidebar.toggle", { card: id, side: key.slice(5) });
     if (key === "fullscreen") return run("core.card.fullscreen", { card: id });
     if (key === "close") return run("core.card.close", { card: id });
+    if (key === "leader") return run("core.group.leader", { card: id });
+    if (key === "group-menu") return openGroupMenu(id, anchor);
     return openPicker(anchor, key, id);
   });
 }
@@ -2706,10 +2730,11 @@ export function dissolveGroup(id) {
  * Opens the close menu of the group card id from the close button of its header, or closes it when it is open. A group whose header
  * holds no close button is refused.
  */
-export function openGroupMenu(id) {
+export function openGroupMenu(id, menuAnchor) {
   const card = treeCard(id);
   tree.requireGroup(card);
-  const anchor = plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
+  // The close item of the tool menu of a folded header opens the menu under ⋯, menuAnchor, and its close button otherwise.
+  const anchor = menuAnchor ?? plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
   if (!anchor) throw new Error(`group ${card} has no close button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return null; }
   openLayer(anchor, "그룹 메뉴", [{ key: "close", name: "그룹 닫기" }, { key: "dissolve", name: "그룹 풀기" }],

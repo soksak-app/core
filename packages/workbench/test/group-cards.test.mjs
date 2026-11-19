@@ -111,12 +111,12 @@ test("a group card is one container at its drawn rectangle with the fill of its 
   probe.style.borderBottomColor = currentGroupLook(1).line;
   assert.equal(header.style.borderBottomColor, probe.style.borderBottomColor, "the header draws the line below it in the color of groupLook");
   assert.equal(header.querySelector('[data-expose="core.group.name"]').textContent, "그룹 1");
-  assert.deepEqual([...header.querySelectorAll("button")].map((button) => button.dataset.expose),
+  assert.deepEqual([...header.querySelectorAll(".chrome__act")].map((button) => button.dataset.expose),
     ["core.group.split-x", "core.group.split-y", "core.group.group-x", "core.group.group-y", "core.card.leader", "core.group.fullscreen",
       "core.group.close"]);
-  assert.deepEqual([...header.querySelectorAll("button")].map((button) => button.dataset.command),
+  assert.deepEqual([...header.querySelectorAll(".chrome__act")].map((button) => button.dataset.command),
     ["core.card.menu", "core.card.menu", "core.card.menu", "core.card.menu", "core.group.leader", "core.card.fullscreen", "core.group.menu"]);
-  assert.deepEqual([...header.querySelectorAll("button")].slice(0, 4).map((button) => JSON.parse(button.dataset.params).menu),
+  assert.deepEqual([...header.querySelectorAll(".chrome__act")].slice(0, 4).map((button) => JSON.parse(button.dataset.params).menu),
     ["split-x", "split-y", "group-x", "group-y"], "a group header holds the four split buttons and no add button");
   // The frames stand below the cards.
   const order = [...planeElement.children];
@@ -306,6 +306,41 @@ test("the leader keeps its leader mark in a head too narrow for its tools, and i
   assert.equal(plane.cardActs("card-2").leader.hidden, true, "core.grid reports the leader button of card-2 shown in its folded head");
   await run("core.card.tools", { card: "card-1" });
   assert.equal(plane.pickerState().items.some((item) => item.key === "leader"), false, "the tool menu of the leader holds its mark");
+  plane.closePicker("test end");
+  // The leader item of a member that does not lead makes it the leader, as its button does.
+  await run("core.card.tools", { card: "card-2" });
+  await run("core.picker.pick", { index: plane.pickerState().items.findIndex((item) => item.key === "leader") });
+  assert.equal(plane.currentTree().leaderOf(plane.currentTree().parentOf("card-2")), "card-2", "the leader item does not make card-2 the leader");
+});
+
+// A group header folds its buttons by the header fit of a card head, with its name in the place of the tabs: too narrow for its buttons,
+// it keeps the fullscreen toggle, the leader mark on the leader and ⋯, whose tool menu holds the other buttons and runs each as its
+// button does (docs/spec/groups.md#headers, docs/spec/cases/layout/head.json).
+test("a group header too narrow for its buttons folds them into its tool menu, which runs them", { timeout: 5000 }, async () => {
+  arrange();
+  const head = groupElement("card-4").querySelector(".group__head");
+  plane.settle();
+  assert.equal(head.dataset.tools, "bar", "a wide group header shows its buttons in one row");
+  Object.defineProperty(head, "clientWidth", { value: 120, configurable: true });
+  head.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
+  plane.settle();
+  assert.equal(head.dataset.tools, "menu", "the narrow header of card-4 is not folded");
+  assert.equal(head.dataset.mark, "leader", "the header of the leader card-4 does not keep its leader mark");
+  const more = head.querySelector(".chrome__more");
+  assert.ok(more, "the group header has no tool menu button");
+  assert.equal(more.dataset.expose, "core.card.tools");
+  assert.equal(more.dataset.command, "core.card.tools");
+  assert.deepEqual(JSON.parse(more.dataset.params), { card: "card-4" });
+  await run("core.card.tools", { card: "card-4" });
+  assert.deepEqual(plane.pickerState().items.map((item) => item.key), ["x", "y", "gx", "gy", "group-menu"],
+    "the tool menu holds the folded buttons without the fullscreen toggle and the leader mark");
+  await run("core.picker.pick", { index: 4 });
+  assert.deepEqual(plane.pickerState().items.map((item) => item.key), ["close", "dissolve"], "the close item opens the close menu of the group");
+  plane.closePicker("test end");
+  await run("core.card.tools", { card: "card-4" });
+  await run("core.picker.pick", { index: 3 });
+  await pick(PLAIN);
+  assert.equal(plane.currentTree().neighbour("card-4", "bottom")?.startsWith("card-"), true, "the group split item groups card-4 toward bottom");
 });
 
 // A head too narrow for its tools keeps the fullscreen toggle beside ⋯, and the tool menu does not hold it

@@ -43,7 +43,10 @@ export function groupHeadTools(tree, id, { fullscreen, even }) {
   return tools;
 }
 
-/** Creates the element of the group card id: the frame with its header, the name and the button row. */
+/**
+ * Creates the element of the group card id: the frame with its header, the name, the button row and the tool menu button ⋯, which the
+ * header shows in place of its folded buttons (docs/spec/groups.md#headers).
+ */
 function createGroupCard(id) {
   const el = document.createElement("section");
   el.className = "group";
@@ -59,7 +62,15 @@ function createGroupCard(id) {
   bind(name, "core.card.focus", { card: id });
   const acts = document.createElement("span");
   acts.className = "chrome__acts";
-  head.append(name, acts);
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "chrome__more";
+  more.dataset.expose = "core.card.tools";
+  more.title = "카드 도구";
+  more.setAttribute("aria-label", more.title);
+  more.innerHTML = svg(icons["card-more"]);
+  bind(more, "core.card.tools", { card: id });
+  head.append(name, acts, more);
   el.append(head);
   return el;
 }
