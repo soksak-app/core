@@ -63,8 +63,11 @@ each frame on it, and a card stands one gap from a frame around it, a frame one
 gap from the next frame, and a card or a frame one gap from its neighbour across
 the line. A frame takes the gap of the corridor, reduced with it when the plane
 cannot hold the corridors and the frames. A card without an entry has no frames,
-the frames are no part of the state, and `setFrames` throws for an id that is no
-card and for a count that is no whole number from zero. A px size is the drawn
+the frames are no part of the state, and `setFrames` throws
+`soksak: frames name "<id>", which is no card` for an id that is no card,
+`soksak: the frames of "<id>" count below zero` for a count below zero and
+`soksak: the frames of "<id>" count no whole number` for a count that is no whole
+number. A px size is the drawn
 size of a card with the most frames of its slot; a card with fewer is drawn wider
 by a gap for each frame it lacks.
 
