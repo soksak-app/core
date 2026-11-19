@@ -408,3 +408,50 @@ func TestARuleInsideAGroupStaysInsideItsFrame(t *testing.T) {
 		}
 	}
 }
+
+// lightness is the CIELAB L* of an sRGB color.
+func lightness(c ui.Color) float64 {
+	linear := func(v uint8) float64 {
+		x := float64(v) / 255
+		if x <= 0.04045 {
+			return x / 12.92
+		}
+		return math.Pow((x+0.055)/1.055, 2.4)
+	}
+	y := 0.2126*linear(c.R) + 0.7152*linear(c.G) + 0.0722*linear(c.B)
+	if y > 216.0/24389 {
+		return 116*math.Cbrt(y) - 16
+	}
+	return y * 24389 / 27
+}
+
+// The group colors of every theme in both modes differ from the surface that each level stands on, bg for level 1 and the color of
+// the level above for the others, and from the card fill by at least 4 units of CIELAB L* (docs/spec/groups.md#drawing).
+func TestEveryGroupLevelStandsApartFromItsSurfaceAndTheCards(t *testing.T) {
+	f := nestedSideShell(t)
+	var themes []struct {
+		ID    string            `json:"name"`
+		Dark  map[string]string `json:"dark"`
+		Light map[string]string `json:"light"`
+	}
+	if err := json.Unmarshal([]byte(f.status("core.themes")), &themes); err != nil {
+		t.Fatal(err)
+	}
+	if len(themes) == 0 {
+		t.Fatal("core.themes lists no theme")
+	}
+	for _, theme := range themes {
+		for mode, colors := range map[string]map[string]string{"dark": theme.Dark, "light": theme.Light} {
+			card := lightness(ui.Hex(colors["card"]))
+			under := lightness(ui.Hex(colors["bg"]))
+			for _, level := range []string{"group-1", "group-2", "group-3"} {
+				own := lightness(ui.Hex(colors[level]))
+				if math.Abs(own-under) < 4 || math.Abs(own-card) < 4 {
+					t.Errorf("%s %s: %s %s has L* %.1f beside %.1f under it and %.1f of the cards", theme.ID, mode, level, colors[level], own,
+						under, card)
+				}
+				under = own
+			}
+		}
+	}
+}
