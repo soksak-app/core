@@ -260,7 +260,9 @@ pub fn run(frontend: Arc<dyn Assets>) {
 /// Receives the setup result of a step after exit_on_failure returned it. exit_on_failure ends the process on a failure, so only
 /// a returned failure reaches this function.
 fn report_setup(result: Result<(), Box<dyn std::error::Error>>) {
-    drop(result);
+    if let Err(error) = result {
+        soksak_host::application_log::log_error("startup", error);
+    }
 }
 
 #[cfg(test)]
