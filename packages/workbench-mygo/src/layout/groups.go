@@ -1408,35 +1408,63 @@ func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *Z
 	}
 }
 
-// Fullscreen is the rectangle of each card inside the group card id while it is shown across rect: the rectangle of the group card is
-// stretched onto rect on each axis (docs/spec/groups.md#card-commands-on-a-group-card).
+// gridBox is the rectangle in the grid of the card id with the node n, nil for a content card outside the tree: the union of the
+// cards inside a group card, and the first row line of it.
+func (t *GroupTree) gridBox(id string, n *node) (Rect, int) {
+	if n != nil && n.group {
+		_, _, r0, _ := t.span(n) // silent: the first row line is the one value of the span that the headers read.
+		return t.union(n), r0
+	}
+	rect, _ := t.grid.Rect(id) // silent: id is a card of the grid.
+	card, _ := t.grid.Card(id) // silent: id is a card of the grid.
+	return rect, card.R0
+}
+
+// Fullscreen is the rectangle of each card inside the group card id while it is shown across rect, laid out as if the group card were
+// the whole space (docs/spec/groups.md#card-commands-on-a-group-card): the lines inside it are stretched onto rect while every corridor
+// keeps the gap, its header stands at the top of rect, and each card inside it stands below the headers of the group cards between it
+// and id that start on its first row line.
 func (t *GroupTree) Fullscreen(id string, rect Rect) map[string]Rect {
 	n := t.groupNode(id)
 	if n == nil {
 		return nil
 	}
 	from := t.union(n)
+	half := t.grid.Gap() / 2
+	// edge maps a coordinate of an edge of a card in the grid onto rect: the line beside the edge, half a gap away, moves in proportion
+	// between the lines around the group card, and the edge keeps half a gap from it.
+	edge := func(v, lo, size, onto, ontoSize float64, low bool) float64 {
+		switch {
+		case math.Abs(v-lo) < eps:
+			return onto
+		case math.Abs(v-(lo+size)) < eps:
+			return onto + ontoSize
+		}
+		line := v + half
+		if !low {
+			line = v - half
+		}
+		mapped := onto - half + (line-(lo-half))*(ontoSize+2*half)/(size+2*half)
+		if low {
+			return mapped - half
+		}
+		return mapped + half
+	}
 	fit := func(r Rect) Rect {
-		x0 := rect.X + (r.X-from.X)*rect.W/from.W
-		x1 := rect.X + (r.X+r.W-from.X)*rect.W/from.W
-		y0 := rect.Y + (r.Y-from.Y)*rect.H/from.H
-		y1 := rect.Y + (r.Y+r.H-from.Y)*rect.H/from.H
+		x0, x1 := edge(r.X, from.X, from.W, rect.X, rect.W, false), edge(r.X+r.W, from.X, from.W, rect.X, rect.W, true)
+		y0, y1 := edge(r.Y, from.Y, from.H, rect.Y, rect.H, false), edge(r.Y+r.H, from.Y, from.H, rect.Y, rect.H, true)
 		return Rect{X: x0, Y: y0, W: x1 - x0, H: y1 - y0}
 	}
-	out := map[string]Rect{}
+	out := map[string]Rect{id: rect}
 	for _, card := range t.Cards() {
-		if card != id && !slices.Contains(t.Groups(card), id) {
+		path, inner, _ := t.find(card)
+		at := slices.IndexFunc(path, func(g *node) bool { return g.card == id })
+		if card == id || at < 0 {
 			continue
 		}
-		r, _ := t.Rect(card) // silent: card is a card of the space.
-		if t.IsGroup(card) {
-			out[card] = fit(r)
-			continue
-		}
-		// A content card keeps the headers of the group cards above it at their height.
-		lib, _ := t.grid.Rect(card) // silent: card is a card of the grid.
+		lib, r0 := t.gridBox(card, inner)
 		fitted := fit(lib)
-		k := r.Y - lib.Y
+		k := float64(t.heads(path[at:], r0)) * t.headStep()
 		fitted.Y += k
 		fitted.H -= k
 		out[card] = fitted

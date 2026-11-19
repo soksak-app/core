@@ -150,10 +150,14 @@ func (s *Shell) planeDividers() []layout.Divider {
 	return out
 }
 
-// planeRules are the rules of the grid cut where they would cross a group header.
+// planeRules are the rules of the grid cut where they would cross a group header, and none while a card is fullscreen, which hides
+// the cards that the rules separate.
 func (s *Shell) planeRules() []layout.Rule {
 	heads := s.headRects()
 	out := []layout.Rule{}
+	if s.fullscreen != "" {
+		return out
+	}
 	for _, rule := range s.plane.Rules() {
 		a0, a1, from, to := rule.X, rule.X+rule.W, rule.Y, rule.Y+rule.H
 		if rule.Axis == "y" {
