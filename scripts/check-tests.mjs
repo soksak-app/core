@@ -283,6 +283,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-15",
+    implementation: [
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func (s *Shell) frameColor(id string) ui.Color" },
+      { file: "packages/workbench/group-cards.js", symbol: "function markHeldFocus(el, d)" },
+      { file: "packages/workbench/group-tree.js", symbol: "focusDistance(id, focused) {" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestEveryGroupCardThatHoldsTheFocusMarksItsFrame" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "each group card that holds the focused card marks its frame with the focus faded by group-focus-fade for each level" },
+    ],
+    expected: "Each group card that holds the focused card mixes the focus color into its frame line by group-focus-fade to the power of the levels up to the focused card in both workbenches, also at the seam without a line of its own, and core.card.get of a group card reports that number of levels as focus.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-9",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) describeLevel(key string) (*LayoutNode, error)" },
@@ -14129,7 +14143,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/group-tree.js", symbol: "fullscreen(id, area)" },
       { file: "packages/workbench/group-tree.js", symbol: "drawnRules(rules)" },
       { file: "packages/workbench/settings.js", symbol: "export function groupFill(level)" },
-      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even })" },
+      { file: "packages/workbench/group-cards.js", symbol: "export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused })" },
       { file: "packages/workbench/plane.js", symbol: "export function drawnCardRects()" },
       { file: "packages/workbench/card-tools.js", symbol: "export function updateCardTools(toolbar, { canClose, canSplitX, canSplitY, canGroup, leads, leader, fullscreen })" },
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },

@@ -3,6 +3,7 @@
 // the name of the group and the head buttons of the group in the style of the head of a content card.
 import { bind } from "./commands.js";
 import { declaredIcons as icons } from "./icons.js";
+import { CHROME } from "./chrome-metrics.js";
 import { groupFill } from "./settings.js";
 import declaration from "./workbench.json" with { type: "json" };
 
@@ -95,13 +96,31 @@ function drawTools(acts, tools) {
   });
 }
 
+/** The share of the focus color in the frame of a group card d levels above the focused card, group-focus-fade to the power d. */
+const FOCUS_FADE = Number(CHROME["group-focus-fade"]);
+
+/**
+ * Marks the frame of a group card that holds the focused card: data-focus is the number of levels d up to it, and --group-focus the
+ * share of the focus color that the stylesheet mixes into its frame (docs/spec/groups.md#focus); a frame outside the focus has neither.
+ */
+function markHeldFocus(el, d) {
+  if (d === null) {
+    if (el.dataset.focus !== undefined) delete el.dataset.focus;
+    if (el.style.getPropertyValue("--group-focus") !== "") el.style.removeProperty("--group-focus");
+    return;
+  }
+  const share = `${100 * FOCUS_FADE ** d}%`;
+  if (el.dataset.focus !== String(d)) el.dataset.focus = String(d);
+  if (el.style.getPropertyValue("--group-focus") !== share) el.style.setProperty("--group-focus", share);
+}
+
 /**
  * Draws the group cards of the tree on the plane element planeEl (docs/spec/groups.md#drawing): rects is the drawn rectangle of each
- * shown group card by id, which a fullscreen group card gives the group cards inside it, and head the height of a header. A group card
- * that rects does not hold is hidden; the element of a group card that the tree no longer holds is removed. The frames stand below the
- * cards, so they are inserted before the first card.
+ * shown group card by id, which a fullscreen group card gives the group cards inside it, head the height of a header and focused the
+ * focused content card, whose group cards mark their frames. A group card that rects does not hold is hidden; the element of a group
+ * card that the tree no longer holds is removed. The frames stand below the cards, so they are inserted before the first card.
  */
-export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even }) {
+export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, focused }) {
   const live = new Set();
   const first = planeEl.querySelector(":scope > .card");
   for (const { id, node } of tree.order()) {
@@ -117,6 +136,7 @@ export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even })
     if (!rect) continue;
     Object.assign(el.style, { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.w}px`, height: `${rect.h}px`,
       background: groupFill(tree.level(id) + 1) });
+    markHeldFocus(el, tree.focusDistance(id, focused));
     const header = el.querySelector(".group__head");
     header.style.height = `${head}px`;
     const name = header.querySelector(".group__name");

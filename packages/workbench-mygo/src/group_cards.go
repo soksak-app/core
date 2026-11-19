@@ -2,6 +2,7 @@ package workbench
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 
@@ -67,10 +68,38 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	s.anchored("core.group/"+id, card)
 	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
 		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupFill(s.planes.Level(id)+1)).
-		Border(s.palette.CardBorder(), s.palette.Edge).Radius(s.palette.CardRadius()).PassThrough()
+		Border(s.palette.CardBorder(), s.frameColor(id)).Radius(s.palette.CardRadius()).PassThrough()
 	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Clip().Children(func() {
 		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
 	})
+	// At the seam the frame has no border, and its line is the fill at its edge; the mark of the focus recolors that line, over the header.
+	if s.palette.Seam() && s.frameColor(id) != s.palette.Edge {
+		ui.Box(c).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
+			Border(s.palette.BorderWidth, s.frameColor(id)).PassThrough()
+	}
+}
+
+// groupFocus is the number of levels from the focused content card up to the group card id that holds it, 1 for the group card that
+// holds it directly, or nil when the focused card stands outside id (docs/spec/groups.md#focus).
+func (s *Shell) groupFocus(id string) *int {
+	path := s.planes.Groups(s.focused)
+	for i, group := range path {
+		if group == id {
+			d := len(path) - i
+			return &d
+		}
+	}
+	return nil
+}
+
+// frameColor is the color of the frame line of the group card id: the focus color mixed into edge by group-focus-fade to the power of
+// the levels up to the focused card while id holds it and focusInd is border, and edge otherwise (docs/spec/groups.md#focus).
+func (s *Shell) frameColor(id string) ui.Color {
+	d := s.groupFocus(id)
+	if d == nil || s.settings.Value("focusInd") == "corner" {
+		return s.palette.Edge
+	}
+	return mixed(s.palette.Focus, s.palette.Edge, float32(math.Pow(float64(s.metrics.groupFocusFade), float64(*d))))
 }
 
 // headTolerance is how far a line may reach into a header across the line, in points: a divider at the side of a group card touches the

@@ -127,6 +127,38 @@ test("a group card that the tree no longer holds is removed from the plane", { t
   assert.equal(groupElement("card-4"), null);
 });
 
+/** The group card card-6 holds the group card card-5 of card-1 and card-2 and the card card-3, beside card-4 of the root level. */
+function arrangeNested(focusedId) {
+  plane.closePicker("fixture reset");
+  if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
+  plane.adopt({ focusedId, named: 0, windowSidebars: {}, sidebars: {}, lastCard: 6, leader: "card-6",
+    groups: [{ card: "card-6", name: "그룹 2", leader: "card-5", members: [
+      { card: "card-5", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }, "card-3"] }],
+    state: { xs: [0, 0.25, 0.5, 0.75, 1], ys: [0, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
+      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)]),
+      content("card-4", 3, 4, 0, 1, [view("tab-aaaaa4", PLAIN)])] } }, "spc-aaaaaa");
+  plane.settle();
+}
+
+test("each group card that holds the focused card marks its frame with the focus faded by group-focus-fade for each level", { timeout: 5000 }, async () => {
+  const fade = Number(JSON.parse(readFileSync(new URL("../workbench.json", import.meta.url), "utf8")).chrome["group-focus-fade"]);
+  assert.ok(fade > 0 && fade < 1 && fade ** 2 >= 0.3, `group-focus-fade ${fade} keeps two levels visible`);
+  const marks = () => Object.fromEntries(["card-5", "card-6"].map((id) => [id,
+    { focus: groupElement(id).dataset.focus ?? null, share: groupElement(id).style.getPropertyValue("--group-focus") }]));
+  const focusOf = async (id) => (await run("core.card.get", { card: id })).focus;
+  arrangeNested("card-1");
+  assert.deepEqual(marks(), { "card-5": { focus: "1", share: `${100 * fade}%` }, "card-6": { focus: "2", share: `${100 * fade ** 2}%` } },
+    "card-1 inside card-5 inside card-6");
+  assert.deepEqual([await focusOf("card-5"), await focusOf("card-6")], [1, 2]);
+  await run("core.card.focus", { card: "card-3" });
+  assert.deepEqual(marks(), { "card-5": { focus: null, share: "" }, "card-6": { focus: "1", share: `${100 * fade}%` } },
+    "the marks follow the focus to card-3 in the draw that moves it");
+  assert.deepEqual([await focusOf("card-5"), await focusOf("card-6")], [null, 1]);
+  await run("core.card.focus", { card: "card-4" });
+  assert.deepEqual(marks(), { "card-5": { focus: null, share: "" }, "card-6": { focus: null, share: "" } }, "card-4 stands outside every group");
+  assert.deepEqual([await focusOf("card-5"), await focusOf("card-6")], [null, null]);
+});
+
 test("a fullscreen group card is laid out as the whole area and a focus inside it keeps it fullscreen", { timeout: 5000 }, async () => {
   arrange();
   await run("core.card.fullscreen", { card: "card-4" });
