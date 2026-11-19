@@ -45,7 +45,17 @@ A row that the program never drew is held only by the program, and no terminal c
 
 ## Session state
 
-The state of the session (`<plugin>.session`) reports, for the choice of a mode: whether the alternate screen is active (`alternate.active`), the kept rows of each screen (`scrollback` with `offset`, `history` and `dropped`, and `alternate` with `history` and `dropped`), and the foreground program of the session.
+The state of the session (`<plugin>.session`) reports what a caller needs for the choice of a mode, in three members that the sidecar sends and the plugin keeps as it receives them:
+
+| Member | Form |
+| --- | --- |
+| `scrollback` | `{offset, history, dropped}`: the viewport offset and the kept history rows of the active screen, and the number of rows that the history limit dropped from the primary history, which is the number of the oldest kept primary row |
+| `alternate` | `{active, history, dropped}`: whether the alternate screen is active, the number of rows kept above the alternate screen, and the number of kept rows that the bound dropped, which is the number of the oldest kept alternate row |
+| `foreground` | `{pid, command, cwd}`: the leader of the foreground process group of the terminal of the session, the path of its executable and its working directory; `null` when the terminal has no foreground process group |
+
+- Source: the sidecar carries `scrollback` and `alternate` in each `view` event, so they follow the screen that the person sees. It reads `foreground` from the terminal of the session (the foreground process group of the PTY, and the path and the working directory of its leader) when the session opens and after each output of the session, and sends the event `{event: "foreground", foreground}` when the value differs from the last value that it sent.
+- A refused read: when the system refuses to name the executable or the working directory of the leader, such as for a process of another user, the member is `{pid, command: null, cwd: null, error}`, and `error` names the read and the reason; no value is guessed.
+- Limit: a program that takes the foreground and writes no output is named at the next output of the session. No event of the system reports a change of the foreground process group, and a full-screen program draws, so its output names it; `alternate.active` and not `foreground` decides whether the kept alternate rows or the program scroll apply.
 
 ## Agent transcript
 
