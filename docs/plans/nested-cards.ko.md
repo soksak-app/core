@@ -8,7 +8,11 @@
 
 - group card는 body가 자기 plane인 plane의 card다. plane은 layout library `packages/soksak`의 grid 하나(`xs`, `ys`, `cards`, `paidBy`)다. library는 plane 하나의 library로 남고, workbench가 plane의 tree를 가진다.
 - space는 root plane 하나를 가진다. plane의 card는 tab을 가진 content card이거나, child plane을 가진 group card다. content card의 각 tab은 지금처럼 다른 card와 독립이다.
-- group card는 header에 이름, level `L<n>`(그 plane의 깊이, root plane은 level 0), leader mark, control을 가진다. body는 child plane이고, 그 plane의 corridor만큼 안으로 들어간다.
+- card와 tab 구조는 그대로이고, 더하는 것은 group card뿐이다.
+  - header는 기존 card header design을 따르며, 이름, leader mark, button을 가진다.
+  - level(그 plane의 깊이, root plane은 level 0)은 status에 보고한다.
+  - body는 child plane이고, 그 plane의 corridor만큼 안으로 들어간다.
+  - 이 생각을 처음 보인 mockup은 따라 그릴 design이 아니다.
 - group은 card를 하나 이상 가진다. group의 마지막 card를 닫으면 group card가 닫힌다.
 - child plane이 group header 아래에서 모든 card에 두 축 모두 `minSize`를 줄 수 있는 동안 group card 안을 split할 수 있다. 이를 깨는 split, move, resize는 지금 한 plane에서처럼 거부된다.
 - 각 plane에는 leader가 정확히 하나 있다. leader는 그 plane의 card 하나이며, content card일 수도 group card일 수도 있다.
