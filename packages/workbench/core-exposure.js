@@ -703,7 +703,9 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.boundary.move", ({ axis, line, position }) => {
     const grid = currentGrid();
     if (!grid?.hasBoundary(axis, line)) throw new Error(`no ${axis} boundary at line ${line}`);
-    const moved = grid.moveBoundary(axis, line, position, false);
+    // The group tree moves the whole line and stops where a card would be drawn below its minimum or the groups would lose their form
+    // (docs/spec/groups.md#minimum-size).
+    const moved = currentTree().moveBoundary(axis, line, position, false);
     settle();
     return { position: moved };
   });

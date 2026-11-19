@@ -299,13 +299,15 @@ export class GroupTree {
   attempt(id, operation, change) {
     const before = this.drawnCards();
     const kept = this.snapshot();
-    const grouped = this.groups.length > 0;
     let result;
     try {
       result = change();
-      if (grouped) this.keepForm();
+      // The space holds a group after the change also when the change made the first one.
+      this.keepForm();
       const broken = this.nodes().find((node) => !this.covers(node));
       if (broken) throw new Error(`card ${id} cannot ${operation}: group ${broken.card} would not cover one rectangle`);
+      const breach = this.formBreach();
+      if (breach) throw new Error(`card ${id} cannot ${operation}: ${this.breachText(breach)}`);
       const below = this.belowMinimum(before);
       if (below) throw new Error(`card ${id} cannot ${operation}: ${this.minimumText(below)}`);
     } catch (error) {
@@ -325,6 +327,85 @@ export class GroupTree {
     this.grid.tidy();
     const state = this.grid.toJSON();
     if (Object.keys(state.paidBy).length) this.grid.replace({ ...state, paidBy: {} });
+  }
+
+  /**
+   * The first breach of the form of a space with groups other than a group that does not cover its rectangle, or null: two lines of an
+   * axis at one coordinate around a slot that no card with a px size holds, {axis, line}, the first of them, x before y, or two group cards
+   * that overlap without one holding the other, {groups: [a, b]} in workbench order (docs/spec/groups.md#model).
+   */
+  formBreach() {
+    if (this.groups.length === 0) return null;
+    const state = this.grid.toJSON();
+    for (const [axis, lines, lo, hi, size] of [["x", state.xs, "c0", "c1", "width"], ["y", state.ys, "r0", "r1", "height"]]) {
+      for (let k = 0; k + 1 < lines.length; k++) {
+        const sized = state.cards.some((card) => card[lo] === k && card[hi] === k + 1 && card[size] !== undefined);
+        if (!sized && !(lines[k + 1] > lines[k])) return { axis, line: k };
+      }
+    }
+    const boxes = this.nodes().map((node) => ({ card: node.card, ...this.rectangle(node) }));
+    const holds = (p, q) => p.c0 <= q.c0 && p.c1 >= q.c1 && p.r0 <= q.r0 && p.r1 >= q.r1;
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i], b = boxes[j];
+        const apart = a.c1 <= b.c0 || b.c1 <= a.c0 || a.r1 <= b.r0 || b.r1 <= a.r0;
+        if (!apart && !holds(a, b) && !holds(b, a)) return { groups: [a.card, b.card] };
+      }
+    }
+    return null;
+  }
+
+  /** The text of a breach of formBreach after an operation. */
+  breachText(breach) {
+    return breach.groups ? `groups ${breach.groups[0]} and ${breach.groups[1]} would overlap`
+      : `the ${breach.axis} lines ${breach.line} and ${breach.line + 1} would stand at one coordinate`;
+  }
+
+  /**
+   * Moves the boundary line of axis toward px, as moveBoundary of the grid does across every group, and stops at the last position at
+   * which every content card that the move changes is drawn at least minSize and the form of the space holds (docs/spec/groups.md#minimum-size).
+   * Returns where the boundary stands.
+   */
+  moveBoundary(axis, line, px, allowSnap) {
+    const from = this.grid.boundaryPos(axis, line);
+    const before = this.drawnCards();
+    const kept = this.snapshot();
+    const holds = () => !this.belowMinimum(before) && !this.formBreach() && this.nodes().every((node) => this.covers(node));
+    const moved = this.grid.moveBoundary(axis, line, px, allowSnap);
+    if (holds()) return moved;
+    // The drawn sizes change monotonically along the move, so the last position that keeps them is found by halving the distance between
+    // the start, which keeps them, and the refused position, as the mygo workbench finds it.
+    let good = from, bad = moved;
+    for (let i = 0; i < 40; i++) {
+      const middle = (good + bad) / 2;
+      this.restore(kept);
+      this.grid.moveBoundary(axis, line, middle, false);
+      if (holds()) good = middle;
+      else bad = middle;
+    }
+    this.restore(kept);
+    return this.grid.moveBoundary(axis, line, good, false);
+  }
+
+  /**
+   * Balances the grid; it keeps the arrangement, so every group card keeps its rectangle. A balance that draws a content card that it
+   * changes below its minimum, or that breaks the form of the space, is refused and changes nothing.
+   */
+  balance() {
+    const before = this.drawnCards();
+    const kept = this.snapshot();
+    const refused = (why) => {
+      this.restore(kept);
+      return new Error(`the layout cannot balance: ${why}`);
+    };
+    if (!this.grid.balance()) throw refused("the grid is not a slicing arrangement");
+    this.keepForm();
+    const broken = this.nodes().find((node) => !this.covers(node));
+    if (broken) throw refused(`group ${broken.card} would not cover one rectangle`);
+    const below = this.belowMinimum(before);
+    if (below) throw refused(this.minimumText(below));
+    const breach = this.formBreach();
+    if (breach) throw refused(this.breachText(breach));
   }
 
   /** Runs change and puts everything back, and returns what change returned or throws what it threw. */
@@ -590,13 +671,14 @@ export class GroupTree {
     let broken = null;
     for (const side of sides) {
       if (!this.grid.fill(id, [side])) continue;
-      const kept = this.snapshot();
+      // Only the grid is put back: the nodes of the tree stay the objects that the caller holds.
+      const kept = this.snapshot().state;
       if (this.grid.close(id, [side])) {
         const group = groups.find((node) => !this.covers(node));
         if (!group) return [side];
         broken ??= group.card;
       }
-      this.restore(kept);
+      this.grid.replace(kept);
     }
     if (broken !== null) throw refused(`group ${broken} would not cover one rectangle`);
     if (this.grid.close(id, [])) return [];
@@ -732,9 +814,9 @@ export class GroupTree {
         this.splitRectangle(beside, side, id, data);
       } else {
         // The move closes the card with the sides that closeCell chose on the same state, then lands it beside landing.
-        const kept = this.snapshot();
+        const kept = this.snapshot().state;
         const sides = this.closeCell(id, operation, found.parent);
-        this.restore(kept);
+        this.grid.replace(kept);
         if (!this.grid.move(id, landing, side, sides)) throw refusal();
       }
       if (merged) this.unmerge(found.node, merged);
@@ -874,6 +956,13 @@ export function readGroupTree({ state, groups, leader, lastCard }, options, grid
       const used = new Set(state.cards.flatMap((card) => [card[lo], card[hi]]));
       const unused = lines.findIndex((_, k) => !used.has(k));
       if (unused >= 0) throw new Error(`layout with groups stores the ${axis} line ${unused}, which no card uses; a layout with groups keeps none`);
+    }
+    const breach = tree.formBreach();
+    if (breach?.groups) {
+      throw new Error(`layout with groups stores the groups ${breach.groups[0]} and ${breach.groups[1]}, which overlap; two groups are disjoint or one holds the other`);
+    }
+    if (breach) {
+      throw new Error(`layout with groups stores the ${breach.axis} lines ${breach.line} and ${breach.line + 1} at one coordinate; a layout with groups keeps none`);
     }
   }
   const refused = new Error(`layout stores lastCard ${JSON.stringify(lastCard) ?? "undefined"}, which is not the largest issued card number`);

@@ -14022,6 +14022,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/group-tree.js", symbol: "splitRectangle(node, side, id, data)" },
       { file: "packages/workbench/group-tree.js", symbol: "dropAt(x, y, options)" },
       { file: "packages/workbench/group-tree.js", symbol: "closeCell(id, op, parent = this.parentOf(id))" },
+      { file: "packages/workbench/group-tree.js", symbol: "formBreach()" },
+      { file: "packages/workbench/group-tree.js", symbol: "moveBoundary(axis, line, px, allowSnap)" },
       { file: "packages/workbench/stored-layout.js", symbol: "readGroupTree(kept, { gap: 0, minSize: 0, head: 0 }, new Soksak());" },
       { file: "packages/workbench/plane.js", symbol: "tree = readGroupTree(kept, treeOptions(), grid);" },
       { file: "packages/workbench/plane.js", symbol: "const { groups, leader, lastCard } = tree.stored();" },
@@ -14035,6 +14037,8 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/workbench/test/groups-cases.test.mjs", id: "groups: ${kase.name}" },
       { file: "packages/workbench/test/stored-groups.test.mjs", id: "the stored check refuses a layout without groups and a group that is not one rectangle" },
+      { file: "packages/workbench/test/stored-groups.test.mjs", id: "the stored check refuses a layout with groups whose two lines stand at one coordinate" },
+      { file: "packages/workbench/test/group-properties.test.mjs", id: "group form holds after random operations, seed ${seed}" },
       { file: "packages/workbench/test/stored-groups.test.mjs", id: "a new space stores no groups, the first content card as its leader and a lastCard" },
       { file: "packages/workbench/test/stored-groups.test.mjs", id: "the plane writes back the group tree it opened and issues a split card from lastCard" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.group.create groups a content card with a new card and answers the same when applied again" },
