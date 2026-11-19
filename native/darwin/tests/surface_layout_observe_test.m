@@ -327,6 +327,42 @@ static void checkPressEndsHold(void) {
     [window release];
 }
 
+// A key up and a modifier change end no hold: the key up of the keystroke that changed the layout follows its key down within a
+// keystroke, so the transaction stays open until its peer presents or the next press or key down comes. Both are still told to the
+// observers of the actions of the user (docs/spec/native-surfaces.md#layout-transaction).
+static void checkKeyUpLeavesTheHold(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 300, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    SPHeldPresentation *stalled = [[[SPHeldPresentation alloc] initWithFrame:NSMakeRect(0, 0, 100, 100)] autorelease];
+    [window.contentView addSubview:stalled];
+    __block BOOL presented = NO;
+    surfaceLayoutBegin(window, 81, ^(int allowed) {});
+    check(surfaceLayoutJoinView(window, 81, stalled, ^{ presented = YES; }), @"the peer joins the transaction");
+    check(surfaceLayoutCommit(window, 81), @"the commit waits for the peer");
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyUp location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
+        timestamp:0 windowNumber:window.windowNumber context:nil characters:@"=" charactersIgnoringModifiers:@"=" isARepeat:NO
+        keyCode:24]];
+    check(surfaceLayoutIsPreparing(window) && surfaceLayoutViewJoinCount(window) == 1,
+        [NSString stringWithFormat:@"a key up leaves the hold standing (preparing %d, joins %lu)", surfaceLayoutIsPreparing(window),
+            (unsigned long)surfaceLayoutViewJoinCount(window)]);
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeFlagsChanged location:NSZeroPoint modifierFlags:0 timestamp:0
+        windowNumber:window.windowNumber context:nil characters:@"" charactersIgnoringModifiers:@"" isARepeat:NO keyCode:55]];
+    check(surfaceLayoutIsPreparing(window) && surfaceLayoutViewJoinCount(window) == 1,
+        [NSString stringWithFormat:@"a modifier change leaves the hold standing (preparing %d, joins %lu)",
+            surfaceLayoutIsPreparing(window), (unsigned long)surfaceLayoutViewJoinCount(window)]);
+    [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagCommand
+        timestamp:0 windowNumber:window.windowNumber context:nil characters:@"=" charactersIgnoringModifiers:@"=" isARepeat:NO
+        keyCode:24]];
+    check(!surfaceLayoutIsPreparing(window) && surfaceLayoutViewJoinCount(window) == 0, @"the next key down ends the hold");
+    check(!presented, @"the peer reports no presentation");
+    runQueue();
+    surfaceLayoutAbandonView(window, stalled);
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
 // The actions of the user reach every subscriber through one device at the level of the application: each press and each key
 // event that reaches -[NSApplication sendEvent:], a synthetic one and a modifier change included, is told once before any monitor
 // sees it, a drag is not told, and an event that the hold kept is not told again when it comes back
@@ -504,6 +540,8 @@ int main(void) { @autoreleasepool {
     checkHeldInputEnds();
     resetOwners();
     checkPressEndsHold();
+    resetOwners();
+    checkKeyUpLeavesTheHold();
     resetOwners();
     checkActionsAreToldOnce();
     resetOwners();

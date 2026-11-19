@@ -310,6 +310,17 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F973",
+    implementation: [
+      { file: "native/darwin/src/surface_layout.m", symbol: "if (event.type != NSEventTypeKeyUp && event.type != NSEventTypeFlagsChanged) endHoldByInput();" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "checkKeyUpLeavesTheHold" },
+    ],
+    expected: "A press or a key down ends the layout hold; a key up or a modifier change ends none.",
+    levels: ["unit"],
+  },
+  {
     id: "F972",
     implementation: [
       { file: "scripts/platform/darwin/prepare-app-bundle.mjs", symbol: "function workingDirectory(pid, run) {" },
