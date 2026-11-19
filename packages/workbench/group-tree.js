@@ -502,6 +502,11 @@ export class GroupTree {
     if (this.groups.length === 0) {
       if (arrange && !this.grid.arrange("even")) throw new Error("the layout cannot balance: no equal grid keeps every card at its minimum size");
       if (!arrange && !this.grid.balance()) throw new Error("the layout cannot balance: the grid is not a slicing arrangement");
+      // The even arrangement can add an empty card, and lastCard stays the largest issued card number (docs/spec/groups.md#storage).
+      for (const card of this.grid.cards) {
+        const n = cardNumber(card.id);
+        if (n !== null) this.last = Math.max(this.last, n);
+      }
       return;
     }
     const heads = new Array(this.grid.lines("y").length - 1).fill(0);
