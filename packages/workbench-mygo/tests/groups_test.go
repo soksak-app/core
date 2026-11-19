@@ -104,9 +104,20 @@ func TestAGroupCreateWrapsTheCardAndFocusesTheNewCard(t *testing.T) {
 	if layout["leader"] != "card-2" || layout["lastCard"] != float64(3) {
 		t.Fatalf("core.layout holds the leader %v and lastCard %v", layout["leader"], layout["lastCard"])
 	}
-	want := []any{map[string]any{"card": "card-2", "name": "그룹 1", "level": float64(1), "leader": "main", "members": []any{"main", "card-3"}}}
-	if !reflect.DeepEqual(layout["groups"], want) {
-		t.Fatalf("core.layout holds the groups %v, want %v", layout["groups"], want)
+	// core.layout reports the stored tree, whose box holds the group card with its name and leader.
+	if _, has := layout["groups"]; has {
+		t.Fatalf("core.layout reports groups beside its tree: %v", layout["groups"])
+	}
+	box := treeBox(layout["state"].(map[string]any)["root"].(map[string]any), "card-2")
+	if box == nil || !reflect.DeepEqual(box["data"], map[string]any{"name": "그룹 1", "leader": "main"}) {
+		t.Fatalf("core.layout holds the box %v of card-2", box)
+	}
+	members := []string{}
+	for _, card := range treeCards(box["inner"].(map[string]any)) {
+		members = append(members, card["card"].(string))
+	}
+	if !slices.Equal(members, []string{"main", "card-3"}) {
+		t.Fatalf("the box of card-2 holds %v", members)
 	}
 	if cards := len(treeCards(layout["state"].(map[string]any)["root"].(map[string]any))); cards != 4 {
 		t.Fatalf("the grid holds %d cards, not main, card-3 and the two window sidebars", cards)
@@ -578,10 +589,8 @@ func TestOpenTowardASideFromAGroupMemberStaysInsideTheGroup(t *testing.T) {
 	if strings.Contains(outside, `"`+result.Card+`"`) {
 		t.Fatalf("core.layout.open from %s answered %s, the card outside the group %s", created.Card, opened, outside)
 	}
-	for _, group := range f.read("core.layout")["groups"].([]any) {
-		entry := group.(map[string]any)
-		if entry["card"] == created.Group && !slices.Contains(entry["members"].([]any), any(result.Card)) {
-			t.Fatalf("the new card %s is not a member of %s: %v", result.Card, created.Group, entry["members"])
-		}
+	box := treeBox(f.read("core.layout")["state"].(map[string]any)["root"].(map[string]any), created.Group)
+	if box == nil || !slices.ContainsFunc(treeCards(box["inner"].(map[string]any)), func(card map[string]any) bool { return card["card"] == result.Card }) {
+		t.Fatalf("the new card %s is not a member of %s: %v", result.Card, created.Group, box)
 	}
 }

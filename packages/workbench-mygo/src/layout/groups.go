@@ -1699,10 +1699,8 @@ func (t *GroupTree) Stored() (State, *string, int) {
 	return t.grid.ToJSON(), leader, t.last
 }
 
-// Reported is the group tree that core.layout reports: the stored form with the level of each node.
-func (t *GroupTree) Reported() []any { return t.nodes(t.roots, 0, true) }
-
-// ReportedMembers is the members of the group card id in the form of Reported.
+// ReportedMembers is the members of the group card id as core.card.get reports them: each content card by its id, and each group card
+// as {card, name, level, leader, members}.
 func (t *GroupTree) ReportedMembers(id string) []any {
 	path, n, _ := t.find(id) // silent: an id that is no card has no members.
 	if n == nil || !n.group {

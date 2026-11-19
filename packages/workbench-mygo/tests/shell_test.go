@@ -630,6 +630,25 @@ func treeCards(root map[string]any) []map[string]any {
 	return cards
 }
 
+// treeBox is the box id in a stored tree whose root node is root, or nil.
+func treeBox(root map[string]any, id string) map[string]any {
+	if root["box"] == id {
+		return root
+	}
+	if inner, ok := root["inner"].(map[string]any); ok {
+		if box := treeBox(inner, id); box != nil {
+			return box
+		}
+	}
+	kids, _ := root["kids"].([]any) // silent: a card or a box has no kids.
+	for _, kid := range kids {
+		if box := treeBox(kid.(map[string]any)["node"].(map[string]any), id); box != nil {
+			return box
+		}
+	}
+	return nil
+}
+
 func newShell(t testing.TB, stored *storedHost) *shellFixture {
 	t.Helper()
 	f := startedShell(t, stored)
