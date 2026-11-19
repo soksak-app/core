@@ -10,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -561,6 +562,46 @@ func TestEveryGroupCardThatHoldsTheFocusMarksItsFrame(t *testing.T) {
 	check("card-1 focused at the seam", map[string]color.RGBA{"outside card-6 left": marked(1), "below card-6": marked(1)})
 }
 
+// The name of a group stands at the start of the header, in the place of the tab strip where the first tab of a content card stands,
+// and not in the middle of the room that the buttons leave (docs/spec/groups.md#headers).
+func TestAGroupNameStandsAtTheStartOfItsHeader(t *testing.T) {
+	f := groupedShell(t)
+	f.settle()
+	var label *ui.ElementNode
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for i := range nodes {
+			if exposed, ok := nodes[i].Key.(workbench.Exposed); ok && exposed.Name == "core.group.name" && exposed.Item == "card-2" {
+				label = &nodes[i]
+			}
+			walk(nodes[i].Children)
+		}
+	}
+	walk(f.tester.ElementTree())
+	if label == nil {
+		t.Fatal("the group card card-2 shows no name")
+	}
+	// The ink of the name is every point of its middle row whose color differs from the end of the name, which no text reaches.
+	box := label.Bounds
+	y := box.Y + box.H/2
+	ground := f.pixelOf(box.X+box.W-1, y)
+	first, last := float32(-1), float32(-1)
+	for x := box.X; x < box.X+box.W; x++ {
+		if !near(f.pixelOf(x, y), ground) {
+			if first < 0 {
+				first = x
+			}
+			last = x
+		}
+	}
+	if first < 0 {
+		t.Fatalf("the name %+v shows no text", box)
+	}
+	if left, right := first-box.X, box.X+box.W-last; left >= right {
+		t.Fatalf("the name text runs from %v to %v in the name %+v: %v from its start and %v from its end", first, last, box, left, right)
+	}
+}
+
 // A divider draws its grip at the center of each drawn stretch that holds the grip, and a stretch shorter than the grip draws none, so
 // no grip reaches into a header: the line between the members of a group card nested at the top of another one is cut by both headers
 // and keeps a stretch of one gap between them (docs/spec/groups.md#drawing).
@@ -587,4 +628,93 @@ func TestAGripStandsOnlyOnAStretchThatHoldsIt(t *testing.T) {
 	if got, beside := f.pixelOf(x, body), f.pixelOf(x, body-20); near(got, beside) {
 		t.Errorf("the stretch of the line beside the bodies draws no grip at its center %v,%v: %v", x, body, got)
 	}
+}
+
+// The rename field of a group header is the rename field of a project or a space tab: its height, padding, outline and selection come
+// from the tokens of the theme, it takes the place of the name with its text where the text of the name started and its end where the
+// name ended, and the header keeps its height (docs/spec/groups.md#headers).
+func TestTheRenameFieldOfAGroupTakesThePlaceOfItsName(t *testing.T) {
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Chrome map[string]string `json:"chrome"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	token := func(name string) float32 {
+		value, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSuffix(declared.Chrome[name], "px"), "%"), 32)
+		if err != nil {
+			t.Fatalf("the token %s is %q: %v", name, declared.Chrome[name], err)
+		}
+		return float32(value)
+	}
+	padX, rootPad, rootH, headH := token("tab-pad-x"), token("bar-tab-root-pad"), token("bar-tab-root-h"), token("head-h")
+	f := groupedShell(t)
+	f.settle()
+	palette := f.palette()
+	name, header := f.box("core.group.name", "card-2"), f.box("core.group.header", "card-2")
+	// The ink of a text row runs from the first to the last point that stands nearer the text color than the ground of the row: the
+	// header for the name, and the selection, which covers the whole value when the field opens, for the field.
+	distance := func(a, b color.RGBA) int {
+		d := func(x, y uint8) int { return (int(x) - int(y)) * (int(x) - int(y)) }
+		return d(a.R, b.R) + d(a.G, b.G) + d(a.B, b.B)
+	}
+	ink := func(box ui.Rect, ground color.RGBA) float32 {
+		y := box.Y + box.H/2
+		first, last := float32(-1), float32(-1)
+		for x := box.X; x < box.X+box.W/2; x++ {
+			if p := f.pixelOf(x, y); distance(p, opaque(palette.Fg)) < distance(p, ground) {
+				if first < 0 {
+					first = x
+				}
+				last = x
+			}
+		}
+		return last - first
+	}
+	before := ink(name, f.pixelOf(name.X+name.W-2, name.Y+name.H/2))
+	f.run(t, "core.rename.begin", `{"kind": "group", "id": "card-2"}`)
+	f.settle()
+	field, after := f.box("core.rename.input", ""), f.box("core.group.header", "card-2")
+	border := palette.BorderWidth
+	if after != header || header.H != headH {
+		t.Errorf("the header %+v of %v points becomes %+v while the name is renamed", header, headH, after)
+	}
+	if want := (ui.Rect{X: name.X + padX - border - rootPad, Y: header.Y + (header.H-border-rootH)/2, W: name.X + name.W - (name.X + padX - border - rootPad), H: rootH}); field != want {
+		t.Errorf("the rename field is %+v for the name %+v, want %+v: its text where the text of the name started", field, name, want)
+	}
+	// The scan of the field starts inside its outline.
+	inner := f.box("core.rename.input", "")
+	inner.X, inner.W = inner.X+palette.BorderWidth+1, inner.W-2*palette.BorderWidth-2
+	if during := ink(inner, opaque(mixed(palette.Focus, palette.Bg, token("rename-selection-mix")/100))); math.Abs(float64(during-before)) > 1 {
+		t.Errorf("the text of the name is %v wide and %v in the rename field: the field does not keep the size of the name", before, during)
+	}
+	// The field selects its whole value when it opens; the selection is the color that covers most of the start of its text row, which
+	// the name of two letters and more fills.
+	counts := map[color.RGBA]int{}
+	y := field.Y + field.H/2
+	for x := field.X + border + rootPad; x < field.X+border+rootPad+16; x++ {
+		counts[f.pixelOf(x, y)]++
+	}
+	want := opaque(mixed(palette.Focus, palette.Bg, token("rename-selection-mix")/100))
+	most, seen := color.RGBA{}, 0
+	for c, n := range counts {
+		if n > seen {
+			most, seen = c, n
+		}
+	}
+	if !near(most, want) {
+		t.Errorf("the selection of the rename field is %v, want the focus color mixed into bg %v", most, want)
+	}
+}
+
+// mixed is a color with share of color and the rest of base, as color-mix in srgb.
+func mixed(c, base ui.Color, share float32) ui.Color {
+	blend := func(a, b uint8) uint8 {
+		return uint8(math.Round(float64(a)*float64(share) + float64(b)*float64(1-share)))
+	}
+	return ui.Color{R: blend(c.R, base.R), G: blend(c.G, base.G), B: blend(c.B, base.B), A: 255}
 }

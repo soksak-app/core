@@ -44,7 +44,10 @@ func (s *Shell) newLayout() (json.RawMessage, error) {
 				declared := item.(map[string]any)
 				plugin, _ := declared["plugin"].(string) // silent: the environment test holds the form of these tabs.
 				title, _ := declared["title"].(string)   // silent: the environment test holds the form of these tabs.
-				made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: plugin, Title: title})
+				// A first tab of a space has no source tab, so its origin is null, written with the layout that creates it
+				// (docs/spec/projects.md#tab-origin).
+				made = append(made, layout.Tab{ID: s.issueTab(made), Plugin: plugin, Title: title,
+					Rest: map[string]json.RawMessage{"origin": json.RawMessage(`{"directory":null}`)}})
 			}
 			card["data"] = tabData(made, made[0].ID)
 		}

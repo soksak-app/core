@@ -66,8 +66,8 @@ import { onTabReports, reportTabState, reportTitle, setMountedTab, settleLeftTab
 
 /* One plane. This document does not know how the plane renders and only receives the render completion. */
 import {
-  activeTab, currentGrid, nameWindow, onLayout, onRender, plane, redrawActivities, setActivityReader, setGap, settle, settleModifiedTabsToClose,
-  tabsOf,
+  activeTab, currentGrid, groupRenames, nameWindow, onLayout, onRender, plane, redrawActivities, setActivityReader, setGap, settle,
+  settleModifiedTabsToClose, tabsOf, useGroupRename,
 } from "./plane.js";
 import { observePlaneGrid } from "./device-grid.js";
 
@@ -501,7 +501,8 @@ function act(name, title, on, command, params, expose) {
 }
 
 const barTabs = createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw: () => drawBars(), keyboardOwed, changed: () => coreChanged(),
-  activities: activityState });
+  activities: activityState, groups: groupRenames });
+useGroupRename(barTabs.renames);
 // The plane draws the activities of the tabs and the group cards of the shown space (docs/spec/activity.md#drawing).
 setActivityReader(() => {
   const shown = projects.inLibrary() ? null : projects.active();

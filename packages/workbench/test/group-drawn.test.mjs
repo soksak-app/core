@@ -113,6 +113,38 @@ test("at the seam every line between two boxes and under a header is one line of
   near(shown.get("card-1").y, 3 * HEAD, "card-1 under the three headers of card-7 shown fullscreen");
 });
 
+/**
+ * card-6 holds the nested group card card-5, card-1 beside card-2, above card-3 across both columns; card-4 stands outside on the right.
+ * The line between card-1 and card-2 runs through the header of card-5, and its rule across the plane has its middle in card-3, inside
+ * card-6 but outside card-5.
+ */
+function nestedAcross() {
+  const grid = new Soksak(undefined, { gap: GAP, minSize: MIN, width: W, height: H });
+  const layout = {
+    state: { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 0.4, 1], cards: [
+      { id: "card-1", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "card-2", c0: 1, c1: 2, r0: 0, r1: 1 },
+      { id: "card-3", c0: 0, c1: 2, r0: 1, r1: 2 }, { id: "card-4", c0: 2, c1: 3, r0: 0, r1: 2 }] },
+    groups: [{ card: "card-6", name: "그룹 1", leader: "card-5", members: [
+      { card: "card-5", name: "그룹 2", leader: "card-1", members: ["card-1", "card-2"] }, "card-3"] }],
+    leader: "card-6", lastCard: 6,
+  };
+  return readGroupTree(layout, { gap: GAP, minSize: MIN, head: HEAD }, grid);
+}
+
+test("a rule of one point that runs through a nested group header is cut at that header", () => {
+  const tree = nestedAcross();
+  const heads = ["card-6", "card-5"].map((id) => ({ id, head: tree.headRect(id) }));
+  const rules = tree.drawnRules(tree.grid.rules());
+  // A rule crosses a header when the line stands inside the width of the header and its stretch overlaps the height of the header.
+  const crossing = rules.flatMap((rule) => heads.filter(({ head }) => {
+    const [a0, a1, s0, s1] = rule.axis === "y" ? [rule.y, rule.y + rule.h, rule.x, rule.x + rule.w] : [rule.x, rule.x + rule.w, rule.y, rule.y + rule.h];
+    const [h0, h1, t0, t1] = rule.axis === "y" ? [head.y, head.y + head.h, head.x, head.x + head.w] : [head.x, head.x + head.w, head.y, head.y + head.h];
+    return a0 >= h0 && a1 <= h1 && Math.min(s1, t1) - Math.max(s0, t0) > 0;
+  }).map(({ id }) => `${rule.key} crosses the header of ${id}`));
+  assert.deepEqual(crossing, [], "a rule crosses a group header");
+  assert.ok(rules.some((rule) => rule.axis === "x" && rule.line === 1), "the rule of line 1 is drawn below the header of card-5");
+});
+
 /** The length of the grip of a divider along its line, the chrome metric sp-grip-length. */
 const GRIP = 24;
 

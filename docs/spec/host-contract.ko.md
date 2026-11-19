@@ -39,7 +39,7 @@ fn invalid_json_closes_connection() {
 
 ## 애플리케이션 메뉴
 
-두 호스트는 하나의 표로 애플리케이션 메뉴를 구성하므로 한쪽에만 있는 메뉴 항목은 결함이다. `title` 항목의 제목은 선택된 언어에서 온다. `system` 항목은 프레임워크가 제공하는 제목과 단축키를 유지한다(번들이 표의 언어들을 현지화로 선언하므로 시스템이 관리하는 제목도 같은 언어를 따른다). `system` 행의 키는 프레임워크가 제공하는 단축키이며 window check는 그 키를 비교하고 제목은 있는지만 확인한다. AppKit은 메뉴를 validate할 때마다 `undo:`·`redo:` action 항목의 제목을 undo manager에서 다시 정하므로 undo와 redo는 `system` 항목이다. 키는 `host.menu` 보고 형식을 쓴다. 지원 언어는 표의 언어 열이다 — 현재 `ko`·`en` 이며 새 언어는 워크벤치의 언어 선언과 함께 열을 추가해 확장한다. 언어는 일반 설정 `language`다. `auto` 는 시스템 언어의 주 태그를 지원 집합에서 찾고 없는 시스템 언어는 기본 언어 `en` 으로 내려간다. 페이지는 처음 사용 전과 변경마다 유효 언어를 호스트에 보낸다(`set_menu_language`). 그 전에 호스트는 같은 대응과 대비로 시스템 언어에서 메뉴를 구성한다.
+두 호스트는 하나의 표로 애플리케이션 메뉴를 구성하므로 한쪽에만 있는 메뉴 항목은 결함이다. `title` 항목의 제목은 선택된 언어에서 온다. `system` 항목은 프레임워크가 제공하는 제목과 단축키를 유지한다(번들이 표의 언어들을 현지화로 선언하므로 시스템이 관리하는 제목도 같은 언어를 따른다). `system` 행의 키는 프레임워크가 제공하는 단축키이며 window check는 그 키를 비교하고 제목은 있는지만 확인한다. AppKit은 메뉴를 validate할 때마다 `undo:`·`redo:` action 항목의 제목을 undo manager에서 다시 정하므로 undo와 redo는 `system` 항목이다. 전체 화면 항목은 각 framework의 토글 항목이며, 단축키 `ctrl+cmd+f`로 AppKit의 `toggleFullScreen:` action을 실행하고, 전체 화면에 들어가기만 하는 항목이 아니다. 키는 `host.menu` 보고 형식을 쓴다. 지원 언어는 표의 언어 열이다 — 현재 `ko`·`en` 이며 새 언어는 워크벤치의 언어 선언과 함께 열을 추가해 확장한다. 언어는 일반 설정 `language`다. `auto` 는 시스템 언어의 주 태그를 지원 집합에서 찾고 없는 시스템 언어는 기본 언어 `en` 으로 내려간다. 페이지는 처음 사용 전과 변경마다 유효 언어를 호스트에 보낸다(`set_menu_language`). 그 전에 호스트는 같은 대응과 대비로 시스템 언어에서 메뉴를 구성한다.
 
 메뉴:
 
@@ -1499,6 +1499,8 @@ Wails와 Tauri 호스트의 메인 페이지와 mygo 호스트의 workbench는 �
 | `layout.open.refusal-changes-nothing` | 알 수 없는 카드, active가 아닌 space의 카드, 알 수 없는 plugin, `surface.params`에 맞지 않는 `params`, `plugin`과 `path`를 둘 다 주거나 둘 다 주지 않은 것, 네 쪽 중 하나가 아닌 side, `side` 쪽으로 나눌 수 없는 카드는 각각 그 오류로 실패하고 `layout`을 그대로 둔다. |
 | `layout.current.resolves-at-each-application` | `card: "current"`는 적용마다 focus된 카드를, `tab: "current"`는 focus된 카드의 active 탭을 지정한다. 그래서 두 번 적용한 `core.layout.open {card: "current", side, plugin}`은 focus된 카드를 나누고, 그다음 첫 적용이 focus를 준 새 카드를 나눈다. |
 | `layout.select.twice-is-the-same` | `core.layout.select {tab}`은 탭을 active로 하고 그 카드에 focus를 주며 `{card, tab}`으로 답한다. 두 번째 적용은 같게 답하고 아무것도 바꾸지 않는다. |
+| `layout.move.focuses-the-moved-card` | layout을 바꾸는 `core.card.move`는 옮긴 카드에 focus를 주고, group card의 move는 그 안의 첫 content card에 focus를 준다. 아무것도 바꾸지 않는 두 번째 적용은 같은 `{card}`로 답하고 focus를 그대로 둔다([focus](groups.ko.md#focus)). |
+| `group.create.request-after-the-layout` | drawn minimum이 group을 거절하는 card의 `core.group.create`는 1에서 128 글자의 string이 아닌 `request`와 알 수 없는 plugin에도 drawn minimum의 거절을 답하고, layout이 group을 받는 card의 잘못된 `request`는 `core.group.create: request must be a string of 1 to 128 characters`로 거절된다([command](groups.md#commands)). |
 | `layout.move.into-a-card-once` | 두 번 적용한 `core.layout.move {tab, card}`는 다른 카드의 탭을 `card`로 한 번 옮겨 그 마지막 탭으로 두고, 그 탭은 식별자와 `params`를 지킨 채 focus된 카드에서 active다. 두 적용은 `{card, tab}`로 답하고, `card`가 이미 담은 탭은 선택되고 어디로도 옮겨지지 않는다. |
 | `layout.move.beside-a-card-once` | 두 번 적용한 `core.layout.move {tab, card, side}`는 `card`를 `side` 쪽으로 한 번 나눠 그 탭을 담은 새 카드를 만들고, 카드의 유일한 탭을 다른 카드의 한 변 쪽으로 옮기면 그 카드가 식별자와 함께 옮겨진다. 두 적용은 같은 `{card, tab}`로 답하고 같은 `layout`을 남긴다. |
 | `layout.move.refusal-changes-nothing` | 알 수 없는 탭, active가 아닌 space의 탭, 알 수 없는 카드, `card`의 유일한 탭을 `card`의 한 변 쪽으로 옮기는 것은 그 오류로 실패하고 `layout`을 남긴다. |

@@ -714,6 +714,101 @@ function beginTabDrag(e, cardId, tabId) {
   el.addEventListener("pointercancel", onUp);
 }
 
+/**
+ * The rectangle that the move of the dragged group card groupId to hit gives it, or undefined when the layout refuses the move; the
+ * move runs on the group tree and the tree puts the grid back (probe).
+ */
+function groupDropRect(groupId, hit) {
+  if (tree.checkMove(groupId, hit.id, hit.zone)) return undefined;
+  return tree.probe(() => {
+    try {
+      tree.move(groupId, hit.id, hit.zone);
+      return tree.rect(groupId);
+    } catch {
+      // A refused move is a drop with no slot, which the caller reads as undefined; the release then changes nothing.
+      return undefined;
+    }
+  });
+}
+
+/**
+ * Starts the drag of the group card groupId by a press on its header (docs/spec/groups.md#moving-and-dropping). The drop resolves
+ * without the group card and the cards inside it, the preview is the rectangle that the move gives the group card, core.drag reports
+ * the drag with the tab "", and the release runs core.card.move toward the drop; a release with no zone changes nothing.
+ */
+function beginGroupDrag(e, header, groupId) {
+  e.preventDefault();
+  const band = dropBands();
+  tabDrag = { cardId: groupId, tabId: "", from: { x: e.clientX, y: e.clientY }, moved: false, hit: null };
+  header.setPointerCapture(e.pointerId);
+  dragChanged();
+  const onMove = (ev) => {
+    if (!tabDrag) return;
+    if (Math.hypot(ev.clientX - tabDrag.from.x, ev.clientY - tabDrag.from.y) > 4) tabDrag.moved = true;
+    if (!tabDrag.moved) return;
+    if (!tabDrag.stood) { tabDrag.stood = true; restoreFullscreen(); standIn(true); }
+    const host = plane.getBoundingClientRect();
+    const hit = tree.dropAt(ev.clientX - host.left, ev.clientY - host.top, { headerPx: band.headerPx, footerPx: band.footerPx, without: groupId });
+    tabDrag.hit = hit && !isPlace(hit.card) ? { id: hit.card, zone: hit.zone } : null;
+    const rect = tabDrag.hit ? groupDropRect(groupId, tabDrag.hit) : undefined;
+    if (!rect) {
+      tabDrag.hit = null;
+      hideDrop();
+    } else {
+      showDropRect(rect);
+    }
+    dragChanged();
+  };
+  const onUp = (ev) => {
+    if (!tabDrag) return;
+    if (header.hasPointerCapture(ev.pointerId)) header.releasePointerCapture(ev.pointerId);
+    const drag = tabDrag;
+    tabDrag = null;
+    hideDrop();
+    if (drag.stood) standIn(false);
+    header.removeEventListener("pointermove", onMove);
+    header.removeEventListener("pointerup", onUp);
+    header.removeEventListener("pointercancel", onUp);
+    dragChanged();
+    if (drag.moved && drag.hit) return run("core.card.move", { card: groupId, target: drag.hit.id, side: drag.hit.zone });
+    settle();
+  };
+  header.addEventListener("pointermove", onMove);
+  header.addEventListener("pointerup", onUp);
+  header.addEventListener("pointercancel", onUp);
+}
+
+// A press on the header of a group card outside its buttons drags the group card, and a double-click on its name renames the group
+// (docs/spec/groups.md#headers). The plane takes both for every group header, which group-cards.js draws.
+plane.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || !tree) return;
+  const header = e.target.closest?.(".group__head");
+  if (!header || e.target.closest(".chrome__acts, .chrome__more, input")) return;
+  beginGroupDrag(e, header, header.closest(".group").dataset.groupCard);
+});
+plane.addEventListener("dblclick", (e) => {
+  const name = e.target.closest?.(".group__name");
+  if (name) run("core.rename.begin", { kind: "group", id: name.closest(".group").dataset.groupCard });
+});
+
+/* The rename of the bars, whose field the header of a renamed group card shows (useGroupRename). */
+let groupRename = { state: () => null, field: () => null };
+
+/** Connects the rename of the bars, renames of bar-tabs.js, so the header of a renamed group card shows its field. */
+export function useGroupRename(renames) {
+  groupRename = renames;
+}
+
+/** The group cards of the shown space for the rename of the kind group of bar-tabs.js (docs/spec/groups.md#headers). */
+export const groupRenames = {
+  name(id) {
+    if (!tree?.isGroup(id)) throw new Error(`no group ${id}`);
+    return tree.groupRecord(id).name;
+  },
+  rename: (id, name) => renameGroup(id, name),
+  redraw: () => settle(),
+};
+
 /* ── Picker layer ──────────────────────────────────────────────────────────
    A layer is not a card, so it does not affect the layout and Soksak does not recognize it.
    When the layout changes, the reference position of the layer becomes invalid, so settle closes it first.     */
@@ -965,6 +1060,11 @@ export function dropHit(x, y, fromId, band) {
 function showDrop(fromId, hit) {
   const half = hit && !isPlace(hit.id) ? dropRect(fromId, hit) : undefined;
   if (!half) { hideDrop(); return null; }
+  return showDropRect(half);
+}
+
+/** Draws the drop preview at the rectangle half of the plane and returns it. */
+function showDropRect(half) {
   dropPreview = { x: half.x, y: half.y, w: half.w, h: half.h };
   // The preview must be drawn over the surface. When there is a host, it is drawn as a native shape — the fill is
   // translucent, so a web view cannot compose it over a surface. The CSS of this document decides the shape, and its computed
@@ -1681,6 +1781,9 @@ function build(kept) {
       rules: () => tree.drawnRules(grid.rules()),
       dividers: () => tree.drawnDividers(grid.dividers(), gripMetrics().gripLength),
     },
+    // The document holds the cards in workbench order, so the lists of the elements and the Tab key follow it; drawGroupCards puts
+    // each group card before the cards inside it (docs/spec/groups.md#model).
+    order: () => tree.order().filter(({ node }) => !node).map(({ id }) => id),
     // A stretch of a divider too short for its grip draws none, which the stylesheet reads from data-grip (docs/spec/groups.md#drawing).
     updateDivider: (el, divider) => {
       const grip = String(divider.grip);
@@ -1725,7 +1828,8 @@ function build(kept) {
       }
       keepHiddenSidebars();
       const fullscreen = view.fullscreenCard;
-      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId });
+      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven(), focused: focusedId,
+        renaming: groupRename.state(), renameField: () => groupRename.field() });
       drawActivities();
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
@@ -2565,8 +2669,10 @@ export function layoutDescription() {
         return { card: member.id, size, frame: frameOf(member.id), leader, group: { name, level: depth, leader: lead, root: level(member.node) } };
       }
       const card = grid.card(member.id);
+      // A content card node carries parent only inside a group card and leader only on the leader of its level
+      // (docs/spec/exposure.md#window-snapshot).
       return {
-        card: card.id, size, frame: frameOf(card.id), parent: parent ? parent.card : null, leader,
+        card: card.id, size, frame: frameOf(card.id), ...(parent ? { parent: parent.card } : {}), ...(leader ? { leader } : {}),
         tabs: tabsOf(card).map((t) => ({
           // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
           tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
@@ -2748,10 +2854,10 @@ export const newGroupRequest = () => issueId("request", (id) => groupRequests.ge
  * group stands (docs/spec/groups.md#idempotency).
  */
 export function createGroup(id, side, kind, params, request) {
-  if (request !== undefined && (typeof request !== "string" || request.length === 0 || [...request].length > 128)) {
-    throw new Error("core.group.create: request must be a string of 1 to 128 characters");
-  }
-  const answered = request === undefined ? undefined : groupRequests.get(heldSpace)?.get(request);
+  // A request that is no string of 1 to 128 characters is refused after the layout and the drawn minimum, in the order of the refusals
+  // (docs/spec/groups.md#commands); no answer is kept under such a request, so it finds none.
+  const validRequest = request === undefined || (typeof request === "string" && request.length > 0 && [...request].length <= 128);
+  const answered = request === undefined || !validRequest ? undefined : groupRequests.get(heldSpace)?.get(request);
   if (answered) return answered;
   if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
   const card = treeCard(id);
@@ -2768,6 +2874,7 @@ export function createGroup(id, side, kind, params, request) {
     if (found) return { group: parent.card, card: other, tab: found.id };
   }
   tree.probe(() => tree.create(card, side, undefined, splitsEven()));
+  if (!validRequest) throw new Error("core.group.create: request must be a string of 1 to 128 characters");
   knownPlugin(kind);
   const wanted = checkTabParams(kind, plugin(kind).params, params);
   const t = newTab(kind, wanted, sourceTabOf(card), "split");
@@ -2832,8 +2939,10 @@ export function moveCard(id, target, side) {
   const card = treeCard(id);
   const to = treeCard(target);
   layoutChangeable(card);
-  tree.move(card, to, side);
-  settle();
+  // A move that changes the layout focuses the moved card, as the drop of the only tab of a card does; a move to where the card
+  // stands changes nothing and keeps the focus (docs/spec/groups.md#focus).
+  if (tree.move(card, to, side)) focusCard(card);
+  else settle();
   return { card };
 }
 

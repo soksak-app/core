@@ -83,7 +83,8 @@ export function createRegistry({ call = null, report = null } = {}) {
   const methods = new Map();
   /* For each declaration key, the surfaces that registered the entry. Registration order is kept. */
   const surfaces = new Map();
-  const surfaceNames = (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key);
+  // The entries of a surface as "<kind> <name>" in sorted order, so the timing of the registrations does not decide the order (docs/spec/exposure.md#plugin-processes).
+  const surfaceNames = (surface) => [...surfaces].filter(([, owners]) => owners.has(surface)).map(([key]) => key).sort();
   const registrationTrace = (phase, surface, fields = {}) => trace("surface.registration", {
     phase, surface, timeOrigin: performance.timeOrigin, hasPort: surfacePorts.has(surface), ...fields,
     get names() { return surfaceNames(surface); },

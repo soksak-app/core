@@ -348,13 +348,18 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 			}
 		})
 		if s.renaming != nil && s.renaming.renameTarget == target {
-			ui.Row(c).Grow(1).Children(func() { s.drawRenameField(c, max(0, nameWidth)) })
+			// The field takes the place of the name: its text starts where the text of the name started, so it starts its outline and its
+			// padding less the padding of the name before the name, grows to the end of the name, and keeps the size of the name
+			// (docs/spec/groups.md#headers).
+			s.drawRenameField(c, 0, size).Grow(1).Shrink(1).MarginStart(m.tabPadX - s.palette.BorderWidth - s.frameLength(m.barTabRootPad))
 		} else {
 			if activity != "" {
 				s.drawActivity(c, "core.activity.group", id, activity, m.activityIcon)
 			}
 			label := s.binder.Press(c, "core.group.name", "core.card.focus", id, cardParam{Card: id})
-			label.KeepFocus().Grow(1).Shrink(1).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
+			// The name stands at the start of the place of the tab strip, where the first tab of a content card stands; a button centres its
+			// content otherwise (docs/spec/groups.md#headers).
+			label.KeepFocus().Grow(1).Shrink(1).Row().Justify(ui.Start).AlignItems(ui.Center).PaddingX(m.tabPadX).Label(name).Tooltip(name)
 			s.renameOnDoubleClick(label, target)
 			// The name grows over the room that the buttons leave, so a press on the header outside its buttons drags the group card. The
 			// buttons take their own presses, so only the name starts the drag, and its release ends it.

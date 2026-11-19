@@ -5,9 +5,11 @@ import { drawActivity } from "./activity.js";
 /**
  * Creates the strips. projects is the project module, bind and run are the command functions, redraw draws the bars
  * again, changed reports a change of the rename state, and activities reads the value of core.activity, whose project and space
- * activities the tabs show (docs/spec/activity.md#drawing).
+ * activities the tabs show (docs/spec/activity.md#drawing). groups gives the group cards of the shown space to the rename of the kind
+ * group (docs/spec/groups.md#headers): name(id), the name of a group card, rename(id, name), its rename, and redraw(), the draw of
+ * the plane that shows the rename field in the header of the group card.
  */
-export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw, keyboardOwed, changed, activities }) {
+export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, run, redraw, keyboardOwed, changed, activities, groups }) {
   /**
    * Creates one tab. A click switches, a double click renames, and ✕ closes. All three are commands.
    *
@@ -51,7 +53,7 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
     return el;
   }
 
-  /* Rename in progress. {kind: "project"|"space", id, value}. */
+  /* Rename in progress. {kind: "project"|"space"|"group", id, value}. */
   let renaming = null;
 
   /** Input field in the place of the tab being renamed. Enter confirms, Escape cancels, and losing focus confirms. */
@@ -74,6 +76,12 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
   /** Operations that the rename commands call. */
   const renames = {
     begin({ kind, id }) {
+      if (kind === "group") {
+        renaming = { kind, id, value: groups.name(id) };
+        groups.redraw();
+        changed();
+        return;
+      }
       const here = projects.active();
       if (kind === "space" && !here) throw new Error(`no ${kind} ${id}`);
       const list = kind === "project" ? projects.all() : kind === "space" ? here.spaces : null;
@@ -96,20 +104,26 @@ export function createBarTabs({ projects, projectBar, spaceBar, workarea, bind, 
       const title = value.trim();
       if (title) {
         if (kind === "project") await projects.rename(id, title);
+        else if (kind === "group") groups.rename(id, title);
         else projects.renameSpace(id, title);
       }
+      if (kind === "group") groups.redraw();
       redraw();
       keyboardOwed();
       changed();
     },
     cancel() {
       if (!renaming) throw new Error("nothing is being renamed");
+      const { kind } = renaming;
       renaming = null;
+      if (kind === "group") groups.redraw();
       redraw();
       keyboardOwed();
       changed();
     },
     state: () => renaming && { ...renaming },
+    /** The rename field of the group card that is renamed, which the header of that group card shows in the place of its name. */
+    field: () => renameField(),
   };
 
   /** Creates the "+" button. */

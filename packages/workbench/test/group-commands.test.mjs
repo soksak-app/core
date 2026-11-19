@@ -113,8 +113,9 @@ test("a request makes core.group.create idempotent by that request", { timeout: 
   assert.deepEqual(await run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request: "r1" }), first);
   assert.deepEqual(await stored(), before, "the repeat of an answered request changed the layout");
   // A request that is no string is refused by the declared params of the command before it runs (F967).
+  // The request is refused after the layout and the drawn minimum, so the check groups card-1, where the layout takes a group.
   for (const request of ["", "r".repeat(129)]) {
-    await refuses(run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request }),
+    await refuses(run("core.group.create", { card: "card-1", side: "right", plugin: PLAIN, request }),
       "core.group.create: request must be a string of 1 to 128 characters");
   }
 });
@@ -216,13 +217,14 @@ test("the layout of the window description holds each group card as a node of it
   const shape = (node) => (node.children ? { direction: node.direction, children: node.children.map(shape) }
     : node.group ? { card: node.card, leader: node.leader, group: { name: node.group.name, level: node.group.level, leader: node.group.leader,
       root: shape(node.group.root) } }
-    : { card: node.card, parent: node.parent, leader: node.leader });
+    // A content card node carries parent only inside a group card and leader only on the leader of its level (docs/spec/exposure.md#window-snapshot).
+    : Object.fromEntries(["card", "parent", "leader"].filter((key) => key in node).map((key) => [key, node[key]])));
   assert.deepEqual(shape(root), { direction: "row", children: [
     { card: "card-4", leader: true, group: { name: "그룹 1", level: 1, leader: "card-1", root: { direction: "row", children: [
       { card: "card-1", parent: "card-4", leader: true },
       { card: "card-5", leader: false, group: { name: "그룹 2", level: 2, leader: "card-2", root: { direction: "column", children: [
-        { card: "card-2", parent: "card-5", leader: true }, { card: "card-6", parent: "card-5", leader: false }] } } }] } } },
-    { card: "card-3", parent: null, leader: false }] });
+        { card: "card-2", parent: "card-5", leader: true }, { card: "card-6", parent: "card-5" }] } } }] } } },
+    { card: "card-3" }] });
   const { x, y, w, h } = plane.currentTree().rect("card-4");
   const origin = document.getElementById("plane").getBoundingClientRect();
   assert.deepEqual(groups.map(({ card, members }) => ({ card, members })), [{ card: "card-4", members: ["card-1", "card-5"] },
@@ -288,4 +290,110 @@ test("core.layout.balance in a space with groups gives every child of every cut 
     `card-10 is drawn ${tree.rect("card-9").h} below a header of ${head} above card-7 at ${tree.rect("card-7").h}, not one size`);
   same(["browser", "card-13"], "w");
   same(["card-9", "card-11"], "w");
+});
+
+// contract: layout.move.focuses-the-moved-card
+test("core.card.move focuses the moved card, the first card inside a moved group card, and a move that changes nothing keeps the focus",
+  { timeout: 5000 }, async () => {
+    arrange();
+    plane.focusCard("card-3");
+    assert.deepEqual(await run("core.card.move", { card: "card-2", target: "card-3", side: "right" }), { card: "card-2" });
+    assert.equal(plane.focused(), "card-2", "the move left the focus on another card than the moved card");
+    plane.focusCard("card-1");
+    assert.deepEqual(await run("core.card.move", { card: "card-2", target: "card-3", side: "right" }), { card: "card-2" });
+    assert.equal(plane.focused(), "card-1", "a move that changes nothing moved the focus");
+    arrange();
+    plane.focusCard("card-3");
+    assert.deepEqual(await run("core.card.move", { card: "card-4", target: "card-3", side: "right" }), { card: "card-4" });
+    assert.equal(plane.focused(), "card-1", "the move of a group card did not focus the first card inside it");
+  });
+
+// The document of the plane holds the cards in workbench order, each group card before the cards inside it, whatever the order in which
+// the grid holds the cards, so the lists of the elements and the Tab key follow the workbench order (docs/spec/groups.md#model,
+// docs/spec/exposure.md#workbench-statuses). The grid holds card-5 and card-3 of the group card card-6 first and card-2 before card-1
+// of the group card card-4, and a move of card-1 below card-5 puts it after card-5.
+test("the plane holds the cards and the group cards in workbench order", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 6, leader: "card-4",
+    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] },
+      { card: "card-6", name: "그룹 2", leader: "card-3", members: ["card-3", "card-5"] }],
+    state: { xs: [0, 0.375, 0.75, 1], ys: [0, 0.5, 1], cards: [content("card-5", 2, 3, 1, 2, [view("tab-aaaaa5", PLAIN)]),
+      content("card-3", 2, 3, 0, 1, [view("tab-aaaaa3", PLAIN)]), content("card-2", 1, 2, 0, 2, [view("tab-aaaaa2", PLAIN)]),
+      content("card-1", 0, 1, 0, 2, [view("tab-aaaaa1", PLAIN)])] } }, "spc-aaaaaa");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const documentOrder = () => [...document.querySelectorAll("#plane > .card, #plane > .group")]
+    .map((el) => el.dataset.cardId ?? el.dataset.groupCard);
+  assert.deepEqual(documentOrder(), ["card-4", "card-1", "card-2", "card-6", "card-3", "card-5"],
+    "the document does not hold the plane in workbench order");
+  assert.deepEqual([...document.querySelectorAll("#plane [data-expose='core.card.add']")].map((el) => el.dataset.exposeItem ?? el.closest(".card").dataset.cardId),
+    ["card-1", "card-2", "card-3", "card-5"], "core.card.add is not listed in workbench order");
+  await run("core.card.move", { card: "card-2", target: "card-5", side: "bottom" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const order = plane.currentTree().order().map(({ id }) => id);
+  assert.ok(order.indexOf("card-2") > order.indexOf("card-5"), `the move did not put card-2 after card-5: ${order.join(", ")}`);
+  assert.deepEqual(documentOrder(), order, "after the move the document does not hold the plane in workbench order");
+});
+
+// core.group.create checks its refusals in the order of the specification: the layout and the drawn minimum before the request and the
+// plugin, so a request that is no string of 1 to 128 characters and an unknown plugin on a card whose group is refused answer the
+// refusal of the layout, and the request is refused only where the layout takes the group (docs/spec/groups.md#commands).
+// contract: group.create.request-after-the-layout
+test("core.group.create refuses the drawn minimum before the request and the plugin", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 2, leader: "card-1", groups: [],
+    state: { xs: [0, 1], ys: [0, 0.9, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
+      content("card-2", 0, 1, 1, 2, [view("tab-aaaaa2", PLAIN)])] } }, "spc-aaaaaa");
+  const refusal = await registry.handle({ id: 1, method: "command.run", params: { name: "core.group.create",
+    params: { card: "card-2", side: "bottom", plugin: PLAIN } } });
+  const minimum = refusal.error?.message ?? "";
+  assert.match(minimum, /^card card-2 cannot hold a group toward bottom: card card-\d+ would be \d+x\d+, below its minimum 96x96$/,
+    `the group of card-2 toward bottom is not refused by the drawn minimum: ${minimum}`);
+  await refuses(run("core.group.create", { card: "card-2", side: "bottom", plugin: PLAIN, request: "" }), minimum);
+  await refuses(run("core.group.create", { card: "card-2", side: "bottom", plugin: "nope", request: "r-1" }), minimum);
+  await refuses(run("core.group.create", { card: "card-1", side: "right", plugin: PLAIN, request: "" }),
+    "core.group.create: request must be a string of 1 to 128 characters");
+});
+
+// A card that the fullscreen of another card hides shows no head and no pane, so core.grid reports its acts and its pane as null, as for
+// a card without a head (docs/spec/example-model.md#card-fullscreen).
+test("core.grid reports no acts and no pane for a card that a fullscreen card hides", { timeout: 5000 }, async () => {
+  arrange();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await run("core.card.fullscreen", { card: "card-3" });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const cards = (await status("core.grid")).cards;
+  const shown = cards.find((card) => card.id === "card-3");
+  assert.ok(shown.acts !== null && shown.pane === 0, `the fullscreen card-3 reports the acts ${JSON.stringify(shown.acts)} and the pane ${shown.pane}`);
+  for (const id of ["card-1", "card-2"]) {
+    const hidden = cards.find((card) => card.id === id);
+    assert.deepEqual({ acts: hidden.acts, pane: hidden.pane }, { acts: null, pane: null }, `the hidden ${id} reports acts and a pane`);
+  }
+  await run("core.card.fullscreen", { card: "card-3" });
+});
+
+// The verification of the plane judges the cards of each level of the group tree on the lines of that level, so a layout with a group
+// card fails no row of it (docs/spec/groups.md#drawn-rectangles).
+test("the verification of the plane fails no row for a layout with a group card", { timeout: 5000 }, async () => {
+  arrange();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const { verify } = await import("../verify.js");
+  const failed = verify().filter((row) => row.ok === false && /^V[1-5] /.test(row.name)).map((row) => `${row.name}: ${row.note}`);
+  assert.deepEqual(failed, [], "the verification fails rows of the layout with a group card");
+});
+
+// A member of a group card and a card outside it can end on one line; the frame of the group card holds the member one gap inside that
+// line, so the verification compares the edges of the cards that have the same frames on that side (docs/spec/groups.md#drawn-rectangles).
+test("the verification of the plane fails no row when a member of a group card and another card end on one line", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  if (plane.currentGrid()) for (const card of plane.currentGrid().cards) for (const tab of plane.tabsOf(card)) reports.forgetTab(tab.id);
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 5, leader: "card-4",
+    groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
+    state: { xs: [0, 0.4, 0.7, 1], ys: [0, 0.5, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
+      content("card-2", 1, 2, 0, 1, [view("tab-aaaaa2", PLAIN)]), content("card-3", 0, 2, 1, 2, [view("tab-aaaaa3", PLAIN)]),
+      content("card-5", 2, 3, 0, 2, [view("tab-aaaaa5", PLAIN)])] } }, "spc-aaaaaa");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const { verify } = await import("../verify.js");
+  const failed = verify().filter((row) => row.ok === false && /^V[1-5] /.test(row.name)).map((row) => `${row.name}: ${row.note}`);
+  assert.deepEqual(failed, [], "the verification fails rows of the layout with a group card");
+  arrange();
 });

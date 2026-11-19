@@ -57,8 +57,9 @@ function mapped(t, [a0, b0], [a, b]) {
 }
 
 /** The group tree of one space over its grid. */
-/** How far a line may reach into a header or a frame across the line, in px: a divider at the side of a group card touches the end of its
- * header by less than this. */
+/** How far a line that stands beside a header may reach into it across the line, in px: a divider at the side of a group card touches the
+ * end of its header by less than this. A line inside the width of a header, a rule of one px among them, crosses the header however thin
+ * it is. */
 const HEAD_TOLERANCE = 1;
 
 /** The extent [a0, a1] across its line of a rule or a divider of axis. */
@@ -77,7 +78,8 @@ const spanOf = (axis, r) => (axis === "y" ? [r.y, r.y + r.h, r.x, r.x + r.w] : [
 function cutOut(axis, [a0, a1], parts, boxes) {
   for (const box of boxes) {
     const [h0, h1, s0, s1] = spanOf(axis, box);
-    if (Math.min(a1, h1) - Math.max(a0, h0) <= HEAD_TOLERANCE) continue;
+    const inside = a0 >= h0 && a1 <= h1;
+    if (!inside && Math.min(a1, h1) - Math.max(a0, h0) <= HEAD_TOLERANCE) continue;
     parts = parts.flatMap(([from, to]) => {
       if (to <= s0 || from >= s1) return [[from, to]];
       return [...(from < s0 ? [[from, s0]] : []), ...(to > s1 ? [[s1, to]] : [])];
@@ -1168,7 +1170,8 @@ export class GroupTree {
 
   /**
    * Moves the card id, a content card or a group card, beside target on side into the level of target, or with side centre into the group
-   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). The card keeps its id.
+   * card target at the right edge of its rectangle (docs/spec/groups.md#commands). The card keeps its id. Returns false when the card
+   * already stands where the move puts it, which changes nothing, and true after a move.
    */
   move(id, target, side) {
     const refused = this.checkMove(id, target, side);
@@ -1177,7 +1180,7 @@ export class GroupTree {
     if (side !== "centre" && !SIDES.includes(side)) throw refusal();
     const found = this.find(id);
     if (!found || !this.find(target)) throw refusal();
-    if (this.moved(id, target, side)) return;
+    if (this.moved(id, target, side)) return false;
     const operation = `move to ${side} of ${target}`;
     this.attempt(id, operation, () => {
       const data = found.node ? undefined : this.grid.card(id).data;
@@ -1217,6 +1220,7 @@ export class GroupTree {
       this.attach(parent, found.node ?? id);
       this.leaderEntered(parent, id);
     });
+    return true;
   }
 
   /** Whether move of the card id to side of target would succeed. */
