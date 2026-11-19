@@ -684,8 +684,11 @@ test("a plan below the minimum states the card, the plane it needs and the neare
 test("core.layout.apply moves each existing tab with its identifier into its card and closes only what close names", { timeout: 5000 }, async () => {
   arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION, { name: "s" })] },
     { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  // The text size of a card is part of its data, which a kept card keeps.
+  plane.currentGrid().card("a").data.textSize = 1.25;
   const tree = { direction: "column", children: [{ tabs: [{ tab: "tab-aaaaa3" }] }, { tabs: [{ plugin: SESSION, params: { name: "s" } }, { tab: "tab-aaaaa1" }], active: 1 }] };
   const applied = await twice("core.layout.apply", { tree });
+  assert.equal(plane.currentGrid().card("a").data.textSize, 1.25);
   assert.deepEqual(planned(applied.cards), [["b", ["tab-aaaaa3"]], ["a", ["tab-aaaaa2", "tab-aaaaa1"]]]);
   const { root } = layout();
   assert.equal(root.direction, "column");

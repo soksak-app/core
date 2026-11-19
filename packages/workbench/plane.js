@@ -2838,7 +2838,9 @@ export function applyInLayout(params) {
   const place = (node) => {
     if (node.direction) return { direction: node.direction, children: node.children.map(place) };
     const tabs = node.tabs.map((entry) => (entry.tab !== undefined ? held.get(entry.tab) : newTab(entry.plugin, entry.params, null, "layout apply")));
-    grid.setData(ids[k++], { tabs, activeId: tabs[node.active].id });
+    // A kept card keeps the rest of its data, its text size and its sidebars; default: a new card has no data.
+    const id = ids[k++];
+    grid.setData(id, { ...(grid.card(id).data ?? {}), tabs, activeId: tabs[node.active].id });
     return { tabs: tabs.map((t) => ({ tab: t.id })), active: node.active };
   };
   const named = place(planned.tree);
