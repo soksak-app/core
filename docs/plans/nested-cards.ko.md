@@ -13,7 +13,7 @@
   - level(그 plane의 깊이, root plane은 level 0)은 status에 보고한다.
   - body는 child plane이고, 그 plane의 corridor만큼 안으로 들어간다.
   - 이 생각을 처음 보인 mockup은 따라 그릴 design이 아니다.
-- group은 card를 하나 이상 가진다. group의 마지막 card를 닫으면 group card가 닫힌다.
+- group은 card를 두 개 이상 가진다. card로 group을 만들면 그 card는 group card가 되고, 그 안에 card 두 개가 생긴다: tab을 가진 원래 card와 `side` 쪽의 새 card다. close나 move로 group에 card가 하나만 남으면, 그 card가 parent plane에서 group card를 대신한다.
 - child plane이 group header 아래에서 모든 card에 두 축 모두 `minSize`를 줄 수 있는 동안 group card 안을 split할 수 있다. 이를 깨는 split, move, resize는 지금 한 plane에서처럼 거부된다.
 - 각 plane에는 leader가 정확히 하나 있다. leader는 그 plane의 card 하나이며, content card일 수도 group card일 수도 있다.
   - 새 plane은 첫 card를 leader로 삼는다.
@@ -25,13 +25,13 @@
   - content card header: `+`는 tab을 더하고, 두 split button은 같은 plane에서 card 옆에 새 card를 놓는다.
   - group card header: `+`는 group 안에 content card를 더하고, 두 split button은 parent plane에서 group card를 split한다.
   - split은 group을 만들지 않는다.
-  - group button은 card를 새 group으로 감싼다. 이 button은 card가 group header를 담고 그 card들에 `minSize`를 줄 수 있을 때만 보인다.
+  - group button은 card를 card 두 개의 group으로 바꾼다. 이 button은 card가 group header를 담고 그 card들에 `minSize`를 줄 수 있을 때만 보인다.
   - group 해제는 group header의 close menu에 있다.
 - card는 plane 사이를 옮겨도 identifier를 유지한다. card를 지정하는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.get`)는 어느 plane의 card에도 동작한다.
 
 ## Command와 status
 
-- `core.group.create {card}`는 card를 새 group card에 넣고, 그 group card가 card의 slot을 차지한다. card는 child plane의 첫 card가 된다. `core.group.create {card, side}`는 group 안에서 `side` 쪽으로 새 content card도 split한다.
+- `core.group.create {card, side}`는 card를 group card로 바꾼다. 그 plane은 원래 card와 `side` 쪽의 새 content card를 가진다. group button은 card의 긴 축을 쓴다: 너비가 높이보다 크면 `right`, 아니면 `bottom`.
 - `core.group.dissolve {group}`은 group card를 그 plane의 card들로 바꾼다. child plane의 line을 parent plane의 group card span 안에 넣는다. parent plane이 각 card에 `minSize`를 줄 수 없으면 거부된다.
 - `core.group.rename {group, name}`, `core.group.leader {card}`(card가 자기 plane의 leader가 된다).
 - status `core.layout`은 tree를 보고한다. group card는 `group: {name, level, leader, plane}`을 가진다. `core.card.get`은 card의 group 경로를 보고한다. `sok describe`는 tree를 보인다.
