@@ -387,6 +387,9 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 /* The rail outline is drawn only inside the passage. A fill that covers the inside of a card would be hidden by the native surface
    in the application, so it is not drawn here either. */
 .rail{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:visible}
+/* The party lines (docs/spec/parties.md#drawing) stack over the cards, whose edges they cover at the seam, and under the rail, which is
+   drawn over them, as the mygo host paints them after the cards and before the rail. */
+.parties{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:visible}
 .rail path{fill:none;stroke:var(--rail);stroke-width:var(--bw);
   stroke-linejoin:round;vector-effect:non-scaling-stroke}
 

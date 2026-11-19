@@ -389,8 +389,8 @@ export function drawParties() {
   if (!grid || !planeElement) return;
   if (!layer || !layer.isConnected) {
     layer = document.createElementNS(SVG_NS, "svg");
+    // The class parties of app.css stacks the layer over the cards and under the rail, as the mygo host paints it.
     layer.setAttribute("class", "parties");
-    layer.setAttribute("style", "position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none");
     planeElement.append(layer);
   }
   layer.replaceChildren();
