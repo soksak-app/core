@@ -13,7 +13,6 @@ import { openTabStates } from "./tab-state.js";
 import { createTabSessions } from "./tab-session.js";
 import { documentRegions } from "./document-regions.js";
 import { sectionSurfacePlugin } from "./registry.js";
-import { loadParties, storedParties } from "./parties.js";
 import { spaceSectionSurfaces, storedSurfaceKept } from "./section-surfaces.js";
 
 let store;
@@ -251,7 +250,7 @@ export function begin(snapshot) {
   begun = opened.id;
   // The work area screen gives the plane its size, so the screen changes first and then the plane is drawn. A plane drawn without a size is drawn again on the next frame.
   changed();
-  loadSpaceParties(opened, opened.spaces.find((s) => s.id === opened.activeSpaceId));
+  readStoredSpace(opened, opened.spaces.find((s) => s.id === opened.activeSpaceId));
   listener.load(layout, opened.activeSpaceId);
   const recreated = opened.spaces.find((s) => s.id === opened.activeSpaceId);
   const previousRecreated = recreated.layout;
@@ -427,51 +426,13 @@ async function readProjects(readSnapshot = () => store.snapshot()) {
   return ended;
 }
 
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-
 /**
- * Reads the `parties` member of a space of projects.json (docs/spec/parties.md#storage). A space without the member has no party.
- * A value of another form, or a party that breaks a rule of the specification, is refused. The error names the file, the project root,
- * the space identifier and the found value as JSON text.
+ * Reads a stored space of projects.json (docs/spec/projects.md#persistence). No current form of a space object holds the member
+ * `parties`, so a space that holds it is refused with an error that names the file, the project root, the space and the member.
  */
 export function readStoredSpace(project, space) {
-  if (space.parties === undefined) return { ...space, parties: [] };
-  const found = JSON.stringify(space.parties);
-  const refuse = () => {
-    throw new Error(`projects.json: project ${project.root}, space ${space.id}: parties ${found}`);
-  };
-  if (!Array.isArray(space.parties)) refuse();
-  // default: a space with no layout holds no card (docs/spec/projects.md#persistence).
-  const layoutCards = new Set((space.layout?.state?.cards ?? []).map((card) => card.id));
-  const owners = new Map();
-  for (const party of space.parties) {
-    if (typeof party !== "object" || party === null || typeof party.id !== "string" || !Array.isArray(party.cards)) {
-      refuse();
-    }
-    if (party.cards.length < 2) refuse();
-    for (const card of party.cards) {
-      if (!layoutCards.has(card)) refuse();
-      if (owners.has(card)) refuse();
-      owners.set(card, party.id);
-    }
-    if (party.leader !== null && !party.cards.includes(party.leader)) refuse();
-    if (typeof party.color !== "string" || !HEX_COLOR.test(party.color)) refuse();
-    if (party.leaderColor !== null && (typeof party.leaderColor !== "string" || !HEX_COLOR.test(party.leaderColor))) {
-      refuse();
-    }
-  }
-  return { ...space, parties: space.parties };
-}
-
-/** Returns the space object to store. It holds the `parties` member only when the space has parties (docs/spec/parties.md#storage). */
-export function writeStoredSpace(space) {
-  const { parties, ...rest } = space;
-  return parties?.length ? { ...rest, parties } : rest;
-}
-
-/** Replaces the parties of the window with the stored parties of a space that is shown (docs/spec/parties.md#storage). */
-function loadSpaceParties(project, space) {
-  loadParties(readStoredSpace(project, space).parties);
+  if (Object.hasOwn(space, "parties")) throw new Error(`projects.json: project ${project.root}, space ${space.id}: obsolete member parties`);
+  return space;
 }
 
 export function keep(path) {
@@ -481,11 +442,10 @@ export function keep(path) {
   const space = project.spaces.find((s) => s.id === project.activeSpaceId);
   const previous = space.layout;
   space.layout = listener.save(path);
-  space.parties = storedParties();
   // The tabs that the previous stored layout of this space held and the saved one does not hold leave their origins (docs/spec/projects.md#tab-origin).
   // default: a keep without a writing path is the store of the drawn layout after a render.
   forgetTabsLeft(previous.state.cards, space.layout.state.cards, `${path ?? "drawn layout"} of space ${space.id}, project ${project.id}`);
-  const patch = { spaces: project.spaces.map(writeStoredSpace), activeSpaceId: project.activeSpaceId, named: project.named };
+  const patch = { spaces: project.spaces, activeSpaceId: project.activeSpaceId, named: project.named };
   const key = JSON.stringify(patch);
   if (key === savedLayout) return writing;
   savedLayout = key;
@@ -550,7 +510,7 @@ async function showProject(id, openedProject = null, stagedOwner = false) {
   history.replaceState(null, "", `${location.pathname}?project=${encodeURIComponent(id)}`);
   changed();
   savedLayout = "";
-  loadSpaceParties(project, project.spaces.find((s) => s.id === project.activeSpaceId));
+  readStoredSpace(project, project.spaces.find((s) => s.id === project.activeSpaceId));
   listener.load(project.spaces.find((s) => s.id === project.activeSpaceId).layout, project.activeSpaceId);
   changed();
   // Replace the start-document preview synchronously before waking mounts that could declare native composition.
@@ -663,7 +623,7 @@ export const move = (id, delta) => store.move(id, delta);
 
 function restore(path) {
   const p = active();
-  loadSpaceParties(p, p.spaces.find((s) => s.id === p.activeSpaceId));
+  readStoredSpace(p, p.spaces.find((s) => s.id === p.activeSpaceId));
   listener.load(p.spaces.find((s) => s.id === p.activeSpaceId).layout, p.activeSpaceId);
   changed();
   keep(path);

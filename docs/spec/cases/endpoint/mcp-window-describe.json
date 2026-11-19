@@ -200,12 +200,6 @@
             "owner": "core",
             "status": [
               {
-                "name": "core.parties",
-                "description": "The parties of the window.",
-                "schema": {},
-                "value": []
-              },
-              {
                 "name": "core.screen",
                 "description": "Current screen, e.g. home. Long value.",
                 "schema": {},
@@ -1131,7 +1125,6 @@
         "tool": "window_describe",
         "arguments": {},
         "result": {
-          "parties": [],
           "agent": {
             "card": "card-1",
             "space": "space-1",
@@ -1161,9 +1154,7 @@
                       "active": true,
                       "params": null
                     }
-                  ],
-                  "party": null,
-                  "leader": false
+                  ]
                 },
                 {
                   "direction": "column",
@@ -1188,9 +1179,7 @@
                             "address": "http://localhost:3366"
                           }
                         }
-                      ],
-                      "party": null,
-                      "leader": false
+                      ]
                     },
                     {
                       "card": "card-3",
@@ -1218,9 +1207,7 @@
                           "active": false,
                           "params": null
                         }
-                      ],
-                      "party": null,
-                      "leader": false
+                      ]
                     }
                   ]
                 }
@@ -1302,14 +1289,6 @@
               "kind": "command",
               "name": "host.window.reload",
               "params": []
-            },
-            {
-              "description": "The parties of the window.",
-              "group": "core",
-              "key": "core status core.parties",
-              "kind": "status",
-              "name": "core.parties",
-              "value": "[]"
             },
             {
               "cut": true,
@@ -1523,7 +1502,7 @@
               "name": "browser.reload"
             }
           ],
-          "total": 8,
+          "total": 7,
           "window": {
             "window": "main",
             "title": "soksak",
@@ -1538,7 +1517,6 @@
           "limit": 3
         },
         "result": {
-          "parties": [],
           "agent": {
             "card": null,
             "space": null,
@@ -1568,9 +1546,7 @@
                       "active": true,
                       "params": null
                     }
-                  ],
-                  "party": null,
-                  "leader": false
+                  ]
                 },
                 {
                   "direction": "column",
@@ -1595,9 +1571,7 @@
                             "address": "http://localhost:3366"
                           }
                         }
-                      ],
-                      "party": null,
-                      "leader": false
+                      ]
                     },
                     {
                       "card": "card-3",
@@ -1625,9 +1599,7 @@
                           "active": false,
                           "params": null
                         }
-                      ],
-                      "party": null,
-                      "leader": false
+                      ]
                     }
                   ]
                 }
@@ -1731,17 +1703,17 @@
               }
             },
             {
-              "description": "The parties of the window.",
+              "description": "Current screen, e.g. home. Long value.",
               "group": "core",
-              "key": "core status core.parties",
+              "key": "core status core.screen",
               "kind": "status",
-              "name": "core.parties",
+              "name": "core.screen",
               "schema": {},
-              "value": []
+              "value": "화면 <home> & abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij"
             }
           ],
-          "total": 9,
-          "next": "core status core.parties"
+          "total": 8,
+          "next": "core status core.screen"
         }
       },
       {
@@ -2173,7 +2145,7 @@
               }
             }
           ],
-          "total": 9
+          "total": 8
         }
       },
       {
@@ -2357,7 +2329,6 @@
           "window": "other"
         },
         "result": {
-          "parties": [],
           "agent": null,
           "layout": {
             "space": "space-1",
@@ -2383,9 +2354,7 @@
                       "active": true,
                       "params": null
                     }
-                  ],
-                  "party": null,
-                  "leader": false
+                  ]
                 },
                 {
                   "direction": "column",
@@ -2410,9 +2379,7 @@
                             "address": "http://localhost:3366"
                           }
                         }
-                      ],
-                      "party": null,
-                      "leader": false
+                      ]
                     },
                     {
                       "card": "card-3",
@@ -2440,9 +2407,7 @@
                           "active": false,
                           "params": null
                         }
-                      ],
-                      "party": null,
-                      "leader": false
+                      ]
                     }
                   ]
                 }
@@ -2524,14 +2489,6 @@
               "kind": "command",
               "name": "host.window.reload",
               "params": []
-            },
-            {
-              "description": "The parties of the window.",
-              "group": "core",
-              "key": "core status core.parties",
-              "kind": "status",
-              "name": "core.parties",
-              "value": "[]"
             },
             {
               "cut": true,
@@ -2745,7 +2702,7 @@
               "name": "browser.reload"
             }
           ],
-          "total": 8,
+          "total": 7,
           "window": {
             "window": "main",
             "title": "soksak",

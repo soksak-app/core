@@ -439,6 +439,10 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return err
 	}
+	// The same refusal as readStoredSpace of packages/workbench/projects.js (docs/spec/projects.md#persistence).
+	if space.Parties != nil {
+		return fmt.Errorf("projects.json: project %s, space %s: obsolete member parties", project.Root, space.ID)
+	}
 	var stored storedLayout
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
@@ -458,9 +462,6 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
 	if err := s.sidebars.Restore(stored.Sidebars); err != nil {
-		return fmt.Errorf("space %s: %w", space.ID, err)
-	}
-	if err := s.restoreParties(project, *space, plane); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
 	}
 	s.windowSidebars = map[string]layout.WindowSidebar{}
@@ -575,16 +576,6 @@ func (s *Shell) keepPlane(project *projectRecord) error {
 	for i := range project.Spaces {
 		if project.Spaces[i].ID == space.ID {
 			project.Spaces[i].Layout = next
-			// default: a shown space without parties state writes no party, which is the stored form of a space with no party.
-			parties := []layout.StoredParty{}
-			if s.parties != nil {
-				parties = s.parties.Stored()
-			}
-			storedParties, err := layout.WriteStoredParties(parties)
-			if err != nil {
-				return err
-			}
-			project.Spaces[i].Parties = storedParties
 		}
 	}
 	return nil
@@ -652,19 +643,11 @@ func (s *Shell) patchThen(id string, members map[string]any, stored func()) {
 func (s *Shell) settle() { s.settleThen(func() {}) }
 
 // settleThen is settle that runs stored after the plane is stored.
-func (s *Shell) settleThen(stored func()) { s.settleChangeThen(layout.LayoutChange{}, stored) }
-
-// settleChange is settle after a layout change that moved or split the cards that change names.
-func (s *Shell) settleChange(change layout.LayoutChange) { s.settleChangeThen(change, func() {}) }
-
-// settleChangeThen is settle after the layout change change, which runs stored after the plane is stored. Each party that the change
-// affected is corrected before the plane and its parties are stored (docs/spec/parties.md#changes-of-the-layout).
-func (s *Shell) settleChangeThen(change layout.LayoutChange, stored func()) {
+func (s *Shell) settleThen(stored func()) {
 	s.closePicker()
 	if _, err := s.arrangeWindowSidebars(); err != nil {
 		s.fail(err)
 	}
-	s.reconcileParties(change)
 	s.held = nil
 	if s.plane != nil {
 		s.text.KeepPressedCard(func(card string) bool {
@@ -1065,7 +1048,7 @@ func (s *Shell) splitTab(id, side string, known *LoadedPlugin, params json.RawMe
 		return nil, fmt.Errorf("card %s cannot split toward %s", id, side)
 	}
 	s.focusCard(born)
-	s.settleChange(layout.LayoutChange{Split: []layout.SplitCard{{Card: id, Born: born}}})
+	s.settle()
 	return map[string]string{"card": born, "tab": tab.ID}, nil
 }
 

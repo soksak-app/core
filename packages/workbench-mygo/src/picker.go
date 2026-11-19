@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -192,29 +191,9 @@ func (s *Shell) openCardTools(card string) error {
 			items = append(items, pickerItem{Key: tool.Do, Name: tool.Title, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}
-	// The group item opens the chooser of the touching cards, and each party item is an element of its name that runs its own
-	// command (docs/spec/parties.md#card-menu).
-	var partyItems []layout.MenuItem
-	if s.parties != nil {
-		if len(s.parties.GroupCandidates(s.plane, card)) > 0 {
-			items = append(items, pickerItem{Key: "group", Name: "카드 묶기", Expose: "core.party.menu.group"})
-		}
-		partyItems = s.parties.MenuItems(s.plane, card)
-		for index, item := range partyItems {
-			items = append(items, pickerItem{Key: fmt.Sprintf("party-%d", index), Name: item.Label, Expose: item.Element})
-		}
-	}
 	s.focusCard(card)
 	s.settle()
 	s.openPicker("카드 도구", items, func(key string) error {
-		if key == "group" {
-			s.openGroupChooser(anchor, card, nil)
-			return nil
-		}
-		if index, ok := partyItemIndex(key, len(partyItems)); ok {
-			s.binder.run(partyItems[index].Command, partyItems[index].Params)
-			return nil
-		}
 		if key == "close" {
 			_, err := s.askedCloseCard(card)
 			return err
@@ -231,45 +210,6 @@ func (s *Shell) openCardTools(card string) error {
 		return nil
 	}).anchor = anchor
 	return nil
-}
-
-// partyItemIndex returns the index of the party item of the key party-<index> among count party items.
-func partyItemIndex(key string, count int) (int, bool) {
-	text, ok := strings.CutPrefix(key, "party-")
-	if !ok {
-		return 0, false
-	}
-	index, err := strconv.Atoi(text)
-	if err != nil || index < 0 || index >= count {
-		return 0, false
-	}
-	return index, true
-}
-
-// openGroupChooser opens the group chooser of a card in no party under the anchor: one item per touching card in no party, and the
-// confirm item once a card is selected. A press on a card selects it, or clears it when it is selected, and reopens the chooser with
-// the selection. The confirm item runs core.party.create with the card and the selected cards (docs/spec/parties.md#card-menu).
-func (s *Shell) openGroupChooser(anchor, card string, chosen []string) {
-	items := []pickerItem{}
-	for _, other := range s.parties.GroupCandidates(s.plane, card) {
-		items = append(items, pickerItem{Key: "card-" + other, Name: other, Active: slices.Contains(chosen, other)})
-	}
-	if len(chosen) > 0 {
-		items = append(items, pickerItem{Key: "confirm", Name: fmt.Sprintf("카드 %d개 묶기", len(chosen)+1), Expose: "core.party.menu.group"})
-	}
-	s.openPicker("묶을 카드 고르기", items, func(key string) error {
-		if key == "confirm" {
-			s.binder.run("core.party.create", map[string]any{"cards": append([]string{card}, chosen...)})
-			return nil
-		}
-		other, _ := strings.CutPrefix(key, "card-") // silent: the other items of this layer have keys of the form card-<id>.
-		next := slices.DeleteFunc(slices.Clone(chosen), func(held string) bool { return held == other })
-		if len(next) == len(chosen) {
-			next = append(next, other)
-		}
-		s.openGroupChooser(anchor, card, next)
-		return nil
-	}).anchor = anchor
 }
 
 // openTabList opens the list of the tabs of a card, which its head folds, and closes it when it is open.
