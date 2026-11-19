@@ -47,6 +47,22 @@ A page reads the state after it opens or attaches to a session, because a persis
 
 Each terminal plugin declares the status `<plugin>.state` (`terminal.state`, `term.state`) for each terminal surface. Its value is `{state, source, sequence, exit}` with the meaning of the [state read](#state-read): `{state: null, source: null, sequence: 0, exit: null}` before the reply of the first read, the reply of the read, and then the members `to`, `source`, `sequence` and `exit` of each change event. A change event or a read reply that is not of this form is a sidecar error: the page reports it through the error path of the session and keeps the previous value. A new session of the surface starts again from the value before the first read.
 
+## Activity
+
+Each terminal plugin also declares the status `<plugin>.activity` (`terminal.activity`, `term.activity`) for each terminal surface, and declares it for core with `activity: true`, so that core aggregates the activity of the tab, its cards, its space and its project (core F982). Its value is a core activity level or `null` for no activity. The plugin decides the level, because it knows the state and the exit code; core only aggregates the levels. The value follows each value of `<plugin>.state`:
+
+| `state` of `<plugin>.state` | `<plugin>.activity` |
+| --- | --- |
+| `null`, before the first change | `null` |
+| `idle` | `idle` |
+| `running` | `running` |
+| `exited` with an `exit` other than 0 | `failed` |
+| `exited` with `exit` 0, or with `exit` `null` | `null` |
+| `waiting`, `agent-waiting` (held) | `attention` |
+| `agent-busy` (held) | `running` |
+
+An `exited` state whose mark gives no exit code reports no failure, because no code shows one. The rows of the held states apply when those states are defined ([held states](#held-states)). The status changes only when its value changes, and a new session of the surface starts again at `null`.
+
 ## Held states
 
 - `waiting`: the plan defines it as output silence for a window together with a screen that shows a prompt or a question ([terminal plan, 2.3](../plans/terminal-plan.md#23-states)). No length of the window is measured and no pattern of a prompt or a question is declared, and a fixed silence window is a timer where the marks and the agent signals are the event sources. Held until the window and the patterns are decided in this document with their evidence.

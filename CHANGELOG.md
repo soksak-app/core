@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F990 (activity of a terminal): `spec/terminal-state.md` defines the status `<plugin>.activity`, a core activity level or null that each terminal plugin derives from its state and exit code and declares with `activity: true`. F987 and F988 are registered.
 - F893: The start of the channel of the installed sidecars records `host.sidecar.path` at the level `info` with `folder`, the folder of the host executable that the environment of every sidecar puts first on PATH, and `sok`, the sok of the application bundle in it, in both hosts (`docs/spec/sidecars.md#processes-of-a-surface`). Red: the Go and Rust tests of the case `sidecars.environment.start-records-the-sok-folder` read no record. Green: both pass.
 - F904 (screen rows in both sidecars): closed with its four sub-items; no shared case file of the screen rows exists, and the owning tests of the sidecars and the plugins are the evidence. F899-1 waits for the merge of the term plugin row.
 - F899-4 (terminal state in both terminal pairs): the sidecars vt (S195) and alacritty (S190) report `idle`, `running` and `exited` with the exit code and answer `shell.state.read`, and the plugins terminal (P165) and term (P44) show the status `<plugin>.state`; each ran the shared cases red and then green. The changes are unreleased until the sidecar releases and the plugin pins; `waiting` and the agent states are held.
