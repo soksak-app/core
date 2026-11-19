@@ -246,7 +246,7 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			}
 			if event.Clicks == 2 {
 				s.held = nil
-				s.plane.CenterBoundary(divider.Axis, divider.Line)
+				s.planes.CenterBoundary(divider.Axis, divider.Line)
 				s.settle()
 				return true
 			}
@@ -267,7 +267,7 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			if held == nil || held.item != item {
 				return false
 			}
-			s.plane.MergeCoincident(held.axis, held.line)
+			s.planes.MergeCoincident(held.axis, held.line)
 			s.settle()
 			return true
 		case ui.InputKeyDown:
@@ -285,7 +285,7 @@ func (s *Shell) dividerKey(divider layout.Divider, key ui.Key) bool {
 	step := 0.0
 	switch key {
 	case ui.KeyEnter, ui.KeySpace:
-		s.plane.CenterBoundary(divider.Axis, divider.Line)
+		s.planes.CenterBoundary(divider.Axis, divider.Line)
 		s.settle()
 		return true
 	case ui.KeyLeft, ui.KeyUp:

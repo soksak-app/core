@@ -525,14 +525,19 @@ func (t *GroupTree) install(boxes []cellBox, paid map[string]Paid, laid map[stri
 			ends := of(b)
 			set[ends[0]], set[ends[1]] = true, true
 		}
-		out := []float64{}
+		values := []float64{}
 		for v := range set {
-			out = append(out, v)
+			values = append(values, v)
 		}
-		sort.Float64s(out)
+		sort.Float64s(values)
+		// Two ends closer than eps are one line, so that a computed middle at the coordinate of a line takes that line.
+		out := []float64{}
 		index := map[float64]int{}
-		for i, v := range out {
-			index[v] = i
+		for _, v := range values {
+			if len(out) == 0 || v-out[len(out)-1] >= eps {
+				out = append(out, v)
+			}
+			index[v] = len(out) - 1
 		}
 		return out, index
 	}
@@ -790,8 +795,15 @@ func (t *GroupTree) levelSplit(target string, side Side, id string) {
 		n = &node{card: lower}
 	}
 	_, _, line, _ := t.span(n)
+	// A line that other cards stand on stays, so that a split moves no line of another card.
+	pieces := idSet(append(t.inside(t.nodeOf(upper)), t.inside(n)...))
+	for _, card := range t.grid.Cards() {
+		if (card.R0 == line || card.R1 == line) && !pieces[card.ID] {
+			return
+		}
+	}
 	if delta := (down.H - up.H) / 2; math.Abs(delta) > eps {
-		t.grid.MoveBoundary("y", line, t.grid.BoundaryPos("y", line)+delta, false)
+		t.grid.moveLinePast("y", line, t.grid.BoundaryPos("y", line)+delta)
 	}
 }
 
@@ -803,6 +815,11 @@ func (t *GroupTree) balanced(id string, side Side) error {
 	if _, err := t.grid.Balance(); err != nil {
 		t.restore(kept)
 		return fmt.Errorf("card %s cannot split toward %s: cardSplit even cannot balance the grid: %w", id, side, err)
+	}
+	t.keepLines()
+	if group := t.broken(); group != "" {
+		t.restore(kept)
+		return fmt.Errorf("card %s cannot split toward %s: cardSplit even would leave group %s not covering one rectangle", id, side, group)
 	}
 	if card, rect := t.below(before); card != "" {
 		t.restore(kept)
@@ -1222,7 +1239,13 @@ func (t *GroupTree) Balance() error {
 	before := t.drawn()
 	kept := t.snapshot()
 	if _, err := t.grid.Balance(); err != nil {
+		t.restore(kept)
 		return err
+	}
+	t.keepLines()
+	if group := t.broken(); group != "" {
+		t.restore(kept)
+		return fmt.Errorf("the layout cannot balance: group %s would not cover one rectangle", group)
 	}
 	if card, rect := t.below(before); card != "" {
 		t.restore(kept)
@@ -1259,6 +1282,30 @@ func (t *GroupTree) MoveBoundary(axis Axis, line int, px float64, allowSnap bool
 	}
 	t.restore(kept)
 	return t.grid.MoveBoundary(axis, line, good, false)
+}
+
+// CenterBoundary centres the boundary line of axis between its neighbours, as Grid.CenterBoundary does, and merges it onto a line
+// that it reaches, so that no two lines stand at one coordinate. It keeps the line where it stands when a content card beside it would
+// be drawn below minSize. It returns where the boundary stands.
+func (t *GroupTree) CenterBoundary(axis Axis, line int) float64 {
+	before := t.drawn()
+	kept := t.snapshot()
+	at := t.grid.CenterBoundary(axis, line)
+	t.grid.MergeCoincident(axis, line)
+	t.keepLines()
+	if card, _ := t.below(before); card != "" {
+		t.restore(kept)
+		return t.grid.BoundaryPos(axis, line)
+	}
+	return at
+}
+
+// MergeCoincident merges the boundary line of axis onto a neighbour at its coordinate at the end of a drag, as Grid.MergeCoincident
+// does, and keeps no line that no card uses while the space holds a group card.
+func (t *GroupTree) MergeCoincident(axis Axis, line int) bool {
+	merged := t.grid.MergeCoincident(axis, line)
+	t.keepLines()
+	return merged
 }
 
 // Focusable is the content card that a focus of the card id gives: the card itself, or for a group card the first content card

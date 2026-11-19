@@ -1055,6 +1055,49 @@ func (g *Grid) MergeCoincident(axis Axis, line int) bool {
 	return true
 }
 
+// moveLinePast moves the line toward px as MoveBoundary does, and past each line of the axis that it reaches, where no card lies
+// between the two, by exchanging their places; a line that stops on another line merges onto it, so that no two lines stand at one
+// coordinate.
+func (g *Grid) moveLinePast(axis Axis, line int, px float64) {
+	lo, hi := span(axis)
+	for {
+		at := g.MoveBoundary(axis, line, px, false)
+		a := g.arr(axis)
+		next := line + 1
+		if px < at {
+			next = line - 1
+		}
+		if math.Abs(at-px) < eps || next <= 0 || next >= len(a)-1 || math.Abs(a[next]-a[line]) >= eps {
+			// A line that the bounds of the cards stop on another line merges onto it.
+			for _, k := range []int{line - 1, line + 1} {
+				if k > 0 && k < len(a)-1 && math.Abs(a[k]-a[line]) < eps {
+					g.MergeCoincident(axis, line)
+					break
+				}
+			}
+			return
+		}
+		for _, c := range g.list {
+			if c.get(lo) == min(line, next) && c.get(hi) == max(line, next) {
+				g.MergeCoincident(axis, line)
+				return
+			}
+		}
+		for _, c := range g.list {
+			for _, k := range []spanKey{lo, hi} {
+				switch c.get(k) {
+				case line:
+					c.set(k, next)
+				case next:
+					c.set(k, line)
+				}
+			}
+		}
+		g.changed()
+		line = next
+	}
+}
+
 // Tidy removes the lines no card references and returns how many were removed.
 func (g *Grid) Tidy() int {
 	dropped := 0
@@ -1116,7 +1159,14 @@ func (g *Grid) cutAt(card *Card, axis Axis, fresh bool) (int, float64, bool) {
 	if line >= 0 {
 		return line, a[line], true
 	}
-	return -1, clamp(mid, lowest, highest), true
+	value := clamp(mid, lowest, highest)
+	// A fresh cut at the coordinate of a line takes that line, so that no two lines stand at one coordinate.
+	for i := card.get(lo) + 1; i < card.get(hi); i++ {
+		if math.Abs(a[i]-value) < eps {
+			return i, a[i], true
+		}
+	}
+	return -1, value, true
 }
 
 // extents is the drawn size of every card on an axis, by id.

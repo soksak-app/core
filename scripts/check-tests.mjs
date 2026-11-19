@@ -14005,6 +14005,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/src/group_cards.go", symbol: "func clearOfHeads" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) levelSplit" },
       { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) headStep" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "func (t *GroupTree) CenterBoundary" },
+      { file: "packages/workbench-mygo/src/layout/grid.go", symbol: "func (g *Grid) moveLinePast" },
       { file: "packages/workbench-mygo/src/tab_drag.go", symbol: "func (s *Shell) dragGroupTo" },
     ],
     tests: [
@@ -14015,6 +14017,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheCloseMenuOfAGroupDissolvesIt" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestNoDividerCrossesAGroupHeader" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestABoxBelowAGroupHeaderStandsAGapBelowIt" },
+      { file: "packages/workbench-mygo/tests/layout/groups_property_test.go", id: "TestRandomGroupOperationsKeepTheInvariants" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestALineAcrossAGroupIsOneLine" },
       { file: "packages/workbench-mygo/tests/group_fullscreen_test.go", id: "TestAGroupCardGoesFullscreenWithTheCardsInsideIt" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheSplitSettingBalancesTheGrid" },
