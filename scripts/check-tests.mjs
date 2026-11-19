@@ -14532,7 +14532,7 @@ const FEATURE_LINKS = [
     id: "F965",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static const char *resizeEdgeAt(NSWindow *window, NSPoint point)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerResizeEdge, resizeEdge(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_RESIZE_EDGE => Delivery::ResizeEdge(resize_edge(" },
     ],
     tests: [
@@ -14560,7 +14560,7 @@ const FEATURE_LINKS = [
     id: "F962-2",
     implementation: [
       { file: "native/darwin/src/input_inject.m", symbol: "static void interruptGestures(NSEvent *event)" },
-      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held))" },
+      { file: "packages/host/go/src/platform/darwin/input.go", symbol: "done(platform.PointerInterrupted, interruption(held), 0)" },
       { file: "packages/host/rust/src/platform/darwin/input.rs", symbol: "SP_INPUT_INTERRUPTED => Delivery::Interrupted(interruption(" },
     ],
     tests: [
