@@ -171,6 +171,16 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	if _, drawn := s.picker.drawn[anchor]; !drawn {
 		return fmt.Errorf("card %s has no %s button", card, menu)
 	}
+	// The command is the press of the button, and a disabled button takes no press (docs/spec/groups.md#headers).
+	tools := s.headTools(card)
+	if s.isGroup(card) {
+		tools = s.groupHeadTools(card)
+	}
+	for _, head := range tools {
+		if head.Do == tool.tool && !head.Enabled {
+			return fmt.Errorf("card %s cannot %s", card, menu)
+		}
+	}
 	if s.toggled(anchor) {
 		return nil
 	}

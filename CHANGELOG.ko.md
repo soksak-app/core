@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-36 (비활성 head 버튼의 menu, mygo): 비활성인 split, group split, add 버튼의 `core.card.menu`는 page에서처럼 `card <id> cannot <menu>`로 거절되고 menu를 열지 않는다. mygo는 menu를 열었고 그 선택이 실패했다(`docs/spec/groups.md#headers`). 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-34 (창 description의 group card node, mygo): mygo는 page처럼, 그리고 `docs/spec/exposure.md#window-snapshot`이 말하듯 모든 group card node에 `leader`를, level을 이끌지 않는 node에는 `false`로 쓰고, group card node에 `parent`를 쓰지 않으며, `groups`의 모든 항목에 `leading`을 쓴다. 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-32 (plane의 문서 순서): layout library는 card element를 생성 순서 대신 view option `order`가 주는 순서, 기본으로 grid의 reading order로 유지하고, 자리를 벗어난 element만 옮기며 focus를 가진 element는 옮기지 않는다. page는 workbench order를 주고 각 group card element를 그 안의 첫 상자 앞에 두므로, element 목록과 `Tab` key가 mygo처럼 workbench order를 따른다(`docs/spec/groups.md#model`). 검증: library와 page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-41 (group 이름의 자리): mygo workbench는 group 이름을 가운데가 아니라 page처럼 content card의 첫 tab이 서는 header의 시작에 그린다. groups 명세가 그 자리를 적는다(`docs/spec/groups.md#headers`). 검증: mygo test가 바뀌지 않은 code에서 실패했고 통과한다.

@@ -656,3 +656,20 @@ func TestACardMoveFocusesTheMovedCardAndAMoveThatChangesNothingKeepsTheFocus(t *
 		t.Fatalf("the move of the group card card-4 focused %s, not the first card inside it", got)
 	}
 }
+
+// A split button of a group header is disabled while the split of its group card toward its side is refused, and core.card.menu of a
+// disabled button is refused with the text of the page instead of opening a menu whose pick fails (docs/spec/groups.md#headers).
+func TestTheMenuOfADisabledGroupSplitButtonIsRefused(t *testing.T) {
+	f := groupedShell(t)
+	f.tester.SetSize(1200, 380)
+	f.settle()
+	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "bottom", "plugin": "plain"}`); err == nil {
+		t.Fatal("the split of the group card card-2 toward bottom succeeded in a window of 380 points")
+	}
+	if _, err := f.apply("core.card.menu", `{"card": "card-2", "menu": "split-y"}`); err == nil || err.Error() != "card card-2 cannot split-y" {
+		t.Fatalf("core.card.menu of the disabled split button of card-2 answered %v", err)
+	}
+	if picker := f.status("core.picker"); !strings.HasPrefix(picker, `{"open":false`) {
+		t.Fatalf("core.card.menu of a disabled button opened the menu %s", picker)
+	}
+}
