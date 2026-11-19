@@ -190,9 +190,11 @@ function gridState() {
   const rects = grid.rects();
   const fullscreen = fullscreenCard();
   let pane = 0;
-  const cards = [...plane.querySelectorAll(".card[data-card-id]")].map((el) => {
-    const card = grid.card(el.dataset.cardId);
-    if (!card) return null;
+  // The cards of the grid in workbench order (docs/spec/groups.md#status-and-queries); a card that has no element yet is not reported.
+  const cards = tree.order().filter(({ node }) => !node).map(({ id }) => {
+    const card = grid.card(id);
+    const el = plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
+    if (!card || !el) return null;
     const rect = fullscreen === null ? rects.get(card.id) : presentedCardRect(card.id);
     const tabs = tabsOf(card);
     return {
@@ -215,8 +217,7 @@ function gridState() {
   // The group cards follow the cards of the grid in workbench order, each with its drawn rectangle and no tabs (docs/spec/groups.md#status-and-queries).
   const groups = tree.nodes().map((node) => {
     const { x, y, w, h } = tree.rect(node.card);
-    const parent = tree.parentOf(node.card);
-    return { id: node.card, x, y, w, h, parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === node.card,
+    return { id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
       group: { name: node.name, level: tree.level(node.card) + 1, leader: node.leader } };
   });
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
@@ -227,10 +228,10 @@ function gridState() {
   };
 }
 
-/** The members of a card of core.grid for its level: parent, the group card that holds it, absent in the root level, and leader true on the leader. */
+/** The members of a card of core.grid for its level: parent, the group card that holds it or null in the root level, and leader, whether it leads its level. */
 function levelMembers(tree, id) {
   const parent = tree.parentOf(id);
-  return { ...(parent ? { parent: parent.card } : {}), ...(tree.leaderOf(parent) === id ? { leader: true } : {}) };
+  return { parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === id };
 }
 
 /* The memory saver of the page (memory-saver.js), given at installCoreExposure. */
