@@ -464,7 +464,7 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
                 allowed.push("many");
             }
             if kind == "status" {
-                allowed.push("summary");
+                allowed.extend_from_slice(&["summary", "activity"]);
             }
             only(&at_entry, entry, &allowed)?;
             if !is_text(entry.get("description")) {
@@ -492,6 +492,54 @@ fn check_exposes(owner: &str, exposes: &Value) -> Result<(), String> {
             if entry.get("summary").is_some_and(|raw| !raw.is_boolean()) {
                 return Err(format!("{at_entry}: summary must be a boolean"));
             }
+            if let Some(activity) = entry.get("activity") {
+                let schema = entry.get("schema").and_then(Value::as_object);
+                check_activity(&at_entry, schema, activity)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The activities from the highest to the lowest (docs/spec/activity.md#activities).
+const ACTIVITIES: [&str; 4] = ["attention", "failed", "running", "idle"];
+
+/// Checks the activity map of a status (checkActivity of the reader, docs/spec/activity.md#declaration): an object with at
+/// least one member, each a value of the status that its schema admits and naming an activity, the members checked in code
+/// point order of their names.
+fn check_activity(
+    at: &str,
+    schema: Option<&Map<String, Value>>,
+    activity: &Value,
+) -> Result<(), String> {
+    let members = activity
+        .as_object()
+        .filter(|members| !members.is_empty())
+        .ok_or_else(|| {
+            format!(
+                "{at}: activity must be an object of values and activities with at least one member"
+            )
+        })?;
+    for value in sorted_keys(members) {
+        let named = &members[value];
+        if !named
+            .as_str()
+            .is_some_and(|named| ACTIVITIES.contains(&named))
+        {
+            return Err(format!(
+                "{at}: activity {} names {}, which is not one of {}",
+                value_text(&Value::String(value.clone())),
+                value_text(named),
+                ACTIVITIES.join(", ")
+            ));
+        }
+        let admitted =
+            schema.is_some_and(|schema| matches_schema(schema, &Value::String(value.clone())));
+        if !admitted {
+            return Err(format!(
+                "{at}: activity {} is not a value of the schema of the status",
+                value_text(&Value::String(value.clone()))
+            ));
         }
     }
     Ok(())

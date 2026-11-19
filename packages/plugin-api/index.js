@@ -1267,7 +1267,7 @@ function parameterRefusal(name, schema, params) {
  * Validates one `exposes` declaration. Throws when the format is wrong and returns the received value otherwise.
  *
  *     owner   first part of the name: core, host or a plugin id
- *   status  {name, description, schema, summary?}
+ *   status  {name, description, schema, summary?, activity?}
  *     commands {name, description, params, result}. params is a schema of type object. A command has no time limit: its
  *                     reply or the end of its peer ends it, so a declaration with timeout is refused.
  *   element {name, description, many?}
@@ -1296,7 +1296,7 @@ export function validateExposes(owner, exposes) {
       // A command ends by its reply or by the end of its peer (docs/spec/exposure.md, command timeout), so the former member is
       // refused by its own name.
       if (key === "commands" && Object.hasOwn(entry, "timeout")) throw new Error(`${at}: timeout is not a member of a command declaration`);
-      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : []), ...(key === "status" ? ["summary"] : [])]);
+      only(at, entry, ["name", "description", ...fields[key], ...(key === "element" ? ["many"] : []), ...(key === "status" ? ["summary", "activity"] : [])]);
       if (!isText(entry.description)) throw new Error(`${at}: description is required`);
       for (const field of fields[key]) {
         if (entry[field] === undefined) throw new Error(`${at}: ${field} is required`);
@@ -1306,9 +1306,29 @@ export function validateExposes(owner, exposes) {
       if (entry.many !== undefined && typeof entry.many !== "boolean") throw new Error(`${at}: many must be a boolean`);
       // A status with summary true is a tab summary (docs/spec/exposure.md#entry-fields).
       if (entry.summary !== undefined && typeof entry.summary !== "boolean") throw new Error(`${at}: summary must be a boolean`);
+      if (entry.activity !== undefined) checkActivity(at, entry.schema, entry.activity);
     }
   }
   return exposes;
+}
+
+/** The activities from the highest to the lowest (docs/spec/activity.md#activities). */
+export const ACTIVITIES = Object.freeze(["attention", "failed", "running", "idle"]);
+
+/**
+ * Checks the activity map of a status (docs/spec/activity.md#declaration): an object with at least one member, each a value of the
+ * status that its schema admits and naming an activity, the members checked in code point order of their names.
+ */
+function checkActivity(at, schema, activity) {
+  if (!isObject(activity) || Object.keys(activity).length === 0) {
+    throw new Error(`${at}: activity must be an object of values and activities with at least one member`);
+  }
+  for (const [value, named] of sortedEntries(activity)) {
+    if (!ACTIVITIES.includes(named)) {
+      throw new Error(`${at}: activity ${JSON.stringify(value)} names ${JSON.stringify(named)}, which is not one of ${ACTIVITIES.join(", ")}`);
+    }
+    if (!matchesSchema(schema, value)) throw new Error(`${at}: activity ${JSON.stringify(value)} is not a value of the schema of the status`);
+  }
 }
 
 /**

@@ -4729,6 +4729,401 @@
       ]
     },
     {
+      "id": "exposes.status-activity-accepted",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": {
+                "busy": "running",
+                "ask": "attention",
+                "done": "idle"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": true,
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-not-object",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": "running"
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be an object of values and activities with at least one member",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-empty",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": {}
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be an object of values and activities with at least one member",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-list",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": [
+                "busy"
+              ]
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity must be an object of values and activities with at least one member",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-unknown-level",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": {
+                "busy": "waiting"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity \"busy\" names \"waiting\", which is not one of attention, failed, running, idle",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-level-not-text",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": {
+                "busy": 1
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity \"busy\" names 1, which is not one of attention, failed, running, idle",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-first-member-in-code-point-order",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": {
+                "done": "later",
+                "ask": "soon"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity \"ask\" names \"soon\", which is not one of attention, failed, running, idle",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-value-outside-enum",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "busy",
+                  "ask",
+                  "done",
+                  null
+                ]
+              },
+              "activity": {
+                "busy": "running",
+                "gone": "idle"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity \"gone\" is not a value of the schema of the status",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
+      "id": "exposes.status-activity-value-outside-type",
+      "manifest": {
+        "id": "probe",
+        "name": "Probe",
+        "description": "Sample.",
+        "surface": {
+          "composition": {
+            "kind": "view",
+            "page": "ui/page.html"
+          }
+        },
+        "mark": "P",
+        "icon": "<svg></svg>",
+        "exposes": {
+          "status": [
+            {
+              "name": "probe.s",
+              "description": "State.",
+              "schema": {
+                "type": "number"
+              },
+              "activity": {
+                "1": "idle"
+              }
+            }
+          ]
+        }
+      },
+      "accepted": false,
+      "error": "probe exposes probe.s: activity \"1\" is not a value of the schema of the status",
+      "packageFiles": [
+        "plugin.json",
+        "ui/page.html"
+      ]
+    },
+    {
       "id": "exposes.description-missing",
       "manifest": {
         "id": "probe",
