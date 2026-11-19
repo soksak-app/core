@@ -528,7 +528,7 @@ pub(crate) fn choose_folder(
         return Ok(None);
     }
     match panel.URLs().iter().next() {
-        Some(url) => chosen_path(url).map(Some),
+        Some(url) => chosen_path(&url).map(Some),
         None => Ok(None),
     }
 }
