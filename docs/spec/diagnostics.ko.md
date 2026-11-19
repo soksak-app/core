@@ -86,6 +86,8 @@ Still은 녹화 창과 그 child window를 window server가 합성한 그대로 
 
 표의 행은 시각이 없는 기록을 `<level> <layer> <where>: <text>`로 보인다.
 
+panic으로 poison된 Rust lock은 `PoisonError::into_inner`로 읽고 그 값을 쓴다. panic hook이 panic을 event `host.panic`으로 기록하므로(아래 표의 행), 복구가 실패를 숨기지 않는다.
+
 | 실패 | 기록 |
 |---|---|
 | main page의 module이 불러오지 못하거나 불러오는 중 던진다 | `error workbench start: <text> @ <file>:<line>`([page 시작](native-host.ko.md#page-시작)) |

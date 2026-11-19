@@ -50,6 +50,7 @@ impl Record {
         *self
             .window
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
     }
 
@@ -58,6 +59,7 @@ impl Record {
         *self
             .window
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner()) = window;
     }
 
@@ -66,6 +68,7 @@ impl Record {
         *self
             .closing
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner()) = Some(hook);
     }
 
@@ -73,6 +76,7 @@ impl Record {
     pub(crate) fn closing_kept(&self) -> bool {
         self.closing
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .as_ref()
             .map(|hook| hook())
@@ -83,6 +87,7 @@ impl Record {
     pub(crate) fn webview_labels(&self) -> Vec<String> {
         self.webviews
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .keys()
             .cloned()
@@ -93,6 +98,7 @@ impl Record {
     pub(crate) fn webview(&self, label: &str) -> port::Result<*mut WebView> {
         self.webviews
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .get(label)
             .map(|view| view.0)
@@ -103,6 +109,7 @@ impl Record {
     pub(crate) fn raw_webview(&self, label: &str) -> Option<*mut WebView> {
         self.webviews
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .get(label)
             .map(|view| view.0)
@@ -112,6 +119,7 @@ impl Record {
     pub(crate) fn add_webview(&self, label: String, view: *mut WebView) {
         self.webviews
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .insert(label, Webview(view));
     }
@@ -120,6 +128,7 @@ impl Record {
     pub(crate) fn remove_webview(&self, label: &str) {
         self.webviews
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .remove(label);
     }
@@ -135,6 +144,7 @@ pub(crate) fn windows() -> &'static RwLock<HashMap<String, Arc<Record>>> {
 pub(crate) fn register(_label: String, record: Arc<Record>) {
     windows()
         .write()
+        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(|error| error.into_inner())
         .insert(_label, record);
 }
@@ -143,6 +153,7 @@ pub(crate) fn register(_label: String, record: Arc<Record>) {
 pub(crate) fn labels() -> Vec<String> {
     windows()
         .read()
+        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(|error| error.into_inner())
         .keys()
         .cloned()
@@ -153,6 +164,7 @@ pub(crate) fn labels() -> Vec<String> {
 pub(crate) fn record(label: &str) -> Option<Arc<Record>> {
     windows()
         .read()
+        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(|error| error.into_inner())
         .get(label)
         .cloned()
@@ -160,11 +172,13 @@ pub(crate) fn record(label: &str) -> Option<Arc<Record>> {
 
 /// The record of the window that holds the web view with label, and the window label.
 pub(crate) fn record_of_webview(label: &str) -> Option<(Arc<Record>, String)> {
+    // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
     let all = windows().read().unwrap_or_else(|error| error.into_inner());
     for (window, record) in all.iter() {
         if record
             .webviews
             .lock()
+            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(|error| error.into_inner())
             .contains_key(label)
         {
