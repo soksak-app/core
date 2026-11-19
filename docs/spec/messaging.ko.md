@@ -56,7 +56,7 @@ Message는 소비되지 않는다. `messages_read`는 `after`보다 큰 sequence
 
 ## Hand-off는 message가 아니다
 
-Hand-off는 작업을 다른 terminal에 넘기고 결과를 받는 것이다. 이는 message가 아니라 record다. Message는 reader가 순서대로 받는 text이며, message로 보낸 결과는 어느 attempt의 답인지 보이지 않기 때문이다. Party와 card 기능이 record와 그 저장을 소유하며, 이 문서는 분리만 정의한다. Record의 상태는 `assigned`, `started`, `result`, `integrated`, `abandoned`다. `assigned`가 attempt를 시작하고, `started`, `result`, `integrated`가 그 순서로 따른다. `abandoned`는 `integrated`에 이르지 않은 attempt를 끝내며, 그 뒤의 새 할당은 다음 attempt를 시작한다. 각 record는 `attempt` 번호를 가지며, 1에서 시작해 할당마다 1씩 늘어난다. 상태 변경은 자기 attempt를 밝히며, 이전 attempt의 변경이나 결과는 `stale-attempt`로 거부된다. 이 error는 현재 attempt를 밝힌다. Record에는 heartbeat, 시간 제한, lock이 없다. 멈춘 attempt는 소유자나 사람이 `abandoned`로 끝낼 때까지 `started`로 남으며, 기다리는 호출자는 상태 event를 기다린다. [AGENTS](../../AGENTS.md#implementation)가 event 대기에 요구하는 방식이다.
+Hand-off는 작업을 다른 terminal에 넘기고 결과를 받는 것이다. 이는 message가 아니라 record다. Message는 reader가 순서대로 받는 text이며, message로 보낸 결과는 어느 attempt의 답인지 보이지 않기 때문이다. record와 그 저장을 정의한 specification은 아직 없으며, 이 문서는 분리만 정의한다. Record의 상태는 `assigned`, `started`, `result`, `integrated`, `abandoned`다. `assigned`가 attempt를 시작하고, `started`, `result`, `integrated`가 그 순서로 따른다. `abandoned`는 `integrated`에 이르지 않은 attempt를 끝내며, 그 뒤의 새 할당은 다음 attempt를 시작한다. 각 record는 `attempt` 번호를 가지며, 1에서 시작해 할당마다 1씩 늘어난다. 상태 변경은 자기 attempt를 밝히며, 이전 attempt의 변경이나 결과는 `stale-attempt`로 거부된다. 이 error는 현재 attempt를 밝힌다. Record에는 heartbeat, 시간 제한, lock이 없다. 멈춘 attempt는 소유자나 사람이 `abandoned`로 끝낼 때까지 `started`로 남으며, 기다리는 호출자는 상태 event를 기다린다. [AGENTS](../../AGENTS.md#implementation)가 event 대기에 요구하는 방식이다.
 
 ## Input injection
 

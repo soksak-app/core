@@ -35,7 +35,7 @@
 | status | `name` | 항목 이름 |
 | status | `description` | 한 문장 설명 |
 | status | `schema` | 값 스키마 |
-| status | `summary` | 선택적 boolean. `true`이면 이 status를 탭 요약으로 표시한다. 값은 plugin이 선언한 각 탭의 `status`에 들어가며, [party](parties.ko.md#조회)의 카드 상태와 [창 설명](cli.ko.md#창-설명)의 탭 요약에 나타난다. `summary`가 없는 status는 전체 설명(`--full`)에만 나타난다. core는 값을 복사할 뿐 plugin을 이름으로 알지 않는다. 기본값은 `false`다. |
+| status | `summary` | 선택적 boolean. `true`이면 이 status를 탭 요약으로 표시한다. 값은 plugin이 선언한 각 탭의 [창 설명](cli.ko.md#창-설명) 탭 요약에 나타난다. `summary`가 없는 status는 전체 설명(`--full`)에만 나타난다. core는 값을 복사할 뿐 plugin을 이름으로 알지 않는다. 기본값은 `false`다. |
 | command | `name` | 항목 이름 |
 | command | `description` | 한 문장 설명 |
 | command | `params` | 매개변수 스키마 |
