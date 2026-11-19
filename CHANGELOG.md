@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-2: `core.party.remove` refuses a card that the party does not hold with `card <id> is not in party <party>`, and changes nothing. The case `removing a card that is not in the party is refused` in `docs/spec/cases/layout/parties.json` expects that refusal, and the party module and the Go party model pass it.
 - F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
 - F905-4: The Codex contract test does not include the shared `policy` helper it does not call, which failed the clippy check with warnings denied in the F898 CI check (`packages/sok/rust/tests/codex_test.rs`).
 - F899-6: The contract that refuses destructive shell commands of hosted agents before they run, fail-closed, is in the persistent services specification. The implementations are in the sidecar repositories (alacritty S121, vt S181).

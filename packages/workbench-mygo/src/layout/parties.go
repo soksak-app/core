@@ -498,17 +498,14 @@ func (p *Parties) join(g *Grid, target *party, cards []string, reason string) (p
 	return partyReply{Party: p.view(target), Taken: taken, Changed: changed}, nil
 }
 
-// remove removes a card from a party and applies the split rule to the cards that remain. A card that the party does not hold changes nothing.
+// remove removes a card from a party and applies the split rule to the cards that remain. A card that the party does not hold is refused.
 func (p *Parties) remove(g *Grid, partyID, card string) (any, error) {
 	target := p.find(partyID)
 	if target == nil {
 		return nil, fmt.Errorf("unknown party %s", partyID)
 	}
 	if !slices.Contains(target.Cards, card) {
-		return struct {
-			Party   partyView     `json:"party"`
-			Changed []partyChange `json:"changed"`
-		}{p.view(target), []partyChange{}}, nil
+		return nil, fmt.Errorf("card %s is not in party %s", card, partyID)
 	}
 	before := slices.Clone(target.Cards)
 	target.Cards = slices.DeleteFunc(target.Cards, func(id string) bool { return id == card })

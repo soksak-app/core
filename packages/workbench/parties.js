@@ -303,10 +303,10 @@ function add({ party: id, card, take = false }) {
   return { party: record(party), taken, changed };
 }
 
-/** Removes a card from a party and applies the split rule to the rest. */
+/** Removes a card from a party and applies the split rule to the rest. A card that the party does not hold is refused. */
 function remove({ party: id, card }) {
   const party = byId(id);
-  if (!party.cards.includes(card)) return { party: record(party), changed: [] };
+  if (!party.cards.includes(card)) fail(`card ${card} is not in party ${id}`);
   const before = [...party.cards];
   party.cards = party.cards.filter((member) => member !== card);
   if (party.leader === card) party.leader = null;
