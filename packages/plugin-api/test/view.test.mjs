@@ -544,6 +544,43 @@ test("the view bridge keeps the public log API and batches source-clocked record
   assert.deepEqual(reports.filter(({ kind }) => kind !== "open-calls"), [], "a successful writer reply reported an error");
 });
 
+// The host binds the surface of a view record to the view that sent it and refuses a record that names one
+// (docs/spec/logging.md#view-record-delivery), so the plugin record of a surface view carries only the fields of the plugin.
+test("a plugin record of a surface view reaches the host without a surface field", { timeout: 5000 }, async (t) => {
+  const { posted, host } = setup(t);
+  globalThis.window.sokSurface = { surface: "probe-tab", params: null, declarations: {} };
+  // The surface document entries of a surface view read the visual viewport, which jsdom does not define.
+  const viewport = new globalThis.window.EventTarget();
+  Object.assign(viewport, { width: 400, height: 200 });
+  Object.defineProperty(globalThis.window, "visualViewport", { value: viewport });
+  const reports = [];
+  let clockReads = 0;
+  const { runtime } = createViewBridge({
+    handler: { postMessage: (message) => {
+      posted.push(plain(message));
+      if (message.id === undefined || message.command === undefined) return;
+      if (message.command === "runtime.log" && message.params.action === "clock") {
+        clockReads += 1;
+        queueMicrotask(() => host({ sok: 1, id: message.id, result: { ts_us: 1_000_000 + clockReads, mono_ns: 2_000_000 + clockReads } }));
+      } else {
+        queueMicrotask(() => host({ sok: 1, id: message.id, result: null }));
+      }
+    } },
+    report: (error) => { if (error.kind !== "open-calls") reports.push(error); },
+  });
+  runtime.log.info("saved", { n: 1 });
+  let batch;
+  for (let turn = 0; turn < 20 && batch === undefined; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    batch = posted.find(({ command, params }) => command === "runtime.log" && params?.action === "batch");
+  }
+  assert.ok(batch, `the view did not send a batch request after ${clockReads} clock reads`);
+  const record = batch.params.events.find(({ event }) => event === "plugin.probe.saved");
+  assert.ok(record, `the batch holds no plugin record: ${JSON.stringify(batch.params.events.map(({ event }) => event))}`);
+  assert.deepEqual(record.fields, { n: 1 }, "the plugin record of a surface view names a surface that the host refuses");
+  assert.deepEqual(reports, [], "the view reported a failure");
+});
+
 /** Dispatches a cancelable keydown on the window of the view and returns the event. */
 const keydown = (init) => {
   const event = new globalThis.window.KeyboardEvent("keydown", { cancelable: true, ...init });

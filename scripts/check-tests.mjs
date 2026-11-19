@@ -13975,6 +13975,13 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F933",
+    implementation: [{ file: "packages/plugin-api/view.js", symbol: "const { log } = createPluginRuntime({ pluginId: plugin, hooks: {" }],
+    tests: [{ file: "packages/plugin-api/test/view.test.mjs", id: "a plugin record of a surface view reaches the host without a surface field" }],
+    expected: "The view bridge sends the plugin records of a surface view without fields.surface, and the host adds the surface bound to the view channel.",
+    levels: ["unit"],
+  },
+  {
     id: "F932",
     implementation: [{ file: "packages/sok/go/src/sok.go", symbol: "A declared submit command sends its text as one input and Enter as a separate key input" }],
     tests: [{ file: "scripts/test/submit-guidance.test.mjs", id: "the submit guidance sentence is identical in both sok usage texts, the agent skill and the command reference" }],
