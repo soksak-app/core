@@ -78,7 +78,7 @@ test("a frame factor change prepares the row of the next draw and writes the fac
       "the seats of the layout do not carry the device pixel scale that the view laid the cards out on");
 
     records.length = 0;
-    compositor.publishAhead(held.made, held.seated, held.titlebar);
+    compositor.publishAhead(held.made, held.seated, held.titlebar, []);
     assert.equal(records.at(-1).titlebar, 54, "the preparation record carries the row of the next draw");
     held.draw();
     assert.equal(drawnFactor(), "1.5", "the prepared draw writes the factor");

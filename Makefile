@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 
-.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
+.PHONY: check-push check-preflight check-events benchmark-rust benchmark-go check-tools install build test-all check-browser-example check-docs check-commits check-checklist-history install-hooks check-boundaries check-platform-files check-windows-build check-windows-rust check-host-files check-app-tests create-test-certificates test-app-card-sidebar-current test-app-view-focus-current test-app-shutdown benchmark-view-drag benchmark-resize-catch-up benchmark-empty-window benchmark-idle-tab benchmark-split-load benchmark-click-cpu benchmark-scroll-cpu benchmark-layout-redraw repeat-app-test benchmark-b3 check-b3 check-exposure check-tests check-hosts-same test-language check-release test-rust-alone repeat-rust repeat-go repeat-node check-temp-files measure-page-memory measure-object-counts measure-host-calls measure-app-usage measure-terminal-redraw measure-trace-share measure-host-allocations check-app-update check-host-debug check-commands test-headless-owners
 
 check-docs:
 	@node scripts/check-docs.mjs
@@ -737,6 +737,21 @@ benchmark-split-load:
 
 benchmark-plain-view:
 	@pnpm -F @soksak/e2e run benchmark:plain-view
+
+# Three benchmarks of cards whose view holds a native image region drawn by a sidecar, the raster probe fixture, against the running
+# applications of SOKSAK_APP (all three by default); each reports its figures and judges none. benchmark-click-cpu
+# (docs/operations/examples.md#click-cpu-benchmark) clicks ten cards 100 times; benchmark-scroll-cpu
+# (docs/operations/examples.md#scroll-cpu-benchmark) scrolls 10000 retained lines with native wheels; benchmark-layout-redraw
+# (docs/operations/examples.md#layout-redraw-benchmark) counts the recorded frames in which a card shows none of its raster during a
+# balance, a divider drag and a leader change.
+benchmark-click-cpu:
+	@pnpm -F @soksak/e2e run benchmark:click-cpu
+
+benchmark-scroll-cpu:
+	@pnpm -F @soksak/e2e run benchmark:scroll-cpu
+
+benchmark-layout-redraw:
+	@pnpm -F @soksak/e2e run benchmark:layout-redraw
 
 # The time from a key to its arrival in the input probe of an open application (docs/operations/examples.md#input-latency): APP names the application, by
 # default mygo, and SOKSAK_CONFIG_DIR the configuration folder that the application runs with.
