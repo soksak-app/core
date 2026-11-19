@@ -40,12 +40,15 @@ The current Linux and Windows platform implementations report that process exit 
 | `sok setup install [path\|skill\|mcp]...` | Installs each missing setup part of the named kinds, of every kind without a name ([setup parts](#setup-parts)) |
 | `sok setup environment` | Prints `{HOME, PATH, CLAUDE_CONFIG_DIR, environment}` of its environment, where `environment` holds every variable, for the host that reads the environment of the login shell ([agents in the application](#agents-in-the-application)) |
 | `sok plugin install\|update\|remove\|enable\|disable <id>` | Changes the installed plugins ([installation](installation.md)) |
+| `sok conversation read --agent claude-code\|codex --cwd <path>` | Prints `{file, messages, skipped}`: the messages of the conversation of an agent in a working directory, read from the agent's session file on disk, and the file it read ([agent conversation](agent-conversation.md)); it does not need a running application |
 | `sok plugin list` | Lists the installed plugins |
 | `sok registry use <index>` | Sets the registry index that installation reads |
 | `sok registry build <directory>` | Validates a registry and writes its `index.json` |
 | `sok message send <folder> <text>` | Writes one message into the folder `<folder>`, an absolute path, for the surface that `SOKSAK_SURFACE` names: the text is UTF-8 and at most 64 KiB, and a larger text fails with an explicit error that names the limit, with no file written. The command writes the text under the temporary name `.tmp-<random>` in the folder, closes the file, and then renames it to `<from>.<token>.txt`, the rename being the point at which the message becomes visible ([message](messaging.md#message)). It does not connect to an application; without `SOKSAK_SURFACE` it fails with an explicit error. It prints `{path}`, the name of the message file, and a folder that does not exist fails as a file operation does ([output and exit status](#output-and-exit-status)) |
 
 A declared command name contains a dot (`core.card.split`, `terminal.input`), so it never collides with the command words above.
+
+A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
 
 ## Windows
 

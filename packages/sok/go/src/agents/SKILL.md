@@ -43,6 +43,7 @@ After a step, find the commands of the plugin of a tab with `exposure_search` or
 ## Running and observing
 
 - Run a declared command with the parameters of its schema: `sok <command> [--<parameter> <value>]... [--params <json>]`, or `command_run {name, params}`.
+- A declared submit command sends its text as one input and Enter as a separate key input, refuses text that contains CR or LF, and returns only that the input was sent; confirm acceptance from the status of the input line and of the agent busy state, never by waiting with a timer.
 - Read a status with `sok status <name>` or `status_get`; wait for a value with `sok status <name> --watch` or `status_watch_once {name, equals}`.
 - Act on an element with `sok element rect|click|input|dispatch <name>`, `element_rect` or `element_act`.
 - Use native input (`sok input pointer|gesture|key|text`, `input_pointer`, `input_key`, `input_text`) only when a request needs real input events; a command or an element action is the normal path.
