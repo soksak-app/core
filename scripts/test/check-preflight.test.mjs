@@ -30,3 +30,14 @@ test("the preflight lists the static checks of the host jobs and the equivalence
   }
   assert.ok(!targets.includes("check-rust-clippy"), "check-rust-clippy is not listed because it needs build-native");
 });
+
+test("the preflight passes the revision range to check-commits, as the pre-push range of check-push", () => {
+  const result = spawnSync(process.execPath, [join(ROOT, "scripts", "check-preflight.mjs"), "--list"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    timeout: 60000,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const line = result.stdout.split("\n").find((text) => text.startsWith("target check-commits"));
+  assert.equal(line, "target check-commits RANGE=origin/main..HEAD", "check-commits gets the range of check-push");
+});

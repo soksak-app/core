@@ -71,17 +71,23 @@ for (const target of selected) {
   runnable.push(target);
 }
 
+// The revision range of the pre-push checks, the same default that check-push uses (Makefile).
+const PUSH_RANGE = "origin/main..HEAD";
+// Targets that require a revision range as a variable; the step variable is dropped by stepTargets, so the range is passed here.
+const RANGE_ARGUMENT = { "check-commits": `RANGE=${PUSH_RANGE}`, "check-checklist-history": `RANGE=${PUSH_RANGE}` };
+const argumentsOf = (target) => (RANGE_ARGUMENT[target] === undefined ? [] : [RANGE_ARGUMENT[target]]);
+
 console.log(`preflight targets (${runnable.length}): ${runnable.join(" ")}`);
 if (process.argv.includes("--list")) {
   // The list mode prints the derived targets in CI order and runs none of them.
-  for (const target of runnable) console.log(`target ${target}`);
+  for (const target of runnable) console.log(`target ${[target, ...argumentsOf(target)].join(" ")}`);
   process.exit(0);
 }
 let failed = null;
 for (const target of runnable) {
   console.log(`running ${target}`);
   const started = Date.now();
-  const result = spawnSync("make", ["--no-print-directory", target], {
+  const result = spawnSync("make", ["--no-print-directory", target, ...argumentsOf(target)], {
     cwd: ROOT,
     stdio: "inherit",
     timeout: TARGET_TIMEOUT_MS,
