@@ -14059,14 +14059,14 @@ const FEATURE_LINKS = [
   {
     id: "F936",
     implementation: [
-      { file: "packages/workbench/projects.js", symbol: "obsolete member parties" },
-      { file: "packages/workbench-mygo/src/shell_project.go", symbol: "obsolete member parties" },
+      { file: "packages/host/go/src/workspace.go", symbol: "projectsFormat = 2" },
+      { file: "packages/host/rust/src/workspace.rs", symbol: "pub(crate) const PROJECTS_FORMAT: u64 = 2;" },
     ],
     tests: [
-      { file: "packages/workbench/test/stored-space.test.mjs", id: "a space that holds the member parties is refused with an error that names projects.json, the project, the space and the member" },
-      { file: "packages/workbench-mygo/tests/stored_space_test.go", id: "TestASpaceThatHoldsPartiesIsRefusedByName" },
+      { file: "packages/host/go/tests/workspace_test.go", id: "TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites" },
+      { file: "packages/host/rust/tests/workspace_test.rs", id: "earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes" },
     ],
-    expected: "Both workbenches refuse a stored space that holds the removed member parties with an error that names projects.json, the project, the space and the member.",
+    expected: "Both hosts refuse as a whole a projects.json of format 1, the only form whose spaces held the removed member parties.",
     levels: ["unit"],
   },
   {

@@ -459,10 +459,6 @@ func (s *Shell) loadSpace(project *projectRecord) error {
 	if err != nil {
 		return err
 	}
-	// The same refusal as readStoredSpace of packages/workbench/projects.js (docs/spec/projects.md#persistence).
-	if space.Parties != nil {
-		return fmt.Errorf("projects.json: project %s, space %s: obsolete member parties", project.Root, space.ID)
-	}
 	var stored storedLayout
 	if err := json.Unmarshal(space.Layout, &stored); err != nil {
 		return fmt.Errorf("space %s: %w", space.ID, err)
