@@ -56,6 +56,12 @@ fn window_pointer(view: &objc2_app_kit::NSView) -> Result<*mut c_void, String> {
         .unwrap_or(std::ptr::null_mut()))
 }
 
+/// The window pointer of a view for the main-thread window test. Only the test-seam feature compiles it.
+#[cfg(feature = "test-seam")]
+pub fn window_pointer_for_test(view: &objc2_app_kit::NSView) -> Result<*mut c_void, String> {
+    window_pointer(view)
+}
+
 // The window operations of the port.
 
 pub(crate) fn title(window: *mut c_void) -> String {

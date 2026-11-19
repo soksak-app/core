@@ -6,6 +6,9 @@ mod framework;
 mod frontend;
 mod menu;
 #[path = "platform/platform.rs"]
+#[cfg(feature = "test-seam")]
+pub mod platform;
+#[cfg(not(feature = "test-seam"))]
 mod platform;
 mod service;
 

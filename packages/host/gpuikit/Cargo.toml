@@ -14,6 +14,8 @@ diagnostics = ["soksak-host/diagnostics"]
 dev = ["soksak-host/dev"]
 # gpuikit selects the identifier of the application of the sok command.
 gpuikit = ["soksak-sok/gpuikit"]
+# test-seam exposes the window pointer of a view to the main-thread window test; no production build has it.
+test-seam = []
 
 [dependencies]
 gpui-kit = "=0.9.1"
@@ -64,3 +66,10 @@ objc2-app-kit = { version = "0.3", features = ["NSEvent"] }
 
 [lints]
 workspace = true
+
+# The native window of a view is read only on the main thread, so this target runs its tests there (harness = false).
+[[test]]
+name = "darwin_window_test"
+path = "tests/platform/darwin/darwin_window_test.rs"
+harness = false
+required-features = ["test-seam"]

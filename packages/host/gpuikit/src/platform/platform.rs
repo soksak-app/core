@@ -3,6 +3,9 @@
 
 #[cfg(target_os = "macos")]
 #[path = "darwin/darwin.rs"]
+#[cfg(feature = "test-seam")]
+pub mod darwin;
+#[cfg(not(feature = "test-seam"))]
 mod darwin;
 
 #[cfg(target_os = "macos")]
