@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-3 (projects.json error text in a page test): the page test of the refused stored files lists the refusal of a `projects.json` with the text of the current reader, `projects.json: format must be 2`; the text of a refused `settings.json` stays `format must be 1`. `storedFileErrors` passes the texts of the snapshot through unchanged, so the test judges no behaviour of the text.
 - F937-3 (side check of close and move, page library): `close(id, sides)` and `move(id, targetId, side, sides)` of the layout library refuse a side other than `below`, `above`, `right` and `left` with `unknown fill side <side>` before they judge the card, as `fill` and the Go port do, so a fixed card, the last card, a card with a paidBy record or a missing card no longer answers false or true for another side. The API table of `packages/soksak/docs/layout.md` states the refusal. Verification: the test `close and move refuse another side before they judge the card` of `packages/soksak/test/close.test.mjs` failed on the unchanged code and passes; 67 grid cases and 479 of 479 layout library tests pass.
 
 ## 2026-11-19

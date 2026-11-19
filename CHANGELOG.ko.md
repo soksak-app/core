@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-3 (page test의 projects.json 오류 text): 거부된 저장 파일의 page test는 `projects.json`의 거부를 현재 reader의 text `projects.json: format must be 2`로 나열한다. 거부된 `settings.json`의 text는 `format must be 1`로 남는다. `storedFileErrors`는 snapshot의 text를 바꾸지 않고 넘기므로 test는 text의 동작을 판정하지 않는다.
 - F937-3 (close와 move의 변 검사, page library): layout library의 `close(id, sides)`와 `move(id, targetId, side, sides)`는 `fill`과 Go port처럼 카드를 판정하기 전에 `below`, `above`, `right`, `left`가 아닌 변을 `unknown fill side <side>`로 거부하므로, 고정된 카드, 마지막 카드, paidBy 기록을 가진 카드, 없는 카드가 다른 변에 더 이상 false나 true를 답하지 않는다. `packages/soksak/docs/layout.md`의 API 표가 그 거부를 밝힌다. 검증: `packages/soksak/test/close.test.mjs`의 test `close and move refuse another side before they judge the card`가 바뀌지 않은 code에서 실패했고 통과한다. grid case 67개와 layout library test 479개 중 479개가 통과한다.
 
 ## 2026-11-19
