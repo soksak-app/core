@@ -714,15 +714,7 @@ func TestViewCallAttachesARegionWithoutAHistory(t *testing.T) {
 
 func TestAPressOnAViewFocusesItsCard(t *testing.T) {
 	f, _ := surfaceShell(t)
-	row := func(id string) float64 {
-		for _, card := range f.cardsOf() {
-			if card["id"] == id {
-				return card["r0"].(float64)
-			}
-		}
-		t.Fatalf("no card %s", id)
-		return 0
-	}
+	row := func(id string) float32 { return f.box("core.card", id).Y }
 	cards := f.tabbedCards()
 	if len(cards) != 2 || row(cards[0]) == row(cards[1]) {
 		t.Fatalf("the views stand in the cards %v", f.cardsOf())

@@ -334,30 +334,25 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		arg(t, s, 1, &line)
 		return g.CenterBoundary(axis, line), true, nil
 	case "even":
-		var boxes []layout.Member
-		arg(t, s, 0, &boxes)
-		return nil, false, g.Even(boxes)
+		return nil, false, g.Even()
+	case "setHeads":
+		var heads map[string]float64
+		arg(t, s, 0, &heads)
+		return nil, false, g.SetHeads(heads)
 	case "insert":
 		var (
-			boxes []layout.Member
-			to    layout.Target
-			side  layout.Side
-			piece layout.Piece
+			to   layout.Target
+			side layout.Side
+			node layout.Node
 		)
-		arg(t, s, 0, &boxes)
-		arg(t, s, 1, &to)
-		arg(t, s, 2, &side)
-		arg(t, s, 3, &piece)
-		born, err := g.Insert(boxes, to, side, piece)
+		arg(t, s, 0, &to)
+		arg(t, s, 1, &side)
+		arg(t, s, 2, &node)
+		born, err := g.Insert(to, side, &node)
 		return born, true, err
 	case "withdraw":
-		var (
-			boxes []layout.Member
-			id    string
-		)
-		arg(t, s, 0, &boxes)
-		arg(t, s, 1, &id)
-		left, err := g.Withdraw(boxes, id)
+		arg(t, s, 0, &id)
+		left, err := g.Withdraw(id)
 		return left, true, err
 	case "arrange":
 		var mode string
@@ -504,7 +499,7 @@ func TestWindowSidebarCases(t *testing.T) {
 		Options     layout.Options `json:"options"`
 		Cases       []struct {
 			Name    string                          `json:"name"`
-			State   layout.Cells                    `json:"state"`
+			State   layout.State                    `json:"state"`
 			Order   []string                        `json:"order"`
 			Sides   []string                        `json:"sides"`
 			Shown   []string                        `json:"shown"`
@@ -526,8 +521,11 @@ func TestWindowSidebarCases(t *testing.T) {
 	caseFile(t, "window-sidebars.json", &file)
 	for _, kase := range file.Cases {
 		t.Run(kase.Name, func(t *testing.T) {
-			grid, err := layout.NewFromCells(kase.State, file.Options)
+			grid, err := layout.New(nil, file.Options)
 			if err != nil {
+				t.Fatal(err)
+			}
+			if err := grid.Replace(kase.State); err != nil {
 				t.Fatal(err)
 			}
 			changed, err := layout.ArrangeWindowSidebars(grid, kase.Order, kase.Sides, kase.Records, kase.Initial, func(side string) bool {

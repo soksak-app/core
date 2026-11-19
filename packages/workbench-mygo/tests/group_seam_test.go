@@ -22,15 +22,14 @@ import (
 // card-7 stands at the left, top and bottom edges of the plane and card-8 at its right edge.
 func seamShell(t *testing.T) *tabShell {
 	t.Helper()
-	space := gridSpace("spc-aaaaaa", []float64{0, 0.25, 0.5, 0.75, 1}, []float64{0, 0.5, 1},
-		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-3", 1, 2, 0, 1, tab("t3", "notes")),
-		gridCard("card-4", 0, 2, 1, 2, tab("t4", "notes")), gridCard("card-2", 2, 3, 0, 2, tab("t2", "notes")),
-		gridCard("card-8", 3, 4, 0, 2, tab("t8", "notes")))
+	space := treeSpace("spc-aaaaaa", cutNode("x",
+		kidNode(0.75, boxNode("card-7", "그룹 3", "card-6", cutNode("x",
+			kidNode(2./3, boxNode("card-6", "그룹 2", "card-5", cutNode("y",
+				kidNode(0.5, boxNode("card-5", "그룹 1", "card-1", cutNode("x", kidNode(0.5, cardNode("card-1", tab("t1", "notes"))), kidNode(0.5, cardNode("card-3", tab("t3", "notes")))))),
+				kidNode(0.5, cardNode("card-4", tab("t4", "notes")))))),
+			kidNode(1./3, cardNode("card-2", tab("t2", "notes")))))),
+		kidNode(0.25, cardNode("card-8", tab("t8", "notes")))))
 	stored := space["layout"].(map[string]any)
-	stored["groups"] = []any{map[string]any{"card": "card-7", "name": "그룹 3", "leader": "card-6", "members": []any{
-		map[string]any{"card": "card-6", "name": "그룹 2", "leader": "card-5", "members": []any{
-			map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-3"}}, "card-4"}},
-		"card-2"}}}
 	stored["leader"], stored["lastCard"] = "card-7", 8
 	f := layoutShell(t, space)
 	// The scale of a window of the measured defect: a line of 1 point is 2 device pixels, and a line between two boxes, which stands

@@ -159,9 +159,9 @@ func TestARetainNamesThePluginOfEachSurface(t *testing.T) {
 
 // A stored card that shows the installed set on its left.
 func cardWithSidebar(project map[string]any) string {
-	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]
+	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["root"].(map[string]any)
 	card["data"].(map[string]any)["sidebars"] = map[string]any{"left": map[string]any{"set": "set-install"}}
-	return card["id"].(string)
+	return card["card"].(string)
 }
 
 // A restart leaves the services alive and their sessions recoverable while a layout holds the surface
@@ -237,11 +237,11 @@ func TestARetainKeepsTheLinkedSideOfEachTabOfACard(t *testing.T) {
 		"sets":  []any{map[string]any{"id": "mine", "title": "mine", "sections": []any{"boxprobe.history"}, "layout": "list"}},
 		"links": []any{map[string]any{"place": "card-top", "plugin": "boxprobe", "set": "mine"}},
 	}
-	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["cards"].([]map[string]any)[0]
+	card := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)["state"].(map[string]any)["root"].(map[string]any)
 	stored := &storedHost{installed: sidebarsInstalled, projects: []map[string]any{project}}
 	newShell(t, stored)
 	calls := retained(t, stored)
-	want := "/a spc-aaaaaa/" + card["id"].(string) + ":top/boxprobe.history"
+	want := "/a spc-aaaaaa/" + card["card"].(string) + ":top/boxprobe.history"
 	if len(calls) != 1 || !slices.Contains(calls[0], want) {
 		t.Fatalf("retained %v, without %s", calls, want)
 	}

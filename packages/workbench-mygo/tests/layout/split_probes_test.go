@@ -49,9 +49,8 @@ func TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := layout.Cells{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "card-1", C0: 0, C1: 1, R0: 0, R1: 1}},
-		PaidBy: map[string]layout.Paid{}}
-	tree, err := layout.ReadTree(state, json.RawMessage(`[]`), json.RawMessage(`"card-1"`), json.RawMessage(`1`),
+	state := layout.State{Root: &layout.Node{Card: "card-1"}, PaidBy: map[string]string{}}
+	tree, err := layout.ReadTree(state, nil, json.RawMessage(`"card-1"`), json.RawMessage(`1`),
 		layout.GroupOptions{Head: 32}, grid)
 	if err != nil {
 		t.Fatal(err)

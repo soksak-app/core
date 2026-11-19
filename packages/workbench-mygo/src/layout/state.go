@@ -347,6 +347,7 @@ func (g *Grid) derive() {
 	up := map[*Node]holding{}
 	var place func(n *Node, e extent)
 	place = func(n *Node, e extent) {
+		g.visit()
 		extents[n] = e
 		switch {
 		case n.isCut():
@@ -373,6 +374,7 @@ func (g *Grid) derive() {
 	leaves := []*Node{}
 	var walk func(n *Node)
 	walk = func(n *Node) {
+		g.visit()
 		switch {
 		case n.isCut():
 			for _, kid := range n.Kids {
@@ -438,6 +440,7 @@ func (g *Grid) commit() {
 	}
 	var push func(n *Node)
 	push = func(n *Node) {
+		g.visit()
 		switch {
 		case n.isCut():
 			a := g.arr(n.Cut)
@@ -469,11 +472,18 @@ type holding struct {
 // holder is the node that holds n: a cut with the index of n among its kids, a box with index -1, or nil for the root. It reads the
 // holders that derive recorded, so it holds for the tree of the last derive and for the nodes that an operation has not moved since.
 func (g *Grid) holder(n *Node) (*Node, int) {
+	g.visit()
 	h, ok := g.up[n]
 	if !ok {
 		return nil, 0
 	}
 	return h.node, h.at
+}
+
+// parent is the node that holds n, a cut or a box, or nil for the root.
+func (g *Grid) parent(n *Node) *Node {
+	g.visit()
+	return g.up[n].node
 }
 
 // put puts next where n stands: in its cut, inside its box, or as the root. A cut along the axis of the cut that holds it gives that cut
@@ -531,25 +541,29 @@ func cardsOf(n *Node) []*Node {
 	return []*Node{n}
 }
 
-// Cells is the earlier stored form of a layout, the lines and the cells: the reader of the layouts that the workbench stores until it
-// stores the tree (F966-2-4 and F966-2-5 remove it).
-type Cells struct {
-	Xs     []float64       `json:"xs"`
-	Ys     []float64       `json:"ys"`
-	Cards  []Card          `json:"cards"`
-	PaidBy map[string]Paid `json:"paidBy"`
+// Cards is the cards of the stored tree in the order of the tree, with their attributes and without cells, or the refusal of CheckState.
+func (s State) Cards() ([]Card, error) {
+	out := []Card{}
+	if err := CheckState(s); err != nil {
+		return nil, err
+	}
+	for _, leaf := range cardsOf(s.Root) {
+		out = append(out, Card{ID: leaf.Card, Width: leaf.Width, Height: leaf.Height, Fixed: leaf.Fixed, Data: leaf.Data})
+	}
+	return out, nil
 }
 
-// Paid is where a card of the earlier form took its space: the card To.
-type Paid struct {
-	Side string `json:"side"`
-	To   string `json:"to"`
-	Span string `json:"span,omitempty"`
-	At   *int   `json:"at,omitempty"`
+// cells is the lines and the cells of the grid, which the rectangle operations of the group tree lay their cards on before the grid reads
+// them as its tree again (installCells).
+type cells struct {
+	Xs     []float64
+	Ys     []float64
+	Cards  []Card
+	PaidBy map[string]string
 }
 
-// CheckCells rejects lines and cells that cannot describe a plane and reports which field is wrong.
-func CheckCells(state Cells) error {
+// checkCells rejects lines and cells that cannot describe a plane and reports which field is wrong.
+func checkCells(state cells) error {
 	bad := func(why string) error { return errors.New("soksak: " + why) }
 	for _, axis := range []struct {
 		name  string
@@ -595,14 +609,13 @@ func CheckCells(state Cells) error {
 	return nil
 }
 
-// treeOfCells reads lines and cells as their slicing tree, the cut along x outside where the lines allow both, with the boxes of the
-// host as boxes of the tree, so a host that still holds the earlier form installs it (F966-2-4 removes it).
-func treeOfCells(cells Cells, boxes []Member) (State, error) {
-	if err := CheckCells(cells); err != nil {
+// treeOfCells reads lines and cells as their slicing tree with each box of boxes as a box node with its data, so no cut crosses a box;
+// the cut along x stands outside where the lines allow both.
+func treeOfCells(c cells, boxes []Member, data map[string]json.RawMessage) (State, error) {
+	if err := checkCells(c); err != nil {
 		return State{}, err
 	}
-	drawn := map[string]Rect{}
-	root, err := planeTree(cells, boxes, drawn, []Axis{"x", "y"})
+	root, err := planeTree(c, boxes, map[string]Rect{}, []Axis{"x", "y"})
 	if err != nil {
 		return State{}, err
 	}
@@ -610,7 +623,7 @@ func treeOfCells(cells Cells, boxes []Member) (State, error) {
 	convert = func(n *cutNode) *Node {
 		if n.leaf {
 			if n.inner != nil {
-				return &Node{Box: n.id, Inner: convert(n.inner)}
+				return &Node{Box: n.id, Data: data[n.id], Inner: convert(n.inner)}
 			}
 			return &Node{Card: n.card.ID, Data: n.card.Data, Fixed: n.card.Fixed, Width: n.card.Width, Height: n.card.Height}
 		}
@@ -622,43 +635,165 @@ func treeOfCells(cells Cells, boxes []Member) (State, error) {
 		}
 		return out
 	}
-	paid := map[string]string{}
-	for id, p := range cells.PaidBy {
-		paid[id] = p.To
-	}
-	return State{Root: convert(root), PaidBy: paid}, nil
+	return State{Root: convert(root), PaidBy: maps.Clone(c.PaidBy)}, nil
 }
 
-// NewFromCells makes a grid from lines and cells of the earlier form, for the workbench until it stores the tree (F966-2-4).
-func NewFromCells(cells Cells, options Options) (*Grid, error) {
-	state, err := treeOfCells(cells, nil)
-	if err != nil {
-		return nil, err
-	}
-	return New(&state, options)
-}
-
-// Cells is the lines and the cells derived from the tree.
-func (g *Grid) Cells() Cells {
+// cells is the lines and the cells derived from the tree.
+func (g *Grid) cells() cells {
 	cards := make([]Card, len(g.list))
 	for i, c := range g.list {
 		cards[i] = copyCard(c)
 	}
-	paid := map[string]Paid{}
-	for id, to := range g.paidBy {
-		paid[id] = Paid{To: to}
-	}
-	return Cells{Xs: slices.Clone(g.xs), Ys: slices.Clone(g.ys), Cards: cards, PaidBy: paid}
+	return cells{Xs: slices.Clone(g.xs), Ys: slices.Clone(g.ys), Cards: cards, PaidBy: maps.Clone(g.paidBy)}
 }
 
-// replaceCells installs lines and cells of the earlier form with the boxes of the host, for the group tree of the workbench until it
-// keeps its group cards as boxes of the tree (F966-2-4).
-func (g *Grid) replaceCells(cells Cells, boxes []Member) error {
-	state, err := treeOfCells(cells, boxes)
+// installCells reads lines and cells as the tree of the grid with the boxes and their data, and installs it with its checks.
+func (g *Grid) installCells(c cells, boxes []Member, data map[string]json.RawMessage) error {
+	state, err := treeOfCells(c, boxes, data)
 	if err != nil {
 		return err
 	}
 	return g.Replace(state)
+}
+
+// keepBoxes makes the boxes of the tree the boxes of want, innermost first, each with its data: a box of the tree that want does not hold
+// with the same cards gives its place to its inner node, and a box of want that the tree does not hold wraps the node that holds exactly
+// its cards, or the neighbouring kids of one cut that hold them, which become a cut of their own inside it. A box whose cards stand as no
+// such node is refused with an error that names it.
+func (g *Grid) keepBoxes(want []Member, data map[string]json.RawMessage) error {
+	wanted := map[string]map[string]bool{}
+	order := []*Box{}
+	var collect func(b *Box)
+	collect = func(b *Box) {
+		for _, m := range b.Members {
+			if m.Box != nil {
+				collect(m.Box)
+			}
+		}
+		set := map[string]bool{}
+		for _, id := range contentsOf(b) {
+			set[id] = true
+		}
+		wanted[b.ID] = set
+		order = append(order, b)
+	}
+	for _, m := range want {
+		if m.Box == nil {
+			return errors.New("soksak: the boxes hold the card " + strconv.Quote(m.Card) + ", which is no box")
+		}
+		collect(m.Box)
+	}
+	for _, box := range g.boxes() {
+		have := map[string]bool{}
+		for _, leaf := range cardsOf(box) {
+			have[leaf.Card] = true
+		}
+		if set, ok := wanted[box.Box]; !ok || !maps.Equal(set, have) || !box.Inner.isCut() {
+			g.put(box, box.Inner)
+			g.derive()
+		}
+	}
+	for _, b := range order {
+		if box := g.boxNode(b.ID); box != nil {
+			box.Data = data[b.ID]
+			continue
+		}
+		if err := g.wrap(b.ID, wanted[b.ID], data[b.ID]); err != nil {
+			return err
+		}
+		g.derive()
+	}
+	return nil
+}
+
+// boxNode is the box id of the tree, or nil.
+func (g *Grid) boxNode(id string) *Node {
+	for _, box := range g.boxes() {
+		if box.Box == id {
+			return box
+		}
+	}
+	return nil
+}
+
+// wrap puts the box id with data around the node that holds exactly the cards of set, or around the neighbouring kids of one cut that
+// hold them.
+func (g *Grid) wrap(id string, set map[string]bool, data json.RawMessage) error {
+	refused := errors.New("soksak: the cards of box " + strconv.Quote(id) + " stand as no node of the tree")
+	var holder *Node
+	above := map[*Node]int{}
+	first := true
+	for card := range set {
+		leaf := g.leaves[card]
+		if leaf == nil {
+			return refused
+		}
+		if first {
+			depth := 0
+			for at := g.parent(leaf); at != nil; at = g.parent(at) {
+				above[at] = depth
+				depth++
+			}
+			holder, first = nil, false
+			for at := range above {
+				if holder == nil || above[at] < above[holder] {
+					holder = at
+				}
+			}
+			continue
+		}
+		at := g.parent(leaf)
+		for at != nil {
+			if _, ok := above[at]; ok {
+				break
+			}
+			at = g.parent(at)
+		}
+		if at == nil {
+			return refused
+		}
+		if above[at] > above[holder] {
+			holder = at
+		}
+	}
+	if holder == nil || !holder.isCut() {
+		return refused
+	}
+	touched := []int{}
+	for i, kid := range holder.Kids {
+		in, out := 0, 0
+		for _, leaf := range cardsOf(kid.Node) {
+			if set[leaf.Card] {
+				in++
+			} else {
+				out++
+			}
+		}
+		if in > 0 && out > 0 {
+			return refused
+		}
+		if in > 0 {
+			touched = append(touched, i)
+		}
+	}
+	lo, hi := touched[0], touched[len(touched)-1]
+	if hi-lo+1 != len(touched) {
+		return refused
+	}
+	if lo == 0 && hi == len(holder.Kids)-1 {
+		g.put(holder, &Node{Box: id, Data: data, Inner: holder})
+		return nil
+	}
+	span, total := []Kid{}, 0.0
+	for _, kid := range holder.Kids[lo : hi+1] {
+		total += kid.Share
+	}
+	for _, kid := range holder.Kids[lo : hi+1] {
+		span = append(span, Kid{Share: kid.Share / total, Node: kid.Node})
+	}
+	box := &Node{Box: id, Data: data, Inner: &Node{Cut: holder.Cut, Kids: span}}
+	holder.Kids = slices.Concat(holder.Kids[:lo], []Kid{{Share: total, Node: box}}, holder.Kids[hi+1:])
+	return nil
 }
 
 // SetHeads sets the px that the host draws inside the top of each box of the tree by id, above its inner node, which the drawn sizes and
@@ -670,7 +805,7 @@ func (g *Grid) SetHeads(heads map[string]float64) error {
 			return errors.New("soksak: heads name " + strconv.Quote(id) + ", which is no box")
 		}
 		if !finite(px) || px < 0 {
-			return errors.New("soksak: the head of " + strconv.Quote(id) + " is " + jsString(px))
+			return errors.New("soksak: the head of " + strconv.Quote(id) + " is below zero")
 		}
 	}
 	g.heads = maps.Clone(heads)

@@ -56,20 +56,23 @@ type Grid struct {
 	at     map[*Node]nodeLines
 	leaves map[string]*Node
 	// byID is the card of each id, and up the node that holds each node with its index, as derive built them.
-	byID      map[string]*Card
-	up        map[*Node]holding
-	w, h      float64
-	seq       int
-	splitMemo map[string]bool
-	probes    int
-	probing   bool
-	gap       float64
-	min       float64
-	order     string
-	grab      float64
-	snapAt    float64
-	snapMode  string
-	frames    frameRead
+	byID map[string]*Card
+	up   map[*Node]holding
+	// visits is the number of nodes that the last operation visited (Visits), and depth the number of operations that run, so the count
+	// starts with the outermost.
+	visits, depth int
+	w, h          float64
+	seq           int
+	splitMemo     map[string]bool
+	probes        int
+	probing       bool
+	gap           float64
+	min           float64
+	order         string
+	grab          float64
+	snapAt        float64
+	snapMode      string
+	frames        frameRead
 	// cardFrames is the frames of each card by id that SetFrames set.
 	cardFrames map[string]Frames
 	// heads is the px that the host draws inside the top of each box by id, which SetHeads set.
@@ -212,6 +215,7 @@ func (g *Grid) SetSnap(mode string) {
 
 // Resize sets the plane size. A size that is not a finite non-negative number is ignored.
 func (g *Grid) Resize(width, height float64) {
+	defer g.begin()()
 	if !finite(width) || !finite(height) || width < 0 || height < 0 {
 		return
 	}
@@ -323,7 +327,26 @@ func (g *Grid) SetFrames(frames map[string]Frames) error {
 	return nil
 }
 
-func (g *Grid) find(id string) *Card { return g.byID[id] }
+func (g *Grid) find(id string) *Card {
+	g.visit()
+	return g.byID[id]
+}
+
+// Visits is the number of nodes that the last operation visited (packages/soksak/docs/layout.md#cuts): each operation is linear in the
+// nodes that it touches, which a test bounds on a large tree instead of a time.
+func (g *Grid) Visits() int { return g.visits }
+
+// begin starts the count of the visits of an operation and returns its end: an operation that another one runs counts in that one.
+func (g *Grid) begin() func() {
+	if g.depth == 0 {
+		g.visits = 0
+	}
+	g.depth++
+	return func() { g.depth-- }
+}
+
+// visit counts one visited node.
+func (g *Grid) visit() { g.visits++ }
 
 // Lines is a copy of the line coordinates of an axis, normalised 0..1.
 func (g *Grid) Lines(axis Axis) []float64 {
@@ -344,6 +367,7 @@ func (g *Grid) ToJSON() State {
 
 // Replace replaces the arrangement while keeping the plane and the options.
 func (g *Grid) Replace(state State) error {
+	defer g.begin()()
 	if err := CheckState(state); err != nil {
 		return err
 	}
@@ -709,6 +733,7 @@ func (g *Grid) BoundaryRange(axis Axis, line int) [2]float64 {
 // MoveBoundary moves a boundary to a position in px and returns the position it reaches. When either adjacent slot has a px size,
 // that size changes; otherwise the line itself moves.
 func (g *Grid) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) float64 {
+	defer g.begin()()
 	if noAxis(axis) {
 		return 0
 	}
@@ -762,12 +787,16 @@ func (g *Grid) MoveBoundary(axis Axis, line int, px float64, allowSnap bool) flo
 			}
 		}
 	}
+	// The position is read before the tree takes the lines, because a boundary that reached a neighbouring line joins it there and the
+	// index line then names the next line.
+	at := g.BoundaryPos(axis, line)
 	g.changed()
-	return g.BoundaryPos(axis, line)
+	return at
 }
 
 // CenterBoundary moves a boundary so the two cards beside it are drawn at the same size, and returns the position it reaches.
 func (g *Grid) CenterBoundary(axis Axis, line int) float64 {
+	defer g.begin()()
 	if noAxis(axis) {
 		return 0
 	}
@@ -796,6 +825,7 @@ func (g *Grid) CenterBoundary(axis Axis, line int) float64 {
 // square, and a tie goes to the grid without an empty card. It is false, and changes nothing, when no grid keeps every cell at least
 // minSize, and an error for a mode other than even.
 func (g *Grid) Arrange(mode string) (bool, error) {
+	defer g.begin()()
 	if mode != "even" {
 		return false, errors.New("unknown arrangement " + strconv.Quote(mode))
 	}
@@ -1063,6 +1093,7 @@ func (g *Grid) CanSplit(id string, axis Axis) bool {
 // half. It is false when the halves do not fit.
 // With init.NewLine the cut takes a new position at the centre instead of a line that the card spans across.
 func (g *Grid) Split(id string, axis Axis, init SplitInit) (string, bool) {
+	defer g.begin()()
 	if noAxis(axis) {
 		return "", false
 	}
@@ -1080,6 +1111,7 @@ func isSide(side Side) bool {
 
 // SplitToward cuts a card and puts the new one on a named side. The ids are not swapped.
 func (g *Grid) SplitToward(id string, side Side, init SplitInit) (string, bool) {
+	defer g.begin()()
 	if !isSide(side) {
 		return "", false
 	}
@@ -1335,6 +1367,7 @@ func (g *Grid) closing(id string, sides []string) (*Node, int, bool, bool) {
 // the last card, or when no kid of its cut without a fixed card can take the space. sides names the sides whose neighbour may expand, tried
 // in their order, FillSides for the order of fillOrder, and an empty list gives the space to every kid in proportion.
 func (g *Grid) Close(id string, sides []string) (bool, error) {
+	defer g.begin()()
 	if err := checkFillSides(sides); err != nil {
 		return false, err
 	}
@@ -1462,6 +1495,7 @@ func (g *Grid) standing(axis Axis, line int) (int, bool) {
 // spans the boundary, the line is no seam of the root, the size is not smaller than the plane, or the result would leave a card with no
 // area.
 func (g *Grid) InsertAt(axis Axis, line int, init InsertInit) (string, bool) {
+	defer g.begin()()
 	if noAxis(axis) {
 		return "", false
 	}
@@ -1549,6 +1583,7 @@ func (g *Grid) InsertAt(axis Axis, line int, init InsertInit) (string, bool) {
 // MoveTo moves a card that spans the whole plane, a kid of the root cut along axis, to another boundary of the root: its kid moves to that
 // place with its share, the kids it passes shift by its span and every other line keeps its coordinate.
 func (g *Grid) MoveTo(id string, axis Axis, line int) bool {
+	defer g.begin()()
 	if noAxis(axis) {
 		return false
 	}
@@ -1601,6 +1636,7 @@ func (g *Grid) Standings(axis Axis, without string) []int {
 
 // Move moves a card to one side of another, keeping its id and its payload. sides is the sides of its close, as Close takes them.
 func (g *Grid) Move(id, targetID string, side Side, sides []string) (bool, error) {
+	defer g.begin()()
 	if err := checkFillSides(sides); err != nil {
 		return false, err
 	}

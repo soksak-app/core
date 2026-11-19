@@ -10,14 +10,10 @@ import (
 func fixedProject() map[string]any {
 	project := storedProject(tab("tab-aaaaaa", "notes"))
 	layout := project["spaces"].([]map[string]any)[0]["layout"].(map[string]any)
-	main := layout["state"].(map[string]any)["cards"].([]map[string]any)[0]
-	main["c0"], main["c1"] = 1, 2
-	layout["state"] = map[string]any{"xs": []float64{0, 1. / 3, 2. / 3, 1}, "ys": []float64{0, 1}, "paidBy": map[string]any{},
-		"cards": []map[string]any{
-			{"id": "left", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "width": 190, "fixed": true},
-			main,
-			{"id": "right", "c0": 2, "c1": 3, "r0": 0, "r1": 1, "width": 210, "fixed": true},
-		}}
+	state := layout["state"].(map[string]any)
+	main := state["root"].(map[string]any)
+	state["root"] = cutNode("x", kidNode(1./3, map[string]any{"card": "left", "width": 190, "fixed": true}), kidNode(1./3, main),
+		kidNode(1./3, map[string]any{"card": "right", "width": 210, "fixed": true}))
 	return project
 }
 

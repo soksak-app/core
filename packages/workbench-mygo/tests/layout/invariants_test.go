@@ -136,17 +136,17 @@ func (r readTree) even(cut *slicing) bool {
 
 // tiles is the text of a cell of the grid that is not covered by exactly one card, or "".
 func tiles(grid *layout.Grid) string {
-	state := grid.Cells()
+	xs, ys := grid.Lines("x"), grid.Lines("y")
 	count := map[[2]int]int{}
-	for _, c := range state.Cards {
+	for _, c := range grid.Cards() {
 		for col := c.C0; col < c.C1; col++ {
 			for row := c.R0; row < c.R1; row++ {
 				count[[2]int{col, row}]++
 			}
 		}
 	}
-	for col := 0; col+1 < len(state.Xs); col++ {
-		for row := 0; row+1 < len(state.Ys); row++ {
+	for col := 0; col+1 < len(xs); col++ {
+		for row := 0; row+1 < len(ys); row++ {
 			if n := count[[2]int{col, row}]; n != 1 {
 				return fmt.Sprintf("cell %d:%d is covered %d times", col, row, n)
 			}
@@ -344,7 +344,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			// I10: the withdraw of the card just added restores the layout of an even cut and of a wrap.
 			if !along || before.even(was) {
 				copied := newGrid(grid.ToJSON())
-				if _, err := copied.Withdraw(nil, id); err != nil {
+				if _, err := copied.Withdraw(id); err != nil {
 					fail("I10", step, fmt.Sprintf("the withdraw of %s is refused: %s", id, err))
 				} else if back := movedCards(rects, beforeOrder, copied, nil); len(back) > 0 {
 					fail("I10", step, fmt.Sprintf("the withdraw of %s does not restore %v", id, back))
@@ -402,14 +402,14 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			id := fmt.Sprintf("c%d", next)
 			next++
 			judge(step, func() error {
-				_, err := grid.Insert(nil, layout.Target{target}, to, layout.Piece{ID: id})
+				_, err := grid.Insert(layout.Target{target}, to, &layout.Node{Card: id})
 				return err
 			}, inserted(step, id, target, to))
 		case u < 0.7:
 			id := pick()
 			if count > 1 {
 				judge(step, func() error {
-					_, err := grid.Withdraw(nil, id)
+					_, err := grid.Withdraw(id)
 					return err
 				}, withdrawn(step, id))
 			}
@@ -418,16 +418,16 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			target := pick()
 			to := side()
 			if count > 1 && target != id {
-				var left layout.Piece
+				var left *layout.Node
 				start := grid.ToJSON()
 				if judge(step, func() error {
 					var err error
-					left, err = grid.Withdraw(nil, id)
+					left, err = grid.Withdraw(id)
 					return err
 				}, withdrawn(step, id)) {
 					// A move is one change: a refused landing leaves the layout as it was before the withdraw.
 					if !judge(step, func() error {
-						_, err := grid.Insert(nil, layout.Target{target}, to, left)
+						_, err := grid.Insert(layout.Target{target}, to, left)
 						return err
 					}, inserted(step, id, target, to)) {
 						if err := grid.Replace(start); err != nil {
@@ -437,7 +437,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 				}
 			}
 		default:
-			judge(step, func() error { return grid.Even(nil) }, func(layout.State, map[string]layout.Rect) {
+			judge(step, func() error { return grid.Even() }, func(layout.State, map[string]layout.Rect) {
 				after := treeOf(grid)
 				uneven := []string{}
 				var visit func(n *slicing)
