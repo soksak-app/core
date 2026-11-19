@@ -42,10 +42,12 @@ The card tools stand in the header in this order, each named by one entry of `ca
 | Add a tab | `core.card.add` | 탭 추가 |
 | Split along a vertical line | `core.card.split-x` | 세로로 나누기 |
 | Split along a horizontal line | `core.card.split-y` | 가로로 나누기 |
+| Group with a new card toward the longer axis, shown while that group succeeds ([group cards](groups.md#headers)) | `core.card.group` | 그룹으로 묶기 |
+| Make the card the leader of its level, shown in a level of two or more members and pressed on the leader | `core.card.leader` | 리더로 정하기 |
 | Fullscreen | `core.card.fullscreen` | 카드 전체 화면, and 카드 배치 복원 while the card is fullscreen |
 | Close | `core.card.close` | 카드 닫기 |
 
-The tooltip and the accessible name of a tool are its name; they describe no behaviour. A disabled tool states its reason instead, without a separator: a close that no neighbour can fill shows 이 자리를 빈틈없이 메울 이웃이 없어 닫을 수 없다, and the tools that change the layout of a fullscreen card show 전체 화면에서는 배치를 바꿀 수 없다. The ⋯ menu lists each enabled tool under its name as the tooltip holds it.
+The tooltip and the accessible name of a tool are its name; they describe no behaviour. A disabled tool states its reason instead, without a separator: a close that no neighbour can fill shows 이 자리를 빈틈없이 메울 이웃이 없어 닫을 수 없다, and the tools that change the layout of a fullscreen card show 전체 화면에서는 배치를 바꿀 수 없다. The ⋯ menu lists each enabled tool under its name as the tooltip holds it. The header of a group card takes the same names for its tools, and its close button, named 그룹 메뉴, opens the close menu of the group with the items 그룹 닫기 and 그룹 풀기 ([group cards](groups.md#headers)).
 
 ## Card fullscreen
 

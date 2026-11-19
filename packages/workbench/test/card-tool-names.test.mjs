@@ -11,6 +11,7 @@ test("the tooltip of a card tool is its name and a refusal states its reason", a
   assert.deepEqual(names, {
     add: "탭 추가", "split-x": "세로로 나누기", "split-y": "가로로 나누기", fullscreen: "카드 전체 화면", restore: "카드 배치 복원",
     close: "카드 닫기", "close-refused": "이 자리를 빈틈없이 메울 이웃이 없어 닫을 수 없다", "layout-held": "전체 화면에서는 배치를 바꿀 수 없다",
+    group: "그룹으로 묶기", leader: "리더로 정하기", "group-close": "그룹 닫기", "group-dissolve": "그룹 풀기", "group-menu": "그룹 메뉴",
   });
   for (const name of Object.values(names)) assert.ok(!name.includes("—"), `${name} carries a dash`);
   const spec = readFileSync(new URL("../../../docs/spec/example-model.md", import.meta.url), "utf8");

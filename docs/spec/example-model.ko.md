@@ -42,10 +42,12 @@
 | 탭 추가 | `core.card.add` | 탭 추가 |
 | 세로선으로 나누기 | `core.card.split-x` | 세로로 나누기 |
 | 가로선으로 나누기 | `core.card.split-y` | 가로로 나누기 |
+| 긴 축 쪽 새 카드와 group으로 묶기. 그 group이 성공하는 동안 보인다([group card](groups.ko.md#header)) | `core.card.group` | 그룹으로 묶기 |
+| 카드를 그 level의 leader로 정하기. member가 둘 이상인 level에서 보이고 leader에서 눌려 있다 | `core.card.leader` | 리더로 정하기 |
 | 전체 화면 | `core.card.fullscreen` | 카드 전체 화면, 카드가 전체 화면인 동안은 카드 배치 복원 |
 | 닫기 | `core.card.close` | 카드 닫기 |
 
-도구의 tooltip과 접근성 이름은 그 이름이며 동작을 설명하지 않는다. 꺼진 도구는 대신 구분 기호 없이 그 이유를 말한다. 어느 이웃도 채울 수 없는 닫기는 이 자리를 빈틈없이 메울 이웃이 없어 닫을 수 없다를, 전체 화면 카드에서 배치를 바꾸는 도구는 전체 화면에서는 배치를 바꿀 수 없다를 보인다. ⋯ menu는 켜진 도구를 tooltip이 가진 이름 그대로 나열한다.
+도구의 tooltip과 접근성 이름은 그 이름이며 동작을 설명하지 않는다. 꺼진 도구는 대신 구분 기호 없이 그 이유를 말한다. 어느 이웃도 채울 수 없는 닫기는 이 자리를 빈틈없이 메울 이웃이 없어 닫을 수 없다를, 전체 화면 카드에서 배치를 바꾸는 도구는 전체 화면에서는 배치를 바꿀 수 없다를 보인다. ⋯ menu는 켜진 도구를 tooltip이 가진 이름 그대로 나열한다. group card의 머리는 그 도구에 같은 이름을 쓰고, 그룹 메뉴라는 이름의 닫기 button은 item 그룹 닫기와 그룹 풀기를 가진 group의 닫기 menu를 연다([group card](groups.ko.md#header)).
 
 ## 카드 전체 화면
 
