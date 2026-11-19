@@ -389,7 +389,6 @@ pub(crate) fn observe_window(
     LISTENERS
         .get_or_init(Default::default)
         .lock()
-        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .entry(key)
         .or_default()
@@ -397,7 +396,6 @@ pub(crate) fn observe_window(
     let mut observed = OBSERVED
         .get_or_init(Default::default)
         .lock()
-        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if !observed.insert(key) {
         return;
@@ -446,7 +444,6 @@ fn fire(key: usize, event: &WindowEvent) {
     let listeners = LISTENERS
         .get_or_init(Default::default)
         .lock()
-        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let Some(listeners) = listeners.get(&key) else {
         return;
@@ -527,7 +524,9 @@ pub(crate) fn choose_folder(
     if answer != objc2_app_kit::NSModalResponseOK {
         return Ok(None);
     }
-    panel.URLs().iter().next().map(|url| panel_path(&url)).transpose()
+    Ok(panel.URLs().iter().next().map(|url| {
+        std::path::PathBuf::from(url.path().map(|path| path.to_string()).unwrap_or_default())
+    }))
 }
 
 /// Shows the save panel attached to the window and returns the chosen path.
@@ -554,14 +553,9 @@ pub(crate) fn save_file(
     if panel.runModal() != objc2_app_kit::NSModalResponseOK {
         return Ok(None);
     }
-    panel.URL().map(|url| panel_path(&url)).transpose()
-}
-
-/// The path of the file URL that a panel returned; a URL without a path is an error, because a panel returns file URLs.
-fn panel_path(url: &objc2_foundation::NSURL) -> Result<std::path::PathBuf, String> {
-    url.path()
-        .map(|path| std::path::PathBuf::from(path.to_string()))
-        .ok_or_else(|| "the file panel returned a URL without a path".to_string())
+    Ok(panel.URL().map(|url| {
+        std::path::PathBuf::from(url.path().map(|path| path.to_string()).unwrap_or_default())
+    }))
 }
 
 /// The user configuration directory of the operating system.

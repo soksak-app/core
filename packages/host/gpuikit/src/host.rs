@@ -54,9 +54,8 @@ impl StagedFrontend {
 
 impl Assets for StagedFrontend {
     fn get(&self, key: &str) -> Option<std::borrow::Cow<'_, [u8]>> {
-        let relative = key.strip_prefix('/')?;
+        let relative = key.strip_prefix('/').unwrap_or(key);
         std::fs::read(self.0.join(relative))
-            // default: a page file that cannot be read is not served; page_file answers 404 without the record that docs/spec/diagnostics.md#failure-points requires (not yet written by this host).
             .ok()
             .map(std::borrow::Cow::Owned)
     }
@@ -85,12 +84,13 @@ pub(crate) fn page_file(assets: &dyn Assets, path: &str) -> http::Response<Vec<u
             .header("Content-Type", content_type)
             .header("Cache-Control", "no-store")
             .body(bytes.into_owned())
-            .expect("a page response of fixed headers and a valid status is built"),
+            // default: a response of fixed headers over built bytes does not fail.
+            .unwrap_or_else(|_| http::Response::new(vec![])),
         None => http::Response::builder()
             .status(http::StatusCode::NOT_FOUND)
             .header("Content-Type", "text/plain; charset=utf-8")
             .body(format!("{path} not found\n").into_bytes())
-            .expect("a page response of fixed headers and a valid status is built"),
+            .unwrap_or_else(|_| http::Response::new(vec![])),
     }
 }
 

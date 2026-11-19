@@ -30,7 +30,6 @@ define_class!(
             let index = *self.ivars();
             let calls = CALLS
                 .lock()
-                // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(call) = calls.get(index) {
                 call();
@@ -47,11 +46,9 @@ pub(crate) fn set_menu(app: &AppHandle, menus: Vec<Menu>) -> Result<(), String> 
     let name = "Soksak";
     *CALLS
         .lock()
-        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Vec::new();
     *TARGETS
         .lock()
-        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Vec::new();
     let bar = NSMenu::new(mtm);
     bar.setAutoenablesItems(false);
@@ -138,6 +135,7 @@ fn menu_item(
                     let title = title.ok_or("the quit item has no title")?;
                     let quit = app.clone();
                     let target = target_of(
+                        mtm,
                         Some(Box::new(move || quit.quit()) as Box<dyn Fn() + Send + Sync>),
                     )?;
                     unsafe {
@@ -162,7 +160,7 @@ fn menu_item(
             });
         }
     };
-    let target = target_of(call)?;
+    let target = target_of(mtm, call)?;
     unsafe {
         if let Some(title) = title {
             view.setTitle(&NSString::from_str(&title));
@@ -180,22 +178,22 @@ fn menu_item(
 
 /// Allocates the target of one item of the host with its call.
 fn target_of(
+    mtm: MainThreadMarker,
     call: Option<Box<dyn Fn() + Send + Sync>>,
 ) -> Result<Retained<ItemTarget>, String> {
     let index = {
         let mut calls = CALLS
             .lock()
-            // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         calls.push(call.expect("an item of the host holds a call"));
         calls.len() - 1
     };
+    let _ = mtm;
     let allocated = ItemTarget::alloc().set_ivars(index);
     // default: the init of NSObject is the designated initializer of the target.
     let target: Retained<ItemTarget> = unsafe { objc2::msg_send![super(allocated), init] };
     TARGETS
         .lock()
-        // default: a lock that a panicking thread poisoned still holds its value; docs/spec/diagnostics.md#failure-points records the panic.
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .push(target.clone());
     Ok(target)
