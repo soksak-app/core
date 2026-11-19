@@ -1,0 +1,7 @@
+{
+  "name": "page-log-admits",
+  "description": "The page asks whether events would be stored under a policy that stores only errors; the question sends no call.",
+  "replay": false,
+  "reason": "The case sends no call, so the producer has nothing to answer.",
+  "steps": []
+}
