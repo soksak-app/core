@@ -128,6 +128,7 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
   lane("measurement tools and waits", "js-ts", ["scripts/measure-tools.mjs"], ["scripts/test/measure-tools.test.mjs", "scripts/test/platform/darwin/system/measure-app-usage.test.mjs"], { sharedTests: true }),
   lane("terminal redraw measurement", "js-ts", ["scripts/measure-terminal-redraw.mjs", "scripts/fixtures/status-redraw.mjs"], ["scripts/test/measure-terminal-redraw.test.mjs"]),
   lane("terminal text measurement", "js-ts", ["scripts/measure-terminal-text.mjs"], ["scripts/test/measure-terminal-text.test.mjs"]),
+  lane("terminal input measurement", "js-ts", ["scripts/measure-terminal-input.mjs", "scripts/fixtures/input-box.mjs"], ["scripts/test/measure-terminal-input.test.mjs"]),
   lane("host allocation measurement", "js-ts", ["scripts/measure-host-allocations.mjs"], ["scripts/test/measure-host-allocations.test.mjs"]),
   lane("measurement trace state", "js-ts", ["scripts/measure-trace.mjs"], ["scripts/test/measure-trace.test.mjs"]),
   lane("B3 measurement output", "js-ts", ["scripts/b3-out.mjs"], ["scripts/test/b3-out.test.mjs"]),
