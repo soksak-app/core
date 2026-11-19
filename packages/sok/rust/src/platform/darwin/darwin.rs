@@ -77,9 +77,11 @@ impl Darwin {
     }
 
     pub(super) fn config_dir() -> Result<PathBuf, String> {
-        std::env::var_os("HOME")
+        let home = std::env::var_os("HOME")
             .filter(|home| !home.is_empty())
-            .map(|home| PathBuf::from(home).join("Library/Application Support"))
-            .ok_or_else(|| "$HOME is not defined".into())
+            .ok_or_else(|| "$HOME is not defined".to_string())?;
+        let home = crate::files::utf8_path(PathBuf::from(home))
+            .map_err(|escaped| format!("HOME is not UTF-8: {escaped}"))?;
+        Ok(home.join("Library/Application Support"))
     }
 }

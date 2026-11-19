@@ -755,7 +755,7 @@ fn home_that_is_not_utf8_is_refused_with_its_bytes_escaped() {
         (
             1,
             "",
-            "sok: event log: HOME is not UTF-8: /nonexistent/h\\xffme\nsok: HOME is not UTF-8: /nonexistent/h\\xffme\n"
+            "sok: event log: the default configuration directory is unknown: HOME is not UTF-8: /nonexistent/h\\xffme\nsok: HOME is not UTF-8: /nonexistent/h\\xffme\n"
         )
     );
 }

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F987: `sok conversation read` and the configuration folder of the Rust sok refuse a `HOME` that is not UTF-8 with `HOME is not UTF-8: <escaped>`, and the reader refuses a folder entry whose name is not UTF-8, instead of writing the path with replaced characters.
 - F988: the Go diagnostic method of a person action checks that the action is text instead of discarding the result of the type check, and `node scripts/check-fallbacks.mjs` passes again.
 - F990 (activity of a terminal): `spec/terminal-state.md` defines the status `<plugin>.activity`, a core activity level or null that each terminal plugin derives from its state and exit code and declares with `activity: true`. F987 and F988 are registered.
 - F893: The start of the channel of the installed sidecars records `host.sidecar.path` at the level `info` with `folder`, the folder of the host executable that the environment of every sidecar puts first on PATH, and `sok`, the sok of the application bundle in it, in both hosts (`docs/spec/sidecars.md#processes-of-a-surface`). Red: the Go and Rust tests of the case `sidecars.environment.start-records-the-sok-folder` read no record. Green: both pass.
