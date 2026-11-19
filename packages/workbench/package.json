@@ -71,6 +71,7 @@
     "closed-tabs.js",
     "page-layout.js",
     "plane.js",
+    "group-tree.js",
     "picker-layer.js",
     "projects.js",
     "spaces.js",

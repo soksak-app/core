@@ -14015,6 +14015,20 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-3",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "export function readGroupTree" },
+      { file: "packages/workbench/group-tree.js", symbol: "would not cover one rectangle" },
+      { file: "packages/workbench/group-tree.js", symbol: "splitRectangle(node, side, id, data)" },
+      { file: "packages/workbench/group-tree.js", symbol: "dropAt(x, y, options)" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/groups-cases.test.mjs", id: "groups: ${kase.name}" },
+    ],
+    expected: "The group tree of the page workbench holds the groups of a space beside its one grid and passes every case of the group layout cases.",
+    levels: ["unit"],
+  },
+  {
     id: "F939",
     implementation: [
       { file: "packages/plugin-api/index.js", symbol: "summary must be a boolean" },
