@@ -3280,7 +3280,7 @@
    ]
   },
   {
-   "name": "a drop resolves on the frame of a group card, so a point in the gap between the frame and its cards is on that group card",
+   "name": "a drop resolves on the innermost box that holds the point, so a point in the gap inside a frame is on that group card",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -3379,6 +3379,17 @@
      },
      "returns": {
       "card": "card-6",
+      "zone": "left"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 36,
+      "y": 200
+     },
+     "returns": {
+      "card": "card-5",
       "zone": "left"
      }
     }
@@ -3519,7 +3530,7 @@
    ]
   },
   {
-   "name": "a drop resolves from the root level inward",
+   "name": "a drop resolves on the box under the point, a content card before the group card that holds it",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -3607,7 +3618,7 @@
     {
      "call": "drop",
      "args": {
-      "x": 100,
+      "x": 12,
       "y": 150
      },
      "returns": {
@@ -3618,7 +3629,7 @@
     {
      "call": "drop",
      "args": {
-      "x": 900,
+      "x": 988,
       "y": 150
      },
      "returns": {
@@ -3646,6 +3657,17 @@
      "returns": {
       "card": "card-1",
       "zone": "centre"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 100,
+      "y": 150
+     },
+     "returns": {
+      "card": "card-1",
+      "zone": "left"
      }
     },
     {
