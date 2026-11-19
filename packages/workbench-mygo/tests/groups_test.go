@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -448,5 +449,57 @@ func TestTheGridReportsEveryCardInTheGroupForm(t *testing.T) {
 	// card-3; the group card follows the cards of the grid.
 	if want := []string{"left", "main", "card-3", "right", "card-2"}; !slices.Equal(order, want) {
 		t.Errorf("core.grid lists %v, not %v", order, want)
+	}
+}
+
+// With request, core.group.create is idempotent by the request: a repeat answers the first answer and changes nothing, and a request
+// that the space has not answered groups again, also where the group of the same command stands (docs/spec/groups.md#idempotency).
+func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	first, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": "r1"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": "r2"}`)
+	if err != nil || second == first {
+		t.Fatalf("a new request answered %s, %v; the first answered %s", second, err, first)
+	}
+	before := f.status("core.layout")
+	if again, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": "r1"}`); err != nil ||
+		again != first || f.status("core.layout") != before {
+		t.Fatalf("the repeat of r1 answered %s, %v, not %s, and changed the layout: %v", again, err, first, f.status("core.layout") != before)
+	}
+	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`, `7`} {
+		want := "core.group.create: request must be a string of 1 to 128 characters"
+		if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": `+request+`}`); err == nil ||
+			err.Error() != want {
+			t.Errorf("the request %s answered %v, not %q", request, err, want)
+		}
+	}
+}
+
+// Each press of the plugin item of the group menu groups the card, so a second press groups the card again
+// (docs/spec/groups.md#idempotency).
+func TestEachPressOfTheGroupMenuGroupsTheCard(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	// The window is wide, so main stays wider than high after the first group and the second press groups it toward right again.
+	f.tester.SetSize(2400, 600)
+	f.settle()
+	for press := 1; press <= 2; press++ {
+		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "group"}`); err != nil {
+			t.Fatal(err)
+		}
+		index := -1
+		for k, item := range f.read("core.picker")["items"].([]any) {
+			if item.(map[string]any)["key"] == "plain" {
+				index = k
+			}
+		}
+		if _, err := f.apply("core.picker.pick", `{"index": `+strconv.Itoa(index)+`}`); err != nil {
+			t.Fatal(err)
+		}
+		if groups := strings.Count(f.status("core.layout"), `"name":"그룹 `); groups != press {
+			t.Fatalf("after press %d the layout holds %d group cards: %s", press, groups, f.status("core.layout"))
+		}
 	}
 }

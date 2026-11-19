@@ -78,7 +78,7 @@ header의 버튼은 그 header의 상자에 동작한다. content card header에
 
 | Command | Parameter | 결과 | 규칙 |
 | --- | --- | --- | --- |
-| `core.group.create` | `{card, side, plugin, params?}` | `{group, card, tab}` | content card 또는 group card인 `card`를 새 content card와 묶는다. 새 card는 `card`를 `side`(`left`, `right`, `top`, `bottom`) 쪽으로 나눈 것에서 오며, content card는 library의 split(`splitToward`), group card는 사각형의 split이고, `plugin`의 tab을 `params`로 담는다. 새 group card는 다음 card 식별자를, 새 card는 그 다음 식별자를 받고, 이름 `그룹 <n>`을 받는다. `n`은 space의 어떤 group도 이름 `그룹 <n>`으로 갖지 않는 가장 작은 양의 정수다. group card는 그 level에서 `card`의 자리와 leader mark를 받고, member `card`와 새 card를 가지며 `card`가 그 leader다. 결과는 group card, 새 card, 그 tab을 가리키고, focus는 새 card로 옮긴다 |
+| `core.group.create` | `{card, side, plugin, params?, request?}` | `{group, card, tab}` | content card 또는 group card인 `card`를 새 content card와 묶는다. 새 card는 `card`를 `side`(`left`, `right`, `top`, `bottom`) 쪽으로 나눈 것에서 오며, content card는 library의 split(`splitToward`), group card는 사각형의 split이고, `plugin`의 tab을 `params`로 담는다. 새 group card는 다음 card 식별자를, 새 card는 그 다음 식별자를 받고, 이름 `그룹 <n>`을 받는다. `n`은 space의 어떤 group도 이름 `그룹 <n>`으로 갖지 않는 가장 작은 양의 정수다. group card는 그 level에서 `card`의 자리와 leader mark를 받고, member `card`와 새 card를 가지며 `card`가 그 leader다. 결과는 group card, 새 card, 그 tab을 가리키고, focus는 새 card로 옮긴다 |
 | `core.group.dissolve` | `{group}` | `{dissolved: true}` | group card를 그것을 담은 level에서 그 member로 바꾼다. grid는 바뀌지 않는다. group 첫 row의 card는 group이 내놓은 header만큼 길게 그려진다. dissolve의 leader 규칙이 적용된다 |
 | `core.group.rename` | `{group, name}` | `{group, name}` | group의 이름을 양끝 공백을 지운 `name`으로 정한다 |
 | `core.group.leader` | `{card}` | `{card, group}` | content card 또는 group card인 `card`를 그 level의 leader로 만든다. header의 leader 버튼은 그 header의 card로 이것을 실행한다. `group`은 `card`를 담은 group card의 식별자이며, root level에서는 `null`이다 |
@@ -94,6 +94,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 | `core.group.create` | `card`가 window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
 | `core.group.create` | layout이 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>` |
 | `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 workbench order로 그런 첫 card, `<m>`은 `minSize` |
+| `core.group.create` | `request`가 1에서 128자의 문자열이 아님 | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin`이나 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) |
 | `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group`이 content card나 window sidebar | `card <id> is not a group` |
 | `core.group.rename` | 양끝 공백을 지운 이름이 Unicode scalar value 1개 미만이거나 40개 초과 | `group name must be 1 to 40 characters: <name>` |
@@ -112,7 +113,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 
 같은 식별자로 같은 command를 두 번째 적용하면 같은 상태를 남기고 같은 결과를 돌려준다.
 
-- `core.group.create {card, side, plugin, params}`는 `card`가 member가 정확히 `card`와 `N`인 group card `G`의 member이고, `N`이 `core.layout.open`의 규칙으로 `side` 쪽 `card`의 이웃이며, `N`이 `plugin`의 tab `T`를 `params`로 담으면 `{group: G, card: N, tab: T}`를 돌려주고 아무것도 바꾸지 않는다.
+- `core.group.create {card, side, plugin, params}`는 `card`가 member가 정확히 `card`와 `N`인 group card `G`의 member이고, `N`이 `core.layout.open`의 규칙으로 `side` 쪽 `card`의 이웃이며, `N`이 `plugin`의 tab `T`를 `params`로 담으면 `{group: G, card: N, tab: T}`를 돌려주고 아무것도 바꾸지 않는다. `request`, 곧 한 요청의 식별자가 있으면 command는 대신 그 식별자로 멱등이다: space가 전에 답한 `request`의 반복은 첫 실행의 답을 돌려주고 아무것도 바꾸지 않으며, space가 답하지 않은 `request`는 위 규칙이 group을 찾는 곳에서도 command를 실행한다. workbench는 각 space의 요청의 답을 그 window가 열린 동안 지니며 어느 것도 저장하지 않는다. group 버튼과 `core.card.menu {card, menu: "group"}`의 항목은 누를 때마다 새 `request`를 보내므로, 각 누름은 card를 한 번 묶고 두 번째 누름은 다시 묶는다.
 - 이 창이 workbench 시작 뒤 푼 group card의 `core.group.dissolve {group}`은 `{dissolved: true}`로 답하고 아무것도 바꾸지 않는다. 창은 닫힌 tab을 기억하듯([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) 자기가 푼 group card의 식별자를 기억한다. 이 실행에서 창이 풀지 않은 식별자는 tab의 반복 close처럼 재시작 뒤에도 layout에 없는 card의 문구로 실패한다. 식별자는 두 번 나오지 않으므로 그 식별자는 다른 card를 가리키지 않는다.
 - 현재 이름으로의 `core.group.rename`, 현재 leader의 `core.group.leader`, 그리고 card가 이미 move가 두는 자리(`target`의 level의 member이며 `side` 쪽 그 이웃, 또는 `centre`이면 `target`의 member로서 그 사각형의 오른쪽 가장자리에서 위부터 아래까지 닿는 자리)에 있는 `core.card.move`는 layout을 부르지 않고 같은 결과를 돌려주므로 아무것도 바뀌지 않는다.
 - `core.group.menu`는 `core.card.menu`가 card menu를 토글하듯 menu를 토글한다. `core.layout`은 바뀌지 않는다.
