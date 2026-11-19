@@ -42,10 +42,11 @@ test("at the seam a group card draws no border, its mark colors the line outside
   }
 });
 
-test("with a gap a group card keeps its border and its header draws no line, and the stage stands apart from the bars", { timeout: 5000 }, () => {
+test("with a gap a group card keeps its border, its header draws the line below it as the head of a card, and the stage stands apart from the bars", { timeout: 5000 }, () => {
   for (const theme of declared.themes) {
     const style = seamStyle(theme, "gap", true);
-    assert.deepEqual({ frame: style.frame, stage: style.stage }, { frame: theme.shape.bw, stage: "0px 0px" }, `${theme.name} with a gap`);
+    assert.deepEqual({ frame: style.frame, head: style.head, stage: style.stage }, { frame: theme.shape.bw, head: `${theme.shape.bw} solid`,
+      stage: "0px 0px" }, `${theme.name} with a gap`);
     assert.notEqual(style.markOutline.split(" ")[1], "solid", `${theme.name}: the mark draws no outline with a gap`);
   }
 });

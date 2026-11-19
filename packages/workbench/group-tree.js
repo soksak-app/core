@@ -376,17 +376,11 @@ export class GroupTree {
     return out;
   }
 
-  /** The side of the group button of the card id: right when it is drawn wider than high, otherwise bottom (docs/spec/groups.md#headers). */
-  groupSide(id) {
-    const rect = this.rect(id);
-    return rect && rect.w > rect.h ? "right" : "bottom";
-  }
-
-  /** Whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would succeed. */
-  canGroup(id, even) {
-    return this.answer(`group:${id}:${even}`, () => this.probe(() => {
+  /** Whether a group split button of the card id toward side is enabled: a group of the card and a new card toward side would succeed. */
+  canGroup(id, side, even) {
+    return this.answer(`group:${id}:${side}:${even}`, () => this.probe(() => {
       try {
-        this.create(id, this.groupSide(id), undefined, even);
+        this.create(id, side, undefined, even);
         return true;
       } catch {
         // silent: the probe answers whether the group succeeds; the refusal is the answer false.
@@ -407,12 +401,14 @@ export class GroupTree {
 
   /**
    * The dividers of the grid cut where they would cross a group header (docs/spec/groups.md#drawing): a divider of a line inside a group
-   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index.
+   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index. Each part
+   * draws its grip, gripLength long, at its center while it holds the grip (grip), so no grip reaches into a header.
    */
-  drawnDividers(dividers) {
+  drawnDividers(dividers, gripLength) {
     const heads = this.headRects();
     return dividers.flatMap((divider) => clearOfHeads(divider.axis, across(divider), along(divider), heads)
-      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key })));
+      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key,
+        grip: part[1] - part[0] >= gripLength })));
   }
 
   /**
@@ -529,6 +525,16 @@ export class GroupTree {
       if (rect.w < minSize - EPSILON || rect.h < minSize - EPSILON) return { id, rect };
     }
     return null;
+  }
+
+  /**
+   * The text of a split of the card id toward side that the layout library refuses at any minimum: the card is drawn narrower than the
+   * corridor that the split adds, so its halves would have no extent on the axis of side.
+   */
+  noRoomText(id, side) {
+    const { w, h } = this.rect(id);
+    const axis = side === "left" || side === "right" ? "x" : "y";
+    return this.minimumText({ id, rect: { w: axis === "x" ? 0 : w, h: axis === "y" ? 0 : h } });
   }
 
   /** The text of a content card drawn below its minimum. */
@@ -667,15 +673,13 @@ export class GroupTree {
   }
 
   /**
-   * The balance of the grid (docs/spec/groups.md#card-commands-on-a-group-card): in a space without groups the balance of the layout
-   * library, or with arrange its even arrangement (cardArrange even); in a space with groups every line index stays and every slot of
-   * each axis that no card with a size in px holds takes an equal share of the free length, a slot on the y axis with the heads of the
-   * group cards that start on its upper line on top of its share.
+   * The balance of the grid (docs/spec/groups.md#card-commands-on-a-group-card): every child of every cut takes an equal share, with
+   * each group card as a box of the layout library (even); in a space without groups, arrange runs the even arrangement of the library
+   * instead (cardArrange even).
    */
   share(arrange) {
-    if (this.groups.length === 0) {
-      if (arrange && !this.grid.arrange("even")) throw new Error("the layout cannot balance: no equal grid keeps every card at its minimum size");
-      if (!arrange && !this.grid.balance()) throw new Error("the layout cannot balance: the grid is not a slicing arrangement");
+    if (this.groups.length === 0 && arrange) {
+      if (!this.grid.arrange("even")) throw new Error("the layout cannot balance: no equal grid keeps every card at its minimum size");
       // The even arrangement can add an empty card, and lastCard stays the largest issued card number (docs/spec/groups.md#storage).
       for (const card of this.grid.cards) {
         const n = cardNumber(card.id);
@@ -683,14 +687,14 @@ export class GroupTree {
       }
       return;
     }
-    const heads = new Array(this.grid.lines("y").length - 1).fill(0);
-    for (const card of this.grid.cards) {
-      const found = this.find(card.id);
-      if (found) heads[card.r0] = Math.max(heads[card.r0], this.headersAbove(found.path, card.r0) * this.headStep());
-    }
+    // Each group card is a box of the layout library with its header above its members, so no cut crosses a group card.
+    const box = (node) => ({
+      id: node.card,
+      head: this.headStep(),
+      members: node.members.map((member) => (typeof member === "string" ? member : box(member))),
+    });
     try {
-      this.grid.shareLines("x");
-      this.grid.shareLines("y", heads);
+      this.grid.even(this.groups.map(box));
     } catch (error) {
       throw new Error(`the layout cannot balance: ${error.message}`);
     }
@@ -909,7 +913,7 @@ export class GroupTree {
     return this.attempt(id, `hold a group toward ${side}`, () => {
       const group = this.issue();
       const born = this.issue();
-      if (!this.splitCard(id, side, born, data, true)) throw new Error(`card ${id} cannot hold a group toward ${side}`);
+      if (!this.splitCard(id, side, born, data, true)) throw new Error(`card ${id} cannot hold a group toward ${side}: ${this.noRoomText(id, side)}`);
       const parent = this.parentOf(id);
       const node = { card: group, name: this.nextGroupName(), leader: id, members: [found.node ?? id, born] };
       this.replaceMember(parent, id, node);
@@ -932,7 +936,7 @@ export class GroupTree {
     const before = this.drawnCards();
     return this.attempt(id, `split toward ${side}`, () => {
       const born = this.issue();
-      if (!this.splitCard(id, side, born, data, false)) throw refusal();
+      if (!this.splitCard(id, side, born, data, false)) throw new Error(`card ${id} cannot split toward ${side}: ${this.noRoomText(id, side)}`);
       this.attach(found.parent, born);
       this.leaderEntered(found.parent, born);
       this.levelSplit(id, side, born);
@@ -943,13 +947,17 @@ export class GroupTree {
 
   /** Whether split of the card id toward side would succeed. */
   canSplit(id, side, even) {
+    return this.splitRefusal(id, side, even) === null;
+  }
+
+  /** The text with which split of the card id toward side would be refused, or null when it would succeed. */
+  splitRefusal(id, side, even) {
     return this.answer(`split:${id}:${side}:${even}`, () => this.probe(() => {
       try {
         this.split(id, side, undefined, even);
-        return true;
-      } catch {
-        // silent: the probe answers whether the split succeeds; the refusal is the answer false.
-        return false;
+        return null;
+      } catch (error) {
+        return error.message;
       }
     }));
   }
@@ -1001,7 +1009,16 @@ export class GroupTree {
       return true;
     }
     const newLine = (side === "top" || side === "bottom") && (grouping || this.rect(target).y > this.grid.rect(target).y + EPSILON);
-    return this.grid.splitToward(target, side, { id, data, newLine }) !== null;
+    if (this.grid.splitToward(target, side, { id, data, newLine }) !== null) return true;
+    // The library refuses a split whose halves fall below its minimum. The split is made again without the minimum, so the check of
+    // attempt names the content card that would be drawn below it and the size it would get (docs/spec/groups.md#commands).
+    const min = this.grid.minSize;
+    this.grid.minSize = 0;
+    try {
+      return this.grid.splitToward(target, side, { id, data, newLine }) !== null;
+    } finally {
+      this.grid.minSize = min;
+    }
   }
 
   /**

@@ -19,8 +19,9 @@ use serde_json::{Map, Value, json};
 use crate::application_log::log_error;
 use crate::buffer_bounds::record_buffer_drop;
 use crate::endpoint::{
-    BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INVALID_PARAMS, MISSING_DOCUMENT, NO_INPUT,
-    NOT_ACTIVE, POINTER_HELD, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME, missing_window,
+    BUTTON_HELD, Endpoint, Failure, HANDLER_FAILED, INTERRUPTED, INVALID_PARAMS, MISSING_DOCUMENT,
+    NO_INPUT, NOT_ACTIVE, POINTER_HELD, PRESS_OPEN, Service, TIMED_OUT, UNKNOWN_NAME,
+    missing_window,
 };
 use crate::event_log::Level;
 use crate::event_record::emit_host;
@@ -161,9 +162,9 @@ fn host_declarations() -> Value {
         }],
         "commands": [
             {"name": "host.dock.select", "description": "Performs the Dock menu item with the title.",
-             "params": {"type": "object", "properties": {"title": {"type": "string"}}}, "result": nothing},
+             "params": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}, "result": nothing},
             {"name": "host.hit", "description": "Returns the owner and native hit-view class and frame of a point in window coordinates.",
-             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
+             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}, "required": ["x", "y"]},
              "result": {"type": "object", "properties": {
                  "kind": {"type": "string", "enum": ["workbench", "document", "native"]},
                  "surface": {"type": "string"}, "document": {"type": "string"},
@@ -171,7 +172,7 @@ fn host_declarations() -> Value {
                  "view": {"type": ["object", "null"], "properties": {
                      "class": {"type": "string"}, "frame": rect}}}}},
             {"name": "host.menu.select", "description": "Performs the application menu item with the title in the submenu with the menu title.",
-             "params": {"type": "object", "properties": {"menu": {"type": "string"}, "title": {"type": "string"}}}, "result": nothing},
+             "params": {"type": "object", "properties": {"menu": {"type": "string"}, "title": {"type": "string"}}, "required": ["menu", "title"]}, "result": nothing},
             {"name": "host.quit", "description": "Requests normal application termination, including pending saves.",
              "params": empty, "result": nothing},
             {"name": "host.window.close", "description": "Closes the window through its normal close action.",
@@ -183,7 +184,7 @@ fn host_declarations() -> Value {
             {"name": "host.window.maximize", "description": "Maximizes the window, or restores it with on false.",
              "params": {"type": "object", "properties": {"on": {"type": "boolean"}}}, "result": nothing},
             {"name": "host.window.move", "description": "Moves the window frame origin to a point in screen coordinates.",
-             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}},
+             "params": {"type": "object", "properties": {"x": {"type": "number"}, "y": {"type": "number"}}, "required": ["x", "y"]},
              "result": nothing},
             {"name": "host.window.presented", "description": "Resolves after the main page and the shown modal have presented their current geometry and every visible image region has presented its exact current raster, with the display time of that frame.",
              "params": empty, "result": {"type": "object", "properties": {"displayed": {"type": "number"}}}},
@@ -192,7 +193,7 @@ fn host_declarations() -> Value {
             {"name": "host.window.reload", "description": "Starts the workbench of the window again.",
              "params": empty, "result": nothing},
             {"name": "host.window.resize", "description": "Resizes the content area.",
-             "params": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}},
+             "params": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}, "required": ["width", "height"]},
              "result": nothing},
         ],
         "element": [],
@@ -227,6 +228,30 @@ pub fn check_host_name(method: &str, name: &str) -> Result<(), Failure> {
         Ok(())
     } else {
         Err(Failure::new(UNKNOWN_NAME, undeclared_text(method, name)))
+    }
+}
+
+/// Checks the params of the declared host command name against its params schema before the command runs
+/// (docs/spec/exposure.md#command-parameters); absent or null params are an empty object.
+pub fn check_host_params(name: &str, params: Option<&Value>) -> Result<(), Failure> {
+    let declared = host_declarations();
+    let schema = declared["commands"]
+        .as_array()
+        .and_then(|entries| entries.iter().find(|entry| entry["name"] == name))
+        .and_then(|entry| entry["params"].as_object())
+        .ok_or_else(|| {
+            Failure::new(
+                -32603,
+                format!("the host command {name} declares no params schema"),
+            )
+        })?;
+    let given = match params {
+        Some(Value::Object(given)) => given.clone(),
+        _ => Map::new(),
+    };
+    match crate::command_params::command_params_refusal(name, schema, &given) {
+        Some(refusal) => Err(Failure::params(refusal)),
+        None => Ok(()),
     }
 }
 
@@ -3413,6 +3438,8 @@ impl Host {
             Delivery::PointerHeld(held) => {
                 Err(Failure::new(POINTER_HELD, pointer_held_message(&held)))
             }
+            Delivery::ResizeEdge(message) => Err(Failure::new(INVALID_PARAMS, message)),
+            Delivery::Interrupted(message) => Err(Failure::new(INTERRUPTED, message)),
         }
     }
 

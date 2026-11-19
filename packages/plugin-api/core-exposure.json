@@ -135,6 +135,7 @@
     "core.card.close",
     "core.layout.open",
     "core.layout.select",
+    "core.layout.move",
     "core.layout.close",
     "core.tab.select",
     "core.tab.close",

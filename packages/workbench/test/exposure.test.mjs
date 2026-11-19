@@ -97,7 +97,7 @@ const coreExposes = () => ({
 
 const probeExposes = () => ({
   status: [{ name: "probe.lines", description: "Lines.", schema: { type: "array" } }],
-  commands: [{ name: "probe.send", description: "Sends.", params: { type: "object" }, result: {} }],
+  commands: [{ name: "probe.send", description: "Sends.", params: { type: "object", properties: { n: { type: "number" } } }, result: {} }],
   element: [{ name: "probe.lines", description: "Output." }],
 });
 

@@ -34,10 +34,6 @@ for (const app of Object.values(APPS)) {
     // A pointer move that presses nothing makes the window the virtual key window.
     await s.pointer(x, y, "move");
     await s.until("host.window", (state) => state.virtualKey, "the window did not become the virtual key window");
-    // A key that comes before the view of the pressed tab presented ends the hold of its layout, and the host logs that end
-    // (docs/spec/native-surfaces.md#layout-transaction, docs/spec/diagnostics.md); whether a key comes first depends on how fast
-    // the view presents.
-    s.expectError(/^error host view presentation: surface \S+ had not presented when input ended the hold$/);
     await s.pointer(x, y, "down");
     await s.pointer(x, y, "up");
     // No wait: a person types as the button comes up.

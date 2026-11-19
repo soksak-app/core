@@ -959,7 +959,7 @@
           "reason"
         ]
       },
-      "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of process-ended, hidden or unresponsive (docs/spec/native-surfaces.md#view-surfaces)."
+      "description": "The presentation wait of a view ended without its presentation: surface names the view and reason is the end, one of input, closed, hidden, process-ended or unresponsive. A press or a key down that ends the hold before the view presented its change is ordinary input of a person, so this record and not an error records it (docs/spec/native-surfaces.md#layout-transaction)."
     },
     "host.trace.view.presentation-join": {
       "layer": "host",

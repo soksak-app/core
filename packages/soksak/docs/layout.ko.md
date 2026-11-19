@@ -357,6 +357,54 @@ slicing floorplan이므로 slicing tree로 읽히고, 몫은 그 tree에서 축�
 grid.balance();
 ```
 
+## Cuts
+
+`even(boxes)`는 slicing tree의 모든 cut의 모든 child에 같은 몫을 준다. 그래서
+결과는 배치를 만든 operation의 순서가 아니라 배치에 달려 있다. 다섯 카드의
+row는 절반씩 만들었든 셋으로 나눠 만들었든 같은 다섯 카드이고, 같은 수의
+카드를 가진 두 row는 line을 함께 쓴다. tree는 `sliceTree`의 tree다. cut은
+사각형을 한 축을 따라 `n`개의 child로 나누며, 각 child는 카드, box, 또는
+다른 축을 따라가는 cut이다. 한 cut이 나눌 수 있는 모든 line을 한 번에 잡으므로
+다섯 카드의 row는 다섯 child를 가진 cut 하나다. line이 두 축 모두로 child 집합을
+자를 수 있으면 `x`를 따라가는 cut이 바깥 cut이다.
+
+box는 tree가 child 하나로 유지하는 host의 사각형이다. `boxes`는 어느 box에도
+들지 않는 box를 `{id, head, members}`로 나열한다. `members`는 카드 id와 box이고,
+`head`는 host가 box 안쪽 위에 member 위로 그리는 px다. 어느 box에도 들지 않는
+카드는 plane의 member다. box의 member는 box 사각형 안에 자기 tree를 가지므로
+어떤 cut도 box를 가로지르지 않는다.
+
+child의 크기는 그려진 크기다. 곧 그 카드들의 그려진 사각형의 범위이며, `y`
+축에서는 그 위 box의 head를 뺀다. 그래서 box의 head는 box의 몫 안에 있고,
+크기가 같은 두 child는 같은 크기로 그려진다. slot은 plane 전체에 대한 span에서
+corridor를 뺀 크기로 그려지므로(R5) 같은 span이 같은 크기는 아니다. `even`은
+모든 cut을 같은 span으로 놓고, 그려진 사각형을 읽고, 각 span을 그려진 크기와
+같은 크기의 차이만큼 옮기며, 가장 큰 차이가 1000분의 1 px 아래가 될 때까지
+반복한다. corridor는 span에 따라 바뀌지 않으므로 한 번의 보정으로 cut 하나가
+정확히 놓이고, 중첩된 cut은 한 번 더 걸린다. cut의 축에 px 크기를 가진 카드와
+`fixed` 카드는 자기 span을 유지하고 몫을 받지 않는다. 10억분의 1 안에 있는
+좌표는 한 line이다(R1). `even`은 `balance`처럼 `paidBy` 기록을 유지하고
+`minSize`를 검사하지 않는다. host가 그리는 head는 host만 알므로 결과는 host가
+검사한다. slicing이 아닌 배치는 `the grid is not a slicing arrangement`를,
+grid의 카드가 아닌 box member는 `card <id> is not a member of the layout`을
+던지며, 던지면 아무것도 바뀌지 않는다.
+
+```js
+grid.even([]);                                                        // 모든 cut을 고르게
+grid.even([{ id: "group-1", head: 44, members: ["card-1", "card-2"] }]); // head를 가진 box
+```
+
+### Pending cases
+
+카드를 더하고, 빼고, 옮기는 operation의 크기 규칙은 아직 정해지지 않은
+결정이다. 후보 규칙을 기술하는 `docs/spec/cases/layout/grid.json`의 case는 그것이
+기다리는 결정을 담은 `pending`을 가진다. 두 runner는 그런 case를 그 문구와 함께
+건너뛴 것으로 보고하고 실행하지 않으며, 그 case가 부르는 call(`insert`,
+`withdraw`)은 결정이 내려질 때까지 library에 없다.
+
+pending case가 기술하는 제안은
+[layout sizes](../../../docs/plans/layout-sizes.ko.md)다.
+
 ## 균등 배치
 
 `arrange("even")`은 현재 순서의 카드를 격자로 다시 배치한다. 분할과 합치기를
@@ -510,6 +558,7 @@ shape.loops.length;                   // 카드가 붙어 있으면 1, 떨어져
 | `moveLinePast(axis, line, px)` | line을 `moveBoundary` 처럼 옮기고, 둘 사이에 카드가 없는 곳에서 닿는 각 line을 지나간다. 다른 line 위에 멈춘 line은 그 line에 합쳐진다 |
 | `shareLines(axis, extra?)` | 그 axis의 모든 line index를 유지하고, px 크기를 가진 카드가 차지하지 않은 모든 slot에 자기 corridor, `extra[slot]` px, 그리고 free length의 같은 몫을 준다. free length는 extent에서 corridor, 고정 크기와 extra를 뺀 값이다. 고정된 slot은 자기 span을 유지한다. 알 수 없는 axis, slot 수와 길이가 다른 extra 목록, 공유 slot이 길이를 갖지 못하는 axis에는 throw 한다 |
 | `balance()` | 배치를 유지하고 모든 카드에 공정한 몫을 준다 |
+| `even(boxes)` | host의 box를 child로 하여 slicing tree의 모든 cut의 모든 child에 같은 몫을 준다 ([cuts](#cuts)) |
 | `sliceTree(cards)` | 배치의 slicing tree(`Slice`: 카드 하나, 또는 한 축을 따라 판의 처음부터 나눈 쪽들), 아니면 null |
 | `mergeCoincident(axis, line)` | 이제 같은 자리에 있는 이웃 선으로 접는다 |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | 가상 선 |

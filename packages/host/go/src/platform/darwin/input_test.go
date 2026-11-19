@@ -76,3 +76,33 @@ func TestADeliveredPressAnswersTheViewThatItReached(t *testing.T) {
 		}
 	}
 }
+
+// A press on a resize edge of the window is refused by the library with a message that names the point and the edge, and the
+// host answers that message unchanged (docs/spec/exposure.md#methods).
+// contract: endpoint.input.resize-edge-refusal
+func TestAResizeEdgeRefusalCarriesTheMessageOfTheLibrary(t *testing.T) {
+	message := "the point (200, 299) lies on the bottom resize edge of the window, where AppKit tracks a press as a window resize; the synthetic press was not delivered"
+	reason := append([]byte(message), 0)
+	var result platform.PointerResult
+	var held platform.ButtonHeld
+	handle := handles.NewHandle(func(got platform.PointerResult, state platform.ButtonHeld, _ uintptr) { result, held = got, state })
+	goHost_input_delivered(uintptr(handle), abi.SP_INPUT_RESIZE_EDGE, &abi.SpInputHeld{Pid: -1, Reason: &reason[0]}, 0)
+	if result != platform.PointerResizeEdge || held.Reason != message {
+		t.Fatalf("the refusal answered %v with %+v, want PointerResizeEdge with the message %q", result, held, message)
+	}
+}
+
+// A drag or a release of a gesture that the press of a person ended is refused by the library with a message that names that press
+// and the point where the gesture was released, and the host answers that message unchanged (docs/spec/exposure.md#named-pointers).
+// contract: endpoint.input.interruption
+func TestAnInterruptionCarriesTheMessageOfTheLibrary(t *testing.T) {
+	message := "a person's down of the left button at (100, 80) in the window of the gesture ended the synthetic gesture of pointer a, whose press was released at (60, 50)"
+	reason := append([]byte(message), 0)
+	var result platform.PointerResult
+	var held platform.ButtonHeld
+	handle := handles.NewHandle(func(got platform.PointerResult, state platform.ButtonHeld, _ uintptr) { result, held = got, state })
+	goHost_input_delivered(uintptr(handle), abi.SP_INPUT_INTERRUPTED, &abi.SpInputHeld{Pid: -1, Reason: &reason[0]}, 0)
+	if result != platform.PointerInterrupted || held.Reason != message {
+		t.Fatalf("the interruption answered %v with %+v, want PointerInterrupted with the message %q", result, held, message)
+	}
+}

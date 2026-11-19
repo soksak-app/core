@@ -1205,10 +1205,10 @@ const SCHEMA_TYPES = {
   null: (v) => v === null,
 };
 
-/** Validates one schema. The allowed keywords are type, properties, items and enum. */
+/** Validates one schema. The allowed keywords are type, properties, required, items and enum (docs/spec/exposure.md#entry-fields). */
 function checkSchema(where, schema) {
   if (!isObject(schema)) throw new Error(`${where}: schema must be an object`);
-  only(where, schema, ["type", "properties", "items", "enum"]);
+  only(where, schema, ["type", "properties", "required", "items", "enum"]);
   if (schema.type !== undefined) {
     const types = [].concat(schema.type);
     if (types.length === 0 || types.some((type) => typeof type !== "string" || !Object.hasOwn(SCHEMA_TYPES, type))) {
@@ -1219,6 +1219,11 @@ function checkSchema(where, schema) {
     if (!isObject(schema.properties)) throw new Error(`${where}: properties must be an object`);
     for (const [key, value] of sortedEntries(schema.properties)) checkSchema(`${where}.${key}`, value);
   }
+  if (schema.required !== undefined && (!Array.isArray(schema.required) || schema.required.length === 0
+    || new Set(schema.required).size !== schema.required.length
+    || schema.required.some((key) => typeof key !== "string" || !isObject(schema.properties) || !Object.hasOwn(schema.properties, key)))) {
+    throw new Error(`${where}: required must be a non-empty list of distinct names of properties`);
+  }
   if (schema.items !== undefined) checkSchema(`${where}[]`, schema.items);
   if (schema.enum !== undefined && (!Array.isArray(schema.enum) || schema.enum.length === 0)) {
     throw new Error(`${where}: enum must be a non-empty array`);
@@ -1226,11 +1231,13 @@ function checkSchema(where, schema) {
 }
 
 /**
- * Returns whether the value satisfies the schema. properties checks only the keys that the value has.
+ * Returns whether the value satisfies the schema. properties checks only the keys that the value has, and an object lacks no key
+ * that required names.
  */
 export function matchesSchema(schema, value) {
   if (schema.enum !== undefined && !schema.enum.some((item) => sameJson(item, value))) return false;
   if (schema.type !== undefined && ![].concat(schema.type).some((type) => SCHEMA_TYPES[type](value))) return false;
+  if (schema.required !== undefined && isObject(value) && schema.required.some((key) => !Object.hasOwn(value, key))) return false;
   if (schema.properties !== undefined && isObject(value)) {
     for (const [key, sub] of Object.entries(schema.properties)) {
       if (Object.hasOwn(value, key) && !matchesSchema(sub, value[key])) return false;
@@ -1238,6 +1245,22 @@ export function matchesSchema(schema, value) {
   }
   if (schema.items !== undefined && Array.isArray(value)) return value.every((item) => matchesSchema(schema.items, item));
   return true;
+}
+
+/**
+ * The refusal of the members of the parameters of a command by their names, or null (docs/spec/exposure.md#command-parameters): the first
+ * member in code point order that properties of the schema does not name, then the first member of required that the parameters lack.
+ * The check is written here and not taken from a JSON Schema library, because the registries of the Go and Rust hosts answer the same
+ * texts, which the libraries of the three languages word differently.
+ */
+function parameterRefusal(name, schema, params) {
+  // default: a schema without properties declares no parameter.
+  const declared = schema.properties ?? {};
+  const unknown = Object.keys(params).sort().find((key) => !Object.hasOwn(declared, key));
+  if (unknown !== undefined) return `command ${name}: unknown parameter ${unknown}`;
+  // default: a schema without required requires no parameter.
+  const missing = (schema.required ?? []).find((key) => !Object.hasOwn(params, key));
+  return missing === undefined ? null : `command ${name}: parameter ${missing} is required`;
 }
 
 /**
@@ -1825,6 +1848,8 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `command.run for ${name} requires params`);
         }
         const input = params.params;
+        const named = parameterRefusal(name, found.declaration.params, input);
+        if (named) throw new ExposureError(EXPOSURE_ERRORS.invalidParams, named);
         if (!matchesSchema(found.declaration.params, input)) {
           throw new ExposureError(EXPOSURE_ERRORS.invalidParams, `invalid params for ${name}`);
         }

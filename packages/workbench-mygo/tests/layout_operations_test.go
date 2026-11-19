@@ -269,6 +269,38 @@ func (f *tabShell) hostCalls(name string) int {
 	return count
 }
 
+// contract: layout.tree.splits-carry-frames
+func TestEachSplitOfTheDescriptionCarriesTheFrameOfItsChildren(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("a", 0, 1, 0, 2, tab("tab-aaaaaa", "notes")), gridCard("b", 1, 2, 0, 1, tab("tab-bbbbbb", "notes")),
+		gridCard("c", 1, 2, 1, 2, tab("tab-cccccc", "notes"))))
+	var check func(node describedNode, where string)
+	check = func(node describedNode, where string) {
+		if node.Direction == "" {
+			return
+		}
+		if node.Frame == nil {
+			t.Fatalf("%s: the split %s has no frame", where, node.shape())
+		}
+		left, top, right, bottom := math.Inf(1), math.Inf(1), math.Inf(-1), math.Inf(-1)
+		for _, child := range node.Children {
+			left, top = min(left, child.Frame.X), min(top, child.Frame.Y)
+			right, bottom = max(right, child.Frame.X+child.Frame.Width), max(bottom, child.Frame.Y+child.Frame.Height)
+		}
+		if got := *node.Frame; got.X != left || got.Y != top || got.Width != right-left || got.Height != bottom-top {
+			t.Fatalf("%s: the split frame is %+v, not the frame %v,%v %vx%v of its children", where, got, left, top, right-left, bottom-top)
+		}
+		for i, child := range node.Children {
+			check(child, fmt.Sprintf("%s/%d", where, i))
+		}
+	}
+	root := *f.layout().Root
+	if got := root.shape(); got != "row[a 0.5, column[b 0.5, c 0.5] 0.5]" {
+		t.Fatalf("the tree is %s", got)
+	}
+	check(root, "root")
+}
+
 // contract: layout.open.adds-a-tab-once
 func TestALayoutOpenAddsATabOnce(t *testing.T) {
 	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
@@ -490,8 +522,6 @@ func TestARefusedLayoutOpenChangesNothing(t *testing.T) {
 		{`{"card":"main"}`, "core.layout.open needs plugin or path"},
 		{`{"card":"main","path":"a.md","params":{"path":"a.md"}}`, "core.layout.open takes params only with plugin"},
 		{`{"card":"main","side":"middle","plugin":"notes"}`, "unknown side middle; use left, right, top or bottom"},
-		// The neighbour rest holds no tab with these params, so the open splits thin.
-		{`{"card":"thin","side":"right","plugin":"notes","params":{"path":"x.md"}}`, "card thin cannot split toward right"},
 	}
 	check := func(params, want string) {
 		t.Helper()
@@ -505,6 +535,15 @@ func TestARefusedLayoutOpenChangesNothing(t *testing.T) {
 	}
 	for _, refusal := range refusals {
 		check(refusal.params, refusal.want)
+	}
+	// The neighbour rest holds no tab with these params, so the open splits thin, which a half would draw below the minimum.
+	before, stored := f.described(), f.stored()
+	if _, err := f.apply("core.layout.open", `{"card":"thin","side":"right","plugin":"notes","params":{"path":"x.md"}}`); err == nil ||
+		!thinRefusal.MatchString(err.Error()) {
+		t.Fatalf("the open beside thin failed with %v, want %s", err, thinRefusal)
+	}
+	if f.described() != before || f.stored() != stored {
+		t.Fatal("the refused open beside thin changed the layout")
 	}
 	// A card of a fullscreen arrangement does not change.
 	f.run(t, "core.card.fullscreen", `{"card":"main"}`)
@@ -536,6 +575,80 @@ func TestCurrentResolvesAtEachApplication(t *testing.T) {
 	answer, _ := f.twice("core.layout.select", `{"tab":"current"}`)
 	if answer["card"] != b["card"] || answer["tab"] != b["tab"] {
 		t.Fatalf("the select of the current tab answered %v", answer)
+	}
+}
+
+// contract: layout.move.into-a-card-once
+func TestALayoutMoveIntoACardMovesTheTabOnce(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+		gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "notes"), paramTab("tab-bbbbbb", "notes", map[string]any{"path": "s.md"})),
+		gridCard("b", 1, 2, 0, 1, tab("tab-cccccc", "notes"))))
+	answer, layout := f.twice("core.layout.move", `{"tab":"tab-bbbbbb","card":"b"}`)
+	if answer["card"] != "b" || answer["tab"] != "tab-bbbbbb" {
+		t.Fatalf("the move answered %v", answer)
+	}
+	if got := layout.tabs(t, "b"); !slices.Equal(got, []string{"tab-cccccc", "tab-bbbbbb*"}) || layout.focusedCard() != "b" {
+		t.Fatalf("b holds %v and the focus is %s", got, layout.focusedCard())
+	}
+	if got := layout.tabs(t, "a"); !slices.Equal(got, []string{"tab-aaaaaa*"}) {
+		t.Fatalf("a holds %v", got)
+	}
+	if got := layout.paramsOf(t, "b", "tab-bbbbbb"); got != `{"path":"s.md"}` {
+		t.Fatalf("the moved tab has the params %s", got)
+	}
+	// A tab that its card already holds is selected and moves nowhere.
+	answer, layout = f.twice("core.layout.move", `{"tab":"tab-cccccc","card":"b"}`)
+	if answer["card"] != "b" || answer["tab"] != "tab-cccccc" {
+		t.Fatalf("the move answered %v", answer)
+	}
+	if got := layout.tabs(t, "b"); !slices.Equal(got, []string{"tab-cccccc*", "tab-bbbbbb"}) {
+		t.Fatalf("b holds %v", got)
+	}
+}
+
+// contract: layout.move.beside-a-card-once
+func TestALayoutMoveWithASideMovesTheTabOnce(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("tab-aaaaaa", "notes"), tab("tab-bbbbbb", "plain")))
+	answer, layout := f.twice("core.layout.move", `{"tab":"tab-bbbbbb","card":"main","side":"right"}`)
+	born, _ := answer["card"].(string)
+	if answer["tab"] != "tab-bbbbbb" || born == "main" {
+		t.Fatalf("the move answered %v", answer)
+	}
+	if got, want := layout.Root.shape(), fmt.Sprintf("row[main 0.5, %s 0.5]", born); got != want || layout.focusedCard() != born {
+		t.Fatalf("the tree is %s, want %s, and the focus is %s", got, want, layout.focusedCard())
+	}
+	if got := layout.tabs(t, born); !slices.Equal(got, []string{"tab-bbbbbb*"}) {
+		t.Fatalf("the new card holds %v", got)
+	}
+	// The only tab of a card moves the card: its identifier stays, and the card stands toward the side.
+	answer, layout = f.twice("core.layout.move", `{"tab":"tab-aaaaaa","card":"`+born+`","side":"bottom"}`)
+	if answer["card"] != "main" || answer["tab"] != "tab-aaaaaa" {
+		t.Fatalf("the move of the only tab answered %v", answer)
+	}
+	if got, want := layout.Root.shape(), fmt.Sprintf("column[%s 0.5, main 0.5]", born); got != want {
+		t.Fatalf("the tree is %s, want %s", got, want)
+	}
+}
+
+// contract: layout.move.refusal-changes-nothing
+func TestARefusedLayoutMoveChangesNothing(t *testing.T) {
+	f := layoutShell(t,
+		gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+			gridCard("a", 0, 1, 0, 1, tab("tab-aaaaaa", "notes")), gridCard("b", 1, 2, 0, 1, tab("tab-bbbbbb", "notes"))),
+		gridSpace("spc-bbbbbb", []float64{0, 1}, []float64{0, 1}, gridCard("far", 0, 1, 0, 1, tab("tab-ffffff", "notes"))))
+	before := f.described()
+	for _, c := range []struct{ params, want string }{
+		{`{"tab":"tab-zzzzzz","card":"b"}`, "tab tab-zzzzzz is not in the layout of window main"},
+		{`{"tab":"tab-ffffff","card":"b"}`, "tab tab-ffffff is in space spc-bbbbbb, which is not active"},
+		{`{"tab":"tab-aaaaaa","card":"nothing"}`, "card nothing is not in the layout of window main"},
+		{`{"tab":"tab-aaaaaa","card":"a","side":"right"}`, "tab tab-aaaaaa cannot move to the right of a"},
+	} {
+		if _, err := f.apply("core.layout.move", c.params); err == nil || err.Error() != c.want {
+			t.Fatalf("%s failed with %v, want %s", c.params, err, c.want)
+		}
+		if f.described() != before {
+			t.Fatalf("the refused %s changed the layout", c.params)
+		}
 	}
 }
 

@@ -23,7 +23,7 @@ import {
   currentGrid, currentTextScope, dragState, focusCard, foldSidebar,
   drawnCardRects, focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
-  openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
+  openInLayout, selectInLayout, moveInLayout, closeInLayout, layoutDescription, surfaceSpace,
   cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup, storedLayoutText,
 } from "./plane.js";
 import { emitEvent, eventAdmits } from "./page-log.js";
@@ -652,7 +652,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => closeCard(card));
   // The group commands and the card query of any level (docs/spec/groups.md#commands).
-  registry.command("core.group.create", ({ card, side, plugin: kind, params }) => createGroup(card, side, kind, params));
+  registry.command("core.group.create", ({ card, side, plugin: kind, params, request }) => createGroup(card, side, kind, params, request));
   registry.command("core.group.dissolve", ({ group }) => dissolveGroup(group));
   registry.command("core.group.rename", ({ group, name }) => renameGroup(group, name));
   registry.command("core.group.leader", ({ card }) => leadLevel(card));
@@ -672,6 +672,7 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
   registry.command("core.layout.open", (params) => openInLayout(params));
   registry.command("core.layout.select", (params) => selectInLayout(params));
+  registry.command("core.layout.move", (params) => moveInLayout(params));
   registry.command("core.layout.close", (params) => closeInLayout(params));
   registry.command("core.tab.select", ({ tab }) => { trace("action", { kind: "tab.select", tab }); selectTab(tab); });
   registry.command("core.tab.close", ({ tab }) => closeTabById(tab));

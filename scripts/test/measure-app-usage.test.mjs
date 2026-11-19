@@ -232,6 +232,21 @@ test("totals count the attributed rows only and sum the sidecars apart from the 
   assert.deepEqual(totalsOf([]), { application: zero, sidecars: zero, total: zero });
 });
 
+test("totals count a process that holds the documents of several views once", () => {
+  // host.window lists each document with the process that draws it, and one WebContent process draws the documents of several views.
+  const rows = [
+    { role: "host", pid: 10, bytes: 100, peakBytes: 120, cpuSeconds: 2, cpuPercent: 1 },
+    { role: "document tab-1/", pid: 20, bytes: 50, peakBytes: 60, cpuSeconds: 1, cpuPercent: 0.5 },
+    { role: "document tab-2/", pid: 20, bytes: 50, peakBytes: 60, cpuSeconds: 1, cpuPercent: 0.5 },
+    { role: "sidecar probe", pid: 30, bytes: 7, peakBytes: 8, cpuSeconds: 0.5, cpuPercent: 0.25 },
+  ];
+  assert.deepEqual(totalsOf(rows), {
+    application: { bytes: 150, peakBytes: 180, cpuSeconds: 3, cpuPercent: 1.5 },
+    sidecars: { bytes: 7, peakBytes: 8, cpuSeconds: 0.5, cpuPercent: 0.25 },
+    total: { bytes: 157, peakBytes: 188, cpuSeconds: 3.5, cpuPercent: 1.75 },
+  });
+});
+
 const MYGO = "/var/tester/soksak-check-mygo";
 const MB = 1024 * 1024;
 

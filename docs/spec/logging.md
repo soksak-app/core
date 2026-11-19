@@ -287,6 +287,16 @@ The [memory saver](plugins.md#memory-saver) emits these page events of the class
 
 Each event enters `events.json` in the change that adds its emit site, because the catalog check refuses a declared event that no source emits.
 
+### Late presentation
+
+A press or a key down that ends the hold of a layout transaction before a joined view presented its change ([layout transaction](native-surfaces.md#layout-transaction)) is ordinary input of a person: key repeat and fast typing send key downs closer together than a view presents. The host records that end with one gated event and writes no error.
+
+| Event | Level | Class | Fields | Meaning |
+| --- | --- | --- | --- | --- |
+| `host.trace.view.presentation-abandoned` | debug | call | `surface`, `reason` | The presentation wait of the view `surface` ended without its presentation; `reason` is `input` for a press or a key down, or `closed`, `hidden`, `process-ended` or `unresponsive`. The host writes it only while the performance trace is on ([the switch](performance-trace.md#the-switch)) and the policy stores `debug` of the class `call`. |
+
+No wait ends by time, so no bound declares a presentation late. A failure of the end itself, a native join that cannot be ended or a notice that cannot be sent, stays the error `error host view channel: <reason>`.
+
 ### Sidecar catalogs
 
 A sidecar catalog (`events.json` of a sidecar repository) names its sidecar in the member `sidecar`, lists `layers: ["sidecar"]` only, and declares events of the layer `sidecar`: `sidecar.<name>.*` events and the lifecycle events `log.open`, `log.dropped` and `log.rotated`. `composeCatalogs(base, ...sidecars)` (`packages/log-contract`) joins the catalog of this repository with the catalogs of the installed sidecars into the one catalog that the audit takes, and it refuses with an error that names the sidecar and the event when a catalog names no sidecar, lists another layer, declares an event of another layer or of a name outside `sidecar.<name>.` and `log.`, declares a `sidecar.<name>.*` event twice, or declares a `log.*` event that differs from the declaration of the base in class, level, fields or `cids`. A `log.*` event that both declare is one declaration, so the lifecycle events of a sidecar file (`log.open`, `log.dropped` with `from_seq`, `to_seq`, `count`, `bytes` and `reason`, and `log.rotated`) pass with the layer `sidecar`, and a missing or mistyped field is a finding with its line like any other event.

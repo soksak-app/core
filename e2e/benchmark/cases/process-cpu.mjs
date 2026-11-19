@@ -5,7 +5,7 @@
 // the launchd domain of the host, and the sidecar processes of the configuration folder, together with the persistent raster probe
 // service and the child process of each of its sessions (rasterServiceSnapshot of e2e/raster-probe.mjs), which the host starts with
 // --service-dir. The CPU time of a process is the CPU time that ps reports at the start and at the end of the interval.
-import { readCpuSeconds, cpuFigures, windowApplicationRows } from "../../../scripts/measure-app-usage.mjs";
+import { readCpuSeconds, cpuFigures, onePerProcess, windowApplicationRows } from "../../../scripts/measure-app-usage.mjs";
 import { rasterServiceSnapshot } from "../../raster-probe.mjs";
 
 /** The groups that the figures sum, in the order of the report. */
@@ -67,7 +67,7 @@ export async function applicationProcesses(s) {
 /**
  * The CPU figures of the rows `rows` over `seconds` from the readings `before` and `after` (Map pid -> CPU seconds) and `actions`,
  * the number of actions of the interval: each row with its group, cpuSeconds and cpuPercent, and for each group of CPU_GROUPS and
- * the total the CPU seconds, the percent of the interval and the CPU milliseconds per action. A process that is not in both readings
+ * the total the CPU seconds, the percent of the interval and the CPU milliseconds per action, each process once. A process that is not in both readings
  * and a CPU time that decreased are errors (cpuFigures of measure-app-usage), which fail the figures together.
  */
 export function cpuReport({ rows, before, after, seconds, actions }) {
@@ -76,8 +76,9 @@ export function cpuReport({ rows, before, after, seconds, actions }) {
   const measured = rows.map((row) => ({ row: { ...row, group: cpuGroupOf(row.role) }, where: `${row.role} (pid ${row.pid})` }));
   const { errors } = cpuFigures({ measured, foreign: new Set(), cpuBefore: before, cpuAfter: after, elapsed: seconds });
   if (errors.length > 0) throw new Error(`the CPU time over the interval cannot be read: ${errors.join("; ")}`);
+  // Each process counts once: one WebContent process draws the documents of several views, and each document has its row.
   const figures = (selected) => {
-    const cpuSeconds = selected.reduce((sum, { row }) => sum + row.cpuSeconds, 0);
+    const cpuSeconds = onePerProcess(selected.map(({ row }) => row)).reduce((sum, row) => sum + row.cpuSeconds, 0);
     return { cpuSeconds, cpuPercent: (cpuSeconds / seconds) * 100, msPerAction: (cpuSeconds * 1000) / actions };
   };
   const groups = Object.fromEntries(CPU_GROUPS.map((group) => [group, figures(measured.filter(({ row }) => row.group === group))]));

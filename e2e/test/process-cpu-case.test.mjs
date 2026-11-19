@@ -34,6 +34,15 @@ test("the report sums each group over the interval and per action, and a missing
   assert.throws(() => cpuReport({ rows, before, after, seconds: 0, actions: 1 }), /positive number of seconds/);
 });
 
+test("the report counts a process that holds the documents of several views once", { timeout: 5000 }, () => {
+  // host.window lists each document with the process that draws it, and one WebContent process draws the documents of several views.
+  const rows = [{ role: "host", pid: 1 }, { role: "document tab-1/", pid: 2 }, { role: "document tab-2/", pid: 2 }];
+  const report = cpuReport({ rows, before: new Map([[1, 10], [2, 5]]), after: new Map([[1, 11], [2, 5.5]]), seconds: 2, actions: 100 });
+  assert.deepEqual(report.groups.webContent, { cpuSeconds: 0.5, cpuPercent: 25, msPerAction: 5 });
+  assert.deepEqual(report.total, { cpuSeconds: 1.5, cpuPercent: 75, msPerAction: 15 });
+  assert.deepEqual(report.rows.map(({ role }) => role), ["host", "document tab-1/", "document tab-2/"]);
+});
+
 test("a percentile takes the nearest rank", { timeout: 5000 }, () => {
   assert.deepEqual([percentile([5, 1, 3, 2, 4], 50), percentile([5, 1, 3, 2, 4], 90), percentile([7], 90)], [3, 5, 7]);
   assert.throws(() => percentile([], 50), /no value/);

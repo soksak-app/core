@@ -80,7 +80,7 @@ function arrange() {
   plane.settle();
 }
 const run = (name, params) => registry.run(name, params);
-const { groupFill } = await import("../settings.js");
+const { currentGroupLook } = await import("../settings.js");
 
 /** The rectangle at which the element of a card or a group card stands, as {x, y, w, h}. */
 const placed = (element) => ({ x: parseFloat(element.style.left), y: parseFloat(element.style.top), w: parseFloat(element.style.width),
@@ -102,16 +102,22 @@ test("a group card is one container at its drawn rectangle with the fill of its 
   assert.equal(group.hidden, false);
   near(placed(group), tree.rect("card-4"), "the frame of card-4");
   const probe = document.createElement("i");
-  probe.style.background = groupFill(1);
-  assert.equal(group.style.background, probe.style.background, "the frame is filled with the color of level 1");
+  probe.style.background = currentGroupLook(1).body;
+  assert.equal(group.style.background, probe.style.background, "the frame is filled with the body of level 1");
   const header = group.querySelector('[data-expose="core.group.header"]');
   assert.ok(header, "the group card has its header");
+  probe.style.backgroundColor = currentGroupLook(1).head;
+  assert.equal(header.style.backgroundColor, probe.style.backgroundColor, "the header is drawn in the color of the head of a card");
+  probe.style.borderBottomColor = currentGroupLook(1).line;
+  assert.equal(header.style.borderBottomColor, probe.style.borderBottomColor, "the header draws the line below it in the color of groupLook");
   assert.equal(header.querySelector('[data-expose="core.group.name"]').textContent, "그룹 1");
-  assert.deepEqual([...header.querySelectorAll("button")].map((button) => button.dataset.expose),
-    ["core.group.add", "core.group.split-x", "core.group.split-y", "core.group.wrap", "core.card.leader", "core.group.fullscreen",
+  assert.deepEqual([...header.querySelectorAll(".chrome__act")].map((button) => button.dataset.expose),
+    ["core.group.split-x", "core.group.split-y", "core.group.group-x", "core.group.group-y", "core.card.leader", "core.group.fullscreen",
       "core.group.close"]);
-  assert.deepEqual([...header.querySelectorAll("button")].map((button) => button.dataset.command),
+  assert.deepEqual([...header.querySelectorAll(".chrome__act")].map((button) => button.dataset.command),
     ["core.card.menu", "core.card.menu", "core.card.menu", "core.card.menu", "core.group.leader", "core.card.fullscreen", "core.group.menu"]);
+  assert.deepEqual([...header.querySelectorAll(".chrome__act")].slice(0, 4).map((button) => JSON.parse(button.dataset.params).menu),
+    ["split-x", "split-y", "group-x", "group-y"], "a group header holds the four split buttons and no add button");
   // The frames stand below the cards.
   const order = [...planeElement.children];
   assert.ok(order.indexOf(group) < order.indexOf(cardElement("card-1")), "the frame comes before the cards in paint order");
@@ -183,39 +189,60 @@ const pick = async (plugin) => {
   await run("core.picker.pick", { index });
 };
 
-test("a content card head shows the group button while the group fits and the leader button pressed on its leader", { timeout: 5000 }, () => {
+// A head holds four split buttons, each named by its result and its direction: the splits beside the card and the group splits toward
+// right and bottom, which are enabled while their group succeeds and are never hidden (docs/spec/groups.md#headers).
+test("a content card head shows the split and group split buttons toward each direction and the leader button pressed on its leader", { timeout: 5000 }, () => {
   arrange();
   assert.deepEqual(headTools("card-1").map((button) => button.dataset.expose),
-    ["core.card.add", "core.card.split-x", "core.card.split-y", "core.card.group", "core.card.leader", "core.card.fullscreen", "core.card.close"]);
+    ["core.card.add", "core.card.split-x", "core.card.split-y", "core.card.group-x", "core.card.group-y", "core.card.leader",
+      "core.card.fullscreen", "core.card.close"]);
   const button = (id, name) => cardElement(id).querySelector(`[data-expose="${name}"]`);
-  assert.equal(button("card-1", "core.card.group").hidden, false);
-  assert.equal(button("card-1", "core.card.group").dataset.command, "core.card.menu");
-  assert.deepEqual(JSON.parse(button("card-1", "core.card.group").dataset.params), { card: "card-1", menu: "group" });
+  for (const [name, menu, title] of [["core.card.group-x", "group-x", "그룹으로 좌우 분할"], ["core.card.group-y", "group-y", "그룹으로 상하 분할"]]) {
+    assert.equal(button("card-1", name).hidden, false, `${name} is shown`);
+    assert.equal(button("card-1", name).disabled, false, `${name} is enabled while its group succeeds`);
+    assert.equal(button("card-1", name).title, title);
+    assert.equal(button("card-1", name).dataset.command, "core.card.menu");
+    assert.deepEqual(JSON.parse(button("card-1", name).dataset.params), { card: "card-1", menu });
+  }
   assert.equal(button("card-1", "core.card.leader").dataset.command, "core.group.leader");
   assert.deepEqual(["card-1", "card-2", "card-3"].map((id) => [button(id, "core.card.leader").hidden, button(id, "core.card.leader").getAttribute("aria-pressed")]),
     [[false, "true"], [false, "false"], [false, "false"]], "card-1 leads its level, card-2 does not, and card-4 leads the root level of card-3");
 });
 
-test("core.card.menu group opens the plugin menu whose item groups the card with a new card toward its longer axis", { timeout: 5000 }, async () => {
-  arrange();
-  await run("core.card.menu", { card: "card-3", menu: "group" });
-  assert.equal(plane.pickerState().open, true);
+// Each group split menu groups the card toward its own side, whatever the shape of the card, and each press sends a new request, so a
+// second press groups the card again (docs/spec/groups.md#headers, docs/spec/groups.md#idempotency).
+test("core.card.menu group-x and group-y group the card with a new card toward right and toward bottom", { timeout: 5000 }, async () => {
+  for (const [menu, side] of [["group-x", "right"], ["group-y", "bottom"]]) {
+    arrange();
+    await run("core.card.menu", { card: "card-3", menu });
+    assert.equal(plane.pickerState().open, true);
+    await pick(PLAIN);
+    const tree = plane.currentTree();
+    const made = tree.parentOf("card-3");
+    assert.ok(made, `${menu}: card-3 is a member of a new group card`);
+    assert.equal(made.members.length, 2);
+    const born = made.members.find((member) => member !== "card-3");
+    assert.equal(tree.neighbour("card-3", side), born, `${menu}: the new card stands toward ${side}`);
+  }
+  // card-3 is drawn higher than wide, so it has the room for a second group toward bottom.
+  const first = plane.currentTree().parentOf("card-3").card;
+  await run("core.card.menu", { card: "card-3", menu: "group-y" });
   await pick(PLAIN);
-  const tree = plane.currentTree();
-  const made = tree.parentOf("card-3");
-  assert.ok(made, "card-3 is a member of a new group card");
-  assert.equal(made.members.length, 2);
-  // card-3 is drawn higher than wide, so the new card stands below it.
-  const born = made.members.find((member) => member !== "card-3");
-  assert.equal(tree.neighbour("card-3", "bottom"), born);
+  assert.notEqual(plane.currentTree().parentOf("card-3").card, first, "a second press groups card-3 again");
 });
 
+// A group header holds no add button, so its add menu is refused (docs/spec/groups.md#headers).
 test("core.card.menu on a group card opens the menu of its header, whose items act on the group card", { timeout: 5000 }, async () => {
   arrange();
-  await run("core.card.menu", { card: "card-4", menu: "add" });
-  assert.equal(plane.pickerState().open, true, "the add menu of the group header is open");
+  await assert.rejects(run("core.card.menu", { card: "card-4", menu: "add" }),
+    (error) => error.message === "card card-4 is a group; a group header has no add menu");
+  assert.equal(plane.pickerState().open, false, "no menu opens for the add of a group card");
+  await run("core.card.menu", { card: "card-4", menu: "group-y" });
   await pick(PLAIN);
-  assert.equal(plane.currentTree().node("card-4").members.length, 3, "the add menu adds a content card inside the group card");
+  const wrapped = plane.currentTree().parentOf("card-4");
+  assert.ok(wrapped && wrapped.members.length === 2, "the group split of the group card wraps it with a new card in a new group");
+  assert.equal(plane.currentTree().neighbour("card-4", "bottom"), wrapped.members.find((member) => typeof member === "string"),
+    "the new content card stands below the group card");
   arrange();
   await run("core.card.menu", { card: "card-4", menu: "split-y" });
   await pick(PLAIN);
@@ -279,6 +306,49 @@ test("the leader keeps its leader mark in a head too narrow for its tools, and i
   assert.equal(plane.cardActs("card-2").leader.hidden, true, "core.grid reports the leader button of card-2 shown in its folded head");
   await run("core.card.tools", { card: "card-1" });
   assert.equal(plane.pickerState().items.some((item) => item.key === "leader"), false, "the tool menu of the leader holds its mark");
+  plane.closePicker("test end");
+  // The leader item of a member that does not lead makes it the leader, as its button does.
+  await run("core.card.tools", { card: "card-2" });
+  await run("core.picker.pick", { index: plane.pickerState().items.findIndex((item) => item.key === "leader") });
+  assert.equal(plane.currentTree().leaderOf(plane.currentTree().parentOf("card-2")), "card-2", "the leader item does not make card-2 the leader");
+});
+
+// A group header folds its buttons by the header fit of a card head, with its name in the place of the tabs: too narrow for its buttons,
+// it keeps the fullscreen toggle, the leader mark on the leader and ⋯, whose tool menu holds the other buttons and runs each as its
+// button does (docs/spec/groups.md#headers, docs/spec/cases/layout/head.json).
+test("a group header too narrow for its buttons folds them into its tool menu, which runs them", { timeout: 5000 }, async () => {
+  arrange();
+  const head = groupElement("card-4").querySelector(".group__head");
+  // JSDOM has no layout engine: the name grows over the room of the header, 1000 wide, unless the fit holds its growth to measure its
+  // text, 40 wide.
+  const name = head.querySelector(".group__name");
+  Object.defineProperty(name, "scrollWidth", { value: 1000, configurable: true });
+  name.getBoundingClientRect = () => ({ x: 0, y: 0, width: head.dataset.measure === undefined ? 1000 : 40, height: 20 });
+  Object.defineProperty(head, "clientWidth", { value: 400, configurable: true });
+  head.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
+  plane.settle();
+  assert.equal(head.dataset.tools, "bar", "a group header with room for its name and its buttons shows its buttons in one row");
+  assert.equal(head.dataset.measure, undefined, "the fit leaves the name free to grow");
+  Object.defineProperty(head, "clientWidth", { value: 120, configurable: true });
+  head.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
+  plane.settle();
+  assert.equal(head.dataset.tools, "menu", "the narrow header of card-4 is not folded");
+  assert.equal(head.dataset.mark, "leader", "the header of the leader card-4 does not keep its leader mark");
+  const more = head.querySelector(".chrome__more");
+  assert.ok(more, "the group header has no tool menu button");
+  assert.equal(more.dataset.expose, "core.card.tools");
+  assert.equal(more.dataset.command, "core.card.tools");
+  assert.deepEqual(JSON.parse(more.dataset.params), { card: "card-4" });
+  await run("core.card.tools", { card: "card-4" });
+  assert.deepEqual(plane.pickerState().items.map((item) => item.key), ["x", "y", "gx", "gy", "group-menu"],
+    "the tool menu holds the folded buttons without the fullscreen toggle and the leader mark");
+  await run("core.picker.pick", { index: 4 });
+  assert.deepEqual(plane.pickerState().items.map((item) => item.key), ["close", "dissolve"], "the close item opens the close menu of the group");
+  plane.closePicker("test end");
+  await run("core.card.tools", { card: "card-4" });
+  await run("core.picker.pick", { index: 3 });
+  await pick(PLAIN);
+  assert.equal(plane.currentTree().neighbour("card-4", "bottom")?.startsWith("card-"), true, "the group split item groups card-4 toward bottom");
 });
 
 // A head too narrow for its tools keeps the fullscreen toggle beside ⋯, and the tool menu does not hold it

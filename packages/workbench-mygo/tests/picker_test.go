@@ -1233,7 +1233,7 @@ func TestEveryCardMenuAsksItsQuestion(t *testing.T) {
 	f.tester.SetSize(1600, 900)
 	f.settle()
 	for menu, want := range map[string]string{"add": "새 탭에 무엇을 띄울까", "split-x": "새 위치에 무엇을 띄울까", "split-y": "새 위치에 무엇을 띄울까",
-		"group": "새 위치에 무엇을 띄울까"} {
+		"group-x": "새 위치에 무엇을 띄울까", "group-y": "새 위치에 무엇을 띄울까"} {
 		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "`+menu+`"}`); err != nil {
 			t.Fatal(err)
 		}
