@@ -346,6 +346,14 @@ export declare class Soksak {
      * Returns false when a card spans both lines, which would leave it zero size.
      */
     mergeCoincident(axis: Axis, line: number): boolean;
+    /**
+     * Moves a line toward `px` as `moveBoundary` does, and past each line of the
+     * axis that it reaches where no card lies between the two, by exchanging
+     * their places; a line that stops on another line merges onto it, so no two
+     * lines stand at one coordinate. A host that keeps regions of cards that a
+     * line may not cross uses it to place a line it made.
+     */
+    moveLinePast(axis: Axis, line: number, px: number): void;
     /** Removes lines no card references. Returns how many were removed. */
     tidy(): number;
     /**
@@ -353,7 +361,7 @@ export declare class Soksak {
      *
      * Prefers the unreferenced line nearest the card's centre that leaves both
      * halves at `minSize`. Otherwise returns a new line at the centre, clamped to
-     * the range where both halves fit.
+     * the range where both halves fit. `newLine` takes no existing line.
      */
     private cutAt;
     /** The smallest drawn side of every card, by id. Used to compare before and after a change. */
@@ -389,11 +397,15 @@ export declare class Soksak {
      * other axis is copied, because both halves stay in that slot. A px size on
      * the cut axis is divided between them.
      *
+     * `init.newLine` cuts at a new line at the centre even where a line that the
+     * card spans across lies inside it, for a host that places the line itself.
+     *
      * Returns the new card's id, or null when the halves do not fit.
      */
     split(id: string, axis: Axis, init?: {
         id?: string;
         data?: unknown;
+        newLine?: boolean;
     }): string | null;
     /**
      * Cut a card and put the new one on a named side.
@@ -404,6 +416,7 @@ export declare class Soksak {
     splitToward(id: string, side: Side, init?: {
         id?: string;
         data?: unknown;
+        newLine?: boolean;
     }): string | null;
     private nextId;
     /**

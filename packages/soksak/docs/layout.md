@@ -517,8 +517,8 @@ first.
 | --- | --- |
 | `cards`, `card(id)`, `rect(id)`, `rects()`, `rectOf(card)` | read the arrangement |
 | `resize(w, h)`, `width`, `height` | plane size |
-| `canSplit(id, axis)`, `split(id, axis, {id?, data?})` | cut one card in two |
-| `splitToward(id, side, {id?, data?})` | cut it and put the new one on a named side |
+| `canSplit(id, axis)`, `split(id, axis, {id?, data?, newLine?})` | cut one card in two; `newLine` cuts at a new line at the centre even where a line that the card spans across lies inside it |
+| `splitToward(id, side, {id?, data?, newLine?})` | cut it and put the new one on a named side |
 | `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | remove a card; `fill` reports which neighbours take the space; `sides` names the sides whose row of neighbours may grow, tried in their order (`"below"`, `"above"`, `"right"`, `"left"`), `fillSides`, the sides of `fillOrder`, by default, and an empty list only removes the slots |
 | `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | take a card to another card's side; `sides` is the sides of its close, as `close` takes them |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
@@ -526,6 +526,7 @@ first.
 | `zoneAt(x, y, options)` | where a drop lands |
 | `dividers()`, `rules()` | grab areas, and boundaries to draw |
 | `boundaryPos`, `boundaryRange`, `hasBoundary(axis, line)`, `moveBoundary(axis, line, px, allowSnap?)`, `centerBoundary` | drag a boundary |
+| `moveLinePast(axis, line, px)` | move a line as `moveBoundary` does and past each line that it reaches where no card lies between the two; a line that stops on another line merges onto it |
 | `balance()` | give every card a fair share and keep the arrangement |
 | `sliceTree(cards)` | the slicing tree of an arrangement (`Slice`: a card, or a cut along an axis into sides from the plane's start), or null |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |

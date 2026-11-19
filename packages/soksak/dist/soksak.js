@@ -1097,6 +1097,47 @@ export class Soksak {
         this.changed();
         return true;
     }
+    /**
+     * Moves a line toward `px` as `moveBoundary` does, and past each line of the
+     * axis that it reaches where no card lies between the two, by exchanging
+     * their places; a line that stops on another line merges onto it, so no two
+     * lines stand at one coordinate. A host that keeps regions of cards that a
+     * line may not cross uses it to place a line it made.
+     */
+    moveLinePast(axis, line, px) {
+        if (this.noAxis(axis))
+            return;
+        const [lo, hi] = SPAN[axis];
+        for (;;) {
+            const at = this.moveBoundary(axis, line, px, false);
+            const a = this.arr(axis);
+            const next = px < at ? line - 1 : line + 1;
+            if (Math.abs(at - px) < EPS || next <= 0 || next >= a.length - 1 || Math.abs(a[next] - a[line]) >= EPS) {
+                // A line that the bounds of the cards stop on another line merges onto it.
+                for (const k of [line - 1, line + 1]) {
+                    if (k > 0 && k < a.length - 1 && Math.abs(a[k] - a[line]) < EPS) {
+                        this.mergeCoincident(axis, line);
+                        break;
+                    }
+                }
+                return;
+            }
+            if (this.list.some((c) => c[lo] === Math.min(line, next) && c[hi] === Math.max(line, next))) {
+                this.mergeCoincident(axis, line);
+                return;
+            }
+            for (const c of this.list) {
+                for (const k of [lo, hi]) {
+                    if (c[k] === line)
+                        c[k] = next;
+                    else if (c[k] === next)
+                        c[k] = line;
+                }
+            }
+            this.changed();
+            line = next;
+        }
+    }
     /** Removes lines no card references. Returns how many were removed. */
     tidy() {
         let dropped = 0;
@@ -1119,9 +1160,9 @@ export class Soksak {
      *
      * Prefers the unreferenced line nearest the card's centre that leaves both
      * halves at `minSize`. Otherwise returns a new line at the centre, clamped to
-     * the range where both halves fit.
+     * the range where both halves fit. `newLine` takes no existing line.
      */
-    cutAt(card, axis) {
+    cutAt(card, axis, newLine = false) {
         if (card.fixed)
             return null;
         const a = this.arr(axis);
@@ -1140,7 +1181,7 @@ export class Soksak {
             return null;
         const mid = (a[card[lo]] + a[card[hi]]) / 2;
         let line = -1;
-        for (let i = card[lo] + 1; i < card[hi]; i++) {
+        for (let i = card[lo] + 1; i < card[hi] && !newLine; i++) {
             if (a[i] < lowest || a[i] > highest)
                 continue;
             if (line < 0 || Math.abs(a[i] - mid) < Math.abs(a[line] - mid))
@@ -1242,6 +1283,9 @@ export class Soksak {
      * other axis is copied, because both halves stay in that slot. A px size on
      * the cut axis is divided between them.
      *
+     * `init.newLine` cuts at a new line at the centre even where a line that the
+     * card spans across lies inside it, for a host that places the line itself.
+     *
      * Returns the new card's id, or null when the halves do not fit.
      */
     split(id, axis, init = {}) {
@@ -1253,7 +1297,7 @@ export class Soksak {
         if (init.id !== undefined && this.find(init.id))
             return null;
         const card = this.find(id);
-        const cut = card && this.cutAt(card, axis);
+        const cut = card && this.cutAt(card, axis, init.newLine === true);
         if (!card || !cut)
             return null;
         const was = this.extents(axis);
