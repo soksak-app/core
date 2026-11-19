@@ -55,11 +55,20 @@ func (s *Shell) drawWork(c *ui.Context, width, height float32) {
 		}).Children(func() {
 			// The line around the stage stands where the stage does, outside the box that holds the plane on the grid.
 			s.drawStageEdge(c, -shiftX, -shiftY, width, stage)
-			cards := s.plane.Cards()
+			// Every card of every plane in workbench order: a group card stands before the cards of its child plane, which lie over its body.
+			cards := s.allCards()
 			s.forgetCardReads(cards)
 			for _, card := range cards {
 				rect, ok := s.cardRect(card.ID)
 				if !ok {
+					continue
+				}
+				if s.isGroup(card.ID) {
+					if s.fullscreen != "" {
+						ui.Box(c).Absolute().Size(0, 0).Children(func() { s.binder.Absent(c, "core.group", "core.card.focus", card.ID, cardParam{Card: card.ID}) })
+						continue
+					}
+					s.drawGroupCard(c, card.ID, rect, inset)
 					continue
 				}
 				data, err := s.readCard(card)
@@ -206,9 +215,6 @@ func (s *Shell) drawCard(c *ui.Context, id string, data *layout.CardData, rect l
 // tabCloseMark is the mark of the close button of a tab, as the page draws it.
 const tabCloseMark = "✕"
 
-// cardToolTotal is the count of the tools of a card head: add, split x, split y, full screen and close.
-const cardToolTotal = 5
-
 // drawHead draws the head of a card: its tab list button, its tabs and its tools in one group, folded as the width of the head allows
 // (.chrome of packages/workbench/app.css).
 func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides cardSides, width, height float32) {
@@ -232,7 +238,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 		}
 		left += widths[i] + float64(m.cardTabsGap)
 	}
-	buttons := float32(cardToolTotal + len(sides.shown))
+	buttons := float32(len(s.headTools(id)) + len(sides.shown))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
 		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton),
@@ -536,7 +542,7 @@ func (s *Shell) headTools(id string) []headTool {
 	}
 	closing := headTool{Do: "close", Status: "close", Name: "core.card.close", Command: "core.card.close", Params: cardParam{Card: id},
 		Title: names["close"], Icon: "card-close"}
-	canClose := s.plane.CanClose(id)
+	canClose := s.planes.CanClose(id)
 	if !canClose {
 		closing.Title = names["close-refused"]
 	}
@@ -545,23 +551,42 @@ func (s *Shell) headTools(id string) []headTool {
 	if fullscreen {
 		whole.Title, whole.Icon = names["restore"], "card-restore"
 	}
-	return []headTool{
+	tools := []headTool{
 		changes(headTool{Do: "add", Status: "add", Name: "core.card.add", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "add"},
 			Title: names["add"], Icon: "card-add"}, true),
 		changes(headTool{Do: "x", Status: "split-x", Name: "core.card.split-x", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-x"},
-			Title: names["split-x"], Icon: "card-split-x"}, s.plane.CanSplit(id, "x")),
+			Title: names["split-x"], Icon: "card-split-x"}, s.planes.CanSplit(id, "right")),
 		changes(headTool{Do: "y", Status: "split-y", Name: "core.card.split-y", Command: "core.card.menu", Params: menuParam{Card: id, Menu: "split-y"},
-			Title: names["split-y"], Icon: "card-split-y"}, s.plane.CanSplit(id, "y")),
-		whole,
-		changes(closing, canClose),
+			Title: names["split-y"], Icon: "card-split-y"}, s.planes.CanSplit(id, "bottom")),
 	}
+	tools = append(tools, s.groupTools(id, "core.card.group", changes)...)
+	return append(tools, whole, changes(closing, canClose))
+}
+
+// groupTools are the group button of the card id, shown while a group of it toward its longer axis would succeed, and its leader
+// button, shown in a plane of two or more cards and pressed on the leader (docs/spec/groups.md#headers). group is the element of the
+// group button of its kind of header.
+func (s *Shell) groupTools(id, group string, changes func(tool headTool, can bool) headTool) []headTool {
+	names := s.options.Declared.CardTools
+	var tools []headTool
+	if s.planes.CanGroup(id) {
+		tools = append(tools, changes(headTool{Do: "group", Status: "group", Name: group, Command: "core.card.menu", Params: menuParam{Card: id, Menu: "group"},
+			Title: names["group"], Icon: "card-group"}, true))
+	}
+	key, _ := s.planes.PlaneOf(id) // silent: the head tools are asked for a card of the tree.
+	if s.planes.LeadCount(key) >= 2 {
+		leader, _ := s.planes.Leader(key) // silent: a plane of two cards that can lead has a leader.
+		tools = append(tools, changes(headTool{Do: "leader", Status: "leader", Name: "core.card.leader", Command: "core.group.leader", Params: cardParam{Card: id},
+			Title: names["leader"], Icon: "card-leader", Pressed: leader == id}, true))
+	}
+	return tools
 }
 
 // drawTools draws the tools of a card.
 func (s *Shell) drawTools(c *ui.Context, id string) {
 	for _, tool := range s.headTools(id) {
 		button := s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed)
-		if tool.Do == "fullscreen" {
+		if tool.Do == "fullscreen" || tool.Do == "leader" {
 			button.Checked(tool.Pressed)
 		}
 	}

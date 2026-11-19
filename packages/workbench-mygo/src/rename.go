@@ -108,6 +108,11 @@ func (s *Shell) beginRename(target renameTarget) error {
 			return fmt.Errorf("no space %s", target.ID)
 		}
 		title = space.Title
+	case "group":
+		if !s.isGroup(target.ID) {
+			return fmt.Errorf("no group %s", target.ID)
+		}
+		title = s.planes.GroupName(target.ID)
 	default:
 		return fmt.Errorf("unknown rename target %s", target.Kind)
 	}
@@ -130,6 +135,8 @@ func (s *Shell) commitRename(done func(error)) {
 		done(nil)
 	case target.Kind == "project":
 		s.renameProject(target.ID, title, done)
+	case target.Kind == "group":
+		done(s.renameGroup(target.ID, title))
 	default:
 		done(s.renameSpace(target.ID, title))
 	}

@@ -819,8 +819,17 @@ func (p *Planes) Split(id string, side Side, data json.RawMessage, even bool) (s
 	return born, err
 }
 
-// CanSplit tells whether Split of the card id toward side would succeed.
+// CanSplit tells whether Split of the card id toward side would succeed. A split changes the size of the card that it splits and of no
+// other card, so only the split of a group card can take a group card below its smallest size and runs on the tree; the split of a
+// content card is decided by its plane, as the head tools ask it for each card in each frame.
 func (p *Planes) CanSplit(id string, side Side) bool {
+	key, ok := p.PlaneOf(id)
+	if !ok || !isSide(side) || !p.grid(key).CanSplit(id, axisOf(side)) {
+		return false
+	}
+	if p.groups[id] == nil {
+		return true
+	}
 	kept := p.snapshot()
 	_, err := p.Split(id, side, json.RawMessage(`{}`), false)
 	p.restore(kept)
@@ -880,8 +889,11 @@ func (p *Planes) Close(id string) ([]string, error) {
 	return ended, nil
 }
 
-// CanClose tells whether Close of the card id would succeed.
+// CanClose tells whether Close of the card id would succeed. A tree without group cards is one plane, which decides the close itself.
 func (p *Planes) CanClose(id string) bool {
+	if len(p.groups) == 0 {
+		return p.root.CanClose(id)
+	}
 	kept := p.snapshot()
 	_, err := p.Close(id)
 	p.restore(kept)
@@ -1376,4 +1388,35 @@ func (p *Planes) PlaneCards(key string) []string {
 		}
 	}
 	return out
+}
+
+// CanGroup tells whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would
+// succeed (docs/spec/groups.md#headers).
+func (p *Planes) CanGroup(id string) bool {
+	return p.CheckGroup(id, p.GroupSide(id)) == nil
+}
+
+// CanDissolve tells whether Dissolve of the group card id would succeed.
+func (p *Planes) CanDissolve(id string) bool {
+	if p.groups[id] == nil {
+		return false
+	}
+	kept := p.snapshot()
+	err := p.Dissolve(id)
+	p.restore(kept)
+	return err == nil
+}
+
+// LeadCount is the number of cards of the plane key that can lead it: its cards that are not window sidebars. A plane of two or more
+// shows the leader button in each of their headers.
+func (p *Planes) LeadCount(key string) int {
+	count := 0
+	if grid := p.grid(key); grid != nil {
+		for _, card := range grid.list {
+			if !IsWindowSide(card.ID) {
+				count++
+			}
+		}
+	}
+	return count
 }

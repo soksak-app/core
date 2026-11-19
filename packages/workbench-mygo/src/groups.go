@@ -162,6 +162,12 @@ func (s *Shell) registerGroups() {
 		return map[string]string{"card": value.Card}, nil
 	})
 	later(s, "core.card.get", func(value cardParam, answer func(any, error)) { s.cardGet(value.Card, answer) })
+	act(s, "core.group.menu", func(value groupParam) error {
+		if err := s.requirePlane(); err != nil {
+			return err
+		}
+		return s.openGroupMenu(value.Group, "core.group.close/"+value.Group)
+	})
 }
 
 // createGroup runs core.group.create: the refusals in the order of docs/spec/groups.md#commands, the repetition that finds the group

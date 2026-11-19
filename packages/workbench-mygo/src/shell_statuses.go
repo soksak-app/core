@@ -190,7 +190,11 @@ func (s *Shell) cardActs(id string) map[string]any {
 		return nil
 	}
 	acts := map[string]any{"fit": fit.Fit, "tools": fit.Tools}
-	for _, tool := range s.headTools(id) {
+	tools := s.headTools(id)
+	if s.isGroup(id) {
+		tools = s.groupHeadTools(id)
+	}
+	for _, tool := range tools {
 		acts[tool.Status] = cardTool{Enabled: tool.Enabled, Hidden: fit.Tools != "bar", Title: tool.Title}
 	}
 	return acts
@@ -228,8 +232,8 @@ func (s *Shell) gridState() (any, error) {
 		leader, _ := s.planes.Leader(placed.Plane) // silent: a plane without a leader has no card that carries the mark.
 		if record, ok := s.planes.Group(card.ID); ok {
 			status.Cards = append(status.Cards, gridCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, C0: card.C0, C1: card.C1,
-				R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Tabs: []gridTabStatus{}, Sidebars: map[layout.Side]layout.PresentedSidebar{},
-				Plane: placed.Plane, Leader: leader == card.ID, Group: &gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
+				R0: card.R0, R1: card.R1, Fixed: card.Fixed, Width: card.Width, Tabs: []gridTabStatus{}, Acts: s.cardActs(card.ID),
+				Sidebars: map[layout.Side]layout.PresentedSidebar{}, Plane: placed.Plane, Leader: leader == card.ID, Group: &gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
 			continue
 		}
 		data, err := layout.DecodeCardData(card.Data)

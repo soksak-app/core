@@ -3304,7 +3304,7 @@
       },
       {
         "name": "core.card.menu",
-        "description": "Opens or closes a card's add or split menu.",
+        "description": "Opens or closes the add, split or group menu of a card or a group card.",
         "params": {
           "type": "object",
           "properties": {
@@ -3315,7 +3315,8 @@
               "enum": [
                 "add",
                 "split-x",
-                "split-y"
+                "split-y",
+                "group"
               ]
             }
           }
@@ -3741,6 +3742,21 @@
               ]
             }
           }
+        }
+      },
+      {
+        "name": "core.group.menu",
+        "description": "Opens or closes the close menu of a group header.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            }
+          }
+        },
+        "result": {
+          "type": "null"
         }
       },
       {
@@ -4269,14 +4285,15 @@
       },
       {
         "name": "core.rename.begin",
-        "description": "Starts renaming a project or space tab in place.",
+        "description": "Starts renaming a project or space tab, or a group name, in place.",
         "params": {
           "type": "object",
           "properties": {
             "kind": {
               "enum": [
                 "project",
-                "space"
+                "space",
+                "group"
               ]
             },
             "id": {
@@ -4535,6 +4552,56 @@
       {
         "name": "core.card.split-x",
         "description": "The vertical split buttons of pane cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group",
+        "description": "The group cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.header",
+        "description": "The headers of the group cards in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.name",
+        "description": "The names in the group headers in workbench order; a double-click renames.",
+        "many": true
+      },
+      {
+        "name": "core.group.add",
+        "description": "The add buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.split-x",
+        "description": "The vertical split buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.split-y",
+        "description": "The horizontal split buttons of the group headers in workbench order.",
+        "many": true
+      },
+      {
+        "name": "core.group.wrap",
+        "description": "The group buttons of the group headers in workbench order, shown while the group card can hold a group of itself and a new card toward its longer axis.",
+        "many": true
+      },
+      {
+        "name": "core.group.close",
+        "description": "The close buttons of the group headers in workbench order; each opens the close menu of its group.",
+        "many": true
+      },
+      {
+        "name": "core.card.group",
+        "description": "The group buttons of the content card headers in workbench order, shown while the card can hold a group of itself and a new card toward its longer axis.",
+        "many": true
+      },
+      {
+        "name": "core.card.leader",
+        "description": "The leader buttons of the card and group headers of planes of two or more cards in workbench order; pressed on the leader.",
         "many": true
       },
       {

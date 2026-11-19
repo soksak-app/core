@@ -22,7 +22,7 @@ var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": 
 const pickerMapWidth, pickerMapHeight = 16, 10
 
 // menuTools are the menus of the card head, with the tool of each and the side that its split takes.
-var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"}}
+var menuTools = map[string]struct{ tool, side string }{"add": {tool: "add"}, "split-x": {"x", "right"}, "split-y": {"y", "bottom"}, "group": {tool: "group"}}
 
 // pickerItem is an item of the layer. Expose is the element name of an item that has its own, and Icon the SVG elements of a
 // 16-unit view box.
@@ -136,6 +136,10 @@ func (s *Shell) openAddMenu(anchor, tool, card string) {
 			_, err := s.addTab(card, plugin, nil)
 			return err
 		}
+		if tool == "group" {
+			_, err := s.createGroup(groupCreateParam{Card: card, Side: string(s.planes.GroupSide(card)), Plugin: plugin})
+			return err
+		}
 		side := "right"
 		if tool == "y" {
 			side = "bottom"
@@ -157,14 +161,14 @@ func (s *Shell) openCardMenu(card, menu string) error {
 	if !known {
 		return fmt.Errorf("unknown menu %s", menu)
 	}
-	anchor := "core.card." + menu + "/" + card
+	anchor := s.cardMenuElement(card, menu) + "/" + card
 	if _, drawn := s.picker.drawn[anchor]; !drawn {
 		return fmt.Errorf("card %s has no %s button", card, menu)
 	}
 	if s.toggled(anchor) {
 		return nil
 	}
-	s.focusCard(card)
+	s.focusCard(s.planes.Focusable(card))
 	s.settle()
 	s.openAddMenu(anchor, tool.tool, card)
 	return nil
@@ -186,14 +190,25 @@ func (s *Shell) openCardTools(card string) error {
 	if err != nil {
 		return err
 	}
-	for _, tool := range s.headTools(card) {
+	tools := s.headTools(card)
+	if s.isGroup(card) {
+		tools = s.groupHeadTools(card)
+	}
+	for _, tool := range tools {
 		if tool.Enabled {
 			items = append(items, pickerItem{Key: tool.Do, Name: tool.Title, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}
-	s.focusCard(card)
+	s.focusCard(s.planes.Focusable(card))
 	s.settle()
 	s.openPicker("카드 도구", items, func(key string) error {
+		if key == "close" && s.isGroup(card) {
+			return s.openGroupMenu(card, anchor)
+		}
+		if key == "leader" {
+			s.binder.run("core.group.leader", cardParam{Card: card})
+			return nil
+		}
 		if key == "close" {
 			_, err := s.askedCloseCard(card)
 			return err
