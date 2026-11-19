@@ -1077,7 +1077,6 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 		want   string
 	}{
 		{"missing request", "request", func(m map[string]any) { delete(m, "request") }, "image screen message has no request"},
-		{"missing name", "name", func(m map[string]any) { delete(m, "name") }, "image screen message has no image name"},
 		{"string generation", "generation", func(m map[string]any) { m["generation"] = "2" }, "image screen message has no valid generation"},
 		{"negative raster", "raster", func(m map[string]any) { m["raster"] = -1 }, "image screen message has no valid raster"},
 		{"missing rows", "rows", func(m map[string]any) { delete(m, "rows") }, "image screen message has no rows array"},
@@ -1112,5 +1111,25 @@ func TestMalformedScreenMessageNamesItsMember(t *testing.T) {
 				t.Fatalf("a malformed screen message ended the unanswered request: next request %+v", again)
 			}
 		})
+	}
+}
+
+// contract: images.copy-path.screen-without-name-is-not-answered
+// A screen message without a valid image name is consumed and sends no answer, because the answer is routed by the image name.
+func TestScreenMessageWithoutNameIsNotAnswered(t *testing.T) {
+	images, key, raster, first := screenFixture(t)
+	member := map[string]any{
+		"request": first.Request, "generation": raster.Generation, "raster": raster.Raster,
+		"rows": []any{map[string]any{"row": 0, "cells": "row-0"}},
+	}
+	body := screenMessageBody(t, member)
+	decision := Decide(body, "sidecar-a", key.Surface, images)
+	malformed, ok := decision.(error)
+	if !ok || !strings.Contains(malformed.Error(), "image screen message has no image name") {
+		t.Fatalf("decision of the screen message without a name = %T %v, want an error that names the image name", decision, decision)
+	}
+	handled, answers, err := handleScreenMessage(images, body, "sidecar-a", key.Surface)
+	if err != nil || !handled || len(answers) != 0 {
+		t.Fatalf("screen message without a name handled %t, answers %v, error %v; want handled with no answer", handled, answers, err)
 	}
 }

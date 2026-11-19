@@ -1362,7 +1362,13 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		}
 		screen["error"] = "malformed"
 		screen["member"] = d.Member
-		name, _ := d.Echo["name"].(string)
+		// The answer is routed by the image name. A message without a valid name names no image, so the error is logged and no
+		// answer is sent.
+		name, named := d.Echo["name"].(string)
+		if !named {
+			LogError("image screen", fmt.Sprintf("surface=%s sender=%s image name is missing, so the malformed answer is not sent", surface, sender))
+			return true
+		}
 		logAnswerError("image screen "+name, sendResponse(name, map[string]interface{}{"image": map[string]interface{}{"screen": screen}}))
 		return true
 
