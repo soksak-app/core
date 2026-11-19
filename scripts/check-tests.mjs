@@ -471,6 +471,31 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F960",
+    implementation: [
+      { file: "e2e/benchmark/cases/raster-cards.mjs", symbol: "export async function openRasterGrid(s, { rows, columns, balance })" },
+      { file: "e2e/benchmark/cases/raster-cards.mjs", symbol: "export function boundaryMoves(start, now)" },
+      { file: "e2e/benchmark/cases/click-cpu.mjs", symbol: "export function clickOrder(cards, focused, count)" },
+      { file: "e2e/benchmark/cases/scroll-cpu.mjs", symbol: "export function wheelDelta(frame, lines)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function actionFrames(times, { action, from, to })" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function blankFigures(cards, base, counts)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function redrawActions(grid, line, leader)" },
+      { file: "e2e/benchmark/cases/layout-redraw.mjs", symbol: "export function regionRaster(host, surface)" },
+    ],
+    tests: [
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the rows of the grid are the first content cards of one column of the start layout" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a row splits at its widest card, and the cleanup moves back each line that stands elsewhere" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the clicks visit each card in turn from the card after the focused one" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a wheel toward older lines has a negative distance of whole points, and a wheel that does not move that way fails" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "an action takes the last frame completed before it and the frames requested during it" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "a frame is blank for a card that keeps no pixel of its colour" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the leader actions run only where the build declares core.group.leader" },
+      { file: "e2e/test/raster-benchmarks-case.test.mjs", id: "the raster of a region is its frame in device pixels, also where the view rounds a half point" },
+    ],
+    expected: "The raster benchmarks open a grid of probe cards with the sidebars off, visit the cards, wheel toward older lines and count the blank card frames of each action from the recorded frames.",
+    levels: ["unit"],
+  },
+  {
     id: "F974",
     implementation: [
       { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },
