@@ -754,8 +754,8 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 	}
 }
 
-// themeToken returns the color token of a theme in its mode, as workbench.json declares it.
-func themeToken(t *testing.T, name, mode, token string) color.RGBA {
+// declaredThemes returns the themes that workbench.json declares.
+func declaredThemes(t *testing.T) []map[string]any {
 	t.Helper()
 	text, err := os.ReadFile("../src/workbench.json")
 	if err != nil {
@@ -767,7 +767,13 @@ func themeToken(t *testing.T, name, mode, token string) color.RGBA {
 	if err := json.Unmarshal(text, &declared); err != nil {
 		t.Fatal(err)
 	}
-	for _, theme := range declared.Themes {
+	return declared.Themes
+}
+
+// themeToken returns the color token of a theme in its mode, as workbench.json declares it.
+func themeToken(t *testing.T, name, mode, token string) color.RGBA {
+	t.Helper()
+	for _, theme := range declaredThemes(t) {
 		if theme["name"] == name {
 			parsed := ui.Hex(theme[mode].(map[string]any)[token].(string))
 			return color.RGBA{parsed.R, parsed.G, parsed.B, 255}
@@ -778,6 +784,8 @@ func themeToken(t *testing.T, name, mode, token string) color.RGBA {
 }
 
 // The first row and the row of the spaces are bands of the card color, each with its edge under it, over the background of the stage.
+// At the seam (gap 0) the stage shares its top line with the line under the row of the spaces (docs/spec/settings.md#values), and the
+// focus ring of a focused card at the top of the plane colors that shared line, as it colors each line of the card.
 func TestTheBarsOfTheWindowTakeTheCardColorOfTheTheme(t *testing.T) {
 	declared, err := workbench.Declared()
 	if err != nil {
@@ -809,12 +817,28 @@ func TestTheBarsOfTheWindowTakeTheCardColorOfTheTheme(t *testing.T) {
 			if got := at(first + 1); got != card {
 				t.Fatalf("the row of the spaces is %v, want %v", got, card)
 			}
-			if got := at(second - 0.5); got != edge {
-				t.Fatalf("the edge of the row of the spaces is %v, want %v", got, edge)
+			grid := status[struct {
+				Plane struct{ X, Y float64 } `json:"plane"`
+				Cards []struct {
+					Y       float64
+					Focused bool
+				}
+			}](t, f, "core.grid")
+			plane, under := grid.Plane, edge
+			seam := slices.ContainsFunc(declaredThemes(t), func(declared map[string]any) bool {
+				return declared["name"] == theme[0] && declared["shape"].(map[string]any)["gap"] == "0px"
+			})
+			if seam && slices.ContainsFunc(grid.Cards, func(card struct {
+				Y       float64
+				Focused bool
+			}) bool {
+				return card.Focused && card.Y < 1
+			}) {
+				under = themeToken(t, theme[0], theme[1], "focus")
 			}
-			plane := status[struct {
-				Plane struct{ X float64 } `json:"plane"`
-			}](t, f, "core.grid").Plane
+			if got := at(second - 0.5); got != under {
+				t.Fatalf("the line under the row of the spaces is %v, want %v with the seam %v", got, under, seam)
+			}
 			if got := at(second + 1); plane.X > 1 && got != stage {
 				t.Fatalf("the stage is %v, want %v", got, stage)
 			}

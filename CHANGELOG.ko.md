@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F967-3 (seam에서 space bar 아래 선): gap이 0이고 focus 카드가 plane 맨 위에 있으면 창 bar의 mygo test는 space 줄 아래 선에 focus 색을 기대한다. stage가 그 선을 함께 쓰고 seam에서 카드의 focus ring이 카드 둘레의 선을 칠하기 때문이다(`docs/spec/settings.md#values`, `docs/spec/groups.md`). 검증: stage가 선을 함께 쓰기 전 commit에서 test가 통과했고 그 변경에서 실패했으며, 이 기대로 두 theme에서 통과한다.
 - F967-1 (창 크기 변경의 한계): 두 host 모두 `host.window.resize`의 1 point보다 작은 너비나 높이를 `width and height must be at least 1`로 거부한다. 이전에는 Go host가 1보다 작은 크기를 다른 문구로 거부했고 Rust host는 0 이하만 거부했다(`docs/spec/cases/window-resize.json`). 검증: 두 host의 content size test가 바뀌지 않은 코드에서 실패했고 통과한다.
 - F973 (key up과 배치 hold): key up이나 modifier 변경은 더는 배치 hold를 끝내지 않으므로, key down이 배치를 바꾼 key의 뗌이 view가 표시하기 전에 그 변경을 커밋하지 않는다. mygo는 Command = keystroke에서 `host view presentation: surface <tab> had not presented when input ended the hold`를 더는 쓰지 않는다. 검증: native hold test가 바뀌지 않은 library에서 실패했고 통과한다. keystroke 36번의 창 측정은 수정 전 mygo에서 이 오류 14번, 수정 뒤 mygo, Wails, Tauri에서 0번을 기록했다.
 - F956 (text size scope의 창 검증): mygo, Wails, Tauri의 debug build에서 plane 둘레 stage의 누름이 frame을 scope로 만들었고, Command = 세 번이 frame 배율 1.1, 1.25, 1.5로 그것을 유지했다. test inventory check의 feature link는 `drawWork`의 현재 stage 경계를 가리킨다.
