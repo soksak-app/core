@@ -53,6 +53,7 @@ function liesOn(side, outlineSides) {
   });
 }
 
+// contract: workbench.parties.drawing
 test("the outer outline of a party is one closed path element named by the party", { timeout: 10000 }, async () => {
   const window = await openPartyWindow();
   try {

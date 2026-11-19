@@ -8,6 +8,7 @@ import { openPartyWindow } from "./support/party-window.mjs";
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+// contract: workbench.parties.commands
 test("core.party.create of two touching cards makes one party with the first identifier p1 and no leader", { timeout: 10000 }, async () => {
   const window = await openPartyWindow();
   try {

@@ -1,4 +1,3 @@
-// contract: docs/spec/parties.md#storage
 // A space restores its parties from the stored members and exports them back unchanged. A stored party that the grid does not
 // hold as touching cards is refused by the restore with the party identifier, and nothing is restored.
 package layout_test
@@ -10,6 +9,7 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
+// contract: workbench.parties.storage
 func TestStoredPartiesRestoreAndExportUnchanged(t *testing.T) {
 	state := layout.State{
 		Xs: []float64{0, 1, 2},

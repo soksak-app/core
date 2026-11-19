@@ -11,6 +11,7 @@ const layout = {
 };
 const project = { id: "prj-one", root: "/work/one", title: "one" };
 
+// contract: workbench.parties.storage
 test("a space object without a parties member reads as parties []", () => {
   const space = readStoredSpace(project, { id: "spc-1", title: "SPACE1", layout });
   assert.deepEqual(space.parties, []);

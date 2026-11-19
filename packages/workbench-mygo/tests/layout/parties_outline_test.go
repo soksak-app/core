@@ -1,4 +1,3 @@
-// contract: docs/spec/parties.md#drawing
 // The outer outline of a party is the outline of the presented rectangles of its cards: adjacent cards join at half the gap, and the
 // outline is inset by half the border width, which is the rail width of the declaration. The Go party model returns the same loops
 // that the outline function of the layout returns for those rectangles.
@@ -12,6 +11,7 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
+// contract: workbench.parties.drawing
 func TestPartyOutlineIsTheOutlineOfItsCardRects(t *testing.T) {
 	state := layout.State{
 		Xs: []float64{0, 100, 200},

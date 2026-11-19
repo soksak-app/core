@@ -1,4 +1,3 @@
-// contract: docs/spec/parties.md#commands
 // The status core.parties lists one record per party: the stored fields, the outline in window points and the reason of the last
 // change. The outline of each record is the outline of the party (Parties.Outline) as [x, y] pairs.
 package layout_test
@@ -11,6 +10,7 @@ import (
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
+// contract: workbench.parties.commands
 func TestPartyRecordsCarryTheStoredFieldsOutlineAndReason(t *testing.T) {
 	state := layout.State{
 		Xs:    []float64{0, 1, 2},

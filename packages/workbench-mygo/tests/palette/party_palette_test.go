@@ -1,4 +1,3 @@
-// contract: docs/spec/parties.md#drawing
 // The party colors of the Go workbench are read from the declaration copy that the Go host embeds, the same declaration that the page
 // reads. Each party token of the shown theme and of each mode resolves to a #rrggbb value. The equality of the copy with the workbench
 // declaration is checked by scripts/check-hosts-same.mjs, which reads both sources.
@@ -13,6 +12,7 @@ import (
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+// contract: workbench.parties.drawing
 func TestPartyTokensResolveToHexColors(t *testing.T) {
 	declared, err := workbench.ReadDeclarations()
 	if err != nil {

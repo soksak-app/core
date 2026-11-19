@@ -1,4 +1,3 @@
-// contract: docs/spec/parties.md#storage
 // The storage rules of the parties member of a space object of projects.json. A space without the member reads as no party, an
 // explicit null or another form is refused with the file, the project root, the space identifier and the found value, and each
 // party that breaks a rule of the specification is refused.
@@ -20,6 +19,7 @@ func spaceWith(parties string) json.RawMessage {
 	return json.RawMessage(`{"id":"s1","title":"Space","layout":{},"parties":` + parties + `}`)
 }
 
+// contract: workbench.parties.storage
 func TestSpaceWithoutPartiesReadsNoParty(t *testing.T) {
 	got, err := layout.ReadStoredParties(spaceWith(""), "root-1", "s1", []string{"a", "b"})
 	if err != nil {

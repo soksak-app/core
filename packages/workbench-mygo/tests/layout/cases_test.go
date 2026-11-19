@@ -157,6 +157,7 @@ func arg(t *testing.T, s step, i int, out any) bool {
 	return true
 }
 
+// contract: workbench.parties.commands
 func TestGridCases(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
@@ -818,7 +819,6 @@ func sidebarCall(t *testing.T, id string, data *layout.CardData, sets map[string
 	return nil, false, nil
 }
 
-// contract: docs/spec/parties.md#commands
 // TestPartyCreateCasesJudgeTouchingCards runs the party cases of docs/spec/cases/layout/parties.json that create a party of two cards: a
 // case with no error, and a case with the error of cards that do not touch, state the touching judgement of the two cards.
 func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {

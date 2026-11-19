@@ -1,4 +1,3 @@
-// contract: docs/spec/parties.md#commands
 // The party cases of docs/spec/cases/layout/parties.json run against the Go party model. Each case builds the grid from its state,
 // then runs its steps in order through layout.Parties: a step with an error must fail with that exact text, and a step with returns
 // must reply with every member that the returns name. The same file is run by the party module of packages/workbench.
@@ -100,6 +99,7 @@ func shownPalette(t *testing.T) map[string]string {
 	return palette
 }
 
+// contract: workbench.parties.commands
 func TestPartyCasesRunEverySteps(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
