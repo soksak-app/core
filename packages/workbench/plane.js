@@ -1380,13 +1380,16 @@ function fitChrome(chrome, strip) {
   const lead = parseFloat(getComputedStyle(chrome.closest(".card")?.dataset.fullscreen === "true" && apps
     ? apps : chrome.querySelector(".chrome__ham")).width);
   const active = strip.querySelector(".tab[data-active=true]");
-  // The leader keeps its leader mark beside ⋯ in the menu stage, so the menu stage needs the room of both (docs/spec/groups.md#headers).
+  // The head keeps the leader mark and the fullscreen toggle beside ⋯ in the menu stage, so the menu stage needs the room of each
+  // (docs/spec/groups.md#headers, docs/spec/example-model.md#card-tools).
   const mark = leaderMark(acts);
+  const kept = keptTools(acts);
   const { fit, tools } = fitHead({
     width: chrome.clientWidth, paddingLeft: parseFloat(head.paddingLeft), paddingRight: parseFloat(head.paddingRight), lead, gap,
     toolsWidth: acts.getBoundingClientRect().width,
     // ⋯ is not drawn in the bar stage, so the declared width is read and not the rect.
-    moreWidth: parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width) + (mark ? mark.getBoundingClientRect().width + gap : 0),
+    moreWidth: parseFloat(getComputedStyle(chrome.querySelector(".chrome__more")).width)
+      + kept.reduce((sum, b) => sum + b.getBoundingClientRect().width + gap, 0),
     tabWidths: [...strip.querySelectorAll(".tab")].map((tab) => tab.getBoundingClientRect().width),
     // The gap between tabs is a value that the tab list holds.
     // default: the computed value normal of columnGap is not a number and is 0 in flex.
@@ -1402,6 +1405,10 @@ function fitChrome(chrome, strip) {
 
 /** The pressed leader button of the tool row acts, the leader mark, or null on a card that does not lead. */
 const leaderMark = (acts) => acts.querySelector(".chrome__act[data-do=leader][aria-pressed=true]:not([hidden])");
+
+/** The buttons of the tool row acts that the head keeps beside ⋯ in the menu stage: the leader mark and the fullscreen toggle. */
+const keptTools = (acts) => [...acts.querySelectorAll(".chrome__act[data-do=leader][aria-pressed=true], .chrome__act[data-do=fullscreen]")]
+  .filter((b) => !b.hidden);
 
 /* It measures after the render completes. Measuring before the width is updated computes a wrong position.
    It does not scroll during a tab drag. The coordinates of the dragged tab would be misaligned. */
@@ -1941,9 +1948,9 @@ export function openCardTools(id) {
   if (!anchor) throw new Error(`card ${id} has no tool menu button`);
   if (picker?.anchor === anchor) { closePicker("toggle"); return; }
   const acts = cardElement(id).querySelector(".chrome__acts");
-  // The leader keeps its leader mark in the head, so the menu does not hold it (docs/spec/groups.md#headers).
-  const kept = leaderMark(acts);
-  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden && b !== kept).map((b) => ({
+  // The head keeps the leader mark and the fullscreen toggle, so the menu does not hold them (docs/spec/groups.md#headers).
+  const kept = keptTools(acts);
+  const items = [...acts.querySelectorAll(".chrome__act")].filter((b) => !b.disabled && !b.hidden && !kept.includes(b)).map((b) => ({
     // A sidebar button has no data-do and points to a side with data-side.
     key: b.classList.contains("chrome__side") ? `side-${b.dataset.side}` : b.dataset.do,
     name: b.title,
@@ -2548,10 +2555,11 @@ export function cardActs(id) {
   const chrome = cardElement(id)?.querySelector(".chrome");
   const acts = chrome?.querySelector(".chrome__acts");
   if (!acts) return null;
+  const kept = keptTools(acts);
   const buttons = Object.fromEntries([...acts.querySelectorAll(".chrome__act[data-do]")].map((b) => [
     ["close", "fullscreen", "leader"].includes(b.dataset.do) ? b.dataset.do : MENU_OF[b.dataset.do],
-    // A head that folded the tools into a menu does not draw the tool row, but the leader keeps its leader mark.
-    { enabled: !b.disabled, hidden: b.hidden || (chrome.dataset.tools === "menu" && !(chrome.dataset.mark === "leader" && b.dataset.do === "leader")),
+    // A head that folded the tools into a menu draws only the kept buttons of the tool row: the leader mark and the fullscreen toggle.
+    { enabled: !b.disabled, hidden: b.hidden || (chrome.dataset.tools === "menu" && !kept.includes(b)),
       title: b.title },
   ]));
   // default: the head of a card whose tab row is not yet fitted is an unfolded strip.

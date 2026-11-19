@@ -225,7 +225,7 @@ func TestANarrowHeadHasTheToolMenuAndTheTabList(t *testing.T) {
 	menu := f.menu()
 	// The plane holds two cards and card leads it, so its head keeps the leader mark beside the menu and the menu does not hold it
 	// (docs/spec/groups.md#headers).
-	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:3], []string{"add", "y", "fullscreen"}) || !f.has("core.card.leader", card) {
+	if menu.Title != "카드 도구" || !slices.Equal(menu.keys()[:2], []string{"add", "y"}) || !f.has("core.card.leader", card) {
 		t.Fatalf("the menu is %+v", menu)
 	}
 	f.click("core.picker.item", "add")
@@ -1272,5 +1272,28 @@ func TestALayerWithoutAQuestionDrawsNoHead(t *testing.T) {
 	}
 	if top, head := keep.Bounds.Y-10-float32(gap), float32(pad+headTop); top >= head {
 		t.Fatalf("the first item stands %v below the top of the layer, below the top padding %v of a head", top, head)
+	}
+}
+
+// A head too narrow for its tools keeps the fullscreen button immediately before the tool menu button, and the menu does not hold it
+// (docs/spec/example-model.md#card-tools).
+func TestANarrowHeadKeepsTheFullscreenButtonBesideTheToolMenu(t *testing.T) {
+	f := projectWithPlugins(t)
+	card := f.tabbedCards()[0]
+	f.tester.SetSize(150, 500)
+	f.settle()
+	if f.has("core.card.add", card) || !f.has("core.card.tools", card) {
+		t.Fatalf("the head of %s is not folded into its tool menu", card)
+	}
+	if !f.has("core.card.fullscreen", card) {
+		t.Fatalf("the narrow head of %s shows no fullscreen button", card)
+	}
+	full, more := f.box("core.card.fullscreen", card), f.box("core.card.tools", card)
+	if full.X+full.W > more.X || more.X-(full.X+full.W) > 8 {
+		t.Fatalf("the fullscreen button at %v does not stand immediately before the tool menu button at %v", full, more)
+	}
+	f.click("core.card.tools", card)
+	if slices.Contains(f.menu().keys(), "fullscreen") {
+		t.Fatalf("the tool menu holds the fullscreen button: %v", f.menu().keys())
 	}
 }

@@ -281,10 +281,11 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
 .chrome__more svg{width:var(--card-icon);height:var(--card-icon);fill:currentColor;stroke:none}
 .chrome__more:hover{background:var(--inset);color:var(--fg)}
 .chrome[data-tools=menu] .chrome__more{display:grid}
-.chrome[data-tools=menu] .chrome__acts{display:none}
-.chrome[data-tools=menu][data-mark=leader] .chrome__acts{display:flex;padding:0;border-color:transparent}
-.chrome[data-tools=menu][data-mark=leader] .chrome__acts > :not([data-do=leader]){display:none}
-.chrome[data-tools=menu][data-mark=leader] .chrome__more{margin-left:0}
+/* The folded head keeps the fullscreen toggle and, on the leader, the leader mark beside ⋯ (docs/spec/example-model.md#card-tools). */
+.chrome[data-tools=menu] .chrome__acts{display:flex;gap:var(--card-head-gap);padding:0;border-color:transparent}
+.chrome[data-tools=menu] .chrome__acts > :not([data-do=fullscreen]):not([data-do=leader]){display:none}
+.chrome[data-tools=menu]:not([data-mark=leader]) .chrome__acts > [data-do=leader]{display:none}
+.chrome[data-tools=menu] .chrome__more{margin-left:0}
 .chrome[data-fit=ham] .chrome__tabs{display:none}
 /* A tab is at most 200 points wide, so one long title leaves the width of the strip to the other tabs; the name is cut with
    an ellipsis inside that bound, and the tab shows the whole name as its tooltip (docs/spec/example-model.md#card-tabs). */

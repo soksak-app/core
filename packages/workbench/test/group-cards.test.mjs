@@ -280,3 +280,18 @@ test("the leader keeps its leader mark in a head too narrow for its tools, and i
   await run("core.card.tools", { card: "card-1" });
   assert.equal(plane.pickerState().items.some((item) => item.key === "leader"), false, "the tool menu of the leader holds its mark");
 });
+
+// A head too narrow for its tools keeps the fullscreen toggle beside ⋯, and the tool menu does not hold it
+// (docs/spec/example-model.md#card-tools).
+test("a narrow head keeps the fullscreen toggle beside its tool menu, and the menu does not hold it", { timeout: 5000 }, async () => {
+  arrange();
+  const chrome = cardElement("card-3").querySelector(".chrome");
+  Object.defineProperty(chrome, "clientWidth", { value: 120, configurable: true });
+  chrome.querySelector(".chrome__acts").getBoundingClientRect = () => ({ x: 0, y: 0, width: 200, height: 24, top: 0, left: 0, right: 200, bottom: 24 });
+  plane.settle();
+  assert.equal(chrome.dataset.tools, "menu", "the head of card-3 is not folded");
+  assert.equal(plane.cardActs("card-3").fullscreen.hidden, false, "the narrow head of card-3 hides its fullscreen toggle");
+  await run("core.card.tools", { card: "card-3" });
+  assert.equal(plane.pickerState().items.some((item) => item.key === "fullscreen"), false, "the tool menu of card-3 holds the fullscreen toggle");
+  plane.closePicker("test end");
+});

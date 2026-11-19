@@ -197,10 +197,10 @@ func (s *Shell) openCardTools(card string) error {
 	if s.isGroup(card) {
 		tools = s.groupHeadTools(card)
 	}
-	_, marked := leaderMark(tools)
+	kept := keptTools(tools)
 	for _, tool := range tools {
-		// The leader keeps its leader mark in the header, so the menu does not hold it (docs/spec/groups.md#headers).
-		if tool.Enabled && !(marked && tool.Do == "leader") {
+		// The header keeps the leader mark and the fullscreen toggle, so the menu does not hold them (docs/spec/groups.md#headers).
+		if tool.Enabled && !keeps(kept, tool.Do) {
 			items = append(items, pickerItem{Key: tool.Do, Name: tool.Title, Icon: s.headIconElements(tool.Icon), Active: tool.Pressed})
 		}
 	}

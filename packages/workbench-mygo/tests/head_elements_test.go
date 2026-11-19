@@ -69,7 +69,8 @@ func TestAHiddenTabLeavesTheActiveTabInItsPlace(t *testing.T) {
 	f.settle()
 	list, first := f.box("core.card.tab-list", "main"), f.box("core.card.tab", "tab-000000")
 	gap := first.X - (list.X + list.W)
-	f.tester.SetSize(300, 600)
+	// The head keeps the leader mark and the fullscreen toggle beside ⋯, and the active tab fits beside them.
+	f.tester.SetSize(360, 600)
 	f.settle()
 	card := status[gridRead](t, f, "core.grid").Cards[0]
 	active := *card.Active

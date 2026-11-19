@@ -283,6 +283,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-16",
+    implementation: [
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func keptTools(tools []headTool) []headTool" },
+      { file: "packages/workbench/plane.js", symbol: "const keptTools = (acts) =>" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestANarrowHeadKeepsTheFullscreenButtonBesideTheToolMenu" },
+      { file: "packages/workbench-mygo/tests/card_sidebars_test.go", id: "TestTheToolMenuHoldsTheSidesAndTheHeadKeepsTheFullScreen" },
+      { file: "packages/workbench/test/group-cards.test.mjs", id: "a narrow head keeps the fullscreen toggle beside its tool menu, and the menu does not hold it" },
+    ],
+    expected: "A head too narrow for its tools keeps the fullscreen toggle beside its tool menu in both workbenches, and the menu does not hold it.",
+    levels: ["unit"],
+  },
+  {
     id: "F956",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "planeX, planeY := shiftX+inset, shiftY+inset" },
@@ -356,7 +370,7 @@ const FEATURE_LINKS = [
   {
     id: "F953",
     implementation: [
-      { file: "packages/workbench-mygo/src/cards.go", symbol: "func leaderMark(tools []headTool) (headTool, bool)" },
+      { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) drawKeptTools(c *ui.Context, id string, kept []headTool)" },
       { file: "packages/workbench/plane.js", symbol: "const leaderMark = (acts) =>" },
     ],
     tests: [

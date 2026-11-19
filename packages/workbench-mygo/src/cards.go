@@ -247,12 +247,12 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 	}
 	buttons := float32(len(s.headTools(id)) + len(sides.shown))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
-	leading, marked := leaderMark(s.headTools(id))
+	kept := keptTools(s.headTools(id))
 	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
-		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(s.moreWidth(marked)),
+		Lead: float64(m.cardButton), Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(s.moreWidth(kept)),
 		TabWidths: widths, TabGap: float64(m.cardTabsGap), ActiveWidth: activeWidth, Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW)})
 	s.heads[id] = fit
-	tools := s.moreWidth(marked)
+	tools := s.moreWidth(kept)
 	if fit.Tools == "bar" {
 		tools = group
 	}
@@ -270,7 +270,7 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			if fit.Tools == "bar" {
 				s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
 			} else {
-				s.drawAbsentTools(c, id, sides, marked)
+				s.drawAbsentTools(c, id, sides, kept)
 			}
 		})
 		if s.fullscreen == id {
@@ -307,36 +307,45 @@ func (s *Shell) drawHead(c *ui.Context, id string, data *layout.CardData, sides 
 			})
 			return
 		}
-		s.drawLeaderMark(c, id, leading, marked)
+		s.drawKeptTools(c, id, kept)
 		s.headButton(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id}, "카드 도구", s.headIcon("card-more", true), true, false)
 	})
 }
 
-// leaderMark is the leader button of tools while it is pressed, the leader mark, which a narrow header keeps beside its tool menu
-// (docs/spec/groups.md#headers).
-func leaderMark(tools []headTool) (headTool, bool) {
+// keptTools are the tools that a header keeps beside its tool menu when the other tools fold into it, in the order of tools: the leader
+// button while it is pressed, the leader mark (docs/spec/groups.md#headers), and the fullscreen toggle
+// (docs/spec/example-model.md#card-tools).
+func keptTools(tools []headTool) []headTool {
+	var kept []headTool
 	for _, tool := range tools {
-		if tool.Do == "leader" && tool.Pressed {
-			return tool, true
+		if tool.Do == "fullscreen" || (tool.Do == "leader" && tool.Pressed) {
+			kept = append(kept, tool)
 		}
 	}
-	return headTool{}, false
+	return kept
 }
 
-// moreWidth is the width that a header gives its tools in the menu stage: the menu button, and before it the leader mark on the leader.
-func (s *Shell) moreWidth(marked bool) float32 {
-	if marked {
-		return 2*s.metrics.cardButton + s.metrics.cardHeadGap
+// keeps tells whether kept holds the tool that do names.
+func keeps(kept []headTool, do string) bool {
+	for _, tool := range kept {
+		if tool.Do == do {
+			return true
+		}
 	}
-	return s.metrics.cardButton
+	return false
 }
 
-// drawLeaderMark draws the leader mark of the header of id before its tool menu button, while the tools stand in the menu.
-func (s *Shell) drawLeaderMark(c *ui.Context, id string, mark headTool, marked bool) {
-	if !marked {
-		return
+// moreWidth is the width that a header gives its tools in the menu stage: the menu button and before it the kept tools, each with the
+// gap of the head.
+func (s *Shell) moreWidth(kept []headTool) float32 {
+	return s.metrics.cardButton + float32(len(kept))*(s.metrics.cardButton+s.metrics.cardHeadGap)
+}
+
+// drawKeptTools draws the kept tools of the header of id before its tool menu button, while the other tools stand in the menu.
+func (s *Shell) drawKeptTools(c *ui.Context, id string, kept []headTool) {
+	for _, tool := range kept {
+		s.headButton(c, tool.Name, tool.Command, id, tool.Params, tool.Title, s.headIcon(tool.Icon, false), tool.Enabled, tool.Pressed).Checked(tool.Pressed)
 	}
-	s.headButton(c, mark.Name, mark.Command, id, mark.Params, mark.Title, s.headIcon(mark.Icon, false), mark.Enabled, mark.Pressed).Checked(true)
 }
 
 // cardLine is the color of the lines below the head of a card and above its foot: the rule of the plane when the cards share one line
@@ -357,14 +366,14 @@ func (s *Shell) drawAbsentTabs(c *ui.Context, tabs []layout.Tab) {
 }
 
 // drawAbsentTools draws the elements of the tools of a card that the head does not show.
-func (s *Shell) drawAbsentTools(c *ui.Context, id string, sides cardSides, marked bool) {
+func (s *Shell) drawAbsentTools(c *ui.Context, id string, sides cardSides, kept []headTool) {
 	for _, side := range layout.SidebarSides {
 		if _, shown := sides.shown[side]; shown {
 			s.binder.Absent(c, "core.card.sidebar.fold", "core.card.sidebar.toggle", id+":"+side, cardSideParam{Card: id, Side: side})
 		}
 	}
 	for _, tool := range s.headTools(id) {
-		if marked && tool.Do == "leader" {
+		if keeps(kept, tool.Do) {
 			continue
 		}
 		s.binder.Absent(c, tool.Name, tool.Command, id, tool.Params).Disabled(!tool.Enabled)
@@ -393,7 +402,7 @@ func (s *Shell) drawAbsentCard(c *ui.Context, id string, data *layout.CardData, 
 		s.binder.Absent(c, "core.card.tab-list", "core.card.tab-list", id, cardParam{Card: id})
 		s.binder.Absent(c, "core.card.space-apps", "core.space.apps", id, cardParam{Card: id})
 		s.drawAbsentTabs(c, data.TabList())
-		s.drawAbsentTools(c, id, sides, false)
+		s.drawAbsentTools(c, id, sides, nil)
 		s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})
 	})
 }

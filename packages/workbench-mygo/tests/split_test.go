@@ -741,7 +741,8 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 	}
 	f.click("core.card.tools", card)
 	keys := f.menu().keys()
-	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || !slices.Contains(keys, "fullscreen") {
+	// The head keeps the fullscreen toggle beside the menu, so the menu does not hold it (docs/spec/example-model.md#card-tools).
+	if slices.Contains(keys, "x") || !slices.Contains(keys, "y") || slices.Contains(keys, "fullscreen") {
 		t.Fatalf("the tool menu holds %q", keys)
 	}
 	// The menu takes the names of the tools as their tooltips hold them.

@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-16 (fullscreen toggle of a narrow head): a card or group header too narrow for its tools keeps the fullscreen toggle beside ⋯ in both workbenches, and the tool menu no longer holds it. Verification: the narrow head tests of both workbenches failed on the unchanged code and pass.
 - F956 (text size scope of the stage and of keys): a press on the stage around the plane makes the frame the scope of the text size in both workbenches, and the native input monitor reports no press for a key input, so a Command = no longer moves the scope to the card that holds the keyboard (`docs/spec/text-size.md#scope`). Verification: the scope tests of both workbenches failed on the unchanged code and pass.
 - F937-14 (group cards of `core.grid`): `cards` of `core.grid` holds content cards only, each with its tabs, and the group cards stand in the member `groups` in both workbenches, so a plugin that reads the tabs of each card no longer fails on a space with group cards. Verification: the `core.grid` tests of both workbenches failed on the unchanged code and pass.
 - F964 (empty head of a menu): the group button of a card header asks its question in mygo, and a menu without a question draws no head in both workbenches, so no menu opens with an empty first row. Verification: the picker tests of both workbenches failed on the unchanged code and pass.
