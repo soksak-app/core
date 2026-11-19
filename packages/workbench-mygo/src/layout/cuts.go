@@ -84,26 +84,6 @@ type BareCard struct {
 	Data   json.RawMessage `json:"data,omitempty"`
 }
 
-// LeftCard is a card that left with Withdraw, at the coordinates it had and with the rectangle it was drawn at.
-type LeftCard struct {
-	Card BareCard `json:"card"`
-	X0   float64  `json:"x0"`
-	X1   float64  `json:"x1"`
-	Y0   float64  `json:"y0"`
-	Y1   float64  `json:"y1"`
-	Rect Rect     `json:"rect"`
-}
-
-// Piece is a card that Insert adds: a new card {id, data?} without cards, or what Withdraw returned: a card or a box with the cards
-// inside it and the px of the heads that stood above it.
-type Piece struct {
-	ID    string          `json:"id"`
-	Data  json.RawMessage `json:"data,omitempty"`
-	Box   *Box            `json:"box"`
-	Above float64         `json:"above"`
-	Cards []LeftCard      `json:"cards"`
-}
-
 type extent struct{ x0, x1, y0, y1 float64 }
 
 func (e extent) get(k string) float64 {
@@ -154,12 +134,15 @@ type cutNode struct {
 	dirty, laid bool
 	adjust      []float64
 	old, rect   extent
-	// size is the drawn extent of the node where it stood, per axis.
-	size map[Axis]float64
+	// drawn is the px rectangle of the node where it stood, and size its extent per axis.
+	drawn extent
+	size  map[Axis]float64
 	// above is the px of the heads above the node where it stood, placedAbove where it is laid.
 	above, placedAbove float64
 	// weight is the weight among the kids of its cut, when an operation set one; otherwise its size.
 	weight *float64
+	// stored is the box node of the stored tree that a box leaf stands for, or nil for a box of the host that the tree does not store.
+	stored *Node
 }
 
 func unionOf(es []extent) extent {
@@ -171,11 +154,16 @@ func unionOf(es []extent) extent {
 }
 
 func sizeOfRects(rects []Rect) map[Axis]float64 {
+	e := extentOfRects(rects)
+	return map[Axis]float64{"x": e.x1 - e.x0, "y": e.y1 - e.y0}
+}
+
+func extentOfRects(rects []Rect) extent {
 	x0, x1, y0, y1 := math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)
 	for _, r := range rects {
 		x0, x1, y0, y1 = math.Min(x0, r.X), math.Max(x1, r.X+r.W), math.Min(y0, r.Y), math.Max(y1, r.Y+r.H)
 	}
-	return map[Axis]float64{"x": x1 - x0, "y": y1 - y0}
+	return extent{x0, x1, y0, y1}
 }
 
 func bareOf(c Card) BareCard {
@@ -193,16 +181,17 @@ func holdsSpan(c BareCard, spans map[Axis]int, axis Axis) bool {
 	return size != nil && spans[axis] == 1
 }
 
+// newCut is the cut of kids along axis. Its size is the extent of the drawn rectangles of its kids, so on its axis it holds the corridors
+// between them, as the size that correctCuts reads of a kid that is a cut.
 func newCut(axis Axis, kids []*cutNode, dirty bool) *cutNode {
 	olds := make([]extent, len(kids))
-	along, across := 0.0, 0.0
+	drawn := make([]extent, len(kids))
 	for i, k := range kids {
 		olds[i] = k.old
-		along += k.size[axis]
-		across = math.Max(across, k.size[other(axis)])
+		drawn[i] = k.drawn
 	}
-	old := unionOf(olds)
-	return &cutNode{axis: axis, kids: kids, old: old, rect: old, size: map[Axis]float64{axis: along, other(axis): across},
+	old, at := unionOf(olds), unionOf(drawn)
+	return &cutNode{axis: axis, kids: kids, old: old, rect: old, drawn: at, size: map[Axis]float64{"x": at.x1 - at.x0, "y": at.y1 - at.y0},
 		above: kids[0].above, dirty: dirty, adjust: make([]float64, len(kids))}
 }
 
@@ -266,19 +255,20 @@ func buildCuts(nodes []*cutNode, prefer []Axis) (*cutNode, error) {
 
 // assignAbove sets the px of the heads above each node where it stands: the kids of a cut along x share it, a cut along y gives it to
 // its first kid.
-func assignAbove(n *cutNode, above float64) {
+func (t *cutTree) assignAbove(n *cutNode, above float64) {
+	t.visit()
 	n.above = above
 	if n.leaf {
 		if n.inner != nil {
-			assignAbove(n.inner, above+n.box.Head)
+			t.assignAbove(n.inner, above+n.box.Head)
 		}
 		return
 	}
 	for i, kid := range n.kids {
 		if n.axis == "x" || i == 0 {
-			assignAbove(kid, above)
+			t.assignAbove(kid, above)
 		} else {
-			assignAbove(kid, 0)
+			t.assignAbove(kid, 0)
 		}
 	}
 }
@@ -286,11 +276,12 @@ func assignAbove(n *cutNode, above float64) {
 func cardLeaf(c BareCard, old extent, spans map[Axis]int, rect Rect) *cutNode {
 	card := c
 	return &cutNode{leaf: true, id: c.ID, card: &card, held: map[Axis]bool{"x": holdsSpan(c, spans, "x"), "y": holdsSpan(c, spans, "y")},
-		old: old, rect: old, size: sizeOfRects([]Rect{rect})}
+		old: old, rect: old, drawn: extentOfRects([]Rect{rect}), size: sizeOfRects([]Rect{rect})}
 }
 
 func boxLeaf(b *Box, inner *cutNode, old extent, rects []Rect) *cutNode {
-	return &cutNode{leaf: true, id: b.ID, box: b, inner: inner, held: map[Axis]bool{}, old: old, rect: old, size: sizeOfRects(rects)}
+	return &cutNode{leaf: true, id: b.ID, box: b, inner: inner, held: map[Axis]bool{}, old: old, rect: old, drawn: extentOfRects(rects),
+		size: sizeOfRects(rects)}
 }
 
 // contentsOf is the card ids inside a box, through the boxes that it holds.
@@ -306,14 +297,14 @@ func contentsOf(b *Box) []string {
 	return out
 }
 
-func extentOf(s State, c Card) extent {
+func extentOf(s cells, c Card) extent {
 	return extent{s.Xs[c.C0], s.Xs[c.C1], s.Ys[c.R0], s.Ys[c.R1]}
 }
 
 func notMember(id string) error { return fmt.Errorf("card %s is not a member of the layout", id) }
 
 // leavesOf is the leaves of the members of one box or of the plane, read from the state and its drawn rectangles.
-func leavesOf(members []Member, s State, byID map[string]Card, drawn map[string]Rect, prefer []Axis) ([]*cutNode, error) {
+func leavesOf(members []Member, s cells, byID map[string]Card, drawn map[string]Rect, prefer []Axis) ([]*cutNode, error) {
 	out := []*cutNode{}
 	for _, m := range members {
 		if m.Box == nil {
@@ -350,7 +341,7 @@ func leavesOf(members []Member, s State, byID map[string]Card, drawn map[string]
 }
 
 // planeTree is the tree of the plane: the cards that no box holds and the boxes, each box with the tree of its members.
-func planeTree(s State, boxes []Member, drawn map[string]Rect, prefer []Axis) (*cutNode, error) {
+func planeTree(s cells, boxes []Member, drawn map[string]Rect, prefer []Axis) (*cutNode, error) {
 	byID := map[string]Card{}
 	for _, c := range s.Cards {
 		byID[c.ID] = c
@@ -375,35 +366,12 @@ func planeTree(s State, boxes []Member, drawn map[string]Rect, prefer []Axis) (*
 	if err != nil {
 		return nil, err
 	}
-	root, err := buildCuts(kids, prefer)
-	if err != nil {
-		return nil, err
-	}
-	assignAbove(root, 0)
-	return root, nil
+	return buildCuts(kids, prefer)
 }
 
 // found is the node of a member, the cut that holds it, and the box leaf whose tree holds it (nil for the plane).
 type found struct {
 	node, cut, owner *cutNode
-}
-
-func findNode(root *cutNode, id string, owner, holder *cutNode) *found {
-	if root.leaf {
-		if root.id == id {
-			return &found{root, holder, owner}
-		}
-		if root.inner != nil {
-			return findNode(root.inner, id, root, nil)
-		}
-		return nil
-	}
-	for _, kid := range root.kids {
-		if hit := findNode(kid, id, owner, root); hit != nil {
-			return hit
-		}
-	}
-	return nil
 }
 
 // memberIDs is the ids of the leaves of a node in its own tree, without the members inside its boxes.
@@ -416,21 +384,6 @@ func memberIDs(n *cutNode) []string {
 		out = append(out, memberIDs(kid)...)
 	}
 	return out
-}
-
-func parentCut(root, n *cutNode) *cutNode {
-	if root.leaf {
-		return nil
-	}
-	for _, kid := range root.kids {
-		if kid == n {
-			return root
-		}
-		if hit := parentCut(kid, n); hit != nil {
-			return hit
-		}
-	}
-	return nil
 }
 
 func sizeAlong(n *cutNode, axis Axis) float64 {
@@ -452,12 +405,13 @@ func weightOf(n *cutNode, axis Axis) float64 {
 func weighed(v float64) *float64 { return &v }
 
 // placeCuts lays a node into its rectangle, and the kids of a cut that changed or whose rectangle moved on its axis by their weights.
-func placeCuts(n *cutNode, rect extent, above float64) {
+func (t *cutTree) placeCuts(n *cutNode, rect extent, above float64) {
+	t.visit()
 	n.rect = rect
 	n.placedAbove = above
 	if n.leaf {
 		if n.inner != nil {
-			placeCuts(n.inner, rect, above+n.box.Head)
+			t.placeCuts(n.inner, rect, above+n.box.Head)
 		}
 		return
 	}
@@ -505,7 +459,7 @@ func placeCuts(n *cutNode, rect extent, above float64) {
 		if n.axis == "x" || i == 0 {
 			kidAbove = above
 		}
-		placeCuts(kid, part, kidAbove)
+		t.placeCuts(kid, part, kidAbove)
 		at = end
 	}
 }
@@ -547,44 +501,82 @@ func linesOf(values []float64) []float64 {
 	return out
 }
 
-// lineOf is the index of the line of v.
+// lineOf is the index of the line of v in the ascending lines: the last line at or below v within eps, or -1.
 func lineOf(lines []float64, v float64) int {
-	at := -1
-	for i, line := range lines {
-		if line <= v+eps {
-			at = i
-		}
-	}
-	return at
+	return sort.Search(len(lines), func(i int) bool { return lines[i] > v+eps }) - 1
 }
 
-// cellsOf is the state of the laid tree: coordinates within eps are one line, and the cards keep the order of order with the new ones
-// after.
-func cellsOf(root *cutNode, order []string) State {
-	laid := cardsOfNode(root, true)
-	xv, yv := []float64{}, []float64{}
-	for _, c := range laid {
-		xv, yv = append(xv, c.at.x0, c.at.x1), append(yv, c.at.y0, c.at.y1)
-	}
-	xs, ys := linesOf(xv), linesOf(yv)
-	rank := func(id string) int {
-		if at := slices.Index(order, id); at >= 0 {
-			return at
+// nodeOfCut is the node of the stored tree of a laid node: a cut takes the shares of the rectangles its kids were laid at, a kid cut along
+// the axis of its cut gives that cut its kids and a cut of one kid is that kid, so the tree stays canonical, and a box of the host that the
+// tree does not store is its inner node.
+func (t *cutTree) nodeOfCut(n *cutNode) *Node {
+	t.visit()
+	if n.leaf {
+		if n.inner != nil {
+			inner := t.nodeOfCut(n.inner)
+			if n.stored != nil {
+				return &Node{Box: n.id, Data: n.stored.Data, Inner: inner}
+			}
+			return inner
 		}
-		return len(order)
+		c := n.card
+		return cardNode(Card{ID: c.ID, Width: c.Width, Height: c.Height, Fixed: c.Fixed, Data: c.Data})
 	}
-	sort.SliceStable(laid, func(i, j int) bool { return rank(laid[i].card.ID) < rank(laid[j].card.ID) })
-	cards := []Card{}
-	for _, c := range laid {
-		cards = append(cards, Card{ID: c.card.ID, Width: c.card.Width, Height: c.card.Height, Fixed: c.card.Fixed, Data: c.card.Data,
-			C0: lineOf(xs, c.at.x0), C1: lineOf(xs, c.at.x1), R0: lineOf(ys, c.at.y0), R1: lineOf(ys, c.at.y1)})
+	lo, hi := ends(n.axis)
+	total := n.rect.get(hi) - n.rect.get(lo)
+	out := &Node{Cut: n.axis}
+	for _, kid := range n.kids {
+		share := (kid.rect.get(hi) - kid.rect.get(lo)) / total
+		node := t.nodeOfCut(kid)
+		if node.isCut() && node.Cut == n.axis {
+			for _, k := range node.Kids {
+				out.Kids = append(out.Kids, Kid{Share: share * k.Share, Node: k.Node})
+			}
+			continue
+		}
+		out.Kids = append(out.Kids, Kid{Share: share, Node: node})
 	}
-	return State{Xs: xs, Ys: ys, Cards: cards, PaidBy: map[string]Paid{}}
+	if len(out.Kids) == 1 {
+		return out.Kids[0].Node
+	}
+	return out
+}
+
+// cutTree is the tree of the operations of the cuts read from the stored tree, with the drawn rectangles and the heads of the boxes.
+func (g *Grid) cutTree(drawn map[string]Rect) *cutTree {
+	t := &cutTree{visits: &g.visits}
+	var convert func(n *Node) *cutNode
+	convert = func(n *Node) *cutNode {
+		t.visit()
+		l := g.at[n]
+		old := extent{g.xs[l[0]], g.xs[l[1]], g.ys[l[2]], g.ys[l[3]]}
+		switch {
+		case n.isCut():
+			kids := make([]*cutNode, len(n.Kids))
+			for i, kid := range n.Kids {
+				kids[i] = convert(kid.Node)
+			}
+			return newCut(n.Cut, kids, false)
+		case n.isBox():
+			inner := convert(n.Inner)
+			leaf := boxLeaf(&Box{ID: n.Box, Head: g.heads[n.Box], Members: []Member{}}, inner, old, nil)
+			leaf.drawn, leaf.size = inner.drawn, inner.size
+			leaf.stored = n
+			return leaf
+		}
+		c := g.find(n.Card)
+		return cardLeaf(bareOf(*c), old, map[Axis]int{"x": c.C1 - c.C0, "y": c.R1 - c.R0}, drawn[n.Card])
+	}
+	root := convert(g.root)
+	tree := newCutTree(root, &g.visits)
+	tree.assignAbove(tree.root, 0)
+	return tree
 }
 
 // correctCuts moves each span that the last layout laid by the difference between its drawn size and the size its weight asks for,
 // and returns the largest difference in px.
-func correctCuts(root *cutNode, drawn map[string]Rect, rate func(Axis) float64) float64 {
+func (t *cutTree) correctCuts(root *cutNode, at drawnAt, rate func(Axis) float64) float64 {
+	t.visit()
 	worst := 0.0
 	var visit func(n *cutNode)
 	visit = func(n *cutNode) {
@@ -608,11 +600,7 @@ func correctCuts(root *cutNode, drawn map[string]Rect, rate func(Axis) float64) 
 		total, room := 0.0, 0.0
 		sharing := []int{}
 		for i, kid := range n.kids {
-			rects := []Rect{}
-			for _, c := range cardsOfNode(kid, true) {
-				rects = append(rects, drawn[c.card.ID])
-			}
-			sizes[i] = sizeOfRects(rects)[n.axis]
+			sizes[i] = at.size(kid, n.axis)
 			if n.axis == "y" {
 				sizes[i] -= kid.placedAbove
 			}
@@ -636,99 +624,105 @@ func correctCuts(root *cutNode, drawn map[string]Rect, rate func(Axis) float64) 
 	return worst
 }
 
-// arrivingNode is the node of what arrives: a new card, or a card or a box that left, with the tree of its members at the place it
-// left.
-func arrivingNode(p Piece) (*cutNode, error) {
-	if p.Cards == nil {
-		return cardLeaf(BareCard{ID: p.ID, Data: p.Data}, extent{}, map[Axis]int{"x": 1, "y": 1}, Rect{}), nil
-	}
-	if p.Box == nil {
-		only := p.Cards[0]
-		leaf := cardLeaf(only.Card, extent{only.X0, only.X1, only.Y0, only.Y1}, map[Axis]int{"x": 1, "y": 1}, only.Rect)
-		leaf.above = p.Above
-		return leaf, nil
-	}
-	axisLines := func(get func(LeftCard) [2]float64) []float64 {
-		seen := map[float64]bool{}
-		out := []float64{}
-		for _, c := range p.Cards {
-			for _, v := range get(c) {
-				if !seen[v] {
-					seen[v] = true
-					out = append(out, v)
-				}
-			}
+// arriving is the node of the tree of the operations of the cuts for a node that Insert adds: a card, or a box with its inner node, whose
+// cuts are laid again in the new rectangle of the box by the shares that the node holds.
+func (g *Grid) arriving(n *Node, t *cutTree) *cutNode {
+	t.visit()
+	switch {
+	case n.isCut():
+		kids := make([]*cutNode, len(n.Kids))
+		for i, kid := range n.Kids {
+			kids[i] = g.arriving(kid.Node, t)
+			kids[i].weight = weighed(kid.Share)
 		}
-		sort.Float64s(out)
-		return out
+		cut := newCut(n.Cut, kids, true)
+		return cut
+	case n.isBox():
+		leaf := boxLeaf(&Box{ID: n.Box, Head: g.heads[n.Box], Members: []Member{}}, g.arriving(n.Inner, t), extent{}, nil)
+		leaf.stored = n
+		return leaf
 	}
-	xs := axisLines(func(c LeftCard) [2]float64 { return [2]float64{c.X0, c.X1} })
-	ys := axisLines(func(c LeftCard) [2]float64 { return [2]float64{c.Y0, c.Y1} })
-	s := State{Xs: xs, Ys: ys}
-	byID := map[string]Card{}
-	drawn := map[string]Rect{}
-	olds, rects := []extent{}, []Rect{}
-	for _, c := range p.Cards {
-		card := Card{ID: c.Card.ID, Width: c.Card.Width, Height: c.Card.Height, Fixed: c.Card.Fixed, Data: c.Card.Data,
-			C0: slices.Index(xs, c.X0), C1: slices.Index(xs, c.X1), R0: slices.Index(ys, c.Y0), R1: slices.Index(ys, c.Y1)}
-		s.Cards = append(s.Cards, card)
-		byID[card.ID] = card
-		drawn[card.ID] = c.Rect
-		olds, rects = append(olds, extent{c.X0, c.X1, c.Y0, c.Y1}), append(rects, c.Rect)
-	}
-	prefer := []Axis{"x", "y"}
-	kids, err := leavesOf(p.Box.Members, s, byID, drawn, prefer)
-	if err != nil {
-		return nil, err
-	}
-	inner, err := buildCuts(kids, prefer)
-	if err != nil {
-		return nil, err
-	}
-	leaf := boxLeaf(p.Box, inner, unionOf(olds), rects)
-	assignAbove(leaf, p.Above)
-	// The members of the box are laid again in its new rectangle by the sizes they had.
-	var mark func(n *cutNode)
-	mark = func(n *cutNode) {
-		if n.leaf {
-			return
-		}
-		n.dirty = true
-		for _, kid := range n.kids {
-			mark(kid)
-		}
-	}
-	mark(inner)
-	return leaf, nil
+	return cardLeaf(BareCard{ID: n.Card, Width: n.Width, Height: n.Height, Fixed: n.Fixed, Data: n.Data}, extent{},
+		map[Axis]int{"x": 1, "y": 1}, Rect{})
 }
 
-// takenIDs is the ids that a state and its boxes hold: every card and every box.
-func takenIDs(s State, boxes []Member) map[string]bool {
+// takenIDs is the ids that the grid holds: every card and every box.
+func (g *Grid) takenIDs() map[string]bool {
 	out := map[string]bool{}
-	for _, c := range s.Cards {
-		out[c.ID] = true
-	}
-	var walk func(b *Box)
-	walk = func(b *Box) {
-		out[b.ID] = true
-		for _, m := range b.Members {
-			if m.Box != nil {
-				walk(m.Box)
-			}
+	var stored func(n *Node)
+	stored = func(n *Node) {
+		g.visit()
+		out[n.id()] = true
+		if n.isBox() {
+			stored(n.Inner)
+		}
+		for _, kid := range n.Kids {
+			stored(kid.Node)
 		}
 	}
-	for _, m := range boxes {
-		if m.Box != nil {
-			walk(m.Box)
-		}
-	}
+	stored(g.root)
+	delete(out, "")
 	return out
 }
 
-type cutTree struct{ root *cutNode }
+// cutTree is a tree of the operations of the cuts with an index of its nodes: the node of each id, and the cut or the box leaf that holds
+// each node, so a lookup reads the index and does not walk the tree.
+type cutTree struct {
+	// visits counts the nodes that the operation of the grid visits (Grid.Visits).
+	visits *int
+	root   *cutNode
+	byID   map[string]*cutNode
+	parent map[*cutNode]*cutNode
+	owner  map[*cutNode]*cutNode
+}
+
+// visit counts one visited node.
+func (t *cutTree) visit() { *t.visits++ }
+
+// newCutTree is the tree of root with its index, counting its visits in visits.
+func newCutTree(root *cutNode, visits *int) *cutTree {
+	t := &cutTree{visits: visits, root: root, byID: map[string]*cutNode{}, parent: map[*cutNode]*cutNode{}, owner: map[*cutNode]*cutNode{}}
+	t.enter(root, nil, nil)
+	return t
+}
+
+// enter adds n and the nodes below it to the index, held by the cut parent inside the box leaf owner.
+func (t *cutTree) enter(n, parent, owner *cutNode) {
+	t.visit()
+	if parent != nil {
+		t.parent[n] = parent
+	} else {
+		delete(t.parent, n)
+	}
+	if owner != nil {
+		t.owner[n] = owner
+	} else {
+		delete(t.owner, n)
+	}
+	if n.leaf {
+		t.byID[n.id] = n
+		if n.inner != nil {
+			t.enter(n.inner, nil, n)
+		}
+		return
+	}
+	for _, kid := range n.kids {
+		t.enter(kid, n, owner)
+	}
+}
+
+// find is the found node of id, or nil.
+func (t *cutTree) find(id string) *found {
+	n, ok := t.byID[id]
+	if !ok {
+		return nil
+	}
+	return &found{n, t.parent[n], t.owner[n]}
+}
 
 // replaceNode puts next where the found node stood: in its cut, or as the root of the tree of a box or of the plane.
 func (t *cutTree) replaceNode(f *found, next *cutNode) {
+	t.enter(next, f.cut, f.owner)
 	switch {
 	case f.cut != nil:
 		f.cut.kids[slices.Index(f.cut.kids, f.node)] = next
@@ -744,7 +738,7 @@ func (t *cutTree) replaceNode(f *found, next *cutNode) {
 func (t *cutTree) targetNode(list []string) (*found, error) {
 	hits := []*found{}
 	for _, id := range list {
-		hit := findNode(t.root, id, nil, nil)
+		hit := t.find(id)
 		if hit == nil {
 			return nil, notMember(id)
 		}
@@ -755,55 +749,75 @@ func (t *cutTree) targetNode(list []string) (*found, error) {
 	}
 	refused := fmt.Errorf("cards %s are not neighbours of one cut", strings.Join(list, ", "))
 	owner := hits[0].owner
-	root := t.root
-	if owner != nil {
-		root = owner.inner
+	// The holder is the lowest cut above every member: the cuts above the first member, and the first of them that each other member
+	// reaches as it climbs. The climb stays inside the tree of the box that holds the first member.
+	above := map[*cutNode]int{}
+	depth := 0
+	for at := t.parent[hits[0].node]; at != nil; at = t.parent[at] {
+		above[at] = depth
+		depth++
 	}
 	var holder *cutNode
-	for at := hits[0].node; at != nil; at = parentCut(root, at) {
-		if !at.leaf {
-			all := true
-			ids := memberIDs(at)
-			for _, id := range list {
-				if !slices.Contains(ids, id) {
-					all = false
-					break
-				}
-			}
-			if all {
-				holder = at
+	low := -1
+	for _, hit := range hits[1:] {
+		if hit.owner != owner {
+			return nil, refused
+		}
+		at := t.parent[hit.node]
+		for at != nil {
+			if _, ok := above[at]; ok {
 				break
 			}
+			at = t.parent[at]
+		}
+		if at == nil {
+			return nil, refused
+		}
+		if above[at] > low {
+			holder, low = at, above[at]
 		}
 	}
 	if holder == nil {
 		return nil, refused
 	}
-	touched := []int{}
+	// touched is the indices of the kids of the holder that hold a member, each read by the climb of the member to the holder.
+	index := make(map[*cutNode]int, len(holder.kids))
 	for i, kid := range holder.kids {
-		for _, id := range memberIDs(kid) {
-			if slices.Contains(list, id) {
-				touched = append(touched, i)
-				break
-			}
+		index[kid] = i
+	}
+	seen := map[int]bool{}
+	touched := []int{}
+	for _, hit := range hits {
+		at := hit.node
+		for t.parent[at] != holder {
+			at = t.parent[at]
+		}
+		if i := index[at]; !seen[i] {
+			seen[i] = true
+			touched = append(touched, i)
 		}
 	}
+	slices.Sort(touched)
 	first, last := touched[0], touched[len(touched)-1]
 	span := slices.Clone(holder.kids[first : last+1])
+	listed := make(map[string]bool, len(list))
+	for _, id := range list {
+		listed[id] = true
+	}
 	held := []string{}
 	for _, kid := range span {
 		held = append(held, memberIDs(kid)...)
 	}
-	if len(held) != len(list) {
+	if len(held) != len(listed) {
 		return nil, refused
 	}
 	for _, id := range held {
-		if !slices.Contains(list, id) {
+		if !listed[id] {
 			return nil, refused
 		}
 	}
 	if first == 0 && last == len(holder.kids)-1 {
-		return &found{holder, parentCut(root, holder), owner}, nil
+		return &found{holder, t.parent[holder], owner}, nil
 	}
 	sub := newCut(holder.axis, span, false)
 	w := 0.0
@@ -812,6 +826,7 @@ func (t *cutTree) targetNode(list []string) (*found, error) {
 	}
 	sub.weight = weighed(w)
 	holder.kids = slices.Concat(holder.kids[:first], []*cutNode{sub}, holder.kids[last+1:])
+	t.enter(sub, holder, owner)
 	holder.adjust = make([]float64, len(holder.kids))
 	return &found{sub, holder, owner}, nil
 }
@@ -894,25 +909,55 @@ func (t *cutTree) addBeside(f *found, side Side, arriving *cutNode, gap float64)
 		kids = []*cutNode{f.node, arriving}
 	}
 	next := newCut(axis, kids, true)
-	next.old, next.rect, next.size, next.above, next.weight = f.node.old, f.node.old, f.node.size, f.node.above, weight
+	next.old, next.rect, next.drawn, next.size, next.above, next.weight = f.node.old, f.node.old, f.node.drawn, f.node.size, f.node.above, weight
 	t.replaceNode(f, next)
+}
+
+// drawnAt is the px rectangle in which each node of a tree is drawn: the extent of the drawn rectangles of its cards.
+type drawnAt map[*cutNode]extent
+
+func (at drawnAt) size(n *cutNode, axis Axis) float64 {
+	e := at[n]
+	lo, hi := ends(axis)
+	return e.get(hi) - e.get(lo)
+}
+
+// drawnExtents reads the drawn rectangle of every node of the tree of root in one walk, each node from its kids.
+func (t *cutTree) drawnExtents(root *cutNode, drawn map[string]Rect) drawnAt {
+	t.visit()
+	at := drawnAt{}
+	var walk func(n *cutNode) extent
+	walk = func(n *cutNode) extent {
+		var e extent
+		switch {
+		case n.leaf && n.inner != nil:
+			e = walk(n.inner)
+		case n.leaf:
+			e = extentOfRects([]Rect{drawn[n.card.ID]})
+		default:
+			parts := make([]extent, len(n.kids))
+			for i, kid := range n.kids {
+				parts[i] = walk(kid)
+			}
+			e = unionOf(parts)
+		}
+		at[n] = e
+		return e
+	}
+	walk(root)
+	return at
 }
 
 // need is the size that a node needs on an axis, in the px of the grid rectangles: a card its minimum and on y the heads drawn inside its
 // rectangle; a box the need of its members; a cut along the axis the needs of its children and the corridors between them; a cut across
 // it the largest need of its children. A child that keeps its span needs the size it is drawn at.
-func need(n *cutNode, axis Axis, drawn map[string]Rect, min float64) float64 {
-	extent := func(m *cutNode) float64 {
-		rects := []Rect{}
-		for _, c := range cardsOfNode(m, true) {
-			rects = append(rects, drawn[c.card.ID])
-		}
-		return sizeOfRects(rects)[axis]
-	}
+func (t *cutTree) need(n *cutNode, axis Axis, at drawnAt, min float64) float64 {
+	t.visit()
+	extent := func(m *cutNode) float64 { return at.size(m, axis) }
 	if n.leaf {
 		switch {
 		case n.inner != nil:
-			return need(n.inner, axis, drawn, min)
+			return t.need(n.inner, axis, at, min)
 		case n.held[axis]:
 			return extent(n)
 		case axis == "y":
@@ -923,98 +968,83 @@ func need(n *cutNode, axis Axis, drawn map[string]Rect, min float64) float64 {
 	if n.axis != axis {
 		most := 0.0
 		for _, kid := range n.kids {
-			most = math.Max(most, need(kid, axis, drawn, min))
+			most = math.Max(most, t.need(kid, axis, at, min))
 		}
 		return most
 	}
 	sum, kids := 0.0, 0.0
 	for _, kid := range n.kids {
-		sum += need(kid, axis, drawn, min)
+		sum += t.need(kid, axis, at, min)
 		kids += extent(kid)
 	}
 	return sum + extent(n) - kids
 }
 
 // belowMinimum is the text of the outermost node whose rectangle the plan changed and that is drawn below its minimum, or "".
-func belowMinimum(n *cutNode, drawn map[string]Rect, min float64) string {
+func (t *cutTree) belowMinimum(n *cutNode, at drawnAt, min float64) string {
+	t.visit()
 	moved := math.Abs(n.rect.x0-n.old.x0) > eps || math.Abs(n.rect.x1-n.old.x1) > eps || math.Abs(n.rect.y0-n.old.y0) > eps ||
 		math.Abs(n.rect.y1-n.old.y1) > eps
 	if n.leaf && (moved || n.laid) {
-		rects := []Rect{}
-		for _, c := range cardsOfNode(n, true) {
-			rects = append(rects, drawn[c.card.ID])
-		}
-		has := sizeOfRects(rects)
-		nx, ny := need(n, "x", drawn, min), need(n, "y", drawn, min)
+		has := map[Axis]float64{"x": at.size(n, "x"), "y": at.size(n, "y")}
+		nx, ny := t.need(n, "x", at, min), t.need(n, "y", at, min)
 		if has["x"] < nx-evenWithin || has["y"] < ny-evenWithin {
 			return fmt.Sprintf("card %s would be %s, below its minimum %s", n.id, sizeText(has["x"], has["y"]), sizeText(nx, ny))
 		}
 	}
 	if n.leaf {
 		if n.inner != nil {
-			return belowMinimum(n.inner, drawn, min)
+			return t.belowMinimum(n.inner, at, min)
 		}
 		return ""
 	}
 	for _, kid := range n.kids {
-		if text := belowMinimum(kid, drawn, min); text != "" {
+		if text := t.belowMinimum(kid, at, min); text != "" {
 			return text
 		}
 	}
 	return ""
 }
 
-// cutPlan is an operation laid out: layout gives the state, and correct reads its drawing and returns the largest error in px.
+// cutPlan is an operation laid out: install lays its tree and puts it into the grid, correct reads its drawing and returns the largest
+// error in px, and minimum judges the result.
 type cutPlan struct {
-	tree  *cutTree
-	order []string
+	tree *cutTree
 }
 
-func (p cutPlan) layout() State {
-	placeCuts(p.tree.root, p.tree.root.old, 0)
-	return cellsOf(p.tree.root, p.order)
+func (p cutPlan) install(g *Grid) error {
+	p.tree.placeCuts(p.tree.root, p.tree.root.old, 0)
+	state := State{Root: p.tree.nodeOfCut(p.tree.root), PaidBy: g.paidBy}
+	if err := CheckState(state); err != nil {
+		return err
+	}
+	g.root = state.Root
+	g.derive()
+	g.agreeSizes()
+	g.commit()
+	return nil
 }
 
 func (p cutPlan) correct(drawn map[string]Rect, rate func(Axis) float64) float64 {
-	return correctCuts(p.tree.root, drawn, rate)
+	return p.tree.correctCuts(p.tree.root, p.tree.drawnExtents(p.tree.root, drawn), rate)
 }
 
 func (p cutPlan) minimum(drawn map[string]Rect, min float64) string {
-	return belowMinimum(p.tree.root, drawn, min)
+	return p.tree.belowMinimum(p.tree.root, p.tree.drawnExtents(p.tree.root, drawn), min)
 }
 
-func orderOf(s State, gone map[string]bool) []string {
-	out := []string{}
-	for _, c := range s.Cards {
-		if !gone[c.ID] {
-			out = append(out, c.ID)
-		}
-	}
-	return out
-}
-
-// across is the order of the cuts for an operation toward axis: the cut across that axis is the outer one where the lines allow both.
-func across(axis Axis) []Axis {
-	if axis == "x" {
-		return []Axis{"y", "x"}
-	}
-	return []Axis{"x", "y"}
-}
-
-// byCuts installs the plan that make makes of the arrangement and its drawn rectangles with the paidBy records of the grid. The plan lays
-// its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a thousandth of a px.
-// With judged, a result that draws a changed node below its minimum is refused with its text. An error puts the arrangement back.
-func (g *Grid) byCuts(make func(s State, drawn map[string]Rect) (cutPlan, error), judged bool) error {
+// byCuts installs the plan that make makes of the stored tree and its drawn rectangles. The plan lays its cuts, the grid draws them, and
+// the plan corrects its spans by what was drawn until the largest error is below a thousandth of a px. With judged, a result that draws a
+// changed node below its minimum is refused with its text. An error puts the arrangement back.
+func (g *Grid) byCuts(make func(drawn map[string]Rect) (cutPlan, error), judged bool) error {
 	kept := g.ToJSON()
-	plan, err := make(kept, g.Rects())
+	plan, err := make(g.Rects())
 	if err != nil {
 		return err
 	}
 	rate := func(axis Axis) float64 { return sharePerSpan(g.plane(), axis) }
 	for pass := 0; ; pass++ {
-		state := plan.layout()
-		state.PaidBy = kept.PaidBy
-		if err := g.Replace(state); err != nil {
+		if err := plan.install(g); err != nil {
 			// kept is the state that the grid held, which its checks accepted, so restore loads it without a check.
 			g.restore(kept)
 			return err
@@ -1029,76 +1059,87 @@ func (g *Grid) byCuts(make func(s State, drawn map[string]Rect) (cutPlan, error)
 			return errors.New(text)
 		}
 	}
+	clear(g.splitMemo)
 	return nil
 }
 
-// Insert adds piece, a new card or what Withdraw returned, beside target toward side by ADD and returns its id
-// (packages/soksak/docs/layout.md#cuts). An error, a result below a minimum included, changes nothing.
-func (g *Grid) Insert(boxes []Member, target Target, side Side, piece Piece) (string, error) {
+// Insert adds node, a new card {card, data?} or the node that Withdraw returned, beside target toward side by ADD and returns its id
+// (packages/soksak/docs/layout.md#add-and-remove). An error, a result below a minimum included, changes nothing.
+func (g *Grid) Insert(target Target, side Side, node *Node) (string, error) {
+	defer g.begin()()
 	if !slices.Contains([]string{"left", "right", "top", "bottom"}, side) {
 		return "", fmt.Errorf("unknown side %s; use left, right, top or bottom", side)
 	}
-	err := g.byCuts(func(s State, drawn map[string]Rect) (cutPlan, error) {
-		taken := takenIDs(s, boxes)
-		arriving := []string{piece.ID}
-		for _, c := range piece.Cards {
-			arriving = append(arriving, c.Card.ID)
-		}
-		for _, id := range arriving {
+	if node == nil || node.isCut() || node.id() == "" {
+		return "", errors.New("soksak: insert takes a card or a box node")
+	}
+	arriving := cloneNode(node)
+	err := g.byCuts(func(drawn map[string]Rect) (cutPlan, error) {
+		taken := g.takenIDs()
+		for _, id := range append(cardIDs(arriving), boxIDs(arriving)...) {
 			if taken[id] {
 				return cutPlan{}, fmt.Errorf("card %s is a member of the layout", id)
 			}
 		}
-		root, err := planeTree(s, boxes, drawn, across(axisOf(side)))
-		if err != nil {
-			return cutPlan{}, err
-		}
-		tree := &cutTree{root}
+		tree := g.cutTree(drawn)
 		f, err := tree.targetNode(target)
 		if err != nil {
 			return cutPlan{}, err
 		}
-		node, err := arrivingNode(piece)
-		if err != nil {
-			return cutPlan{}, err
-		}
-		tree.addBeside(f, side, node, g.gap)
-		return cutPlan{tree, orderOf(s, nil)}, nil
+		tree.addBeside(f, side, g.arriving(arriving, tree), g.gap)
+		return cutPlan{tree}, nil
 	}, true)
 	if err != nil {
 		return "", err
 	}
-	return piece.ID, nil
+	return arriving.id(), nil
 }
 
-// Withdraw takes the member id, a card or a box, out of its cut by P1: the other kids take its space in proportion to their sizes. It
-// returns what left, which Insert takes (packages/soksak/docs/layout.md#cuts). An error changes nothing.
-func (g *Grid) Withdraw(boxes []Member, id string) (Piece, error) {
-	prefer := []Axis{"x", "y"}
-	if g.order != "v" {
-		prefer = []Axis{"y", "x"}
+// cardIDs is the ids of the cards of a node, and boxIDs the ids of its boxes.
+func cardIDs(n *Node) []string {
+	out := []string{}
+	for _, leaf := range cardsOf(n) {
+		out = append(out, leaf.Card)
 	}
-	var left Piece
-	err := g.byCuts(func(s State, drawn map[string]Rect) (cutPlan, error) {
-		root, err := planeTree(s, boxes, drawn, prefer)
-		if err != nil {
-			return cutPlan{}, err
+	return out
+}
+
+func boxIDs(n *Node) []string {
+	out := []string{}
+	var walk func(n *Node)
+	walk = func(n *Node) {
+		if n.isBox() {
+			out = append(out, n.Box)
+			walk(n.Inner)
 		}
-		tree := &cutTree{root}
-		f := findNode(root, id, nil, nil)
+		for _, kid := range n.Kids {
+			walk(kid.Node)
+		}
+	}
+	walk(n)
+	return out
+}
+
+// Withdraw takes the node id, a card or a box, out of its cut by P1: the other kids take its space in proportion to their sizes. It
+// returns the node that left, which Insert takes (packages/soksak/docs/layout.md#add-and-remove). An error changes nothing.
+func (g *Grid) Withdraw(id string) (*Node, error) {
+	defer g.begin()()
+	var left *Node
+	err := g.byCuts(func(drawn map[string]Rect) (cutPlan, error) {
+		tree := g.cutTree(drawn)
+		f := tree.find(id)
 		if f == nil {
 			return cutPlan{}, notMember(id)
 		}
 		if f.node.leaf && f.node.card != nil && f.node.card.Fixed {
 			return cutPlan{}, fmt.Errorf("card %s is fixed and does not leave", id)
 		}
-		standing := cardsOfNode(f.node, false)
 		gone := map[string]bool{}
-		for _, c := range standing {
+		for _, c := range cardsOfNode(f.node, false) {
 			gone[c.card.ID] = true
 		}
 		last := true
-		for _, c := range s.Cards {
+		for _, c := range g.list {
 			if !c.Fixed && !gone[c.ID] {
 				last = false
 			}
@@ -1118,12 +1159,10 @@ func (g *Grid) Withdraw(boxes []Member, id string) (Piece, error) {
 		if !takes {
 			return cutPlan{}, fmt.Errorf("card %s leaves no card of its cut that takes its space", id)
 		}
-		left = Piece{ID: id, Above: f.node.above, Cards: []LeftCard{}}
-		if f.node.leaf {
-			left.Box = f.node.box
-		}
-		for _, c := range standing {
-			left.Cards = append(left.Cards, LeftCard{Card: c.card, X0: c.at.x0, X1: c.at.x1, Y0: c.at.y0, Y1: c.at.y1, Rect: drawn[c.card.ID]})
+		if f.node.stored != nil {
+			left = cloneNode(f.node.stored)
+		} else {
+			left = cloneNode(g.leaves[id])
 		}
 		for _, kid := range rest {
 			if !isHeldOn(kid, axis) {
@@ -1134,20 +1173,22 @@ func (g *Grid) Withdraw(boxes []Member, id string) (Piece, error) {
 		f.cut.kids = rest
 		f.cut.adjust = make([]float64, len(rest))
 		f.cut.dirty = true
-		return cutPlan{tree, orderOf(s, gone)}, nil
+		return cutPlan{tree}, nil
 	}, true)
-	return left, err
+	if err != nil {
+		return nil, err
+	}
+	return left, nil
 }
 
 // Even gives every kid of every cut an equal share (packages/soksak/docs/layout.md#cuts). An error changes nothing.
-func (g *Grid) Even(boxes []Member) error {
-	return g.byCuts(func(s State, drawn map[string]Rect) (cutPlan, error) {
-		root, err := planeTree(s, boxes, drawn, []Axis{"x", "y"})
-		if err != nil {
-			return cutPlan{}, err
-		}
+func (g *Grid) Even() error {
+	defer g.begin()()
+	return g.byCuts(func(drawn map[string]Rect) (cutPlan, error) {
+		tree := g.cutTree(drawn)
 		var mark func(n *cutNode)
 		mark = func(n *cutNode) {
+			tree.visit()
 			if n.leaf {
 				if n.inner != nil {
 					mark(n.inner)
@@ -1160,7 +1201,7 @@ func (g *Grid) Even(boxes []Member) error {
 				mark(kid)
 			}
 		}
-		mark(root)
-		return cutPlan{&cutTree{root}, orderOf(s, nil)}, nil
+		mark(tree.root)
+		return cutPlan{tree}, nil
 	}, true)
 }

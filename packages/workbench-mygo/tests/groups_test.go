@@ -108,7 +108,7 @@ func TestAGroupCreateWrapsTheCardAndFocusesTheNewCard(t *testing.T) {
 	if !reflect.DeepEqual(layout["groups"], want) {
 		t.Fatalf("core.layout holds the groups %v, want %v", layout["groups"], want)
 	}
-	if cards := len(layout["state"].(map[string]any)["cards"].([]any)); cards != 4 {
+	if cards := len(treeCards(layout["state"].(map[string]any)["root"].(map[string]any))); cards != 4 {
 		t.Fatalf("the grid holds %d cards, not main, card-3 and the two window sidebars", cards)
 	}
 }
@@ -237,8 +237,7 @@ func TestARenameAndALeaderAnswerTheSameAgain(t *testing.T) {
 }
 
 func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
-		gridCard("main", 0, 1, 0, 1, tab("t1", "notes")), gridCard("side", 1, 2, 0, 1, tab("t2", "plain"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.5, cardNode("main", tab("t1", "notes"))), kidNode(0.5, cardNode("side", tab("t2", "plain"))))))
 	if _, err := f.apply("core.group.create", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
 		t.Fatal(err)
 	}
@@ -321,8 +320,7 @@ func TestACardGetReadsAContentCardWithItsGroupPathAndAGroupCardWithItsMembers(t 
 }
 
 func TestACardGetOfAWindowSidebarIsRefused(t *testing.T) {
-	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.2, 1}, []float64{0, 1},
-		map[string]any{"id": "left", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "fixed": true}, gridCard("main", 1, 2, 0, 1, tab("t1", "notes"))))
+	f := layoutShell(t, treeSpace("spc-aaaaaa", cutNode("x", kidNode(0.2, map[string]any{"card": "left", "fixed": true}), kidNode(0.8, cardNode("main", tab("t1", "notes"))))))
 	if _, err := f.cardGet("left"); err == nil || err.Error() != "card left is a window sidebar" {
 		t.Fatalf("core.card.get of a window sidebar fails with %v", err)
 	}
@@ -424,19 +422,18 @@ func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
 // The close of a nested group card at the left of its group gives its cells to the card of the same group beside it, although the
 // fill order of the layout library tries the card of another group above it first (docs/spec/groups.md#closing).
 func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
-	space := gridSpace("spc-aaaaaa", []float64{0, 0.11567838541666667, 0.23510416666666664, 0.5, 1}, []float64{0, 0.33127317676143386, 0.6687268232385661, 1},
-		gridCard("terminal", 0, 2, 0, 1, tab("t1", "notes")), gridCard("browser", 0, 1, 1, 2, tab("t2", "notes")),
-		gridCard("card-8", 3, 4, 2, 3, tab("t3", "notes")), gridCard("card-7", 3, 4, 1, 2, tab("t4", "notes")),
-		gridCard("card-3", 0, 3, 2, 3, tab("t5", "notes")), gridCard("card-5", 3, 4, 0, 1, tab("t6", "notes")),
-		gridCard("card-10", 2, 3, 0, 1, tab("t7", "notes")), gridCard("card-12", 1, 2, 1, 2, tab("t8", "notes")),
-		gridCard("card-13", 2, 3, 1, 2, tab("t9", "notes")))
+	space := treeSpace("spc-aaaaaa", cutNode("y",
+		kidNode(0.33127317676143386, cutNode("x",
+			kidNode(0.5, boxNode("card-9", "그룹 1", "terminal", cutNode("x", kidNode(0.4702083333333333, cardNode("terminal", tab("t1", "notes"))), kidNode(0.5297916666666667, cardNode("card-10", tab("t7", "notes")))))),
+			kidNode(0.5, cardNode("card-5", tab("t6", "notes"))))),
+		kidNode(0.6687268232385661, boxNode("card-4", "그룹 2", "card-11", cutNode("x",
+			kidNode(0.5, cutNode("y",
+				kidNode(0.5046210720887246, cutNode("x",
+					kidNode(0.4702083333333333, boxNode("card-11", "그룹 3", "browser", cutNode("x", kidNode(0.49203035002215334, cardNode("browser", tab("t2", "notes"))), kidNode(0.5079696499778467, cardNode("card-12", tab("t8", "notes")))))),
+					kidNode(0.5297916666666667, cardNode("card-13", tab("t9", "notes"))))),
+				kidNode(0.4953789279112754, cardNode("card-3", tab("t5", "notes"))))),
+			kidNode(0.5, cutNode("y", kidNode(0.5046210720887246, cardNode("card-7", tab("t4", "notes"))), kidNode(0.4953789279112754, cardNode("card-8", tab("t3", "notes"))))))))))
 	stored := space["layout"].(map[string]any)
-	stored["groups"] = []any{
-		map[string]any{"card": "card-9", "name": "그룹 1", "leader": "terminal", "members": []any{"terminal", "card-10"}},
-		map[string]any{"card": "card-4", "name": "그룹 2", "leader": "card-11", "members": []any{
-			map[string]any{"card": "card-11", "name": "그룹 3", "leader": "browser", "members": []any{"browser", "card-12"}},
-			"card-13", "card-7", "card-3", "card-8"}},
-	}
 	stored["leader"], stored["lastCard"] = "card-9", 13
 	f := layoutShell(t, space)
 	f.tester.SetSize(1908, 900)
@@ -548,7 +545,7 @@ func TestEachPressOfTheGroupMenuGroupsTheCard(t *testing.T) {
 		if _, err := f.apply("core.picker.pick", `{"index": `+strconv.Itoa(index)+`}`); err != nil {
 			t.Fatal(err)
 		}
-		if groups := strings.Count(f.status("core.layout"), `"name":"그룹 `); groups != press {
+		if groups := strings.Count(f.status("core.layout"), `"box":`); groups != press {
 			t.Fatalf("after press %d the layout holds %d group cards: %s", press, groups, f.status("core.layout"))
 		}
 	}

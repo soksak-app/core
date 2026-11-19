@@ -15,63 +15,59 @@
   "workspace": {
     "focus": "terminal",
     "grid": {
-      "xs": [
-        0,
-        0.3333333333333333,
-        0.6666666666666666,
-        1
-      ],
-      "ys": [
-        0,
-        0.52,
-        1
-      ],
-      "cards": [
-        {
-          "id": "left",
-          "c0": 0,
-          "c1": 1,
-          "r0": 0,
-          "r1": 2,
-          "width": 190,
-          "fixed": true
-        },
-        {
-          "id": "terminal",
-          "c0": 1,
-          "c1": 2,
-          "r0": 0,
-          "r1": 1,
-          "tabs": [
-            {
-              "plugin": "terminal",
-              "title": "터미널"
+      "root": {
+        "cut": "x",
+        "kids": [
+          {
+            "share": 0.3333333333333333,
+            "node": {
+              "card": "left",
+              "fixed": true,
+              "width": 190
             }
-          ]
-        },
-        {
-          "id": "browser",
-          "c0": 1,
-          "c1": 2,
-          "r0": 1,
-          "r1": 2,
-          "tabs": [
-            {
-              "plugin": "browser",
-              "title": "www 문서"
+          },
+          {
+            "share": 0.3333333333333333,
+            "node": {
+              "cut": "y",
+              "kids": [
+                {
+                  "share": 0.52,
+                  "node": {
+                    "card": "terminal",
+                    "tabs": [
+                      {
+                        "plugin": "terminal",
+                        "title": "터미널"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "share": 0.48,
+                  "node": {
+                    "card": "browser",
+                    "tabs": [
+                      {
+                        "plugin": "browser",
+                        "title": "www 문서"
+                      }
+                    ]
+                  }
+                }
+              ]
             }
-          ]
-        },
-        {
-          "id": "right",
-          "c0": 2,
-          "c1": 3,
-          "r0": 0,
-          "r1": 2,
-          "width": 210,
-          "fixed": true
-        }
-      ]
+          },
+          {
+            "share": 0.33333333333333337,
+            "node": {
+              "card": "right",
+              "fixed": true,
+              "width": 210
+            }
+          }
+        ]
+      }
     }
   },
   "sidebars": {

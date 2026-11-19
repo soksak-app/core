@@ -47,13 +47,13 @@ func (s *Shell) watchLayout(name string, raw json.RawMessage) func(result any, e
 	}
 }
 
-// layoutText is the JSON text of the stored layout of the active space, {state, groups, leader, lastCard}, or nil without a plane.
+// layoutText is the JSON text of the stored layout of the active space, {state, leader, lastCard}, or nil without a plane.
 func (s *Shell) layoutText() []byte {
 	if s.plane == nil || s.planes == nil {
 		return nil
 	}
-	groups, leader, last := s.planes.Stored()
-	text, err := json.Marshal(map[string]any{"state": s.plane.ToJSON(), "groups": groups, "leader": leader, "lastCard": last})
+	state, leader, last := s.planes.Stored()
+	text, err := json.Marshal(map[string]any{"state": state, "leader": leader, "lastCard": last})
 	if err != nil {
 		return []byte(fmt.Sprintf("unserializable: %v", err))
 	}

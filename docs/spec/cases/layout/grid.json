@@ -417,8 +417,8 @@
   {"call":"move","args":["c","a","top"],"returns":true},
   {"call":"toJSON","returns":{"root":{"cut":"x","kids":[{"share":0.75,"node":{"card":"b","fixed":false}},{"share":0.25,"node":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"card":"a","fixed":false,"data":{"tabs":["one"]}}}]}}]},"paidBy":{"a":"b","c":"a"}}},
   {"call":"rects","returns":{"b":{"x":0,"y":0,"w":745,"h":800},"a":{"x":755,"y":405,"w":245,"h":395},"c":{"x":755,"y":0,"w":245,"h":395}}},
-  {"call":"rules","returns":[{"key":"vx:2","axis":"x","line":2,"virtual":true,"x":749.5,"y":0,"w":1,"h":800},{"key":"sx:2:0","axis":"x","line":2,"virtual":false,"x":749.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:2","axis":"y","line":1,"virtual":false,"x":750,"y":399.5,"w":250,"h":1}]},
-  {"call":"dividers","returns":[{"key":"x:2:0","axis":"x","line":2,"x":744.5,"y":0,"w":11,"h":800},{"key":"y:1:2","axis":"y","line":1,"x":755,"y":394.5,"w":245,"h":11}]},
+  {"call":"rules","returns":[{"key":"vx:1","axis":"x","line":1,"virtual":true,"x":749.5,"y":0,"w":1,"h":800},{"key":"sx:1:0","axis":"x","line":1,"virtual":false,"x":749.5,"y":0,"w":1,"h":800},{"key":"vy:1","axis":"y","line":1,"virtual":true,"x":0,"y":399.5,"w":1000,"h":1},{"key":"sy:1:1","axis":"y","line":1,"virtual":false,"x":750,"y":399.5,"w":250,"h":1}]},
+  {"call":"dividers","returns":[{"key":"x:1:0","axis":"x","line":1,"x":744.5,"y":0,"w":11,"h":800},{"key":"y:1:1","axis":"y","line":1,"x":755,"y":394.5,"w":245,"h":11}]},
   {"call":"move","args":["a","a","left"],"returns":false},
   {"call":"move","args":["a","none","left"],"returns":false},
   {"call":"canMove","args":["a","b","middle"],"returns":false},
@@ -583,7 +583,7 @@
  {"name":"a withdrawn box lands with its members in their proportions","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
   {"call":"withdraw","args":["g"],"returns":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}},
   {"call":"insert","args":["c","bottom",{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}],"returns":"g"},
-  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.510075121520106,"node":{"card":"a","fixed":false}},{"share":0.48992487847989397,"node":{"card":"b","fixed":false}}]}}}]},"paidBy":{}}}
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"card":"c","fixed":false}},{"share":0.5,"node":{"box":"g","inner":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}}}]},"paidBy":{}}}
  ]},
  {"name":"the cut operations refuse an unknown side, a card that is no member, the last card and a fixed card","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"s","fixed":true}}]}},"steps":[
   {"call":"insert","args":["a","up",{"card":"x"}],"throws":"unknown side up; use left, right, top or bottom"},

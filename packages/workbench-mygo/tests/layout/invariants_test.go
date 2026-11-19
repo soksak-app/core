@@ -1,4 +1,4 @@
-// The invariants of the rule of sizes over generated layouts (docs/spec/cases/layout/invariants.json). The test of packages/soksak runs the
+// The invariants of the rule of sizes over generated layouts, judged on the stored slicing tree of the grid (docs/spec/cases/layout/invariants.json). The test of packages/soksak runs the
 // same file with the same generator, so a seed makes the same operations in both languages.
 package layout_test
 
@@ -34,7 +34,7 @@ func mulberry32(seed uint32) func() float64 {
 // span is the extent of a node in the fractions of the plane.
 type span struct{ x0, x1, y0, y1 float64 }
 
-// slicing is a node of the slicing tree that the test reads from the lines of a grid: a card by its id, or a cut along axis.
+// slicing is a node of the stored slicing tree of a grid: a card by its id, or a cut along axis, with the ids of its cards and its extent.
 type slicing struct {
 	id   string
 	axis string
@@ -57,69 +57,39 @@ func (s span) hi(axis string) float64 {
 	return s.y1
 }
 
-// readTree is the slicing tree of the grid, the cut of prefer[0] taken first where the lines allow both, and the drawn extent of a node.
+// readTree is the stored slicing tree of the grid, with the extent of each node in the fractions of the plane, and the drawn rectangles.
 type readTree struct {
 	root  *slicing
 	rects map[string]layout.Rect
 }
 
-func treeOf(t *testing.T, grid *layout.Grid, prefer []string) readTree {
-	t.Helper()
-	state := grid.ToJSON()
-	leaves := []*slicing{}
-	for _, c := range state.Cards {
-		leaves = append(leaves, &slicing{id: c.ID, ids: []string{c.ID}, at: span{state.Xs[c.C0], state.Xs[c.C1], state.Ys[c.R0], state.Ys[c.R1]}})
-	}
-	var build func(nodes []*slicing) *slicing
-	build = func(nodes []*slicing) *slicing {
-		if len(nodes) == 1 {
-			return nodes[0]
-		}
-		for _, axis := range prefer {
-			end, start := math.Inf(-1), math.Inf(1)
-			for _, n := range nodes {
-				end, start = math.Max(end, n.at.hi(axis)), math.Min(start, n.at.lo(axis))
-			}
-			at := []float64{}
-			for _, n := range nodes {
-				v := n.at.hi(axis)
-				if v >= end || slices.Contains(at, v) {
-					continue
+func treeOf(grid *layout.Grid) readTree {
+	var build func(n *layout.Node, at span) *slicing
+	build = func(n *layout.Node, at span) *slicing {
+		switch {
+		case n.Cut != "":
+			cut := &slicing{axis: n.Cut, at: at}
+			from := at.lo(n.Cut)
+			extent := at.hi(n.Cut) - from
+			for _, kid := range n.Kids {
+				part := at
+				if n.Cut == "x" {
+					part.x0, part.x1 = from, from+kid.Share*extent
+				} else {
+					part.y0, part.y1 = from, from+kid.Share*extent
 				}
-				crosses := false
-				for _, m := range nodes {
-					if m.at.hi(axis) > v && m.at.lo(axis) < v {
-						crosses = true
-					}
-				}
-				if !crosses {
-					at = append(at, v)
-				}
-			}
-			if len(at) == 0 {
-				continue
-			}
-			sort.Float64s(at)
-			bounds := append(append([]float64{start}, at...), end)
-			cut := &slicing{axis: axis, at: span{math.Inf(1), math.Inf(-1), math.Inf(1), math.Inf(-1)}}
-			for i := 0; i+1 < len(bounds); i++ {
-				part := []*slicing{}
-				for _, n := range nodes {
-					if n.at.lo(axis) >= bounds[i] && n.at.hi(axis) <= bounds[i+1] {
-						part = append(part, n)
-					}
-				}
-				kid := build(part)
-				cut.kids = append(cut.kids, kid)
-				cut.ids = append(cut.ids, kid.ids...)
-				cut.at = span{math.Min(cut.at.x0, kid.at.x0), math.Max(cut.at.x1, kid.at.x1), math.Min(cut.at.y0, kid.at.y0), math.Max(cut.at.y1, kid.at.y1)}
+				from += kid.Share * extent
+				node := build(kid.Node, part)
+				cut.kids = append(cut.kids, node)
+				cut.ids = append(cut.ids, node.ids...)
 			}
 			return cut
+		case n.Inner != nil:
+			return build(n.Inner, at)
 		}
-		t.Fatal("the grid is not a slicing arrangement")
-		return nil
+		return &slicing{id: n.Card, ids: []string{n.Card}, at: at}
 	}
-	return readTree{root: build(leaves), rects: grid.Rects()}
+	return readTree{root: build(grid.ToJSON().Root, span{0, 1, 0, 1}), rects: grid.Rects()}
 }
 
 // size is the drawn extent of a node on an axis.
@@ -164,49 +134,19 @@ func (r readTree) even(cut *slicing) bool {
 	return true
 }
 
-// innerLines is the coordinates at which the children of a cut meet.
-func innerLines(cut *slicing) []float64 {
-	out := []float64{}
-	for _, kid := range cut.kids[1:] {
-		out = append(out, kid.at.lo(cut.axis))
-	}
-	return out
-}
-
-// ambiguous tells whether the lines of the grid read as more than one slicing tree: two neighbouring children of a cut are cuts along the
-// other axis whose children meet at one coordinate, so the line through both also divides the parent across, and the grid has lost which
-// of the trees an operation made (docs/plans/layout-sizes.md#model).
-func ambiguous(t *testing.T, grid *layout.Grid) bool {
-	var visit func(n *slicing) bool
-	visit = func(n *slicing) bool {
-		for i := 0; i+1 < len(n.kids); i++ {
-			p, q := n.kids[i], n.kids[i+1]
-			if p.kids != nil && q.kids != nil && p.axis == q.axis {
-				for _, v := range innerLines(p) {
-					if slices.Contains(innerLines(q), v) {
-						return true
-					}
-				}
-			}
-		}
-		return slices.ContainsFunc(n.kids, visit)
-	}
-	return visit(treeOf(t, grid, []string{"x", "y"}).root) || visit(treeOf(t, grid, []string{"y", "x"}).root)
-}
-
 // tiles is the text of a cell of the grid that is not covered by exactly one card, or "".
 func tiles(grid *layout.Grid) string {
-	state := grid.ToJSON()
+	xs, ys := grid.Lines("x"), grid.Lines("y")
 	count := map[[2]int]int{}
-	for _, c := range state.Cards {
+	for _, c := range grid.Cards() {
 		for col := c.C0; col < c.C1; col++ {
 			for row := c.R0; row < c.R1; row++ {
 				count[[2]int{col, row}]++
 			}
 		}
 	}
-	for col := 0; col+1 < len(state.Xs); col++ {
-		for row := 0; row+1 < len(state.Ys); row++ {
+	for col := 0; col+1 < len(xs); col++ {
+		for row := 0; row+1 < len(ys); row++ {
 			if n := count[[2]int{col, row}]; n != 1 {
 				return fmt.Sprintf("cell %d:%d is covered %d times", col, row, n)
 			}
@@ -233,8 +173,7 @@ func movedCards(before map[string]layout.Rect, order []string, grid *layout.Grid
 }
 
 type failure struct {
-	text     string
-	twoTrees bool
+	text string
 }
 
 // invariantFile is docs/spec/cases/layout/invariants.json.
@@ -269,19 +208,18 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 		}
 		return grid
 	}
-	grid := newGrid(layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "c1", C0: 0, C1: 1, R0: 0, R1: 1}}})
+	grid := newGrid(layout.State{Root: &layout.Node{Card: "c1"}})
 	failures := map[string][]failure{}
 	for _, name := range file.Checked {
 		failures[name] = []failure{}
 	}
 	next := 2
-	twoTrees := false
 	fail := func(name string, step int, text string) {
-		failures[name] = append(failures[name], failure{fmt.Sprintf("seed %d step %d: %s", seed, step, text), twoTrees})
+		failures[name] = append(failures[name], failure{fmt.Sprintf("seed %d step %d: %s", seed, step, text)})
 	}
 	order := func(g *layout.Grid) []string {
 		ids := []string{}
-		for _, c := range g.ToJSON().Cards {
+		for _, c := range g.Cards() {
 			ids = append(ids, c.ID)
 		}
 		return ids
@@ -303,14 +241,12 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 		state := grid.ToJSON()
 		was := stateText(grid)
 		rects := grid.Rects()
-		twoTrees = ambiguous(t, grid)
 		if err := change(); err != nil {
 			if stateText(grid) != was {
 				fail("I2", step, fmt.Sprintf("the refusal %s changed the layout", err))
 			}
 			return false
 		}
-		twoTrees = twoTrees || ambiguous(t, grid)
 		if broken := tiles(grid); broken != "" {
 			fail("I1", step, broken)
 		}
@@ -335,16 +271,16 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 	}
 	inserted := func(step int, id, target, to string) func(layout.State, map[string]layout.Rect) {
 		return func(state layout.State, rects map[string]layout.Rect) {
-			axis, prefer := "y", []string{"x", "y"}
+			axis := "y"
 			if to == "left" || to == "right" {
-				axis, prefer = "x", []string{"y", "x"}
+				axis = "x"
 			}
 			beforeOrder := []string{}
-			for _, c := range state.Cards {
+			for _, c := range newGrid(state).Cards() {
 				beforeOrder = append(beforeOrder, c.ID)
 			}
-			before := treeOf(t, newGrid(state), prefer)
-			after := treeOf(t, grid, prefer)
+			before := treeOf(newGrid(state))
+			after := treeOf(grid)
 			was := holderOf(before.root, []string{target})
 			along := was != nil && was.axis == axis
 			now := holderOf(after.root, []string{id})
@@ -408,7 +344,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			// I10: the withdraw of the card just added restores the layout of an even cut and of a wrap.
 			if !along || before.even(was) {
 				copied := newGrid(grid.ToJSON())
-				if _, err := copied.Withdraw(nil, id); err != nil {
+				if _, err := copied.Withdraw(id); err != nil {
 					fail("I10", step, fmt.Sprintf("the withdraw of %s is refused: %s", id, err))
 				} else if back := movedCards(rects, beforeOrder, copied, nil); len(back) > 0 {
 					fail("I10", step, fmt.Sprintf("the withdraw of %s does not restore %v", id, back))
@@ -418,16 +354,12 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 	}
 	withdrawn := func(step int, id string) func(layout.State, map[string]layout.Rect) {
 		return func(state layout.State, rects map[string]layout.Rect) {
-			prefer := []string{"y", "x"}
-			if grid.FillOrder() == "v" {
-				prefer = []string{"x", "y"}
-			}
 			beforeOrder := []string{}
-			for _, c := range state.Cards {
+			for _, c := range newGrid(state).Cards() {
 				beforeOrder = append(beforeOrder, c.ID)
 			}
-			before := treeOf(t, newGrid(state), prefer)
-			after := treeOf(t, grid, prefer)
+			before := treeOf(newGrid(state))
+			after := treeOf(grid)
 			was := holderOf(before.root, []string{id})
 			if was == nil {
 				return
@@ -462,7 +394,7 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 	}
 	for step := 1; step <= file.Steps; step++ {
 		u := random()
-		count := len(grid.ToJSON().Cards)
+		count := len(grid.Cards())
 		switch {
 		case u < 0.45:
 			target := pick()
@@ -470,14 +402,14 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			id := fmt.Sprintf("c%d", next)
 			next++
 			judge(step, func() error {
-				_, err := grid.Insert(nil, layout.Target{target}, to, layout.Piece{ID: id})
+				_, err := grid.Insert(layout.Target{target}, to, &layout.Node{Card: id})
 				return err
 			}, inserted(step, id, target, to))
 		case u < 0.7:
 			id := pick()
 			if count > 1 {
 				judge(step, func() error {
-					_, err := grid.Withdraw(nil, id)
+					_, err := grid.Withdraw(id)
 					return err
 				}, withdrawn(step, id))
 			}
@@ -486,16 +418,16 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 			target := pick()
 			to := side()
 			if count > 1 && target != id {
-				var left layout.Piece
+				var left *layout.Node
 				start := grid.ToJSON()
 				if judge(step, func() error {
 					var err error
-					left, err = grid.Withdraw(nil, id)
+					left, err = grid.Withdraw(id)
 					return err
 				}, withdrawn(step, id)) {
 					// A move is one change: a refused landing leaves the layout as it was before the withdraw.
 					if !judge(step, func() error {
-						_, err := grid.Insert(nil, layout.Target{target}, to, left)
+						_, err := grid.Insert(layout.Target{target}, to, left)
 						return err
 					}, inserted(step, id, target, to)) {
 						if err := grid.Replace(start); err != nil {
@@ -505,8 +437,8 @@ func runSeed(t *testing.T, file invariantFile, seed uint32) map[string][]failure
 				}
 			}
 		default:
-			judge(step, func() error { return grid.Even(nil) }, func(layout.State, map[string]layout.Rect) {
-				after := treeOf(t, grid, []string{"x", "y"})
+			judge(step, func() error { return grid.Even() }, func(layout.State, map[string]layout.Rect) {
+				after := treeOf(grid)
 				uneven := []string{}
 				var visit func(n *slicing)
 				visit = func(n *slicing) {
@@ -539,25 +471,14 @@ func TestLayoutInvariants(t *testing.T) {
 			total[name] = append(total[name], list...)
 		}
 	}
-	counts, oneTree := []string{}, []string{}
+	counts := []string{}
 	for _, name := range file.Checked {
-		single := 0
-		for _, f := range total[name] {
-			if !f.twoTrees {
-				single++
-			}
-		}
 		counts = append(counts, fmt.Sprintf("%s %d", name, len(total[name])))
-		oneTree = append(oneTree, fmt.Sprintf("%s %d", name, single))
 	}
-	t.Logf("failures per invariant: %s; on layouts whose lines read as one tree: %s", strings.Join(counts, ", "), strings.Join(oneTree, ", "))
+	t.Logf("failures per invariant: %s", strings.Join(counts, ", "))
 	for _, name := range file.Checked {
 		for _, f := range total[name] {
-			two := ""
-			if f.twoTrees {
-				two = " two trees"
-			}
-			t.Logf("%s%s %s", name, two, f.text)
+			t.Logf("%s %s", name, f.text)
 		}
 	}
 	for _, name := range file.Checked {

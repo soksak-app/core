@@ -5,7 +5,7 @@ import { checkReferences, validateEnvironment } from "../index.js";
 
 const environment = (extra = {}) => ({
   runtime: "runtime",
-  workspace: { focus: "main", grid: { xs: [0, 1], ys: [0, 1], cards: [{ id: "main", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [{ plugin: "card", title: "c" }] }] } },
+  workspace: { focus: "main", grid: { root: { card: "main", tabs: [{ plugin: "card", title: "c" }] } } },
   sidebars: { sets: [], links: [] },
   ...extra,
 });
