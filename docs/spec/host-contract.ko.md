@@ -1463,6 +1463,7 @@ fn invalid_json_closes_connection() {
 | `conversation.refuses-when-no-file-matches` | 작업 디렉터리와 일치하는 후보가 없으면 `no <agent> session file has the working directory <cwd>`로 거부한다. | all |
 | `conversation.selects-the-most-recently-modified-file` | 둘 이상의 후보가 일치하면 가장 최근에 수정된 파일을 고른다. | all |
 | `sidecars.environment.sok-folder-first-on-path` | sidecar 프로세스는 sok 애플리케이션의 folder를 PATH의 첫 항목으로 시작하며, 그 folder는 다른 PATH 항목에 나타나지 않는다. | all |
+| `sidecars.environment.start-records-the-sok-folder` | 설치된 sidecar의 sidecar channel의 시작은 level `info`의 event `host.sidecar.path` 하나를 기록하고, 그 `folder`는 host 실행 파일의 폴더이며 `sok`은 그 폴더의 `sok`이다. | all |
 
 ## Workbench cases
 
