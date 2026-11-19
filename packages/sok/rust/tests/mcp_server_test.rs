@@ -685,7 +685,7 @@ fn an_oversized_row_is_a_page_and_pages_follow_a_changing_window() {
     assert!(
         run.results[0].len() <= 40000
             && rows.len() == 1
-            && first["total"] == 4
+            && first["total"] == 5
             && first["next"] == "core status core.big",
         "the first page has {} bytes, {} rows, total {} and next {}; want at most 40000 bytes and the one row core.big",
         run.results[0].len(),
@@ -706,8 +706,8 @@ fn an_oversized_row_is_a_page_and_pages_follow_a_changing_window() {
     let compact: Value = serde_json::from_str(&run.results[2]).expect("the compact page is JSON");
     let rows = compact["rows"].as_array().expect("rows");
     assert!(
-        rows.len() == 4 && compact["next"].is_null(),
-        "the compact page has {} rows and next {}, want 4 rows and no next",
+        rows.len() == 5 && compact["next"].is_null(),
+        "the compact page has {} rows and next {}, want 5 rows and no next",
         rows.len(),
         compact["next"]
     );
@@ -718,7 +718,7 @@ fn an_oversized_row_is_a_page_and_pages_follow_a_changing_window() {
         text.chars().count(),
         rows[0]["cut"]
     );
-    let many = &rows[3];
+    let many = &rows[4];
     let items = many["items"].as_array().expect("items");
     assert!(
         items.len() == 20 && many["cut"] == true && many["itemsTotal"] == 25,
