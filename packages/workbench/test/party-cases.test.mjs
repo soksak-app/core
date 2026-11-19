@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Soksak } from "soksak";
 import { createRegistry } from "../exposure.js";
+import { CHROME } from "../chrome-metrics.js";
 import { THEMES, value } from "../settings.js";
 
 const cases = JSON.parse(readFileSync(new URL("../../../docs/spec/cases/layout/parties.json", import.meta.url), "utf8")).cases;
@@ -25,9 +26,15 @@ for (const item of cases) {
     // Each case starts a new instance of the party module, which holds the parties of the window.
     const parties = await import(`../parties.js?case=${++instances}`);
     const cards = item.state.cards;
+    // A case that states drawing gives the rail width of its theme, which the module draws with, the points of one grid line value and the grid gap.
+    const drawing = item.drawing ?? null;
+    if (drawing) assert.equal(drawing["theme-rail-w"], CHROME["theme-rail-w"], "the rail width of the case is the theme rail width");
+    const unit = drawing?.unit ?? 1;
     const xs = [...new Set(cards.flatMap((card) => [card.c0, card.c1]))].sort((a, b) => a - b);
     const ys = [...new Set(cards.flatMap((card) => [card.r0, card.r1]))].sort((a, b) => a - b);
-    const grid = new Soksak({ xs, ys, cards }, { gap: 0 });
+    const grid = new Soksak({ xs, ys, cards }, { gap: drawing?.gap ?? 0 });
+    // The plane of a drawn case is unit points for each line value, the largest value on each axis (docs/spec/parties.md#drawing).
+    if (drawing) grid.resize(unit * xs.at(-1), unit * ys.at(-1));
     const registry = createRegistry({ call: () => new Promise(() => {}), report: () => {} });
     registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
     parties.installParties({

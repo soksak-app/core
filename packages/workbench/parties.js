@@ -87,7 +87,10 @@ function checkCards(cards) {
     if (cards.indexOf(card) !== index) fail(`card ${card} is listed more than once`);
   });
   if (cards.length < 2) fail("a party needs at least 2 cards");
-  if (groupsOf(cards).length !== 1) fail(`cards are not touching: ${cards.join(", ")}`);
+  // The refusal lists the cards outside the group of the first card, in request order (docs/spec/parties.md#commands).
+  const anchor = groupsOf(cards).find((group) => group.includes(cards[0]));
+  const outside = cards.filter((card) => !anchor.includes(card));
+  if (outside.length) fail(`cards are not touching: ${outside.join(", ")}`);
 }
 
 /**
@@ -127,8 +130,8 @@ function settle(party, reason, before) {
   }
   const deleted = party.cards.length < 2;
   party.reason = deleted ? "too-few" : finalReason;
-  // default: a party with no recorded member before the change removes no card (docs/spec/parties.md#changes-of-the-layout).
-  const removed = (before ?? []).filter((card) => !party.cards.includes(card));
+  // default: a party with no recorded member before the change removes no card, and a deleted party lists every card it had (docs/spec/parties.md#commands).
+  const removed = (before ?? []).filter((card) => deleted || !party.cards.includes(card));
   return { party: party.id, removed, leader: deleted ? null : party.leader, deleted };
 }
 
@@ -282,7 +285,7 @@ function update({ party: id, color, leader, leaderColor }) {
 /** Adds a card that touches the party. */
 function add({ party: id, card, take = false }) {
   const party = byId(id);
-  checkCards([card, ...party.cards.filter((member) => member !== card)]);
+  checkCards([...party.cards.filter((member) => member !== card), card]);
   if (party.cards.includes(card)) return { party: record(party), taken: [], changed: [] };
   const holder = partyOf(card);
   if (holder && !take) fail(`card ${card} belongs to party ${holder.id}`);
@@ -303,10 +306,10 @@ function add({ party: id, card, take = false }) {
   return { party: record(party), taken, changed };
 }
 
-/** Removes a card from a party and applies the split rule to the rest. */
+/** Removes a card from a party and applies the split rule to the rest. A card that the party does not hold is refused. */
 function remove({ party: id, card }) {
   const party = byId(id);
-  if (!party.cards.includes(card)) return { party: record(party), changed: [] };
+  if (!party.cards.includes(card)) fail(`card ${card} is not in party ${id}`);
   const before = [...party.cards];
   party.cards = party.cards.filter((member) => member !== card);
   if (party.leader === card) party.leader = null;

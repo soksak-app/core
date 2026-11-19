@@ -15,6 +15,8 @@ type Parties struct {
 	list []*party
 	// palette holds the party theme tokens of the shown theme and mode, token to #rrggbb value, read from the declaration.
 	palette map[string]string
+	// rail is the rail width of the theme in points. The party border takes it, and each outline is inset by half of it.
+	rail float64
 }
 
 // party is a group of touching cards. Cards keeps the order in which the cards joined the party.
@@ -91,8 +93,11 @@ type tabState struct {
 var partyTokens = []string{"party-1", "party-2", "party-3", "party-4", "party-5", "party-6"}
 
 // NewParties returns a space with no party. palette holds the party theme tokens of the shown theme and mode, token to #rrggbb value,
-// as the declaration of workbench.json states them (docs/spec/parties.md#identity-and-values).
-func NewParties(palette map[string]string) *Parties { return &Parties{palette: palette} }
+// as the declaration of workbench.json states them (docs/spec/parties.md#identity-and-values). rail is the rail width of the theme in
+// points (docs/spec/parties.md#drawing).
+func NewParties(palette map[string]string, rail float64) *Parties {
+	return &Parties{palette: palette, rail: rail}
+}
 
 // Run runs one party command over the grid and returns its reply. An unknown command or an invalid parameter is an error.
 func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error) {
@@ -158,7 +163,7 @@ func (p *Parties) Run(g *Grid, call string, params json.RawMessage) (any, error)
 		if found == nil {
 			return nil, fmt.Errorf("unknown party %s", in.Party)
 		}
-		return p.view(found), nil
+		return p.record(g, found)
 	case "core.card.get":
 		var in struct {
 			Card string `json:"card"`
@@ -232,13 +237,21 @@ func (p *Parties) nextColor() (string, error) {
 	return p.palette[partyTokens[0]], nil
 }
 
-// checkCards refuses a card list that names an unknown card or a card twice, and a list of fewer than two cards.
+// checkCards refuses a card list in the order of the refusal table (docs/spec/parties.md#commands): an unknown card, a window
+// sidebar, a card listed twice, and a list of fewer than two cards.
 func checkCards(g *Grid, cards []string) error {
-	seen := map[string]bool{}
 	for _, id := range cards {
 		if _, ok := g.Card(id); !ok {
 			return fmt.Errorf("unknown card %s", id)
 		}
+	}
+	for _, id := range cards {
+		if slices.Contains(SidebarSides, id) {
+			return fmt.Errorf("card %s is a window sidebar", id)
+		}
+	}
+	seen := map[string]bool{}
+	for _, id := range cards {
 		if seen[id] {
 			return fmt.Errorf("card %s is listed more than once", id)
 		}
@@ -286,14 +299,26 @@ func groups(g *Grid, cards []string) ([][]string, error) {
 	return out, nil
 }
 
-// checkConnected refuses a card list that does not form one group of touching cards.
+// checkConnected refuses a card list whose cards outside the group of its first card. The refusal lists those cards in request order.
 func checkConnected(g *Grid, cards []string) error {
 	parts, err := groups(g, cards)
 	if err != nil {
 		return err
 	}
-	if len(parts) != 1 {
-		return fmt.Errorf("cards are not touching: %s", strings.Join(cards, ", "))
+	var anchor []string
+	for _, part := range parts {
+		if slices.Contains(part, cards[0]) {
+			anchor = part
+		}
+	}
+	outside := []string{}
+	for _, card := range cards {
+		if !slices.Contains(anchor, card) {
+			outside = append(outside, card)
+		}
+	}
+	if len(outside) > 0 {
+		return fmt.Errorf("cards are not touching: %s", strings.Join(outside, ", "))
 	}
 	return nil
 }
@@ -367,7 +392,7 @@ func (p *Parties) settle(g *Grid, target *party, before []string, reason string)
 	target.Reason = &reasonText
 	removed := []string{}
 	for _, card := range before {
-		if !slices.Contains(target.Cards, card) {
+		if deleted || !slices.Contains(target.Cards, card) {
 			removed = append(removed, card)
 		}
 	}
@@ -498,17 +523,14 @@ func (p *Parties) join(g *Grid, target *party, cards []string, reason string) (p
 	return partyReply{Party: p.view(target), Taken: taken, Changed: changed}, nil
 }
 
-// remove removes a card from a party and applies the split rule to the cards that remain. A card that the party does not hold changes nothing.
+// remove removes a card from a party and applies the split rule to the cards that remain. A card that the party does not hold is refused.
 func (p *Parties) remove(g *Grid, partyID, card string) (any, error) {
 	target := p.find(partyID)
 	if target == nil {
 		return nil, fmt.Errorf("unknown party %s", partyID)
 	}
 	if !slices.Contains(target.Cards, card) {
-		return struct {
-			Party   partyView     `json:"party"`
-			Changed []partyChange `json:"changed"`
-		}{p.view(target), []partyChange{}}, nil
+		return nil, fmt.Errorf("card %s is not in party %s", card, partyID)
 	}
 	before := slices.Clone(target.Cards)
 	target.Cards = slices.DeleteFunc(target.Cards, func(id string) bool { return id == card })
@@ -650,7 +672,7 @@ func sameSet(a, b []string) bool {
 
 // Outline returns the loops of the outer outline of a party: the outline of the presented rectangles of its cards, with adjacent
 // cards joined at half the gap and the outline inset by half the border width (docs/spec/parties.md#drawing).
-func (p *Parties) Outline(g *Grid, partyID string, border float64) ([][]Point, error) {
+func (p *Parties) Outline(g *Grid, partyID string) ([][]Point, error) {
 	target := p.find(partyID)
 	if target == nil {
 		return nil, fmt.Errorf("unknown party %s", partyID)
@@ -663,7 +685,7 @@ func (p *Parties) Outline(g *Grid, partyID string, border float64) ([][]Point, e
 		}
 		rects = append(rects, rect)
 	}
-	pad, inset := g.Gap()/2, border/2
+	pad, inset := g.Gap()/2, p.rail/2
 	return ComputeOutline(rects, OutlineOptions{Pad: &pad, Inset: &inset}).Loops, nil
 }
 
@@ -709,22 +731,31 @@ type Record struct {
 }
 
 // Records returns one record for each party, in the order of the parties (docs/spec/parties.md#commands).
-func (p *Parties) Records(g *Grid, border float64) ([]Record, error) {
+func (p *Parties) Records(g *Grid) ([]Record, error) {
 	out := []Record{}
 	for _, item := range p.list {
-		loops, err := p.Outline(g, item.ID, border)
+		record, err := p.record(g, item)
 		if err != nil {
 			return nil, err
 		}
-		pairs := [][][2]float64{}
-		for _, loop := range loops {
-			next := [][2]float64{}
-			for _, point := range loop {
-				next = append(next, [2]float64{point.X, point.Y})
-			}
-			pairs = append(pairs, next)
-		}
-		out = append(out, Record{ID: item.ID, Cards: slices.Clone(item.Cards), Leader: item.Leader, Color: item.Color, LeaderColor: item.LeaderColor, Outline: pairs, Reason: item.Reason})
+		out = append(out, record)
 	}
 	return out, nil
+}
+
+// record returns the record of a party, with its outline in points (docs/spec/parties.md#queries).
+func (p *Parties) record(g *Grid, target *party) (Record, error) {
+	loops, err := p.Outline(g, target.ID)
+	if err != nil {
+		return Record{}, err
+	}
+	pairs := [][][2]float64{}
+	for _, loop := range loops {
+		next := [][2]float64{}
+		for _, point := range loop {
+			next = append(next, [2]float64{point.X, point.Y})
+		}
+		pairs = append(pairs, next)
+	}
+	return Record{ID: target.ID, Cards: slices.Clone(target.Cards), Leader: target.Leader, Color: target.Color, LeaderColor: target.LeaderColor, Outline: pairs, Reason: target.Reason}, nil
 }

@@ -825,7 +825,12 @@ func TestPartyCreateCasesJudgeTouchingCards(t *testing.T) {
 	var file struct {
 		Description string `json:"description"`
 		Cases       []struct {
-			Name  string       `json:"name"`
+			Name    string `json:"name"`
+			Drawing *struct {
+				RailWidth string  `json:"theme-rail-w"`
+				Unit      float64 `json:"unit"`
+				Gap       float64 `json:"gap"`
+			} `json:"drawing"`
 			State layout.State `json:"state"`
 			Steps []struct {
 				Call    string          `json:"call"`

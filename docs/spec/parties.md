@@ -37,6 +37,7 @@ All commands are idempotent: the same request in the same state gives the same r
 | `core.card.get` | `{card}` | the card query of [queries](#queries) | Reads one card, whether or not a party holds it. |
 
 `taken` lists `{card, from}` for each card that changed party, where `from` is the former party identifier or `null`. A card that is already in the target party is not listed. `changed` lists `{party, removed, leader, deleted}` for each party that changed, including a party that `create` or `add` made: `removed` lists the cards that left that party, `leader` is its leader after the change or `null`, and `deleted` is true when the party no longer exists.
+When the party is deleted, `removed` lists every card of the party before the change, including the card that a split or a take kept.
 
 `core.party.delete` replies with `party` as `{id}`, the identifier of the deleted party only.
 
@@ -56,6 +57,8 @@ Refusals and their texts. The wording of each text is decided in [open decisions
 | A party identifier is unknown | `unknown party <id>` |
 
 The checks run in the order of the table. The first failing check gives the error, so one request has one error.
+
+The `<ids>` of `cards are not touching: <ids>` are the cards of the request that touch no member of the party, in request order, separated by `, `. For `create`, which has no party yet, the group of the first card of the request is the party: the listed cards are the cards of the request outside that group. For `add` and `take`, the party is the party named in the request, so the listed card is the card of the request.
 
 ## Take
 
@@ -79,6 +82,7 @@ A layout change is a close, a move, a split, or a resize that changes which card
 ## Drawing
 
 - The whole party is drawn as one outer outline, built by `outline` of `packages/soksak` from the presented rectangles of its cards. Adjacent cards join at half the gap, and the outline is inset by half the border width.
+- A layout case that states `drawing` (`docs/spec/cases/layout/parties.json`) gives its plane the size of its grid in points: the width is `unit` times the largest line value of the x axis, and the height is `unit` times the largest line value of the y axis. The grid divides the plane by the layout rules, so a line lies at `unit` times its value only when the grid divides the plane into equal parts. The outline of the case is in points.
 - The leader card's border segments on the outline are drawn in the leader color, and the leader mark is drawn in its header.
 - When a party outline overlaps the rail, the rail is outside and the party outline is inside, separated by the rail width. The two lines never coincide. The focus indication is independent of the party outline.
 - Element names. The outer outline of party `<id>` is the SVG element `path[data-party="<id>"]`. Its leader border segments are the element `path[data-party-leader="<id>"]`, whose `stroke` is the leader color. The rail outline is the element `#railPath` of the workbench document. A test that checks the rule above compares the `d` value of `#railPath` with the `d` value of the party outline.
