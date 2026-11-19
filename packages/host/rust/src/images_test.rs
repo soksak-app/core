@@ -1331,7 +1331,7 @@ fn a_release_that_fails_in_an_open_window_reports_the_failure() {
     );
 }
 
-// contract: copy-path-screen-request
+// contract: images.copy-path.screen-request
 // A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
 // accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
 #[test]
@@ -1380,7 +1380,7 @@ fn drawing_region_receives_one_screen_request_until_it_is_answered() {
     );
 }
 
-// contract: copy-path-clock-tick
+// contract: images.copy-path.clock-tick
 // The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate
 // that the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).
 #[test]
@@ -1427,7 +1427,7 @@ fn window_clock_ticks_each_drawing_region_with_its_sequence() {
     );
 }
 
-// contract: copy-path-input-draw
+// contract: images.copy-path.input-draw
 // A user input that reaches a drawing region sends the screen request at once when the input is at most 200 ms old and the region has no
 // unanswered request. The request carries the correlation identifiers of the input (docs/spec/native-surfaces.md#copy-path-frames).
 #[test]
