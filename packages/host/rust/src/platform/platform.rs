@@ -1149,6 +1149,16 @@ pub trait Platform: CoreRootHost + Send + Sync {
         done: Box<dyn Fn(Result<Value, String>)>,
     );
     #[cfg(feature = "diagnostics")]
+    /// Dispatches in window the event that the window server gives the application for a press, a move or a scroll of a person
+    /// at x, y in the content (docs/spec/endpoint.md). Call it on the main thread.
+    fn dispatch_person_input(
+        &self,
+        window: Handle,
+        action: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<(), String>;
+    #[cfg(feature = "diagnostics")]
     /// Ends the pending wait of the input reference of window, naming reason in its failure. Call it on the main thread.
     fn end_input_reference_wait(&self, window: Handle, reason: &str);
 
