@@ -53,7 +53,7 @@ const DIRECTIONS = {
     right: { side: 'right', grow: 'c0', touches: (c, x) => c.c0 === x.c1, lo: 'r0', hi: 'r1' },
     left: { side: 'left', grow: 'c1', touches: (c, x) => c.c1 === x.c0, lo: 'r0', hi: 'r1' },
 };
-const ORDER = {
+export const ORDER = {
     v: ['below', 'above', 'right', 'left'],
     h: ['right', 'left', 'below', 'above'],
 };
@@ -66,12 +66,12 @@ const ORDER = {
  * A `fixed` card never fills, because the layout may not expand it. A card with
  * a px size does fill, and spanning a second slot removes that size.
  */
-export function fillFor(cards, closing, order, memo) {
+export function fillFor(cards, closing, sides, memo) {
     if (closing.fixed)
         return null;
     if (cards.filter((c) => !c.fixed).length <= 1)
         return null;
-    for (const side of ORDER[order]) {
+    for (const side of sides) {
         const dir = DIRECTIONS[side];
         const row = cards
             .filter((c) => c !== closing &&

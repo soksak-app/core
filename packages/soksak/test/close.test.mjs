@@ -561,8 +561,8 @@ test("a close and a move take the row of neighbours of the sides they name, in t
   assert.equal(kept.cards.length, 4);
   // A move closes the card with the named sides first.
   const moving = quarters();
-  assert.equal(moving.move("a", "d", "below", ["right"]), true);
-  assert.equal(moving.card("b").c0, 0);
-  assert.equal(moving.card("a").r0, moving.card("d").r1);
+  assert.equal(moving.move("a", "c", "right", ["right"]), true);
+  assert.deepEqual([moving.card("b").c0, moving.card("c").r0, moving.card("a").c0], [0, 1, moving.card("c").c1]);
   assertTiling(moving, "after a move that closed into the named side");
+  assert.throws(() => quarters().close("a", ["middle"]), { message: "unknown fill side middle" });
 });

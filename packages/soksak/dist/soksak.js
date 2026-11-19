@@ -16,7 +16,7 @@
  */
 import { AXES, SIDES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
 import { corridorOf, corridorWhenWide, crossing, declaredFor, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, sharePerSpan, slotSizes, slotWidths, zoneAt, } from './geometry.js';
-import { fillFor, isSlicing } from './slicing.js';
+import { fillFor, isSlicing, ORDER } from './slicing.js';
 import { balanceRegions, sliceTree } from './balance.js';
 const EPS = 1e-9;
 /**
@@ -107,6 +107,10 @@ export class Soksak {
     /** The axis a close tries first. */
     get fillOrder() {
         return this.order;
+    }
+    /** The sides a close tries, in the order of `fillOrder`. */
+    get fillSides() {
+        return ORDER[this.order];
     }
     set fillOrder(value) {
         if (value !== 'v' && value !== 'h')
@@ -1370,16 +1374,21 @@ export class Soksak {
      * The neighbours that would expand over a card if it closed, as frozen copies.
      *
      * Returns null when no row of neighbours matches a side. `close` then removes
-     * the card's slots instead.
+     * the card's slots instead. `sides` names the sides to try in their order, the
+     * sides of `fillOrder` by default.
      */
-    fill(id) {
-        const found = this.fillOf(id);
+    fill(id, sides = this.fillSides) {
+        const found = this.fillOf(id, sides);
         return found && { ...found, cards: found.cards.map((c) => Object.freeze({ ...c })) };
     }
     /** The same result holding the stored cards, so `close` can modify them. */
-    fillOf(id) {
+    fillOf(id, sides = this.fillSides) {
+        for (const side of sides) {
+            if (!ORDER.v.includes(side))
+                throw new Error(`unknown fill side ${String(side)}`);
+        }
         const card = this.find(id);
-        return card ? fillFor(this.list, card, this.order, this.sliceMemo) : null;
+        return card ? fillFor(this.list, card, sides, this.sliceMemo) : null;
     }
     /**
      * The axis whose slots hold no other card, or null.
@@ -1416,9 +1425,13 @@ export class Soksak {
      *
      * A row of neighbours expands over the space when one matches the side.
      * Otherwise the card's slots are removed. Returns false when neither applies,
-     * when the card is `fixed`, or when it is the last card.
+     * when the card is `fixed`, or when it is the last card. `sides` names the
+     * sides whose row of neighbours may expand, tried in their order, the sides
+     * of `fillOrder` by default; an empty list only removes the slots. A host that
+     * keeps its own regions of cards passes one side at a time, because the fill
+     * order does not know which neighbours keep such a region one rectangle.
      */
-    close(id) {
+    close(id, sides = this.fillSides) {
         var _a, _b;
         const card = this.removable(id);
         if (!card)
@@ -1497,7 +1510,7 @@ export class Soksak {
                 return true;
             }
         }
-        const filling = this.fillOf(id);
+        const filling = this.fillOf(id, sides);
         if (filling) {
             const axis = filling.grow === 'c0' || filling.grow === 'c1' ? 'x' : 'y';
             // A line's position does not depend on which cards reference it. Closing
@@ -1875,9 +1888,10 @@ export class Soksak {
      *
      * The card keeps its id and its payload, so the host's element is reused and a
      * live surface inside it is not destroyed. It keeps its px size only when it
-     * lands spanning one slot on that axis.
+     * lands spanning one slot on that axis. `sides` is the sides of the close, as
+     * `close` takes them.
      */
-    move(id, targetId, side) {
+    move(id, targetId, side, sides = this.fillSides) {
         // `splitToward` below rejects an invalid side and the close before it is
         // rolled back, so no check is needed here.
         const card = this.find(id);
@@ -1886,7 +1900,7 @@ export class Soksak {
             return false;
         const carried = { data: card.data, width: card.width, height: card.height };
         const before = this.toJSON();
-        if (!this.close(id))
+        if (!this.close(id, sides))
             return false;
         const landed = this.splitToward(targetId, side, { id, data: carried.data });
         if (landed === null) {

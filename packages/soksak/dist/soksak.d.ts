@@ -109,6 +109,8 @@ export declare class Soksak {
     private order;
     /** The axis a close tries first. */
     get fillOrder(): FillOrder;
+    /** The sides a close tries, in the order of `fillOrder`. */
+    get fillSides(): readonly Fill['side'][];
     set fillOrder(value: FillOrder);
     private grab;
     /** Smallest grab area of a boundary, in px. */
@@ -408,9 +410,10 @@ export declare class Soksak {
      * The neighbours that would expand over a card if it closed, as frozen copies.
      *
      * Returns null when no row of neighbours matches a side. `close` then removes
-     * the card's slots instead.
+     * the card's slots instead. `sides` names the sides to try in their order, the
+     * sides of `fillOrder` by default.
      */
-    fill(id: string): Fill | null;
+    fill(id: string, sides?: readonly Fill['side'][]): Fill | null;
     /** The same result holding the stored cards, so `close` can modify them. */
     private fillOf;
     /**
@@ -428,9 +431,13 @@ export declare class Soksak {
      *
      * A row of neighbours expands over the space when one matches the side.
      * Otherwise the card's slots are removed. Returns false when neither applies,
-     * when the card is `fixed`, or when it is the last card.
+     * when the card is `fixed`, or when it is the last card. `sides` names the
+     * sides whose row of neighbours may expand, tried in their order, the sides
+     * of `fillOrder` by default; an empty list only removes the slots. A host that
+     * keeps its own regions of cards passes one side at a time, because the fill
+     * order does not know which neighbours keep such a region one rectangle.
      */
-    close(id: string): boolean;
+    close(id: string, sides?: readonly Fill['side'][]): boolean;
     /**
      * Restores unreferenced lines to their previous px positions.
      *
@@ -520,9 +527,10 @@ export declare class Soksak {
      *
      * The card keeps its id and its payload, so the host's element is reused and a
      * live surface inside it is not destroyed. It keeps its px size only when it
-     * lands spanning one slot on that axis.
+     * lands spanning one slot on that axis. `sides` is the sides of the close, as
+     * `close` takes them.
      */
-    move(id: string, targetId: string, side: Side): boolean;
+    move(id: string, targetId: string, side: Side, sides?: readonly Fill['side'][]): boolean;
     /** Whether `move` would succeed, without performing it. */
     canMove(id: string, targetId: string, side: Side): boolean;
     /**

@@ -519,8 +519,8 @@ first.
 | `resize(w, h)`, `width`, `height` | plane size |
 | `canSplit(id, axis)`, `split(id, axis, {id?, data?})` | cut one card in two |
 | `splitToward(id, side, {id?, data?})` | cut it and put the new one on a named side |
-| `canClose(id)`, `close(id)`, `fill(id)` | remove a card; `fill` reports which neighbours take the space |
-| `canMove(id, targetId, side)`, `move(id, targetId, side)` | take a card to another card's side |
+| `canClose(id)`, `close(id, sides?)`, `fill(id, sides?)`, `fillSides` | remove a card; `fill` reports which neighbours take the space; `sides` names the sides whose row of neighbours may grow, tried in their order (`"below"`, `"above"`, `"right"`, `"left"`), `fillSides`, the sides of `fillOrder`, by default, and an empty list only removes the slots |
+| `canMove(id, targetId, side)`, `move(id, targetId, side, sides?)` | take a card to another card's side; `sides` is the sides of its close, as `close` takes them |
 | `setFixed(id, on)`, `setSize(id, axis, px)`, `setData(id, data)` | change a card; the returned copies are frozen |
 | `standings(axis, without?)`, `canInsertAt(axis, line, without?)`, `insertAt`, `moveTo` | a card that reaches across the plane |
 | `zoneAt(x, y, options)` | where a drop lands |
