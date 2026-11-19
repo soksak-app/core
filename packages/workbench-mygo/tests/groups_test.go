@@ -341,3 +341,31 @@ func TestACardGetCarriesTheSummaryStatusesOfEachTab(t *testing.T) {
 		t.Fatalf("the tab %s of card %s carries the status %v, want %v", surface, card, status, want)
 	}
 }
+
+// With cardSplit even a split balances the grid, so the three columns of one row take equal widths; with exact the split divides only
+// the card that it splits (docs/spec/groups.md#split-setting).
+func TestTheSplitSettingBalancesTheGrid(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	for range 2 {
+		if _, err := f.apply("core.card.split", `{"card": "main", "side": "right", "plugin": "plain"}`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cards := f.gridCards()
+	if w := cards["card-2"]["w"].(float64); w < 1.5*cards["main"]["w"].(float64) {
+		t.Fatalf("with cardSplit exact card-2 is %v wide and main %v", w, cards["main"]["w"])
+	}
+	f.shellFixture.run("core.settings.set", map[string]any{"patch": map[string]any{"cardSplit": "even"}})
+	if _, err := f.apply("core.card.split", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	cards = f.gridCards()
+	width := cards["main"]["w"].(float64)
+	for _, id := range []string{"card-2", "card-3"} {
+		if w := cards[id]["w"].(float64); w < width-1 || w > width+1 {
+			t.Fatalf("with cardSplit even card %s is %v wide and main %v", id, w, width)
+		}
+	}
+}
