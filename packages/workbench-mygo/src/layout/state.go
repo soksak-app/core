@@ -805,7 +805,7 @@ func (g *Grid) SetHeads(heads map[string]float64) error {
 			return errors.New("soksak: heads name " + strconv.Quote(id) + ", which is no box")
 		}
 		if !finite(px) || px < 0 {
-			return errors.New("soksak: the head of " + strconv.Quote(id) + " is below zero")
+			return errors.New("soksak: the head of " + strconv.Quote(id) + " is " + jsString(px))
 		}
 	}
 	g.heads = maps.Clone(heads)

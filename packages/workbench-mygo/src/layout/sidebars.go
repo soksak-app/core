@@ -581,7 +581,7 @@ func ArrangeWindowSidebars(g *Grid, order, sides []string, records map[string]Wi
 		if side == "right" || side == "bottom" {
 			line = len(g.Lines(axis)) - 1
 		}
-		if !g.CanInsertAt(axis, line, "") {
+		if !g.CanInsertAt(axis, line) {
 			return true, fmt.Errorf("cannot place window sidebar %s", side)
 		}
 		id, size := side, records[side].Size()

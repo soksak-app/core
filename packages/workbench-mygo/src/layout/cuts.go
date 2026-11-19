@@ -133,7 +133,9 @@ type cutNode struct {
 	// dirty tells whether the operation changed the kids, so they are laid again; laid whether the last layout laid them.
 	dirty, laid bool
 	adjust      []float64
-	old, rect   extent
+	// shares is the shares that the kids keep where the cut is laid, for a cut that arrives with its node; otherwise nil.
+	shares    []float64
+	old, rect extent
 	// drawn is the px rectangle of the node where it stood, and size its extent per axis.
 	drawn extent
 	size  map[Axis]float64
@@ -416,13 +418,18 @@ func (t *cutTree) placeCuts(n *cutNode, rect extent, above float64) {
 		return
 	}
 	lo, hi := ends(n.axis)
-	kept := !n.dirty && rect.get(lo) == n.old.get(lo) && rect.get(hi) == n.old.get(hi) && above == n.above
-	n.laid = !kept
+	kept := !n.dirty && n.shares == nil && rect.get(lo) == n.old.get(lo) && rect.get(hi) == n.old.get(hi) && above == n.above
+	n.laid = !kept && n.shares == nil
 	spans := make([]float64, len(n.kids))
 	for i, kid := range n.kids {
 		spans[i] = kid.old.get(hi) - kid.old.get(lo)
 	}
-	if !kept {
+	if n.shares != nil {
+		// A cut that arrives with its node keeps its shares where it lands.
+		for i := range n.kids {
+			spans[i] = (rect.get(hi) - rect.get(lo)) * n.shares[i]
+		}
+	} else if !kept {
 		free := rect.get(hi) - rect.get(lo)
 		total, sharing := 0.0, 0
 		for i, kid := range n.kids {
@@ -631,11 +638,13 @@ func (g *Grid) arriving(n *Node, t *cutTree) *cutNode {
 	switch {
 	case n.isCut():
 		kids := make([]*cutNode, len(n.Kids))
+		shares := make([]float64, len(n.Kids))
 		for i, kid := range n.Kids {
 			kids[i] = g.arriving(kid.Node, t)
-			kids[i].weight = weighed(kid.Share)
+			shares[i] = kid.Share
 		}
 		cut := newCut(n.Cut, kids, true)
+		cut.shares = shares
 		return cut
 	case n.isBox():
 		leaf := boxLeaf(&Box{ID: n.Box, Head: g.heads[n.Box], Members: []Member{}}, g.arriving(n.Inner, t), extent{}, nil)

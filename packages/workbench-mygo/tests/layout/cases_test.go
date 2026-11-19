@@ -397,8 +397,7 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 	case "canInsertAt":
 		arg(t, s, 0, &axis)
 		arg(t, s, 1, &line)
-		arg(t, s, 2, &id)
-		return g.CanInsertAt(axis, line, id), true, nil
+		return g.CanInsertAt(axis, line), true, nil
 	case "insertAt":
 		var init layout.InsertInit
 		arg(t, s, 0, &axis)
@@ -415,8 +414,7 @@ func gridCall(t *testing.T, g *layout.Grid, s step) (any, bool, error) {
 		return g.MoveTo(id, axis, line), true, nil
 	case "standings":
 		arg(t, s, 0, &axis)
-		arg(t, s, 1, &id)
-		return g.Standings(axis, id), true, nil
+		return g.Standings(axis), true, nil
 	case "move", "canMove":
 		arg(t, s, 0, &id)
 		arg(t, s, 1, &target)

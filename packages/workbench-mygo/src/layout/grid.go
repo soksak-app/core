@@ -1449,21 +1449,17 @@ func (g *Grid) settle(axis Axis, before slots, payer string) {
 	g.settleOn(axis, want, order)
 }
 
-// CanInsertAt is whether a card spanning the whole plane can be placed on this boundary: no card spans across the line, apart from
-// the card named without ("" names none).
-func (g *Grid) CanInsertAt(axis Axis, line int, without string) bool {
+// CanInsertAt is whether a card spanning the whole plane can be placed on this boundary: the line is an edge of the plane or a seam
+// of the root cut along axis.
+func (g *Grid) CanInsertAt(axis Axis, line int) bool {
 	if noAxis(axis) {
 		return false
 	}
 	if line < 0 || line > len(g.arr(axis))-1 {
 		return false
 	}
-	for _, c := range g.CardsCrossing(axis, line) {
-		if without == "" || c.ID != without {
-			return false
-		}
-	}
-	return true
+	_, ok := g.standing(axis, line)
+	return ok
 }
 
 // standing is where a card spanning the whole plane on the other axis goes in at line: the index among the kids of the root, which is a
@@ -1506,7 +1502,7 @@ func (g *Grid) InsertAt(axis Axis, line int, init InsertInit) (string, bool) {
 	if init.Size == nil || !finite(*init.Size) || *init.Size < 0 || *init.Size >= extent {
 		return "", false
 	}
-	if !g.CanInsertAt(axis, line, "") {
+	if !g.CanInsertAt(axis, line) {
 		return "", false
 	}
 	at, ok := g.standing(axis, line)
@@ -1599,7 +1595,7 @@ func (g *Grid) MoveTo(id string, axis Axis, line int) bool {
 	if line == card.get(lo) || line == card.get(hi) {
 		return true
 	}
-	if !g.CanInsertAt(axis, line, id) {
+	if !g.CanInsertAt(axis, line) {
 		return false
 	}
 	at, ok := g.standing(axis, line)
@@ -1623,11 +1619,11 @@ func (g *Grid) MoveTo(id string, axis Axis, line int) bool {
 	return true
 }
 
-// Standings is every boundary a plane-spanning card could stand on, apart from the card named without ("" names none).
-func (g *Grid) Standings(axis Axis, without string) []int {
+// Standings is every boundary a plane-spanning card could stand on: the edges of the plane and the seams of the root cut along axis.
+func (g *Grid) Standings(axis Axis) []int {
 	out := []int{}
 	for k := 0; k < len(g.arr(axis)); k++ {
-		if g.CanInsertAt(axis, k, without) {
+		if g.CanInsertAt(axis, k) {
 			out = append(out, k)
 		}
 	}
