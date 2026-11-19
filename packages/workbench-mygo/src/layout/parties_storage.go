@@ -22,8 +22,8 @@ type StoredParty struct {
 }
 
 // ReadStoredParties reads the parties member of a space object of projects.json (docs/spec/parties.md#storage). A space object
-// without the member has no party. Each refusal names the file, the project root, the space identifier and the found value or
-// the party that breaks a rule. cards are the identifiers of the cards of the space layout.
+// without the member has no party. Each refusal is the storage error text, which names the file, the project root, the space
+// identifier and the found value. cards are the identifiers of the cards of the space layout.
 func ReadStoredParties(space json.RawMessage, project, spaceID string, cards []string) ([]StoredParty, error) {
 	var members map[string]json.RawMessage
 	if err := json.Unmarshal(space, &members); err != nil {
@@ -47,37 +47,34 @@ func ReadStoredParties(space json.RawMessage, project, spaceID string, cards []s
 	}
 	owner := map[string]string{}
 	for _, party := range parties {
-		if err := checkStoredParty(party, cards, owner); err != nil {
-			return nil, fmt.Errorf("projects.json: project %s, space %s: party %s: %w", project, spaceID, party.ID, err)
+		if !checkStoredParty(party, cards, owner) {
+			return nil, fmt.Errorf("%s", where)
 		}
 	}
 	return parties, nil
 }
 
-// checkStoredParty refuses a party that breaks a rule of the storage, and records each of its cards in owner.
-func checkStoredParty(party StoredParty, cards []string, owner map[string]string) error {
+// checkStoredParty reports whether a party follows the rules of the storage, and records each of its cards in owner.
+func checkStoredParty(party StoredParty, cards []string, owner map[string]string) bool {
 	if len(party.Cards) < 2 {
-		return fmt.Errorf("fewer than 2 cards")
+		return false
 	}
 	for _, card := range party.Cards {
 		if !slices.Contains(cards, card) {
-			return fmt.Errorf("card %s is missing from the space layout", card)
+			return false
 		}
-		if other, held := owner[card]; held {
-			return fmt.Errorf("card %s is in party %s too", card, other)
+		if _, held := owner[card]; held {
+			return false
 		}
 		owner[card] = party.ID
 	}
 	if party.Leader != nil && !slices.Contains(party.Cards, *party.Leader) {
-		return fmt.Errorf("leader %s is not in the party", *party.Leader)
+		return false
 	}
 	if !hexColor.MatchString(party.Color) {
-		return fmt.Errorf("color %s is not #rrggbb", party.Color)
+		return false
 	}
-	if party.LeaderColor != nil && !hexColor.MatchString(*party.LeaderColor) {
-		return fmt.Errorf("leader color %s is not #rrggbb", *party.LeaderColor)
-	}
-	return nil
+	return party.LeaderColor == nil || hexColor.MatchString(*party.LeaderColor)
 }
 
 // WriteStoredParties returns the parties member of a space object. An empty list is written as an empty array.
