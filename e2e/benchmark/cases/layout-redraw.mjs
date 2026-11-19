@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { drag } from "@soksak/window-check/app.mjs";
+import { transactionCadence } from "@soksak/window-check/drag-measurement.mjs";
 import { frames } from "@soksak/window-check/frame.mjs";
 import { traceSettings } from "../../../scripts/measure-trace.mjs";
 import { fresh } from "../../fixture.mjs";
@@ -97,6 +98,20 @@ async function settled(s, surfaces) {
   return (await s.presented()).displayed;
 }
 
+/**
+ * The stages of the layout transactions `layouts` of a divider drag (the layouts of the reply of diagnostics.drag,
+ * docs/spec/endpoint.md): the number of transactions of each commit path, `none` for one that did not commit, and the spread of
+ * their stages (transactionCadence of @soksak/window-check/drag-measurement.mjs), so a slow drag names the stage that took its time.
+ */
+export function dragStages(layouts) {
+  const paths = {};
+  for (const layout of layouts) {
+    const path = layout.commitPath ?? "none";
+    paths[path] = (paths[path] ?? 0) + 1;
+  }
+  return { paths, cadence: transactionCadence(layouts) };
+}
+
 /** The actions of the benchmark for the grid `grid` (rows of {card}), with the leader actions when `leader` is declared. */
 export function redrawActions(grid, line, leader) {
   const actions = [
@@ -135,14 +150,14 @@ export async function runRedraw(s) {
     for (const { surface } of cards) points.push(await imagePoint(s, surface));
     const from = await clockMs(s);
     s.step(`action ${action}`);
-    await run(s);
+    const result = await run(s);
     displayed = await settled(s, cards.map(({ surface }) => surface));
-    windows.push({ action, from, to: displayed, points });
+    windows.push({ action, from, to: displayed, points, stages: action === "divider drag" ? dragStages(result.layouts) : null });
   }
   const stopped = await recording.stop({ after: displayed });
   if (stopped === null) throw new Error(`the recording ${recording.frames} did not stop; its notes tell why`);
   const times = frames(recording.frames).map(frameTimes);
-  const actions = windows.map(({ action, from, to, points }) => {
+  const actions = windows.map(({ action, from, to, points, stages }) => {
     const { before, during } = actionFrames(times, { action, from, to });
     const first = readFrame(before.path);
     const colours = points.map((point) => pixelAt(first, point));
@@ -150,7 +165,7 @@ export async function runRedraw(s) {
     if (distinct.size !== colours.length) throw new Error(`the cards show the colours ${JSON.stringify(colours)} before ${action}, not one colour each`);
     const base = colourCounts(first, colours, TOLERANCE);
     const counts = during.map(({ path }) => colourCounts(readFrame(path), colours, TOLERANCE));
-    return { action, frames: during.length, cards: blankFigures(cards.map(({ card }) => card), base, counts) };
+    return { action, frames: during.length, cards: blankFigures(cards.map(({ card }) => card), base, counts), stages };
   });
   return { leader, frames: times.length, folder: join(recording.frames), actions };
 }

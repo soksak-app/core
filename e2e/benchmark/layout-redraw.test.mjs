@@ -12,10 +12,15 @@ for (const app of Object.values(APPS)) {
       const s = await open(t, app);
       const { leader, frames, actions } = await runRedraw(s);
       t.diagnostic(`${app.name}: ${frames} recorded frames; core.group.leader ${leader ? "declared" : "not declared, no leader action"}`);
-      for (const { action, frames: during, cards } of actions) {
+      for (const { action, frames: during, cards, stages } of actions) {
         const blank = cards.reduce((sum, { blank: count }) => sum + count, 0);
         t.diagnostic(`${app.name}: ${action}: ${during} frames, ${blank} blank card frames; ` +
           cards.map(({ card, blank: count, fewestShare }) => `${card} ${count} blank, fewest ${(fewestShare * 100).toFixed(0)}%`).join("; "));
+        if (stages !== null) {
+          const spread = (name) => `${name} ${stages.cadence[name].count} median ${stages.cadence[name].median?.toFixed(1)} p90 ${stages.cadence[name].p90?.toFixed(1)} ms`;
+          t.diagnostic(`${app.name}: ${action}: transactions by commit path ${JSON.stringify(stages.paths)}; ` +
+            ["interval", "drawing", "waiting", "committing", "total"].map(spread).join("; "));
+        }
       }
     });
 }

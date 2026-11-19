@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F950-1 (drag 단계): layout redraw benchmark가 divider drag의 layout transaction의 commit path와 단계 시간을 보고한다. 검증: drag 단계 test가 그 함수 없이 실패했고 통과한다.
 - F960 (click benchmark의 sidebar): raster benchmark의 balance하는 grid는 실행하는 동안 window sidebar를 끈다. 그 옆에서는 다섯 card짜리 줄을 정확히 절반으로 split할 수 없기 때문이다. 검증: `card terminal cannot split toward right`로 실패하던 click benchmark가 Wails에서 grid를 연다.
 - F958-1 (layout 중의 press): 주입된 press의 native 전달은 press가 닿은 web view를 답하고, Wails와 Tauri host는 surface press를 전달 전 좌표의 web view 대신 그 web view에 귀속시키므로, 열린 layout을 기다리는 press가 focus를 그 card로 옮긴다. host와 page는 각 surface press를 기록한다(`host.surface.press`, `workbench.surface.press`). 검증: native surface layout test의 press 귀속 검사가 바뀌지 않은 코드에서 실패했고 통과하며, 두 host의 전달 test도 통과한다.
 - F960 (layout redraw benchmark에서 card의 raster): `make benchmark-layout-redraw`는 `host.window`가 놓는 각 region의 raster 크기 frame을 기다리므로, view보다 반 point 넓은 region이 더는 그 기다림을 붙잡지 않는다. 검증: region raster case가 바뀌지 않은 benchmark에서 실패했고 통과한다.

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { clickOrder, focusTimes } from "../benchmark/cases/click-cpu.mjs";
-import { actionFrames, blankFigures, redrawActions, regionRaster } from "../benchmark/cases/layout-redraw.mjs";
+import { actionFrames, blankFigures, dragStages, redrawActions, regionRaster } from "../benchmark/cases/layout-redraw.mjs";
 import { boundaryMoves, startRows, widestCard } from "../benchmark/cases/raster-cards.mjs";
 import { steppedOffset, wheelDelta } from "../benchmark/cases/scroll-cpu.mjs";
 
@@ -69,4 +69,14 @@ test("the raster of a region is its frame in device pixels, also where the view 
   assert.deepEqual(regionRaster(host, "tab-a"), { width: 359, height: 573 });
   assert.deepEqual(regionRaster(host, "tab-b"), { width: 746, height: 519 });
   assert.throws(() => regionRaster(host, "tab-c"), /host.window names no image region raster of tab-c/);
+});
+
+test("the stages of a divider drag count the commit paths of its transactions and spread their times", { timeout: 5000 }, () => {
+  const layout = (begun, requested, presented, committed, commitPath) => ({ ticket: begun, begun, requested, presented, committed, commitPath });
+  const stages = dragStages([layout(0, 2, 4, 20, "view-join"), layout(9, 10, 12, 14, "present"), layout(18, 19, 21, 40, "view-join"),
+    layout(27, null, null, null, null)]);
+  assert.deepEqual(stages.paths, { "view-join": 2, present: 1, none: 1 });
+  assert.deepEqual(stages.cadence.total, { count: 3, median: 20, p90: 22 });
+  assert.deepEqual(stages.cadence.committing, { count: 3, median: 16, p90: 19 });
+  assert.deepEqual(stages.cadence.interval, { count: 3, median: 9, p90: 9 });
 });
