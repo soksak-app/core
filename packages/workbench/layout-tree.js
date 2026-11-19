@@ -45,22 +45,6 @@ function cardsOf(node) {
 }
 
 /**
- * The neighbour of card toward side among cards: the card whose edge lies on the line of the edge of card on that side and whose
- * extent across that side spans the same two lines as card, compared by the lines of the layout, or null.
- */
-export function neighbourToward(cards, card, side) {
-  const near = {
-    left: (other) => other.c1 === card.c0 && other.r0 === card.r0 && other.r1 === card.r1,
-    right: (other) => other.c0 === card.c1 && other.r0 === card.r0 && other.r1 === card.r1,
-    top: (other) => other.r1 === card.r0 && other.c0 === card.c0 && other.c1 === card.c1,
-    bottom: (other) => other.r0 === card.r1 && other.c0 === card.c0 && other.c1 === card.c1,
-  }[side];
-  if (!near) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
-  // default: a card without a neighbour toward the side has none, which the caller reads as null.
-  return cards.find((other) => other.id !== card.id && near(other)) ?? null;
-}
-
-/**
  * Whether two JSON values are equal as JSON values: the order of the members of an object makes no difference, and numbers compare by
  * their value, so 1 and 1.0 are one number.
  */

@@ -14027,6 +14027,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/plane.js", symbol: "export function createGroup(id, side, kind, params)" },
       { file: "packages/workbench/plane.js", symbol: "export function moveCard(id, target, side)" },
       { file: "packages/workbench/plane.js", symbol: "export function cardState(id, summary)" },
+      { file: "packages/workbench/plane.js", symbol: "targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));" },
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.group.create\"" },
     ],
     tests: [
@@ -14037,10 +14038,11 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.group.create groups a content card with a new card and answers the same when applied again" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.group.dissolve, rename and leader change the tree and answer again without a change" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.move moves a card into a group and the add, split and close of a group card act on its rectangle" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.open on a group card selects an equal tab inside it, adds a card to it and splits its rectangle" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.get reads a content card with its group path and a group card with its node" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid reports the group card of each card, the leaders and the group cards after the cards" },
     ],
-    expected: "The group tree of the page workbench holds the groups of a space beside its one grid and passes every case of the group layout cases, the page reads, writes and issues the cards of the group tree of a stored space layout, and its registry runs the group commands, the card query of any level and the group members of core.layout and core.grid.",
+    expected: "The group tree of the page workbench holds the groups of a space beside its one grid and passes every case of the group layout cases, the page reads, writes and issues the cards of the group tree of a stored space layout, and its registry runs the group commands, the card query of any level, core.layout.open on a group card and the group members of core.layout and core.grid.",
     levels: ["unit"],
   },
   {

@@ -25,7 +25,7 @@ import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { cardNumber, memberId, readGroupTree } from "./group-tree.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
-import { layoutTree, neighbourToward, sameJson } from "./layout-tree.js";
+import { layoutTree, sameJson } from "./layout-tree.js";
 import { recordClosedTabs, tabClosed } from "./closed-tabs.js";
 import { clearSlotSurface, setSlotSurface, standIn } from "./compositor.js";
 import { followRing, keyboardOwed } from "./keyboard.js";
@@ -896,9 +896,6 @@ function addTab(cardId, plugin, params) {
 /** The side where the new card is placed: the vertical-line split of the card tools puts it on the right, the horizontal-line split below. */
 const SPLIT_SIDES = ["left", "right", "top", "bottom"];
 const TOOL_SPLIT_SIDE = { x: "right", y: "bottom" };
-
-/** The axis of the line that a split toward side cuts. */
-const splitAxis = (side) => (side === "left" || side === "right" ? "x" : "y");
 
 function splitWith(cardId, side, plugin, params) {
   restoreFullscreen();
@@ -1951,21 +1948,18 @@ export function openCardTabs(id) {
 }
 
 export function addTabTo(id, kind, params) {
-  if (tree?.isGroup(id)) return addToGroup(id, kind, params);
-  paneCard(id);
-  layoutChangeable(id);
-  knownPlugin(kind);
-  return addTab(id, kind, checkTabParams(kind, plugin(kind).params, params));
-}
-
-/**
- * Adds a content card with a tab of kind with params inside the group card id at the right edge of its rectangle and returns the tab
- * (docs/spec/groups.md#card-commands-on-a-group-card).
- */
-function addToGroup(id, kind, params) {
+  if (!tree?.isGroup(id)) paneCard(id);
   layoutChangeable(id);
   knownPlugin(kind);
   const wanted = checkTabParams(kind, plugin(kind).params, params);
+  return tree.isGroup(id) ? addToGroup(id, kind, wanted) : addTab(id, kind, wanted);
+}
+
+/**
+ * Adds a content card with a tab of kind with the checked params inside the group card id at the right edge of its rectangle and returns
+ * the tab (docs/spec/groups.md#card-commands-on-a-group-card).
+ */
+function addToGroup(id, kind, wanted) {
   tree.probe(() => tree.addCard(id, undefined, splitsEven()));
   restoreFullscreen();
   const t = newTab(kind, wanted, sourceTabOf(id), "new tab");
@@ -1979,7 +1973,12 @@ function addToGroup(id, kind, params) {
 const sourceTabOf = (id) => activeTab(grid.card(tree.focusable(id)))?.id ?? null;
 
 export function splitCard(id, side, kind) {
-  if (tree?.isGroup(id)) return splitGroup(id, side, kind);
+  if (tree?.isGroup(id)) {
+    layoutChangeable(id);
+    knownPlugin(kind);
+    if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+    return splitGroup(id, side, kind, null);
+  }
   paneCard(id);
   layoutChangeable(id);
   knownPlugin(kind);
@@ -1989,14 +1988,11 @@ export function splitCard(id, side, kind) {
   return made;
 }
 
-/** Puts a new content card with a tab of kind beside the rectangle of the group card id into the level that holds it. */
-function splitGroup(id, side, kind) {
-  layoutChangeable(id);
-  knownPlugin(kind);
-  if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+/** Puts a new content card with a tab of kind with params beside the rectangle of the group card id into the level that holds it. */
+function splitGroup(id, side, kind, params) {
   tree.probe(() => tree.split(id, side, undefined, splitsEven()));
   restoreFullscreen();
-  const t = newTab(kind, null, sourceTabOf(id), "split");
+  const t = newTab(kind, params, sourceTabOf(id), "split");
   const born = tree.split(id, side, { tabs: [t], activeId: t.id }, splitsEven());
   focusOn(born);
   settle();
@@ -2233,15 +2229,18 @@ function layoutTab(id) {
 /**
  * core.layout.open: selects the first tab of the plugin whose params equal the given ones in the target card, card or its neighbour toward
  * side, or adds the tab to card or splits card toward side into a new card with the tab. path stands for the plugin that opens its
- * extension with params {path} in the normal form of the path. Returns {card, tab}; a refusal changes nothing.
+ * extension with params {path} in the normal form of the path. A group card as card selects among the content cards inside it in
+ * workbench order, adds a content card inside it and splits its rectangle (docs/spec/groups.md#card-commands-on-a-group-card); the
+ * neighbour toward side is a content card of the level of card. Returns {card, tab}, the card that holds the tab; a refusal changes nothing.
  */
 export function openInLayout({ card: cardId, plugin: kind, params, path, side }) {
   if (kind !== undefined && path !== undefined) throw new Error("core.layout.open takes plugin or path, not both");
   if (kind === undefined && path === undefined) throw new Error("core.layout.open needs plugin or path");
   if (path !== undefined && params !== undefined) throw new Error("core.layout.open takes params only with plugin");
   if (side !== undefined && !SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
-  const card = layoutCard(cardId);
-  layoutChangeable(card.id);
+  const id = treeCard(cardId);
+  if (isPlace(id)) throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+  layoutChangeable(id);
   let opener, wanted;
   if (path !== undefined) {
     const normal = checkOpenPath(path);
@@ -2252,17 +2251,29 @@ export function openInLayout({ card: cardId, plugin: kind, params, path, side })
     opener = kind;
     wanted = checkTabParams(kind, plugin(kind).params, params);
   }
-  const target = side === undefined ? card : neighbourToward(contentCards(), card, side);
-  // default: a tab stored without params has the params null.
-  const found = target ? tabsOf(target).find((t) => t.plugin === opener && sameJson(t.params ?? null, wanted)) : undefined;
-  if (found) {
-    selectTab(found.id);
-    return { card: target.id, tab: found.id };
+  let targets = [id];
+  if (side !== undefined) targets = [tree.neighbour(id, side)];
+  else if (tree.isGroup(id)) {
+    const inside = new Set(tree.contents(tree.node(id)));
+    targets = tree.order().map((entry) => entry.id).filter((entry) => inside.has(entry));
   }
-  if (side === undefined) return { card: card.id, tab: addTab(card.id, opener, wanted) };
-  if (!grid.canSplit(card.id, splitAxis(side))) throw new Error(`card ${card.id} cannot split toward ${side}`);
-  const made = splitWith(card.id, side, opener, wanted);
-  if (!made) throw new Error(`card ${card.id} cannot split toward ${side}`);
+  for (const target of targets) {
+    if (!target || isPlace(target) || tree.isGroup(target)) continue;
+    // default: a tab stored without params has the params null.
+    const found = tabsOf(grid.card(target)).find((t) => t.plugin === opener && sameJson(t.params ?? null, wanted));
+    if (found) {
+      selectTab(found.id);
+      return { card: target, tab: found.id };
+    }
+  }
+  if (side === undefined && tree.isGroup(id)) {
+    const tab = addToGroup(id, opener, wanted);
+    return { card: focusedId, tab };
+  }
+  if (side === undefined) return { card: id, tab: addTab(id, opener, wanted) };
+  if (tree.isGroup(id)) return splitGroup(id, side, opener, wanted);
+  const made = splitWith(id, side, opener, wanted);
+  if (!made) throw new Error(`card ${id} cannot split toward ${side}`);
   return made;
 }
 

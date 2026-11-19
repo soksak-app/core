@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F937-3 (layout open on a group card): page의 `core.layout.open`이 group card를 받는다. 그 안의 content card 가운데 workbench order로 첫 같은 tab을 고르고, 없으면 그 안에 content card를 더하며, `side`가 있으면 그것을 담은 level에서 그 사각형을 split한다. `side` 쪽 이웃은 card의 level의 content card이며, 답은 tab을 가진 card를 말한다. 이전 open의 grid 이웃(`neighbourToward`)은 지운다. Red: `card card-4 is not in the layout of window main`. Green: `group-commands.test.mjs`가 통과한다.
 - F937-3 (groups keep no records, page): page의 group tree는 group을 가진 space의 모든 operation을 `tidy`로 끝내고 `paidBy` 기록을 지우며, plane이 window sidebar를 배치한 뒤에도 그렇게 한다. 저장된 읽기는 `paidBy` 기록이나 어떤 card도 쓰지 않는 line을 가진 group이 있는 layout을 거부한다. Green: `docs/spec/cases/layout/groups.json`의 case 39개가 통과한다.
 - F937-3 (groups keep no records): `docs/spec/groups.md`와 `docs/spec/cases/layout/groups.json`이, group을 가진 space는 grid의 모든 operation을 `tidy`로 끝내고 `paidBy` 기록을 남기지 않으며, `paidBy` 기록이나 어떤 card도 쓰지 않는 line을 가진 group이 있는 저장된 layout은 거부된다고 정한다. 파일은 mygo branch에서 가져온다. page model에서 Red: case 넷이 실패하며, 그 가운데 `step 5 grid.xs[1]: 0.476 is not 0.25`와 저장된 `paidBy` 기록의 빠진 거부가 있다.
 - F937-3 (leader result): `packages/workbench/exposure.json`이 `core.group.leader`의 결과를 이전 child plane 형식의 `{card, plane}` 대신 `docs/spec/groups.md#commands`가 정하고 command가 답하는 `{card, group}`으로 선언한다. Red: `group-commands.test.mjs`가 멤버 `card`와 `plane`을 찾았다. Green: 통과한다.
