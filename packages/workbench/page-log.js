@@ -88,13 +88,12 @@ export function eventEnabled(level) {
 }
 
 /**
- * Whether an event of the level and the name that the gate judges by its class is stored now, without counting it, so that a producer
- * reads costly fields before the event only while the event is stored.
+ * Whether an event of the level and the name is stored now, as the writers judge it, without counting it, so that a producer reads
+ * costly fields before the event only while the event is stored; nothing is stored in a page without a host.
  */
 export function eventAdmits(level, event) {
   if (!LOG_LEVELS.includes(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${LOG_LEVELS.join(", ")}`);
-  const klass = classOf(event);
-  return batcher !== null && (klass === undefined || logGate.enabled(klass, level));
+  return batcher !== null && batcher.admits(level, event);
 }
 
 /**

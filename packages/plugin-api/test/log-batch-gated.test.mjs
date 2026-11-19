@@ -70,7 +70,7 @@ test("admits answers as the writers judge an event, the events that pass every g
     },
     report: assert.ifError,
     classify: (event) => classes[event],
-    gate: { enabled: (klass, level) => klass === "call" && level === "warn" },
+    gate: { enabled: (klass, level) => klass === "call" && (level === "warn" || level === "error") },
   });
   assert.deepEqual(["workbench.start", "workbench.log.clock", "workbench.fixture.step"].map((event) => batcher.admits("info", event)),
     [true, true, true], "an event that passes every gate is admitted under a closed gate");

@@ -260,6 +260,15 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     return false;
   };
 
+  // Whether an event of the level and the name is stored now, as the writers judge it (PassesEveryGate of sok, passes_every_gate of
+  // soksak_sok::event_log): an event without a class, an event that passes every gate, the clock of the batcher among them, and an
+  // event that the policy stores. It counts nothing, so a producer asks it before it reads fields that it computes for the event.
+  const admits = (level, event) => {
+    if (!LEVELS.has(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${[...LEVELS].join(", ")}`);
+    const klass = classify(event);
+    return klass === undefined || ungated.has(event) || event === own.clock || gate === null || gate.enabled(klass, level);
+  };
+
   // `fields` is the object of the event or a function that builds it; the function runs only for an event that the gate stores.
   const emit = (level, event, fields = {}, cids = undefined) => {
     if (!LEVELS.has(level)) throw new TypeError(`event level ${JSON.stringify(level)} is not one of ${[...LEVELS].join(", ")}`);
@@ -292,5 +301,5 @@ export function createEventBatcher({ call, report, maxEvents = DEFAULT_MAX_EVENT
     while (sending) await sending;
   };
 
-  return { emit, emitAndWait, flush, gate: open };
+  return { emit, emitAndWait, flush, gate: open, admits };
 }
