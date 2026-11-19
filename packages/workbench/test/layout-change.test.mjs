@@ -1,7 +1,8 @@
 // Every command that changes the stored layout of the active space, one that answers at once and one that answers later, is the
 // event workbench.layout.change with its name, its parameters, its answer and the stored layout that it left; a command that leaves
 // the layout as it was and a command that fails write none (docs/spec/events.json). A divider drag stores its result through the
-// command core.boundary.move, so the drag is one such event.
+// command core.boundary.move, so the drag is one such event, an arrow key runs that command with the position one step away and the
+// centring by Enter or by a double click runs core.boundary.center.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -115,4 +116,35 @@ test("a divider drag stores its result through core.boundary.move, which is one 
   assert.ok(Math.abs(params.position - (from + 60)) < 0.5, `the drag ended at ${params.position}, not ${from + 60}`);
   assert.deepEqual(JSON.parse(events[0].fields.result), { position: params.position });
   drag.finish();
+});
+
+test("an arrow key, Enter and a double click on a divider are each one workbench.layout.change of their command", { timeout: 10000 }, async () => {
+  const keys = selectPageWire("layout-change-keys");
+  const grid = plane.currentGrid();
+  const divider = () => document.querySelector('.sp-divider[data-axis="x"]');
+  const line = Number(divider().dataset.line);
+  const key = (name) => divider().dispatchEvent(new window.KeyboardEvent("keydown", { key: name, bubbles: true }));
+  const press = (type) => (type === "mousedown" ? divider() : document)
+    .dispatchEvent(new window.MouseEvent(type, { clientX: grid.boundaryPos("x", line), clientY: 100, button: 0, buttons: type === "mousedown" ? 1 : 0, bubbles: true }));
+  const from = grid.boundaryPos("x", line);
+  key("ArrowRight");
+  await registry.commandsEnded();
+  assert.equal(grid.boundaryPos("x", line), from + 8, "the arrow key moves the line one step");
+  key("Enter");
+  await registry.commandsEnded();
+  key("ArrowRight");
+  await registry.commandsEnded();
+  for (const type of ["mousedown", "mouseup", "mousedown", "mouseup"]) press(type);
+  await registry.commandsEnded();
+  await flushEvents();
+  const events = keys.calls.filter(({ name, payload }) => name === "log" && payload?.action === "batch").flatMap(({ payload }) => payload.events)
+    .filter(({ event }) => event === "workbench.layout.change");
+  assert.deepEqual(events.map(({ fields }) => [fields.command, Object.keys(JSON.parse(fields.params))]), [
+    ["core.boundary.move", ["axis", "line", "position"]],
+    ["core.boundary.center", ["axis", "line"]],
+    ["core.boundary.move", ["axis", "line", "position"]],
+    ["core.boundary.center", ["axis", "line"]],
+  ]);
+  assert.deepEqual(JSON.parse(events[0].fields.params), { axis: "x", line, position: from + 8 });
+  keys.finish();
 });
