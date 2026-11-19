@@ -437,27 +437,27 @@ const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 export function readStoredSpace(project, space) {
   if (space.parties === undefined) return { ...space, parties: [] };
   const found = JSON.stringify(space.parties);
-  const refuse = (reason) => {
-    throw new Error(`projects.json: project ${project.root}, space ${space.id}: parties ${found}: ${reason}`);
+  const refuse = () => {
+    throw new Error(`projects.json: project ${project.root}, space ${space.id}: parties ${found}`);
   };
-  if (!Array.isArray(space.parties)) refuse("parties must be an array");
+  if (!Array.isArray(space.parties)) refuse();
   // default: a space with no layout holds no card (docs/spec/projects.md#persistence).
   const layoutCards = new Set((space.layout?.state?.cards ?? []).map((card) => card.id));
   const owners = new Map();
   for (const party of space.parties) {
     if (typeof party !== "object" || party === null || typeof party.id !== "string" || !Array.isArray(party.cards)) {
-      refuse("a party record needs an id and a list of cards");
+      refuse();
     }
-    if (party.cards.length < 2) refuse("a party needs at least 2 cards");
+    if (party.cards.length < 2) refuse();
     for (const card of party.cards) {
-      if (!layoutCards.has(card)) refuse(`card ${card} is not in the space layout`);
-      if (owners.has(card)) refuse(`card ${card} belongs to party ${owners.get(card)} and party ${party.id}`);
+      if (!layoutCards.has(card)) refuse();
+      if (owners.has(card)) refuse();
       owners.set(card, party.id);
     }
-    if (party.leader !== null && !party.cards.includes(party.leader)) refuse(`leader ${party.leader} is not a card of party ${party.id}`);
-    if (typeof party.color !== "string" || !HEX_COLOR.test(party.color)) refuse(`color of party ${party.id} is not #rrggbb`);
+    if (party.leader !== null && !party.cards.includes(party.leader)) refuse();
+    if (typeof party.color !== "string" || !HEX_COLOR.test(party.color)) refuse();
     if (party.leaderColor !== null && (typeof party.leaderColor !== "string" || !HEX_COLOR.test(party.leaderColor))) {
-      refuse(`leader color of party ${party.id} is not #rrggbb or null`);
+      refuse();
     }
   }
   return { ...space, parties: space.parties };

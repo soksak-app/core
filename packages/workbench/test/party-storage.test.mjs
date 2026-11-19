@@ -1,5 +1,5 @@
-// Red tests of the party storage of a space (docs/spec/parties.md#storage). The entry points readStoredSpace and writeStoredSpace of
-// the projects module are named by the specification and do not exist yet, so the import fails on the unchanged implementation.
+// Tests of the party storage of a space (docs/spec/parties.md#storage): the entry points readStoredSpace and writeStoredSpace of the
+// projects module read and write the parties member of a space, and every refusal is the storage error of the specification.
 // The tests use real space objects in the form of projects.json; the space layout is not read by these rules.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -42,7 +42,8 @@ test("a malformed parties member is refused with an error that names projects.js
 
 test("a party record with fewer than 2 cards is refused when the space is read", () => {
   const parties = [{ id: "p1", cards: ["a"], leader: null, color: "#112233", leaderColor: null }];
-  assert.throws(() => readStoredSpace(project, { id: "spc-1", title: "SPACE1", layout, parties }), /a party needs at least 2 cards/);
+  assert.throws(() => readStoredSpace(project, { id: "spc-1", title: "SPACE1", layout, parties }),
+    (error) => error instanceof Error && error.message === `projects.json: project /work/one, space spc-1: parties ${JSON.stringify(parties)}`);
 });
 
 // contract: workbench.parties.storage
