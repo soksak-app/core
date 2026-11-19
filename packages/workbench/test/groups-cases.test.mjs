@@ -44,17 +44,19 @@ function difference(actual, expected, where) {
 /**
  * Runs one step on the tree and returns the value of the call. create, split, close, dissolve, rename, leader and move answer as the
  * commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move
- * without tabs, and boundary as core.boundary.move.
+ * without tabs, add as the add of a card to a group card, and boundary as core.boundary.move.
  */
 function call(tree, grid, { call: name, args = {} }) {
   switch (name) {
     case "create": return tree.create(args.card, args.side, undefined, false);
-    case "split": return { card: tree.split(args.card, args.side, undefined, false) };
+    // default: a split step without even divides as cardSplit exact.
+    case "split": return { card: tree.split(args.card, args.side, undefined, args.even ?? false) };
     case "close": tree.close(args.card); return { closed: true };
     case "dissolve": tree.dissolve(args.group); return { dissolved: true };
     case "rename": return { group: args.group, name: tree.rename(args.group, args.name) };
     case "leader": return { card: args.card, group: tree.setLeader(args.card) };
     case "move": tree.move(args.card, args.target, args.side); return { card: args.card };
+    case "add": return { card: tree.addCard(args.group, undefined, args.even ?? false) };
     case "grid": {
       // The cards of the grid with their place and whether they are fixed, as the cases write them.
       const { xs, ys, cards } = grid.toJSON();

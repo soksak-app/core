@@ -314,7 +314,7 @@ func (s *Shell) addGroupCard(id, plugin string, params json.RawMessage) (string,
 	if err != nil {
 		return "", err
 	}
-	born, err := s.planes.AddCard(id, encoded)
+	born, err := s.planes.AddCard(id, encoded, s.cardSplitEven())
 	if err != nil {
 		// A refused command changes nothing, so the number of the title of the new tab is not taken.
 		s.tabsNamed--
