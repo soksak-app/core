@@ -93,9 +93,28 @@ static NSMutableDictionary<NSValue *, SPWindowLayout *> *layouts;
 // YES while the Core Animation transaction that holds the changes of every window is open: from the start of the first open
 // layout transaction to the end of the last one.
 static BOOL holdOpen;
-// The preparation of each window whose transaction a press or key event ended before the host asked for its commit; that commit
-// then reports the commit that the input made.
-static NSMutableDictionary<NSValue *, NSNumber *> *inputEnded;
+// The preparations of each window whose transaction a press or key event ended before the host asked for their commit; each
+// commit then reports the commit that the input made, once, also after a newer layout of the window began. The cancel of a
+// ticket or of the window removes its preparations, and a page commits or cancels each preparation that it made.
+static NSMutableDictionary<NSValue *, NSMutableSet<NSNumber *> *> *inputEnded;
+
+// Records that input committed the transaction of ticket in owner.
+static void recordInputEnded(void *owner, uint64_t ticket) {
+    if (!inputEnded) inputEnded = [[NSMutableDictionary alloc] init];
+    NSValue *key = [NSValue valueWithPointer:owner];
+    if (!inputEnded[key]) inputEnded[key] = [NSMutableSet set];
+    [inputEnded[key] addObject:@(ticket)];
+}
+
+// Removes the record that input committed the transaction of ticket in owner, and tells whether the record existed.
+static bool takeInputEnded(void *owner, uint64_t ticket) {
+    NSValue *key = [NSValue valueWithPointer:owner];
+    NSMutableSet<NSNumber *> *tickets = inputEnded[key];
+    if (![tickets containsObject:@(ticket)]) return false;
+    [tickets removeObject:@(ticket)];
+    if (tickets.count == 0) [inputEnded removeObjectForKey:key];
+    return true;
+}
 static NSMutableArray<SPSettleRequest *> *settling;
 static bool injectSettledFailure;
 static void (^layoutStarted)(void *);
@@ -590,7 +609,6 @@ static void startLayout(SPLayoutRequest *request) {
         if (!layouts) layouts = [[NSMutableDictionary alloc] init];
         layouts[key] = layout;
     }
-    [inputEnded removeObjectForKey:key];
     // A preparation that starts in the open transaction of its window takes the earlier preparation over and commits its changes.
     if (layout.preparation != 0 && layout.preparation != request.ticket) [layout.carried addObject:@(layout.preparation)];
     layout.preparation = request.ticket;
@@ -676,18 +694,13 @@ static void endViewJoins(SPWindowLayout *layout, const char *reason) {
 }
 
 // Commits the open transaction of owner when ticket is its preparation, through path, or defers the commit to the last joined
-// view. A preparation whose transaction a press or key event ended reports that commit once.
+// view. A preparation whose transaction a press or key event ended reports that commit once, also after a newer layout of the
+// window began.
 static bool commitLayout(void *owner, uint64_t ticket, int path) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    NSValue *key = [NSValue valueWithPointer:owner];
-    SPWindowLayout *layout = layouts[key];
-    if (!layout) {
-        if (inputEnded[key] && inputEnded[key].unsignedLongLongValue == ticket) {
-            [inputEnded removeObjectForKey:key];
-            return true;
-        }
-        return false;
-    }
+    if (takeInputEnded(owner, ticket)) return true;
+    SPWindowLayout *layout = layoutOf(owner);
+    if (!layout) return false;
     if (ticket != layout.preparation || layout.committing) return false;
     if (layout.joins.count) {
         layout.committing = YES;
@@ -706,8 +719,7 @@ static void endHoldByInput(void) {
         if (layoutOf(owner) != layout) continue;
         endViewJoins(layout, "input");
         if (!layout.committing) {
-            if (!inputEnded) inputEnded = [[NSMutableDictionary alloc] init];
-            inputEnded[[NSValue valueWithPointer:owner]] = @(layout.preparation);
+            recordInputEnded(owner, layout.preparation);
         }
         finishTransaction(owner, SURFACE_LAYOUT_COMMIT_INPUT);
     }
@@ -872,8 +884,7 @@ void surfaceLayoutCancel(void *owner) {
 
 void surfaceLayoutCancelTicket(void *owner, uint64_t ticket) {
     NSCAssert(NSThread.isMainThread, @"surface layout requires the UI thread");
-    NSValue *key = [NSValue valueWithPointer:owner];
-    if (inputEnded[key] && inputEnded[key].unsignedLongLongValue == ticket) [inputEnded removeObjectForKey:key];
+    takeInputEnded(owner, ticket);
     SPWindowLayout *layout = layoutOf(owner);
     if (layout) {
         refuseWaiting(layout, true, ticket);

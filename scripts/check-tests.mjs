@@ -13975,6 +13975,16 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F927",
+    implementation: [{ file: "native/darwin/src/surface_layout.m", symbol: "if (takeInputEnded(owner, ticket)) return true;" }],
+    tests: [
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "the presentation of ticket 91, whose transaction the key committed, commits after ticket 92 began" },
+      { file: "native/darwin/tests/surface_layout_observe_test.m", id: "a cancelled ticket whose transaction the key committed does not commit" },
+    ],
+    expected: "A presentation whose layout transaction a press or key event committed answers that commit once, also after a newer layout of the window began.",
+    levels: ["unit"],
+  },
+  {
     id: "F925",
     implementation: [
       { file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" },

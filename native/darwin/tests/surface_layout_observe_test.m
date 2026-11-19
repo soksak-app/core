@@ -418,6 +418,37 @@ static void checkReturnedKeyKeepsItsTurn(void) {
     [window release];
 }
 
+// A key that ends the hold commits the transaction of its window, and the presentation of that ticket answers the commit once,
+// also when a newer layout of the window began before the presentation asked for its commit; the cancel of such a ticket removes
+// that answer (docs/spec/native-surfaces.md#layout-transaction).
+static void checkInputEndedTicketCommitsAfterANewerLayout(void) {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(100, 1100, 200, 100) styleMask:NSWindowStyleMaskBorderless
+        backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    void (^key)(NSString *, unsigned short) = ^(NSString *character, unsigned short code) {
+        [NSApp sendEvent:[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:0 timestamp:0
+            windowNumber:window.windowNumber context:nil characters:character charactersIgnoringModifiers:character isARepeat:NO
+            keyCode:code]];
+    };
+    surfaceLayoutBegin(window, 91, ^(int allowed) {});
+    key(@"c", 8);
+    check(!surfaceLayoutIsPreparing(window), @"the key ends the hold of ticket 91");
+    surfaceLayoutBegin(window, 92, ^(int allowed) {});
+    check(surfaceLayoutCommit(window, 91), @"the presentation of ticket 91, whose transaction the key committed, commits after ticket 92 began");
+    check(!surfaceLayoutCommit(window, 91), @"the commit that the key made answers ticket 91 once");
+    check(surfaceLayoutCommit(window, 92), @"the newer layout of the window commits with its own ticket");
+    surfaceLayoutBegin(window, 93, ^(int allowed) {});
+    key(@"d", 2);
+    surfaceLayoutBegin(window, 94, ^(int allowed) {});
+    surfaceLayoutCancelTicket(window, 93);
+    check(!surfaceLayoutCommit(window, 93), @"a cancelled ticket whose transaction the key committed does not commit");
+    check(surfaceLayoutIsPreparing(window), @"the cancel of ticket 93 leaves the transaction of ticket 94 open");
+    check(surfaceLayoutCommit(window, 94), @"the newer layout commits after the cancel of the earlier ticket");
+    surfaceLayoutCancel(window);
+    [window close];
+    [window release];
+}
+
 static void runInline(void (^call)(void)) { call(); }
 
 // Ends every transaction that a check left open, whatever its outcome, so each check starts with no open transaction.
@@ -477,6 +508,8 @@ int main(void) { @autoreleasepool {
     checkActionsAreToldOnce();
     resetOwners();
     checkReturnedKeyKeepsItsTurn();
+    resetOwners();
+    checkInputEndedTicketCommitsAfterANewerLayout();
     [third release];
     [first release];
     [second release];
