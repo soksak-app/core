@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F925-1: Rust page-wire producer가 Go producer처럼 선언된 case 멤버 `filter`를 읽고 `notificationState`, `setTheme`, `setMenuLanguage` 외의 이름을 거부한다. `every_page_wire_case_with_replay_true_gives_its_recorded_reply`는 `party-watch-composition`에서 모르는 멤버를 거부해 실패했고 이제 통과한다.
 - F925-2: page가 답하므로 Rust endpoint runner가 party endpoint case `sok-commands-query-party`, `sok-describe-parties`, `sok-describe-summary-and-full`, `sok-party-get-and-card-get`, `sok-status-parties`를 Go runner의 이유로 밖에 둔다. `every_replayed_case_is_played_or_excluded`는 다섯 각각에서 실패했고 이제 통과한다.
 - F925-3: Rust MCP paging test가 F908부터 case `mcp-window-describe-pages`가 가진 상태 `core.parties`를 기대한다. Go test처럼 total 5, compact 행 5개, 행 4의 element다. `an_oversized_row_is_a_page_and_pages_follow_a_changing_window`는 total 5로 실패했고 이제 통과한다.
 - F923: page workbench와 mygo host에서 통로 설정 `gap`은 이웃한 두 card 사이의 전체 거리이고 stage의 margin은 그 절반이며, 0에서 card는 선 하나를 공유한다. 모든 theme이 이전과 같게 그려지도록 theme `shape.gap` 값을 두 배로 했고 `gap`의 범위는 0부터 48이다. mygo host는 설정의 변경을 보이는 space의 plane에 바로 주고(`applyPalette`가 plane gap을 정한다), 0에서 card border와 radius가 없는 seam과 공유 선 위의 focus를 그리며, settings slider를 drag를 놓을 때 한 번 쓴다. settings file은 저장된 `gap` 숫자를 유지하고 그 숫자는 이제 이전 거리의 절반을 그리므로 사람이 gap을 다시 정한다. Red: `settings-gap.test.mjs`, `TestGapChangeSetsPlaneGap`, `TestGapZeroCardsShareOneLine`, `TestSliderDragWritesOnce`가 바뀌지 않은 구현에서 실패했고, Green: 모두 통과한다.

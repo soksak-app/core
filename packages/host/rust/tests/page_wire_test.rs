@@ -29,6 +29,9 @@ struct Case {
     description: String,
     replay: Option<bool>,
     reason: Option<String>,
+    /// The calls that the page-wire reader answers without a step; this producer runs no page, so it only checks the names.
+    #[serde(default)]
+    filter: Vec<String>,
     writer: Option<Writer>,
     #[serde(default)]
     variables: Map<String, Value>,
@@ -126,6 +129,18 @@ fn run_case(name: &str, file: &Path) -> Result<(), String> {
         serde_json::from_slice(&data).map_err(|error| format!("{}: {error}", file.display()))?;
     if case.name != name {
         return Err(format!("name {:?} does not match the file name", case.name));
+    }
+    // A filtered call is answered by the reader and is not a step of the case, so the producer refuses a name that the reader does
+    // not answer (docs/spec/cases/page-wire/README.md#members).
+    for call_name in &case.filter {
+        if !matches!(
+            call_name.as_str(),
+            "notificationState" | "setTheme" | "setMenuLanguage"
+        ) {
+            return Err(format!(
+                "filter names {call_name}, which the reader does not answer"
+            ));
+        }
     }
     match case.replay {
         None => return Err("replay is missing".into()),

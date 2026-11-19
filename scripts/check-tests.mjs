@@ -13971,6 +13971,28 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F925",
+    implementation: [
+      { file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" },
+      { file: "packages/host/rust/tests/endpoint_cases_test.rs", symbol: "\"sok-commands-query-party\"," },
+      { file: "packages/sok/rust/tests/mcp_server_test.rs", symbol: "let many = &rows[4];" },
+    ],
+    tests: [
+      { file: "packages/host/rust/tests/page_wire_test.rs", id: "every_page_wire_case_with_replay_true_gives_its_recorded_reply" },
+      { file: "packages/host/rust/tests/endpoint_cases_test.rs", id: "every_replayed_case_is_played_or_excluded" },
+      { file: "packages/sok/rust/tests/mcp_server_test.rs", id: "an_oversized_row_is_a_page_and_pages_follow_a_changing_window" },
+    ],
+    expected: "The Rust tests read the page-wire, endpoint and MCP paging cases that F908 changed as the Go tests do.",
+    levels: ["unit"],
+  },
+  {
+    id: "F925-1",
+    implementation: [{ file: "packages/host/rust/tests/page_wire_test.rs", symbol: "for call_name in &case.filter {" }],
+    tests: [{ file: "packages/host/rust/tests/page_wire_test.rs", id: "every_page_wire_case_with_replay_true_gives_its_recorded_reply" }],
+    expected: "The Rust page-wire producer reads the filter member of a case and refuses a name that the reader does not answer, as the Go producer does.",
+    levels: ["unit"],
+  },
+  {
     id: "F925-2",
     implementation: [{ file: "packages/host/rust/tests/endpoint_cases_test.rs", symbol: "\"sok-commands-query-party\"," }],
     tests: [{ file: "packages/host/rust/tests/endpoint_cases_test.rs", id: "every_replayed_case_is_played_or_excluded" }],
