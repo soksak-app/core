@@ -169,3 +169,34 @@ fn commands_query_party_lists_the_party_commands_only() {
         "query party lists a command that is not a party command"
     );
 }
+
+/// The endpoint case of describe holds the snapshot of the parties; a core.parties status without its value is refused with its name.
+#[test]
+fn a_core_parties_status_without_a_value_is_refused_with_its_name() {
+    let case: Value = serde_json::from_str(include_str!(
+        "../../../../docs/spec/cases/endpoint/sok-describe-parties.json"
+    ))
+    .expect("the case is JSON");
+    let mut snapshot = case["variables"]["snapshot"]["example"].clone();
+    for group in snapshot["groups"].as_array_mut().expect("groups") {
+        if group["owner"] != "core" {
+            continue;
+        }
+        for status in group["status"].as_array_mut().expect("status") {
+            if status["name"] == "core.parties" {
+                status.as_object_mut().expect("status object").remove("value");
+            }
+        }
+    }
+    let player = case_player::play_case_with_raw(
+        "sok-describe-parties",
+        "snapshot",
+        &snapshot.to_string(),
+    );
+    let (code, _stdout, stderr) = run(&["describe", "--config-dir", &player.dir()]);
+    assert_ne!(code, 0, "describe accepts a core.parties status without a value");
+    assert!(
+        stderr.contains("core.parties has no value"),
+        "the error names the status: {stderr}"
+    );
+}
