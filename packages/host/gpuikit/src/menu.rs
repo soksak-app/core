@@ -28,9 +28,7 @@ define_class!(
         #[unsafe(method(select:))]
         unsafe fn select(&self, _sender: *mut AnyObject) {
             let index = *self.ivars();
-            let calls = CALLS
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let calls = crate::frontend::locked(&CALLS, "menu calls");
             if let Some(call) = calls.get(index) {
                 call();
             }
@@ -44,12 +42,8 @@ pub(crate) fn set_menu(app: &AppHandle, menus: Vec<Menu>) -> Result<(), String> 
     let mtm = MainThreadMarker::new().ok_or("the menu is installed on the main thread")?;
     let application = NSApplication::sharedApplication(mtm);
     let name = "Soksak";
-    *CALLS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Vec::new();
-    *TARGETS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Vec::new();
+    *crate::frontend::locked(&CALLS, "menu calls") = Vec::new();
+    *crate::frontend::locked(&TARGETS, "menu targets") = Vec::new();
     let bar = NSMenu::new(mtm);
     bar.setAutoenablesItems(false);
     for submenu in menus {
@@ -179,23 +173,18 @@ fn menu_item(
 
 /// Allocates the target of one item of the host with its call.
 fn target_of(
-    mtm: MainThreadMarker,
+    _mtm: MainThreadMarker,
     call: Option<Box<dyn Fn() + Send + Sync>>,
 ) -> Result<Retained<ItemTarget>, String> {
     let index = {
-        let mut calls = CALLS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut calls = crate::frontend::locked(&CALLS, "menu calls");
         calls.push(call.expect("an item of the host holds a call"));
         calls.len() - 1
     };
-    let _ = mtm;
     let allocated = ItemTarget::alloc().set_ivars(index);
     // default: the init of NSObject is the designated initializer of the target.
     let target: Retained<ItemTarget> = unsafe { objc2::msg_send![super(allocated), init] };
-    TARGETS
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    crate::frontend::locked(&TARGETS, "menu targets")
         .push(target.clone());
     Ok(target)
 }

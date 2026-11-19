@@ -398,17 +398,11 @@ pub(crate) fn observe_window(
     listener: Box<dyn Fn(&WindowEvent) + Send + Sync>,
 ) {
     let key = window as usize;
-    LISTENERS
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    crate::frontend::locked(LISTENERS.get_or_init(Default::default), "window listeners")
         .entry(key)
         .or_default()
         .push(listener);
-    let mut observed = OBSERVED
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut observed = crate::frontend::locked(OBSERVED.get_or_init(Default::default), "observed windows");
     if !observed.insert(key) {
         return;
     }
@@ -453,10 +447,7 @@ pub(crate) fn observe_window(
 
 /// Reports event to every listener of the window with the address key.
 fn fire(key: usize, event: &WindowEvent) {
-    let listeners = LISTENERS
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let listeners = crate::frontend::locked(LISTENERS.get_or_init(Default::default), "window listeners");
     let Some(listeners) = listeners.get(&key) else {
         return;
     };
@@ -536,9 +527,16 @@ pub(crate) fn choose_folder(
     if answer != objc2_app_kit::NSModalResponseOK {
         return Ok(None);
     }
-    Ok(panel.URLs().iter().next().map(|url| {
-        std::path::PathBuf::from(url.path().map(|path| path.to_string()).unwrap_or_default())
-    }))
+    match panel.URLs().iter().next() {
+        Some(url) => chosen_path(url).map(Some),
+        None => Ok(None),
+    }
+}
+
+/// The file path of a URL that a panel returned. A URL without a file path is an error, because no path can be chosen from it.
+fn chosen_path(url: &objc2_foundation::NSURL) -> Result<std::path::PathBuf, String> {
+    let path = url.path().ok_or("the chosen location has no file path")?;
+    Ok(std::path::PathBuf::from(path.to_string()))
 }
 
 /// Shows the save panel attached to the window and returns the chosen path.
@@ -565,9 +563,10 @@ pub(crate) fn save_file(
     if panel.runModal() != objc2_app_kit::NSModalResponseOK {
         return Ok(None);
     }
-    Ok(panel.URL().map(|url| {
-        std::path::PathBuf::from(url.path().map(|path| path.to_string()).unwrap_or_default())
-    }))
+    match panel.URL() {
+        Some(url) => chosen_path(&url).map(Some),
+        None => Ok(None),
+    }
 }
 
 /// The user configuration directory of the operating system.

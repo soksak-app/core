@@ -60,9 +60,15 @@ impl Assets for StagedFrontend {
     fn get(&self, key: &str) -> Option<std::borrow::Cow<'_, [u8]>> {
         // default: a key without the leading separator names the same file, as the test the_staged_frontend_reads_a_file_named_without_the_leading_separator in packages/host/gpuikit/tests/page_files/page_files_test.rs asserts.
         let relative = key.strip_prefix('/').unwrap_or(key);
-        std::fs::read(self.0.join(relative))
-            .ok()
-            .map(std::borrow::Cow::Owned)
+        match std::fs::read(self.0.join(relative)) {
+            Ok(bytes) => Some(std::borrow::Cow::Owned(bytes)),
+            // A missing file is a miss, which ReportingAssets reports for its path (packages/host/rust/src/assets.rs:38-44).
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => {
+                soksak_host::application_log::log_error("page asset", format!("{relative}: {error}"));
+                None
+            }
+        }
     }
 }
 
@@ -85,18 +91,35 @@ pub(crate) fn page_file(assets: &dyn Assets, path: &str) -> http::Response<Vec<u
         _ => "application/octet-stream",
     };
     match found {
-        Some(bytes) => http::Response::builder()
-            .status(http::StatusCode::OK)
-            .header("Content-Type", content_type)
-            .header("Cache-Control", "no-store")
-            .body(bytes.into_owned())
-            // default: a response of fixed headers over built bytes does not fail.
-            .unwrap_or_else(|_| http::Response::new(vec![])),
-        None => http::Response::builder()
-            .status(http::StatusCode::NOT_FOUND)
-            .header("Content-Type", "text/plain; charset=utf-8")
-            .body(format!("{path} not found\n").into_bytes())
-            .unwrap_or_else(|_| http::Response::new(vec![])),
+        Some(bytes) => logged_response(
+            path,
+            http::Response::builder()
+                .status(http::StatusCode::OK)
+                .header("Content-Type", content_type)
+                .header("Cache-Control", "no-store")
+                .body(bytes.into_owned()),
+        ),
+        None => logged_response(
+            path,
+            http::Response::builder()
+                .status(http::StatusCode::NOT_FOUND)
+                .header("Content-Type", "text/plain; charset=utf-8")
+                .body(format!("{path} not found\n").into_bytes()),
+        ),
+    }
+}
+
+/// The response that a builder produced. A builder error is logged with the path of the request and answered with 500,
+/// as packages/host/tauriv2/src/host.rs:276 logs a failed URL with its error.
+fn logged_response(path: &str, built: Result<http::Response<Vec<u8>>, http::Error>) -> http::Response<Vec<u8>> {
+    match built {
+        Ok(response) => response,
+        Err(error) => {
+            soksak_host::application_log::log_error("page asset", format!("{path}: response: {error}"));
+            let mut response = http::Response::new(Vec::new());
+            *response.status_mut() = http::StatusCode::INTERNAL_SERVER_ERROR;
+            response
+        }
     }
 }
 
@@ -276,3 +299,7 @@ mod page_files_test;
 #[cfg(test)]
 #[path = "../tests/startup/startup_test.rs"]
 mod startup_test;
+
+#[cfg(test)]
+#[path = "../tests/locking/locking_test.rs"]
+mod locking_test;

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use soksak_host::framework::{
     self as port, AppHandle, LogicalPosition, LogicalSize, PlatformWebview, PresentationDone,
@@ -26,7 +26,26 @@ type Closing = Box<dyn Fn() -> bool + Send + Sync>;
 /// was reported where it happened. The poison is logged here with the name of the lock, and the guard of the value is
 /// returned, because the sections that hold these locks only store or read a value, so the value stays valid.
 pub(crate) fn locked<'a, T>(mutex: &'a Mutex<T>, name: &str) -> MutexGuard<'a, T> {
+    // default: a poisoned lock keeps the value that its sections stored, which the window records keep valid; the poison is logged here.
     mutex.lock().unwrap_or_else(|error| {
+        soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
+        error.into_inner()
+    })
+}
+
+/// Read-locks a table of the GPUI host, with the poison rule of `locked`.
+pub(crate) fn read_locked<'a, T>(table: &'a RwLock<T>, name: &str) -> RwLockReadGuard<'a, T> {
+    // default: a poisoned lock keeps the value that its sections stored, which the window records keep valid; the poison is logged here.
+    table.read().unwrap_or_else(|error| {
+        soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
+        error.into_inner()
+    })
+}
+
+/// Write-locks a table of the GPUI host, with the poison rule of `locked`.
+pub(crate) fn write_locked<'a, T>(table: &'a RwLock<T>, name: &str) -> RwLockWriteGuard<'a, T> {
+    // default: a poisoned lock keeps the value that its sections stored, which the window records keep valid; the poison is logged here.
+    table.write().unwrap_or_else(|error| {
         soksak_host::application_log::log_error("frontend", format!("lock {name} is poisoned; continuing with its value"));
         error.into_inner()
     })
@@ -58,26 +77,17 @@ impl Record {
 
     /// The native window of the record, which open_window filled.
     pub(crate) fn window_handle(&self) -> *mut c_void {
-        *self
-            .window
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        *locked(&self.window, "window")
     }
 
     /// Fills the native window of the record.
     pub(crate) fn set_window(&self, window: *mut c_void) {
-        *self
-            .window
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = window;
+        *locked(&self.window, "window") = window;
     }
 
     /// Stores the closing hook of the window.
     pub(crate) fn set_closing(&self, hook: Closing) {
-        *self
-            .closing
-            .lock()
-            .unwrap_or_else(|error| error.into_inner()) = Some(hook);
+        *locked(&self.closing, "closing") = Some(hook);
     }
 
     /// Runs the closing hook of the window; no hook keeps the window open to close it.
@@ -133,17 +143,13 @@ pub(crate) fn windows() -> &'static RwLock<HashMap<String, Arc<Record>>> {
 
 /// Registers the record of the window with label.
 pub(crate) fn register(_label: String, record: Arc<Record>) {
-    windows()
-        .write()
-        .unwrap_or_else(|error| error.into_inner())
+    write_locked(windows(), "windows")
         .insert(_label, record);
 }
 
 /// The labels of the open windows.
 pub(crate) fn labels() -> Vec<String> {
-    windows()
-        .read()
-        .unwrap_or_else(|error| error.into_inner())
+    read_locked(windows(), "windows")
         .keys()
         .cloned()
         .collect()
@@ -151,21 +157,16 @@ pub(crate) fn labels() -> Vec<String> {
 
 /// The record of the window with label.
 pub(crate) fn record(label: &str) -> Option<Arc<Record>> {
-    windows()
-        .read()
-        .unwrap_or_else(|error| error.into_inner())
+    read_locked(windows(), "windows")
         .get(label)
         .cloned()
 }
 
 /// The record of the window that holds the web view with label, and the window label.
 pub(crate) fn record_of_webview(label: &str) -> Option<(Arc<Record>, String)> {
-    let all = windows().read().unwrap_or_else(|error| error.into_inner());
+    let all = read_locked(windows(), "windows");
     for (window, record) in all.iter() {
-        if record
-            .webviews
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
+        if locked(&record.webviews, "webviews")
             .contains_key(label)
         {
             return Some((Arc::clone(record), window.clone()));

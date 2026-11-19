@@ -5,11 +5,22 @@
 use std::sync::Arc;
 
 fn main() {
-    // The staging step of the application writes the page files to the frontend folder beside the executable, and a
-    // release build places it in the bundle.
-    let folder = std::env::current_exe()
-        .ok()
-        .and_then(|executable| executable.parent().map(|folder| folder.join("frontend")))
-        .expect("the executable of the application has a folder beside it");
+    let folder = match frontend_folder() {
+        Ok(folder) => folder,
+        Err(error) => {
+            soksak_host::application_log::log_error("start", &error);
+            std::process::exit(1);
+        }
+    };
     soksak_host_gpuikit::run(Arc::new(soksak_host_gpuikit::StagedFrontend::new(folder)));
+}
+
+/// The frontend folder beside the executable, where the staging step of the application writes the page files; a release
+/// build places it in the bundle.
+fn frontend_folder() -> Result<std::path::PathBuf, String> {
+    let executable = std::env::current_exe().map_err(|error| format!("the executable path is unknown: {error}"))?;
+    let folder = executable
+        .parent()
+        .ok_or_else(|| format!("the executable path {} has no folder", executable.display()))?;
+    Ok(folder.join("frontend"))
 }
