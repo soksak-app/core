@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F937-58 (거부된 pointer 입력의 이유): native library가 거부한 pointer 입력은 mygo, Wails, Tauri에서 -32602 `the window did not accept the input: <reason>`으로 답하고, 그 기록은 error이므로 release의 event log가 이유를 가진다. 연결이 닫히며 뗀 누름의 `drag`나 `up`은 그 닫힘을 밝히며, 이것이 두 `sok input pointer` 명령의 `down`과 `up`이 거부되는 이유다. Window check `e2e/group-header-input.test.mjs`는 activation 없이 사람의 창들 뒤에 있는 창에서 group header drag와 group 이름 double-click을 실행하고 세 host에서 통과했다. Red/Green: `input_inject_test`, `TestARefusalCarriesTheReasonOfTheLibrary`, `TestRejectedMessage`, `TestARefusedUpAfterTheCloseOfItsConnectionNamesTheClose`와 그 Rust 대응 test.
 - F937-57 (level 안 이동 뒤 level의 leader): 두 workbench에서 자기 level 안에서 옮겨지는 card는 level의 leader 표시를 지킨다; page는 옮겨진 group card의 member를 root level의 leader로 저장해 project의 다음 열기가 거부했고, mygo는 표시를 다음 member에 넘겼다. 검증: page header drag test와 `TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark`가 이전 코드에서 Red였고 Green이며, page suite와 mygo package가 통과한다.
 - F937-56 (capture된 group header의 double-click): Wails와 Tauri host의 page에서도 mygo처럼 group card 이름의 double-click이 rename을 시작한다; 누름이 header의 pointer capture를 잡아 WebKit이 double-click을 header에 보내므로, page는 이제 double-click의 점으로 정한다. 검증: page test가 이전 코드에서 Red였고 Green이며, page suite가 통과한다.
 - F937-49 (mygo snapshot item의 text content): mygo library의 replacement가 element tree의 각 element에 text content를 주는 `v0.7.4-244-g4abb83d-soksak.15`로 바뀌고, mygo에서 `exposure.snapshot` element item의 `text`는 page처럼 accessible label이 아닌 그 text content이다. 검증: mygo window snapshot test가 이전 코드에서 Red였고 Green이며, mygo package 전체가 통과한다.

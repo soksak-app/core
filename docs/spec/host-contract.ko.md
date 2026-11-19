@@ -211,6 +211,7 @@ fn invalid_json_closes_connection() {
 | `diagnostics.crash.folder-is-named-by-the-platform` | platform은 crash report 폴더를 `Library/Logs/DiagnosticReports`로 끝나는 절대 경로로 알린다. | all |
 | `diagnostics.stderr.leaves-out-asset-request-lines` | host가 프레임워크 logger에 준 level에서 logger는 asset server의 `Handling request` 줄을 쓰지 않고 warning과 error는 남긴다. | wailsv3 only: Tauri host는 그런 줄을 쓰지 않는다 |
 | `endpoint.input.close-releases-presses` | Endpoint connection이 닫히면 그 connection의 `down`이 열고 어떤 `up`도 끝내지 않은 각 누름의 `up`을 그 누름이 마지막으로 전달된 입력의 점에서 전달하므로 다른 connection의 `down`이 전달된다. 1007로 거부된 뗌은 다음 `host.buttons` mask 0에서 전달한다. | all |
+| `endpoint.input.release-after-connection-close` | 그 connection이 닫히며 누름을 뗀 pointer, 버튼, 창에 대해 그 뒤 그들의 `down`이 전달되지 않은 동안 창이 -32602로 거부한 `drag`나 `up`은 거부의 메시지 뒤에 `; the close of the connection that delivered the down released the press of pointer <pointer> button <button> in window <window>, so a gesture sends its down, drags and up through one connection`을 붙여 두 host에서 같은 text로 반환한다. 그들의 `down`이 전달된 뒤의 거부는 자기 메시지를 유지한다. | all |
 | `endpoint.connection.holds-activity` | Host는 열린 첫 endpoint connection을 등록할 때부터 마지막 connection을 제거할 때까지 platform의 connection activity를 쥐고, 각 변화를 한 번만 요청한다. 두 connection 중 하나가 닫혀도 activity를 쥐고 있고, 마지막 connection이 끝나면 그 connection의 누름을 풀기 전에 activity를 놓는다. | all |
 | `endpoint.status.ended-ends-a-watch` | Watch의 surface나 창이 닫히면 그 watch를 가진 각 connection은 앞선 `status.changed` 뒤에 `status.ended {window, name, surface?, reason}`를 한 번 받고 그 뒤 `status.changed`는 받지 않으며, page는 그 watch의 `status.unwatch`를 받지 않는다. | all |
 | `endpoint.record.call-is-an-event` | endpoint client의 모든 요청(구독 변경도)은 성능 trace가 꺼져 있을 때도 layer `host`, level `debug`이고 `name`, `args`(받은 그대로의 params, 없으면 `null`), `micros`, `ok: true`, `truncated: false`를 가진 event `host.endpoint.call`이다. | all |
@@ -418,6 +419,7 @@ fn invalid_json_closes_connection() {
 | `endpoint.input.pointer-name` | `pointer`의 기본값은 `main`이고, `a-z`, `0-9`, `-`로 된 1~32자 이름은 그대로 전달하며, 빈 이름, 다른 문자가 있는 이름, 더 긴 이름, 문자열이 아닌 값은 -32602를 반환한다. | all |
 | `endpoint.input.pointer-held-message` | 1011 메시지는 누름을 쥔 pointer와 그 누름이 쥔 상태를 두 host에서 같은 문장으로 밝힌다. | all |
 | `endpoint.input.resize-edge-refusal` | 창의 resize edge 위 `down`은 -32602와 점과 edge를 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
+| `endpoint.input.rejection-reason` | native library가 `SP_INPUT_REJECTED`로 거부한 pointer 입력은 library의 이유를 가지며, host는 그 이유를 바꾸지 않고 -32602 `the window did not accept the input: <reason>`을 두 host에서 같은 text로 반환한다. 이유를 밝히지 않는 platform은 `the window did not accept the input`을 반환한다. | all |
 | `endpoint.input.interruption` | 사람의 누름, 이동, scroll이 끝낸 gesture의 `drag`나 `up`은 1013과 그 동작과 gesture를 놓은 점을 밝히는 native library의 메시지를 두 host에서 바꾸지 않고 반환한다. | all |
 | `endpoint.input.key-unknown-modifier-rejected` | 알 수 없는 키 수정자는 -32602를 반환한다. | all |
 | `endpoint.input.key-shift-command-mask` | shift와 command 수정자는 비트 마스크 9가 되고, 키와 phase는 그대로 전달된다. | all |

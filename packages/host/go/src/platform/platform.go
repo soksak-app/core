@@ -907,8 +907,8 @@ const (
 )
 
 // ButtonHeld is the state of a rejection: for PointerButtonHeld what AppKit reported at the time of the rejection, for PointerHeld
-// the pointer whose press rejected the input and the reason, and for PointerResizeEdge and PointerInterrupted the message of the
-// refusal.
+// the pointer whose press rejected the input and the reason, for PointerResizeEdge and PointerInterrupted the message of the
+// refusal, and for PointerRejected the reason that the platform names, empty on a platform that names none.
 type ButtonHeld struct {
 	// Mask is the value of NSEvent.pressedMouseButtons.
 	Mask uint64
@@ -916,7 +916,8 @@ type ButtonHeld struct {
 	Frontmost *FrontmostApplication
 	// Pointer is the pointer that holds the press of a PointerHeld rejection.
 	Pointer string
-	// Reason is the state that the press of Pointer holds, or the message of a PointerResizeEdge or PointerInterrupted refusal.
+	// Reason is the state that the press of Pointer holds, the message of a PointerResizeEdge or PointerInterrupted refusal, or the
+	// reason of a PointerRejected refusal.
 	Reason string
 }
 

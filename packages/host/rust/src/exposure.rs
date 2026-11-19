@@ -440,6 +440,16 @@ pub fn button_held_message(held: &ButtonHeld) -> String {
     )
 }
 
+/// Builds the message of the -32602 refusal of a pointer input from the reason of the platform, which the native library of
+/// macOS names (docs/spec/exposure.md#methods). A platform that names no reason gives the empty reason.
+pub fn rejected_message(reason: &str) -> String {
+    if reason.is_empty() {
+        "the window did not accept the input".to_string()
+    } else {
+        format!("the window did not accept the input: {reason}")
+    }
+}
+
 /// Builds the message of error 1011: the pointer whose open press rejected the input and the state that the press
 /// holds (docs/spec/exposure.md#named-pointers).
 pub fn pointer_held_message(held: &PointerHeld) -> String {
@@ -3423,10 +3433,9 @@ impl Host {
                 Ok(Value::Null)
             }
             Delivery::Inactive => Err(Failure::new(NOT_ACTIVE, "the window is not active")),
-            Delivery::Rejected => Err(Failure::new(
-                INVALID_PARAMS,
-                "the window did not accept the input",
-            )),
+            Delivery::Rejected(reason) => {
+                Err(Failure::new(INVALID_PARAMS, rejected_message(&reason)))
+            }
             Delivery::Unreceived => Err(Failure::new(
                 TIMED_OUT,
                 "the document did not receive the input",

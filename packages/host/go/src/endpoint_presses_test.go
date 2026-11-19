@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -164,6 +165,43 @@ func TestAReleaseRefusedForAnotherPointerIsDeliveredAtTheEndOfAPress(t *testing.
 	up := backend.next(t, "the end of a press after a release refused with 1011")
 	if up.Phase != "up" || up.Pointer != mainPointer || up.X != 7 || up.Y != 8 {
 		t.Fatalf("the retry delivered %+v, want the up of pointer main at 7,8", up)
+	}
+}
+
+// A release that the window refuses because the close of the connection of its down released the press names that close, so
+// a down and an up sent through two connections, such as two commands of the command line, are refused with their cause.
+// contract: endpoint.input.release-after-connection-close
+func TestARefusedUpAfterTheCloseOfItsConnectionNamesTheClose(t *testing.T) {
+	refusal := rpcError(codeInvalidParams, "%s", RejectedMessage("no open press of the pointer and button in the window"))
+	backend := newPressBackend(nil, refusal, nil, refusal)
+	e := NewEndpoint(backend)
+	owner, other := pressConnection(t, e), pressConnection(t, e)
+	if err := pointer(t, e, owner, "down", 5, 6); err != nil {
+		t.Fatal(err)
+	}
+	backend.next(t, "down")
+	e.drop(owner, "peer closed")
+	backend.next(t, "the release of the close")
+	err := pointer(t, e, other, "up", 5, 6)
+	want := "the window did not accept the input: no open press of the pointer and button in the window; the close of the " +
+		"connection that delivered the down released the press of pointer main button left in window main, so a gesture " +
+		"sends its down, drags and up through one connection"
+	var coded *RPCError
+	if !errors.As(err, &coded) || coded.Code != codeInvalidParams || coded.Message != want {
+		t.Fatalf("the up after the close answered %v, want -32602 %q", err, want)
+	}
+	backend.next(t, "the refused up")
+	// A new press of the pointer and button ends the cause, so a later refusal is the refusal of the window alone.
+	if err := pointer(t, e, other, "down", 5, 6); err != nil {
+		t.Fatal(err)
+	}
+	backend.next(t, "the second down")
+	if err := pointer(t, e, other, "up", 5, 6); err != nil {
+		t.Fatal(err)
+	}
+	backend.next(t, "the second up")
+	if err := pointer(t, e, other, "up", 5, 6); err == nil || err.Error() != refusal.Error() {
+		t.Fatalf("an up after a delivered up answered %v, want %v", err, refusal)
 	}
 }
 
