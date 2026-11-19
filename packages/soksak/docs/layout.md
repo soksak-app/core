@@ -386,6 +386,59 @@ changes nothing when the arrangement is not slicing.
 grid.balance();
 ```
 
+## Cuts
+
+`even(boxes)` gives every child of every cut of the slicing tree an equal
+share, so the result depends on the arrangement and not on the order of the
+operations that built it: a row of five cards is five equal cards, whether it
+was built by halves or by thirds, and two rows that hold the same number of
+cards share their lines. The tree is the tree of `sliceTree`: a cut divides a
+rectangle along one axis into `n` children, each a card, a box or a cut along
+the other axis, and every line one cut can divide at is taken at once, so a
+row of five cards is one cut of five children; where the lines let both axes
+cut a set of children, the cut along `x` is the outer one.
+
+A box is a rectangle of the host that the tree keeps as one child: `boxes`
+lists the boxes that no box holds, each `{id, head, members}`, whose `members`
+are card ids and boxes and whose `head` is the px that the host draws inside
+the top of the box above its members. A card that no box holds is a member of
+the plane. The members of a box have a tree of their own inside the rectangle
+of the box, so no cut crosses a box.
+
+The size of a child is its drawn size: the extent of the drawn rectangles of
+its cards, less on the `y` axis the heads of the boxes above it, so the head of
+a box is inside the share of the box and two children of equal size are drawn
+at equal sizes. A slot is drawn at its span of the whole plane less its
+corridor (R5), so equal spans are not equal sizes: `even` lays every cut by
+equal spans, reads the drawn rectangles and moves each span by the difference
+between its drawn size and the equal size, until the largest difference is
+below a thousandth of a px; a corridor does not change with a span, so one
+correction lays a cut exactly and a nested cut takes one more. A card with a px
+size on the axis of its cut, and a `fixed` card, keeps its span and takes no
+share. Coordinates within a billionth are one line (R1). `even` keeps the
+`paidBy` records, as `balance` does, and does not check `minSize`: the host
+checks the result, because only the host knows the heads it draws. An
+arrangement that is not slicing throws `the grid is not a slicing
+arrangement`, a box member that is no card of the grid throws `card <id> is
+not a member of the layout`, and a throw changes nothing.
+
+```js
+grid.even([]);                                                        // every cut even
+grid.even([{ id: "group-1", head: 44, members: ["card-1", "card-2"] }]); // a box with its head
+```
+
+### Pending cases
+
+The size rule of the operations that add, remove and move a card is an open
+decision. The cases of `docs/spec/cases/layout/grid.json` that state a
+candidate rule carry `pending` with the decision that they wait for; both
+runners report such a case as skipped with that text and do not run it, and
+the calls that they name (`insert`, `withdraw`) are not part of the library
+until the decision is made.
+
+The proposal that the pending cases state is
+[layout sizes](../../../docs/plans/layout-sizes.md).
+
 ## Even arrangement
 
 `arrange("even")` replaces the arrangement with a grid of the cards in their
@@ -548,6 +601,7 @@ first.
 | `moveLinePast(axis, line, px)` | move a line as `moveBoundary` does and past each line that it reaches where no card lies between the two; a line that stops on another line merges onto it |
 | `shareLines(axis, extra?)` | keep every line index of the axis and give every slot that no card with a size in px holds its corridor, `extra[slot]` px and an equal share of the free length, the extent less the corridors, the held sizes and the extras; a held slot keeps its span; throws for an unknown axis, an extra list of another length than the slots and an axis whose shared slots take no length |
 | `balance()` | give every card a fair share and keep the arrangement |
+| `even(boxes)` | give every child of every cut of the slicing tree an equal share, with the boxes of the host as children ([cuts](#cuts)) |
 | `sliceTree(cards)` | the slicing tree of an arrangement (`Slice`: a card, or a cut along an axis into sides from the plane's start), or null |
 | `mergeCoincident(axis, line)` | fold a line onto the neighbour it now coincides with |
 | `tidy()`, `virtualCount()`, `isVirtual(axis, line)`, `crossings(card)`, `cardsCrossing(axis, line)` | virtual lines |

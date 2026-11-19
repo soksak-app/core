@@ -1,11 +1,13 @@
 export { Soksak, checkState } from './soksak.js';
 export type {
   Axis,
+  Box,
   Card,
   CardInit,
   Divider,
   Fill,
   FillOrder,
+  Member,
   Paid,
   Rect,
   Rule,

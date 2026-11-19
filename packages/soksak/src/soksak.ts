@@ -46,11 +46,14 @@ import type { Divider, Frames, Plane, Rule, ZoneHit, ZoneOptions } from './geome
 export type { Divider, Rule, Zone, ZoneHit, ZoneOptions } from './geometry.js';
 import { fillFor, isSlicing, ORDER } from './slicing.js';
 import { balanceRegions, sliceTree } from './balance.js';
+import { evenCuts } from './cuts.js';
+import type { Box, Cells, Plan } from './cuts.js';
 import type { Region } from './balance.js';
 import type { Fill, FillOrder, Span } from './slicing.js';
 
 export type { Axis, Card, CardInit, Rect, Side } from './card.js';
 export type { Fill, FillOrder } from './slicing.js';
+export type { Box, Member } from './cuts.js';
 
 /** `merge`: a dragged boundary snaps onto a neighbouring line and the two combine. */
 export type SnapMode = 'merge' | 'off';
@@ -1078,6 +1081,34 @@ export class Soksak {
       paidBy: Object.fromEntries(this.paidBy),
     });
     return true;
+  }
+
+  /** Gives every child of every cut an equal share (packages/soksak/docs/layout.md#cuts). Throws for an arrangement that is not slicing. */
+  even(boxes: readonly Box[]): void {
+    this.byCuts((cells) => evenCuts(cells, boxes));
+  }
+
+  /**
+   * Installs the plan that `make` makes of the arrangement with the paidBy records of the grid, as `balance` keeps them. The plan
+   * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a thousandth of a
+   * px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that moved. A throw
+   * puts the arrangement back.
+   */
+  private byCuts(make: (cells: Cells) => Plan): void {
+    const kept = this.toJSON();
+    const cells: Cells = { xs: kept.xs, ys: kept.ys, cards: this.list.map((card) => ({ ...card })) };
+    try {
+      const plan = make(cells);
+      for (let pass = 0; pass < 8; pass++) {
+        this.replace({ ...plan.layout(), paidBy: kept.paidBy });
+        const rate = (axis: Axis): number => sharePerSpan(this.plane, axis);
+        if (plan.correct(this.rects(), rate) < 1e-3) return;
+      }
+      this.replace({ ...plan.layout(), paidBy: kept.paidBy });
+    } catch (error) {
+      this.replace(kept);
+      throw error;
+    }
   }
 
   /**
