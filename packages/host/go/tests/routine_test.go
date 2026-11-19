@@ -80,8 +80,9 @@ const routineBeforeWriterChild = "SOKSAK_ROUTINE_BEFORE_WRITER_CHILD"
 // contract: log.panic.before-writer-is-stored-when-the-writer-opens
 func TestAPanicBeforeTheWriterExistsIsRecordedWhenTheWriterOpens(t *testing.T) {
 	if config := os.Getenv(routineBeforeWriterChild); config != "" {
-		// The panic happens before the writer exists; the writer opens after the entrance handed the panic to its record, as the
-		// start of the host does.
+		// The panic happens during the start of the host before the writer exists; the writer opens after the entrance handed the
+		// panic to its record, as the start of the host does.
+		host.NotifyStartBegan()
 		record, handed := routine.Record, make(chan struct{})
 		routine.Record = func(name, text, stack string) {
 			close(handed)
@@ -173,6 +174,7 @@ func TestAPanicThatNoWriterStoresIsWrittenToTheStandardErrorInFull(t *testing.T)
 	if order := os.Getenv(routineNoWriterChild); order != "" {
 		// No writer opens in this process. The start of the host ends without attaching one, before or after the panic waits
 		// for the writer, and that end ends the wait.
+		host.NotifyStartBegan()
 		if order == "start-ended-first" {
 			host.NotifyStartEnded()
 		}
