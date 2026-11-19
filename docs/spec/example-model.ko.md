@@ -40,10 +40,10 @@
 | 도구 | Element | 이름 |
 |---|---|---|
 | 탭 추가 | `core.card.add` | 탭 추가 |
-| 세로선으로 나누기 | `core.card.split-x` | 세로로 나누기 |
-| 가로선으로 나누기 | `core.card.split-y` | 가로로 나누기 |
-| 오른쪽으로 새 group으로 분할. 그 group이 성공하는 동안 켜진다([group card](groups.ko.md#header)) | `core.card.group-x` | 그룹으로 세로 분할 |
-| 아래쪽으로 새 group으로 분할. 그 group이 성공하는 동안 켜진다 | `core.card.group-y` | 그룹으로 가로 분할 |
+| 좌우로 나누어 새 card를 오른쪽에 둔다 | `core.card.split-x` | 좌우로 분할 |
+| 상하로 나누어 새 card를 아래에 둔다 | `core.card.split-y` | 상하로 분할 |
+| 오른쪽으로 새 group으로 분할. 그 group이 성공하는 동안 켜진다([group card](groups.ko.md#header)) | `core.card.group-x` | 그룹으로 좌우 분할 |
+| 아래쪽으로 새 group으로 분할. 그 group이 성공하는 동안 켜진다 | `core.card.group-y` | 그룹으로 상하 분할 |
 | 카드를 그 level의 leader로 정하기. member가 둘 이상인 level에서 보이고 leader에서 눌려 있다 | `core.card.leader` | 리더로 정하기 |
 | 전체 화면 | `core.card.fullscreen` | 카드 전체 화면, 카드가 전체 화면인 동안은 카드 배치 복원 |
 | 닫기 | `core.card.close` | 카드 닫기 |

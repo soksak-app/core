@@ -197,7 +197,7 @@ test("a content card head shows the split and group split buttons toward each di
     ["core.card.add", "core.card.split-x", "core.card.split-y", "core.card.group-x", "core.card.group-y", "core.card.leader",
       "core.card.fullscreen", "core.card.close"]);
   const button = (id, name) => cardElement(id).querySelector(`[data-expose="${name}"]`);
-  for (const [name, menu, title] of [["core.card.group-x", "group-x", "그룹으로 세로 분할"], ["core.card.group-y", "group-y", "그룹으로 가로 분할"]]) {
+  for (const [name, menu, title] of [["core.card.group-x", "group-x", "그룹으로 좌우 분할"], ["core.card.group-y", "group-y", "그룹으로 상하 분할"]]) {
     assert.equal(button("card-1", name).hidden, false, `${name} is shown`);
     assert.equal(button("card-1", name).disabled, false, `${name} is enabled while its group succeeds`);
     assert.equal(button("card-1", name).title, title);

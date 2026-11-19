@@ -40,10 +40,10 @@ The card tools stand in the header in this order, each named by one entry of `ca
 | Tool | Element | Name |
 |---|---|---|
 | Add a tab | `core.card.add` | 탭 추가 |
-| Split along a vertical line | `core.card.split-x` | 세로로 나누기 |
-| Split along a horizontal line | `core.card.split-y` | 가로로 나누기 |
-| Split into a new group toward right, enabled while that group succeeds ([group cards](groups.md#headers)) | `core.card.group-x` | 그룹으로 세로 분할 |
-| Split into a new group toward bottom, enabled while that group succeeds | `core.card.group-y` | 그룹으로 가로 분할 |
+| Split side by side, the new card on the right | `core.card.split-x` | 좌우로 분할 |
+| Split stacked, the new card below | `core.card.split-y` | 상하로 분할 |
+| Split into a new group toward right, enabled while that group succeeds ([group cards](groups.md#headers)) | `core.card.group-x` | 그룹으로 좌우 분할 |
+| Split into a new group toward bottom, enabled while that group succeeds | `core.card.group-y` | 그룹으로 상하 분할 |
 | Make the card the leader of its level, shown in a level of two or more members and pressed on the leader | `core.card.leader` | 리더로 정하기 |
 | Fullscreen | `core.card.fullscreen` | 카드 전체 화면, and 카드 배치 복원 while the card is fullscreen |
 | Close | `core.card.close` | 카드 닫기 |

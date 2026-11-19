@@ -699,10 +699,10 @@ func TestTheToolsOfAHeadFollowWhatTheCardCanDo(t *testing.T) {
 	if !ok || node.Actions&ui.ActionPress != 0 {
 		t.Fatalf("the close tool of the last card takes a press: %+v", node)
 	}
-	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "세로로 나누기" {
+	if enabled, title := f.tool(t, "main", "split-x"); !enabled || title != "좌우로 분할" {
 		t.Fatalf("the split tool is %v %q", enabled, title)
 	}
-	for key, name := range map[string]string{"add": "탭 추가", "split-y": "가로로 나누기", "fullscreen": "카드 전체 화면"} {
+	for key, name := range map[string]string{"add": "탭 추가", "split-y": "상하로 분할", "fullscreen": "카드 전체 화면"} {
 		if _, title := f.tool(t, "main", key); title != name {
 			t.Fatalf("the tool %s is %q, want %q", key, title, name)
 		}
@@ -746,7 +746,7 @@ func TestATooNarrowCardCannotSplitAndItsMenuHoldsWhatItCan(t *testing.T) {
 		t.Fatalf("the tool menu holds %q", keys)
 	}
 	// The menu takes the names of the tools as their tooltips hold them.
-	names := map[string]string{"add": "탭 추가", "y": "가로로 나누기", "fullscreen": "카드 전체 화면", "close": "카드 닫기"}
+	names := map[string]string{"add": "탭 추가", "y": "상하로 분할", "fullscreen": "카드 전체 화면", "close": "카드 닫기"}
 	for _, item := range f.menu().Items {
 		if want, ok := names[item.Key]; ok && item.Name != want {
 			t.Fatalf("the menu item %s is %q, want %q", item.Key, item.Name, want)
