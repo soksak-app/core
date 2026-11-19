@@ -1185,7 +1185,6 @@ export class GroupTree {
     this.attempt(id, operation, () => {
       const data = found.node ? undefined : this.grid.card(id).data;
       this.detach(found.parent, id);
-      this.leaderLeft(found.parent, id);
       if (side === "centre") {
         const into = this.node(target);
         const merged = found.node ? this.merge(found.node) : null;
@@ -1193,6 +1192,7 @@ export class GroupTree {
         this.splitRectangle(into, "right", id, data);
         if (merged) this.unmerge(found.node, merged);
         into.members.push(found.node ?? id);
+        this.leaderLeft(found.parent, id);
         this.leaderEntered(into, id);
         this.collapse();
         return;
@@ -1218,6 +1218,10 @@ export class GroupTree {
       if (merged) this.unmerge(found.node, merged);
       const parent = this.parentOf(landing);
       this.attach(parent, found.node ?? id);
+      // The leader rule reads the members of the levels after the card stands in its new level: a card that moves inside its own level
+      // does not leave it and keeps its leader mark, and the first remaining member of a level that the card left leads it
+      // (docs/spec/groups.md#leader).
+      if (parent !== found.parent) this.leaderLeft(found.parent, id);
       this.leaderEntered(parent, id);
     });
     return true;

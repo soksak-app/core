@@ -337,3 +337,55 @@ func TestACardAtItsMinimumWidthKeepsAPartOfItsTab(t *testing.T) {
 		t.Fatalf("the tool menu of the card at its minimum width is %v, without the fullscreen item", keys)
 	}
 }
+
+// A cut name keeps its first character, cut at the end of its room, as CSS text-overflow: ellipsis does: at the minimum width of a
+// card the room of the name of its tab is narrower than the first character and the ellipsis, and the tab shows the character, not
+// the ellipsis alone (docs/spec/example-model.md#card-tabs). The ink of a letter stands higher than the dots of an ellipsis, whose
+// height is that of one dot.
+func TestTheCutNameOfATabKeepsItsFirstCharacter(t *testing.T) {
+	f, left, right := splitShell(t)
+	box, _ := f.divider(left, right)
+	x, y := box.X+box.W/2, box.Y+box.H/2
+	f.tester.Press(x, y)
+	f.tester.Frame()
+	f.tester.Move(0, y)
+	f.tester.Frame()
+	f.tester.Release(0, y)
+	f.settle()
+	active := f.tabsOf(left)[0].(map[string]any)["id"].(string)
+	tab, closing := f.box("core.card.tab", active), f.box("core.card.tab-close", active)
+	palette := f.palette()
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / f.tester.ElementTree()[0].Bounds.W
+	distance := func(a, b color.RGBA) int {
+		d := func(x, y uint8) int { return (int(x) - int(y)) * (int(x) - int(y)) }
+		return d(a.R, b.R) + d(a.G, b.G) + d(a.B, b.B)
+	}
+	ground := image.RGBAAt(int((tab.X+1)*scale), int((tab.Y+tab.H/2)*scale))
+	top, bottom := -1, -1
+	for py := int(tab.Y * scale); py < int((tab.Y+tab.H)*scale); py++ {
+		for px := int((tab.X + 1) * scale); px < int(closing.X*scale); px++ {
+			if p := image.RGBAAt(px, py); distance(p, opaque(palette.Fg)) < distance(p, ground) {
+				if top < 0 {
+					top = py
+				}
+				bottom = py
+				break
+			}
+		}
+	}
+	if top < 0 {
+		t.Fatalf("the tab %+v of the card at its minimum width shows no name before its close button %+v", tab, closing)
+	}
+	// The room of the name ends a tab gap before the close button, and the cut name draws nothing past it.
+	for py := int(tab.Y * scale); py < int((tab.Y+tab.H)*scale); py++ {
+		for px := int((closing.X - 3) * scale); px < int(closing.X*scale); px++ {
+			if p := image.RGBAAt(px, py); distance(p, opaque(palette.Fg)) < distance(p, ground) {
+				t.Fatalf("the name of the tab %+v draws at %v, past its room before the close button %+v", tab, float32(px)/scale, closing)
+			}
+		}
+	}
+	if height := float32(bottom-top+1) / scale; height < 4 {
+		t.Fatalf("the name of the tab %+v stands %v points high, the height of the dots of an ellipsis: the cut name lost its first character", tab, height)
+	}
+}

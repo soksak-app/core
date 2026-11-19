@@ -718,3 +718,51 @@ func mixed(c, base ui.Color, share float32) ui.Color {
 	}
 	return ui.Color{R: blend(c.R, base.R), G: blend(c.G, base.G), B: blend(c.B, base.B), A: 255}
 }
+
+// The header of a group card is the band of head-h at the top of its frame rectangle, and the frame is the border and the radius of a
+// card around the whole rectangle, its header included: the line of the frame runs along the header as along the body, the rounded
+// corner shows the stage, and the content of the header starts the head padding inside the line, as in the head of a content card
+// (docs/spec/groups.md#drawn-rectangles, docs/spec/groups.md#drawing).
+func TestTheFrameOfAGroupCardRunsAroundItsHeader(t *testing.T) {
+	raw, err := os.ReadFile("../src/workbench.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var declared struct {
+		Chrome map[string]string `json:"chrome"`
+	}
+	if err := json.Unmarshal(raw, &declared); err != nil {
+		t.Fatal(err)
+	}
+	headPad, err := strconv.ParseFloat(strings.TrimSuffix(declared.Chrome["card-head-pad"], "px"), 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := groupedShell(t)
+	f.settle()
+	palette := f.palette()
+	frame, header, name := f.box("core.group", "card-2"), f.box("core.group.header", "card-2"), f.box("core.group.name", "card-2")
+	if header.X != frame.X || header.Y != frame.Y || header.W != frame.W {
+		t.Fatalf("the header %+v is not the band at the top of the frame %+v", header, frame)
+	}
+	border := palette.BorderWidth
+	if pad := name.X - frame.X; pad != border+float32(headPad) {
+		t.Errorf("the name of the header %+v starts %v inside the frame %+v, want the line and the head padding %v", name, pad, frame, border+float32(headPad))
+	}
+	image := f.tester.Image()
+	scale := float32(image.Bounds().Dx()) / f.tester.ElementTree()[0].Bounds.W
+	at := func(x, y float32) color.RGBA { return image.RGBAAt(int(x*scale), int(y*scale)) }
+	line := at(frame.X+border/2, frame.Y+frame.H/2)
+	if got := at(frame.X+border/2, header.Y+header.H/2); got != line {
+		t.Errorf("the left line of the frame is %v along the header and %v along the body", got, line)
+	}
+	if got := at(frame.X+frame.W-border/2, header.Y+header.H/2); got != line {
+		t.Errorf("the right line of the frame is %v along the header and %v along the body", got, line)
+	}
+	if got := at(frame.X+frame.W/2, frame.Y+border/2); got != line {
+		t.Errorf("the top line of the frame is %v over the header, want the line %v", got, line)
+	}
+	if corner, stage := at(frame.X+border/2, frame.Y+border/2), at(frame.X-2, frame.Y+frame.H/2); corner != stage {
+		t.Errorf("the top left corner of the frame is %v, want the stage %v around its radius", corner, stage)
+	}
+}

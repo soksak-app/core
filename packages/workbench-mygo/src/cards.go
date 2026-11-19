@@ -589,7 +589,7 @@ func (s *Shell) drawTab(c *ui.Context, card string, tab layout.Tab, on bool, siz
 		}
 		pill.Children(func() {
 			ui.Row(c).Padding(0, m.tabGap+mark+2*m.tabXPad+m.tabPadX, 0, start).Children(func() {
-				ui.Text(c, name).SingleLine().Ellipsis("…").LineHeight(m.lineHeight).FontSize(size).MaxWidth(width).TextColor(color)
+				drawCutText(c, name, size, m.lineHeight, family, color, width)
 			})
 		})
 		if noticed {

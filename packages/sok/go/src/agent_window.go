@@ -835,14 +835,14 @@ func parameterList(schema json.RawMessage) ([]string, error) {
 	return params, nil
 }
 
-// briefItem is an element item of the compact form: index, role, text, visible, inert and command.
+// briefItem is an element item of the compact form: index, role, text, inert and command.
 func briefItem(item json.RawMessage) (json.RawMessage, error) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(item, &fields); err != nil || fields == nil {
 		return nil, errors.New("an item is not an object")
 	}
 	brief := map[string]any{}
-	for _, member := range []string{"index", "role", "text", "visible", "inert", "command"} {
+	for _, member := range []string{"index", "role", "text", "inert", "command"} {
 		if value, ok := fields[member]; ok {
 			compact, err := compacted(value)
 			if err != nil {

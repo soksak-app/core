@@ -197,20 +197,23 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    different colors. The rail has z 3 in .rail. */
 .card[data-focused=true]{z-index:4}
 /* A group card is one container (docs/spec/groups.md#drawing): its frame has the border and the radius of a card and the fill of its level,
-   which the plane sets, and stands below the cards; its header is the top band inside the frame, whose name and button row take the
+   which the plane sets, and stands below the cards; its header is the band of head-h at the top of the frame, whose name and button row take the
    style of the head of a content card. */
-.group{position:absolute;z-index:0;border:var(--bw) solid var(--edge);border-radius:var(--r);overflow:hidden}
+.group{position:absolute;z-index:0;border-radius:var(--r);overflow:hidden}
+/* The header is the band of head-h at the top of the frame rectangle (docs/spec/groups.md#drawn-rectangles), so the frame element has no
+   border, and the line of the frame is drawn over the ends of the header, as the border of a card runs around its whole box. */
+.group::after{content:"";position:absolute;inset:0;border:var(--bw) solid var(--edge);border-radius:inherit;pointer-events:none}
 .group[hidden]{display:none}
 /* A group card that holds the focused card mixes the focus color into the color of its frame by the share --group-focus, which the
    plane sets to group-focus-fade to the power of the levels up to it (docs/spec/groups.md#focus). Only the color of the frame line
    changes, so the mark adds no line, also at the seam. */
-:root[data-focus-ind=border] .group[data-focus]{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
+:root[data-focus-ind=border] .group[data-focus]::after{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
 /* The rename field of a group takes the place of the name: its text starts where the text of the name started in the size of the name,
    and it grows over the place of the name (docs/spec/groups.md#headers). */
 .group__rename{flex:1 1 0px;min-width:0;font-size:var(--text-small);margin-left:calc(var(--tab-pad-x) - var(--bw) - var(--bar-tab-root-pad))}
 /* The header draws the line below it as the head of a card does, in the color that the plane writes from groupLook of group-look.js:
    edge with a gap and rule at the seam (docs/spec/groups.md#drawing). */
-.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;
+.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 calc(var(--card-head-pad) + var(--bw));overflow:hidden;
   border-bottom:var(--bw) solid}
 .group__name{flex:1 1 auto;min-width:0;padding-left:var(--tab-pad-x);padding-right:var(--tab-pad-x);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
   color:var(--fg);cursor:grab;user-select:none}
@@ -261,7 +264,8 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    A nested group card and the focused card stand later in the paint order, so the innermost mark owns a line that several marked boxes
    end on (docs/spec/groups.md#drawing). The stage starts on the bottom line of the space bar and on the right line of the project
    column and draws its own line over them, so the edge of the plane is one line on each side. */
-:root[data-seam=line] .group{border-width:0;border-radius:0}
+:root[data-seam=line] .group{border-radius:0}
+:root[data-seam=line] .group::after{border-width:0}
 :root[data-seam=line][data-focus-ind=border] .group[data-focus]{
   outline-width:var(--bw);outline-style:solid;outline-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
 :root[data-seam=line] .stage{margin-top:calc(0px - var(--bw))}

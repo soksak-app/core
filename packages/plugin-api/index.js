@@ -1642,13 +1642,14 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
 
   /**
    * One element of an element entry in a window snapshot: its role and rectangle as element.rect gives them, its text with runs of white
-   * space joined into one space and cut to its first 120 Unicode scalar values, so a cut never splits a character, whether it has a box
-   * that is not empty and is not hidden, and the command and the params that it runs, or null.
+   * space joined into one space and cut to its first 120 Unicode scalar values, so a cut never splits a character, and the command and
+   * the params that it runs, or null. An element that the document does not draw, one with an empty box, of hidden visibility or under
+   * the hidden attribute, has no item and answers null.
    */
   const snapshotItem = (name, element, index, withInert) => {
     const { x, y, width, height, role } = rectOf(element);
     const view = element.ownerDocument.defaultView;
-    const shown = width > 0 && height > 0 && view.getComputedStyle(element).visibility !== "hidden" && element.closest("[hidden]") === null;
+    if (width <= 0 || height <= 0 || view.getComputedStyle(element).visibility === "hidden" || element.closest("[hidden]") !== null) return null;
     const paramsText = element.getAttribute("data-params");
     let params = null;
     if (paramsText !== null) {
@@ -1659,7 +1660,7 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       }
     }
     return {
-      index, role, text: firstScalars(element.textContent.replace(/\s+/g, " "), 120), rect: { x, y, width, height }, visible: shown,
+      index, role, text: firstScalars(element.textContent.replace(/\s+/g, " "), 120), rect: { x, y, width, height },
       ...(withInert ? { inert: inert(element) } : {}),
       command: element.getAttribute("data-command"), params,
     };
@@ -1723,7 +1724,8 @@ export function exposureEntries(declared, { place = () => null, inert = () => fa
       .map(({ declaration }) => ({ ...declaration }));
     const elementList = entries.filter(({ kind, declaration }) => kind === "element" && elements(declaration.name).length > 0)
       .map(({ declaration }) => ({ ...declaration,
-        items: elements(declaration.name).map((element, index) => snapshotItem(declaration.name, element, index, withInert)) }));
+        items: elements(declaration.name).map((element, index) => snapshotItem(declaration.name, element, index, withInert))
+          .filter((item) => item !== null) }));
     return Promise.all(reads).then((status) => ({ status, commands: commandList, element: elementList }));
   }
 

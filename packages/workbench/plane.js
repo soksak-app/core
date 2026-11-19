@@ -786,9 +786,14 @@ plane.addEventListener("pointerdown", (e) => {
   if (!header || e.target.closest(".chrome__acts, .chrome__more, input")) return;
   beginGroupDrag(e, header, header.closest(".group").dataset.groupCard);
 });
+// The press takes the pointer capture of the header for a drag, so WebKit targets the double-click at the header, the common target of
+// the press and the release; the name under the point of the double-click decides the rename.
 plane.addEventListener("dblclick", (e) => {
-  const name = e.target.closest?.(".group__name");
-  if (name) run("core.rename.begin", { kind: "group", id: name.closest(".group").dataset.groupCard });
+  const name = e.target.closest?.(".group__head")?.querySelector(":scope > .group__name");
+  if (!name) return;
+  const box = name.getBoundingClientRect();
+  if (e.clientX < box.left || e.clientX >= box.right || e.clientY < box.top || e.clientY >= box.bottom) return;
+  run("core.rename.begin", { kind: "group", id: name.closest(".group").dataset.groupCard });
 });
 
 /* The rename of the bars, whose field the header of a renamed group card shows (useGroupRename). */

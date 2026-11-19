@@ -364,6 +364,81 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-56",
+    implementation: [
+      { file: "packages/workbench/plane.js", symbol: "const name = e.target.closest?.(\".group__head\")?.querySelector(\":scope > .group__name\");" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-header.test.mjs", id: "a double-click on the name of a group card that its header captured begins the rename" },
+    ],
+    expected: "A double-click on the name of a group card begins its rename on the page, also when the header holds the pointer capture of the press.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-57",
+    implementation: [
+      { file: "packages/workbench/group-tree.js", symbol: "if (parent !== found.parent) this.leaderLeft(found.parent, id);" },
+      { file: "packages/workbench-mygo/src/layout/groups.go", symbol: "if lead == id && into == level {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-header.test.mjs", id: "a drag of a group header previews its move, reports the drag and runs core.card.move at the release" },
+      { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestAGroupCardMovedInsideItsLevelKeepsItsLeaderMark" },
+    ],
+    expected: "A card that moves inside its own level keeps the leader mark of the level, and every stored level names one of its members as its leader.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-49",
+    implementation: [
+      { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "snapshotText(node.Text)" },
+      { file: "packages/workbench-mygo/go.mod", symbol: "replace github.com/egoist/mygo => github.com/min-0-max/mygo v0.7.4-244-g4abb83d-soksak.15" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },
+    ],
+    expected: "The text of an element item of a window snapshot in mygo is the text content of the element, as on the page, not its accessible label.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-53",
+    implementation: [
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "Border(s.palette.CardBorder(), s.frameColor(id)).Radius(radius).PassThrough()" },
+      { file: "packages/workbench/app.css", symbol: ".group::after{content:\"\";position:absolute;inset:0;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheFrameOfAGroupCardRunsAroundItsHeader" },
+      { file: "packages/workbench/test/group-frame.test.mjs", id: "the header of a group card is the band at the top of its frame and the line of the frame runs over it" },
+    ],
+    expected: "The header of a group card is the band of head-h at the top of its frame, and the line and the radius of the frame run around the whole card over the ends of the header, in mygo and on the page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-55",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_text.go", symbol: "func drawCutText(" },
+      { file: "packages/workbench/app.css", symbol: ".tab__name{overflow:hidden;text-overflow:ellipsis;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/head_elements_test.go", id: "TestTheCutNameOfATabKeepsItsFirstCharacter" },
+      { file: "packages/workbench/test/tab-name-cut.test.mjs", id: "the name of the active tab of a head that fits one tab is cut with an ellipsis on one line" },
+    ],
+    expected: "A cut tab name keeps as many leading characters as fit beside the ellipsis, and its first character is cut rather than replaced by the ellipsis, in mygo and on the page.",
+    levels: ["unit"],
+  },
+  {
+    id: "F937-50",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: ".filter((item) => item !== null) }));" },
+      { file: "packages/workbench-mygo/src/window_snapshot.go", symbol: "if node.Bounds.W <= 0 || node.Bounds.H <= 0 {" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/exposure.test.mjs", id: "the snapshot lists only the drawn elements of an element entry with their element.rect indexes" },
+      { file: "packages/workbench-mygo/tests/window_snapshot_test.go", id: "TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndTheUnregisteredEntries" },
+    ],
+    expected: "An element entry of a window snapshot lists only the elements that the window draws, with their element.rect indexes, on the page and in mygo.",
+    levels: ["unit"],
+  },
+  {
     id: "F955",
     implementation: [
       { file: "packages/workbench/group-tree.js", symbol: "drawnDividers(dividers, gripLength) {" },

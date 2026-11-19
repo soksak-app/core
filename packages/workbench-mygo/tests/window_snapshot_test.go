@@ -125,12 +125,16 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 	f.registry.Status("core.layout", func() any { return 3 })
 	f.registry.Status("core.grid", func() any { return make(chan int) })
 	f.registry.Command("core.card.focus", func(json.RawMessage) (any, error) { return nil, nil })
+	f.registry.Command("core.card.tools", func(json.RawMessage) (any, error) { return nil, nil })
 	binder := workbench.NewBinder(f.registry, func(_ string, err error) { t.Error(err) })
 	tester := ui.NewTester(func(c *ui.Context) {
 		binder.Frame()
 		ui.Column(c).Fill().Children(func() {
-			binder.Press(c, "core.card", "core.card.focus", "c1", map[string]string{"card": "c1"}).Role(ui.RoleGroup).Label("c1   first\n card").Size(100, 40)
+			// The label names the card for assistive technology; the text of the item is the text content, the texts inside it.
+			binder.Press(c, "core.card", "core.card.focus", "c1", map[string]string{"card": "c1"}).Role(ui.RoleGroup).Label("c1").Size(100, 40).
+				Children(func() { ui.Text(c, "first   \n card") })
 			binder.Absent(c, "core.card", "core.card.focus", "c2", map[string]string{"card": "c2"})
+			binder.Absent(c, "core.card.tools", "core.card.tools", "c1", map[string]string{"card": "c1"})
 			ui.Button(c.Key(workbench.Exposed{Name: "core.debug.close"}), strings.Repeat("가", 130)).Size(60, 20)
 		})
 	}, 400, 300)
@@ -147,7 +151,7 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 			"status":   []any{map[string]any{"name": "textprobe.screen", "value": []any{"x"}}},
 			"commands": []any{},
 			"element": []any{map[string]any{"name": "textprobe.view", "items": []any{map[string]any{"index": 0, "role": nil, "text": "x",
-				"rect": map[string]any{"x": 12, "y": 24, "width": 80, "height": 30}, "visible": true, "command": nil, "params": nil}}}},
+				"rect": map[string]any{"x": 12, "y": 24, "width": 80, "height": 30}, "command": nil, "params": nil}}}},
 		}}, nil
 	}
 
@@ -168,38 +172,48 @@ func TestAWindowSnapshotHoldsTheLayoutThePluginsTheMainGroupTheSurfaceGroupsAndT
 	if want := []any{gridRow, layoutRow}; main["owner"] != "core" || !reflect.DeepEqual(main["status"], orderedAs(t, f.relay, "status", want)) {
 		t.Fatalf("the main group holds the statuses %v, want %v", main["status"], want)
 	}
-	if want := []any{declarationOf(t, f.relay, "commands", "core.card.focus")}; !reflect.DeepEqual(main["commands"], want) {
+	if want := orderedAs(t, f.relay, "commands", []any{declarationOf(t, f.relay, "commands", "core.card.focus"),
+		declarationOf(t, f.relay, "commands", "core.card.tools")}); !reflect.DeepEqual(main["commands"], want) {
 		t.Fatalf("the main group holds the commands %v, want %v", main["commands"], want)
 	}
 	type item struct {
 		name, text, command string
 		index               float64
-		visible, inert      bool
+		inert               bool
 		params              any
 	}
 	var items []item
+	counts := map[string]int{}
 	for _, entry := range main["element"].([]any) {
 		row := entry.(map[string]any)
+		counts[row["name"].(string)] = len(row["items"].([]any))
 		for _, each := range row["items"].([]any) {
 			read := each.(map[string]any)
+			if _, ok := read["visible"]; ok {
+				t.Fatalf("the item %v of %s holds visible, which an item of drawn elements does not carry", read, row["name"])
+			}
 			command, _ := read["command"].(string)
 			items = append(items, item{name: row["name"].(string), text: read["text"].(string), command: command, index: read["index"].(float64),
-				visible: read["visible"].(bool), inert: read["inert"].(bool), params: read["params"]})
+				inert: read["inert"].(bool), params: read["params"]})
 		}
 	}
+	// The card c2 and the tools of c1 are not drawn: they keep their element.rect index and leave the items, and the name of the tools
+	// stays as an entry with no item, since its owner registered it (docs/spec/exposure.md#window-snapshot).
 	want := []item{
-		{name: "core.card", text: "c1 first card", command: "core.card.focus", index: 0, visible: true, params: map[string]any{"card": "c1"}},
-		{name: "core.card", text: "", command: "core.card.focus", index: 1, visible: false, params: map[string]any{"card": "c2"}},
-		{name: "core.debug.close", text: strings.Repeat("가", 120), index: 0, visible: true},
+		{name: "core.card", text: "first card", command: "core.card.focus", index: 0, params: map[string]any{"card": "c1"}},
+		{name: "core.debug.close", text: strings.Repeat("가", 120), index: 0},
 	}
 	if !reflect.DeepEqual(items, want) {
 		t.Fatalf("the main group holds the items %+v, want %+v", items, want)
+	}
+	if count, ok := counts["core.card.tools"]; !ok || count != 0 {
+		t.Fatalf("the main group holds the entries with item counts %v, want core.card.tools with no item", counts)
 	}
 	wantSurfaces := []any{
 		map[string]any{"owner": "surface", "surface": "tab-a", "plugin": "textprobe", "kind": "tab", "state": "loaded", "visible": true,
 			"status": []any{map[string]any{"name": "textprobe.screen", "value": []any{"x"}}}, "commands": []any{},
 			"element": []any{map[string]any{"name": "textprobe.view", "items": []any{map[string]any{"index": float64(0), "role": nil, "text": "x",
-				"rect": map[string]any{"x": float64(112), "y": float64(74), "width": float64(80), "height": float64(30)}, "visible": true,
+				"rect":  map[string]any{"x": float64(112), "y": float64(74), "width": float64(80), "height": float64(30)},
 				"inert": true, "command": nil, "params": nil}}}}},
 		map[string]any{"owner": "surface", "surface": "tab-b", "plugin": "textprobe", "kind": "tab", "state": "loaded", "visible": false,
 			"error": float64(workbench.Gone), "status": []any{}, "commands": []any{}, "element": []any{}},

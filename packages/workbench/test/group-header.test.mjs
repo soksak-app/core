@@ -96,7 +96,8 @@ test("a double-click on the name of a group card begins its rename, and the comm
   arrange();
   await settled();
   const name = groupElement("card-4").querySelector(".group__name");
-  name.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  name.getBoundingClientRect = () => ({ left: 20, top: 10, right: 120, bottom: 25, x: 20, y: 10, width: 100, height: 15 });
+  name.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true, cancelable: true, clientX: 40, clientY: 18 }));
   await settled();
   assert.deepEqual(await status("core.rename"), { kind: "group", id: "card-4", value: "그룹 1" }, "a double-click on the name did not begin the rename");
   const field = groupElement("card-4").querySelector(".group__head [data-expose='core.rename.input']");
@@ -113,6 +114,25 @@ test("a double-click on the name of a group card begins its rename, and the comm
   await run("core.rename.commit");
   assert.equal((await status("core.layout")).groups[0].name, "작업", "an empty name changed the name");
   await refuses(run("core.rename.begin", { kind: "group", id: "card-1" }), "no group card-1");
+});
+
+// A press on the header takes the pointer capture for a drag, so WebKit targets the click and the double-click at the header, the
+// common target of the press and the release, not at the name under the pointer: the double-click begins the rename by its point.
+test("a double-click on the name of a group card that its header captured begins the rename", { timeout: 5000 }, async () => {
+  arrange();
+  await settled();
+  const header = groupElement("card-4").querySelector(".group__head");
+  const name = header.querySelector(".group__name");
+  name.getBoundingClientRect = () => ({ left: 20, top: 10, right: 120, bottom: 25, x: 20, y: 10, width: 100, height: 15 });
+  pointer(name, "pointerdown", 40, 18);
+  pointer(header, "pointerup", 40, 18);
+  header.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true, cancelable: true, clientX: 40, clientY: 18 }));
+  await settled();
+  assert.deepEqual(await status("core.rename"), { kind: "group", id: "card-4", value: "그룹 1" }, "a double-click on the name did not begin the rename");
+  await run("core.rename.cancel");
+  header.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true, cancelable: true, clientX: 300, clientY: 18 }));
+  await settled();
+  assert.equal(await status("core.rename"), null, "a double-click on the header beside the name began the rename");
 });
 
 test("a drag of a group header previews its move, reports the drag and runs core.card.move at the release", { timeout: 5000 }, async () => {
@@ -136,6 +156,10 @@ test("a drag of a group header previews its move, reports the drag and runs core
   assert.ok(placed["card-1"][0] >= placed["card-3"][1] && placed["card-2"][0] >= placed["card-3"][1],
     `the release did not move card-4 to the right of card-3: ${JSON.stringify(placed)}`);
   assert.equal(plane.focused(), "card-1", "the move of the group card did not focus the first card inside it");
+  // The group card moves inside its own level, so it keeps the leader mark of the level, and the stored layout names a member of each
+  // level as its leader (docs/spec/groups.md#leader).
+  const layout = await status("core.layout");
+  assert.equal(layout.leader, "card-4", "the move of the group card inside its level changed the leader of the level");
   assert.deepEqual(drag.preview, plane.currentTree().rect("card-4"), "the preview is not the rectangle that the move gave the group card");
   // A release with no zone changes nothing.
   const before = JSON.stringify(plane.currentGrid().toJSON());

@@ -1,5 +1,5 @@
 // The drawing of the group cards of a space (docs/spec/groups.md#drawing): each group card is one container, its frame of the card
-// border and radius on its drawn rectangle filled with the color of its level, and its header, the top band inside the frame, with
+// border and radius on its drawn rectangle filled with the color of its level, and its header, the band of head-h at the top of the frame, with
 // the name of the group and the head buttons of the group in the style of the head of a content card.
 import { bind } from "./commands.js";
 import { declaredIcons as icons } from "./icons.js";
