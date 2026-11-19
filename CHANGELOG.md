@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F947: At gap 0 the drop zone of a tab drag draws no radius and a border of the border width in both workbenches, the shape of the seam (`docs/spec/settings.md`, row `gap`). Before, the page drew a border of `drop-border` (2 px) over the 1 px focus line, and mygo also kept the radius of the theme. The seam rule of `packages/workbench/app.css` sets the border of `.drop`, which the host draws from the computed style, and `drawDropPreview` of `packages/workbench-mygo/src/tab_drag.go` takes the card radius and the border width at the seam. Validation: `the drop zone at the seam draws no radius and a border of the border width` of `packages/workbench/test/drop-seam.test.mjs` and `TestThePreviewOfADropAtTheSeamIsSquareWithTheBorderWidth` of `packages/workbench-mygo/tests/tab_drag_test.go` failed on the unchanged code and pass.
 - F944: In mygo the window sidebar of the only side that is on leaves the plane when its switch or its fold control turns it off: `ArrangeWindowSidebars` of `packages/workbench-mygo/src/layout/sidebars.go` took an arrangement without any side for the refused arrangement of the same plane state, and now takes a refusal only while one is recorded. Validation: `TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff` failed on the unchanged code and passes; the mygo, Wails and Tauri debug applications turn each of the four sides on and off through the switch and the fold control with the drawn sidebars equal to the settings.
 
 ## 2026-11-19

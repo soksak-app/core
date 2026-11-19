@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F947: gap 0에서 탭 drag의 drop zone이 두 workbench 모두 radius 없이 border width의 테두리를 그려 seam의 모양을 따른다(`docs/spec/settings.md`의 `gap` 행). 전에는 page가 1 px focus 선 위에 `drop-border`(2 px) 테두리를 그렸고, mygo는 theme의 radius도 유지했다. `packages/workbench/app.css`의 seam 규칙이 `.drop`의 테두리를 정하고 host는 그 computed style로 그리며, `packages/workbench-mygo/src/tab_drag.go`의 `drawDropPreview`는 seam에서 card radius와 border width를 쓴다. 검증: `packages/workbench/test/drop-seam.test.mjs`의 `the drop zone at the seam draws no radius and a border of the border width`와 `packages/workbench-mygo/tests/tab_drag_test.go`의 `TestThePreviewOfADropAtTheSeamIsSquareWithTheBorderWidth`가 바뀌지 않은 code에서 실패하고 이제 통과한다.
 - F944: mygo에서 켜진 면이 하나뿐일 때 그 면의 창 사이드바가 스위치나 접기 control로 끄면 plane을 떠난다. `packages/workbench-mygo/src/layout/sidebars.go`의 `ArrangeWindowSidebars`가 면이 없는 배치를 같은 plane 상태에서 거부된 배치로 보았고, 이제 거부 기록이 있을 때만 거부로 본다. 검증: `TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff`가 바뀌지 않은 code에서 실패하고 이제 통과한다. mygo, Wails, Tauri debug application이 네 면을 각각 스위치와 접기 control로 켜고 끄며, 그려진 사이드바가 설정과 같다.
 
 ## 2026-11-19
