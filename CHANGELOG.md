@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F831-1 correction: the agent skill source is `packages/sok/go/src/agents/SKILL.md`, and `packages/sok/go/src/agents/mcp.json` lists thirteen MCP tools. The entry of F831 below says eleven tools and `packages/sok/agents/SKILL.md`; the code and `docs/spec/cli.md` state the values stated here.
 - F898: sok supports the Codex agent: the skill is written to `~/.agents/skills/soksak/SKILL.md` when `~/.codex` is a directory, and `sok mcp install` registers the sok with the `codex` command when it is on `PATH`.
 - F905-4: The Codex contract test does not include the shared `policy` helper it does not call, which failed the clippy check with warnings denied in the F898 CI check (`packages/sok/rust/tests/codex_test.rs`).
 - F899-6: The contract that refuses destructive shell commands of hosted agents before they run, fail-closed, is in the persistent services specification. The implementations are in the sidecar repositories (alacritty S121, vt S181).

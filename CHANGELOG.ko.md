@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F831-1 정정: agent skill 원본은 `packages/sok/go/src/agents/SKILL.md`이고, `packages/sok/go/src/agents/mcp.json`은 MCP tool을 열세 개 나열한다. 아래 F831 항목은 열한 개와 `packages/sok/agents/SKILL.md`라고 적었다. 코드와 `docs/spec/cli.md`는 여기 적은 값을 따른다.
 - F898: sok가 Codex agent를 지원한다. `~/.codex`가 폴더이면 skill을 `~/.agents/skills/soksak/SKILL.md`에 쓰고, `sok mcp install`은 `PATH`에 `codex` 명령이 있으면 sok를 그 명령에 등록한다.
 - F905-4: Codex 계약 시험이 호출하지 않는 공유 `policy` helper를 include하지 않는다. 이 include가 F898 CI 검사에서 경고를 거부하는 clippy 검사를 실패시켰다(`packages/sok/rust/tests/codex_test.rs`).
 - F899-6: 호스팅하는 agent의 파괴적 셸 명령을 실행 전에 거부하는 계약은 persistent services 사양에 있다. 구현은 sidecar 저장소에 있다(alacritty S121, vt S181).
