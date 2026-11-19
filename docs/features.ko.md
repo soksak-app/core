@@ -1706,8 +1706,8 @@ DOM-write 수정 뒤 cohort에서 Terminal source interval은 Wails/Tauri 174/66
   - [ ] F901-2 — Red (lead): S175와 S117 앞의 vt release 0.0.27과 alacritty release 0.0.7의 sidecar로, `SGR 2` 텍스트를 출력하는 fixture TUI를 `diagnostics.capture.still`로 캡처해 추천 글자의 전경색을 기록한다.
   - [ ] F901-3 — Green (lead): S175와 그 혼합 고침 S179를 담은 vt release 0.0.29와, S117을 담고 아직 어느 release에도 없는 alacritty main build로 같은 fixture를 캡처하고, 측정한 색이 엔진 테스트의 혼합값(`#1e1e1e` 위의 `#949494`)인지 기록한다.
 - [ ] F902 — P1: sidecar 0.0.28(vt)과 다음 alacritty 버전의 릴리즈 후보를 publish하지 않고 준비한다. 입력: `sidecars/vt-release-0028`에 0.0.28을 선언한 the vt 0.0.28 version declaration가 있고, alacritty 릴리즈 후보는 없다. 빌드는 lead가 실행한다.
-  - [ ] F902-1 — vt의 `docs/operations/local-native-package.md`와 alacritty의 릴리즈 목표를 읽고 명령과 출력 폴더를 기록한다.
-  - [ ] F902-2 — Lead가 `sidecars/vt-release-0028`에서 `make release OUT=<새 폴더>`로 vt 0.0.28 후보를 빌드하고, 패키지가 S175 dim 수정을 담는지 확인한다.
+  - [ ] F902-1 — vt의 `docs/operations/local-native-package.md`와 alacritty의 릴리즈 목표를 읽고 명령과 출력 폴더를 기록한다. F902-2가 닫혔으므로 alacritty의 release 목표만 읽으면 된다.
+  - [-] F902-2 — Lead가 `sidecars/vt-release-0028`에서 `make release OUT=<새 폴더>`로 vt 0.0.28 후보를 빌드하고, 패키지가 S175 dim 수정을 담는지 확인한다. Closed: vt는 자기 release run으로 release 0.0.28과 0.0.29를 publish했다. 둘 다 S175를 담고, 0.0.29는 혼합 고침 S179도 담으며, 폴더 `sidecars/vt-release-0028`은 없으므로 준비할 vt 후보가 남지 않았다.
   - [ ] F902-3 — Lead가 `sidecars/alacritty-release` worktree에서 같은 명령으로 alacritty 후보를 빌드하고, 패키지가 S117 dim 수정을 담는지 확인한다.
   - [ ] F902-4 — 두 후보를 보고하고, publish나 core pin 변경은 별도 publication 결정을 기다린다.
 - [ ] F903 — P1: 프레임워크에서 Metal surface의 lease 표시가 가능한지 측정한다. 입력: `present: lease` region 계획에 측정이 없고, surface를 표시한 뒤 교체했을 때의 `IOSurfaceIsInUse` 동작을 알 수 없다. 에이전트는 측정 test를 작성하고, lead가 실행한다.
