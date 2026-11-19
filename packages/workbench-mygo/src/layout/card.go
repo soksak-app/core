@@ -38,16 +38,16 @@ type Card struct {
 }
 
 // Frames is the number of frames that stand between a card and each of its four lines (docs: R5 of packages/soksak/docs/layout.md):
-// each takes one gap of the corridor on that side of the card.
+// each takes one gap of the corridor on that side of the card. A count is a whole number from zero, read as a number of JSON.
 type Frames struct {
-	Left   int `json:"left"`
-	Right  int `json:"right"`
-	Top    int `json:"top"`
-	Bottom int `json:"bottom"`
+	Left   float64 `json:"left"`
+	Right  float64 `json:"right"`
+	Top    float64 `json:"top"`
+	Bottom float64 `json:"bottom"`
 }
 
 // side is the frames of the card on the lo or the hi side of axis.
-func (f Frames) side(axis Axis, s string) int {
+func (f Frames) side(axis Axis, s string) float64 {
 	switch {
 	case axis == "x" && s == "lo":
 		return f.Left

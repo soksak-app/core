@@ -72,12 +72,12 @@ func corridorOf(p *plane, axis Axis, slot int, read lineSet) float64 {
 	for k := slot + 2; k < len(a) && blank(p, axis, k-1); k++ {
 		hi = math.Max(hi, inset(p, axis, k, "hi", read))
 	}
-	return lo + hi + float64(slotFrames(p, axis, slot))*corridor(p, axis, read)
+	return lo + hi + slotFrames(p, axis, slot)*corridor(p, axis, read)
 }
 
 // slotFrames is the number of frames a slot carries: the most frames of a card that starts on its lower line on that side, and the
 // most of a card that ends on its upper line on that side, a run of lines at one position counting as its slot.
-func slotFrames(p *plane, axis Axis, slot int) int {
+func slotFrames(p *plane, axis Axis, slot int) float64 {
 	if len(p.frames) == 0 {
 		return 0
 	}
@@ -90,7 +90,7 @@ func slotFrames(p *plane, axis Axis, slot int) int {
 	for to < len(a)-1 && blank(p, axis, to) {
 		to++
 	}
-	low, high := 0, 0
+	low, high := 0.0, 0.0
 	for _, card := range p.cards {
 		f := p.frames[card.ID]
 		if start := card.get(lo); start >= from && start <= slot {
@@ -111,7 +111,7 @@ func cardInset(p *plane, axis Axis, card *Card, side string, read lineSet) float
 	if side == "lo" {
 		line = card.get(lo)
 	}
-	return inset(p, axis, line, side, read) + float64(p.frames[card.ID].side(axis, side))*corridor(p, axis, read)
+	return inset(p, axis, line, side, read) + p.frames[card.ID].side(axis, side)*corridor(p, axis, read)
 }
 
 // corridorWhenWide is the corridor a slot holds once it has a width.
@@ -135,7 +135,7 @@ func corridorWhenWide(p *plane, axis Axis, slot int, read lineSet) float64 {
 	for k := slot + 2; k < len(a) && blank(p, axis, k-1); k++ {
 		hi = math.Max(hi, edge(k, k == len(a)-1))
 	}
-	return lo + hi + float64(slotFrames(p, axis, slot))*corridor(p, axis, read)
+	return lo + hi + slotFrames(p, axis, slot)*corridor(p, axis, read)
 }
 
 // blank is true when a slot draws at zero width: no span to take a share with and no px size.
@@ -398,7 +398,7 @@ func linePositions(p *plane, axis Axis) []float64 {
 // corridor is the gap width for this axis, capped at what the plane can hold.
 func corridor(p *plane, axis Axis, read lineSet) float64 {
 	a := p.lines(axis)
-	real := len(read)
+	real := float64(len(read))
 	if read.has(0) {
 		real--
 	}
@@ -413,7 +413,7 @@ func corridor(p *plane, axis Axis, read lineSet) float64 {
 	if real <= 0 {
 		return p.gap
 	}
-	return math.Min(p.gap, math.Max(0, p.extent(axis))/float64(real))
+	return math.Min(p.gap, math.Max(0, p.extent(axis))/real)
 }
 
 // linesRead is the set of line indices that at least one card references.
@@ -571,9 +571,9 @@ func rectIn(f frame, card *Card) Rect {
 
 // spanIn is one axis of a rect: the card's start position and size, inset by one gap for each of its frames on each side. A card
 // whose two edges cross is drawn at zero width in the middle of the slots it spans.
-func spanIn(a *axle, lo, hi, framesLo, framesHi int) (float64, float64) {
-	near := a.at[lo] + a.lo[lo] + float64(framesLo)*a.unit
-	far := a.at[hi] - a.hi[hi] - float64(framesHi)*a.unit
+func spanIn(a *axle, lo, hi int, framesLo, framesHi float64) (float64, float64) {
+	near := a.at[lo] + a.lo[lo] + framesLo*a.unit
+	far := a.at[hi] - a.hi[hi] - framesHi*a.unit
 	if far >= near-1e-6 {
 		return near, math.Max(0, far-near)
 	}

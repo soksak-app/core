@@ -434,8 +434,13 @@ func (g *Grid) SetFrames(frames map[string]Frames) error {
 		if g.find(id) == nil {
 			return errors.New("soksak: frames name " + strconv.Quote(id) + ", which is no card")
 		}
-		if f.Left < 0 || f.Right < 0 || f.Top < 0 || f.Bottom < 0 {
-			return errors.New("soksak: the frames of " + strconv.Quote(id) + " count below zero")
+		for _, count := range []float64{f.Left, f.Right, f.Top, f.Bottom} {
+			if count < 0 {
+				return errors.New("soksak: the frames of " + strconv.Quote(id) + " count below zero")
+			}
+			if !finite(count) || count != math.Trunc(count) {
+				return errors.New("soksak: the frames of " + strconv.Quote(id) + " count no whole number")
+			}
 		}
 	}
 	g.cardFrames = maps.Clone(frames)
