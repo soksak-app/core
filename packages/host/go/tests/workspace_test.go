@@ -750,10 +750,28 @@ func TestEarlierStoredFormsAreReportedBySnapshotAndRefusedByWrites(t *testing.T)
 	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	refusal := projects + ": projects.json: format must be 1"
+	refusal := projects + ": projects.json: format must be 2"
 	snapshot, err := store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
 	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
 		t.Fatalf("a bare array of projects returned %#v, %v; want %#v", snapshot, err, want)
+	}
+	// A file of format 1 holds spaces without the group tree (docs/spec/groups.md#storage), so it is refused as a whole.
+	const first = `{"format":1,"projects":[{"id":"prj-a","root":"/x","identity":"1:1"}]}`
+	if err := os.WriteFile(projects, []byte(first), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = store.Apply(host.WorkspaceRequest{Kind: "snapshot"})
+	if want := (host.Record{"projects": []host.Record{}, "common": host.Record{}, "projectsError": refusal}); err != nil || !reflect.DeepEqual(snapshot, want) {
+		t.Fatalf("a projects.json of format 1 returned %#v, %v; want %#v", snapshot, err, want)
+	}
+	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err == nil || err.Error() != refusal {
+		t.Fatalf("an add to a projects.json of format 1 returned %v", err)
+	}
+	if data, _ := os.ReadFile(projects); string(data) != first {
+		t.Fatalf("a refused projects.json of format 1 changed: %s", data)
+	}
+	if err := os.WriteFile(projects, []byte(bare), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := store.Apply(host.WorkspaceRequest{Kind: "add", Project: host.Record{"id": "prj-b", "root": "/y", "identity": "1:2"}}); err == nil || err.Error() != refusal {
 		t.Fatalf("an add to a refused projects.json returned %v", err)

@@ -810,11 +810,25 @@ fn earlier_stored_forms_are_reported_by_snapshot_and_refused_by_writes() {
     let projects = config.path().join("projects.json");
     let bare = r#"[{"id":"prj-a","root":"/x","identity":"1:1"}]"#;
     fs::write(&projects, bare).unwrap();
-    let refusal = format!("{}: projects.json: format must be 1", projects.display());
+    let refusal = format!("{}: projects.json: format must be 2", projects.display());
     assert_eq!(
         apply(json!({"kind":"snapshot"})).unwrap(),
         json!({"projects": [], "common": {}, "projectsError": refusal})
     );
+    // A file of format 1 holds spaces without the group tree (docs/spec/groups.md#storage), so it is refused as a whole.
+    let first = r#"{"format":1,"projects":[{"id":"prj-a","root":"/x","identity":"1:1"}]}"#;
+    fs::write(&projects, first).unwrap();
+    assert_eq!(
+        apply(json!({"kind":"snapshot"})).unwrap(),
+        json!({"projects": [], "common": {}, "projectsError": refusal})
+    );
+    assert_eq!(
+        apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
+            .unwrap_err(),
+        refusal
+    );
+    assert_eq!(fs::read_to_string(&projects).unwrap(), first);
+    fs::write(&projects, bare).unwrap();
     assert_eq!(
         apply(json!({"kind":"add","project":{"id":"prj-b","root":"/y","identity":"1:2"}}))
             .unwrap_err(),
