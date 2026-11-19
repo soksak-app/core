@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F908-2: 닿지 않음 거부 `cards are not touching: <ids>`는 party의 member와 닿지 않는 요청의 카드만 요청 순서대로 나열한다. `create`는 첫 카드의 묶음 밖의 카드를, `add`와 `take`는 추가하는 카드를 나열한다. `docs/spec/cases/layout/parties.json`의 case와 Go restore 테스트가 이 목록을 기대하며, party 모듈과 Go party 모델이 이를 낸다.
 - F908-2: `core.party.remove`는 party가 가지지 않은 카드를 `card <id> is not in party <party>`로 거부하고 아무것도 바꾸지 않는다. `docs/spec/cases/layout/parties.json`의 `removing a card that is not in the party is refused` case가 이 거부를 기대하며, party 모듈과 Go party 모델이 통과한다.
 - F898: sok가 Codex agent를 지원한다. `~/.codex`가 폴더이면 skill을 `~/.agents/skills/soksak/SKILL.md`에 쓰고, `sok mcp install`은 `PATH`에 `codex` 명령이 있으면 sok를 그 명령에 등록한다.
 - F905-4: Codex 계약 시험이 호출하지 않는 공유 `policy` helper를 include하지 않는다. 이 include가 F898 CI 검사에서 경고를 거부하는 clippy 검사를 실패시켰다(`packages/sok/rust/tests/codex_test.rs`).

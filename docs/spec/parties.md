@@ -57,6 +57,8 @@ Refusals and their texts. The wording of each text is decided in [open decisions
 
 The checks run in the order of the table. The first failing check gives the error, so one request has one error.
 
+The `<ids>` of `cards are not touching: <ids>` are the cards of the request that touch no member of the party, in request order, separated by `, `. For `create`, which has no party yet, the group of the first card of the request is the party: the listed cards are the cards of the request outside that group. For `add` and `take`, the party is the party named in the request, so the listed card is the card of the request.
+
 ## Take
 
 `take: true` moves a card from its former party into the target party in one command.

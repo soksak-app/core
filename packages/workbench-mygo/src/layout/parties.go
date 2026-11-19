@@ -286,14 +286,26 @@ func groups(g *Grid, cards []string) ([][]string, error) {
 	return out, nil
 }
 
-// checkConnected refuses a card list that does not form one group of touching cards.
+// checkConnected refuses a card list whose cards outside the group of its first card. The refusal lists those cards in request order.
 func checkConnected(g *Grid, cards []string) error {
 	parts, err := groups(g, cards)
 	if err != nil {
 		return err
 	}
-	if len(parts) != 1 {
-		return fmt.Errorf("cards are not touching: %s", strings.Join(cards, ", "))
+	var anchor []string
+	for _, part := range parts {
+		if slices.Contains(part, cards[0]) {
+			anchor = part
+		}
+	}
+	outside := []string{}
+	for _, card := range cards {
+		if !slices.Contains(anchor, card) {
+			outside = append(outside, card)
+		}
+	}
+	if len(outside) > 0 {
+		return fmt.Errorf("cards are not touching: %s", strings.Join(outside, ", "))
 	}
 	return nil
 }

@@ -87,7 +87,10 @@ function checkCards(cards) {
     if (cards.indexOf(card) !== index) fail(`card ${card} is listed more than once`);
   });
   if (cards.length < 2) fail("a party needs at least 2 cards");
-  if (groupsOf(cards).length !== 1) fail(`cards are not touching: ${cards.join(", ")}`);
+  // The refusal lists the cards outside the group of the first card, in request order (docs/spec/parties.md#commands).
+  const anchor = groupsOf(cards).find((group) => group.includes(cards[0]));
+  const outside = cards.filter((card) => !anchor.includes(card));
+  if (outside.length) fail(`cards are not touching: ${outside.join(", ")}`);
 }
 
 /**
@@ -282,7 +285,7 @@ function update({ party: id, color, leader, leaderColor }) {
 /** Adds a card that touches the party. */
 function add({ party: id, card, take = false }) {
   const party = byId(id);
-  checkCards([card, ...party.cards.filter((member) => member !== card)]);
+  checkCards([...party.cards.filter((member) => member !== card), card]);
   if (party.cards.includes(card)) return { party: record(party), taken: [], changed: [] };
   const holder = partyOf(card);
   if (holder && !take) fail(`card ${card} belongs to party ${holder.id}`);
