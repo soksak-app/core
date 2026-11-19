@@ -570,7 +570,7 @@ static void spEnsurePressOriginMonitor(void) {
     // in its own hidden
     // flag, the region would stay hidden permanently in a transition where showing the surface again
     // does not call applyInsets again.
-    self.hidden = !self.wanted || width < 1 || height < 1;
+    sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1);
     if (!self.hidden && sp_surface_region_shown) sp_surface_region_shown(self);
 }
 

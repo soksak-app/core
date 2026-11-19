@@ -343,6 +343,21 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F983-2",
+    implementation: [
+      { file: "native/darwin/src/webview_geometry.m", symbol: "if (!holding || window.firstResponder == holding) return NO;" },
+      { file: "native/darwin/src/image_region.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1);" },
+      { file: "native/darwin/src/document_view.m", symbol: "sp_view_set_hidden(self, !self.wanted || width < 1 || height < 1 || surface.isHiddenOrHasHiddenAncestor);" },
+    ],
+    tests: [
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of another surface leaves the keyboard with the hidden surface that holds it" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "a surface that holds the keyboard for its region keeps it through a hide" },
+      { file: "native/darwin/tests/surface_keyboard_test.m", id: "the hide of a region of another surface leaves the keyboard with the hidden surface that holds it" },
+    ],
+    expected: "A hide of a surface, an image region or a document view leaves the keyboard with a surface that holds it for its region, shown or hidden.",
+    levels: ["unit"],
+  },
+  {
     id: "F973-1",
     implementation: [
       { file: "packages/host/go/src/presentation_wait.go", symbol: "func (s *Surfaces) presentationWaitEnded(surface, reason string, abandoned bool, err error) {" },
