@@ -13975,6 +13975,29 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F929",
+    implementation: [
+      { file: "packages/host/go/src/images.go", symbol: "return ok && string(raw) != \"null\" && json.Unmarshal(raw, target) == nil" },
+      { file: "packages/host/go/src/event_relay.go", symbol: "plugin event %q cannot set its owning surface" },
+      { file: "packages/host/rust/src/event_relay.rs", symbol: "if event.len() > plugin_prefix.len() && event.starts_with(&plugin_prefix) {" },
+      { file: "packages/host/rust/src/images.rs", symbol: "pub(crate) fn random_text() -> String {" },
+    ],
+    tests: [
+      { file: "packages/host/go/src/images_test.go", id: "TestMalformedScreenMessageNamesItsMember" },
+      { file: "packages/host/go/src/images_test.go", id: "TestANullScreenIsMalformedAtTheMemberScreen" },
+      { file: "packages/host/go/src/images_test.go", id: "TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered" },
+      { file: "packages/host/go/src/images_test.go", id: "TestScreenMessageWithoutNameIsNotAnswered" },
+      { file: "packages/host/go/src/view_wire_test.go", id: "TestViewWire" },
+      { file: "packages/host/rust/src/images_test.rs", id: "a_null_screen_is_malformed_at_the_member_screen" },
+      { file: "packages/host/rust/src/images_test.rs", id: "drawing_region_receives_one_screen_request_until_it_is_answered" },
+      { file: "packages/host/rust/src/images_test.rs", id: "screen_message_without_name_is_not_answered" },
+      { file: "packages/host/rust/src/image_detach_test.rs", id: "a_surface_ends_its_detaches_only_after_the_acknowledgement_of_each_of_its_images" },
+      { file: "packages/host/rust/tests/view_wire_test.rs", id: "every_view_wire_case_with_replay_true_gives_its_recorded_reply" },
+    ],
+    expected: "Both hosts refuse a null screen member, use the view batch refusal texts of the logging specification, quote the names of an answer error, write one record for a screen message without a name, and draw request identifiers from the random source of the system.",
+    levels: ["unit"],
+  },
+  {
     id: "F928",
     implementation: [
       { file: "packages/host/go/src/images.go", symbol: "func endScreenLocked(state *ImageRasterState) {" },

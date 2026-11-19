@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"unsafe"
@@ -172,7 +173,8 @@ func imageDetachFixture(t *testing.T, names ...string) (*Surfaces, map[string]*s
 // A supplier that does not answer sends no event, so the detach waits for its acknowledgement, the end of the supplier
 // connection or the end of the surface session, with no limit and no record. The supplier received the detach request, the
 // event at which the test checks that the detach is pending without an end or a record; the acknowledgement then ends it.
-// contract: images.detach.ends-by-its-events
+// The request identifier is image-detach- and 26 characters of the base32 alphabet from the random source of the system.
+// contract: images.detach.ends-by-its-events, images.request-identifiers-are-random-text
 func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 	isolateTraceRecords(t)
 	surfaces, services := imageDetachFixture(t, "fixture-sidecar")
@@ -183,6 +185,9 @@ func TestAnImageDetachHasNoLimitAndWritesNoRecordWhileItWaits(t *testing.T) {
 		t.Fatalf("begin image detach: %v", err)
 	}
 	request := sentImageDetachRequest(t, services["fixture-sidecar"])
+	if !regexp.MustCompile(`^image-detach-[A-Z2-7]{26}$`).MatchString(request) {
+		t.Fatalf("detach request identifier %q, want image-detach- and 26 characters of the base32 alphabet", request)
+	}
 	select {
 	case data := <-ends:
 		t.Fatalf("a detach without its acknowledgement ended: %v", data)

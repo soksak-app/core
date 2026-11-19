@@ -262,7 +262,7 @@ func (i *Images) AnswerScreen(key ImageKey, request ImageScreenRequest, accepted
 func (i *Images) answerScreenLocked(key ImageKey, request ImageScreenRequest, accepted bool) error {
 	state := i.states[key]
 	if state == nil || request.Request == "" || state.ScreenRequest.Request != request.Request {
-		return fmt.Errorf("image %s of surface %s has no unanswered screen request %q", key.Name, key.Surface, request.Request)
+		return fmt.Errorf("image %q of surface %q has no unanswered screen request %q", key.Name, key.Surface, request.Request)
 	}
 	state.ScreenRequest = ImageScreenRequest{}
 	if accepted {
@@ -1161,10 +1161,11 @@ func Decide(bodyBytes []byte, sender, surface string, images *Images) Decision {
 }
 
 // decideScreen validates the members of a screen message in their order: request, name, generation, raster and rows. It returns the
-// first missing or mistyped member as a MalformedScreen, and otherwise the ScreenMessage.
+// first missing or mistyped member as a MalformedScreen, and otherwise the ScreenMessage. A null value is mistyped
+// (docs/spec/native-surfaces.md#copy-path-frames); json.Unmarshal leaves its target unchanged for null, so each read refuses null first.
 func decideScreen(raw json.RawMessage) Decision {
 	var members map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &members); err != nil {
+	if string(raw) == "null" || json.Unmarshal(raw, &members) != nil {
 		return &MalformedScreen{Member: "screen", Text: "image screen message has no screen object", Echo: map[string]interface{}{}}
 	}
 	echo := map[string]interface{}{}
@@ -1198,13 +1199,13 @@ func decideScreen(raw json.RawMessage) Decision {
 	}
 	rows, ok := members["rows"]
 	var rowList []json.RawMessage
-	if !ok || json.Unmarshal(rows, &rowList) != nil {
+	if !ok || string(rows) == "null" || json.Unmarshal(rows, &rowList) != nil {
 		fail("rows", "image screen message has no rows array")
 	}
 	for index, row := range rowList {
 		var fields map[string]json.RawMessage
 		var number uint64
-		if json.Unmarshal(row, &fields) != nil || !screenRowNumber(fields, &number) {
+		if string(row) == "null" || json.Unmarshal(row, &fields) != nil || !screenRowNumber(fields, &number) {
 			fail(fmt.Sprintf("rows.%d.row", index), fmt.Sprintf("image screen message row %d has no valid row number", index))
 		}
 		if _, has := fields["cells"]; !has {
@@ -1217,10 +1218,10 @@ func decideScreen(raw json.RawMessage) Decision {
 	return &ScreenMessage{Request: request, Name: name, Generation: generation, Raster: raster}
 }
 
-// screenMember reads a member of a screen message into target and reports whether it is present and of the type of target.
+// screenMember reads a member of a screen message into target and reports whether it is present, not null and of the type of target.
 func screenMember(members map[string]json.RawMessage, member string, target interface{}) bool {
 	raw, ok := members[member]
-	return ok && json.Unmarshal(raw, target) == nil
+	return ok && string(raw) != "null" && json.Unmarshal(raw, target) == nil
 }
 
 // screenRowNumber reads the row number of a row of a screen message and reports whether it is a non-negative integer.
@@ -1385,6 +1386,13 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		return true
 
 	case *MalformedScreen:
+		// The answer is routed by the image name. A message without a valid name names no image, so its one error record says that
+		// no answer is sent.
+		name, named := d.Echo["name"].(string)
+		if !named {
+			LogError("image screen", fmt.Sprintf("surface=%s sender=%s %s; the message names no image, so no answer is sent", surface, sender, d.Text))
+			return true
+		}
 		LogError("image screen", fmt.Sprintf("surface=%s sender=%s %s", surface, sender, d.Text))
 		screen := map[string]interface{}{}
 		for member, value := range d.Echo {
@@ -1392,13 +1400,6 @@ func HandleEnvelope(bodyBytes []byte, sender, surface string, images *Images, on
 		}
 		screen["error"] = "malformed"
 		screen["member"] = d.Member
-		// The answer is routed by the image name. A message without a valid name names no image, so the error is logged and no
-		// answer is sent.
-		name, named := d.Echo["name"].(string)
-		if !named {
-			LogError("image screen", fmt.Sprintf("surface=%s sender=%s image name is missing, so the malformed answer is not sent", surface, sender))
-			return true
-		}
 		logAnswerError("image screen "+name, sendResponse(name, map[string]interface{}{"image": map[string]interface{}{"screen": screen}}))
 		return true
 

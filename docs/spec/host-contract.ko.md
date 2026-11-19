@@ -515,7 +515,10 @@ fn invalid_json_closes_connection() {
 | `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
 | `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |
 | `images.copy-path.screen-malformed-names-its-member` | 멤버가 없거나 타입이 틀린 screen 메시지, 또는 올바른 `row`나 `cells`가 없는 행은 `malformed` 오류와 첫 번째 그런 멤버의 점 경로로 답하며, 응답되지 않은 요청은 그대로 둔다. | all |
-| `images.copy-path.screen-without-name-is-not-answered` | 유효한 image `name`이 없는 screen 메시지는 답 없이 소비되며, 답은 image 이름으로 라우팅되므로 host는 이름이 없다는 오류 기록만 쓴다. | all |
+| `images.copy-path.screen-without-name-is-not-answered` | 유효한 image `name`이 없는 screen 메시지는 답 없이 소비되며, 답은 image 이름으로 라우팅되므로 host는 이름이 없고 답을 보내지 않는다는 오류 기록 하나만 쓴다. | all |
+| `images.copy-path.screen-null-is-mistyped` | 값이 `null`인 screen 멤버는 타입이 틀린 멤버이며, `null` screen은 멤버 `screen`에서 malformed이다. | all |
+| `images.copy-path.answer-of-no-request-names-it` | region이 갖지 않은 screen 요청의 답은 region 이름, 그 surface, 요청을 따옴표로 묶어 이름 붙이는 오류이다. | all |
+| `images.request-identifiers-are-random-text` | screen 요청 식별자는 `screen-`, detach 요청 식별자는 `image-detach-`이며, 그 뒤에 시스템의 random source에서 뽑은 base32 알파벳 26자가 붙는다. | all |
 | `performance.trace.switch-accepts-on-and-off-only` | `performance` 호출은 동작 `on`과 `off`만 받으며, `line`을 포함한 다른 동작은 `action must be on or off`로 실패하고 아무것도 쓰지 않는다. | all |
 | `performance.trace.switch-is-held-by-the-process` | 프로세스가 스위치를 가진다. `on`은 trace를 켜고 `off`는 끄며, 켜진 동안의 관측만 event `host.trace.on`과 `host.trace.off` 사이에 저장되고, 그 뒤에 파일 `performance`, 파일 `logs/performance.ndjson`, service 폴더의 flag는 없다. | all |
 | `performance.sampler.ends-with-the-switch` | 표본 추출은 trace가 켜진 동안 돌고, 꺼지면 끝나며, 다시 켜면 새로 시작한다. | all |

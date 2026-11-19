@@ -1331,9 +1331,22 @@ fn a_release_that_fails_in_an_open_window_reports_the_failure() {
     );
 }
 
-// contract: images.copy-path.screen-request
+/// Whether id is prefix and 26 characters of the base32 alphabet, the form of a request identifier that the host draws from the random
+/// source of the system.
+pub(crate) fn is_random_identifier(id: &str, prefix: &str) -> bool {
+    id.strip_prefix(prefix).is_some_and(|text| {
+        text.len() == 26
+            && text
+                .bytes()
+                .all(|byte| matches!(byte, b'A'..=b'Z' | b'2'..=b'7'))
+    })
+}
+
+// contract: images.copy-path.screen-request, images.request-identifiers-are-random-text, images.copy-path.answer-of-no-request-names-it
 // A drawing region receives one screen request for its current screen until the host answers it, and the request that follows an
-// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames).
+// accepted screen carries only the changed rows (docs/spec/native-surfaces.md#copy-path-frames). The request identifier is screen- and
+// 26 characters of the base32 alphabet from the random source of the system, and an answer of a request that the region does not hold
+// is an error that names the region, its surface and the request.
 #[test]
 fn drawing_region_receives_one_screen_request_until_it_is_answered() {
     let images = super::Images::default();
@@ -1354,6 +1367,11 @@ fn drawing_region_receives_one_screen_request_until_it_is_answered() {
     );
     let first = &requests[0];
     assert!(
+        is_random_identifier(&first.request, "screen-"),
+        "screen request identifier {:?}: screen- and 26 characters of the base32 alphabet",
+        first.request
+    );
+    assert!(
         first.full && first.generation == configure.generation && first.raster == configure.raster,
         "the first screen request is full for the configured raster: {first:?}"
     );
@@ -1371,6 +1389,18 @@ fn drawing_region_receives_one_screen_request_until_it_is_answered() {
     assert!(
         images.screen_requests().is_empty(),
         "a region with an unanswered screen request gets no other one"
+    );
+    let unknown = super::ScreenRequest {
+        request: "screen-old".to_string(),
+        ..first.clone()
+    };
+    assert_eq!(
+        images.answer_screen(&key, &unknown, true),
+        Err(
+            r#"image "copy" of surface "tab-1" has no unanswered screen request "screen-old""#
+                .to_string()
+        ),
+        "the answer of a request that the region does not hold"
     );
     images.answer_screen(&key, first, true).unwrap();
     let next = images.screen_requests();
@@ -1669,7 +1699,7 @@ type MalformedScreen = (&'static str, &'static str, fn(&mut serde_json::Value));
 // dotted path of its first such member, and its unanswered request stays unanswered (docs/spec/native-surfaces.md#copy-path-frames).
 #[test]
 fn malformed_screen_message_names_its_member() {
-    let cases: [MalformedScreen; 5] = [
+    let cases: [MalformedScreen; 10] = [
         ("missing request", "request", |m| {
             m.as_object_mut().unwrap().remove("request");
         }),
@@ -1684,6 +1714,21 @@ fn malformed_screen_message_names_its_member() {
         }),
         ("row without cells", "rows.0.cells", |m| {
             m["rows"] = serde_json::json!([{ "row": 0 }]);
+        }),
+        ("null request", "request", |m| {
+            m["request"] = serde_json::Value::Null;
+        }),
+        ("null generation", "generation", |m| {
+            m["generation"] = serde_json::Value::Null;
+        }),
+        ("null raster", "raster", |m| {
+            m["raster"] = serde_json::Value::Null;
+        }),
+        ("null rows", "rows", |m| {
+            m["rows"] = serde_json::Value::Null;
+        }),
+        ("null row number", "rows.0.row", |m| {
+            m["rows"] = serde_json::json!([{ "row": null, "cells": "row-0" }]);
         }),
     ];
     for (case, member, change) in cases {
@@ -1714,6 +1759,29 @@ fn malformed_screen_message_names_its_member() {
     }
 }
 
+// contract: images.copy-path.screen-null-is-mistyped
+// A screen member whose value is null is mistyped: a null screen is malformed at the member screen, as a screen that is not an object is
+// (docs/spec/native-surfaces.md#copy-path-frames). Its message names no image, so the host sends no answer.
+#[test]
+fn a_null_screen_is_malformed_at_the_member_screen() {
+    let (images, key, _, _, _) = screen_fixture();
+    let body = serde_json::json!({ "image": { "screen": null } });
+    match super::decide(&body.to_string(), "sidecar-a", &key.0, &images) {
+        super::Decision::Malformed { member, text, .. } => assert_eq!(
+            (member.as_str(), text.as_str()),
+            ("screen", "image screen message has no screen object"),
+            "the decision of a null screen"
+        ),
+        other => panic!("the decision of a null screen is {other:?}, want Malformed"),
+    }
+    let (handled, answers) = handle_screen_message(&images, &body, "sidecar-a", &key.0);
+    assert!(handled, "the null screen is consumed");
+    assert!(
+        answers.is_empty(),
+        "the null screen sends no answer, got {answers:?}"
+    );
+}
+
 // contract: images.copy-path.screen-without-name-is-not-answered
 // A screen message without a valid image name is consumed and sends no answer, because the answer is routed by the image name.
 #[test]
@@ -1724,7 +1792,8 @@ fn screen_message_without_name_is_not_answered() {
         "rows": [{ "row": 0, "cells": "row-0" }],
     });
     let body = serde_json::json!({ "image": { "screen": message } });
-    let (handled, answers) = handle_screen_message(&images, &body, "sidecar-a", &key.0);
+    // The sender of its own names the records of this message among the records of the other tests.
+    let (handled, answers) = handle_screen_message(&images, &body, "sidecar-unnamed", &key.0);
     assert!(handled, "the screen message without a name is consumed");
     assert!(
         answers.is_empty(),
@@ -1733,5 +1802,18 @@ fn screen_message_without_name_is_not_answered() {
     assert!(
         images.screen_requests().is_empty(),
         "the screen message without a name ended the unanswered request"
+    );
+    let texts: Vec<String> = crate::event_record::buffered_fields("host.record.error")
+        .into_iter()
+        .filter(|fields| fields["where"] == "image screen")
+        .filter_map(|fields| fields["text"].as_str().map(str::to_string))
+        .filter(|text| text.contains(" sender=sidecar-unnamed "))
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            "surface=tab-1 sender=sidecar-unnamed image screen message has no image name; the message names no image, so no answer is sent"
+        ],
+        "the error records of the screen message without a name"
     );
 }

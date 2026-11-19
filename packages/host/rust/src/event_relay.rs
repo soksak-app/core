@@ -386,7 +386,8 @@ pub fn view_log_command(
                     .get("fields")
                     .and_then(Value::as_object)
                     .ok_or_else(|| format!("events[{index}]: fields must be an object"))?;
-                if event.starts_with(&plugin_prefix) {
+                // A plugin record is plugin.<plugin>.<event>, so the prefix alone names no record.
+                if event.len() > plugin_prefix.len() && event.starts_with(&plugin_prefix) {
                     if fields.contains_key("surface") {
                         return Err(format!(
                             "events[{index}]: plugin event {event:?} cannot set its owning surface"
@@ -427,7 +428,7 @@ pub fn view_log_command(
                 .expect("validated events array")
             {
                 let event = item["event"].as_str().expect("validated event name");
-                if event.starts_with(&plugin_prefix) {
+                if event.len() > plugin_prefix.len() && event.starts_with(&plugin_prefix) {
                     item["fields"]["surface"] = Value::String(surface.to_string());
                     let (fields, produced) =
                         bounded_serialize(&item["fields"], 65_536).map_err(|error| {
