@@ -1,7 +1,7 @@
 // Rebuilds a macOS application bundle only when no process is executing from that bundle.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, rmSync } from "node:fs";
-import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -17,22 +17,42 @@ function parseProcessTable(text) {
   });
 }
 
-/** Returns bundle executable prefixes in the argument form and the absolute form. */
-function executablePrefixes(bundle) {
-  const absoluteBundle = resolve(bundle);
-  const values = new Set([absoluteBundle]);
-  if (!isAbsolute(bundle)) values.add(normalize(bundle));
-  return [...values].map((value) => `${value}/Contents/MacOS/`);
-}
+/** The directory of the executables of `bundle`, absolute. */
+const executableDirectory = (bundle) => `${resolve(bundle)}/Contents/MacOS/`;
 
-/** A command is attributed only when its argv[0] starts with the exact target bundle executable directory. */
-function processUsesBundle(command, prefixes) {
+/**
+ * The executable path of a command that names a file of a `Contents/MacOS/` directory: the command up to the first space or quote after
+ * that directory, so a bundle path with spaces stays whole, or null for another command.
+ */
+function executableOf(command) {
   const line = command.replace(/\/{2,}/g, "/");
-  return prefixes.some((prefix) => line.startsWith(prefix) && line.slice(prefix.length).split(/[\s"']/)[0] !== "");
+  const at = line.indexOf("/Contents/MacOS/");
+  if (at < 0) return null;
+  const start = at + "/Contents/MacOS/".length;
+  const file = line.slice(start).split(/[\s"']/)[0];
+  return file === "" ? null : line.slice(0, start) + file;
 }
 
 /**
- * The processes that execute from `bundle`. `run` has the signature of spawnSync and reads the process table; a test passes its own.
+ * The working directory of the process `pid`, from `lsof -a -p <pid> -d cwd -Fn`, or null when the process ended after the process
+ * table was read. A relative executable path names a file of that directory, so another checkout that runs the same relative path is
+ * not this bundle.
+ */
+function workingDirectory(pid, run) {
+  const result = run("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], { encoding: "utf8" });
+  if (result.error) throw new Error(`lsof failed while reading the working directory of PID ${pid}: ${result.error.message}`);
+  const name = result.stdout.split("\n").find((line) => line.startsWith("n"));
+  // lsof ends with status 1 and lists nothing for a process that no longer exists.
+  if (result.status === 1 && result.stdout.trim() === "") return null;
+  if (result.status !== 0 || !name) {
+    throw new Error(`lsof listed no working directory of PID ${pid}: status ${result.status}, ${JSON.stringify(result.stdout + result.stderr)}`);
+  }
+  return name.slice(1);
+}
+
+/**
+ * The processes that execute from `bundle`. `run` has the signature of spawnSync and reads the process table and the working directory
+ * of a process with a relative executable path; a test passes its own.
  */
 function runningBundleProcesses(bundle, run = spawnSync) {
   // The output has no bound, because the commands of other processes can exceed any fixed buffer, and every row is read to find
@@ -41,8 +61,19 @@ function runningBundleProcesses(bundle, run = spawnSync) {
   if (result.error || result.status !== 0) {
     throw new Error(`ps failed while checking bundle ${resolve(bundle)}: ${result.error?.message ?? result.stderr.trim()}`);
   }
-  const prefixes = executablePrefixes(bundle);
-  return parseProcessTable(result.stdout).filter(({ pid, command }) => pid !== process.pid && processUsesBundle(command, prefixes));
+  const directory = executableDirectory(bundle);
+  // An executable path is attributed only when it lies in the exact target bundle executable directory, a relative one resolved
+  // against the working directory of its process.
+  const inBundle = (path) => path.startsWith(directory) && path.length > directory.length;
+  return parseProcessTable(result.stdout).filter(({ pid, command }) => {
+    if (pid === process.pid) return false;
+    const executable = executableOf(command);
+    if (executable === null) return false;
+    if (isAbsolute(executable)) return inBundle(executable);
+    if (!executable.includes(`${basename(resolve(bundle))}/Contents/MacOS/`)) return false;
+    const cwd = workingDirectory(pid, run);
+    return cwd !== null && inBundle(resolve(cwd, executable));
+  });
 }
 
 /**
