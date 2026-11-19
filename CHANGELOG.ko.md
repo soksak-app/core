@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-2-5 (projects.json format 3): `projects.json`의 space layout이 grid의 slicing tree가 되므로, Go와 Rust host는 format 3으로 `projects.json`을 쓰고 format 2 파일이나 bare 배열을 `<file>: projects.json: format must be 3`로 통째로 거부한다(`docs/spec/groups.md#storage`). mygo host는 Go host의 store를 쓰고, `projects.json`의 e2e reader, 거부된 file의 window 검사, 거부 text의 fixture가 따른다. Red: Go와 Rust workspace test가 `format must be 2`를 찾았고 e2e reader test가 format 3을 거부했다. Green: Go와 Rust workspace test, e2e reader test, 거부된 file의 mygo 시작 test, 거부 text의 page test가 통과한다. 사람은 `projects.json`을 지우고 project를 다시 더한다. project 설정 파일과 folder는 남는다.
 - F937-38 (두 절반이 들어맞는 split): group header 아래 card의 `bottom` 쪽 split은 새 card가 그 group의 frame을 받은 뒤 line을 놓으므로, 그리는 두 절반이 같은 높이가 되고 두 절반이 들어맞는 split은 더 이상 거부되지 않는다. `cardSplit` `even`의 balance는 현재 tree의 frame을 재며, mygo는 split, group, group에 card 추가에서 balance된 grid만 판정하고, 추가는 이제 `cardSplit`을 따른다(`docs/spec/groups.md#split-setting`). 검증: `docs/spec/cases/layout/groups.json`의 case가 바뀌지 않은 workbench에서 실패했고 두 workbench에서 통과한다.
 - F937-20 (group header의 fit, page): page가 group header의 이름을 그 글자의 폭으로 재므로, 버튼을 담을 자리가 있는 header가 모든 폭에서 접지 않고 버튼을 한 줄에 보인다(`docs/spec/groups.md#headers`). 검증: fit test가 이전 fit에서 실패했고 통과한다.
 - F955 (boundary의 grip): divider의 그려진 각 stretch가 grip 길이를 담는 동안 그 가운데에 grip을 그리고, 쌓인 두 group header 사이의 한 gap 길이 stretch처럼 더 짧은 stretch는 그리지 않으므로, 두 workbench에서 어떤 grip도 header에 들어가지 않는다(`docs/spec/groups.md#drawing`). 검증: 두 workbench의 grip test가 바뀌지 않은 코드에서 실패했고 통과한다.

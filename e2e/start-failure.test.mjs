@@ -60,7 +60,7 @@ for (const app of Object.values(APPS)) {
     await s.run("core.projects.flush");
     writeFileSync(file, "[]");
 
-    const pattern = /^error workbench workbench: .*projects\.json: projects\.json: format must be 2$/;
+    const pattern = /^error workbench workbench: .*projects\.json: projects\.json: format must be 3$/;
     s.expectError(pattern);
     // The reload resolves when the reloaded page reports ready.
     await s.run("host.window.reload");
