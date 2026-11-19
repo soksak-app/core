@@ -44,3 +44,22 @@ test("a party record with fewer than 2 cards is refused when the space is read",
   const parties = [{ id: "p1", cards: ["a"], leader: null, color: "#112233", leaderColor: null }];
   assert.throws(() => readStoredSpace(project, { id: "spc-1", title: "SPACE1", layout, parties }), /a party needs at least 2 cards/);
 });
+
+// contract: workbench.parties.storage
+test("a stored projects.json space reads its parties back with the stored color values", () => {
+  const stored = JSON.parse('{"id":"spc-1","title":"SPACE1","parties":[{"id":"p1","cards":["a","b"],"leader":"a","color":"#123456","leaderColor":"#abcdef"}]}');
+  const space = readStoredSpace(project, { ...stored, layout });
+  assert.deepEqual(space.parties, stored.parties);
+  assert.deepEqual(writeStoredSpace(space).parties, stored.parties);
+});
+
+test("a stored party color that is a theme token name is refused with the storage error of the specification", () => {
+  const second = { id: "spc-1", title: "SPACE1", layout, parties: [{ id: "p1", cards: ["a", "b"], leader: null, color: "party-1", leaderColor: null }] };
+  let message = null;
+  try {
+    readStoredSpace(project, second);
+  } catch (error) {
+    message = error.message;
+  }
+  assert.equal(message, 'projects.json: project /work/one, space spc-1: parties [{"id":"p1","cards":["a","b"],"leader":null,"color":"party-1","leaderColor":null}]');
+});
