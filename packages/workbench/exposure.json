@@ -2776,6 +2776,32 @@
         }
       },
       {
+        "name": "core.boundary.center",
+        "description": "Centres boundary line on axis between its neighbouring lines, as a double click or Enter on its divider does, and redraws; returns the resulting position.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "axis": {
+              "enum": [
+                "x",
+                "y"
+              ]
+            },
+            "line": {
+              "type": "integer"
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      {
         "name": "core.layout.balance",
         "description": "Gives every card of the current space a fair share of the plane and keeps the arrangement; a cut gives its sides room in proportion to the cards they hold along its axis, counted on their fullest row.",
         "params": {

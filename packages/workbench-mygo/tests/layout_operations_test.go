@@ -15,6 +15,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
+
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
@@ -898,5 +900,79 @@ func TestADividerDragEndsWithTheBoundaryCommand(t *testing.T) {
 	}
 	if len(moves) != 1 {
 		t.Fatalf("the drag wrote %d records of core.boundary.move: %v", len(moves), moves)
+	}
+}
+
+// An arrow key on a focused divider runs core.boundary.move with the position one step away, which writes its record
+// workbench.layout.change as every command does.
+func TestADividerKeyRunsTheBoundaryCommand(t *testing.T) {
+	host := recordingCommands(&storedHost{installed: layoutPlugins, common: map[string]any{},
+		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
+	f := newTabShell(t, host)
+	f.open(t)
+	answer, err := f.apply("core.card.split", `{"card":"main","side":"right","plugin":"plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var made struct{ Card string }
+	if err := json.Unmarshal([]byte(answer), &made); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	moves := func() int {
+		count := 0
+		for _, record := range host.written("workbench.layout.change") {
+			if record["fields"].(map[string]any)["command"] == "core.boundary.move" {
+				count++
+			}
+		}
+		return count
+	}
+	// The divider takes the keys once the focus reaches it with Tab, as TestADividerTakesTheKeys finds it.
+	for range 80 {
+		if moves() > 0 {
+			break
+		}
+		f.tester.Key(0, ui.KeyTab)
+		f.settle()
+		f.tester.Key(0, ui.KeyLeft)
+		f.settle()
+	}
+	if moves := moves(); moves != 1 {
+		t.Fatalf("the arrow key wrote %d records of core.boundary.move", moves)
+	}
+}
+
+// A double click on a divider runs core.boundary.center, which centres its line and writes its record workbench.layout.change.
+func TestADividerDoubleClickRunsTheCentreCommand(t *testing.T) {
+	host := recordingCommands(&storedHost{installed: layoutPlugins, common: map[string]any{},
+		projects: []map[string]any{gridProject(oneCard(tab("t1", "notes")))}})
+	f := newTabShell(t, host)
+	f.open(t)
+	answer, err := f.apply("core.card.split", `{"card":"main","side":"right","plugin":"plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var made struct{ Card string }
+	if err := json.Unmarshal([]byte(answer), &made); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.apply("core.boundary.move", `{"axis":"x","line":2,"position":300}`); err != nil {
+		t.Fatal(err)
+	}
+	f.settle()
+	bar, _ := f.divider("main", made.Card)
+	x, y := bar.X+bar.W/2, bar.Y+bar.H/2
+	f.tester.ClickAt(x, y)
+	f.tester.ClickAt(x, y)
+	f.settle()
+	centres := 0
+	for _, record := range host.written("workbench.layout.change") {
+		if record["fields"].(map[string]any)["command"] == "core.boundary.center" {
+			centres++
+		}
+	}
+	if centres != 1 {
+		t.Fatalf("the double click wrote %d records of core.boundary.center", centres)
 	}
 }
