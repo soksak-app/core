@@ -204,7 +204,10 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    plane sets to group-focus-fade to the power of the levels up to it (docs/spec/groups.md#focus). Only the color of the frame line
    changes, so the mark adds no line, also at the seam. */
 :root[data-focus-ind=border] .group[data-focus]{border-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
-.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden}
+/* The header draws the line below it as the head of a card does, in the color that the plane writes from groupLook of group-look.js:
+   edge with a gap and rule at the seam (docs/spec/groups.md#drawing). */
+.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden;
+  border-bottom:var(--bw) solid}
 .group__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
   color:var(--fg);cursor:grab;user-select:none}
 
@@ -248,12 +251,11 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
   outline:var(--bw) solid var(--focus)}
 :root[data-seam=line] .drop{border-radius:0;border:var(--bw) solid var(--focus)}
 /* At the seam a group card draws no border either: the line around it is the line of the plane, its header draws the line between it
-   and the box below it, and the mark of a group card that holds the focus paints the line outside the frame, as the focus of a card does.
+   and the box below it in rule, and the mark of a group card that holds the focus paints the line outside the frame, as the focus of a card does.
    A nested group card and the focused card stand later in the paint order, so the innermost mark owns a line that several marked boxes
    end on (docs/spec/groups.md#drawing). The stage starts on the bottom line of the space bar and on the right line of the project
    column and draws its own line over them, so the edge of the plane is one line on each side. */
 :root[data-seam=line] .group{border-width:0;border-radius:0}
-:root[data-seam=line] .group__head{border-bottom:var(--bw) solid var(--rule)}
 :root[data-seam=line][data-focus-ind=border] .group[data-focus]{
   outline-width:var(--bw);outline-style:solid;outline-color:color-mix(in srgb,var(--focus) var(--group-focus),var(--edge))}
 :root[data-seam=line] .stage{margin-top:calc(0px - var(--bw))}

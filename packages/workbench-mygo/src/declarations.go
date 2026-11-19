@@ -154,6 +154,20 @@ func (p Palette) GroupFill(level int) ui.Color {
 	return mixed(p.Groups[min(max(level, 1), 3)-1], p.Bg, p.GroupTint)
 }
 
+// GroupLook is the colors of a group card (docs/spec/groups.md#drawing): Line is the line under its header.
+type GroupLook struct {
+	Line ui.Color
+}
+
+// GroupLook is the colors of a group card whose members stand on level, groupLook of packages/workbench/group-look.js: the line under
+// its header is edge with a gap and rule at the seam, as under the head of a content card (docs/spec/cases/group-look.json).
+func (p Palette) GroupLook(level int) GroupLook {
+	if p.Seam() {
+		return GroupLook{Line: p.Rule}
+	}
+	return GroupLook{Line: p.Edge}
+}
+
 // Seam is whether the cards share one line: the gap is 0 (seam of packages/workbench/settings.js).
 func (p Palette) Seam() bool { return p.Gap == 0 }
 

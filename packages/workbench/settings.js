@@ -32,6 +32,7 @@ import { chooseLink, resolveSidebar } from "./sidebar-sets.js";
 import { TEXT_STEPS, notifyTextSize } from "./text-size.js";
 import { reportTraceAtStart, setTraceEnabled } from "./performance.js";
 import { setLogPolicy } from "./log-policy.js";
+import { groupLook } from "./group-look.js";
 import { logPolicyOf } from "./log-gate.js";
 import { CLASSES } from "./event-classes.js";
 import { beginOperation } from "./operations.js";
@@ -658,6 +659,8 @@ export function groupFill(level) {
   const bg = rgb(colors.bg);
   return `#${group.map((c, i) => Math.round(c * share + bg[i] * (1 - share)).toString(16).padStart(2, "0")).join("")}`;
 }
+/** The colors of a group card whose members stand on level in the current theme, mode and gap (groupLook of group-look.js). */
+export const currentGroupLook = (level) => groupLook(themeOf(settings.theme)[settings.mode], level, { seam: settings.gap === 0 });
 export const modeName = () => settings.mode;
 
 /**

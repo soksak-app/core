@@ -1,0 +1,9 @@
+{
+"description":"The colors of a group card from the tokens of its theme and mode, the level of its members and whether the cards share one line at the seam (docs/spec/groups.md#drawing): line is the line under its header.",
+"cases":[
+ {"name":"with a gap the line under the header is edge, as under the head of a card","tokens":{"bg":"#eef0f4","card":"#ffffff","edge":"#d8dbe4","rule":"#e3e6ec"},"level":1,"seam":false,"returns":{"line":"#d8dbe4"}},
+ {"name":"at the seam the line under the header is rule, as under the head of a card","tokens":{"bg":"#eef0f4","card":"#ffffff","edge":"#d8dbe4","rule":"#e3e6ec"},"level":1,"seam":true,"returns":{"line":"#e3e6ec"}},
+ {"name":"a nested group card draws the same line with a gap","tokens":{"bg":"#101117","card":"#191b24","edge":"#2b2e3d","rule":"#22242f"},"level":3,"seam":false,"returns":{"line":"#2b2e3d"}},
+ {"name":"a nested group card draws the same line at the seam","tokens":{"bg":"#101117","card":"#191b24","edge":"#2b2e3d","rule":"#22242f"},"level":3,"seam":true,"returns":{"line":"#22242f"}}
+]
+}

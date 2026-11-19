@@ -326,7 +326,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	target := renameTarget{Kind: "group", ID: id}
 	header := ui.Row(s.binder.Name(c, "core.group.header", id))
 	header.Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
-		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.cardLine()).Children(func() {
+		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(s.palette.GroupLook(s.planes.Level(id) + 1).Line).Children(func() {
 		ui.Box(c).Absolute().Size(0, 0).Children(func() {
 			if fit.Tools == "bar" {
 				s.binder.Absent(c, "core.card.tools", "core.card.tools", id, cardParam{Card: id})

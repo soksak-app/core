@@ -4,7 +4,7 @@
 import { bind } from "./commands.js";
 import { declaredIcons as icons } from "./icons.js";
 import { CHROME } from "./chrome-metrics.js";
-import { groupFill } from "./settings.js";
+import { currentGroupLook, groupFill } from "./settings.js";
 import declaration from "./workbench.json" with { type: "json" };
 
 /** The names of the card tools, declared in workbench.json for both workbenches (docs/spec/example-model.md#card-tools). */
@@ -139,6 +139,7 @@ export function drawGroupCards(planeEl, tree, rects, { head, fullscreen, even, f
     markHeldFocus(el, tree.focusDistance(id, focused));
     const header = el.querySelector(".group__head");
     header.style.height = `${head}px`;
+    header.style.borderBottomColor = currentGroupLook(tree.level(id) + 1).line;
     const name = header.querySelector(".group__name");
     if (name.textContent !== node.name) {
       name.textContent = node.name;

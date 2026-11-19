@@ -283,6 +283,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-17",
+    implementation: [
+      { file: "packages/workbench/group-look.js", symbol: "export function groupLook(colors, level, { seam })" },
+      { file: "packages/workbench-mygo/src/declarations.go", symbol: "func (p Palette) GroupLook(level int) GroupLook {" },
+    ],
+    tests: [
+      { file: "packages/workbench/test/group-look.test.mjs", id: "group look: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/group_look_test.go", id: "TestGroupLookCases" },
+      { file: "packages/workbench/test/group-seam.test.mjs", id: "with a gap a group card keeps its border, its header draws the line below it as the head of a card, and the stage stands apart from the bars" },
+    ],
+    expected: "The header of a group card draws the line below it as the head of a content card, in edge with a gap and in rule at the seam, in both workbenches, by the shared cases of docs/spec/cases/group-look.json.",
+    levels: ["unit"],
+  },
+  {
     id: "F968",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/head.go", symbol: "widest = math.Max(widest, w)" },
