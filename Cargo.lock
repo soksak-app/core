@@ -7500,7 +7500,7 @@ dependencies = [
 
 [[package]]
 name = "sok-gpuikit"
-version = "0.0.40"
+version = "0.0.45"
 dependencies = [
  "soksak-host",
  "soksak-host-gpuikit",
@@ -7558,7 +7558,7 @@ dependencies = [
 
 [[package]]
 name = "soksak-host-gpuikit"
-version = "0.0.40"
+version = "0.0.45"
 dependencies = [
  "block2 0.6.2",
  "futures",
