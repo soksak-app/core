@@ -153,6 +153,10 @@ func (r *Registry) Status(name string, read Status) {
 // (docs/spec/logging.md#entrances).
 func (r *Registry) Run(name string, params json.RawMessage) (any, error) {
 	started := time.Now()
+	if err := r.checkParams(name, params); err != nil {
+		r.record(name, started, err)
+		return nil, err
+	}
 	result, err := r.run(name, params)
 	r.record(name, started, err)
 	return result, err
@@ -190,6 +194,10 @@ func (r *Registry) RunLater(name string, params json.RawMessage, answer func(val
 		r.record(name, started, err)
 		answered(value, err)
 	})
+	if err := r.checkParams(name, params); err != nil {
+		answer(nil, err)
+		return
+	}
 	r.mu.Lock()
 	later := r.later[name]
 	r.mu.Unlock()
@@ -526,6 +534,25 @@ func (r *Registry) checkRequest(name string, fields map[string]json.RawMessage) 
 	// The handlers of the workbench take no cause, and an invalid list is refused also for a handler that ignores it.
 	if cids, present := fields["cids"]; present && !validCauses(cids) {
 		return Refuse(InvalidParams, "command.run for %s: command cids must be an array of non-empty strings without a quote, a backslash or a control character", name)
+	}
+	return nil
+}
+
+// checkParams refuses the params of a run of the workbench by the params schema of the command, as a request is refused
+// (docs/spec/exposure.md#command-parameters); a run without params runs with an empty object, as a run of the page does. A command
+// that is not registered is refused by the run, as the page refuses it before its params.
+func (r *Registry) checkParams(name string, params json.RawMessage) error {
+	r.mu.Lock()
+	registered := r.commands[name] != nil || r.later[name] != nil
+	r.mu.Unlock()
+	if !registered {
+		return nil
+	}
+	if len(params) == 0 || string(params) == "null" {
+		params = json.RawMessage(`{}`)
+	}
+	if refusal := host.CommandParamsRefusal(name, r.declared.params[name], params); refusal != "" {
+		return Refuse(InvalidParams, "%s", refusal)
 	}
 	return nil
 }

@@ -126,7 +126,7 @@ func TestCoreCardSplitRefuses(t *testing.T) {
 	}{
 		{"none", "right", "no card none"},
 		{"left", "right", "no card left"},
-		{source, "middle", "unknown side middle; use left, right, top or bottom"},
+		{source, "middle", "invalid params for core.card.split"},
 	} {
 		if _, err := f.answer("core.card.split", map[string]string{"card": c.card, "side": c.side, "plugin": "textprobe"}); err == nil || err.Error() != c.want {
 			t.Errorf("the split of %s toward %s failed with %v, want %s", c.card, c.side, err, c.want)
@@ -220,7 +220,7 @@ func TestCoreBoundaryMove(t *testing.T) {
 	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 99, "position": 340}); err == nil || err.Error() != "no x boundary at line 99" {
 		t.Fatalf("a boundary that does not exist failed with %v", err)
 	}
-	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 1}); err == nil || err.Error() != "core.boundary.move: position is missing" {
+	if _, err := f.answer("core.boundary.move", map[string]any{"axis": "x", "line": 1}); err == nil || err.Error() != "command core.boundary.move: parameter position is required" {
 		t.Fatalf("a move without a position failed with %v", err)
 	}
 }
@@ -1078,9 +1078,9 @@ func TestCardSplitDistinguishesMissingEmptyAndNullSide(t *testing.T) {
 		present  bool
 		expected string
 	}{
-		{name: "missing", expected: "unknown side undefined; use left, right, top or bottom"},
-		{name: "empty", side: "", present: true, expected: "unknown side ; use left, right, top or bottom"},
-		{name: "null", present: true, expected: "unknown side null; use left, right, top or bottom"},
+		{name: "missing", expected: "command core.card.split: parameter side is required"},
+		{name: "empty", side: "", present: true, expected: "invalid params for core.card.split"},
+		{name: "null", present: true, expected: "invalid params for core.card.split"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			argument := map[string]any{"card": card, "plugin": "textprobe"}

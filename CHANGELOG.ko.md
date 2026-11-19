@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F967-4 (mygo의 모든 실행의 parameter): mygo workbench에서 command의 모든 실행, 곧 요청과 workbench 자신의 실행은 page의 모든 실행처럼 parameter 검사를 거친다. 그래서 문자열이 아닌 `core.group.create`의 `request`는 두 workbench에서 `invalid params for core.group.create`로 거부되고, workbench의 실행은 command에 그 schema가 선언한 member만 준다(`docs/spec/exposure.md#command-parameters`). 검증: group request test가 바뀌지 않은 코드에서 실패했고 mygo workbench의 test와 함께 통과한다.
 - F967-2 (하나의 schema matcher): mygo workbench는 plugin data, tab params, contribution을 manifest reader의 matcher인 `sok.MatchesSchemaText`로 검사하고, 자기 matcher 복사본은 제거된다. 검증: 복사본의 case가 reader matcher로 통과하고 mygo workbench의 test가 통과한다.
 - F967-3 (seam에서 space bar 아래 선): gap이 0이고 focus 카드가 plane 맨 위에 있으면 창 bar의 mygo test는 space 줄 아래 선에 focus 색을 기대한다. stage가 그 선을 함께 쓰고 seam에서 카드의 focus ring이 카드 둘레의 선을 칠하기 때문이다(`docs/spec/settings.md#values`, `docs/spec/groups.md`). 검증: stage가 선을 함께 쓰기 전 commit에서 test가 통과했고 그 변경에서 실패했으며, 이 기대로 두 theme에서 통과한다.
 - F967-1 (창 크기 변경의 한계): 두 host 모두 `host.window.resize`의 1 point보다 작은 너비나 높이를 `width and height must be at least 1`로 거부한다. 이전에는 Go host가 1보다 작은 크기를 다른 문구로 거부했고 Rust host는 0 이하만 거부했다(`docs/spec/cases/window-resize.json`). 검증: 두 host의 content size test가 바뀌지 않은 코드에서 실패했고 통과한다.

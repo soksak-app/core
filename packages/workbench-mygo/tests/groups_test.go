@@ -515,7 +515,12 @@ func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
 		again != first || f.status("core.layout") != before {
 		t.Fatalf("the repeat of r1 answered %s, %v, not %s, and changed the layout: %v", again, err, first, f.status("core.layout") != before)
 	}
-	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`, `7`} {
+	// A request that is no string is refused by the params schema, as every registry refuses it (docs/spec/exposure.md#command-parameters).
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": 7}`); err == nil ||
+		err.Error() != "invalid params for core.group.create" {
+		t.Errorf("the request 7 answered %v, not %q", err, "invalid params for core.group.create")
+	}
+	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`} {
 		want := "core.group.create: request must be a string of 1 to 128 characters"
 		if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": `+request+`}`); err == nil ||
 			err.Error() != want {

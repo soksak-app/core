@@ -78,9 +78,10 @@ func act[T any](s *Shell, name string, run func(value T) error) {
 }
 
 type cardParam struct {
-	Card   string `json:"card"`
-	Side   string `json:"side"`
-	Plugin string `json:"plugin"`
+	Card string `json:"card"`
+	// Side and Plugin are omitted when empty, so a run of the workbench gives a command only the members that it declares.
+	Side   string `json:"side,omitempty"`
+	Plugin string `json:"plugin,omitempty"`
 }
 
 // splitCardParam retains the side field's presence until its declared error is
@@ -100,7 +101,7 @@ type addTabParam struct {
 type boundaryParam struct {
 	Axis     layout.Axis `json:"axis"`
 	Line     int         `json:"line"`
-	Position *float64    `json:"position"`
+	Position *float64    `json:"position,omitempty"`
 }
 
 type tabParam struct {
@@ -290,9 +291,7 @@ func (s *Shell) register() {
 		if !s.plane.HasBoundary(value.Axis, value.Line) {
 			return nil, fmt.Errorf("no %s boundary at line %d", value.Axis, value.Line)
 		}
-		if value.Position == nil {
-			return nil, fmt.Errorf("core.boundary.move: position is missing")
-		}
+		// The registry refused params without the required position before the run (docs/spec/exposure.md#command-parameters).
 		moved := s.planes.MoveBoundaryTo(value.Axis, value.Line, *value.Position)
 		s.settle()
 		return map[string]float64{"position": moved}, nil

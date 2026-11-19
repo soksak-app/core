@@ -145,7 +145,7 @@ func TestTheRenameCommandsRefuseWhatIsNotThere(t *testing.T) {
 		params  any
 		text    string
 	}{
-		{"core.rename.begin", map[string]string{"kind": "card", "id": "a"}, "unknown rename target card"},
+		{"core.rename.begin", map[string]string{"kind": "card", "id": "a"}, "invalid params for core.rename.begin"},
 		{"core.rename.begin", map[string]string{"kind": "project", "id": "absent"}, "no project absent"},
 		{"core.rename.begin", map[string]string{"kind": "space", "id": "absent"}, "no space absent"},
 		{"core.rename.set", map[string]string{"value": "x"}, "nothing is being renamed"},

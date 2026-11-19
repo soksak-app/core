@@ -1268,11 +1268,12 @@ func (s *Shell) registerSettingsSets() {
 
 // windowParam is the parameter of a command of the window.
 type windowParam struct {
-	Section string  `json:"section"`
-	Scope   string  `json:"scope"`
-	Plugin  *string `json:"plugin"`
-	Query   *string `json:"query"`
-	Set     *string `json:"set"`
+	// The members that a command does not declare are omitted, so a run of the workbench gives a command only its own members.
+	Section string  `json:"section,omitempty"`
+	Scope   string  `json:"scope,omitempty"`
+	Plugin  *string `json:"plugin,omitempty"`
+	Query   *string `json:"query,omitempty"`
+	Set     *string `json:"set,omitempty"`
 	DX      float64 `json:"dx"`
 	DY      float64 `json:"dy"`
 }
