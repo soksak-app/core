@@ -278,33 +278,6 @@ func (c *instantTable) now() (uint64, error) {
 	return c.times[c.reads-1], nil
 }
 
-// contract: input.pointer.reads-the-press-target-before-delivery
-func TestAPressReadsItsTargetBeforeItsDelivery(t *testing.T) {
-	var steps []string
-	err := readPressThenDeliver(func() error {
-		steps = append(steps, "read")
-		return nil
-	}, func() error {
-		steps = append(steps, "deliver")
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Equal(steps, []string{"read", "deliver"}) {
-		t.Fatalf("a layout between the delivery and the read names another view as the target of the press: %v", steps)
-	}
-	failed := errors.New("no window")
-	delivered := false
-	err = readPressThenDeliver(func() error { return failed }, func() error {
-		delivered = true
-		return nil
-	})
-	if !errors.Is(err, failed) || delivered {
-		t.Fatalf("a press whose target cannot be read was delivered: %v %v", err, delivered)
-	}
-}
-
 // contract: exposure.host-window.reads-during-surface-close
 func TestSurfaceNameIsForgottenInTheStepThatClosesItsNativeView(t *testing.T) {
 	s := &Surfaces{named: map[uintptr]string{}}

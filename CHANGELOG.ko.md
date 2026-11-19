@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F958-1 (layout 중의 press): 주입된 press의 native 전달은 press가 닿은 web view를 답하고, Wails와 Tauri host는 surface press를 전달 전 좌표의 web view 대신 그 web view에 귀속시키므로, 열린 layout을 기다리는 press가 focus를 그 card로 옮긴다. host와 page는 각 surface press를 기록한다(`host.surface.press`, `workbench.surface.press`). 검증: native surface layout test의 press 귀속 검사가 바뀌지 않은 코드에서 실패했고 통과하며, 두 host의 전달 test도 통과한다.
 - F960 (layout redraw benchmark에서 card의 raster): `make benchmark-layout-redraw`는 `host.window`가 놓는 각 region의 raster 크기 frame을 기다리므로, view보다 반 point 넓은 region이 더는 그 기다림을 붙잡지 않는다. 검증: region raster case가 바뀌지 않은 benchmark에서 실패했고 통과한다.
 - F960 (raster probe의 manifest): raster probe fixture의 description은 171자이므로 `sok plugin install`이 그것을 받아들이고 image region benchmark가 시작한다. 검증: raster probe fixture test가 바뀌지 않은 manifest에서 `description must be 1 to 200 characters`로 실패했고 통과한다.
 - F968 (head의 접힘 단계와 선택된 tab): 두 workbench에서 card head의 접힘 단계는 card에서 가장 넓은 tab을 쓰므로, header는 어느 tab이 선택되든 같은 tab을 보이고 선택된 tab은 언제나 그 가운데 있다. 검증: 공유 head case와 mygo head test가 바뀌지 않은 code에서 실패했고 통과한다.

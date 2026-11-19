@@ -33,7 +33,7 @@ static id evaluate(WKWebView *view, NSString *script) {
 }
 static sp_input_result lastResult;
 static BOOL lastDone;
-static void onDone(void *context, sp_input_result result, const sp_input_held *held) { lastResult = result; lastDone = YES; }
+static void onDone(void *context, sp_input_result result, const sp_input_held *held, void *view) { lastResult = result; lastDone = YES; }
 static sp_input_result pointer(NSWindow *window, double x, double y, int phase) {
     lastDone = NO;
     sp_input_pointer_then(window, SP_INPUT_POINTER_MAIN, x, y, phase, 0, 0, 0, 1, onDone, NULL);

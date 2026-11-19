@@ -35,33 +35,33 @@ func (implementation) WatchInput(window platform.Window, input platform.Input) (
 
 // InjectPointer delivers input with sp_input_pointer_then of native/darwin. It does not activate the application. The library
 // starts each request after the answer of the request before it, so this step returns without waiting for an earlier delivery.
-func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld)) error {
+func (implementation) InjectPointer(window platform.Window, pointer string, x, y float64, phase, button int, deltaX, deltaY float64, clicks int, done func(platform.PointerResult, platform.ButtonHeld, uintptr)) error {
 	native.InjectPointer(uintptr(window), native.CString(pointer), float64(x), float64(y), int32(phase), int32(button), float64(deltaX), float64(deltaY), int32(clicks),
 		uintptr(handles.NewHandle(done)))
 	return nil
 }
 
 // goHost_input_delivered announces the result of sp_input_pointer_then. The library passes held only when the result is SP_INPUT_BUTTON_HELD
-// or SP_INPUT_POINTER_HELD and keeps it valid until done returns.
-func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld) {
+// or SP_INPUT_POINTER_HELD and keeps it valid until done returns, and view is the web view that a delivered press or release reached.
+func goHost_input_delivered(context uintptr, result int32, held *abi.SpInputHeld, view uintptr) {
 	handle := handles.Handle(uintptr(context))
-	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld))
+	done := handle.Value().(func(platform.PointerResult, platform.ButtonHeld, uintptr))
 	handle.Delete()
 	switch int32(result) {
 	case abi.SP_INPUT_DELIVERED:
-		done(platform.PointerDelivered, platform.ButtonHeld{})
+		done(platform.PointerDelivered, platform.ButtonHeld{}, view)
 	case abi.SP_INPUT_INACTIVE:
-		done(platform.PointerInactive, platform.ButtonHeld{})
+		done(platform.PointerInactive, platform.ButtonHeld{}, 0)
 	case abi.SP_INPUT_UNRECEIVED:
-		done(platform.PointerUnreceived, platform.ButtonHeld{})
+		done(platform.PointerUnreceived, platform.ButtonHeld{}, 0)
 	case abi.SP_INPUT_BUTTON_HELD:
-		done(platform.PointerButtonHeld, buttonHeld(held))
+		done(platform.PointerButtonHeld, buttonHeld(held), 0)
 	case abi.SP_INPUT_PRESS_OPEN:
-		done(platform.PointerPressOpen, platform.ButtonHeld{})
+		done(platform.PointerPressOpen, platform.ButtonHeld{}, 0)
 	case abi.SP_INPUT_POINTER_HELD:
-		done(platform.PointerHeld, pointerHeld(held))
+		done(platform.PointerHeld, pointerHeld(held), 0)
 	default:
-		done(platform.PointerRejected, platform.ButtonHeld{})
+		done(platform.PointerRejected, platform.ButtonHeld{}, 0)
 	}
 }
 

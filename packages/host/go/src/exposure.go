@@ -1071,23 +1071,14 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	type delivery struct {
 		result platform.PointerResult
 		held   platform.ButtonHeld
+		view   uintptr
 	}
 	done := make(chan delivery, 1)
-	var pressed uintptr
 	err = s.useWindow(func(window platform.Window) error {
-		return readPressThenDeliver(func() error {
-			if input.Phase != "down" {
-				return nil
-			}
-			var err error
-			pressed, err = viewAt(window, input.X, input.Y)
-			return err
-		}, func() error {
-			return system.InjectPointer(window, input.Pointer, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
-				input.DeltaX, input.DeltaY, input.Clicks, func(result platform.PointerResult, held platform.ButtonHeld) {
-					done <- delivery{result, held}
-				})
-		})
+		return system.InjectPointer(window, input.Pointer, input.X, input.Y, pointerPhaseCodes[input.Phase], button,
+			input.DeltaX, input.DeltaY, input.Clicks, func(result platform.PointerResult, held platform.ButtonHeld, view uintptr) {
+				done <- delivery{result, held, view}
+			})
 	})
 	if err != nil {
 		return nativeError(codeNoInput, err)
@@ -1107,8 +1098,10 @@ func (b hostBackend) Pointer(window string, input PointerInput) error {
 	case platform.PointerHeld:
 		return rpcError(codePointerHeld, "%s", PointerHeldMessage(got.held))
 	}
-	if pressed != 0 {
-		s.press(pressed)
+	// A direct injection does not pass through the local event monitor of AppKit, so the host publishes its surface press from the
+	// web view that the delivered press reached.
+	if input.Phase == "down" {
+		s.press(got.view)
 	}
 	return nil
 }

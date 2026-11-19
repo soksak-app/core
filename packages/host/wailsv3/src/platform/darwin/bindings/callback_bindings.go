@@ -33,7 +33,7 @@ extern void goHost_native_dialog_answered(uintptr_t arg0, char * arg1);
 extern void goHost_native_fullscreen_done(uintptr_t arg0, int arg1, char * arg2);
 extern void goHost_surface_pressed(uintptr_t arg0, void * arg1);
 extern void goHost_surface_point(uintptr_t arg0, int arg1, double arg2, double arg3);
-extern void goHost_input_delivered(uintptr_t arg0, int arg1, sp_input_held * arg2);
+extern void goHost_input_delivered(uintptr_t arg0, int arg1, sp_input_held * arg2, uintptr_t arg3);
 extern void goHost_input_activated(uintptr_t arg0, int arg1, char * arg2);
 extern void goHost_document_changed(uintptr_t arg0, char * arg1);
 extern void goHost_document_message(uintptr_t arg0, char * arg1);
@@ -378,8 +378,8 @@ func goHost_surface_point(arg0 C.uintptr_t, arg1 C.int, arg2 C.double, arg3 C.do
 }
 
 //export goHost_input_delivered
-func goHost_input_delivered(arg0 C.uintptr_t, arg1 C.int, arg2 *C.sp_input_held) {
-	callbackHandlers.InputDelivered(uintptr(arg0), int32(arg1), (*abi.SpInputHeld)(unsafe.Pointer(arg2)))
+func goHost_input_delivered(arg0 C.uintptr_t, arg1 C.int, arg2 *C.sp_input_held, arg3 C.uintptr_t) {
+	callbackHandlers.InputDelivered(uintptr(arg0), int32(arg1), (*abi.SpInputHeld)(unsafe.Pointer(arg2)), uintptr(arg3))
 }
 
 //export goHost_input_activated

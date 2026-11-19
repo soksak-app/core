@@ -220,7 +220,7 @@ static void awaitPage(WKWebView *view, NSString *what, NSString *type, NSString 
 
 typedef struct { BOOL done; sp_input_result result; NSUInteger seen; WKWebView *view; BOOL held; } SPReceipt;
 
-static void received(void *context, sp_input_result result, const sp_input_held *held) {
+static void received(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPReceipt *receipt = context;
     receipt->result = result;
     receipt->held = held != NULL;
@@ -235,7 +235,7 @@ static void received(void *context, sp_input_result result, const sp_input_held 
 // answers, and busyEndedAtAnswer keeps whether it had ended when the press answered.
 typedef struct { BOOL done; sp_input_result result; BOOL busyEnded; BOOL busyEndedAtAnswer; } SPAnswer;
 
-static void answered(void *context, sp_input_result result, const sp_input_held *held) {
+static void answered(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     SPAnswer *state = context;
     state->result = result;
     state->busyEndedAtAnswer = state->busyEnded;
@@ -371,7 +371,7 @@ static void checkReceipts(void) {
 // before it answered, and a request whose window closes before it starts answers in the close turn (docs/spec/exposure.md#named-pointers).
 typedef struct { NSMutableArray<NSString *> *order; NSString *name; BOOL done; sp_input_result result; } SPQueued;
 
-static void queued(void *context, sp_input_result result, const sp_input_held *held) {
+static void queued(void *context, sp_input_result result, const sp_input_held *held, void *view) {
     (void)held;
     SPQueued *state = context;
     state->result = result;
