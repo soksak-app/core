@@ -588,6 +588,10 @@ impl Platform for Darwin {
         image::close(image);
         Ok(())
     }
+    fn want_image_frame(&self, image: Handle) -> Result<(), String> {
+        image::want_frame(image);
+        Ok(())
+    }
 
     fn begin_layout(
         &self,

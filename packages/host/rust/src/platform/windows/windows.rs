@@ -446,6 +446,9 @@ impl Platform for Windows {
     fn close_image(&self, image: Handle) -> Result<(), String> {
         unsupported::close_image(image)
     }
+    fn want_image_frame(&self, image: Handle) -> Result<(), String> {
+        unsupported::want_image_frame(image)
+    }
 
     fn begin_layout(
         &self,

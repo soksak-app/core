@@ -633,6 +633,10 @@ type Platform interface {
 	FactsImage(image unsafe.Pointer) (string, error)
 	// CloseImage removes the image region. event is not called afterward.
 	CloseImage(image unsafe.Pointer)
+	// WantImageFrame asks for the next display frame of the window of the image region, which the region reports to its event as
+	// {"type":"frame","refreshRate":N}, or with a null refreshRate at once for a window on no screen. A request while one waits asks
+	// nothing more (docs/spec/native-surfaces.md#copy-path-frames).
+	WantImageFrame(image unsafe.Pointer) error
 
 	// BeginLayout starts a surface layout transaction. When the layout becomes possible, it calls ready on the UI thread.
 	BeginLayout(window Window, ticket uint64, ready func(allowed bool)) error

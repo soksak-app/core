@@ -54,6 +54,12 @@ static NSTimeInterval spareDelay = 1;
 @end
 
 // Image region implementation.
+// SPRegionFrame receives the one display frame that a region requested (docs/spec/native-surfaces.md#copy-path-frames).
+@interface SPRegionFrame : NSObject
+@property(assign) SPImageRegion *region;
+- (void)tick:(CADisplayLink *)link;
+@end
+
 @interface SPImageRegion : NSView <NSTextInputClient>
 @property sp_region_event event;
 @property void *context;
@@ -82,6 +88,7 @@ static NSTimeInterval spareDelay = 1;
 @property(copy) NSString *accessibilityText;
 @property(assign) NSView *observedSurface;
 @property BOOL wanted;
+@property(retain) CADisplayLink *frameLink;  // The display link of the requested display frame, or nil when no frame is requested.
 @property BOOL placed;
 @property BOOL closed;
 @property BOOL hasFocus;
@@ -105,6 +112,7 @@ static NSTimeInterval spareDelay = 1;
 - (void)applyInsetsInTransaction;
 - (void)applyInsetsNow;
 - (void)report:(const char *)json;
+- (void)reportFrame;
 - (void)reject:(NSString *)reason;
 - (NSString *)jsonRange:(NSRange)range;
 - (NSString *)jsonEscapedString:(NSString *)string;
@@ -385,6 +393,15 @@ static void spEnsurePressOriginMonitor(void) {
     return self;
 }
 
+@end
+
+@implementation SPRegionFrame
+- (void)tick:(CADisplayLink *)link {
+    [link invalidate];
+    SPImageRegion *region = self.region;
+    region.frameLink = nil;
+    [region reportFrame];
+}
 @end
 
 @implementation SPImageRegion
@@ -759,6 +776,17 @@ static void spEnsurePressOriginMonitor(void) {
         prefix, [self jsonEscapedString:self.inputFailureReason]];
     [self logInput:call fields:record before:before];
     return YES;
+}
+
+// Reports the requested display frame with the refresh rate of the screen that shows the window at that frame, or null when the
+// window is on no screen. The frame is no input, so it carries no correlation identifier and no input record.
+- (void)reportFrame {
+    if (self.closed || !self.event) return;
+    NSScreen *screen = self.window.screen;
+    NSString *report = screen
+        ? [NSString stringWithFormat:@"{\"type\":\"frame\",\"refreshRate\":%ld}", (long)screen.maximumFramesPerSecond]
+        : @"{\"type\":\"frame\",\"refreshRate\":null}";
+    self.event(self.context, report.UTF8String);
 }
 
 // Records a report to the page as the event `native.input.report`, and sends it with the correlation identifier of the input
@@ -1877,6 +1905,8 @@ void sp_region_close(void *handle) {
     }
     view.closed = YES;
     view.event = NULL;
+    [view.frameLink invalidate];
+    view.frameLink = nil;
     view.runningSpareDelay.region = nil;
     view.runningSpareDelay = nil;
     if (view.spare) {
@@ -1904,6 +1934,22 @@ void sp_region_close(void *handle) {
         [NSEvent removeMonitor:spPressOriginMonitor];
         spPressOriginMonitor = nil;
     }
+}
+
+void sp_region_want_frame(void *handle) {
+    NSCAssert(NSThread.isMainThread, @"image regions belong to the main thread");
+    SPImageRegion *view = (SPImageRegion *)handle;
+    if (view.closed || view.frameLink) return;
+    NSScreen *screen = view.window.screen;
+    if (!screen) {
+        [view reportFrame];
+        return;
+    }
+    SPRegionFrame *frame = [[SPRegionFrame new] autorelease];
+    frame.region = view;
+    // A link retains its target until it is invalidated; the tick and the close of the region invalidate it.
+    view.frameLink = [screen displayLinkWithTarget:frame selector:@selector(tick:)];
+    [view.frameLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
 }
 
 void sp_region_background(void *handle, bool enabled) {

@@ -74,3 +74,9 @@ const char *sp_region_facts(void *region);
 
 // Removes and releases the region. event is not called afterward.
 void sp_region_close(void *region);
+
+// Asks for the next display frame of the window of the region (docs/spec/native-surfaces.md#copy-path-frames). At that frame the region
+// reports {"type":"frame","refreshRate":N} through its event callback, with the refresh rate of the screen that shows the window; a window
+// on no screen reports {"type":"frame","refreshRate":null} at once. A request while one waits asks nothing more, and a closed region
+// reports nothing. Call it on the main thread.
+void sp_region_want_frame(void *region);
