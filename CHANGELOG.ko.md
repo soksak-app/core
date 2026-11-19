@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F969-3 (레이아웃 operation인 탭 이동): 두 workbench에서 `core.layout.move {tab, card, side?}`는 있는 탭을 그 surface와 함께 카드 안이나 카드의 한 변 쪽으로 옮기고 `core.layout.open`처럼 idempotent하므로, 배치는 탭을 닫고 그 plugin을 다시 여는 대신 탭의 상태를 지킨다. 검증: 두 workbench의 이동 test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F969-6 (description split의 frame): 두 workbench에서 창 description의 `layout`의 각 split은 그 자식을 담는 창 point 단위의 사각형인 `frame`을 가지므로, agent는 row의 각 card 너비와 각 row의 높이를 계산 없이 읽는다. 검증: 두 workbench의 description test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F968 (head의 접힘 단계와 선택된 tab): 두 workbench에서 card head의 접힘 단계는 card에서 가장 넓은 tab을 쓰므로, header는 어느 tab이 선택되든 같은 tab을 보이고 선택된 tab은 언제나 그 가운데 있다. 검증: 공유 head case와 mygo head test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-16 (좁은 head의 전체 화면 toggle): 두 workbench에서 tool에 너무 좁은 card header나 group header는 전체 화면 toggle을 ⋯ 옆에 남기며, tool menu는 더 이상 그것을 담지 않는다. 검증: 두 workbench의 좁은 head test가 바뀌지 않은 code에서 실패했고 통과한다.

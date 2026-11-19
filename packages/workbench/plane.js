@@ -2413,6 +2413,30 @@ export function openInLayout({ card: cardId, plugin: kind, params, path, side })
   return made;
 }
 
+/**
+ * core.layout.move: moves an existing tab with its surface into the target card, card or its neighbour toward side. A target that already
+ * holds the tab selects it; otherwise the tab joins card as a drop on its centre does, or card splits toward side into a new card with
+ * the tab as a drop on that edge does, and the only tab of a card moves its card. The tab never closes. Returns {card, tab}, the card
+ * that holds the tab; a refusal changes nothing.
+ */
+export function moveInLayout({ tab: tabId, card: cardId, side }) {
+  if (side !== undefined && !SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  const named = layoutTab(tabId);
+  if (named === null) throw new Error(`tab ${tabId} is not in the layout of window ${nameOfWindow()}`);
+  const id = treeCard(cardId);
+  if (isPlace(id)) throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+  layoutChangeable(id);
+  const target = side === undefined ? id : tree.neighbour(id, side);
+  const holds = (card) => card && !isPlace(card) && (tree.isGroup(card)
+    ? tree.contents(tree.node(card)).includes(named.card.id) : card === named.card.id);
+  if (holds(target)) {
+    selectTab(named.tab.id);
+    return { card: named.card.id, tab: named.tab.id };
+  }
+  moveTab(named.tab.id, id, side ?? "centre");
+  return { card: cardOfTab(named.tab.id).id, tab: named.tab.id };
+}
+
 /** core.layout.select: makes the tab active and its card focused; a tab that is already so is left as it is. Returns {card, tab}. */
 export function selectInLayout({ tab: tabId }) {
   const named = layoutTab(tabId);

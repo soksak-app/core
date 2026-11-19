@@ -1037,7 +1037,7 @@ func (s *Shell) describeNode(node layout.TreeNode) (LayoutNode, error) {
 	return described, nil
 }
 
-// The layout operations core.layout.open, core.layout.select and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
+// The layout operations core.layout.open, core.layout.select, core.layout.move and core.layout.close (docs/spec/cli.md#acting-on-a-layout). Each runs in
 // one step of the main thread, which decides and changes the layout, so the window applies them one at a time.
 
 // currentTarget is the name of the focused card, or of the active tab of the focused card, in a layout operation.
@@ -1072,6 +1072,12 @@ func (s *Shell) registerLayout() {
 		}
 		return map[string]string{"card": card, "tab": tab}, nil
 	})
+	command(s, "core.layout.move", func(value layoutMoveParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		return s.moveLayoutTab(value)
+	})
 	command(s, "core.layout.close", func(value tabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err
@@ -1087,6 +1093,50 @@ func (s *Shell) registerLayout() {
 		done, err := s.askedCloseTab(tab)
 		return closed(done), err
 	})
+}
+
+type layoutMoveParam struct {
+	Tab  string  `json:"tab"`
+	Card string  `json:"card"`
+	Side *string `json:"side"`
+}
+
+// moveLayoutTab moves an existing tab with its surface into the target card, card or its neighbour toward the side. A target that
+// already holds the tab selects it; otherwise the tab joins card as a drop on its centre does, or card splits toward the side into a
+// new card with the tab as a drop on that edge does, and the only tab of a card moves its card. The tab never closes.
+func (s *Shell) moveLayoutTab(value layoutMoveParam) (map[string]string, error) {
+	if value.Side != nil && !splitSide(*value.Side) {
+		return nil, fmt.Errorf("unknown side %s; use left, right, top or bottom", *value.Side)
+	}
+	from, tab, err := s.layoutTab(value.Tab)
+	if err != nil {
+		return nil, err
+	}
+	card, err := s.layoutCard(value.Card)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.layoutChangeable(card); err != nil {
+		return nil, err
+	}
+	target, zone := card, "centre"
+	if value.Side != nil {
+		target, zone = s.planes.Neighbour(card, *value.Side), *value.Side
+	}
+	holds := target == from
+	if s.isGroup(target) {
+		holds = slices.Contains(s.planes.ContentInside(target), from)
+	}
+	if target != "" && !isPlace(target) && holds {
+		if err := s.showLayoutTab(from, tab); err != nil {
+			return nil, err
+		}
+		return map[string]string{"card": from, "tab": tab}, nil
+	}
+	if err := s.moveTab(tab, card, zone); err != nil {
+		return nil, err
+	}
+	return map[string]string{"card": s.cardOfTab(tab), "tab": tab}, nil
 }
 
 // openLayoutTab selects the first tab of the plugin with the params in the target card, or adds one to the card, or splits the card

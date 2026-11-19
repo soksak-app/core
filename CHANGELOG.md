@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F969-3 (move of a tab as a layout operation): `core.layout.move {tab, card, side?}` moves an existing tab with its surface into a card or toward a side of a card in both workbenches, idempotent like `core.layout.open`, so an arrangement keeps the state of a tab instead of closing it and opening its plugin again. Verification: the move tests of both workbenches failed on the unchanged code and pass.
 - F969-6 (frames of the splits of a description): each split of the `layout` of a window description carries `frame`, the rectangle in window points that holds its children, in both workbenches, so an agent reads the width of each card of a row and the height of each row without a computation. Verification: the description tests of both workbenches failed on the unchanged code and pass.
 - F968 (fold stage of a head and the selected tab): the fold stage of a card head takes the widest tab of the card in both workbenches, so a header shows the same tabs whichever tab is selected, and the selected tab is always among them. Verification: the shared head cases and the mygo head test failed on the unchanged code and pass.
 - F937-16 (fullscreen toggle of a narrow head): a card or group header too narrow for its tools keeps the fullscreen toggle beside ⋯ in both workbenches, and the tool menu no longer holds it. Verification: the narrow head tests of both workbenches failed on the unchanged code and pass.

@@ -3942,6 +3942,40 @@
         }
       },
       {
+        "name": "core.layout.move",
+        "description": "Moves an existing tab, with its surface, into card, or with side into the neighbour of card toward side: a target that already holds the tab selects it, else the tab joins card as a drop on its centre does or card splits toward side into a new card with the tab, and the only tab of a card moves its card. tab is a tab identifier or current and card a card identifier or current. The tab never closes; the result names its card and the tab, selected and its card focused, and the same operation applied again answers the same.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            }
+          }
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
         "name": "core.layout.close",
         "description": "Closes a tab as its close control does, and a card without tabs closes; tab is a tab identifier or current. A tab with unsaved changes opens the question of the close control and the result is closed false at once; a tab that this window closed since its workbench started answers closed true and changes nothing.",
         "params": {
