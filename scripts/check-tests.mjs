@@ -14024,6 +14024,8 @@ const FEATURE_LINKS = [
       { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestEveryLayoutCommandRecordsTheLayout" },
       { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestAFullscreenGroupIsLaidOutAsTheWholeArea" },
       { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerDragEndsWithTheBoundaryCommand" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerKeyRunsTheBoundaryCommand" },
+      { file: "packages/workbench-mygo/tests/layout_operations_test.go", id: "TestADividerDoubleClickRunsTheCentreCommand" },
       { file: "packages/workbench-mygo/tests/group_moving_test.go", id: "TestALineAcrossAGroupIsOneLine" },
       { file: "packages/workbench-mygo/tests/group_fullscreen_test.go", id: "TestAGroupCardGoesFullscreenWithTheCardsInsideIt" },
       { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheSplitSettingBalancesTheGrid" },

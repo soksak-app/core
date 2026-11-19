@@ -294,6 +294,17 @@ func (s *Shell) register() {
 		s.settle()
 		return map[string]float64{"position": moved}, nil
 	})
+	command(s, "core.boundary.center", func(value boundaryParam) (any, error) {
+		if err := s.requirePlane(); err != nil {
+			return nil, err
+		}
+		if !s.plane.HasBoundary(value.Axis, value.Line) {
+			return nil, fmt.Errorf("no %s boundary at line %d", value.Axis, value.Line)
+		}
+		centred := s.planes.CenterBoundary(value.Axis, value.Line)
+		s.settle()
+		return map[string]float64{"position": centred}, nil
+	})
 	command(s, "core.card.add-tab", func(value addTabParam) (any, error) {
 		if err := s.requirePlane(); err != nil {
 			return nil, err

@@ -246,8 +246,7 @@ func (s *Shell) dividerInput(divider layout.Divider, item string) func(ui.InputE
 			}
 			if event.Clicks == 2 {
 				s.held = nil
-				s.planes.CenterBoundary(divider.Axis, divider.Line)
-				s.settle()
+				s.binder.run("core.boundary.center", boundaryParam{Axis: divider.Axis, Line: divider.Line})
 				return true
 			}
 			s.held = &heldDivider{item: item, axis: divider.Axis, line: divider.Line, from: at,
@@ -290,8 +289,7 @@ func (s *Shell) dividerKey(divider layout.Divider, key ui.Key) bool {
 	step := 0.0
 	switch key {
 	case ui.KeyEnter, ui.KeySpace:
-		s.planes.CenterBoundary(divider.Axis, divider.Line)
-		s.settle()
+		s.binder.run("core.boundary.center", boundaryParam{Axis: divider.Axis, Line: divider.Line})
 		return true
 	case ui.KeyLeft, ui.KeyUp:
 		step = -dividerKeyStep
@@ -300,7 +298,7 @@ func (s *Shell) dividerKey(divider layout.Divider, key ui.Key) bool {
 	default:
 		return false
 	}
-	s.planes.MoveBoundary(divider.Axis, divider.Line, s.plane.BoundaryPos(divider.Axis, divider.Line)+step, true)
-	s.settle()
+	position := s.plane.BoundaryPos(divider.Axis, divider.Line) + step
+	s.binder.run("core.boundary.move", boundaryParam{Axis: divider.Axis, Line: divider.Line, Position: &position})
 	return true
 }
