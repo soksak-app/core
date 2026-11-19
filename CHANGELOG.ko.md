@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F914-5: GPUI host가 ready에 도달한다. soksak scheme은 주소의 owner의 start document를 응답하고, main thread에서 post한 task는 `post`가 return하기 전에 실행되며, app scheme과 staged frontend(adapter의 `StagedFrontend`)는 page 파일을 앞 구분자가 있거나 없는 page 경로로 읽는다. 검증: `packages/host/gpuikit`의 service와 page file test가 변경 전 adapter에서 실패했고 통과한다. debug bundle이 `ready:true`를 보고하고 project library를 보인다.
 - F911-5: `sok message send FOLDER TEXT`가 `SOKSAK_SURFACE`가 밝히는 surface의 message를 FOLDER에 쓴다. Text는 임시 이름으로 쓴 뒤 `<surface>.<token>.txt`로 rename하며, 64 KiB를 넘는 text는 파일을 만들기 전에 거부한다. Rust 명령은 `packages/sok/rust/src/message.rs`, Go 명령은 `packages/sok/go/src/message.go`에 있고, 시험은 `message_test.rs`와 `message_test.go`다.
 - F909-1, F910-1, F911-1: 보낸 surface 규칙, cursor epoch로서의 registration, 임시 이름과 rename은 `docs/spec/messaging.md`와 한국어 번역이 정의한다. 이 규칙의 sidecar 구현은 alacritty-core 저장소에 있다.
 - F831-1 정정: agent skill 원본은 `packages/sok/go/src/agents/SKILL.md`이고, `packages/sok/go/src/agents/mcp.json`은 MCP tool을 열세 개 나열한다. 아래 F831 항목은 열한 개와 `packages/sok/agents/SKILL.md`라고 적었다. 코드와 `docs/spec/cli.md`는 여기 적은 값을 따른다.

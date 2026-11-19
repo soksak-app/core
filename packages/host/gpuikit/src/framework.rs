@@ -51,8 +51,13 @@ impl port::Framework for Framework {
         "GPUI"
     }
 
-    /// On the main thread GPUI runs the task before it returns.
+    /// On the main thread the task runs before post returns, because the library waits there for the result of the
+    /// task that it posts; another thread queues it for the main thread.
     fn post(&self, task: Box<dyn FnOnce() + Send>) -> port::Result<()> {
+        if service::is_main_thread() {
+            task();
+            return Ok(());
+        }
         service::post(Box::new(move |_| task())).map_err(port::Error::from)
     }
 

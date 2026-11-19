@@ -4,13 +4,11 @@
 use std::ffi::c_void;
 
 use gpui_kit as gpui;
-use http::{Response as HttpResponse, StatusCode};
 use objc2::rc::Retained;
 use objc2::{AnyThread, DefinedClass as _, define_class, msg_send};
 use objc2_app_kit::{NSApp, NSWindow, NSWindowStyleMask};
 use objc2_foundation::{MainThreadMarker, NSString};
 use raw_window_handle::{AppKitWindowHandle, HasWindowHandle, RawWindowHandle};
-use soksak_host::assets::Assets;
 use soksak_host::framework::{
     self as port, LogicalPosition, LogicalSize, PlatformWebview, WindowEvent,
 };
@@ -305,37 +303,6 @@ fn content_view(window: *mut c_void) -> Result<*mut c_void, String> {
     Ok(Retained::as_ptr(&view) as *mut c_void)
 }
 
-/// The reply of a page file request: its bytes with the content type of its extension, or 404.
-fn page_response(path: &str) -> HttpResponse<Vec<u8>> {
-    let assets = crate::page_assets();
-    let found = assets.get(path);
-    let content_type = match path.rsplit('.').next().unwrap_or_default() {
-        "html" => "text/html; charset=utf-8",
-        "js" | "mjs" => "text/javascript; charset=utf-8",
-        "css" => "text/css; charset=utf-8",
-        "json" | "jsonl" => "application/json; charset=utf-8",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "woff2" => "font/woff2",
-        _ => "application/octet-stream",
-    };
-    match found {
-        Some(bytes) => HttpResponse::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", content_type)
-            .header("Cache-Control", "no-store")
-            .body(bytes.into_owned())
-            // default: a response of fixed headers over built bytes does not fail.
-            .unwrap_or_else(|_| HttpResponse::new(vec![])),
-        None => HttpResponse::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header("Content-Type", "text/plain; charset=utf-8")
-            .body(format!("{path} not found\n").into_bytes())
-            .unwrap_or_else(|_| HttpResponse::new(vec![])),
-    }
-}
-
 /// Builds one web view of the host with the soksak scheme of the start documents, the app scheme of the page files
 /// and the call channel of the runtime.
 #[allow(clippy::too_many_arguments)]
@@ -357,11 +324,8 @@ fn build_webview(
         .with_accept_first_mouse(true)
         .with_asynchronous_custom_protocol("soksak".into(), move |id, request, responder| {
             let app = scheme_app.clone();
-            let owner = id.to_string();
-            soksak_host::start::serve_async(
-                crate::PAGE_APP_ORIGIN,
-                owner,
-                request.uri().path().to_string(),
+            crate::answer_start(
+                request.uri(),
                 id.to_string(),
                 move |webview| soksak_host::start::start_page(&app, webview),
                 move |response| {
@@ -375,14 +339,7 @@ fn build_webview(
             // WebKit asks the scheme task on the main thread, so the file is read and answered on a
             // thread of its own, as the start document is (docs/spec/hosts.md#mygo-host).
             soksak_host::routine::spawn_named("page-file", move || {
-                // The address of the start file of a directory is the directory with a trailing separator.
-                let path = if path == "/" {
-                    "index.html"
-                } else {
-                    path.trim_start_matches('/')
-                };
-                let response = page_response(path);
-                responder.respond(response);
+                responder.respond(crate::page_file(crate::page_assets(), &path));
             });
         })
         .with_ipc_handler(move |request| {

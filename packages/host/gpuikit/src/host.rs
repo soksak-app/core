@@ -40,6 +40,79 @@ pub(crate) fn page_assets() -> &'static soksak_host::assets::ReportingAssets {
         .expect("run holds the page assets before a page loads")
 }
 
+/// The staged page files of the application in a folder. A key names a file by its path from the folder, with the leading
+/// separator of a page address (`/index.html`) or without it, as the library reads the core files of the bundled frontend
+/// (`core-root.json`) and as the asset key of Tauri accepts both.
+pub struct StagedFrontend(std::path::PathBuf);
+
+impl StagedFrontend {
+    /// The page files that the staging step of the application wrote to folder.
+    pub fn new(folder: std::path::PathBuf) -> Self {
+        Self(folder)
+    }
+}
+
+impl Assets for StagedFrontend {
+    fn get(&self, key: &str) -> Option<std::borrow::Cow<'_, [u8]>> {
+        let relative = key.strip_prefix('/').unwrap_or(key);
+        std::fs::read(self.0.join(relative))
+            .ok()
+            .map(std::borrow::Cow::Owned)
+    }
+}
+
+/// The reply of a request of the app scheme for path from the page files assets: the bytes of the file with the content
+/// type of its extension, or 404. The address of the start file of a directory is the directory with a trailing
+/// separator.
+pub(crate) fn page_file(assets: &dyn Assets, path: &str) -> http::Response<Vec<u8>> {
+    let path = if path == "/" { "/index.html" } else { path };
+    let found = assets.get(path);
+    let content_type = match path.rsplit('.').next().unwrap_or_default() {
+        "html" => "text/html; charset=utf-8",
+        "js" | "mjs" => "text/javascript; charset=utf-8",
+        "css" => "text/css; charset=utf-8",
+        "json" | "jsonl" => "application/json; charset=utf-8",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "woff2" => "font/woff2",
+        _ => "application/octet-stream",
+    };
+    match found {
+        Some(bytes) => http::Response::builder()
+            .status(http::StatusCode::OK)
+            .header("Content-Type", content_type)
+            .header("Cache-Control", "no-store")
+            .body(bytes.into_owned())
+            // default: a response of fixed headers over built bytes does not fail.
+            .unwrap_or_else(|_| http::Response::new(vec![])),
+        None => http::Response::builder()
+            .status(http::StatusCode::NOT_FOUND)
+            .header("Content-Type", "text/plain; charset=utf-8")
+            .body(format!("{path} not found\n").into_bytes())
+            .unwrap_or_else(|_| http::Response::new(vec![])),
+    }
+}
+
+/// Answers a request of the soksak scheme for address from the web view webview on a thread of its own: start builds the
+/// start document of the web view, and respond receives the response.
+pub(crate) fn answer_start(
+    address: &http::Uri,
+    webview: String,
+    start: impl FnOnce(&str) -> Result<Vec<u8>, String> + Send + 'static,
+    respond: impl FnOnce(http::Response<Vec<u8>>) + Send + 'static,
+) {
+    soksak_host::start::serve_async(
+        PAGE_APP_ORIGIN,
+        // default: a request without a host names no owner, so serve answers it not found.
+        address.host().unwrap_or_default().to_string(),
+        address.path().to_string(),
+        webview,
+        start,
+        respond,
+    );
+}
+
 /// The asynchronous runtime of the library, which run starts once and the blocking tasks of the port use.
 static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
 
@@ -183,3 +256,7 @@ pub fn run(frontend: Arc<dyn Assets>) {
         soksak_host::run_event(&startup_app, RunEvent::Ready);
     });
 }
+
+#[cfg(test)]
+#[path = "../tests/page_files/page_files_test.rs"]
+mod page_files_test;

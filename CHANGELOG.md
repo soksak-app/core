@@ -5,6 +5,7 @@
 
 ## 2026-11-19
 
+- F914-5: The GPUI host reaches ready: the soksak scheme answers the start document of the owner of its address, a task posted on the main thread runs before `post` returns, and the app scheme and the staged frontend (`StagedFrontend` of the adapter) read a page file by its page path with or without the leading separator. Validation: the service and page file tests of `packages/host/gpuikit` failed on the unchanged adapter and pass; a debug bundle reports `ready:true` and shows the project library.
 - F911-5: `sok message send FOLDER TEXT` writes TEXT as a message of the surface in `SOKSAK_SURFACE` into FOLDER. The text is written under a temporary name and renamed to `<surface>.<token>.txt`; a text over 64 KiB is refused before any file is created. The Rust command is `packages/sok/rust/src/message.rs` and the Go command is `packages/sok/go/src/message.go`; their tests are `message_test.rs` and `message_test.go`.
 - F909-1, F910-1, F911-1: The sender rule, the registration as the cursor epoch and the temporary name with the rename are defined in `docs/spec/messaging.md` and its Korean translation; the sidecar implementation of these rules is in the alacritty-core repository.
 - F831-1 correction: the agent skill source is `packages/sok/go/src/agents/SKILL.md`, and `packages/sok/go/src/agents/mcp.json` lists thirteen MCP tools. The entry of F831 below says eleven tools and `packages/sok/agents/SKILL.md`; the code and `docs/spec/cli.md` state the values stated here.

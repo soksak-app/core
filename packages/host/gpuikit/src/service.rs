@@ -35,6 +35,13 @@ pub(crate) fn start(cx: &mut App) {
     .detach();
 }
 
+/// Whether the calling thread is the thread of the GPUI application.
+pub(crate) fn is_main_thread() -> bool {
+    MAIN_THREAD
+        .get()
+        .is_some_and(|main| std::thread::current().id() == *main)
+}
+
 /// Runs task with the application context on the main thread and returns without waiting for it.
 pub(crate) fn post(task: Box<dyn FnOnce(&mut App) + Send>) -> Result<(), String> {
     let requests = REQUESTS
@@ -50,10 +57,10 @@ pub(crate) fn post(task: Box<dyn FnOnce(&mut App) + Send>) -> Result<(), String>
 pub(crate) fn on_main<T: Send + 'static>(
     work: impl FnOnce() -> T + Send + 'static,
 ) -> Result<T, String> {
-    let main = MAIN_THREAD
+    MAIN_THREAD
         .get()
         .ok_or("the GPUI application is not running")?;
-    if std::thread::current().id() == *main {
+    if is_main_thread() {
         return Ok(work());
     }
     let (sender, receiver) = std::sync::mpsc::channel::<T>();
@@ -65,3 +72,7 @@ pub(crate) fn on_main<T: Send + 'static>(
         .recv()
         .map_err(|_| "the main thread ended before it ran a task of the framework".to_string())
 }
+
+#[cfg(test)]
+#[path = "../tests/service/service_test.rs"]
+mod service_test;
