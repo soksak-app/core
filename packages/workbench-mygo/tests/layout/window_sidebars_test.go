@@ -116,6 +116,38 @@ func TestASidebarWithoutRoomDocksAtTheLargestFittingSize(t *testing.T) {
 	}
 }
 
+// TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff checks that the sidebar of the only side that is on leaves the plane when its switch
+// turns off (docs/spec/external-sidebars.md#window-controls): an arrangement without any side is not the refused arrangement of an
+// earlier plane state.
+func TestTheLastWindowSidebarLeavesWhenItsSwitchTurnsOff(t *testing.T) {
+	order := []string{"left", "right", "top", "bottom"}
+	for _, side := range order {
+		width, height := 1000.0, 800.0
+		grid, err := layout.New(&layout.State{Xs: []float64{0, 1}, Ys: []float64{0, 1}, Cards: []layout.Card{{ID: "main", C0: 0, C1: 1, R0: 0, R1: 1}}},
+			layout.Options{Width: &width, Height: &height})
+		if err != nil {
+			t.Fatal(err)
+		}
+		records := map[string]layout.WindowSidebar{}
+		on := true
+		shown := func(s string) bool { return on && s == side }
+		if changed, err := layout.ArrangeWindowSidebars(grid, order, order, records, 190, shown); err != nil || !changed {
+			t.Fatalf("%s: the switch on did not dock the sidebar: changed %v err %v", side, changed, err)
+		}
+		if _, ok := grid.Card(side); !ok {
+			t.Fatalf("%s: the sidebar is missing while its switch is on", side)
+		}
+		on = false
+		changed, err := layout.ArrangeWindowSidebars(grid, order, order, records, 190, shown)
+		if err != nil {
+			t.Fatalf("%s: the switch off refused: %v", side, err)
+		}
+		if _, ok := grid.Card(side); ok || !changed {
+			t.Fatalf("%s: the sidebar stays on the plane after its switch turned off: changed %v cards %v", side, changed, grid.Cards())
+		}
+	}
+}
+
 func fmtSize(w, h float64) string {
 	return fmt.Sprintf("%.1fx%.1f", w, h)
 }
