@@ -536,6 +536,15 @@ func TestTheGridReportsEveryCardInTheGroupForm(t *testing.T) {
 // that the space has not answered groups again, also where the group of the same command stands (docs/spec/groups.md#idempotency).
 func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
 	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	// The request is refused after the layout and the drawn minimum, so the check runs while the layout takes a group of main
+	// (docs/spec/groups.md#commands).
+	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`, `7`} {
+		want := "core.group.create: request must be a string of 1 to 128 characters"
+		if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": `+request+`}`); err == nil ||
+			err.Error() != want {
+			t.Errorf("the request %s answered %v, not %q", request, err, want)
+		}
+	}
 	first, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": "r1"}`)
 	if err != nil {
 		t.Fatal(err)
@@ -548,13 +557,6 @@ func TestARequestMakesAGroupCreateIdempotentByThatRequest(t *testing.T) {
 	if again, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": "r1"}`); err != nil ||
 		again != first || f.status("core.layout") != before {
 		t.Fatalf("the repeat of r1 answered %s, %v, not %s, and changed the layout: %v", again, err, first, f.status("core.layout") != before)
-	}
-	for _, request := range []string{`""`, `"` + strings.Repeat("r", 129) + `"`, `7`} {
-		want := "core.group.create: request must be a string of 1 to 128 characters"
-		if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain", "request": `+request+`}`); err == nil ||
-			err.Error() != want {
-			t.Errorf("the request %s answered %v, not %q", request, err, want)
-		}
 	}
 }
 
@@ -671,5 +673,32 @@ func TestTheMenuOfADisabledGroupSplitButtonIsRefused(t *testing.T) {
 	}
 	if picker := f.status("core.picker"); !strings.HasPrefix(picker, `{"open":false`) {
 		t.Fatalf("core.card.menu of a disabled button opened the menu %s", picker)
+	}
+}
+
+// core.group.create checks its refusals in the order of the specification: the layout and the drawn minimum before the request and the
+// plugin, so a request that is no string of 1 to 128 characters and an unknown plugin on a card whose group is refused answer the
+// refusal of the layout, and the request is refused only where the layout takes the group (docs/spec/groups.md#commands).
+// contract: group.create.request-after-the-layout
+func TestAGroupCreateRefusesTheDrawnMinimumBeforeTheRequestAndThePlugin(t *testing.T) {
+	space := gridSpace("spc-aaaaaa", []float64{0, 1}, []float64{0, 0.9, 1},
+		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 0, 1, 1, 2, tab("t2", "notes")))
+	space["layout"].(map[string]any)["leader"], space["layout"].(map[string]any)["lastCard"] = "card-1", 2
+	f := layoutShell(t, space)
+	f.tester.SetSize(1400, 1300)
+	f.settle()
+	_, refused := f.apply("core.group.create", `{"card": "card-2", "side": "bottom", "plugin": "plain"}`)
+	if refused == nil || !strings.HasPrefix(refused.Error(), "card card-2 cannot hold a group toward bottom: card ") {
+		t.Fatalf("the group of card-2 toward bottom is not refused by the drawn minimum: %v", refused)
+	}
+	for _, params := range []string{`{"card": "card-2", "side": "bottom", "plugin": "plain", "request": ""}`,
+		`{"card": "card-2", "side": "bottom", "plugin": "nope", "request": "r-1"}`} {
+		if _, err := f.apply("core.group.create", params); err == nil || err.Error() != refused.Error() {
+			t.Errorf("core.group.create %s answered %v, not %v", params, err, refused)
+		}
+	}
+	const text = "core.group.create: request must be a string of 1 to 128 characters"
+	if _, err := f.apply("core.group.create", `{"card": "card-1", "side": "right", "plugin": "plain", "request": ""}`); err == nil || err.Error() != text {
+		t.Errorf("an empty request on card-1 answered %v", err)
 	}
 }

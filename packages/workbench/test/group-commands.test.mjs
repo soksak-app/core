@@ -113,8 +113,9 @@ test("a request makes core.group.create idempotent by that request", { timeout: 
   assert.deepEqual(await run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request: "r1" }), first);
   assert.deepEqual(await stored(), before, "the repeat of an answered request changed the layout");
   // A request that is no string is refused by the declared params of the command before it runs (F967).
+  // The request is refused after the layout and the drawn minimum, so the check groups card-1, where the layout takes a group.
   for (const request of ["", "r".repeat(129)]) {
-    await refuses(run("core.group.create", { card: "card-3", side: "bottom", plugin: PLAIN, request }),
+    await refuses(run("core.group.create", { card: "card-1", side: "right", plugin: PLAIN, request }),
       "core.group.create: request must be a string of 1 to 128 characters");
   }
 });
@@ -331,4 +332,24 @@ test("the plane holds the cards and the group cards in workbench order", { timeo
   const order = plane.currentTree().order().map(({ id }) => id);
   assert.ok(order.indexOf("card-2") > order.indexOf("card-5"), `the move did not put card-2 after card-5: ${order.join(", ")}`);
   assert.deepEqual(documentOrder(), order, "after the move the document does not hold the plane in workbench order");
+});
+
+// core.group.create checks its refusals in the order of the specification: the layout and the drawn minimum before the request and the
+// plugin, so a request that is no string of 1 to 128 characters and an unknown plugin on a card whose group is refused answer the
+// refusal of the layout, and the request is refused only where the layout takes the group (docs/spec/groups.md#commands).
+// contract: group.create.request-after-the-layout
+test("core.group.create refuses the drawn minimum before the request and the plugin", { timeout: 5000 }, async () => {
+  plane.closePicker("fixture reset");
+  plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 2, leader: "card-1", groups: [],
+    state: { xs: [0, 1], ys: [0, 0.9, 1], cards: [content("card-1", 0, 1, 0, 1, [view("tab-aaaaa1", PLAIN)]),
+      content("card-2", 0, 1, 1, 2, [view("tab-aaaaa2", PLAIN)])] } }, "spc-aaaaaa");
+  const refusal = await registry.handle({ id: 1, method: "command.run", params: { name: "core.group.create",
+    params: { card: "card-2", side: "bottom", plugin: PLAIN } } });
+  const minimum = refusal.error?.message ?? "";
+  assert.match(minimum, /^card card-2 cannot hold a group toward bottom: card card-\d+ would be \d+x\d+, below its minimum 96x96$/,
+    `the group of card-2 toward bottom is not refused by the drawn minimum: ${minimum}`);
+  await refuses(run("core.group.create", { card: "card-2", side: "bottom", plugin: PLAIN, request: "" }), minimum);
+  await refuses(run("core.group.create", { card: "card-2", side: "bottom", plugin: "nope", request: "r-1" }), minimum);
+  await refuses(run("core.group.create", { card: "card-1", side: "right", plugin: PLAIN, request: "" }),
+    "core.group.create: request must be a string of 1 to 128 characters");
 });

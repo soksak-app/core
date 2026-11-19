@@ -2804,10 +2804,10 @@ export const newGroupRequest = () => issueId("request", (id) => groupRequests.ge
  * group stands (docs/spec/groups.md#idempotency).
  */
 export function createGroup(id, side, kind, params, request) {
-  if (request !== undefined && (typeof request !== "string" || request.length === 0 || [...request].length > 128)) {
-    throw new Error("core.group.create: request must be a string of 1 to 128 characters");
-  }
-  const answered = request === undefined ? undefined : groupRequests.get(heldSpace)?.get(request);
+  // A request that is no string of 1 to 128 characters is refused after the layout and the drawn minimum, in the order of the refusals
+  // (docs/spec/groups.md#commands); no answer is kept under such a request, so it finds none.
+  const validRequest = request === undefined || (typeof request === "string" && request.length > 0 && [...request].length <= 128);
+  const answered = request === undefined || !validRequest ? undefined : groupRequests.get(heldSpace)?.get(request);
   if (answered) return answered;
   if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
   const card = treeCard(id);
@@ -2824,6 +2824,7 @@ export function createGroup(id, side, kind, params, request) {
     if (found) return { group: parent.card, card: other, tab: found.id };
   }
   tree.probe(() => tree.create(card, side, undefined, splitsEven()));
+  if (!validRequest) throw new Error("core.group.create: request must be a string of 1 to 128 characters");
   knownPlugin(kind);
   const wanted = checkTabParams(kind, plugin(kind).params, params);
   const t = newTab(kind, wanted, sourceTabOf(card), "split");

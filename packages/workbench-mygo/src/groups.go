@@ -191,12 +191,11 @@ func (s *Shell) registerGroups() {
 // createGroup runs core.group.create: the refusals in the order of docs/spec/groups.md#commands, the repetition that finds the group
 // that the same command made, and the group with a new card of plugin toward side.
 func (s *Shell) createGroup(value groupCreateParam) (any, error) {
-	request, err := groupRequest(value)
-	if err != nil {
-		return nil, err
-	}
+	// A request that is no string of 1 to 128 characters is refused after the layout and the drawn minimum, in the order of the refusals
+	// (docs/spec/groups.md#commands); no answer is kept under such a request, so it finds none.
+	request, requestErr := groupRequest(value)
 	// A request that the space answered answers again with its first answer; a new request groups also where the group stands.
-	if answer, ok := s.groupRequests[s.planeSpace][request]; request != "" && ok {
+	if answer, ok := s.groupRequests[s.planeSpace][request]; requestErr == nil && request != "" && ok {
 		return answer, nil
 	}
 	if err := s.groupCard(value.Card); err != nil {
@@ -205,13 +204,22 @@ func (s *Shell) createGroup(value groupCreateParam) (any, error) {
 	if err := s.layoutChangeable(value.Card); err != nil {
 		return nil, err
 	}
-	if request == "" {
+	if value.Request == nil {
 		if repeated, ok, err := s.createdGroup(value); err != nil || ok {
 			return repeated, err
 		}
 	}
 	if err := s.planes.CheckGroup(value.Card, value.Side); err != nil {
 		return nil, err
+	}
+	if err := s.planes.Probe(func() error {
+		_, _, err := s.planes.CreateGroup(value.Card, value.Side, nil, s.cardSplitEven())
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	if requestErr != nil {
+		return nil, requestErr
 	}
 	known, err := s.knownPlugin(value.Plugin)
 	if err != nil {
