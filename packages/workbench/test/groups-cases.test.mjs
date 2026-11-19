@@ -68,7 +68,8 @@ function call(tree, grid, { call: name, args = {} }) {
     case "path": return tree.path(args.card);
     case "level": return tree.level(args.card);
     case "drop": return tree.dropAt(args.x, args.y, {});
-    case "balance": tree.balance(); return null;
+    // default: a balance step without arrange balances without the even arrangement.
+    case "balance": tree.balance(args.arrange ?? false); return null;
     case "boundary": return { position: tree.moveBoundary(args.axis, args.line, args.position, false) };
   }
   throw new Error(`unknown call ${name}`);
