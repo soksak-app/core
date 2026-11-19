@@ -514,7 +514,9 @@ fn invalid_json_closes_connection() {
 | `images.invalidate.sidecar-connection-loss-resends-configure` | 사이드카의 그림을 무효화하면 같은 크기의 configure 를 다시 보내고 다른 사이드카의 그림은 그대로 둔다. | all |
 | `images.copy-path.screen-request` | 드로잉 region은 응답되지 않은 요청이 없을 때 screen 요청을 받고, 가진 요청에 host가 응답하거나 그 요청이 끝날 때까지 새 요청을 받지 않는다. | all |
 | `images.copy-path.screen-request-ends` | 응답되지 않은 screen 요청은 새 generation, 새 raster, 공급자 연결의 끝에서 답 없이 끝나며, 연결의 끝은 받아들인 화면도 버린다. 다음 요청은 `full: true`이고, 끝난 요청에 답하는 메시지는 `stale`이다. | all |
-| `images.copy-path.clock-tick` | 드로잉 region은 window 시계의 매 tick마다 sequence와 window의 refresh rate를 담은 tick을 하나씩 받는다. 드로잉 중이 아닌 region은 tick을 받지 않는다. | all |
+| `images.copy-path.frame-request-tick` | 그리는 region의 소유자가 보낸 프레임 요청은 native region에 display frame 하나를 요청하고, 틱 전의 두 번째 요청은 더 요청하지 않는다. display frame은 region의 1부터 세는 sequence와 native region이 읽은 재생률을 담은 틱 하나를 보내고, 재생률이 없는 display frame은 틱을 보내지 않고 요청을 끝낸다. | all |
+| `images.copy-path.frame-request-refused` | region을 소유하지 않는 보낸 쪽의 프레임 요청은 `notAttached`, 현재가 아닌 generation의 요청은 `stale`로 답하고, 그리지 않는 region의 요청은 display frame을 요청하지 않는다. | all |
+| `images.copy-path.frame-request-malformed` | `generation`이 없거나 형이 틀리거나 `null`인 프레임 요청은 `error`를 `malformed`로, `member`와 함께 답하고, 올바른 `name`이 없는 요청은 응답 없이 소비하며 응답을 보내지 않는다고 적는 오류 기록 하나를 남긴다. | all |
 | `images.copy-path.input-draw` | 응답되지 않은 요청이 없는 드로잉 region에 사용자 입력이 닿으면 입력의 correlation 식별자를 담은 screen 요청을 tick을 기다리지 않고 바로 보낸다. | all |
 | `images.copy-path.screen-answer-accepted` | 공급자의 screen 메시지가 region의 응답되지 않은 요청에 답하면 wire에서 `accepted`로 답하고 요청을 끝내며, 그 rows를 다음 요청의 기준으로 삼는다. | all |
 | `images.copy-path.screen-answer-refused` | generation, raster 또는 요청 식별자가 오래되었거나 region을 소유하지 않은 보낸 쪽의 screen 메시지는 `stale` 또는 `notAttached`로 답하며, 응답되지 않은 요청을 그대로 둔다. | all |
