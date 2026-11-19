@@ -590,11 +590,12 @@ person change its gap changes this with it.
 `boundary` is a `BoundaryModel`, the boundary operations that every divider
 gesture runs: `move(axis, line, px)` for a drag step and an arrow key,
 `center(axis, line)` for the second press of a pair and Enter, and
-`merge(axis, line)` at the end of a drag, which returns whether a line merged.
+`end(axis, line)` at the end of a drag, which returns whether a line merged.
 Without it the view runs `moveBoundary`, `centerBoundary` and
 `mergeCoincident` of the grid. A host whose cards are drawn at other
 rectangles than the grid's, and which holds rules of its own for a line,
-supplies its own.
+supplies its own; a host that stores the result of a drag through an
+operation of its own runs it in `end`, from where the drag left the boundary.
 `reason` is one of `drag`, `center`, `merge`, `resize`, `render`.
 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius)`,

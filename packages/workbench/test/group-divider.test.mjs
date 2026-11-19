@@ -7,6 +7,14 @@ import { openVerifyPlane } from "./support/verify-plane.mjs";
 
 const page = await openVerifyPlane();
 const { plane, planeEl } = page;
+// The release of a divider drag runs core.boundary.move, which the core exposure of the page registers; the core exposure listens to
+// the resize of the window.
+globalThis.addEventListener = window.addEventListener.bind(window);
+const { installCoreExposure } = await import("../core-exposure.js");
+const { pageMemorySaver } = await import("./support/memory-saver.mjs");
+const { registry } = await import("../exposure.js");
+await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+  memorySaver: await pageMemorySaver() });
 
 const content = (id, c0, c1, r0, r1) => {
   const tabs = [{ id: `tab-${id}`, plugin: "fixture-verify", title: id }];
@@ -27,13 +35,14 @@ const divider = () => planeEl.querySelector('.sp-divider[data-axis="y"]');
 const mouse = (target, type, y, buttons) =>
   target.dispatchEvent(new window.MouseEvent(type, { clientX: 10, clientY: y, button: 0, buttons, bubbles: true }));
 
-test("a divider drag in a space with groups stops where the card below the header is drawn at its minimum", { timeout: 5000 }, () => {
+test("a divider drag in a space with groups stops where the card below the header is drawn at its minimum", { timeout: 5000 }, async () => {
   arrange();
   const grid = plane.currentGrid();
   const from = grid.boundaryPos("y", 1);
   mouse(divider(), "mousedown", from, 1);
   mouse(document, "mousemove", from - 1000, 1);
   mouse(document, "mouseup", from - 1000, 0);
+  await registry.commandsEnded();
   const drawn = plane.currentTree().rect("card-1");
   assert.ok(Math.abs(drawn.h - grid.minSize) < 0.5, `card-1 is drawn ${drawn.h} high, not its minimum ${grid.minSize}`);
   page.reset();

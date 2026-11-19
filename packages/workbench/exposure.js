@@ -216,6 +216,9 @@ export function createRegistry({ call = null, report = null } = {}) {
 
   // What observes each command request from its start to its answer (watch), or null.
   let watcher = null;
+  // The command requests that started and have not written their event, and what waits until there are none (commandsEnded).
+  let commanding = 0;
+  const commandWaits = [];
 
   // Every command request is the event `workbench.command` (docs/spec/logging.md#entrances), whether or not the
   // trace is on. The watcher receives the name and the parameters when the command starts and the answer when it succeeded, before
@@ -224,6 +227,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     const started = performance.now();
     const micros = () => Math.round((performance.now() - started) * 1000);
     const ended = watcher ? watcher(name, params) : null;
+    commanding++;
     try {
       const result = await run();
       ended?.(result);
@@ -235,6 +239,9 @@ export function createRegistry({ call = null, report = null } = {}) {
         // default: a thrown value that is not an Error is recorded as its own text.
         error: `${error instanceof ExposureError ? error.code : EXPOSURE_ERRORS.failed}: ${errorText(error)}` });
       throw error;
+    } finally {
+      commanding--;
+      if (commanding === 0) for (const resolve of commandWaits.splice(0)) resolve();
     }
   }
 
@@ -522,6 +529,9 @@ export function createRegistry({ call = null, report = null } = {}) {
      * Installs what observes each command request of this document and of the host: watch(name, params) is called when the command
      * starts and returns null or a function that receives the answer of the command when it succeeded.
      */
+    /** Resolves when every command request that started has ended and written its event, at once when none runs. */
+    commandsEnded: () => (commanding === 0 ? Promise.resolve() : new Promise((resolve) => commandWaits.push(resolve))),
+
     watch: (watch) => {
       if (typeof watch !== "function") throw new TypeError("watch requires a function");
       watcher = watch;

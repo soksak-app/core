@@ -101,6 +101,8 @@ test("a divider drag stores its result through core.boundary.move, which is one 
   mouse(divider, "mousedown", from, 1);
   for (const step of [20, 40, 60]) mouse(document, "mousemove", from + step, 1);
   mouse(document, "mouseup", from + 60, 0);
+  // The release runs the command, which ends after the plane drew its result.
+  await registry.commandsEnded();
   await flushEvents();
   const events = drag.calls.filter(({ name, payload }) => name === "log" && payload?.action === "batch").flatMap(({ payload }) => payload.events)
     .filter(({ event }) => event === "workbench.layout.change" || event === "workbench.command");

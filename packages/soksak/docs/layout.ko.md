@@ -549,10 +549,11 @@ observation round 보다 먼저 실행된다. `observation` 이 그 상태를 `r
 
 `boundary` 는 `BoundaryModel` 로, 모든 divider gesture 가 실행하는 boundary operation 이다.
 drag 의 한 걸음과 화살표 키는 `move(axis, line, px)`, 짝의 두 번째 press 와 Enter 는
-`center(axis, line)`, drag 의 끝은 `merge(axis, line)` 이며 merge 는 line 이 합쳐졌는지를
+`center(axis, line)`, drag 의 끝은 `end(axis, line)` 이며 end 는 line 이 합쳐졌는지를
 돌려준다. 이것이 없으면 뷰는 grid 의 `moveBoundary`, `centerBoundary`, `mergeCoincident` 를
 실행한다. 카드를 grid 와 다른 rectangle 에 그리고 line 에 자기 규칙을 두는 호스트는 자기 것을
-넘긴다.
+넘긴다. drag 의 결과를 자기 operation 으로 저장하는 호스트는 drag 가 boundary 를 둔 곳에서
+그 operation 을 `end` 에서 실행한다.
 `reason` 은 `drag`, `center`, `merge`, `resize`, `render` 중 하나다.
 
 `outline(rects, options)`, `unionLoops(rects)`, `roundedPath(loop, radius)`,

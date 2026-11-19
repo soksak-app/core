@@ -31,8 +31,11 @@ export interface BoundaryModel {
   move(axis: Axis, line: number, px: number): number;
   /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
   center(axis: Axis, line: number): number;
-  /** The end of a drag: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. */
-  merge(axis: Axis, line: number): boolean;
+  /**
+   * The end of a drag that moved the boundary: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. A host
+   * that stores the result of a drag through an operation of its own runs it here, from where the drag left the boundary.
+   */
+  end(axis: Axis, line: number): boolean;
 }
 
 export interface ViewOptions {
@@ -270,7 +273,7 @@ export class SoksakView {
     this.boundary = options.boundary ?? {
       move: (axis, line, px) => grid.moveBoundary(axis, line, px),
       center: (axis, line) => grid.centerBoundary(axis, line),
-      merge: (axis, line) => grid.mergeCoincident(axis, line),
+      end: (axis, line) => grid.mergeCoincident(axis, line),
     };
     this.observeResolution();
 
@@ -805,7 +808,7 @@ export class SoksakView {
     // merge addresses; a drag that stood where it stood keeps it.
     let merged = false;
     this.carry(() => {
-      merged = this.boundary.merge(drag.axis, drag.line);
+      merged = this.boundary.end(drag.axis, drag.line);
       return 0;
     }, null);
     this.draw(merged ? 'merge' : 'drag');
@@ -826,7 +829,7 @@ export class SoksakView {
     // merge addresses; a drag that stood where it stood keeps it.
     let merged = false;
     this.carry(() => {
-      merged = this.boundary.merge(drag.axis, drag.line);
+      merged = this.boundary.end(drag.axis, drag.line);
       return 0;
     }, null);
     this.draw(merged ? 'merge' : 'drag');

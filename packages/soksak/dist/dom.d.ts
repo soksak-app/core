@@ -28,8 +28,11 @@ export interface BoundaryModel {
     move(axis: Axis, line: number, px: number): number;
     /** The second press of a pair and Enter: as `centerBoundary(axis, line)` of the grid. Returns where the boundary stands. */
     center(axis: Axis, line: number): number;
-    /** The end of a drag: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. */
-    merge(axis: Axis, line: number): boolean;
+    /**
+     * The end of a drag that moved the boundary: as `mergeCoincident(axis, line)` of the grid. Returns whether a line merged. A host
+     * that stores the result of a drag through an operation of its own runs it here, from where the drag left the boundary.
+     */
+    end(axis: Axis, line: number): boolean;
 }
 export interface ViewOptions {
     /**

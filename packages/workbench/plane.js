@@ -1537,6 +1537,33 @@ function logRefusals(refused) {
   for (const { text } of refused) report(text);
 }
 
+// The divider drag whose steps the plane previews: the axis and the line of its first step and the layout before it, or null.
+let previewed = null;
+
+/** A step of a divider drag: the line of the group tree moves toward px without the merge of the lines that meet. */
+function previewBoundary(axis, line, px) {
+  previewed ??= { axis, line, kept: tree.snapshot() };
+  return tree.placeBoundary(axis, line, px, true);
+}
+
+/**
+ * The end of a divider drag that moved the line: the layout returns to the one before the drag and the command core.boundary.move
+ * moves the line of the first step to the position where the drag left it, so the result is that of the command, which records it.
+ * The command runs its handler before the first wait of the registry, so the plane draws its result in this change.
+ */
+function endBoundary(axis, line) {
+  const drag = previewed;
+  previewed = null;
+  // default: a release whose drag made no step leaves the layout as it is.
+  if (!drag) return false;
+  const position = grid.boundaryPos(axis, line);
+  tree.restore(drag.kept);
+  run("core.boundary.move", { axis: drag.axis, line: drag.line, position }).catch((error) => {
+    report(`boundary ${drag.axis} ${drag.line} move failed: ${error.message}`);
+  });
+  return false;
+}
+
 /** Rebuilds the plane from the start. */
 function build(kept) {
   const restored = restoreWindowState(kept);
@@ -1556,12 +1583,13 @@ function build(kept) {
     // The plane is inset inside the stage by this value. Only the host knows the value, so it must be passed to the view so
     // that lines touching the plane edge continue to the stage boundary.
     bleed: stagePad(),
-    // A divider moves the line of the group tree, which draws the cards below the headers and merges the lines that meet
+    // A divider drag previews its steps on the line of the group tree, which draws the cards below the headers, and its result is
+    // the command core.boundary.move from the layout before the drag to the position where the drag left the line
     // (docs/spec/groups.md#minimum-size).
     boundary: {
-      move: (axis, line, px) => tree.placeBoundary(axis, line, px, true),
+      move: previewBoundary,
       center: (axis, line) => tree.centerBoundary(axis, line),
-      merge: (axis, line) => tree.mergeBoundary(axis, line),
+      end: endBoundary,
     },
     // Drawing writes the frame scale of the current settings into the document. Preparation includes the first-row height at
     // that scale, so the host decides the window title bar in the same transaction (docs/spec/native-surfaces.md#title-bar-height).

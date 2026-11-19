@@ -167,7 +167,7 @@ export class SoksakView {
         this.boundary = (_b = options.boundary) !== null && _b !== void 0 ? _b : {
             move: (axis, line, px) => grid.moveBoundary(axis, line, px),
             center: (axis, line) => grid.centerBoundary(axis, line),
-            merge: (axis, line) => grid.mergeCoincident(axis, line),
+            end: (axis, line) => grid.mergeCoincident(axis, line),
         };
         this.observeResolution();
         // The start waits for an animation frame, which runs before that frame's
@@ -713,7 +713,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.boundary.merge(drag.axis, drag.line);
+            merged = this.boundary.end(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');
@@ -735,7 +735,7 @@ export class SoksakView {
         // merge addresses; a drag that stood where it stood keeps it.
         let merged = false;
         this.carry(() => {
-            merged = this.boundary.merge(drag.axis, drag.line);
+            merged = this.boundary.end(drag.axis, drag.line);
             return 0;
         }, null);
         this.draw(merged ? 'merge' : 'drag');

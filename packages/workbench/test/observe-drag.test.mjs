@@ -49,6 +49,11 @@ installEnvironment({
 const { registry } = await import("../exposure.js");
 registry.declare("core", JSON.parse(readFileSync(new URL("../exposure.json", import.meta.url), "utf8")).exposes);
 const plane = await import("../plane.js");
+// The release of a divider drag runs core.boundary.move, which the core exposure of the page registers.
+const { installCoreExposure } = await import("../core-exposure.js");
+const { pageMemorySaver } = await import("./support/memory-saver.mjs");
+await installCoreExposure({ library: { state: () => null }, renames: { state: () => null }, chrome: () => null, drawn: async () => {},
+  memorySaver: await pageMemorySaver() });
 plane.onLayout((made, draw) => draw());
 plane.adopt(plane.fresh(), "spc-aaaaaa");
 const divider = document.querySelector(".sp-divider[data-axis=\"x\"]");
