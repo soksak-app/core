@@ -217,17 +217,17 @@ function gridState() {
       ...levelMembers(tree, card.id),
     };
   }).filter(Boolean);
-  // The group cards follow the cards of the grid in workbench order, each with its drawn rectangle and no tabs (docs/spec/groups.md#status-and-queries).
+  // The group cards stand in groups in workbench order, each with its drawn rectangle, so cards holds one shape (docs/spec/groups.md#status-and-queries).
   const groups = tree.nodes().map((node) => {
     const { x, y, w, h } = rects.get(node.card);
-    return { fullscreen: node.card === fullscreen, id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
+    return { id: node.card, x, y, w, h, ...levelMembers(tree, node.card),
       group: { name: node.name, level: tree.level(node.card) + 1, leader: node.leader } };
   });
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
   return {
     fullscreen,
     width: grid.width, height: grid.height, gap: grid.gap, plane: planeOrigin(),
-    lines: { x: lines("x"), y: lines("y") }, cards: [...cards, ...groups],
+    lines: { x: lines("x"), y: lines("y") }, cards, groups,
   };
 }
 

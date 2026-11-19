@@ -196,7 +196,10 @@ const status = async (name) => (await registry.handle({ id: 1, method: "status.g
 test("core.grid reports the drawn rectangle of each card and group card, and the fullscreen layout of a group card", { timeout: 5000 }, async () => {
   arrange();
   const tree = plane.currentTree();
-  const reported = async () => new Map((await status("core.grid")).cards.map(({ id, x, y, w, h, fullscreen }) => [id, { x, y, w, h, fullscreen }]));
+  const reported = async () => {
+    const { cards, groups, fullscreen } = await status("core.grid");
+    return new Map([...cards, ...groups].map(({ id, x, y, w, h }) => [id, { x, y, w, h, fullscreen: id === fullscreen }]));
+  };
   let cards = await reported();
   for (const id of ["card-1", "card-2", "card-3", "card-4"]) near(cards.get(id), tree.rect(id), `the reported rectangle of ${id}`);
   await run("core.card.fullscreen", { card: "card-4" });

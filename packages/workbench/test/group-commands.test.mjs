@@ -224,21 +224,24 @@ test("core.card.get reads a content card with its group path and a group card wi
   await refuses(run("core.card.get", { card: "card-99" }), "card card-99 is not in the layout of window main");
 });
 
-test("core.grid reports the group card of each card, the leaders and the group cards after the cards", { timeout: 5000 }, async () => {
+test("core.grid lists the content cards with their tabs in cards and the group cards in groups", { timeout: 5000 }, async () => {
   arrange();
-  // The cards of the grid come in workbench order, then the group cards, each with parent, null at the root level, and leader a boolean.
+  // The content cards come in workbench order, each with its tabs, parent, null at the root level, and leader a boolean, and the group
+  // cards stand in groups, so a reader of cards sees one shape (docs/spec/groups.md#status-and-queries).
   plane.adopt({ focusedId: "card-1", named: 0, windowSidebars: {}, sidebars: {}, lastCard: 4, leader: "card-3",
     groups: [{ card: "card-4", name: "그룹 1", leader: "card-1", members: ["card-1", "card-2"] }],
     state: { xs: [0, 0.25, 0.5, 1], ys: [0, 1], cards: [content("card-3", 0, 1, 0, 1, [view("tab-aaaaa3", PLAIN)]),
       content("card-1", 1, 2, 0, 1, [view("tab-aaaaa1", PLAIN)]), content("card-2", 2, 3, 0, 1, [view("tab-aaaaa2", PLAIN)])] } }, "spc-aaaaaa");
-  const { cards } = await status("core.grid");
+  const { cards, groups } = await status("core.grid");
   assert.deepEqual(cards.map(({ id, parent, leader }) => ({ id, parent, leader })), [
     { id: "card-3", parent: null, leader: true }, { id: "card-1", parent: "card-4", leader: true },
-    { id: "card-2", parent: "card-4", leader: false }, { id: "card-4", parent: null, leader: false },
-  ]);
+    { id: "card-2", parent: "card-4", leader: false },
+  ], "core.grid lists another card than the content cards in cards");
+  for (const card of cards) assert.ok(Array.isArray(card.tabs), `the card ${card.id} of core.grid has no tabs`);
   assert.deepEqual(Object.keys(cards[0]).filter((key) => ["parent", "leader", "group"].includes(key)), ["parent", "leader"]);
-  const { x, y, w, h, ...group } = cards[3];
-  assert.deepEqual(group, { fullscreen: false, id: "card-4", parent: null, leader: false, group: { name: "그룹 1", level: 1, leader: "card-1" } });
+  assert.equal(groups?.length, 1, "core.grid lists no group card in groups");
+  const { x, y, w, h, ...group } = groups[0];
+  assert.deepEqual(group, { id: "card-4", parent: null, leader: false, group: { name: "그룹 1", level: 1, leader: "card-1" } });
   assert.deepEqual({ x, y, w, h }, plane.currentTree().rect("card-4"));
 });
 

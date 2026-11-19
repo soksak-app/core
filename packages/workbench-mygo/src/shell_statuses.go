@@ -21,8 +21,9 @@ type gridStatus struct {
 	Gap        float64              `json:"gap"`
 	Plane      layout.Rect          `json:"plane"`
 	Lines      map[string][]float64 `json:"lines"`
-	// Cards holds a gridCardStatus for each card of the grid and then a gridGroupCardStatus for each group card.
-	Cards []any `json:"cards"`
+	// Cards holds the content cards and Groups the group cards, each in workbench order (docs/spec/groups.md#status-and-queries).
+	Cards  []gridCardStatus      `json:"cards"`
+	Groups []gridGroupCardStatus `json:"groups"`
 }
 
 // gridCardStatus is a card of core.grid.
@@ -237,13 +238,13 @@ func (s *Shell) gridState() (any, error) {
 	origin := s.planeOrigin()
 	plane := layout.Rect{X: origin.X, Y: origin.Y, W: s.plane.Width(), H: s.plane.Height()}
 	status := gridStatus{Width: s.plane.Width(), Height: s.plane.Height(), Gap: s.plane.Gap(), Plane: plane,
-		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []any{}}
+		Lines: map[string][]float64{"x": linePositions(s.plane, "x"), "y": linePositions(s.plane, "y")}, Cards: []gridCardStatus{},
+		Groups: []gridGroupCardStatus{}}
 	if s.fullscreen != "" {
 		status.Fullscreen = &s.fullscreen
 	}
 	pane := 0
-	// The cards of the grid in workbench order, then the group cards in workbench order (docs/spec/groups.md#status-and-queries).
-	var groups []any
+	// The content cards and the group cards, each in workbench order (docs/spec/groups.md#status-and-queries).
 	for _, id := range s.planes.Cards() {
 		card, _ := s.planes.Card(id) // silent: Cards lists cards of the space.
 		rect, ok := s.cardRect(card.ID)
@@ -256,7 +257,7 @@ func (s *Shell) gridState() (any, error) {
 		}
 		leader, _ := s.planes.Leader(s.planes.Parent(card.ID)) // silent: a level without a leader has no card that leads it.
 		if record, ok := s.planes.Group(card.ID); ok {
-			groups = append(groups, gridGroupCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Parent: parent,
+			status.Groups = append(status.Groups, gridGroupCardStatus{ID: card.ID, X: rect.X, Y: rect.Y, W: rect.W, H: rect.H, Parent: parent,
 				Leader: leader == card.ID, Group: gridGroupStatus{Name: record.Name, Level: record.Level, Leader: record.Leader}})
 			continue
 		}
@@ -292,7 +293,6 @@ func (s *Shell) gridState() (any, error) {
 		}
 		status.Cards = append(status.Cards, entry)
 	}
-	status.Cards = append(status.Cards, groups...)
 	return status, nil
 }
 

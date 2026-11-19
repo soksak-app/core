@@ -283,6 +283,19 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F937-14",
+    implementation: [
+      { file: "packages/workbench-mygo/src/shell_statuses.go", symbol: "Groups []gridGroupCardStatus `json:\"groups\"`" },
+      { file: "packages/workbench/core-exposure.js", symbol: "lines: { x: lines(\"x\"), y: lines(\"y\") }, cards, groups," },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/groups_test.go", id: "TestTheCardsOfTheGridHoldContentCardsAndTheGroupsTheGroupCards" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid lists the content cards with their tabs in cards and the group cards in groups" },
+    ],
+    expected: "The cards of core.grid hold content cards only, each with its tabs, and the group cards stand in groups in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F964",
     implementation: [
       { file: "packages/workbench-mygo/src/picker.go", symbol: "var pickerAsk = map[string]string{" },
@@ -14182,7 +14195,7 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/group-commands.test.mjs", id: "a drop resolves on the rectangles of the group cards and core.tab.move puts a tab into and beside a group card" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "the layout of the window description holds each group card as a node of its tree and lists every group once" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.card.get reads a content card with its group path and a group card with its node" },
-      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid reports the group card of each card, the leaders and the group cards after the cards" },
+      { file: "packages/workbench/test/group-commands.test.mjs", id: "core.grid lists the content cards with their tabs in cards and the group cards in groups" },
       { file: "packages/soksak/test/layout-cases.test.mjs", id: "grid: ${kase.name}" },
       { file: "packages/soksak/test/lines.test.mjs", id: "setFrames refuses a count below zero as below zero, a fraction included, and keeps the frames it had" },
       { file: "packages/soksak/test/close.test.mjs", id: "close and move refuse another side before they judge the card" },

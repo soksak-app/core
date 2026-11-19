@@ -71,7 +71,9 @@ func (f *tabShell) cardGet(card string) (map[string]any, error) {
 func (f *tabShell) gridCards() map[string]map[string]any {
 	f.t.Helper()
 	cards := map[string]map[string]any{}
-	for _, card := range f.read("core.grid")["cards"].([]any) {
+	grid := f.read("core.grid")
+	groups, _ := grid["groups"].([]any) // the cards of the grid and its group cards, by id.
+	for _, card := range append(grid["cards"].([]any), groups...) {
 		entry := card.(map[string]any)
 		cards[entry["id"].(string)] = entry
 	}
@@ -130,6 +132,23 @@ func TestTheGridListsTheCardsWithTheGroupThatHoldsThemAndTheLeaders(t *testing.T
 	if main["x"].(float64)-group["x"].(float64) != gap || main["y"].(float64) <= group["y"].(float64) {
 		t.Fatalf("main at %v,%v does not stand one gap %v inside the frame and under the header of its group at %v,%v", main["x"], main["y"],
 			gap, group["x"], group["y"])
+	}
+}
+
+// core.grid lists the content cards with their tabs in cards and the group cards in groups, so a reader of cards sees one shape
+// (docs/spec/groups.md#status-and-queries).
+func TestTheCardsOfTheGridHoldContentCardsAndTheGroupsTheGroupCards(t *testing.T) {
+	f := groupedShell(t)
+	grid := f.read("core.grid")
+	for _, entry := range grid["cards"].([]any) {
+		card := entry.(map[string]any)
+		if _, ok := card["tabs"].([]any); !ok {
+			t.Fatalf("the card %v of core.grid has no tabs: %v", card["id"], card)
+		}
+	}
+	groups, _ := grid["groups"].([]any)
+	if len(groups) != 1 || groups[0].(map[string]any)["id"] != "card-2" {
+		t.Fatalf("core.grid lists the group cards %v, not card-2", grid["groups"])
 	}
 }
 
@@ -440,13 +459,14 @@ func TestTheCloseOfANestedGroupGivesItsCellsToItsGroup(t *testing.T) {
 func TestTheGridReportsEveryCardInTheGroupForm(t *testing.T) {
 	f := groupedShell(t)
 	var grid struct {
-		Cards []map[string]json.RawMessage `json:"cards"`
+		Cards  []map[string]json.RawMessage `json:"cards"`
+		Groups []map[string]json.RawMessage `json:"groups"`
 	}
 	if err := json.Unmarshal([]byte(f.status("core.grid")), &grid); err != nil {
 		t.Fatal(err)
 	}
 	order := []string{}
-	for _, entry := range grid.Cards {
+	for _, entry := range append(grid.Cards, grid.Groups...) {
 		var id string
 		if err := json.Unmarshal(entry["id"], &id); err != nil {
 			t.Fatal(err)
