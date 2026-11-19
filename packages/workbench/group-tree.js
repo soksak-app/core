@@ -57,6 +57,60 @@ function mapped(t, [a0, b0], [a, b]) {
 }
 
 /** The group tree of one space over its grid. */
+/** How far a line may reach into a header or a frame across the line, in px: a divider at the side of a group card touches the end of its
+ * header by less than this. */
+const HEAD_TOLERANCE = 1;
+
+/** The extent [a0, a1] across its line of a rule or a divider of axis. */
+const across = (r) => (r.axis === "y" ? [r.y, r.y + r.h] : [r.x, r.x + r.w]);
+
+/** The stretch [from, to] along its line of a rule or a divider of axis. */
+const along = (r) => (r.axis === "y" ? [r.x, r.x + r.w] : [r.y, r.y + r.h]);
+
+/** The position and the size along its line of a rule or a divider of axis that covers the stretch part. */
+const stretch = (axis, [from, to]) => (axis === "y" ? { x: from, w: to - from } : { y: from, h: to - from });
+
+/** The extent across and the stretch along a line of axis of a rectangle. */
+const spanOf = (axis, r) => (axis === "y" ? [r.y, r.y + r.h, r.x, r.x + r.w] : [r.x, r.x + r.w, r.y, r.y + r.h]);
+
+/** The parts of the stretch part that the rectangles boxes take out of it, for a line of axis across [a0, a1]. */
+function cutOut(axis, [a0, a1], parts, boxes) {
+  for (const box of boxes) {
+    const [h0, h1, s0, s1] = spanOf(axis, box);
+    if (Math.min(a1, h1) - Math.max(a0, h0) <= HEAD_TOLERANCE) continue;
+    parts = parts.flatMap(([from, to]) => {
+      if (to <= s0 || from >= s1) return [[from, to]];
+      return [...(from < s0 ? [[from, s0]] : []), ...(to > s1 ? [[s1, to]] : [])];
+    });
+  }
+  return parts;
+}
+
+/** The parts of the stretch part along a line of axis across [a0, a1] that cross no header that the line reaches into. */
+const clearOfHeads = (axis, extent, part, heads) => cutOut(axis, extent, [part], heads);
+
+/**
+ * The stretch part of a line of axis across [a0, a1] cut by the group cards, groups of {frame, inner}: inside the innermost frame that holds
+ * the middle of the stretch and the line it keeps only the inside of that frame below its header; outside every frame it loses every
+ * stretch where it would cross a frame. Each cut is {from, to, outside}.
+ */
+function clearOfFrames(axis, [a0, a1], part, groups) {
+  const middle = (part[0] + part[1]) / 2;
+  let holder = null;
+  for (const group of groups) {
+    const [c0, c1, s0, s1] = spanOf(axis, group.frame);
+    if (a0 >= c0 && a1 <= c1 && middle > s0 && middle < s1 && (holder === null || holder.frame.w * holder.frame.h > group.frame.w * group.frame.h)) {
+      holder = group;
+    }
+  }
+  if (holder) {
+    const [, , s0, s1] = spanOf(axis, holder.inner);
+    const from = Math.max(part[0], s0), to = Math.min(part[1], s1);
+    return to > from ? [{ from, to, outside: false }] : [];
+  }
+  return cutOut(axis, [a0, a1], [part], groups.map((group) => group.frame)).map(([from, to]) => ({ from, to, outside: true }));
+}
+
 export class GroupTree {
   /**
    * grid is the grid of the space; options are the gap, the smallest drawn edge of a content card (minSize) and the head height of a
@@ -249,17 +303,92 @@ export class GroupTree {
    * on it.
    */
   frameRect(node, path) {
-    const span = this.rectangle(node);
+    return this.place(null, null, path, this.rectangle(node));
+  }
+
+  /**
+   * The rectangle between the lines of span, {c0, c1, r0, r1}, of a box that the group nodes holders hold
+   * (docs/spec/groups.md#drawn-rectangles): each line inset by its corridor and by one gap for each holder that ends on it, the top line
+   * by the headers of the holders that start on it. With onto, the lines of the group node whole are stretched onto the rectangle onto and
+   * its own lines take no corridor, as the border of the plane takes none.
+   */
+  place(onto, whole, holders, span) {
     // The rectangle of the layout library between the lines, without frames: the frames of the library belong to the cards by id, and no
-    // card has the empty id.
+    // card has the empty id. Its edges stand the corridor of each line from the line.
     const bare = this.grid.rectOf({ id: "", fixed: false, ...span });
-    const ends = (key) => path.filter((holder) => this.rectangle(holder)[key] === span[key]).length;
-    const x0 = bare.x + ends("c0") * this.frameUnit("x");
-    const x1 = bare.x + bare.w - ends("c1") * this.frameUnit("x");
-    const y0 = bare.y + this.headersAbove(path, span.r0) * this.headStep();
-    const y1 = bare.y + bare.h - ends("r1") * this.frameUnit("y");
+    const at = (axis, line) => this.grid.boundaryPos(axis, line);
+    const lines = whole && this.rectangle(whole);
+    const pos = (axis, line, lo, hi, from, size) =>
+      (onto ? from + (at(axis, line) - at(axis, lines[lo])) * size / (at(axis, lines[hi]) - at(axis, lines[lo])) : at(axis, line));
+    const own = (line, lo, hi) => onto !== null && (line === lines[lo] || line === lines[hi]);
+    const inset = {
+      c0: own(span.c0, "c0", "c1") ? 0 : bare.x - at("x", span.c0),
+      c1: own(span.c1, "c0", "c1") ? 0 : at("x", span.c1) - bare.x - bare.w,
+      r0: own(span.r0, "r0", "r1") ? 0 : bare.y - at("y", span.r0),
+      r1: own(span.r1, "r0", "r1") ? 0 : at("y", span.r1) - bare.y - bare.h,
+    };
+    const ends = (key) => holders.filter((holder) => this.rectangle(holder)[key] === span[key]).length;
+    // default: without onto the lines stand where the grid draws them.
+    const { x: ox, y: oy, w: ow, h: oh } = onto ?? { x: 0, y: 0, w: 0, h: 0 };
+    const x0 = pos("x", span.c0, "c0", "c1", ox, ow) + inset.c0 + ends("c0") * this.frameUnit("x");
+    const x1 = pos("x", span.c1, "c0", "c1", ox, ow) - inset.c1 - ends("c1") * this.frameUnit("x");
+    const y0 = pos("y", span.r0, "r0", "r1", oy, oh) + inset.r0 + this.headersAbove(holders, span.r0) * this.headStep();
+    const y1 = pos("y", span.r1, "r0", "r1", oy, oh) - inset.r1 - ends("r1") * this.frameUnit("y");
     return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
   }
+
+  /**
+   * The rectangle of each card inside the group card id while it is shown across the rectangle area, laid out as if it were the whole
+   * space (docs/spec/groups.md#card-commands-on-a-group-card): its frame is area, the lines inside it are stretched onto area while every
+   * corridor and frame keeps the gap, and each card inside it stands below the headers of the group cards between it and id that start on
+   * its first row line. A Map by card id with id itself, or null for no group card.
+   */
+  fullscreen(id, area) {
+    const whole = this.node(id);
+    if (!whole) return null;
+    const out = new Map([[id, area]]);
+    for (const { id: card, node } of this.order()) {
+      const { path } = this.find(card);
+      const at = path.indexOf(whole);
+      if (card === id || at < 0) continue;
+      out.set(card, this.place(area, whole, path.slice(at), node ? this.rectangle(node) : this.box(card)));
+    }
+    return out;
+  }
+
+  /** The headers of the group cards, in workbench order. */
+  headRects() {
+    return this.order().filter(({ node }) => node).map(({ id }) => this.headRect(id));
+  }
+
+  /**
+   * The dividers of the grid cut where they would cross a group header (docs/spec/groups.md#drawing): a divider of a line inside a group
+   * starts below the stacked headers. A divider cut in parts keeps its key on the first part, and the next parts add their index.
+   */
+  drawnDividers(dividers) {
+    const heads = this.headRects();
+    return dividers.flatMap((divider) => clearOfHeads(divider.axis, across(divider), along(divider), heads)
+      .map((part, k) => ({ ...divider, ...stretch(divider.axis, part), key: k > 0 ? `${divider.key}:${k}` : divider.key })));
+  }
+
+  /**
+   * The rules of the grid as drawn (docs/spec/groups.md#drawing), each with bleed: each cut where it would cross a header, a stretch inside
+   * a group card cut to the inside of its frame below its header, which keeps out of the stage padding, and a stretch outside every group
+   * card cut where it would cross a frame, which alone reaches into the stage padding at the edge of the plane.
+   */
+  drawnRules(rules) {
+    const heads = this.headRects();
+    const groups = this.order().filter(({ node }) => node).map(({ id }) => {
+      const frame = this.rect(id), head = this.headRect(id);
+      return { frame, inner: { x: frame.x, y: head.y + head.h, w: frame.w, h: frame.y + frame.h - head.y - head.h } };
+    });
+    return rules.flatMap((rule) => {
+      const cuts = clearOfHeads(rule.axis, across(rule), along(rule), heads).flatMap((part) => clearOfFrames(rule.axis, across(rule), part, groups));
+      return cuts.map((cut, k) => ({ ...rule, ...stretch(rule.axis, [cut.from, cut.to]), bleed: cut.outside,
+        key: k > 0 ? `${rule.key}:${k}` : rule.key }));
+    });
+  }
+
 
   /**
    * The length that one frame takes on axis, which the layout library reduces with the corridor when the plane cannot hold the corridors
