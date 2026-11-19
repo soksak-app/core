@@ -195,6 +195,14 @@ button:focus-visible{outline:var(--focus-outline) solid var(--focus);outline-off
    without an order only the outer edge of the group would take the rail color and the four sides of a card would have
    different colors. The rail has z 3 in .rail. */
 .card[data-focused=true]{z-index:4}
+/* A group card is one container (docs/spec/groups.md#drawing): its frame has the border and the radius of a card and the fill of its level,
+   which the plane sets, and stands below the cards; its header is the top band inside the frame, whose name and button row take the
+   style of the head of a content card. */
+.group{position:absolute;z-index:0;border:var(--bw) solid var(--edge);border-radius:var(--r);overflow:hidden}
+.group[hidden]{display:none}
+.group__head{display:flex;align-items:center;gap:var(--card-head-gap);padding:0 var(--card-head-pad);overflow:hidden}
+.group__name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-small);
+  color:var(--fg);cursor:grab;user-select:none}
 
 /* The focus mark is shown only at the four corners of the body. A native surface is outside the CSS stack, so a mark drawn inside the
    card would be hidden under the surface; it is placed on the same layer as the surface. */

@@ -23,6 +23,7 @@ import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths,
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
 import { cardNumber, memberId, readGroupTree } from "./group-tree.js";
+import { drawGroupCards } from "./group-cards.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
 import { layoutTree, sameJson } from "./layout-tree.js";
@@ -1600,6 +1601,14 @@ function build(kept) {
     // The plane is inset inside the stage by this value. Only the host knows the value, so it must be passed to the view so
     // that lines touching the plane edge continue to the stage boundary.
     bleed: stagePad(),
+    // The cards stand at the drawn rectangles of the group tree, below the headers of their group cards, and the rules and dividers are
+    // cut at the headers and the frames (docs/spec/groups.md#drawing).
+    drawn: {
+      has: (id) => grid.card(id) !== undefined || tree.isGroup(id),
+      rects: drawnRects,
+      rules: () => tree.drawnRules(grid.rules()),
+      dividers: () => tree.drawnDividers(grid.dividers()),
+    },
     // A divider drag previews its steps on the line of the group tree, which draws the cards below the headers, and its result is
     // the command core.boundary.move from the layout before the drag to the position where the drag left the line
     // (docs/spec/groups.md#minimum-size).
@@ -1638,6 +1647,8 @@ function build(kept) {
         divider.dataset.expose = "core.divider";
       }
       keepHiddenSidebars();
+      const fullscreen = view.fullscreenCard;
+      drawGroupCards(plane, tree, drawnRects(fullscreen), { head: HEADER, fullscreen, even: splitsEven() });
       markFocus();
       // A placeholder error that this draw does not show again is withdrawn: its surface left, or its plugin state was read again (F217).
       for (const where of shownPlaceholderErrors) if (!placeholderErrorPlaces.has(where)) hideError(null, where);
@@ -1834,7 +1845,24 @@ function knownPlugin(id) {
 const cardElement = (id) => plane.querySelector(`.card[data-card-id="${CSS.escape(id)}"]`);
 
 // default: it is null when there is no fullscreen card.
-export const fullscreenCard = () => plane.querySelector('.card[data-fullscreen="true"]')?.dataset.cardId ?? null;
+export const fullscreenCard = () => view?.fullscreenCard ?? null;
+
+/** Whether the card id is drawn while a card is fullscreen: the fullscreen card and the cards inside it, or every card without one. */
+function shownFullscreen(id) {
+  const shown = view?.fullscreenCard ?? null;
+  return shown === null || id === shown || tree.path(id).some((group) => group.card === shown);
+}
+
+/**
+ * The drawn rectangle of each card of the space by id (docs/spec/groups.md#drawn-rectangles): with a fullscreen card only the cards it
+ * shows, a fullscreen group card laid out as the whole area with the cards inside it, and the window sidebars at the rectangles of the
+ * grid.
+ */
+function drawnRects(fullscreen) {
+  const area = { x: 0, y: 0, w: grid.width, h: grid.height };
+  if (fullscreen !== null) return tree.isGroup(fullscreen) ? tree.fullscreen(fullscreen, area) : new Map([[fullscreen, area]]);
+  return new Map(tree.order().map(({ id }) => [id, isPlace(id) ? grid.rect(id) : tree.rect(id)]));
+}
 export const presentedCardRect = (id) => view?.painted(id);
 
 /**
@@ -1851,7 +1879,7 @@ function restoreFullscreen() {
 }
 
 export function toggleCardFullscreen(id) {
-  paneCard(id);
+  if (!tree.isGroup(id)) paneCard(id);
   focusOn(id);
   closePicker("fullscreen");
   view.fullscreen(view.fullscreenCard === id ? null : id);
@@ -1860,7 +1888,8 @@ export function toggleCardFullscreen(id) {
 export function focusCard(id) {
   if (tree?.isGroup(id)) id = tree.focusable(id);
   paneCard(id);
-  if (view.fullscreenCard !== id) restoreFullscreen();
+  // A focus of a card inside a fullscreen group card keeps it fullscreen (docs/spec/groups.md#card-commands-on-a-group-card).
+  if (!shownFullscreen(id)) restoreFullscreen();
   focusOn(id);
   settle();
 }
@@ -2213,7 +2242,7 @@ export function openFile(path, cardId) {
 
 export function selectTab(tabId) {
   const card = cardOfTab(tabId);
-  if (view.fullscreenCard !== card.id) restoreFullscreen();
+  if (!shownFullscreen(card.id)) restoreFullscreen();
   card.data.activeId = tabId;
   focusOn(card.id);
   settle();

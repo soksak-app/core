@@ -356,6 +356,30 @@ export class GroupTree {
     return out;
   }
 
+  /** The side of the group button of the card id: right when it is drawn wider than high, otherwise bottom (docs/spec/groups.md#headers). */
+  groupSide(id) {
+    const rect = this.rect(id);
+    return rect && rect.w > rect.h ? "right" : "bottom";
+  }
+
+  /** Whether the group button of the card id is shown: a group of the card and a new card toward its longer axis would succeed. */
+  canGroup(id, even) {
+    return this.probe(() => {
+      try {
+        this.create(id, this.groupSide(id), undefined, even);
+        return true;
+      } catch {
+        // silent: the probe answers whether the group succeeds; the refusal is the answer false.
+        return false;
+      }
+    });
+  }
+
+  /** The number of members of the level of parent, null for the root level, that can lead it: every member but a window sidebar. */
+  leadCount(parent) {
+    return this.levelMembers(parent).map(memberId).filter((id) => !isPlace(id)).length;
+  }
+
   /** The headers of the group cards, in workbench order. */
   headRects() {
     return this.order().filter(({ node }) => node).map(({ id }) => this.headRect(id));
