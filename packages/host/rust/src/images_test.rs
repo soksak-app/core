@@ -1379,3 +1379,50 @@ fn drawing_region_receives_one_screen_request_until_it_is_answered() {
         "after an accepted screen the next request is {next:?}: one request, full false, new identifier"
     );
 }
+
+// contract: copy-path-clock-tick
+// The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate
+// that the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).
+#[test]
+fn window_clock_ticks_each_drawing_region_with_its_sequence() {
+    let images = super::Images::default();
+    assert!(
+        images.tick(120).is_empty(),
+        "a window without image regions gets no ticks"
+    );
+    let surface = "tab-1";
+    images.begin_generation(surface);
+    for (name, visible) in [("copy", true), ("idle", false)] {
+        let key = (surface.to_string(), name.to_string());
+        images.reserve(&key, "owner", "fixture-sidecar").unwrap();
+        assert!(images.set(&key, 1));
+        images
+            .configure_raster(&key, 800, 600, 2.0, visible)
+            .unwrap();
+    }
+    let ticks = images.tick(120);
+    assert_eq!(
+        ticks.len(),
+        1,
+        "only the drawing region receives the tick: {ticks:?}"
+    );
+    assert_eq!(
+        (
+            ticks[0].name.as_str(),
+            ticks[0].sequence,
+            ticks[0].refresh_rate
+        ),
+        ("copy", 2, 120),
+        "the tick after one earlier tick carries sequence 2 and refresh rate 120"
+    );
+    let body = serde_json::to_value(serde_json::json!({ "image": { "tick": &ticks[0] } })).unwrap();
+    assert_eq!(
+        body,
+        serde_json::json!({ "image": { "tick": {
+            "name": "copy",
+            "generation": ticks[0].generation,
+            "sequence": 2,
+            "refreshRate": 120,
+        } } })
+    );
+}

@@ -99,6 +99,8 @@ struct Inner {
     /// Whether the window is occluded or minimized; the host reads it from AppKit before it attaches a region and at each
     /// change (docs/spec/native-surfaces.md#image-regions).
     off_screen: bool,
+    /// The ticks of the window clock; each call of Images::tick is one tick.
+    clock_sequence: u64,
     /// Whether the regions of the window draw while it is not on screen. Only the diagnostic method
     /// diagnostics.window.draw-covered sets it (images_draw_covered.rs); a build without the diagnostics feature has no such
     /// state.
@@ -256,6 +258,21 @@ pub struct ScreenRequest {
     pub sidecar: String,
 }
 
+/// The clock tick of a drawing region (docs/spec/native-surfaces.md#copy-path-frames). The sequence counts the ticks of the window
+/// clock from 1, and the refresh rate is the value that the caller read at the tick.
+#[derive(Clone, Debug, Serialize)]
+pub struct Tick {
+    pub name: String,
+    pub generation: u64,
+    pub sequence: u64,
+    #[serde(rename = "refreshRate")]
+    pub refresh_rate: u32,
+    #[serde(skip)]
+    pub key: Key,
+    #[serde(skip)]
+    pub sidecar: String,
+}
+
 /// The serial of the screen requests of this process.
 static NEXT_SCREEN_REQUEST: AtomicU64 = AtomicU64::new(1);
 
@@ -277,6 +294,37 @@ pub struct Drawing {
 }
 
 impl Images {
+    /// Advances the window clock by one tick and returns the tick of each drawing region, sorted by surface and name.
+    /// refresh_rate is the refresh rate of the screen of the window that the caller read for this tick.
+    pub fn tick(&self, refresh_rate: u32) -> Vec<Tick> {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        inner.clock_sequence += 1;
+        let sequence = inner.clock_sequence;
+        let mut ticks = Vec::new();
+        for (key, state) in &inner.states {
+            let Some(sidecar) = inner.sidecars.get(key) else {
+                continue;
+            };
+            // default: the address of a region that is not registered is 0, the same as a region that is not attached.
+            if inner.handles.get(key).copied().unwrap_or_default() == 0
+                || !inner.drawing(key, state)
+            {
+                continue;
+            }
+            ticks.push(Tick {
+                name: key.1.clone(),
+                generation: state.generation,
+                sequence,
+                refresh_rate,
+                key: key.clone(),
+                sidecar: sidecar.clone(),
+            });
+        }
+        ticks.sort_by(|a, b| a.key.cmp(&b.key));
+        ticks
+    }
+
     /// Returns a screen request for each drawing region that has no unanswered request, sorted by surface and name, and
     /// records each returned request as unanswered. A region with an unanswered request gets no other request.
     pub fn screen_requests(&self) -> Vec<ScreenRequest> {

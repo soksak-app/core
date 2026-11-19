@@ -859,3 +859,41 @@ func TestDrawingRegionReceivesOneScreenRequestUntilItIsAnswered(t *testing.T) {
 		t.Fatalf("after an accepted screen the next request is %+v: want one request with full false and a new identifier", next)
 	}
 }
+
+// contract: copy-path-clock-tick
+// The window clock ticks each drawing region with the generation of the region, the sequence of the tick from 1 and the refresh rate that
+// the caller read at the tick. A region that is not drawing receives no tick (docs/spec/native-surfaces.md#copy-path-frames).
+func TestWindowClockTicksEachDrawingRegionWithItsSequence(t *testing.T) {
+	images := NewImages()
+	if ticks := images.Tick(120); len(ticks) != 0 {
+		t.Fatalf("a window without image regions got ticks: %+v", ticks)
+	}
+	var handle int
+	for _, region := range []struct {
+		name    string
+		visible bool
+	}{{"copy", true}, {"idle", false}} {
+		key := ImageKey{Surface: "tab-1", Name: region.name}
+		if err := images.Reserve(key, &ImageOwner{SidecarName: "sidecar-a", SidecarOwner: imageStatusTestOwner{}}); err != nil {
+			t.Fatal(err)
+		}
+		if !images.Set(key, unsafe.Pointer(&handle)) {
+			t.Fatal("image was not attached")
+		}
+		if _, err := images.ConfigureRaster(key, 800, 600, 2, region.visible); err != nil {
+			t.Fatalf("configure image %s: %v", region.name, err)
+		}
+	}
+	ticks := images.Tick(120)
+	if len(ticks) != 1 || ticks[0].Name != "copy" || ticks[0].Sequence != 2 || ticks[0].RefreshRate != 120 {
+		t.Fatalf("tick after one earlier tick = %+v, want one tick of copy with sequence 2 and refresh rate 120", ticks)
+	}
+	body, err := json.Marshal(map[string]any{"image": map[string]any{"tick": ticks[0]}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(`{"image":{"tick":{"name":"copy","generation":%d,"sequence":2,"refreshRate":120}}}`, ticks[0].Generation)
+	if string(body) != want {
+		t.Fatalf("tick body = %s, want %s", body, want)
+	}
+}

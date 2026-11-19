@@ -103,7 +103,9 @@ type Images struct {
 	// ignores a configuration whose (generation, raster) did not increase as a past configuration. It is cleared when the generation of the surface changes.
 	detachedRasters map[ImageKey][2]uint64
 	nextGeneration  uint64
-	changed         chan struct{}
+	// clockSequence counts the ticks of the window clock; each Tick call is one tick.
+	clockSequence uint64
+	changed       chan struct{}
 	// waitEnds counts the ends of the layout transactions of the window, and endedSidecars the ends of the connections of the
 	// sidecars of its regions, each with the name of the last one, so a raster wait ends with the event that ends it
 	// (docs/spec/native-surfaces.md#layout-transaction).
@@ -229,6 +231,44 @@ func (i *Images) AnswerScreen(key ImageKey, request ImageScreenRequest, accepted
 		state.ScreenAccepted, state.ScreenGeneration, state.ScreenRaster = true, request.Generation, request.Raster
 	}
 	return nil
+}
+
+// ImageTick is the clock tick of a drawing region (docs/spec/native-surfaces.md#copy-path-frames). Sequence counts the ticks of the window
+// clock from 1, and RefreshRate is the refresh rate that the caller read at the tick.
+type ImageTick struct {
+	Name        string       `json:"name"`
+	Generation  uint64       `json:"generation"`
+	Sequence    uint64       `json:"sequence"`
+	RefreshRate int          `json:"refreshRate"`
+	Key         ImageKey     `json:"-"`
+	Sidecar     string       `json:"-"`
+	Owner       SidecarOwner `json:"-"`
+}
+
+// Tick advances the window clock by one tick and returns the tick of each drawing region, sorted by surface and name.
+// refreshRate is the refresh rate of the screen of the window that the caller read for this tick.
+func (i *Images) Tick(refreshRate int) []ImageTick {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	i.clockSequence++
+	ticks := []ImageTick{}
+	for key, state := range i.states {
+		owner := i.owners[key]
+		if owner == nil || i.handles[key] == nil || !i.drawingLocked(key, state) {
+			continue
+		}
+		ticks = append(ticks, ImageTick{
+			Name: key.Name, Generation: state.Generation, Sequence: i.clockSequence, RefreshRate: refreshRate,
+			Key: key, Sidecar: owner.SidecarName, Owner: owner.SidecarOwner,
+		})
+	}
+	sort.Slice(ticks, func(a, b int) bool {
+		if ticks[a].Key.Surface != ticks[b].Key.Surface {
+			return ticks[a].Key.Surface < ticks[b].Key.Surface
+		}
+		return ticks[a].Key.Name < ticks[b].Key.Name
+	})
+	return ticks
 }
 
 // SetOnScreen records whether the window is neither occluded nor minimized.
