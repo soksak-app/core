@@ -94,6 +94,8 @@ func TestGroupCases(t *testing.T) {
 func groupCall(t *testing.T, tree *layout.GroupTree, call string, a groupArgs) (any, bool, error) {
 	t.Helper()
 	switch call {
+	case "balance":
+		return nil, false, tree.Balance()
 	case "create":
 		group, born, err := tree.CreateGroup(a.Card, a.Side, nil, false)
 		return map[string]string{"group": group, "card": born}, true, err
