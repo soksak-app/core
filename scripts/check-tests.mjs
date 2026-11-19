@@ -364,6 +364,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F937-53",
+    implementation: [
+      { file: "packages/workbench-mygo/src/group_cards.go", symbol: "Border(s.palette.CardBorder(), s.frameColor(id)).Radius(radius).PassThrough()" },
+      { file: "packages/workbench/app.css", symbol: ".group::after{content:\"\";position:absolute;inset:0;" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/group_drawing_test.go", id: "TestTheFrameOfAGroupCardRunsAroundItsHeader" },
+      { file: "packages/workbench/test/group-frame.test.mjs", id: "the header of a group card is the band at the top of its frame and the line of the frame runs over it" },
+    ],
+    expected: "The header of a group card is the band of head-h at the top of its frame, and the line and the radius of the frame run around the whole card over the ends of the header, in mygo and on the page.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-55",
     implementation: [
       { file: "packages/workbench-mygo/src/shell_text.go", symbol: "func drawCutText(" },

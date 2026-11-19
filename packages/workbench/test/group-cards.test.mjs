@@ -1,5 +1,5 @@
 // The drawing of the group cards of the page workbench (docs/spec/groups.md#drawing): each group card is one container, its frame on the
-// drawn rectangle of the group tree filled with the color of its level, its header the top band inside the frame with the name and the
+// drawn rectangle of the group tree filled with the color of its level, its header the band of head-h at the top of the frame with the name and the
 // head buttons of the group, and the cards inside it one gap inside the frame below the header. A fullscreen group card is laid out as
 // the whole area (docs/spec/groups.md#card-commands-on-a-group-card). The plane of each test holds the group card card-4 of card-1 and
 // card-2 beside card-3 of the root level.

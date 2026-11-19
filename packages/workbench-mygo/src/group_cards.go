@@ -56,9 +56,10 @@ func (s *Shell) groupHeadTools(id string) []headTool {
 		Title: names["group-menu"], Icon: "card-close"}, true))
 }
 
-// drawGroupCard draws the group card id whose rectangle is rect as one container (docs/spec/groups.md#drawing): its frame, the border
-// and the radius of a card on the rectangle, filled with the color of the level of its members, and its header, the top band inside
-// the frame. The cards inside it draw over the rest of the rectangle, one gap inside the frame.
+// drawGroupCard draws the group card id whose rectangle is rect as one container (docs/spec/groups.md#drawing): its body filled with the
+// color of the level of its members, its header, the band of head-h at the top of the rectangle (docs/spec/groups.md#drawn-rectangles),
+// and its frame, the border and the radius of a card on the rectangle, drawn over the header so the line runs around the whole card and
+// the header keeps the rounded corners. The cards inside it draw over the rest of the rectangle, one gap inside the frame.
 func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset float32) {
 	record, _ := s.planes.Group(id) // silent: drawWork draws a group card of the tree.
 	head, _ := s.groupHeadRect(id)  // silent: a group card has a header.
@@ -66,10 +67,12 @@ func (s *Shell) drawGroupCard(c *ui.Context, id string, rect layout.Rect, inset 
 	s.anchored("core.group/"+id, card)
 	card.FocusRing(false).Role(ui.RoleGroup).Label(record.Name).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).
 		Size(float32(rect.W), float32(rect.H)).Background(s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade).Body).
-		Border(s.palette.CardBorder(), s.frameColor(id)).Radius(s.palette.CardRadius()).PassThrough()
-	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Clip().Children(func() {
-		s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H))
-	})
+		Radius(s.palette.CardRadius()).PassThrough()
+	radius := s.palette.CardRadius()
+	ui.Box(c).Absolute().Left(float32(head.X)+inset).Top(float32(head.Y)+inset).Size(float32(head.W), float32(head.H)).Radius(radius, radius, 0, 0).Clip().
+		Children(func() { s.drawGroupHead(c, id, record.Name, float32(head.W), float32(head.H)) })
+	ui.Box(c).Absolute().Left(float32(rect.X)+inset).Top(float32(rect.Y)+inset).Size(float32(rect.W), float32(rect.H)).
+		Border(s.palette.CardBorder(), s.frameColor(id)).Radius(radius).PassThrough()
 	// At the seam the frame has no border, and its line is the line of the plane around it; the mark of the focus colors that line, as
 	// the focus ring of a content card does. A nested group card and the focused card draw later, so the innermost mark owns a line that
 	// several marked boxes end on (docs/spec/groups.md#drawing).
@@ -324,7 +327,9 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	buttons := float32(len(tools))
 	group := buttons*m.cardButton + (buttons-1)*m.cardActsGap + 2*m.cardActsPad + 2*s.palette.BorderWidth
 	kept := keptTools(tools)
-	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(m.cardHeadPad), PaddingRight: float64(m.cardHeadPad),
+	// The line of the frame runs over the ends of the header, so its content starts the head padding inside the line, as in a card head.
+	pad := m.cardHeadPad + s.palette.CardBorder()
+	fit := layout.FitHead(layout.Head{Width: float64(width), PaddingLeft: float64(pad), PaddingRight: float64(pad),
 		Gap: float64(m.cardHeadGap), ToolsWidth: float64(group), MoreWidth: float64(m.cardButton), KeptWidth: float64(s.keptWidth(kept)),
 		TabWidths: []float64{float64(nameWidth)}, TabGap: float64(m.cardTabsGap), Peek: float64(m.tabPeekW), MinTab: float64(m.tabMinW),
 		Grab: float64(m.tabGrabW)})
@@ -333,7 +338,7 @@ func (s *Shell) drawGroupHead(c *ui.Context, id, name string, width, height floa
 	target := renameTarget{Kind: "group", ID: id}
 	look := s.palette.GroupLook(s.planes.Level(id)+1, s.metrics.groupFillFade)
 	header := ui.Row(s.binder.Name(c, "core.group.header", id))
-	header.Size(width, height).PaddingX(m.cardHeadPad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
+	header.Size(width, height).PaddingX(pad).AlignItems(ui.Center).Gap(m.cardHeadGap).Clip().
 		Role(ui.RoleGroup).Label("core.group.header").BorderWidth(0, 0, s.palette.BorderWidth, 0).BorderColor(look.Line).Background(look.Head).Children(func() {
 		ui.Box(c).Absolute().Size(0, 0).Children(func() {
 			if fit.Tools == "bar" {

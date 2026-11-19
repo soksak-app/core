@@ -17,15 +17,18 @@ function seamStyle(theme, seam, column) {
     ...Object.entries(theme.light).map(([name, value]) => [`--${name}`, value]), ["--r", theme.shape.r], ["--bw", theme.shape.bw],
     // The share that the plane writes on a marked frame (markHeldFocus of group-cards.js).
     ["--group-focus", "60%"]]);
-  const resolved = css.replace(/var\(\s*(--[\w-]+)\s*\)/g, (whole, name) => vars.get(name) ?? whole);
+  // jsdom computes no style of a pseudo-element, so the line of the frame, the ::after box of a group card, is computed on a child
+  // element that the rules of ::after select instead.
+  const resolved = css.replace(/var\(\s*(--[\w-]+)\s*\)/g, (whole, name) => vars.get(name) ?? whole).replaceAll(".group::after", ".group > .after")
+    .replaceAll(".group[data-focus]::after", ".group[data-focus] > .after");
   const dom = new JSDOM(`<html data-seam="${seam}" data-focus-ind="border"><style>${resolved}</style>
     <div class="workarea">${column ? '<div class="project-column"></div>' : ""}<div class="work"><div class="tabs tabs--space"></div>
-    <main class="stage" id="stage"><div class="plane"><section class="group" id="plain"><header class="group__head" id="head"></header></section>
+    <main class="stage" id="stage"><div class="plane"><section class="group" id="plain"><header class="group__head" id="head"></header><i class="after" id="line"></i></section>
     <section class="group" id="marked" data-focus="1" style="--group-focus: 60%"></section></div></main></div></div></html>`);
   try {
     const of = (id) => dom.window.getComputedStyle(dom.window.document.getElementById(id));
     return {
-      frame: of("plain").borderTopWidth,
+      frame: of("line").borderTopWidth,
       markOutline: `${of("marked").outlineWidth} ${of("marked").outlineStyle}`,
       head: `${of("head").borderBottomWidth} ${of("head").borderBottomStyle}`,
       stage: `${parseFloat(of("stage").marginTop) || 0}px ${parseFloat(of("stage").marginLeft) || 0}px`,
