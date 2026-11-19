@@ -132,7 +132,7 @@ focus ring은 어느 plane의 content card 하나에 서고, 키보드는 그 ca
 
 - `core.layout`은 layout의 저장 형태([저장](#저장))를 보고하며, 각 group 기록에 `level`을 더한 `group: {name, level, leader, plane}`을 가진다. `level`은 그 child plane의 level이고 `leader`는 그 child plane의 leader다. 그리고 `state` 옆에 root plane의 leader `leader`를 가진다.
 - `core.grid`는 root plane의 card에 대해 값을 유지하고, child plane의 card를 workbench 순서로 더한다. 각 card는 자기를 담은 child plane의 group card 식별자인 member `plane`을 더 가진다. 그 사각형은 root plane의 사각형처럼 root plane 좌표다. 자기 plane의 leader인 각 card는 plane의 유일한 card도 포함해 member `leader: true`를 더 가진다. group card는 member `group: {name, level, leader}`를 더하고 tab 없이 나열된다.
-- `core.card.get {card}`는 어느 plane의 content card든 card 상태를 그대로 읽고, card의 group 경로인 member `groups`를 더한다. 곧 card를 담은 group card의 식별자를 가장 바깥부터 가장 안쪽까지이며, root plane에서는 `[]`다. group card에 대해서는 `{card, groups, group: {name, level, leader, cards}}`를 돌려주며, `cards`는 child plane의 card를 reading order로 나열한다.
+- `core.card.get {card}`는 어느 plane의 card든 하나를 읽는다. content card는 card 상태를 그대로 두고 member `groups`를 더한다. `groups`는 그 card를 담은 group card마다 `{card, name}` 하나씩, 가장 바깥부터 가장 안쪽까지의 group 경로이며 root plane에서는 `[]`다. 그래서 읽는 쪽은 경로를 `<name> > <name> > <name>`으로 보인다. group card는 `{card, groups, group: {name, level, leader, plane}}`을 돌려준다. `plane`은 `core.layout`의 tree 형식으로 된 child plane이다: 그 plane의 모든 card를 reading order로 담고, 그 안의 group card는 자기 `group` record를 가지며, 가장 안쪽 plane까지 이어진다.
 - [창 snapshot](exposure.ko.md#창-snapshot)과 `sok describe`의 `layout`은 group card를 node `{card, size, frame, group: {name, level, leader, root}}`로 담는다. `root`는 root plane의 tree 형태인 child plane의 tree다. tree의 각 node는 자기 plane의 leader에서 `leader: true`를 가진다.
 
 ## 저장
