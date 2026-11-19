@@ -36,7 +36,7 @@ chrome 버튼과 app 메뉴의 항목 설정…(Settings…), 단축키 `cmd+,`�
 | 위치 | 프로젝트 탭 위치 `projectTabs` |
 | 사이드바 | 왼쪽 사이드바 보이기 `left`, 오른쪽 사이드바 보이기 `right`, 위 사이드바 보이기 `top`, 아래 사이드바 보이기 `bottom`; 왼쪽 사이드바 세트, 오른쪽 사이드바 세트, 위 사이드바 세트, 아래 사이드바 세트(각각 모든 세트와 사용 안 함의 선택 상자, `core.settings.link {place, plugin: null, set}`); 사이드바 순서 `sidebarOrder` |
 | 사이드바 크기 | [배치 값](#배치-값)의 폭 설정 |
-| 표시 | 포커스 표시 `focusInd`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
+| 표시 | 포커스 표시 `focusInd`, 카드 자동 정렬 `cardArrange`, 카드 분할 `cardSplit`, 그룹 색 `group.tint`, 경계선 `fullRule`, 포커스 밖 흐리게 `dim` |
 | 언어 | 언어 `language` |
 | 메모리 (전역 범위에서만) | 보기 프로세스 `viewProcess`, 메모리 절약 `memorySaver`, 숨긴 뒤 내리기까지 `memorySaverDelay` |
 | 진단 | 디버그 (`core.settings.debug {on}`을 실행하는 switch) |
@@ -151,6 +151,7 @@ core 설정은 저마다 한 형식을 받는다. 설정 파일을 읽을 때와
 | `fullRule` | `under`, `over`, `none` 중 하나 |
 | `cardArrange` | `resize`(구조를 유지하고 카드에 공정한 크기를 준다, 기본값) 또는 `even`(카드를 같은 크기의 격자로 배치한다, `arrange(\"even\")`) 중 하나. 카드 자동 정렬 명령은 이 설정 값을 실행하고, 툴바 아이콘이 이 값을 보인다 |
 | `cardSplit` | `exact`(split은 자기가 나누는 카드의 사각형만 나눈다, layout library의 R4, 기본값) 또는 `even`(split 뒤에 `balance()`가 grid의 카드에 구조를 유지한 채 공정한 크기를 준다) 중 하나. `exact`에서 group card의 split은 그 사각형만 나눈다. `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 split, group에 card를 더하는 것, `side`가 있는 `core.layout.open`에 적용된다([group card](groups.ko.md#split-설정)) |
+| `group.tint` | 0부터 100까지의 정수(퍼센트), 기본값 100: group card의 채움이 그 level의 theme 색 `group-<n>`을 stage 색 `bg`에 섞는 정도; 0은 채움을 그리지 않는다([group 그리기](groups.ko.md#그리기)) |
 | `language` | `auto` 또는 애플리케이션 메뉴의 언어(`ko`, `en`) |
 | `sidebarMinWidth`, `sidebarMaxWidth`, `sidebarWidth` | [배치 값](#배치-값) |
 | `viewProcess` | `plugin` 또는 `view`, 전역 범위, 기본값 `plugin`: host가 그 뒤 만드는 view의 WebContent process로, 그 plugin의 view들과 함께 쓰거나 자기 것을 쓴다([View 프로세스](plugin-processes.ko.md#view-프로세스)) |

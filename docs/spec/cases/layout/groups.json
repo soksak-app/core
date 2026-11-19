@@ -346,9 +346,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 0,
+      "y": 32,
       "w": 1000,
-      "h": 188
+      "h": 156
      }
     },
     {
@@ -2943,7 +2943,7 @@
    ]
   },
   {
-   "name": "nested headers stack on the top of the rectangles, and a card reads its group path and level",
+   "name": "nested headers stack on the top of the rectangles, a nested group card is drawn below the headers that hold it, and a card reads its group path and level",
    "options": {
     "gap": 24,
     "minSize": 96,
@@ -3078,9 +3078,9 @@
      },
      "returns": {
       "x": 0,
-      "y": 0,
+      "y": 32,
       "w": 1000,
-      "h": 288
+      "h": 256
      }
     },
     {
@@ -3150,6 +3150,140 @@
       "card": "card-6"
      },
      "returns": 0
+    }
+   ]
+  },
+  {
+   "name": "a group card nested at the side of its group is drawn below the header of its group, which spans the whole group",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-6",
+      "name": "그룹 2",
+      "leader": "card-5",
+      "members": [
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-3"
+        ]
+       },
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-6",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-6"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 600
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": {
+      "x": 0,
+      "y": 32,
+      "w": 488,
+      "h": 568
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 64,
+      "w": 488,
+      "h": 224
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 312,
+      "w": 488,
+      "h": 288
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 512,
+      "y": 32,
+      "w": 488,
+      "h": 568
+     }
     }
    ]
   },

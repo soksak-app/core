@@ -3,8 +3,13 @@
 package workbench_test
 
 import (
+	"math"
 	"slices"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
+
+	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
 )
 
 // The header of a group card holds its name and its buttons, and the headers of content cards stay the headers of the content cards.
@@ -105,3 +110,60 @@ func TestAGroupIsRenamedInPlace(t *testing.T) {
 }
 
 // A tab dropped on a card of a child plane moves into that card, and a tab dropped on the header of a group card goes into a new card
+
+// nestedSideShell is a layout shell whose group card card-6 holds the nested group card card-5 at its left, card-1 over card-3, beside
+// card-2 at its right, in a window large enough for both headers.
+func nestedSideShell(t *testing.T) *tabShell {
+	t.Helper()
+	space := gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 0.5, 1},
+		gridCard("card-1", 0, 1, 0, 1, tab("t1", "notes")), gridCard("card-2", 1, 2, 0, 2, tab("t2", "notes")),
+		gridCard("card-3", 0, 1, 1, 2, tab("t3", "notes")))
+	stored := space["layout"].(map[string]any)
+	stored["groups"] = []any{map[string]any{"card": "card-6", "name": "그룹 2", "leader": "card-5", "members": []any{
+		map[string]any{"card": "card-5", "name": "그룹 1", "leader": "card-1", "members": []any{"card-1", "card-3"}}, "card-2"}}}
+	stored["leader"], stored["lastCard"] = "card-6", 6
+	f := layoutShell(t, space)
+	f.tester.SetSize(1400, 900)
+	f.settle()
+	return f
+}
+
+// exposedAll is every element of the element name in the tree, with its item.
+func exposedAll(nodes []ui.ElementNode, name string) map[string]ui.Rect {
+	out := map[string]ui.Rect{}
+	var walk func(nodes []ui.ElementNode)
+	walk = func(nodes []ui.ElementNode) {
+		for _, node := range nodes {
+			if exposed, ok := node.Key.(workbench.Exposed); ok && exposed.Name == name {
+				out[exposed.Item] = ui.Rect{X: node.Bounds.X, Y: node.Bounds.Y, W: node.Bounds.W, H: node.Bounds.H}
+			}
+			walk(node.Children)
+		}
+	}
+	walk(nodes)
+	return out
+}
+
+// A group header is one bar across the whole width of its group card, and no divider crosses a header by more than 1 point: the divider
+// of the line between the nested group and the card beside it starts below the header of the outer group (docs/spec/groups.md#drawing).
+func TestNoDividerCrossesAGroupHeader(t *testing.T) {
+	f := nestedSideShell(t)
+	heads := exposedAll(f.tester.ElementTree(), "core.group.header")
+	dividers := exposedAll(f.tester.ElementTree(), "core.divider")
+	if len(heads) != 2 || len(dividers) == 0 {
+		t.Fatalf("the window shows the headers %v and the dividers %v", heads, dividers)
+	}
+	for group, head := range heads {
+		frame := f.gridCards()[group]
+		if math.Abs(float64(head.W)-frame["w"].(float64)) > 1 {
+			t.Fatalf("the header of %s is %v wide and its group card %v", group, head.W, frame["w"])
+		}
+		for item, divider := range dividers {
+			overlapX := min(head.X+head.W, divider.X+divider.W) - max(head.X, divider.X)
+			overlapY := min(head.Y+head.H, divider.Y+divider.H) - max(head.Y, divider.Y)
+			if overlapX > 1 && overlapY > 1 {
+				t.Fatalf("the divider %s at %+v crosses the header of %s at %+v", item, divider, group, head)
+			}
+		}
+	}
+}
