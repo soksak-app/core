@@ -2327,17 +2327,22 @@ export async function closeInLayout({ tab: tabId }) {
 }
 
 /**
- * The layout of the window description (docs/spec/exposure.md#window-snapshot): the shown space, the focused card and the tree of the
- * content cards with the frame of each card in window points and its tabs. It is null while the plane shows no space.
+ * The layout of the window description (docs/spec/exposure.md#window-snapshot): the shown space, the focused card, the tree of the
+ * content cards with the frame of each card in window points, its group card (parent, null at the root level), whether it leads its level
+ * and its tabs, and the group tree as core.layout reports it with the frame of each group card and whether it leads its own level
+ * (docs/spec/groups.md#status-and-queries). It is null while the plane shows no space.
  */
 export function layoutDescription() {
   if (!grid) return null;
   const origin = plane.getBoundingClientRect();
   const root = layoutTree(contentCards(), grid.lines("x"), grid.lines("y"), (card, size) => {
-    const rect = grid.rect(card.id);
+    // The drawn rectangle: a card below the headers of its group cards is drawn below them (docs/spec/groups.md#drawn-rectangles).
+    const rect = tree.rect(card.id);
+    const parent = tree.parentOf(card.id);
     return {
       card: card.id, size,
       frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
+      parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === card.id,
       tabs: tabsOf(card).map((t) => ({
         // The title is the name that the tab shows, the label that its surface announced or the tab name, without the mark of a modified tab.
         tab: t.id, plugin: t.plugin, title: shownTabName(t, tabLabel(t.id), false), active: t.id === card.data.activeId,
@@ -2346,7 +2351,15 @@ export function layoutDescription() {
       })),
     };
   });
-  return { space: heldSpace, focused: focusedId, root };
+  const describe = (node) => {
+    const rect = tree.rect(node.card);
+    return {
+      card: node.card, name: node.name, level: node.level, leader: node.leader, leading: tree.leaderOf(tree.parentOf(node.card)) === node.card,
+      frame: { x: origin.left + rect.x, y: origin.top + rect.y, width: rect.w, height: rect.h },
+      members: node.members.map((member) => (typeof member === "string" ? member : describe(member))),
+    };
+  };
+  return { space: heldSpace, focused: focusedId, root, groups: tree.tree().map(describe) };
 }
 
 const ZONES = ["centre", "left", "right", "top", "bottom"];

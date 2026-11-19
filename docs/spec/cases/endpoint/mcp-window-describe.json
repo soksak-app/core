@@ -35,6 +35,8 @@
                   "width": 600,
                   "height": 760
                 },
+                "parent": null,
+                "leader": true,
                 "tabs": [
                   {
                     "tab": "terminal-1",
@@ -58,6 +60,8 @@
                       "width": 596,
                       "height": 378
                     },
+                    "parent": null,
+                    "leader": false,
                     "tabs": [
                       {
                         "tab": "browser-1",
@@ -79,6 +83,8 @@
                       "width": 596,
                       "height": 378
                     },
+                    "parent": null,
+                    "leader": false,
                     "tabs": [
                       {
                         "tab": "editor-1",
@@ -101,7 +107,8 @@
                 ]
               }
             ]
-          }
+          },
+          "groups": []
         },
         "plugins": [
           {
@@ -720,6 +727,8 @@
                   "width": 600,
                   "height": 760
                 },
+                "parent": null,
+                "leader": true,
                 "tabs": [
                   {
                     "tab": "terminal-1",
@@ -743,6 +752,8 @@
                       "width": 596,
                       "height": 378
                     },
+                    "parent": null,
+                    "leader": false,
                     "tabs": [
                       {
                         "tab": "browser-1",
@@ -764,6 +775,8 @@
                       "width": 596,
                       "height": 378
                     },
+                    "parent": null,
+                    "leader": false,
                     "tabs": [
                       {
                         "tab": "editor-1",
@@ -786,7 +799,8 @@
                 ]
               }
             ]
-          }
+          },
+          "groups": []
         },
         "plugins": [
           {
@@ -1146,6 +1160,8 @@
                     "width": 600,
                     "height": 760
                   },
+                  "parent": null,
+                  "leader": true,
                   "tabs": [
                     {
                       "tab": "terminal-1",
@@ -1169,6 +1185,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "browser-1",
@@ -1190,6 +1208,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "editor-1",
@@ -1212,7 +1232,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "groups": []
           },
           "next": null,
           "plugins": [
@@ -1538,6 +1559,8 @@
                     "width": 600,
                     "height": 760
                   },
+                  "parent": null,
+                  "leader": true,
                   "tabs": [
                     {
                       "tab": "terminal-1",
@@ -1561,6 +1584,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "browser-1",
@@ -1582,6 +1607,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "editor-1",
@@ -1604,7 +1631,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "groups": []
           },
           "plugins": [
             {
@@ -2175,6 +2203,8 @@
                     "width": 600,
                     "height": 760
                   },
+                  "parent": null,
+                  "leader": true,
                   "tabs": [
                     {
                       "tab": "terminal-1",
@@ -2198,6 +2228,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "browser-1",
@@ -2219,6 +2251,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "editor-1",
@@ -2241,7 +2275,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "groups": []
           },
           "next": null,
           "plugins": [
@@ -2346,6 +2381,8 @@
                     "width": 600,
                     "height": 760
                   },
+                  "parent": null,
+                  "leader": true,
                   "tabs": [
                     {
                       "tab": "terminal-1",
@@ -2369,6 +2406,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "browser-1",
@@ -2390,6 +2429,8 @@
                         "width": 596,
                         "height": 378
                       },
+                      "parent": null,
+                      "leader": false,
                       "tabs": [
                         {
                           "tab": "editor-1",
@@ -2412,7 +2453,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "groups": []
           },
           "next": null,
           "plugins": [
