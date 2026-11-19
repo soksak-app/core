@@ -2,164 +2,189 @@
 
 [English](groups.md)
 
-group card는 body가 자기 plane인 card다. 이 명세는 plane의 tree, 각 plane의 leader, group header, command `core.group.*`, `core.layout`, `core.grid`, `core.card.get`과 창 설명의 group member, `projects.json`에 저장되는 tree의 형태, plane의 그리기를 정한다. plane 하나의 grid는 layout library의 규칙([soksak](../../packages/soksak/docs/layout.ko.md))을 따르고, card command와 layout operation은 [layout에 대한 작업](cli.ko.md#레이아웃에-동작하기)을, 선언은 [노출](exposure.ko.md)을 따른다.
+group card는 space grid의 사각형 하나를 가리키고 그 안의 card를 담는다. 이 명세는 space의 group tree, 각 level의 leader, group header, command `core.group.*`, `core.layout`, `core.grid`, `core.card.get`과 창 설명의 group member, `projects.json`에 저장되는 group tree의 형태, group 그리기를 소유한다. space의 grid는 layout library의 규칙([soksak](../../packages/soksak/docs/layout.md))을 따른다. card command와 layout operation은 [layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)을, 선언은 [노출](exposure.ko.md)을 따른다.
 
 ## 범위
 
-card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab의 command, status, element, 그리고 저장 형태는 계약을 유지하며, `packages/soksak`은 바뀌지 않은 채 plane 하나의 library로 남는다. 더해지는 것은 group card 하나다. group card는 content card가 tab을 담는 자리에 자기 plane에 child card를 담는 card다. 이 명세는 group card가 더하는 것과 기존 command가 group 안의 card에 닿는 방식만 정한다. group 안의 content card는 root plane에서와 같은 content card다.
+card와 tab의 구조는 지금 그대로다. content card, 그 tab, card와 tab의 command, status, element, 그리고 저장되는 grid는 계약을 유지하며, `packages/soksak`은 바뀌지 않는다. space는 line 집합 하나를 가진 grid 하나를 유지한다. 더해지는 것은 group card 하나다. group card는 grid 옆에 저장되는 tree의 node이며, cell이 그 grid의 사각형 하나를 이루는 card 집합을 가리킨다. 이 명세는 group card가 더하는 것과 기존 command가 group 안의 card에 닿는 방법만 말한다. group 안의 content card는 다른 card와 같은 grid의 content card다.
 
 ## 모델
 
-- plane은 layout library의 grid 하나다. 곧 `packages/soksak`의 `toJSON`이 주는 상태 `{xs, ys, cards, paidBy}`다. library는 plane 하나의 library로 남고, workbench가 plane의 tree를 가진다.
-- space에는 level 0의 root plane이 하나 있다. plane의 card는 tab을 하나 이상 담는 content card, child plane 하나를 담는 group card, 또는 root plane에서만 window sidebar([external window sidebars](external-sidebars.ko.md))다. group card의 child plane의 level은 그 group card가 있는 plane의 level에 1을 더한 값이다.
-- group card는 이름, header, body를 가진다. header는 card 위쪽의 card head 높이(chrome metrics의 `head-h`, [layout 값](settings.ko.md#배치-값)) 한 줄이다. body는 card의 나머지이며, child plane은 root plane이 stage 안에 gap 절반의 여백을 두고 놓이듯([값](settings.ko.md#값)) body 안에 모든 변에서 gap 절반만큼 들여 놓인다. 그려진 크기 `w`×`h`의 group card는 child plane에 크기 (`w` − gap)×(`h` − `head-h` − gap)를 준다. group card는 tab, surface, card sidebar를 갖지 않는다.
-- group은 card를 둘 이상 담는다. card 하나의 group은 없다. child plane은 content card와 group card를 담고 window sidebar는 담지 않는다.
-- card의 식별자는 그 space의 모든 plane에서 card 하나를 가리킨다. content card와 group card는 식별자를 한 sequence에서 받는다. 곧 `card-<n>`이며, `n`은 layout이 저장하는([저장](#저장)) 그 space가 낸 가장 큰 card 번호 `lastCard`보다 1 크다. 그래서 두 plane이 같은 식별자를 갖지 않고, space는 끝난 식별자를 재시작 뒤에도 다시 내지 않는다. card는 한 plane에서 다른 plane으로 옮겨도 식별자를 유지하고, card를 가리키는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.*`, `core.tab.move`, `core.group.*`)는 active space의 어느 plane의 card든 받는다.
+- space는 layout library의 grid 하나를 가진다. 곧 `packages/soksak`의 `toJSON`이 주는 상태 `{xs, ys, cards, paidBy}`이며, 그 card는 content card와 window sidebar([external window sidebars](external-sidebars.ko.md))다. layout library의 R1이 모든 경계에 대해 말하듯 grid의 각 line은 group 안팎을 가리지 않고 space 전체를 가로지르는 line 하나다.
+- group card는 space group tree의 node다. 식별자, 이름, leader, 그리고 member를 가진다. member는 grid의 content card와 group card이며 둘 이상이다. window sidebar는 member가 아니다. 각 content card와 group card는 많아야 group card 하나의 member다. 어떤 group card의 member도 아닌 card는 root level의 member다.
+- group card의 사각형은 그 안의 content card, 곧 그 member와 그 안의 group card의 member가 가진 가장 작은 첫 line부터 가장 큰 마지막 line까지의 line index span `[c0, c1) × [r0, r1)`이다. group card는 사각형 하나를 덮는다. 곧 그 안의 content card의 cell이 정확히 그 사각형의 cell이므로, grid의 다른 card는 그 사각형의 cell을 갖지 않는다. group card의 사각형은 그것을 담은 group card의 사각형 안에 놓인다.
+- root level의 level은 0이고, group card의 member의 level은 그 group card의 level에 1을 더한 값이다. level은 tree에서 도출되며 저장되지 않는다.
+- card의 식별자는 그 space에서 card 하나를 가리킨다. content card와 group card는 식별자를 한 sequence에서 받는다. 곧 `card-<n>`이며, `n`은 layout이 저장하는([저장](#저장)) 그 space가 낸 가장 큰 card 번호 `lastCard`보다 1 크다. 그래서 space는 끝난 식별자를 재시작 뒤에도 다시 내지 않는다. card는 group 안팎으로 옮겨도 식별자를 유지하며, card를 가리키는 모든 command(`core.layout.open`, `core.layout.select`, `core.layout.close`, `core.card.*`, `core.tab.move`, `core.group.*`)는 활성 space의 어느 level의 card든 받는다.
 - group이라는 낱말 하나는 이름 `core.group.*`, `core.card.group`과 이 명세의 기록의 member `group`에서만 group card를 가리킨다. `core.picker` item의 member `group`과 창 snapshot의 groups는 원래 뜻을 유지한다.
-- plane의 reading order는 card를 첫 row line `r0`, 다음으로 첫 column line `c0` 순으로 정렬한다. 이 순서는 layout library의 R2가 요구하듯 `cards` 배열의 순서가 아니라 line으로 정해진다.
+- level의 reading order는 member를 card 또는 group card 사각형의 첫 row line `r0`, 다음으로 첫 column line `c0` 순으로 정렬한다. 이 순서는 layout library의 R2가 요구하듯 배열 순서가 아니라 line으로 정해진다. card의 workbench order는 root level의 reading order이며, 각 group card는 그 member의 reading order 앞에 선다.
+
+### 그리는 사각형
+
+layout library는 grid의 각 card의 사각형을 준다(R5). group card의 header는 그 사각형 위쪽을 가로지르는 card head 높이(chrome metrics의 `head-h`, [layout 값](settings.ko.md#배치-값)) 한 줄이며, 위 line을 공유하는 group card의 header는 가장 바깥 것부터 아래로 쌓인다. 그래서 content card는 그것을 담고 그 첫 row line에서 시작하는 group card의 header 아래에 그려진다. 그 그리는 사각형은 library의 사각형을 `k` × `head-h`만큼 아래로 옮기고 그만큼 줄인 것이며, `k`는 그런 group card의 수다. 그 왼쪽, 오른쪽, 아래쪽 변은 grid의 line 위에 머물므로, 같은 line 위의 두 card는 어느 group이 담든 같은 좌표에 그려진다. group card의 그리는 사각형은 그 안의 content card의 library 사각형의 합집합이다. 그 header는 그 위쪽, 곧 그것을 담고 같은 row line에서 시작하는 group card의 header 아래에 놓인다.
 
 ### 최소 크기
 
-content card의 가장 작은 변은 두 축에서 `minSize`다. 한 축에서 plane의 가장 작은 extent는 그 slicing tree(`sliceTree`)로 계산한다. card는 자기의 가장 작은 extent를 센다. 그 축을 따른 cut은 양쪽의 합에 그 사이 line마다 gap 하나를 더해 센다. 다른 축을 따른 cut은 양쪽 중 가장 큰 쪽을 센다. group card의 가장 작은 크기는 `x` 축에서 child plane의 가장 작은 extent에 gap을 더한 값이고, `y` 축에서 gap과 `head-h`를 더한 값이다.
-
-group card가 child plane에 주는 크기에서 child plane이 모든 card를 가장 작은 크기 이상으로 담으면 group이 맞는다. 이를 위해 layout library는 바뀌지 않는다. workbench는 plane의 각 operation(split, close, insert, move, balance, arrange)을 오늘의 drop preview처럼 먼저 plane의 사본에 적용하고, operation이 group card의 그려진 크기를 바꾸어 그 group card가 가장 작은 크기보다 작아지면 operation을 거부한다. 그래서 어떤 operation도 card를 `minSize` 아래로 줄이지 않듯 group card를 가장 작은 크기 아래로 줄이지 않는다. 창 크기 변경으로 이미 가장 작은 크기보다 작아진 group card는 자기 크기를 바꾸지 않는 operation을 거부하지 않는다. drop preview와 drop의 release는 같은 검사를 쓰므로, 검사가 거부하는 위치에는 preview가 없고 그 release는 아무것도 바꾸지 않는다. 경계 drag는 경계 옆의 모든 group card가 가장 작은 크기를 유지하는 마지막 위치에서 멈춘다. plane의 operation은 그 plane의 group card 크기를 바꾸므로 workbench는 바뀐 각 group card 안의 plane에 같은 변경으로 적용하고, 그중 하나가 거부하면 operation 전체를 거부한다. operation이 아닌 변경, 곧 창 크기 변경, `gap`, `size`, 글자 크기의 변경은 R5가 plane 하나에 대해 말하듯 모든 plane의 비율을 다시 표현하고 아무것도 거부하지 않는다. 그동안 card는 공간이 돌아올 때까지 가장 작은 크기보다 작게 그려진다.
+content card는 두 축에서 적어도 `minSize`로 그려진다. layout library는 자기 사각형에 대해 이 한계를 지킨다. header는 card를 짧게 그리므로, workbench는 각 operation(split, close, insert, move, balance, arrange, 경계 drag, group 변경)을 오늘의 drop 미리보기처럼 먼저 grid와 group tree의 복사본에 적용하고, 그 operation이 바꾸는 content card가 어느 축에서 `minSize`보다 작게 그려지면 그 operation을 거부한다. window 크기 변경이 이미 작게 남긴 card는 그 card를 바꾸지 않는 operation을 거부하지 않는다. drop 미리보기와 drop 놓기는 같은 검사를 쓰므로, 검사가 거부하는 위치는 미리보기를 보이지 않고 놓아도 아무것도 바꾸지 않는다. 경계 drag는 library의 drag이며 모든 group을 가로질러 line 전체를 옮긴다. line 옆의 모든 content card가 적어도 `minSize`로 그려지는 마지막 위치에서 멈춘다. operation이 아닌 변경, 곧 window 크기 변경, `gap`, `size`, 글자 크기의 변경은 R5가 말하듯 grid의 비율을 다시 표현하고 아무것도 거부하지 않는다. 그때 card는 공간이 돌아올 때까지 최소보다 작게 그려진다.
 
 ## Leader
 
-content card나 group card를 담는 각 plane은 leader를 정확히 하나 가진다. leader는 그 plane의 card 하나이며 content card 또는 group card다. window sidebar는 leader가 되지 않으므로, 오늘 마지막 content card를 닫으면 남는 것처럼 window sidebar만 담은 root plane은 leader가 없고 `leader: null`을 저장한다. 그 뒤의 변경이 넣는 첫 card가 그 leader가 된다.
+content card나 group card를 담는 각 level은 leader를 정확히 하나 가진다. leader는 그 member 하나이며 content card 또는 group card다. window sidebar는 leader가 되지 않으므로, 오늘 마지막 content card를 닫으면 남는 것처럼 window sidebar만 담은 root level은 leader가 없고 `leader: null`을 저장한다. 나중의 변경이 그 안에 넣는 첫 card가 그 leader가 된다.
 
-- 새 plane은 첫 card를 leader로 삼는다. 곧 `core.group.create`가 group으로 바꾸는 card이며, 그 옆의 새 card가 아니다. 새 space는 root plane에서 reading order로 window sidebar가 아닌 첫 card를 leader로 삼는다.
-- `core.group.create`가 plane의 leader를 group에 넣으면 새 group card가 그 card의 자리를 받으므로 그 plane의 leader mark도 받는다.
-- `core.group.leader {card}`는 `card`를 자기 plane의 leader로 만든다. 다른 plane은 바꾸지 않는다.
-- plane의 leader가 close나 다른 plane으로의 move로 plane을 떠나면, reading order로 window sidebar가 아닌 남은 첫 card가 leader가 된다.
-- group을 풀 때 group card가 parent plane의 leader였으면 child plane의 leader가 parent plane의 leader가 되고, 그렇지 않으면 parent plane이 leader를 유지한다.
-- group card는 parent plane의 leader이면서 자기 child plane의 card 하나가 그 child plane의 leader일 수 있다. 두 mark는 서로 독립이다.
+- 새 group card는 `core.group.create`가 묶는 card를 leader로 삼으며, 그 옆의 새 card가 아니다. 새 space는 root level에서 reading order로 window sidebar가 아닌 첫 card를 leader로 삼는다.
+- `core.group.create`가 level의 leader를 묶으면 새 group card가 그 card의 자리를 받으므로 그 level의 leader mark도 받는다.
+- `core.group.leader {card}`는 `card`를 자기 level의 leader로 만든다. 다른 level은 바꾸지 않는다.
+- level의 leader가 close나 다른 level로의 move로 level을 떠나면, reading order로 window sidebar가 아닌 남은 첫 member가 leader가 된다.
+- group card를 풀 때 group card가 자기를 담은 level의 leader였으면 그 member의 leader가 그 level의 leader가 되고, 그렇지 않으면 그 level이 leader를 유지한다.
+- group card는 자기 level의 leader이면서 자기 member 하나가 그 member들의 leader일 수 있다. 두 mark는 서로 독립이다.
 
-leader는 mark다. command, focus, 그리는 순서를 바꾸지 않는다. `core.layout`과 `core.grid`는 모든 plane에서 leader를 보고하며, card가 둘 이상인 plane에서는 leader card의 header가 card header의 기존 수단, 곧 header 버튼의 눌린 상태로 그것을 보인다([header](#header)).
+leader는 mark다. command, focus, 그리는 순서를 바꾸지 않는다. `core.layout`과 `core.grid`는 모든 level에서 leader를 보고하며, member가 둘 이상인 level에서는 leader의 header가 card header의 기존 수단, 곧 header 버튼의 눌린 상태로 그것을 보인다([header](#header)).
 
 ## Header
 
-header의 버튼은 그 header의 상자에 작용한다.
+header의 버튼은 그 header의 상자에 동작한다. content card header에서는 그 card, group header에서는 그 group card의 사각형이다.
 
 | Header | Element | Command | 효과 |
 | --- | --- | --- | --- |
 | content card | `core.card.add` | `core.card.menu {card, menu: "add"}` | 지금처럼 card에 tab을 더한다 |
-| content card | `core.card.split-x`, `core.card.split-y` | `core.card.menu {card, menu}` | 지금처럼 같은 plane에서 card 옆에 새 content card를 놓는다 |
-| content card | `core.card.group` | `core.card.menu {card, menu: "group"}` | 새 card의 plugin menu를 연다. 그 item은 `core.group.create {card, side, plugin}`을 실행하며, 이는 card를 그 card와 새 card의 group card로 바꾼다 |
-| content card | `core.card.leader` | `core.group.leader {card}` | card를 자기 plane의 leader로 만든다 |
-| group card | `core.group.add` | `core.card.menu {card: <group>, menu: "add"}` | 고른 tab을 가진 content card를 child plane의 오른쪽 끝에 더한다 |
-| group card | `core.group.split-x`, `core.group.split-y` | `core.card.menu {card: <group>, menu}` | parent plane에서 group card 옆에 새 content card를 놓는다 |
-| group card | `core.group.wrap` | `core.card.menu {card: <group>, menu: "group"}` | 새 card의 plugin menu를 연다. 그 item은 `core.group.create {card: <group>, side, plugin}`을 실행하며, 이는 group card와 새 card를 새 group card에 넣는다 |
-| group card | `core.card.leader` | `core.group.leader {card: <group>}` | group card를 parent plane의 leader로 만든다 |
-| group card | `core.group.close` | `core.group.menu {group}` | group의 close menu를 연다 |
+| content card | `core.card.split-x`, `core.card.split-y` | `core.card.menu {card, menu}` | 지금처럼 card 옆에 새 content card를 그 group 안에 둔다 |
+| content card | `core.card.group` | `core.card.menu {card, menu: "group"}` | 새 card의 plugin menu를 연다. 그 item은 card를 새 card와 묶는 `core.group.create {card, side, plugin}`을 실행한다 |
+| content card | `core.card.leader` | `core.group.leader {card}` | card를 그 level의 leader로 만든다 |
+| group card | `core.group.add` | `core.card.menu {card: <group>, menu: "add"}` | 고른 tab을 담은 content card를 group 안, 그 사각형의 오른쪽 가장자리에 더한다 |
+| group card | `core.group.split-x`, `core.group.split-y` | `core.card.menu {card: <group>, menu}` | group card 사각형 옆에 새 content card를 그 group card를 담은 level에 둔다 |
+| group card | `core.group.wrap` | `core.card.menu {card: <group>, menu: "group"}` | 새 card의 plugin menu를 연다. 그 item은 group card를 새 card와 묶는 `core.group.create {card: <group>, side, plugin}`을 실행한다 |
+| group card | `core.card.leader` | `core.group.leader {card: <group>}` | group card를 그 level의 leader로 만든다 |
+| group card | `core.group.fullscreen` | `core.card.fullscreen {card: <group>}` | group card를 작업 영역 전체에 보이거나 배치를 되돌린다 |
+| group card | `core.group.close` | `core.group.menu {group}` | group의 닫기 menu를 연다 |
 
-- split은 group을 만들지 않는다. content card의 split과 group card의 split은 각각 자기가 나누는 card의 plane에 새 content card를 놓는다.
-- group 버튼의 side는 그 card의 긴 축이다. card가 높이보다 넓게 그려지면 `right`, 아니면 `bottom`이다. `core.card.group`과 `core.group.wrap`은 그 card의 그 side로의 `core.group.create`가 성공할 때만 보인다. 곧 card가 줄 child plane (`w` − gap)×(`h` − `head-h` − gap)이 그 card를 가장 작은 크기로, content card 하나를 `minSize`로, 그 side 방향으로 gap 하나를 두고 나란히 담을 때이며, 이것이 `core.group.create` 거부의 크기 `mw`×`mh`다. `core.card.menu`는 `add`, `split-x`, `split-y` 옆에 menu `group`을 받고, 그 item은 add menu와 split menu의 plugin이다.
-- `core.card.leader`는 card가 둘 이상인 plane의 모든 card header에 보인다. leader에서는 눌려 있고(`aria-pressed` true) 그것이 leader mark이며, 다른 card에서는 눌려 있지 않다. card가 하나인 plane에는 없다. 이 버튼은 기존 card header 디자인의 head 버튼이며 card tool의 header fit을 따르므로, 너무 좁은 header는 이를 tool menu(`core.card.tools`)에 둔다.
-- group header는 기존 디자인의 card header다([card 배치](example-model.ko.md)). head 높이 `head-h`, head 버튼, 그 icon, card header의 theme이 같다. tab strip 자리에 group 이름(`core.group.name`)을 보이고, head 버튼은 content card의 head 버튼 자리에 놓인다. `core.group.add`, `core.group.split-x`, `core.group.split-y`는 `core.card.add`, `core.card.split-x`, `core.card.split-y`의 icon을 쓰고, 그다음 `core.group.wrap`, `core.card.leader`, `core.card.close`의 icon을 쓰는 `core.group.close`가 온다. group card가 더하는 icon은 group 버튼(`core.card.group`, `core.group.wrap`)의 icon과 leader mark(`core.card.leader`)의 icon뿐이며, 둘 다 다른 card head icon과 함께 `workbench.json`의 icons에 선언한다. plane의 level은 `core.layout`과 `core.grid`에 보고되고 그려지지 않는다.
-- `core.group.name`을 double-click하면 `core.rename.begin {kind: "group", id}`를 실행하고, 이름 바꾸기 field(`core.rename.input`)는 `core.group.rename`을 실행하는 `core.rename.commit`으로 확정한다. `core.rename.begin`은 `project`와 `space` 옆에 kind `group`을 받는다.
-- group의 close menu는 item 그룹 닫기와 그룹 풀기를 가진 picker다. 그룹 닫기는 `core.card.close {card: <group>}`을, 그룹 풀기는 `core.group.dissolve {group}`을 실행한다. 그룹 풀기는 풀기가 성공할 때만 보인다. 그 item은 `core.picker.item` 항목이며, `core.picker`는 card의 add menu를 보고하듯 menu가 열려 있음을 그 group card와 item과 함께 보고한다.
+- split은 group을 만들지 않는다. content card의 split은 새 card를 그 card를 담은 group에 넣고, group card의 split은 그 group card를 담은 level에 넣는다.
+- group 버튼의 side는 그 상자의 긴 축이다. 높이보다 넓게 그려지면 `right`, 아니면 `bottom`이다. `core.card.group`과 `core.group.wrap`은 그 card의 그 side 쪽 `core.group.create`가 성공할 동안에만 보인다. `core.card.menu`는 `add`, `split-x`, `split-y` 옆에 menu `group`을 받고, 그 item은 add menu와 split menu의 plugin이다.
+- `core.card.leader`는 member가 둘 이상인 level의 모든 member header에 보인다. leader에서는 눌려(`aria-pressed` true) leader mark가 되고, 다른 member에서는 눌리지 않는다. member가 하나인 level은 보이지 않는다. 이것은 기존 card header 디자인의 head 버튼이며 card tool의 header fit을 따르므로, 너무 좁은 header는 그것을 tool menu(`core.card.tools`)에 담는다.
+- group header는 기존 디자인의 card header다([card layout](example-model.ko.md)). head 높이 `head-h`, head 버튼, 그 icon, card header의 theme을 쓴다. tab strip 자리에 group 이름(`core.group.name`)을 보이고, head 버튼은 content card의 head 버튼 자리에 선다. `core.card.add`, `core.card.split-x`, `core.card.split-y`의 icon을 쓰는 `core.group.add`, `core.group.split-x`, `core.group.split-y`, 이어서 `core.group.wrap`, `core.card.leader`, `core.card.fullscreen`의 icon을 쓰는 `core.group.fullscreen`, 그리고 `core.card.close`의 icon을 쓰는 `core.group.close`다. group card가 더하는 icon은 group 버튼(`core.card.group`, `core.group.wrap`)의 icon과 leader mark(`core.card.leader`)의 icon뿐이며, 둘 다 다른 card head icon과 함께 `workbench.json`의 icon에 선언된다. level은 `core.layout`과 `core.grid`에 보고되고 그려지지 않는다.
+- `core.group.name`을 double-click하면 `core.rename.begin {kind: "group", id}`를 실행하고, 이름 입력 칸(`core.rename.input`)은 `core.group.rename`을 실행하는 `core.rename.commit`으로 확정한다. `core.rename.begin`은 `project`와 `space` 옆에 kind `group`을 받는다.
+- group의 닫기 menu는 picker이며, item은 `core.card.close {card: <group>}`을 실행하는 그룹 닫기와 `core.group.dissolve {group}`을 실행하는 그룹 풀기다. 그 item은 `core.picker.item` 항목이며, `core.picker`는 card의 add menu를 보고하듯 그 group card와 item으로 열린 menu를 보고한다.
 
 ## Command
 
-각 command는 자기 변경을 보이는 placement 뒤에 답한다. active가 아닌 space에 있거나 창의 어느 space에도 없는 card나 group은 [layout에 대한 작업](cli.ko.md#레이아웃에-동작하기)의 문구로 실패한다. card가 fullscreen인 동안의 layout 변경은 `card <id>: the layout does not change while card <shown> is fullscreen; restore the arrangement first`로 실패한다. 거부된 command는 아무것도 바꾸지 않는다. 오류 문구의 크기는 가장 가까운 point로 반올림한 정수 point의 그려진 크기이며 `<w>x<h>`로 쓴다.
+각 command는 그 변경을 보이는 배치 뒤에 답한다. 활성이 아닌 space나 창의 어느 space에도 없는 card나 group은 [layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)의 문구로 실패한다. card나 group card가 전체 화면인 동안의 layout 변경은 전체 화면 group card 안에서도 밖에서도 `card <id>: the layout does not change while card <shown> is fullscreen; restore the arrangement first`로 실패한다. 거부된 command는 아무것도 바꾸지 않는다. 오류 문구의 크기는 가장 가까운 point로 반올림한 정수 point의 그리는 크기이며 `<w>x<h>`로 쓴다.
+
+### Group card의 사각형
+
+세 operation이 layout library로 group card `G`의 사각형에 동작하며, 각각은 library operation을 사각형으로 일반화한 것이다.
+
+- `G`의 member를 한 축의 사각형 `[a, b]`에 놓을 때, `G` 안의 content card가 그 축에서 쓰는 grid의 각 line은 `G`의 span `[a0, b0]` 안의 좌표 `t`에서 `a + (b − a) × (t − a0) / (b0 − a0)`로 쓰인다. 허용 오차 없이 숫자로서 grid의 한 line의 좌표와 같은 좌표는 그 line이며(R1), 나머지는 새 line이다. `G` 안의 content card는 그 line을 받고 `G` 밖의 card는 자기 line을 유지하므로, `G` 밖의 card가 쓰는 line은 움직이지 않는다. 그 뒤 어떤 card도 쓰지 않는 line은 지우고(`tidy`), 결과는 자기가 놓은 card의 `paidBy` 항목을 남기지 않는다. 그 card의 line이 움직였기 때문이다. workbench는 그 결과를 `checkState`를 실행하는 `replace`로 설치한다.
+- `G`의 사각형을 `side` 쪽으로 나누는 것은 R4의 일반화다. 사각형은 `side` 축의 가운데에서 나뉜 두 사각형으로 바뀐다. 새 card가 `side` 쪽 절반을 받고, `G`의 member는 나머지 절반에 놓인다. `cardSplit`이 `even`이면 `balance()`가 뒤따른다([split 설정](#split-설정)).
+- `G`를 card 하나로 만들 때는 `G` 안의 content card를 그 사각형을 덮는 card 하나로 바꾼다. 사각형의 cell이 정확히 그 card들의 cell이므로 이것은 library의 상태다. 이것은 `G`의 close와 move에 쓰이며, move 뒤에는 member를 그 card의 사각형에 놓는다.
 
 | Command | Parameter | 결과 | 규칙 |
 | --- | --- | --- | --- |
-| `core.group.create` | `{card, side, plugin, params?}` | `{group, card, tab}` | `card`를 card 둘의 group으로 바꾼다. group card는 자기 plane에서 `card`의 자리, px 크기, leader mark를 받고, 다음 card 식별자와 이름 `그룹 <n>`을 받는다. `n`은 space의 어느 group도 이름 `그룹 <n>`으로 갖지 않은 가장 작은 양의 정수다. `card`는 식별자와, tab 또는 child plane을 유지하며, child plane에서 `side`의 반대쪽 card가 되고, px 크기 없이 child plane의 leader가 된다. child plane은 `core.card.split`이 side 쪽에 새 card를 놓듯 `side`(`left`, `right`, `top`, `bottom`) 쪽으로 `card`와, group card 다음 식별자와 `plugin`의 `params` tab을 가진 새 content card로 나뉜다. 결과는 group card, 새 card, 그 tab을 가리키며 focus는 새 card로 옮겨 간다 |
-| `core.group.dissolve` | `{group}` | `{dissolved: true}` | group card를 그 child plane의 card로 바꾼다. child plane의 각 line은 group card의 span 안에서 parent plane의 좌표 `a + (b − a) × t`에 들어간다. `a`와 `b`는 span의 첫 line과 마지막 line의 좌표이고 `t`는 child plane에서 그 line의 좌표다. 좌표가 parent plane의 line 좌표와 tolerance 없이 수로서 같은 line은(R1) 그 line이다. mapping은 line 좌표로 하므로, card의 그려진 크기는 group card가 내어 준 header와 inset만큼 바뀐다. 각 card는 식별자, data, px 크기를 유지한다. group card의 px 크기는 옮기지 않는다. 그 card들은 parent plane의 여러 slot에 걸치거나 자기 slot이 없기 때문이다(R5). 풀기의 leader 규칙이 적용된다 |
-| `core.group.rename` | `{group, name}` | `{group, name}` | group 이름을 양 끝 공백을 뺀 `name`으로 정한다 |
-| `core.group.leader` | `{card}` | `{card, plane}` | content card 또는 group card인 `card`를 자기 plane의 leader로 만든다. header의 leader 버튼은 그 header의 card로 이를 실행한다. `plane`은 `card`를 담은 child plane의 group card 식별자이며, root plane이면 `null`이다 |
-| `core.group.menu` | `{group}` | `null` | group의 close menu를 열거나, 열려 있으면 닫는다 |
-| `core.card.move` | `{card, target, side}` | `{card}` | content card 또는 group card인 `card`를 tab 또는 child plane과 함께 `target`의 plane에서 `target`의 `side`(`left`, `right`, `top`, `bottom`) 옆으로, 또는 `side` `centre`와 group `target`이면 drop처럼 `target`의 child plane 오른쪽 끝으로 옮긴다. card는 식별자를 유지한다. 떠나는 plane에는 card가 plane을 떠날 때의 leader 규칙이 적용된다 |
+| `core.group.create` | `{card, side, plugin, params?}` | `{group, card, tab}` | content card 또는 group card인 `card`를 새 content card와 묶는다. 새 card는 `card`를 `side`(`left`, `right`, `top`, `bottom`) 쪽으로 나눈 것에서 오며, content card는 library의 split(`splitToward`), group card는 사각형의 split이고, `plugin`의 tab을 `params`로 담는다. 새 group card는 다음 card 식별자를, 새 card는 그 다음 식별자를 받고, 이름 `그룹 <n>`을 받는다. `n`은 space의 어떤 group도 이름 `그룹 <n>`으로 갖지 않는 가장 작은 양의 정수다. group card는 그 level에서 `card`의 자리와 leader mark를 받고, member `card`와 새 card를 가지며 `card`가 그 leader다. 결과는 group card, 새 card, 그 tab을 가리키고, focus는 새 card로 옮긴다 |
+| `core.group.dissolve` | `{group}` | `{dissolved: true}` | group card를 그것을 담은 level에서 그 member로 바꾼다. grid는 바뀌지 않는다. group 첫 row의 card는 group이 내놓은 header만큼 길게 그려진다. dissolve의 leader 규칙이 적용된다 |
+| `core.group.rename` | `{group, name}` | `{group, name}` | group의 이름을 양끝 공백을 지운 `name`으로 정한다 |
+| `core.group.leader` | `{card}` | `{card, group}` | content card 또는 group card인 `card`를 그 level의 leader로 만든다. header의 leader 버튼은 그 header의 card로 이것을 실행한다. `group`은 `card`를 담은 group card의 식별자이며, root level에서는 `null`이다 |
+| `core.group.menu` | `{group}` | `null` | group의 닫기 menu를 열고, 열려 있으면 닫는다 |
+| `core.card.move` | `{card, target, side}` | `{card}` | drop이 하듯 content card 또는 group card인 `card`를 `target`의 `side`(`left`, `right`, `top`, `bottom`) 옆, `target`의 level로 옮기거나, `side`가 `centre`이고 `target`이 group이면 그 group 안, 그 사각형의 오른쪽 가장자리로 옮긴다. content card는 library의 move(`move`)로 옮긴다. group card는 card 하나로 만들고, 그 card를 `move`로 옮긴 뒤 member를 새 사각형에 놓는다. group으로의 move는 그 자리에서 card를 닫고 그 card로 group card에 add하는 것이다. card는 식별자를 유지한다. level을 떠나는 card의 leader 규칙이 떠나는 level에 적용된다 |
 
-각 command가 검사하는 순서의 거부:
+grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. content card의 split은 새 card를 그 card를 담은 group에 넣으며, split은 그 group 사각형의 한 cell을 나누므로 사각형이 유지된다. 결과가 group card를 사각형 하나가 아니게 남기는 close, move, drop, insert는 거부되며, content card를 최소보다 작게 그리는 것도 거부된다.
+
+거부는 각 command가 검사하는 순서로 다음과 같다.
 
 | Command | 조건 | 문구 |
 | --- | --- | --- |
 | `core.group.create` | `card`가 window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
-| `core.group.create` | card가 자기와 `side` 쪽 새 card의 group을 담을 수 없음 | `card <id> cannot hold a group toward <side>: it is <w>x<h> and the group needs <mw>x<mh>`. `card`의 가장 작은 크기를 `cw`×`ch`라 할 때, `left`나 `right` 쪽이면 `mw`는 `cw` + `minSize` + 2 × gap이고 `mh`는 max(`ch`, `minSize`) + `head-h` + gap이며, `top`이나 `bottom` 쪽이면 `mw`는 max(`cw`, `minSize`) + gap이고 `mh`는 `ch` + `minSize` + `head-h` + 2 × gap이다 |
-| `core.group.create` | `plugin` 또는 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 작업](cli.ko.md#레이아웃에-동작하기)) |
-| `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group`이 content card나 window sidebar를 가리킴 | `card <id> is not a group` |
-| `core.group.dissolve` | child plane의 card가 parent plane에서 가장 작은 크기보다 작게 그려질 것 | `group <id> cannot be dissolved: card <c> would be <w>x<h>, below its minimum <mw>x<mh>`. `<c>`는 child plane의 reading order로 그런 첫 card다 |
-| `core.group.rename` | 양 끝 공백을 뺀 이름이 Unicode scalar value 1개보다 적거나 40개보다 많음 | `group name must be 1 to 40 characters: <name>` |
-| `core.group.leader` | `card`가 window sidebar | `card <id> is a window sidebar and cannot lead a plane` |
+| `core.group.create` | layout이 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>` |
+| `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 workbench order로 그런 첫 card, `<m>`은 `minSize` |
+| `core.group.create` | `plugin`이나 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) |
+| `core.group.dissolve`, `core.group.rename`, `core.group.menu` | `group`이 content card나 window sidebar | `card <id> is not a group` |
+| `core.group.rename` | 양끝 공백을 지운 이름이 Unicode scalar value 1개 미만이거나 40개 초과 | `group name must be 1 to 40 characters: <name>` |
+| `core.group.leader` | `card`가 window sidebar | `card <id> is a window sidebar and cannot lead a level` |
 | `core.card.move` | `card`가 window sidebar | `card <id> is a window sidebar and does not move` |
 | `core.card.move` | `target`이 window sidebar | `card <target> is a window sidebar; a card does not move beside it` |
-| `core.card.move` | `target`이 `card`이거나 `card`의 child plane 안의 card | `card <id> cannot move into itself` |
-| `core.card.move` | content card `target`에 `side` `centre` | `card <target> is not a group; a card moves beside it` |
-| `core.card.move` | layout이 move를 거부함 | `card <id> cannot move to <side> of <target>` |
+| `core.card.move` | `target`이 `card`이거나 `card` 안의 card | `card <id> cannot move into itself` |
+| `core.card.move` | `side`가 `centre`이고 `target`이 content card | `card <target> is not a group; a card moves beside it` |
+| `core.card.move` | layout이 move를 거부 | `card <id> cannot move to <side> of <target>` |
+| 모든 operation | 결과가 group card를 사각형 하나가 아니게 남김 | `card <id> cannot <operation>: group <g> would not cover one rectangle`. `<g>`는 workbench order로 그런 첫 group card |
+| 모든 operation | content card가 최소보다 작게 그려짐 | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
+
+`<operation>`은 layout 거부 문구의 operation 문구다. 곧 `split toward <side>`, `close`, `move to <side> of <target>`이다.
 
 ### Idempotency
 
 같은 식별자로 같은 command를 두 번째 적용하면 같은 상태를 남기고 같은 결과를 돌려준다.
 
-- `core.group.create {card, side, plugin, params}`는 `card`가 정확히 `card`와 `N`을 담은 group card `G`의 child plane의 card이고, `N`이 `core.layout.open`의 규칙으로 `card`의 `side` 쪽 이웃이며, `N`이 `plugin`의 `params` tab `T`를 담으면 `{group: G, card: N, tab: T}`를 돌려주고 아무것도 바꾸지 않는다.
-- 이 창이 workbench 시작 뒤 푼 group card에 대한 `core.group.dissolve {group}`은 `{dissolved: true}`로 답하고 아무것도 바꾸지 않는다. 창은 닫은 tab을 기억하듯 푼 group card의 식별자를 기억한다([layout에 대한 작업](cli.ko.md#레이아웃에-동작하기)). 이 실행에서 창이 풀지 않은 식별자는 재시작 뒤에도 tab의 반복 close처럼 layout에 없는 card의 문구로 실패하고, 설명은 group이 없어졌음을 보인다. 어떤 식별자도 두 번 내지 않으므로 그 식별자는 다른 card를 가리키지 않는다.
-- 현재 이름으로의 `core.group.rename`, 현재 leader에 대한 `core.group.leader`, 그리고 move가 놓을 자리(`target`의 `side` 쪽 이웃, 또는 `centre`이면 `target`의 child plane 오른쪽 끝에서 위부터 아래까지 닿는 card)에 이미 있는 card의 `core.card.move`는 layout을 부르지 않고 같은 결과를 돌려주므로 아무것도 바뀌지 않는다.
-- `core.group.menu`는 `core.card.menu`가 card menu를 toggle하듯 menu를 toggle하며 `core.layout`은 바뀌지 않는다.
+- `core.group.create {card, side, plugin, params}`는 `card`가 member가 정확히 `card`와 `N`인 group card `G`의 member이고, `N`이 `core.layout.open`의 규칙으로 `side` 쪽 `card`의 이웃이며, `N`이 `plugin`의 tab `T`를 `params`로 담으면 `{group: G, card: N, tab: T}`를 돌려주고 아무것도 바꾸지 않는다.
+- 이 창이 workbench 시작 뒤 푼 group card의 `core.group.dissolve {group}`은 `{dissolved: true}`로 답하고 아무것도 바꾸지 않는다. 창은 닫힌 tab을 기억하듯([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) 자기가 푼 group card의 식별자를 기억한다. 이 실행에서 창이 풀지 않은 식별자는 tab의 반복 close처럼 재시작 뒤에도 layout에 없는 card의 문구로 실패한다. 식별자는 두 번 나오지 않으므로 그 식별자는 다른 card를 가리키지 않는다.
+- 현재 이름으로의 `core.group.rename`, 현재 leader의 `core.group.leader`, 그리고 card가 이미 move가 두는 자리(`target`의 level의 member이며 `side` 쪽 그 이웃, 또는 `centre`이면 `target`의 member로서 그 사각형의 오른쪽 가장자리에서 위부터 아래까지 닿는 자리)에 있는 `core.card.move`는 layout을 부르지 않고 같은 결과를 돌려주므로 아무것도 바뀌지 않는다.
+- `core.group.menu`는 `core.card.menu`가 card menu를 토글하듯 menu를 토글한다. `core.layout`은 바뀌지 않는다.
 
 ### Group card에 대한 card command
 
-- `core.card.add-tab {card: <group>, plugin, params?}`는 tab을 가진 새 content card를 child plane의 오른쪽 끝에 위부터 아래까지 닿게 넣고(`x` 축 마지막 line에서 `insertAt`), content card에서처럼 `{tab}`을 돌려준다. child plane이 담을 수 없으면 `group <id> has no room for a card at its right edge`로 실패한다.
-- `core.layout.open {card: <group>, plugin, params?}`는 child plane의 content card 중 reading order로 `plugin`의 `params` 첫 tab을 고르고, 없으면 `core.card.add-tab`처럼 card를 더한다. `side`가 있으면 어느 card에서처럼 parent plane에서 group card를 나눈다.
-- `core.card.menu {card: <group>, menu}`는 group header의 add, split, group menu를 연다. 그 item은 content card의 menu가 content card에 하듯 group card에 `core.card.add-tab`, `core.card.split`, `core.group.create {card: <group>, side, plugin}`을 실행한다.
-- `core.card.split {card: <group>, side, plugin}`은 parent plane에서 group card 옆에 새 content card를 놓는다.
-- `core.card.close {card: <group>}`은 group card를 그 child plane의 모든 card와 그 안의 plane과 함께 닫는다. `core.card.close`가 card 하나의 tab에 묻듯 수정된 각 tab을 먼저 묻고, 물은 tab이 모두 저장되거나 버려질 때까지 결과는 `closed: false`다.
-- `core.card.focus {card: <group>}`은 child plane의 reading order로 첫 content card에 focus를 주며, 첫 card가 group card면 그 첫 group card로 내려간다.
-- `core.card.fullscreen {card: <group>}`은 `card <id> is a group; fullscreen shows a content card`로 실패한다. 어느 plane의 content card든 지금처럼 작업 영역 전체로 fullscreen이 된다.
-- `core.layout.balance`와 card 자동 정렬 command(`cardArrange`)는 root plane부터 안쪽으로 각 plane에 따로 적용되므로, parent plane이 group card에 주는 크기가 그 child plane을 정한다. group card는 자기 plane의 card 하나로 센다. 한 plane이 거부하면 아무것도 바뀌지 않는다.
+- `core.card.add-tab {card: <group>, plugin, params?}`는 tab을 담은 content card를 group 안, 그 사각형의 오른쪽 가장자리에 더한다. 곧 새 card가 group의 member가 되는 `right` 쪽 사각형 split이며, content card와 같이 `{tab}`을 돌려준다.
+- `core.layout.open {card: <group>, plugin, params?}`는 group 안의 content card 중에서 workbench order로 `plugin`과 `params`의 첫 tab을 고르고, 없으면 `core.card.add-tab`처럼 card를 더한다. `side`가 있으면 group card를 담은 level에서 그 사각형을 `side` 쪽으로 나눈다.
+- `core.card.menu {card: <group>, menu}`는 group header의 add, split, group menu를 연다. content card의 menu가 content card에 실행하듯, 그 item은 group card에 `core.card.add-tab`, `core.card.split`, `core.group.create {card: <group>, side, plugin}`을 실행한다.
+- `core.card.split {card: <group>, side, plugin}`은 사각형의 split으로 group card 사각형 옆에 새 content card를 둔다. 새 card는 group card를 담은 level의 member가 된다.
+- `core.card.close {card: <group>}`은 group card를 그 안의 모든 card와 함께 닫는다. group card를 card 하나로 만들고 library의 close(R7)로 닫는다. `core.card.close`가 card 하나의 tab을 묻듯 수정된 각 tab을 먼저 묻고, 물은 모든 tab이 저장되거나 버려질 때까지 결과는 `closed: false`다.
+- `core.card.focus {card: <group>}`은 workbench order로 group 안의 첫 content card에 focus를 둔다.
+- `core.card.fullscreen {card: <group>}`은 group card를 작업 영역 전체에 보인다. 그 사각형을 각 축으로 늘려 plane 전체에 대응시키고, 그 안의 content card와 group card는 그 대응이 주는 사각형에 header와 함께 그려진다. 다른 모든 card는 전체 화면 content card처럼 빈 사각형으로 숨는다. grid는 바뀌지 않으며, group card의 두 번째 `core.card.fullscreen`은 배치를 되돌린다. group 안의 content card는 지금처럼 혼자 전체 화면이 된다. group card가 전체 화면인 동안 layout은 전체 화면 card의 규칙대로 group card 안에서도 밖에서도 바뀌지 않으며, 그 안 card의 focus는 전체 화면을 유지한다.
+- `core.layout.balance`와 card 자동 정렬 command(`cardArrange`)는 지금처럼 grid에 동작한다. 배치를 유지하므로 모든 group card는 자기 사각형을 유지한다.
 
 ### Split 설정
 
-설정 `cardSplit`([값](settings.ko.md#값))은 split 뒤의 크기를 정한다. 기본값 `exact`이면 split은 지금처럼 자기가 나누는 card의 사각형만 나눈다(layout library의 R4). `even`이면 workbench는 같은 변경에서 split이 일어난 plane에 `balance()`를 실행하므로, 그 plane의 card가 구조를 유지한 채 공정한 크기를 받고, 그 plane의 group card 크기를 통한 것 외에는 다른 plane이 바뀌지 않는다. 이 설정은 `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 새 group 안 split, 그리고 `side`가 있는 `core.layout.open`에 적용된다. `balance()`는 plane의 모든 card에 공정한 몫을 주고 가장 작은 크기를 검사하지 않는다. px 크기를 가진 card는 그려진 크기를 유지하므로 남는 공간이 다른 card를 `minSize`보다 작게 둘 수 있고, group card는 가장 작은 크기와 상관없이 몫 하나로 센다. balance한 상태가 plane을 나타내지 못하면 `balance()`는 throw한다. 그래서 `even`이면 workbench는 모든 operation처럼([최소 크기](#최소-크기)) balance한 plane을 사본에서 검사하며, 그 plane이나 그 안의 plane의 card가 가장 작은 크기보다 작아지면 `card <id> cannot split toward <side>: cardSplit even would draw card <c> of plane <plane> at <w>x<h>, below its minimum <mw>x<mh>`로(`<c>`는 workbench 순서로 첫 그런 card), `balance()`가 throw하면 `card <id> cannot split toward <side>: cardSplit even cannot balance plane <plane>: <the error of balance>`로 split 전체를 거부하고 아무것도 바꾸지 않는다. slicing plane의 split은 slicing이므로 여기서 `balance()`는 false를 돌려주지 않는다. `side`가 있는 `core.layout.open`의 반복은 두 값 모두에서 새 card를 `side` 쪽 이웃으로 찾으므로 idempotency가 유지된다.
+설정 `cardSplit`([값](settings.ko.md#값))은 split 뒤의 크기를 정한다. 기본값 `exact`에서 split은 나누는 상자만 나눈다. 곧 card의 사각형(layout library의 R4) 또는 group card의 사각형([group card의 사각형](#group-card의-사각형))이다. `even`에서는 workbench가 같은 변경에서 grid에 `balance()`를 실행하므로, 모든 card가 공정한 크기를 받고 배치는 유지된다. 이것은 `core.card.split`과 split 버튼, `core.group.create`와 group 버튼의 split, group에 card를 더하는 것, `side`가 있는 `core.layout.open`에 적용된다. `balance()`는 모든 card에 공정한 몫을 주고 그리는 최소를 검사하지 않으므로, `even`에서 workbench는 모든 operation처럼([최소 크기](#최소-크기)) 복사본에서 balance된 grid를 검사하고, content card가 최소보다 작게 그려지면 `card <id> cannot split toward <side>: cardSplit even would draw card <c> at <w>x<h>, below its minimum <m>x<m>`로, `balance()`가 throw하면 `card <id> cannot split toward <side>: cardSplit even cannot balance the grid: <the error of balance>`로 split 전체를 거부한다. `<c>`는 workbench order로 그런 첫 card다. 아무것도 바뀌지 않는다. `side`가 있는 `core.layout.open`의 반복은 두 값 모두에서 새 card를 `side` 쪽 이웃으로 찾으므로 그 idempotency가 유지된다.
 
 ### 닫기
 
-group은 card 하나를 담지 않는다. close, move, tab drop이 child plane에 card 하나를 남기면, move의 target을 정한 뒤 같은 변경에서 그 card가 parent plane에서 group card를 대신한다. 그래서 옮겨진 card가 떠나는 group card 옆으로의 move는 그것을 대신한 card 옆에 놓이고, card가 떠나는 group card의 `centre`로의 move나 drop은 card를 먼저 child plane에 넣으므로 child plane이 다시 card 둘을 담아 대체되지 않는다. 남은 card는 그곳에서 group card의 자리, px 크기, leader mark를 받고 식별자를 유지하며, group card는 풀기에서처럼 끝난다. 남은 card가 group card의 자리 전체를 받으므로 이 대체는 거부되지 않는다. child plane의 모든 card를 닫는 것은 group card의 close, `core.card.close {card: <group>}`이다. root plane의 마지막 card를 닫을 close는 layout의 마지막 card 규칙(layout library의 R7)을 따른다.
+group card는 member 하나를 담지 않는다. close, move, tab drop이 group card에 member 하나를 남기면, move의 target이 정해진 뒤 같은 변경에서 그 member가 그 group card를 담은 level에서 group card를 대신한다. 그 member는 group card의 자리와 leader mark를 받고 식별자를 유지하며, group card는 dissolve처럼 끝난다. 이 대체에서 grid는 바뀌지 않으므로 거부되지 않는다. group card 안의 모든 card를 닫는 것은 group card의 close, 곧 `core.card.close {card: <group>}`다. grid의 마지막 card를 닫으려는 close는 layout의 마지막 card 규칙(layout library의 R7)을 따른다.
 
 ## 이동과 drop
 
-tab drag와 `core.tab.move`는 어느 plane의 target card든 받는다. drop은 root plane부터 안쪽으로 정해진다. plane의 `zoneAt`이 card와 zone을 주며, card가 group card이고 zone이 `centre`면 같은 점으로 그 child plane에서 계속 정하고, group header 위의 점이나 child plane이 어느 card로도 정하지 않는 body의 점은 group card의 `centre`다. 그래서 group card body의 각 변 바깥쪽 4분의 1(`edge` 0.25)은 parent plane에서 group card의 side이고, body의 나머지는 child plane에 속한다. group card의 `centre`에 놓은 drop은 `core.card.add-tab`처럼 tab을 child plane 오른쪽 끝의 새 content card에 넣고, side에 놓은 drop은 target의 plane에서 target 옆에 놓는다. 자기 card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다.
+tab drag와 `core.tab.move`는 어느 level의 target card든 받는다. drop은 root level에서 안쪽으로 결정된다. 한 level에서 group card의 그리는 사각형 안의 점은 그 group card에서 결정된다. 그 header 위의 점은 group card의 `centre`다. 사각형의 한 side 쪽 바깥 4분의 1(`zoneAt`이 card body를 재듯 사각형의 `edge` 0.25) 안의 점은 group card의 그 side다. 다른 점은 group card의 member로 넘어간다. level의 어떤 group card에도 없는 점은 그 아래의 content card에서 grid의 `zoneAt`으로 다섯 zone을 가지고 결정된다. 그래서 drop은 group 없는 space의 card 사이처럼 group 안에서, 밖에서, 다른 group에서 모든 level의 모든 content card의 모든 side와 centre, 그리고 모든 group card의 모든 side와 centre에 닿는다.
 
-group card header의 control 밖을 눌러 drag하면 group card를 옮긴다. drop은 tab에서처럼 정해지고 release는 `core.card.move {card, target, side}`를 실행한다. group card를 drag하는 동안에는, tab drag가 오늘 자기 card의 centre를 빼듯(`centreOnly`) 드래그한 card와 그 child plane을 빼고 정한다. zone이 없는 release는 아무것도 바꾸지 않고 오류도 보이지 않는다.
+- content card의 `centre` 위 drop은 지금처럼 tab을 그 card로 옮긴다.
+- content card의 side 위 drop은 library의 split으로 tab을 그 옆 새 card에 넣고, 새 card는 target을 담은 group의 member가 된다. card의 유일한 tab은 `move`로 그 card를 그리로 옮기고, card는 그 group의 member가 된다.
+- group card의 `centre` 위 drop은 `core.card.add-tab`처럼 tab을 group 안, 그 사각형의 오른쪽 가장자리의 새 content card에 넣는다. card의 유일한 tab은 그 card를 그리로 옮긴다.
+- group card의 side 위 drop은 사각형의 split으로 tab을 group card 사각형 옆, 그 group card를 담은 level의 새 card에 넣는다. card의 유일한 tab은 `core.card.move`가 옮기듯 그 card를 그리로 옮긴다.
+
+card의 유일한 tab은 지금처럼 그 card를 옮기며, card는 식별자를 유지한다. group card header의 control 밖을 누르고 끌면 group card를 옮긴다. drop은 tab처럼 결정되고, 놓으면 `core.card.move {card, target, side}`를 실행한다. group card를 끄는 동안 결정은 오늘 tab drag가 자기 card의 centre를 빼듯(`centreOnly`) 끌리는 group card와 그 안의 card를 뺀다. zone 없이 놓으면 아무것도 바꾸지 않고 오류를 보이지 않는다.
 
 ## Focus
 
-focus ring은 어느 plane의 content card 하나에 서고, 키보드는 그 card를 어느 plane이 담든 [키보드는 focus ring을 따른다](exposure.ko.md#키보드는-focus-ring을-따른다)가 말하듯 그것을 따른다. group card는 focus ring도 키보드도 받지 않는다. group card에 focus를 주는 command나 press는 `core.card.focus`가 주는 card에 focus를 준다. `Tab` 키가 따르는 workbench element의 순서는 element tree다. group card element는 자기 header, 그다음 child plane의 card를 reading order로 담는다. card를 다른 plane으로 옮겨도 focus는 그 card에 남는다.
+focus ring은 어느 level의 content card 하나 위에 있고, keyboard는 [keyboard는 focus ring을 따른다](exposure.ko.md#키보드는-focus-ring을-따른다)가 말하듯 어느 group이 card를 담든 그것을 따른다. group card는 focus ring도 keyboard도 받지 않는다. group card에 focus를 두는 command나 누르기는 `core.card.focus`가 주는 card에 focus를 둔다. `Tab` key가 따르는 workbench element의 순서는 workbench order다. group card element와 그 header는 그 안의 card 앞에 선다. card를 group 안팎으로 옮겨도 focus는 그 card에 남는다.
 
 ## 상태와 조회
 
-- `core.layout`은 layout의 저장 형태([저장](#저장))를 보고하며, 각 group 기록에 `level`을 더한 `group: {name, level, leader, plane}`을 가진다. `level`은 그 child plane의 level이고 `leader`는 그 child plane의 leader다. 그리고 `state` 옆에 root plane의 leader `leader`를 가진다.
-- `core.grid`는 root plane의 card에 대해 값을 유지하고, child plane의 card를 workbench 순서로 더한다. 각 card는 자기를 담은 child plane의 group card 식별자인 member `plane`을 더 가진다. 그 사각형은 root plane의 사각형처럼 root plane 좌표다. 자기 plane의 leader인 각 card는 plane의 유일한 card도 포함해 member `leader: true`를 더 가진다. group card는 member `group: {name, level, leader}`를 더하고 tab 없이 나열된다.
-- `core.card.get {card}`는 어느 plane의 card든 하나를 읽으며, card 상태를 읽는 유일한 조회다. content card의 상태는 `{card, activeTab, tabs, groups}`다. `card`는 그 식별자, `activeTab`은 그 active tab의 식별자 또는 `null`, `tabs`는 tab 순서대로 그 tab의 `{tab, plugin, status}`다. `status`는 그 tab의 status 값 객체로, 그 plugin이 `summary: true`로 선언한 status를 담으며([노출](exposure.ko.md#항목-필드)), 선언하지 않은 plugin이면 `{}`다. `groups`는 그 group 경로다. 그 card를 담은 group card마다 `{card, name}` 하나씩, 가장 바깥부터 가장 안쪽까지이며 root plane에서는 `[]`다. 그래서 읽는 쪽은 경로를 `<name> > <name> > <name>`으로 보인다. group card는 `{card, groups, group: {name, level, leader, plane}}`을 돌려준다. `plane`은 `core.layout`의 tree 형식으로 된 child plane이다: 그 plane의 모든 card를 reading order로 담고, 그 안의 모든 group card는 자기 `group` 기록을 가지며 가장 안쪽 plane까지 이어진다. window sidebar는 `card <id> is a window sidebar`로 실패하고, 활성 space의 card가 아닌 식별자는 [layout에 대한 작업](cli.ko.md#레이아웃에-동작하기)의 문구로 실패한다.
-- `core.card.get {card}`와 card를 가리키는 모든 command는 root plane에서 시작하는 tree의 walk 한 번으로 card를 찾으며, walk는 지나는 group card를 기록한다. walk가 그 식별자를 만나면 기록한 group card가 group 경로이고 그 node가 subtree다.
-- [창 snapshot](exposure.ko.md#창-snapshot)과 `sok describe`의 `layout`은 group card를 node `{card, size, frame, group: {name, level, leader, root}}`로 담는다. `root`는 root plane의 tree 형태인 child plane의 tree다. tree의 각 node는 자기 plane의 leader에서 `leader: true`를 가진다.
+- `core.layout`은 layout의 저장 형태([저장](#저장))를 보고하며, 각 group node에 `level`을 더한 `{card, name, level, leader, members}`를 담는다. `level`은 그 member의 level, `leader`는 그 member의 leader다. `state` 옆에는 root level의 leader인 `leader`를 담는다.
+- `core.grid`는 grid의 card에 대한 값을 그리는 사각형과 함께 유지하고, 각 card에 그것을 담은 group card의 식별자인 member `parent`를 더한다. root level에서는 없다. 자기 level의 leader인 각 card는 level의 유일한 member여도 더해진 member `leader: true`를 가진다. grid의 card 뒤에 group card를 workbench order로 나열하며, 각각은 그리는 사각형을 가지고 tab 없이 `{id, x, y, w, h, parent, leader, group: {name, level, leader}}`이다.
+- `core.card.get {card}`는 어느 level의 card 하나를 읽으며, card 상태의 유일한 조회다. content card의 상태는 `{card, activeTab, tabs, groups}`다. `card`는 그 식별자, `activeTab`은 활성 tab의 식별자 또는 `null`, `tabs`는 tab 순서의 tab이며 각각 `{tab, plugin, status}`다. `status`는 그 tab의 status 값 객체로, 그 plugin이 `summary: true`로 선언한 status([노출](exposure.ko.md#항목-필드))이며, 선언하지 않은 plugin에서는 `{}`다. `groups`는 group 경로로, 그것을 담은 group card마다 가장 바깥부터 가장 안쪽까지 `{card, name}` 하나씩이며 root level에서는 `[]`이므로, 읽는 쪽은 경로를 `<name> > <name> > <name>`으로 보인다. group card는 `{card, groups, group: {name, level, leader, members}}`를 돌려준다. `members`는 `core.layout`의 tree 형태의 member이며, content card는 식별자로, group card는 자기 node로 가장 안쪽 group까지 담는다. window sidebar는 `card <id> is a window sidebar`로 실패하고, 활성 space의 card가 아닌 식별자는 [layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)의 문구로 실패한다.
+- `core.card.get {card}`와 card를 가리키는 모든 command는 root level에서 group tree를 한 번 walk하여 card를 찾고, walk는 지나는 group card를 기록한다. walk가 식별자를 만나면 기록된 group card가 group 경로이고 그 node가 subtree다. walk가 만나지 않는 content card는 root level의 member다.
+- [창 snapshot](exposure.ko.md#창-snapshot)과 `sok describe`의 `layout`은 grid의 tree를 유지하며, 각 card node는 `core.grid`처럼 `parent`를 가진다. 여기에 `groups`를 더한다. 이것은 `core.layout`이 보고하는 group tree이며, 각 node는 group card의 그리는 사각형인 `frame`을 가지고 각 level의 leader에 `leader: true`를 가진다.
 
 ## 저장
 
-`projects.json`의 space layout([저장](projects.ko.md#저장))은 root plane을 `state`로, space가 낸 가장 큰 card 번호를 `lastCard`로, root plane의 leader를 `leader`로 저장한다. `lastCard`는 tree의 모든 card 식별자 번호 이상인 양의 정수다. `leader`는 root plane의 card 식별자이며, root plane이 window sidebar만 담는 동안은 `null`이다. 어느 plane의 group card든 `data`가 정확히 `{group: {name, leader, plane}}`인 그 plane의 card다. `name`은 group 이름, `plane`은 `state` 형태의 child plane, `leader`는 `plane`의 card 식별자다. level은 기록의 깊이가 주므로 저장하지 않는다. group이 없는 layout은 `leader`를 저장하고 group 기록은 없다.
+`projects.json`의 space layout([persistence](projects.ko.md#저장))은 grid를 `state`로, group tree를 `groups`로, space가 낸 가장 큰 card 번호를 `lastCard`로, root level의 leader를 `leader`로 저장한다. `lastCard`는 grid와 group tree의 모든 card 식별자의 번호 이상인 양의 정수다. `leader`는 root level의 member의 식별자이며, root level이 window sidebar만 담는 동안은 `null`이다. `groups`는 root level의 group card 목록이며, 각 node는 정확히 `{card, name, leader, members}`다. `card`는 그 식별자, `name`은 group의 이름, `members`는 그 member로서 각각 `state`의 content card 식별자 또는 group card의 node이고, `leader`는 그 member 하나의 식별자다. workbench는 각 level의 member와 root level의 group을 reading order로 쓴다. level은 node의 깊이가 주므로 저장되지 않는다. group이 없는 layout은 `groups: []`를 저장한다.
 
-저장된 layout은 이 형태로만 읽는다. 각 거부는 [저장](projects.ko.md#저장)이 저장된 layout에 대해 말하듯 space의 거부다. 그 space를 여는 일이 실패하고 library 미리보기가 오류를 보이며, project 목록과 다른 space는 읽힌다. 각 거부의 접두어는 `projects.json: project <root> space <space>: `이고, `<plane>`은 `root` 또는 `group <id>`다.
+저장된 layout은 이 형태로만 읽힌다. 각 거부는 [persistence](projects.ko.md#저장)가 저장된 layout에 대해 말하듯 space의 거부다. 그 space를 여는 것은 실패하고 library 미리보기가 오류를 보이며, registry와 다른 space는 계속 읽힌다. 각 거부의 앞머리는 `projects.json: project <root> space <space>: `이며, `<level>`은 `root` 또는 `group <id>`다.
 
-| 찾은 것 | 문구 |
+| 발견 | 문구 |
 | --- | --- |
-| `leader`가 없는 layout, `leader`가 없는 group 기록, 또는 content card나 group card를 담은 plane의 `leader` `null` | `plane <plane> has no leader` |
-| 자기 plane의 card가 아닌 leader | `plane <plane> names the leader <id>, which is not a card of that plane` |
-| leader인 window sidebar | `plane <plane> names the window sidebar <id> as its leader` |
-| 다른 형태의 group 기록, 또는 `data`에 다른 member가 있는 group card | `card <id> stores the group <value>, which is not {name, leader, plane}` |
-| card가 둘보다 적은 child plane | `group <id> holds fewer than two cards` |
-| child plane의 window sidebar | `group <id> holds the window sidebar <side>` |
-| tree의 두 곳에 있는 한 식별자 | `card <id> is stored twice` |
+| layout library가 거부하는 grid | `checkState`의 오류 |
+| `groups`가 없는 layout, 또는 목록이 아닌 `groups` | `layout stores groups <value>, which is not a list of groups` |
+| 다른 형태의 node | `layout stores the group <value>, which is not {card, name, leader, members}` |
 | 다른 형태의 이름 | `group <id> stores the name <value>, which is not 1 to 40 characters` |
-| layout library가 거부하는 child plane | `group <id>: <the error of checkState>` |
-| `lastCard`가 없는 layout, 또는 양의 정수가 아니거나 tree의 card 식별자 번호보다 작은 `lastCard` | `layout stores lastCard <value>, which is not the largest issued card number` |
+| member가 둘 미만인 node | `group <id> holds fewer than two cards` |
+| window sidebar인 member | `group <id> holds the window sidebar <side>` |
+| `state`의 card도 node도 아닌 member | `group <id> holds <value>, which is not a content card of the layout` |
+| group tree의 두 자리에 있는 식별자 하나, 또는 `state`의 card 식별자를 가진 group card | `card <id> is stored twice` |
+| `leader`가 없는 layout, `leader`가 없는 node, 또는 content card나 group card를 담는 level의 `null` `leader` | `level <level> has no leader` |
+| 자기 level의 member가 아닌 leader | `level <level> names the leader <id>, which is not a member of that level` |
+| leader인 window sidebar | `level <level> names the window sidebar <id> as its leader` |
+| 사각형 하나를 덮지 않는 group card | `group <id> does not cover one rectangle of the grid` |
+| `lastCard`가 없는 layout, 또는 양의 정수가 아니거나 grid나 group tree의 card 식별자 번호보다 작은 `lastCard` | `layout stores lastCard <value>, which is not the largest issued card number` |
 
-member `leader`와 `lastCard`가 필수이므로 이 형태는 이전 release의 형태가 아니다. `projects.json`은 형식 2를 가지며, 형식 1의 file은 `<file>: projects.json: format must be 2`로 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이전 file을 바꾸는 migration은 없다. 형식으로 거부된 file은 거부된 space와 달리 통째로 거부된다. 그 file은 project 목록, 화면 상태, space, plugin의 project data(`plugins`)를 담으므로 그 어느 것도 읽히지 않고, file을 지울 때까지 file의 모든 쓰기가 그 오류로 실패한다. release는 사람이 `projects.json`을 지우고 project를 다시 더하며, project의 설정 file(`.soksak/settings.json`)과 folder는 남는다고 밝힌다. `docs/spec/cases/layout/groups.json`의 layout case는 저장 검사, 가장 작은 extent, command와 그 거부, drop 결정을 기술하며, `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model이 같은 file을 실행한다.
+member `groups`, `leader`, `lastCard`는 필수이므로 이 형태는 이전 release의 형태가 아니다. `projects.json`은 format 2를 가지고, format 1 파일은 `<file>: projects.json: format must be 2`로 거부된다([저장 데이터 형식](installation.ko.md#저장-데이터-형식)). 이전 파일을 바꾸는 migration은 없다. 형식으로 거부된 파일은 거부된 space와 달리 통째로 거부된다. 그 파일은 registry, 화면 상태, space, plugin의 project 데이터(`plugins`)를 담으므로 그 어느 것도 읽히지 않으며, 파일을 지울 때까지 파일의 모든 쓰기는 그 오류로 실패한다. release는 사람이 `projects.json`을 지우고 project를 다시 더한다는 것, 그리고 project의 설정 파일(`.soksak/settings.json`)과 폴더는 남는다는 것을 말한다. `docs/spec/cases/layout/groups.json`의 layout case가 저장 검사, 그리는 사각형, command와 그 거부, 사각형 operation, drop 결정을 말하며, `packages/workbench`의 test와 `packages/workbench-mygo`의 Go layout model은 같은 파일을 실행한다.
 
 ## 그리기
 
-group card는 기존 디자인의 card로 그린다. 그 background, border, radius, header, focus 처리는 theme과 chrome metrics에서 온 content card의 것이며, group을 위한 색, border, label은 더하지 않는다. child plane은 [모델](#모델)이 말하듯 body 안에 놓이고, child plane의 card는 그 안에서 기존 디자인의 card로 그린다. 각 plane은 자기 경계선과 divider(`sp-rule`, `sp-divider`)를 자기 사각형 안에 그린다. group card 옆의 parent plane divider는 group card의 크기를 바꾸고 child plane은 비율을 유지한다. child plane의 divider는 group card를 `plane`으로 하여 `core.boundary.move`를 실행하고, 어느 plane의 경계 이동이든 그것이 크기를 바꾸는 group card가 가장 작은 크기에 이르는 곳에서 멈춘다. rail은 지금처럼 focus된 content card와 그것이 override한 window sidebar의 외곽을 그린다([override context와 rail 테두리](external-sidebars.ko.md#오버라이드-컨텍스트와-레일-보더)). 두 workbench는 [native surfaces](native-surfaces.ko.md#인수-기준)의 수용 기준이 요구하듯 group card, 그 header, child plane을 card chrome과 native 화면과 같은 draw와 transaction에서 그린다. library의 layout 미리보기는 group card를 그 child plane의 도식을 담은 card로 그린다.
+group card는 기존 card 디자인으로 그린다. 그 header는 theme과 chrome metrics의 card header이며, 그 테두리는 card의 border와 radius다. 테두리는 그 사각형 둘레의 corridor, 곧 모든 쪽에서 group card의 그리는 사각형 바깥 gap 절반에 놓여, 그 card들과 둘레 card 사이 gap의 가운데에 있으므로 어떤 card도 덮지 않는다. 한 변을 공유하는 중첩 group card와 이웃 group card의 테두리는 한 line 위에 놓여 한 line으로 그려진다. group을 위한 색, border, label은 더하지 않는다. group card 안의 content card는 그리는 사각형([그리는 사각형](#그리는-사각형))에 기존 디자인의 card로 그린다. grid는 지금처럼 자기 경계선과 divider(`sp-rule`, `sp-divider`)를 그린다. space를 가로지르는 line 집합 하나이므로 divider는 모든 group을 지나 그 line 전체를 옮긴다. rail은 지금처럼 focus된 content card와 그것이 override한 window sidebar의 외곽을 그린다([override context와 rail 테두리](external-sidebars.ko.md#오버라이드-컨텍스트와-레일-보더)). 두 workbench는 [native surfaces](native-surfaces.ko.md#인수-기준)의 수용 기준이 요구하듯 group 테두리와 header를 card chrome과 native 화면과 같은 draw와 transaction에서 그린다. library의 layout 미리보기는 grid를 지금처럼 그리고 각 group card를 그 안의 pane을 두르는 테두리로 그린다.
 
 ## 노출
 
@@ -167,56 +192,61 @@ group card는 기존 디자인의 card로 그린다. 그 background, border, rad
 
 | 종류 | 이름 | 설명 |
 | --- | --- | --- |
-| command | `core.group.create` | Turns a card into a group card that holds the card and a new content card toward side. |
-| command | `core.group.dissolve` | Replaces a group card with the cards of its child plane inside its span. |
+| command | `core.group.create` | Groups a card with a new content card toward side. |
+| command | `core.group.dissolve` | Replaces a group card with its members in the level that holds it. |
 | command | `core.group.rename` | Renames a group card. |
-| command | `core.group.leader` | Makes a card the leader of its plane. |
+| command | `core.group.leader` | Makes a card the leader of its level. |
 | command | `core.group.menu` | Opens or closes the close menu of a group header. |
-| command | `core.card.move` | Moves a content card or a group card beside a card of any plane, or into a group, as a drop does. |
-| status | `core.layout` | The stored form of the current space layout with the level of each group record, or null. |
-| status | `core.grid` | The current grid as today, with the cards of the child planes, each with its plane, and each group card with its group record. |
-| command | `core.boundary.move` | Moves boundary line on axis of the plane, the child plane of the group card plane or the root plane without it, to a position in the coordinates of that plane and redraws; returns the resulting position. |
-| command | `core.card.get` | Reads the state of one content card of any plane with its group path, or one group card. |
-| element | `core.group` | The group cards in workbench order. |
+| command | `core.card.move` | Moves a content card or a group card beside a card of any level, or into a group, as a drop does. |
+| command | `core.card.fullscreen` | Shows a content card or a group card across the work area, or restores the arrangement. |
+| status | `core.layout` | The stored form of the current space layout with the level of each group node, or null. |
+| status | `core.grid` | The current grid as today, each card with the group card that holds it, and the group cards with their rectangles. |
+| command | `core.card.get` | Reads the state of one content card of any level with its group path, or one group card. |
+| element | `core.group` | The frames of the group cards in workbench order. |
 | element | `core.group.header` | The headers of the group cards in workbench order. |
 | element | `core.group.name` | The names in the group headers in workbench order; a double-click renames. |
 | element | `core.group.add` | The add buttons of the group headers in workbench order. |
 | element | `core.group.split-x` | The vertical split buttons of the group headers in workbench order. |
 | element | `core.group.split-y` | The horizontal split buttons of the group headers in workbench order. |
-| element | `core.group.wrap` | The group buttons of the group headers in workbench order, shown while the group card can hold a group of itself and a new card toward its longer axis. |
+| element | `core.group.wrap` | The group buttons of the group headers in workbench order, shown while the group card can be grouped with a new card toward its longer axis. |
+| element | `core.group.fullscreen` | The fullscreen buttons of the group headers in workbench order. |
 | element | `core.group.close` | The close buttons of the group headers in workbench order; each opens the close menu of its group. |
-| element | `core.card.group` | The group buttons of the content card headers in workbench order, shown while the card can hold a group of itself and a new card toward its longer axis. |
-| element | `core.card.leader` | The leader buttons of the card and group headers of planes of two or more cards in workbench order; pressed on the leader. |
+| element | `core.card.group` | The group buttons of the content card headers in workbench order, shown while the card can be grouped with a new card toward its longer axis. |
+| element | `core.card.leader` | The leader buttons of the card and group headers of levels of two or more members in workbench order; pressed on the leader. |
 
-`core.rename.begin`은 `project`와 `space` 옆에 kind `group`을, `core.card.menu`는 menu `group`을 선언한다. 모든 element는 `createBinder`로 묶이며, `core.workbench.audit`은 그중 어느 것도 묶이지 않은 것으로 나열하지 않는다.
+`core.rename.begin`은 `project`와 `space` 옆에 kind `group`을, `core.card.menu`는 menu `group`을 선언한다. 모든 element는 `createBinder`로 bind되며, `core.workbench.audit`은 그 어느 것도 unbound로 나열하지 않는다.
 
 ## 결정
 
-- card와 tab의 구조, 그 command, status, element, 저장 형태, 그리고 layout library는 바뀌지 않는다. group card가 유일한 추가다. 그래서 group card의 가장 작은 크기는 library의 option이 아니라, drop preview가 drop을 검사하듯 workbench가 plane의 사본에서 검사한다.
-- group card는 기존 디자인의 card로 그린다. 새 시각 요소는 group 버튼의 icon과, 눌린 header 버튼인 leader mark뿐이다. level은 보고하고 그리지 않는다.
-- group은 언제나 card를 둘 이상 담는다. `core.group.create`는 card를 그 card와 side 쪽 새 card의 group card로 바꾸므로, group은 command 하나로 두 번째 card와 함께 만들어진다. card 하나가 남으면 그것이 group card를 대신한다. group 버튼은 card 둘을 담을 공간이 있는 축인 그 card의 긴 축을 쓴다.
-- group card는 새 식별자를 받고, group이 되는 card는 식별자와 tab을 유지한다. 그 card를 가리키는 모든 저장 참조, tab session, command가 계속 그것을 가리키기 때문이다. group card는 card가 서 있던 곳에 서므로 parent plane에서 card의 자리, px 크기, leader mark를 받는다.
-- root plane의 leader는 `state` 옆의 `leader`로, child plane의 leader는 그 group 기록에 저장한다. 그래서 plane은 정확히 layout library의 상태이고, plane을 읽는 모든 reader가 그것을 바꾸지 않고 읽는다. level은 기록의 깊이에서 얻고 저장하지 않으므로, 어떤 저장 값도 tree와 어긋날 수 없다.
-- tree는 중첩으로 저장하며, group card의 child plane은 그 card의 data에 있다. tree의 주된 조회는 card 식별자 하나에서 그 조상 경로 전체와 subtree 전체로 가는 것이기 때문이다. 중첩 형태에서 subtree는 저장된 node 자신이고 경로는 그곳까지 걸어가는 것이므로 조립이 없다. 순환이 없고, plane 없는 card가 없으며, 각 card의 parent가 하나라는 tree의 모양은 text의 구성으로 지켜지고 참조 검사가 필요 없다. card마다 parent 식별자를 가진 기록 하나인 평평한 형태는 받아들이지 않았다. 중첩 형태에서 plane 사이의 이동은 subtree 하나를 떼어 붙이는 것이고, file은 어느 형태든 통째로 쓰이므로, 평평한 형태는 얻는 것이 없고 참조 검사만 더하기 때문이다.
-- card는 식별자의 index가 아니라 tree의 walk 한 번으로 찾는다. index는 card의 포함 관계를 한 번 더 담고 모든 move가 그것을 고쳐야 하므로 tree와 어긋날 수 있다. space는 card를 수십 개 담으므로 조회마다 walk 한 번은 측정할 만한 비용이 없다.
-- `projects.json`은 형식 2를 받는다. `leader`는 `core.group.leader`가 바꾸는 상태이고 형식 1의 file에는 없으며, 저장 형식 규칙은 새 형식 번호와 migration 없음을 요구한다. release는 사람이 다시 만드는 file을 밝힌다.
-- card 식별자는 기존 형태 `card-<n>`을 유지하고, workbench가 layout이 저장한 `lastCard`에서 모든 plane에 대해 낸다. 그래서 plane의 식별자가 충돌하지 않고 재시작을 넘어서도 어떤 식별자도 두 번 내지 않는다. random 식별자는 content card 식별자의 형태를 바꾸므로, 저장된 식별자에서 얻은 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 받아들이지 않았다.
-- `cardSplit` `even`은 split이 일어난 plane만 balance한다. 사람은 상자 하나 안에서 나누고, 그 주변 상자는 크기를 유지하기 때문이다. `exact`는 R4의 동작인 기본값으로 남는다. balance가 card를 가장 작은 크기 아래로 둘 때 `even`은 split을 거부한다. `exact` 결과로 되돌아가면 사람이 고른 설정이 말없이 다른 값으로 바뀌기 때문이다.
-- drop은 기존 `zoneAt`과 그 edge 비율로 root plane부터 안쪽으로 정하므로, group body의 바깥 4분의 1은 group card의 side이고 나머지는 그 plane에 속한다. 새 종류의 zone은 더하지 않는다.
-- group card는 focus ring을 받지 않는다. ring은 surface를 위해 키보드를 잡는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
+- space는 line 집합 하나를 가진 grid 하나를 유지하고, group card는 그 사각형 하나를 가리킨다. 한 group에서 다른 group으로, 또는 group을 지나 이어지는 line은 line 하나다. 그 위의 두 card는 같은 좌표에 그려지고, 보통 card 사이처럼 drag 한 번이 그것을 모든 group을 가로질러 옮긴다. group card마다 자기 line을 가진 child grid는 거부되었다. 두 grid는 line 하나를 가질 수 없으므로, group을 가로질러 이어지는 이음매가 두 좌표에 놓이고 두 line으로 drag된다.
+- group tree는 card의 data가 아니라 grid 옆에 저장된다. group card는 grid의 card가 아니기 때문이다. 그것은 자기 cell을 갖지 않고 그 안 card의 cell만 가진다. grid는 정확히 layout library의 상태로 남고, grid를 읽는 모든 쪽은 그것을 바뀌지 않은 채 읽는다.
+- 모든 group card는 grid의 사각형 하나를 정확히 덮는다. group card의 header, 테두리, drop 결정, 전체 화면은 사각형 하나를 필요로 하며, 그것을 깨는 operation은 깨는 group과 함께 거부되므로, tree는 상자 하나가 아닌 cell을 가리키지 않는다.
+- group card의 header는 그 사각형의 위쪽을 차지하여 첫 row의 card를 짧게 하고, 테두리는 corridor에 놓이므로, 모든 content card의 왼쪽, 오른쪽, 아래쪽 변은 grid의 line 위에 머문다. group 안 card의 inset은 거부되었다. inset은 card의 변을 그 group의 깊이만큼 옮기고, 그러면 한 line 위의 두 card가 떨어져 그려지기 때문이다.
+- group card 사각형에 대한 operation은 layout library를 쓴다. 사각형의 split은 card 여러 개의 상자에 대한 R4이며, 안의 card는 절반을 받아 비율을 유지하고 밖의 card는 자기 line을 유지한다. close와 move는 사각형을 card 하나로 만들고, library가 그것을 닫거나 옮긴다. 그래서 library는 바뀌지 않고 모든 결과는 `checkState`가 받는 상태다.
+- 그리는 최소는 library의 option이 아니라 workbench가 drop 미리보기가 drop을 검사하듯 grid와 tree의 복사본에서 검사한다. header를 아는 것은 workbench뿐이기 때문이다.
+- group은 언제나 member를 둘 이상 담는다. `core.group.create`는 card를 한 side 쪽 새 card와 묶으므로 group은 command 하나로 두 번째 card와 함께 만들어진다. member 하나가 남으면 그것이 group card를 대신한다. group 버튼은 그 상자의 긴 축, 곧 card 둘을 둘 공간이 있는 축을 쓴다.
+- group card는 새 식별자를 받고, 그것이 묶는 card는 식별자와 tab을 유지한다. 그 card를 가리키는 모든 저장 참조, tab session, command가 계속 그것을 가리키기 때문이다. group card는 그 level에서 card의 자리와 leader mark를 받는다. card가 서 있던 자리에 서기 때문이다.
+- root level의 leader는 `leader`로, group card member의 leader는 그 node에 저장된다. level은 node의 깊이에서 도출되고 저장되지 않으므로, 어떤 저장 값도 tree와 어긋날 수 없다.
+- tree는 중첩되어 저장된다. group card의 member는 그 node에 있다. tree의 주된 조회는 card 식별자 하나에서 그 조상 경로 전체와 subtree 전체로 가는 것이기 때문이다. 중첩 형태에서 subtree는 저장된 node 자체이고 경로는 그것까지의 walk이므로 조립이 없다. card마다 parent 식별자를 가진 기록 하나씩의 평면 형태는 거부되었다. 중첩 형태가 구성으로 지키는 참조 검사가 필요하고, 파일은 어느 형태든 통째로 쓰이기 때문이다.
+- workbench는 식별자 index가 아니라 tree의 walk 한 번으로 card에 닿는다. index는 card의 포함 관계를 두 번째로 가지며 모든 move가 그것을 고쳐야 하므로 tree와 어긋날 수 있다. space는 card를 수십 개 담으므로 조회마다 walk 한 번은 잴 만한 비용이 없다.
+- `projects.json`은 format 2를 받는다. `groups`, `leader`, `lastCard`는 format 1 파일에 없는 상태이며, 저장 형식 규칙은 새 format 번호를 요구하고 migration을 두지 않는다. release는 사람이 다시 만드는 파일을 말한다.
+- card 식별자는 기존 형태 `card-<n>`으로 남고, layout이 저장하는 `lastCard`에서 workbench가 낸다. 그래서 재시작을 지나도 식별자는 두 번 나오지 않는다. 무작위 식별자는 content card 식별자의 형태를 바꾸므로 거부되었다. 저장된 식별자에서 도출한 번호는 가장 큰 번호의 card가 끝난 뒤 끝난 식별자를 다시 내므로 거부되었다.
+- `cardSplit` `even`은 grid를 balance한다. grid가 space의 line 집합 하나이기 때문이다. `exact`는 기본값으로 남으며, R4와 그 사각형 일반화의 동작이다. balance가 card를 최소보다 작게 그리면 `even`은 split을 거부한다. `exact` 결과로 돌아가면 말없이 고른 설정을 다른 값으로 바꾸게 되기 때문이다.
+- drop은 `zoneAt`의 edge 비율로 group card의 사각형 위에서 root level부터 안쪽으로 결정되고 grid의 `zoneAt`에서 끝나므로, 모든 level의 모든 card의 다섯 zone에 닿고 새 종류의 zone은 더해지지 않는다.
+- group card는 group으로서 전체 화면이 된다. 사람은 card 하나를 보이듯 작업의 상자 하나를 보이므로, 그 사각형이 그 안의 모든 card와 header와 함께 작업 영역을 덮는다. 전체 화면인 동안 layout은 전체 화면 card의 규칙 하나대로 그 안에서도 밖에서도 바뀌지 않는다.
+- group card는 focus ring을 받지 않는다. ring은 surface의 keyboard를 쥐는데 group card에는 surface가 없기 때문이다. group card의 focus는 그 첫 content card로 간다.
 
-review가 답한 반론:
+review는 다음 반론에 답했다.
 
-- leader의 `create`는 그 plane에 plane의 card가 아닌 leader를 남긴다: group card가 card의 leader mark를 받는다.
-- close 뒤 window sidebar만 남은 root plane에는 leader가 될 card가 없다: card가 들어올 때까지 `leader`는 `null`이다.
-- 따로인 library instance의 card 식별자가 충돌하고, 실행 안에서나 재시작 뒤에 다시 쓴 식별자가 반복한 풀기로 다른 group을 풀게 한다: workbench가 저장된 `lastCard`에서 모든 plane의 식별자를 낸다.
-- 창 크기 변경이 group을 가장 작은 크기 아래로 두는 동안 plane의 모든 operation이 거부된다: group card의 크기를 바꾸는 operation만 검사하며, drop preview와 release가 같은 검사를 쓴다.
-- card가 이미 있는 자리로의 `core.card.move`가 그것을 닫고 다시 넣어 px 크기를 바꾼다: layout을 부르지 않고 결과를 돌려준다.
-- 풀기의 line mapping에는 같음의 기준이 필요하다: R1이 요구하듯 좌표는 tolerance 없이 수로서 같으며, group card의 px 크기는 옮기지 않는다.
-- 옮겨진 card가 떠나는 group 옆으로의 move는 group이 대체될 때 target을 잃는다: target은 대체 전에 정해지고 card는 group을 대신한 card 옆에 놓인다.
-- `core.card.get`이 member `leader`로 card 상태를 다시 정의한다: card 상태는 유지되고 `groups`만 더하며, leader는 `core.layout`과 `core.grid`에 보고된다.
-- `create`의 거부 크기가 정의되지 않았다: 각 side에 대해 `mw`×`mh`를 밝힌다.
-- group이라는 낱말은 이미 picker group과 snapshot groups를 가리킨다: group 하나는 이 명세가 나열한 이름과 member에서만 group card를 가리키며, kit 용어 목록이 새 용어를 받는다.
-- card가 떠나는 group의 `centre`로의 move는 결과가 정의되지 않았다: card가 먼저 child plane에 들어가므로 group은 card 둘을 유지한다.
-- 저장된 group의 거부가 file 전체의 거부로 읽힐 수 있다: 그것은 space의 거부이며, 형식 거부만 file을 거부한다.
-- 형식 변경은 project 목록과 plugin의 project data를 잃게 한다: release가 그것을 밝히며, layout을 다른 file로 옮기는 안은 `projects.json`의 형태도 바꾸어 같은 손실을 주므로 받아들이지 않았다.
+- leader의 `create`는 그 level에 member가 아닌 leader를 남긴다: group card가 card의 leader mark를 받는다.
+- close 뒤 window sidebar만 남은 root level에는 leader가 될 card가 없다: card가 들어올 때까지 그 `leader`는 `null`이다.
+- 실행 안에서든 재시작 뒤든 다시 쓰인 식별자는 반복 dissolve가 다른 group을 풀게 한다: workbench는 모든 식별자를 저장된 `lastCard`에서 낸다.
+- window 크기 변경이 card를 그리는 최소보다 작게 남기는 동안 모든 operation이 거부될 것이다: card를 바꾸는 operation만 검사되고, drop 미리보기와 놓기는 같은 검사를 쓴다.
+- card가 이미 가진 자리로의 `core.card.move`는 그것을 닫고 다시 넣어 px 크기를 바꿀 것이다: layout을 부르지 않고 결과를 돌려준다.
+- 사각형의 split은 그것이 대응시키는 line에 대해 같음이 필요하다: 좌표는 R1이 요구하듯 허용 오차 없이 숫자로서 같으며, group 밖의 card가 쓰는 line은 움직이지 않는다.
+- 옮긴 card가 떠나는 group 옆으로의 move는 group이 대체될 때 target을 잃을 것이다: target은 대체 전에 정해지고, card는 group을 대신하는 card 옆에 놓인다.
+- `core.card.get`은 member `leader`로 card 상태를 다시 정의할 것이다: card 상태는 유지되고 `groups`만 더해진다. leader는 `core.layout`과 `core.grid`에 보고된다.
+- 낱말 group은 이미 picker group과 snapshot group을 가리킨다: group 하나는 이 명세가 나열하는 이름과 member에서만 group card를 가리키며, kit term 목록이 새 term을 받는다.
+- 저장된 group의 거부는 파일 전체의 거부로 읽힐 수 있다: 그것은 space의 거부이며, 형식 거부만 파일을 거부한다.
+- format 상승은 registry와 plugin의 project 데이터를 잃는다: release가 그것을 말하며, layout을 다른 파일로 옮기는 것은 `projects.json`의 형태도 바꾸고 같은 손실을 주므로 거부되었다.
+- group 안의 close는 group 밖의 card에게 card의 자리를 줄 수 있다: 결과를 검사하여 group과 함께 거부하므로, tree는 상자 둘의 group card를 갖지 않는다.

@@ -1,12 +1,12 @@
 {
- "description": "The tree of planes of a space (docs/spec/groups.md): the stored checks, the smallest extents, the group commands and their refusals, the cards of the planes and the drop resolution. A case reads its layout, the stored form {state, leader, lastCard}, with the options gap, minSize, head and the size of the root plane, then runs its steps; a case with throws refuses its layout with that text.",
+ "description": "The groups of a space (docs/spec/groups.md): the stored checks, the drawn rectangles, the group commands and their refusals, the rectangle operations and the drop resolution. A case reads its layout, the stored form {state, groups, leader, lastCard}, with the options gap, minSize, head and the size of the plane, then runs its steps; a case with throws refuses its layout with that text, which the reader of projects.json prefixes with the project and the space. A step runs call with args and returns its result or throws its text. create, split, close, dissolve, rename, leader and move are the commands core.group.create, core.card.split, core.card.close, core.group.dissolve, core.group.rename, core.group.leader and core.card.move without tabs; grid returns xs, ys and the cards of the grid without paidBy; stored returns groups, leader and lastCard with the members of each group in reading order; rect returns the drawn rectangle of a card; path returns the group path of core.card.get; level returns the level of a card; drop returns the card and the zone that a drop at a point resolves to. A value in a refusal text is its JSON text.",
  "cases": [
   {
-   "name": "a group of a card holds the card and a new card toward side, takes the slot and the leader mark, and issues the next ids",
+   "name": "a group of a card holds the card and a new card toward side, takes its slot and its leader mark, and issues the next ids",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -22,216 +22,355 @@
      ],
      "cards": [
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
+    "groups": [],
+    "leader": "card-1",
     "lastCard": 1
    },
    "steps": [
     {
      "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
+     "args": {
+      "card": "card-1",
+      "side": "right"
+     },
+     "returns": {
+      "group": "card-2",
+      "card": "card-3"
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
     },
     {
      "call": "stored",
+     "args": {},
      "returns": {
-      "state": {
-       "xs": [
-        0,
-        1
-       ],
-       "ys": [
-        0,
-        1
-       ],
-       "cards": [
-        {
-         "id": "card-2",
-         "c0": 0,
-         "c1": 1,
-         "r0": 0,
-         "r1": 1,
-         "fixed": false,
-         "data": {
-          "group": {
-           "name": "그룹 1",
-           "leader": "main",
-           "plane": {
-            "xs": [
-             0,
-             0.5,
-             1
-            ],
-            "ys": [
-             0,
-             1
-            ],
-            "cards": [
-             {
-              "id": "main",
-              "c0": 0,
-              "c1": 1,
-              "r0": 0,
-              "r1": 1,
-              "fixed": false,
-              "data": {
-               "tabs": [
-                {
-                 "id": "t1",
-                 "plugin": "alpha",
-                 "title": "t1"
-                }
-               ],
-               "activeId": "t1"
-              }
-             },
-             {
-              "id": "card-3",
-              "c0": 1,
-              "c1": 2,
-              "r0": 0,
-              "r1": 1,
-              "fixed": false,
-              "data": {
-               "tabs": [
-                {
-                 "id": "t2",
-                 "plugin": "alpha",
-                 "title": "t2"
-                }
-               ],
-               "activeId": "t2"
-              }
-             }
-            ],
-            "paidBy": {
-             "card-3": {
-              "side": "lo",
-              "to": "main",
-              "at": 0
-             }
-            }
-           }
-          }
-         }
-        }
-       ],
-       "paidBy": {}
-      },
+      "groups": [
+       {
+        "card": "card-2",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-3"
+        ]
+       }
+      ],
       "leader": "card-2",
       "lastCard": 3
      }
     },
     {
      "call": "rect",
-     "args": [
-      "card-2"
-     ],
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 32,
+      "w": 488,
+      "h": 568
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 512,
+      "y": 32,
+      "w": 488,
+      "h": 568
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
      "returns": {
       "x": 0,
       "y": 0,
       "w": 1000,
       "h": 600
      }
+    }
+   ]
+  },
+  {
+   "name": "a group of a group card splits its rectangle, lays its members into the half away from side and stacks the headers",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 800
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "create",
+     "args": {
+      "card": "card-4",
+      "side": "bottom"
+     },
+     "returns": {
+      "group": "card-5",
+      "card": "card-6"
+     }
     },
     {
-     "call": "rect",
-     "args": [
-      "main"
-     ],
+     "call": "grid",
+     "args": {},
      "returns": {
-      "x": 12,
-      "y": 52,
-      "w": 476,
-      "h": 536
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.25,
+       0.5,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-6",
+        "c0": 0,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 2,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-5",
+        "name": "그룹 2",
+        "leader": "card-4",
+        "members": [
+         {
+          "card": "card-4",
+          "name": "그룹 1",
+          "leader": "card-1",
+          "members": [
+           "card-1",
+           "card-2"
+          ]
+         },
+         "card-6"
+        ]
+       }
+      ],
+      "leader": "card-5",
+      "lastCard": 6
      }
     },
     {
      "call": "rect",
-     "args": [
-      "card-3"
-     ],
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 64,
+      "w": 488,
+      "h": 124
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
      "returns": {
       "x": 512,
-      "y": 52,
-      "w": 476,
-      "h": 536
+      "y": 64,
+      "w": 488,
+      "h": 124
      }
     },
     {
-     "call": "groups",
-     "args": [
-      "card-3"
-     ],
-     "returns": [
-      "card-2"
-     ]
-    },
-    {
-     "call": "groups",
-     "args": [
-      "card-2"
-     ],
-     "returns": []
-    },
-    {
-     "call": "group",
-     "args": [
-      "card-2"
-     ],
+     "call": "rect",
+     "args": {
+      "card": "card-6"
+     },
      "returns": {
-      "name": "그룹 1",
-      "level": 1,
-      "leader": "main",
-      "cards": [
-       "main",
-       "card-3"
-      ]
+      "x": 0,
+      "y": 212,
+      "w": 1000,
+      "h": 176
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 412,
+      "w": 1000,
+      "h": 388
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 188
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 388
      }
     }
    ]
   },
   {
-   "name": "a group toward bottom splits the child plane on y",
+   "name": "a group that would draw a card below its minimum is refused with that card and its size",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -239,91 +378,156 @@
     "state": {
      "xs": [
       0,
+      0.5,
       1
      ],
      "ys": [
       0,
+      0.5,
       1
      ],
      "cards": [
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
-    "lastCard": 1
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
    },
    "steps": [
     {
      "call": "create",
-     "args": [
-      "main",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
+     "args": {
+      "card": "card-4",
+      "side": "bottom"
+     },
+     "throws": "card card-4 cannot hold a group toward bottom: card card-1 would be 488x74, below its minimum 96x96"
     },
     {
-     "call": "rect",
-     "args": [
-      "main"
-     ],
+     "call": "stored",
+     "args": {},
      "returns": {
-      "x": 12,
-      "y": 52,
-      "w": 976,
-      "h": 256
-     }
-    },
-    {
-     "call": "rect",
-     "args": [
-      "card-3"
-     ],
-     "returns": {
-      "x": 12,
-      "y": 332,
-      "w": 976,
-      "h": 256
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       }
+      ],
+      "leader": "card-4",
+      "lastCard": 4
      }
     }
    ]
   },
   {
-   "name": "a card too small for a group toward side is refused with its size and the size that the group needs",
+   "name": "a group whose header would draw its card below its minimum is refused although the layout splits it",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
+    "width": 1000,
+    "height": 520
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [],
+    "leader": "card-1",
+    "lastCard": 3
+   },
+   "steps": [
+    {
+     "call": "create",
+     "args": {
+      "card": "card-1",
+      "side": "bottom"
+     },
+     "throws": "card card-1 cannot hold a group toward bottom: card card-1 would be 488x86, below its minimum 96x96"
+    }
+   ]
+  },
+  {
+   "name": "a group that the layout cannot split is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
     "width": 200,
     "height": 600
    },
@@ -339,77 +543,37 @@
      ],
      "cards": [
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
+    "groups": [],
+    "leader": "card-1",
     "lastCard": 1
    },
    "steps": [
     {
      "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "throws": "card main cannot hold a group toward right: it is 200x600 and the group needs 240x160"
-    },
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
+     "args": {
+      "card": "card-1",
+      "side": "right"
+     },
+     "throws": "card card-1 cannot hold a group toward right"
     }
    ]
   },
   {
-   "name": "a group of a window sidebar is refused",
+   "name": "a window sidebar holds no group and leads no level",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -434,300 +598,44 @@
        "fixed": true
       },
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 1,
        "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
+    "groups": [],
+    "leader": "card-1",
     "lastCard": 1
    },
    "steps": [
     {
      "call": "create",
-     "args": [
-      "left",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
+     "args": {
+      "card": "left",
+      "side": "right"
+     },
      "throws": "card left is a window sidebar; a group holds content cards and group cards"
+    },
+    {
+     "call": "leader",
+     "args": {
+      "card": "left"
+     },
+     "throws": "card left is a window sidebar and cannot lead a level"
     }
    ]
   },
   {
-   "name": "the smallest size of a group card is the smallest extent of its child plane plus the gap, and the head height on y",
+   "name": "a split of a card in a group adds the new card to that group",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "smallest",
-     "args": [
-      "card-2"
-     ],
-     "returns": [
-      240,
-      160
-     ]
-    },
-    {
-     "call": "smallest",
-     "args": [
-      "main"
-     ],
-     "returns": [
-      96,
-      96
-     ]
-    },
-    {
-     "call": "create",
-     "args": [
-      "card-3",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
-      }
-     ],
-     "returns": [
-      "card-4",
-      "card-5"
-     ]
-    },
-    {
-     "call": "smallest",
-     "args": [
-      "card-4"
-     ],
-     "returns": [
-      120,
-      280
-     ]
-    },
-    {
-     "call": "smallest",
-     "args": [
-      "card-2"
-     ],
-     "returns": [
-      264,
-      344
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a close that leaves one card in a group replaces the group card with that card in its slot with its leader mark",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "close",
-     "args": [
-      "card-3"
-     ],
-     "returns": [
-      "card-3"
-     ]
-    },
-    {
-     "call": "stored",
-     "returns": {
-      "state": {
-       "xs": [
-        0,
-        1
-       ],
-       "ys": [
-        0,
-        1
-       ],
-       "cards": [
-        {
-         "id": "main",
-         "c0": 0,
-         "c1": 1,
-         "r0": 0,
-         "r1": 1,
-         "fixed": false,
-         "data": {
-          "tabs": [
-           {
-            "id": "t1",
-            "plugin": "alpha",
-            "title": "t1"
-           }
-          ],
-          "activeId": "t1"
-         }
-        }
-       ],
-       "paidBy": {}
-      },
-      "leader": "main",
-      "lastCard": 3
-     }
-    }
-   ]
-  },
-  {
-   "name": "a close of a group card closes every card of its child plane",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -740,587 +648,138 @@
      ],
      "ys": [
       0,
+      0.5,
       1
      ],
      "cards": [
       {
-       "id": "a",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       },
       {
-       "id": "b",
+       "id": "card-2",
        "c0": 1,
        "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t3",
-          "plugin": "alpha",
-          "title": "t3"
-         }
-        ],
-        "activeId": "t3"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "a",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "a",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "close",
-     "args": [
-      "card-2"
-     ],
-     "returns": [
-      "a",
-      "card-3"
-     ]
-    },
-    {
-     "call": "stored",
-     "returns": {
-      "state": {
-       "xs": [
-        0,
-        0.5,
-        1
-       ],
-       "ys": [
-        0,
-        1
-       ],
-       "cards": [
-        {
-         "id": "b",
-         "c0": 0,
-         "c1": 2,
-         "r0": 0,
-         "r1": 1,
-         "fixed": false,
-         "data": {
-          "tabs": [
-           {
-            "id": "t3",
-            "plugin": "alpha",
-            "title": "t3"
-           }
-          ],
-          "activeId": "t3"
-         }
-        }
-       ],
-       "paidBy": {}
+       "fixed": false
       },
-      "leader": "b",
-      "lastCard": 3
-     }
-    }
-   ]
-  },
-  {
-   "name": "a dissolve puts the lines of the child plane into the span of the group card, keeps the ids and passes the leader of the child plane",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
       {
-       "id": "main",
+       "id": "card-3",
        "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "leader",
-     "args": [
-      "card-3"
-     ],
-     "returns": "card-2"
-    },
-    {
-     "call": "dissolve",
-     "args": [
-      "card-2"
-     ]
-    },
-    {
-     "call": "stored",
-     "returns": {
-      "state": {
-       "xs": [
-        0,
-        0.5,
-        1
-       ],
-       "ys": [
-        0,
-        1
-       ],
-       "cards": [
-        {
-         "id": "main",
-         "c0": 0,
-         "c1": 1,
-         "r0": 0,
-         "r1": 1,
-         "fixed": false,
-         "data": {
-          "tabs": [
-           {
-            "id": "t1",
-            "plugin": "alpha",
-            "title": "t1"
-           }
-          ],
-          "activeId": "t1"
-         }
-        },
-        {
-         "id": "card-3",
-         "c0": 1,
-         "c1": 2,
-         "r0": 0,
-         "r1": 1,
-         "fixed": false,
-         "data": {
-          "tabs": [
-           {
-            "id": "t2",
-            "plugin": "alpha",
-            "title": "t2"
-           }
-          ],
-          "activeId": "t2"
-         }
-        }
-       ],
-       "paidBy": {
-        "card-3": {
-         "side": "lo",
-         "to": "main",
-         "at": 0
-        }
-       }
-      },
-      "leader": "card-3",
-      "lastCard": 3
-     }
-    },
-    {
-     "call": "dissolve",
-     "args": [
-      "main"
-     ],
-     "throws": "card main is not a group"
-    }
-   ]
-  },
-  {
-   "name": "a rename trims the name and refuses a name of fewer than 1 or more than 40 characters",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "rename",
-     "args": [
-      "card-2",
-      "  작업  "
-     ],
-     "returns": "작업"
-    },
-    {
-     "call": "rename",
-     "args": [
-      "card-2",
-      "   "
-     ],
-     "throws": "group name must be 1 to 40 characters:    "
-    },
-    {
-     "call": "rename",
-     "args": [
-      "card-2",
-      "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
-     ],
-     "throws": "group name must be 1 to 40 characters: 가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가"
-    },
-    {
-     "call": "rename",
-     "args": [
-      "main",
-      "x"
-     ],
-     "throws": "card main is not a group"
-    },
-    {
-     "call": "create",
-     "args": [
-      "card-3",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
-      }
-     ],
-     "returns": [
-      "card-4",
-      "card-5"
-     ]
-    },
-    {
-     "call": "group",
-     "args": [
-      "card-4"
-     ],
-     "returns": {
+    "groups": [
+     {
+      "card": "card-4",
       "name": "그룹 1",
-      "level": 2,
-      "leader": "card-3",
-      "cards": [
-       "card-3",
-       "card-5"
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
       ]
      }
-    }
-   ]
-  },
-  {
-   "name": "a leader is a card of its plane and never a window sidebar",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      0.2,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "left",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": true
-      },
-      {
-       "id": "main",
-       "c0": 1,
-       "c1": 2,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
+    ],
+    "leader": "card-4",
+    "lastCard": 4
    },
    "steps": [
     {
-     "call": "leader",
-     "args": [
-      "left"
-     ],
-     "throws": "card left is a window sidebar and cannot lead a plane"
+     "call": "split",
+     "args": {
+      "card": "card-1",
+      "side": "bottom"
+     },
+     "returns": {
+      "card": "card-5"
+     }
     },
     {
-     "call": "leader",
-     "args": [
-      "main"
-     ],
-     "returns": null
-    }
-   ]
-  },
-  {
-   "name": "a move out of a group beside the group card that it leaves lands beside the card that replaces the group",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2",
+         "card-5"
+        ]
        }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
+      ],
+      "leader": "card-4",
+      "lastCard": 5
+     }
     },
     {
-     "call": "move",
-     "args": [
-      "card-3",
-      "card-2",
-      "left"
-     ]
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 32,
+      "w": 488,
+      "h": 106
+     }
     },
     {
-     "call": "groups",
-     "args": [
-      "card-3"
-     ],
-     "returns": []
+     "call": "rect",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": {
+      "x": 0,
+      "y": 162,
+      "w": 488,
+      "h": 126
+     }
     },
     {
-     "call": "planeCards",
-     "args": [
-      null
-     ],
-     "returns": [
-      "card-3",
-      "main"
-     ]
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 512,
+      "y": 32,
+      "w": 488,
+      "h": 256
+     }
     },
     {
-     "call": "leader",
-     "args": [
-      "main"
-     ],
-     "returns": null
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 288
+     }
     }
    ]
   },
   {
-   "name": "a move into the centre of a group card puts the card at the right edge of its child plane",
+   "name": "a split of a group card places the new card beside its rectangle in the level that holds it",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -1333,454 +792,1608 @@
      ],
      "ys": [
       0,
+      0.5,
       1
      ],
      "cards": [
       {
-       "id": "a",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       },
       {
-       "id": "b",
+       "id": "card-2",
        "c0": 1,
        "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t3",
-          "plugin": "alpha",
-          "title": "t3"
-         }
-        ],
-        "activeId": "t3"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "a",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "a",
-      "bottom",
+       "fixed": false
+      },
       {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "move",
-     "args": [
-      "b",
-      "card-2",
-      "centre"
-     ]
-    },
-    {
-     "call": "groups",
-     "args": [
-      "b"
-     ],
-     "returns": [
-      "card-2"
-     ]
-    },
-    {
-     "call": "planeCards",
-     "args": [
-      "card-2"
-     ],
-     "returns": [
-      "a",
-      "b",
-      "card-3"
-     ]
-    },
-    {
-     "call": "move",
-     "args": [
-      "b",
-      "card-2",
-      "centre"
-     ]
-    },
-    {
-     "call": "move",
-     "args": [
-      "card-2",
-      "a",
-      "right"
-     ],
-     "throws": "card card-2 cannot move into itself"
-    },
-    {
-     "call": "move",
-     "args": [
-      "a",
-      "card-3",
-      "centre"
-     ],
-     "throws": "card card-3 is not a group; a card moves beside it"
-    }
-   ]
-  },
-  {
-   "name": "a move into the centre of the group that the card leaves keeps the group",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
+       "id": "card-3",
        "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
-    "lastCard": 1
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
    },
    "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "move",
-     "args": [
-      "main",
-      "card-2",
-      "centre"
-     ]
-    },
-    {
-     "call": "planeCards",
-     "args": [
-      "card-2"
-     ],
-     "returns": [
-      "card-3",
-      "main"
-     ]
-    }
-   ]
-  },
-  {
-   "name": "a card added to a group stands at the right edge of its child plane",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
-     "call": "addCard",
-     "args": [
-      "card-2",
-      {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
-      }
-     ],
-     "returns": "card-4"
-    },
-    {
-     "call": "planeCards",
-     "args": [
-      "card-2"
-     ],
-     "returns": [
-      "main",
-      "card-4",
-      "card-3"
-     ]
-    },
-    {
-     "call": "addCard",
-     "args": [
-      "main",
-      {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
-      }
-     ],
-     "throws": "card main is not a group"
-    }
-   ]
-  },
-  {
-   "name": "a split puts a sibling into the plane of the card and takes the next id",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
     {
      "call": "split",
-     "args": [
-      "card-3",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
-      }
-     ],
-     "returns": "card-4"
+     "args": {
+      "card": "card-4",
+      "side": "right"
+     },
+     "returns": {
+      "card": "card-5"
+     }
     },
     {
-     "call": "groups",
-     "args": [
-      "card-4"
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.25,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.5,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 3,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       }
+      ],
+      "leader": "card-4",
+      "lastCard": 5
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 32,
+      "w": 238,
+      "h": 256
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 262,
+      "y": 32,
+      "w": 226,
+      "h": 256
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": {
+      "x": 512,
+      "y": 0,
+      "w": 488,
+      "h": 288
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 312,
+      "w": 1000,
+      "h": 288
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 488,
+      "h": 288
+     }
+    }
+   ]
+  },
+  {
+   "name": "a close that leaves one member replaces the group card with that member and its leader mark",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
      ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "close",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [],
+      "leader": "card-1",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 288
+     }
+    }
+   ]
+  },
+  {
+   "name": "a close that would break the rectangle of a group is refused with the group",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-5",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-5",
+    "lastCard": 5
+   },
+   "steps": [
+    {
+     "call": "close",
+     "args": {
+      "card": "card-4"
+     },
+     "throws": "card card-4 cannot close: group card-5 would not cover one rectangle"
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       }
+      ],
+      "leader": "card-5",
+      "lastCard": 5
+     }
+    }
+   ]
+  },
+  {
+   "name": "a close of a group card closes every card inside it and passes the leader mark",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "close",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "closed": true
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [],
+      "leader": "card-3",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 600
+     }
+    }
+   ]
+  },
+  {
+   "name": "a dissolve keeps the grid and passes the leader of the group",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "dissolve",
+     "args": {
+      "group": "card-4"
+     },
+     "returns": {
+      "dissolved": true
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       0.5,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 0,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [],
+      "leader": "card-1",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 488,
+      "h": 288
+     }
+    },
+    {
+     "call": "dissolve",
+     "args": {
+      "group": "card-1"
+     },
+     "throws": "card card-1 is not a group"
+    }
+   ]
+  },
+  {
+   "name": "a rename trims the name, refuses a name of fewer than 1 or more than 40 characters, and a new group takes the smallest free number",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "rename",
+     "args": {
+      "group": "card-4",
+      "name": "  작업  "
+     },
+     "returns": {
+      "group": "card-4",
+      "name": "작업"
+     }
+    },
+    {
+     "call": "rename",
+     "args": {
+      "group": "card-4",
+      "name": "   "
+     },
+     "throws": "group name must be 1 to 40 characters: "
+    },
+    {
+     "call": "rename",
+     "args": {
+      "group": "card-4",
+      "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+     },
+     "throws": "group name must be 1 to 40 characters: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+     "call": "rename",
+     "args": {
+      "group": "card-1",
+      "name": "x"
+     },
+     "throws": "card card-1 is not a group"
+    },
+    {
+     "call": "create",
+     "args": {
+      "card": "card-3",
+      "side": "right"
+     },
+     "returns": {
+      "group": "card-5",
+      "card": "card-6"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "작업",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       },
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-3",
+        "members": [
+         "card-3",
+         "card-6"
+        ]
+       }
+      ],
+      "leader": "card-4",
+      "lastCard": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "a leader is a member of its level",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "leader",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "card": "card-2",
+      "group": "card-4"
+     }
+    },
+    {
+     "call": "leader",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "card": "card-3",
+      "group": null
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "그룹 1",
+        "leader": "card-2",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       }
+      ],
+      "leader": "card-3",
+      "lastCard": 4
+     }
+    }
+   ]
+  },
+  {
+   "name": "a move out of a group beside the group card that it leaves lands beside the member that replaces the group",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-2",
+      "target": "card-4",
+      "side": "bottom"
+     },
+     "returns": {
+      "card": "card-2"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [],
+      "leader": "card-1",
+      "lastCard": 4
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 138
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 0,
+      "y": 162,
+      "w": 1000,
+      "h": 126
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 312,
+      "w": 1000,
+      "h": 288
+     }
+    }
+   ]
+  },
+  {
+   "name": "a move beside a member of a group joins that group",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-5",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-3"
+      ]
+     }
+    ],
+    "leader": "card-5",
+    "lastCard": 5
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-3",
+      "side": "bottom"
+     },
+     "returns": {
+      "card": "card-4"
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-3",
+         "card-4"
+        ]
+       }
+      ],
+      "leader": "card-5",
+      "lastCard": 5
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 32,
+      "w": 488,
+      "h": 256
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 312,
+      "w": 488,
+      "h": 126
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 0,
+      "y": 462,
+      "w": 488,
+      "h": 138
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 512,
+      "y": 0,
+      "w": 488,
+      "h": 600
+     }
+    }
+   ]
+  },
+  {
+   "name": "a move into the centre of a group card puts the card at the right edge of its rectangle",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-3",
+      "target": "card-1",
+      "side": "centre"
+     },
+     "throws": "card card-1 is not a group; a card moves beside it"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-1",
+      "side": "right"
+     },
+     "throws": "card card-4 cannot move into itself"
+    },
+    {
+     "call": "move",
+     "args": {
+      "card": "card-3",
+      "target": "card-4",
+      "side": "centre"
+     },
+     "returns": {
+      "card": "card-3"
+     }
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.25,
+       0.5,
+       1
+      ],
+      "ys": [
+       0,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 1,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 1,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       }
+      ]
+     }
+    },
+    {
+     "call": "stored",
+     "args": {},
+     "returns": {
+      "groups": [
+       {
+        "card": "card-4",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2",
+         "card-3"
+        ]
+       }
+      ],
+      "leader": "card-4",
+      "lastCard": 4
+     }
+    }
+   ]
+  },
+  {
+   "name": "a move that would break the rectangle of a group is refused with the group",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-5",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-5",
+    "lastCard": 5
+   },
+   "steps": [
+    {
+     "call": "move",
+     "args": {
+      "card": "card-4",
+      "target": "card-1",
+      "side": "left"
+     },
+     "throws": "card card-4 cannot move to left of card-1: group card-5 would not cover one rectangle"
+    }
+   ]
+  },
+  {
+   "name": "nested headers stack on the top of the rectangles, and a card reads its group path and level",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-6",
+      "name": "그룹 2",
+      "leader": "card-5",
+      "members": [
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       },
+       "card-3",
+       "card-4"
+      ]
+     }
+    ],
+    "leader": "card-6",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": {
+      "x": 0,
+      "y": 64,
+      "w": 488,
+      "h": 224
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-2"
+     },
+     "returns": {
+      "x": 512,
+      "y": 64,
+      "w": 488,
+      "h": 224
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": {
+      "x": 0,
+      "y": 312,
+      "w": 488,
+      "h": 288
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-4"
+     },
+     "returns": {
+      "x": 512,
+      "y": 312,
+      "w": 488,
+      "h": 288
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 288
+     }
+    },
+    {
+     "call": "rect",
+     "args": {
+      "card": "card-6"
+     },
+     "returns": {
+      "x": 0,
+      "y": 0,
+      "w": 1000,
+      "h": 600
+     }
+    },
+    {
+     "call": "path",
+     "args": {
+      "card": "card-1"
+     },
      "returns": [
-      "card-2"
+      {
+       "card": "card-6",
+       "name": "그룹 2"
+      },
+      {
+       "card": "card-5",
+       "name": "그룹 1"
+      }
      ]
     },
     {
-     "call": "split",
-     "args": [
-      "card-2",
-      "bottom",
+     "call": "path",
+     "args": {
+      "card": "card-3"
+     },
+     "returns": [
       {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
+       "card": "card-6",
+       "name": "그룹 2"
       }
-     ],
-     "returns": "card-5"
+     ]
     },
     {
-     "call": "groups",
-     "args": [
-      "card-5"
-     ],
+     "call": "path",
+     "args": {
+      "card": "card-6"
+     },
      "returns": []
+    },
+    {
+     "call": "level",
+     "args": {
+      "card": "card-1"
+     },
+     "returns": 2
+    },
+    {
+     "call": "level",
+     "args": {
+      "card": "card-5"
+     },
+     "returns": 1
+    },
+    {
+     "call": "level",
+     "args": {
+      "card": "card-6"
+     },
+     "returns": 0
     }
    ]
   },
   {
-   "name": "a drop resolves from the root plane inward",
+   "name": "a drop resolves from the root level inward",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -1788,135 +2401,352 @@
     "state": {
      "xs": [
       0,
+      0.5,
       1
      ],
      "ys": [
       0,
+      0.5,
       1
      ],
      "cards": [
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "main",
-    "lastCard": 1
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
    },
    "steps": [
     {
-     "call": "create",
-     "args": [
-      "main",
-      "right",
-      {
-       "tabs": [
-        {
-         "id": "t2",
-         "plugin": "alpha",
-         "title": "t2"
-        }
-       ],
-       "activeId": "t2"
-      }
-     ],
-     "returns": [
-      "card-2",
-      "card-3"
-     ]
-    },
-    {
      "call": "drop",
-     "args": [
-      500,
-      300,
-      {
-       "headerPx": 40
-      }
-     ],
+     "args": {
+      "x": 500,
+      "y": 10
+     },
      "returns": {
-      "id": "card-2",
+      "card": "card-4",
       "zone": "centre"
      }
     },
     {
      "call": "drop",
-     "args": [
-      700,
-      300,
-      {
-       "headerPx": 40
-      }
-     ],
+     "args": {
+      "x": 500,
+      "y": 50
+     },
      "returns": {
-      "id": "card-3",
-      "zone": "centre"
+      "card": "card-4",
+      "zone": "top"
      }
     },
     {
      "call": "drop",
-     "args": [
-      50,
-      300,
-      {
-       "headerPx": 40
-      }
-     ],
+     "args": {
+      "x": 100,
+      "y": 150
+     },
      "returns": {
-      "id": "card-2",
+      "card": "card-4",
       "zone": "left"
      }
     },
     {
      "call": "drop",
-     "args": [
-      500,
-      20,
-      {
-       "headerPx": 40
-      }
-     ],
+     "args": {
+      "x": 900,
+      "y": 150
+     },
      "returns": {
-      "id": "card-2",
+      "card": "card-4",
+      "zone": "right"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 500,
+      "y": 250
+     },
+     "returns": {
+      "card": "card-4",
+      "zone": "bottom"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 300,
+      "y": 150
+     },
+     "returns": {
+      "card": "card-1",
       "zone": "centre"
      }
     },
     {
      "call": "drop",
-     "args": [
-      30,
-      300,
-      {
-       "headerPx": 40,
-       "without": "card-2"
-      }
-     ],
-     "returns": null
+     "args": {
+      "x": 460,
+      "y": 150
+     },
+     "returns": {
+      "card": "card-1",
+      "zone": "right"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 600,
+      "y": 150
+     },
+     "returns": {
+      "card": "card-2",
+      "zone": "left"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 300,
+      "y": 450
+     },
+     "returns": {
+      "card": "card-3",
+      "zone": "centre"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 900,
+      "y": 450
+     },
+     "returns": {
+      "card": "card-3",
+      "zone": "right"
+     }
     }
    ]
   },
   {
-   "name": "a stored layout without leader is refused",
+   "name": "a stored layout with groups that are not a list is refused",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": {},
+    "leader": "card-1",
+    "lastCard": 3
+   },
+   "throws": "layout stores groups {}, which is not a list of groups"
+  },
+  {
+   "name": "a stored layout with a group of another form is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     "card-4"
+    ],
+    "leader": "card-1",
+    "lastCard": 4
+   },
+   "throws": "layout stores the group \"card-4\", which is not {card, name, leader, members}"
+  },
+  {
+   "name": "a stored layout with an empty group name is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "throws": "group card-4 stores the name \"\", which is not 1 to 40 characters"
+  },
+  {
+   "name": "a stored layout with a group of one card is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -1932,82 +2762,37 @@
      ],
      "cards": [
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "lastCard": 1
+    "groups": [
+     {
+      "card": "card-2",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1"
+      ]
+     }
+    ],
+    "leader": "card-2",
+    "lastCard": 2
    },
-   "throws": "plane root has no leader"
+   "throws": "group card-2 holds fewer than two cards"
   },
   {
-   "name": "a stored leader that is not a card of its plane is refused",
+   "name": "a stored layout with a window sidebar in a group is refused",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-9",
-    "lastCard": 1
-   },
-   "throws": "plane root names the leader card-9, which is not a card of that plane"
-  },
-  {
-   "name": "a stored window sidebar as the leader is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -2032,37 +2817,38 @@
        "fixed": true
       },
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 1,
        "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "left",
-    "lastCard": 1
+    "groups": [
+     {
+      "card": "card-2",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "left",
+       "card-1"
+      ]
+     }
+    ],
+    "leader": "card-2",
+    "lastCard": 2
    },
-   "throws": "plane root names the window sidebar left as its leader"
+   "throws": "group card-2 holds the window sidebar left"
   },
   {
-   "name": "a root plane of window sidebars alone stores the leader null",
+   "name": "a stored layout with a member that is not a card of the layout is refused",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -2070,6 +2856,462 @@
     "state": {
      "xs": [
       0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-9"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 9
+   },
+   "throws": "group card-4 holds \"card-9\", which is not a content card of the layout"
+  },
+  {
+   "name": "a stored layout with a card stored twice is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-1"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "throws": "card card-1 is stored twice"
+  },
+  {
+   "name": "a stored layout with a group card with the identifier of a card of the grid is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-3",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-3",
+    "lastCard": 3
+   },
+   "throws": "card card-3 is stored twice"
+  },
+  {
+   "name": "a stored layout with a group without a leader is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": null,
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "throws": "level group card-4 has no leader"
+  },
+  {
+   "name": "a stored layout with a group leader outside the group is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-3",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "throws": "level group card-4 names the leader card-3, which is not a member of that level"
+  },
+  {
+   "name": "a stored layout with a root leader inside a group is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-1",
+    "lastCard": 4
+   },
+   "throws": "level root names the leader card-1, which is not a member of that level"
+  },
+  {
+   "name": "a stored layout with a root without a leader is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": null,
+    "lastCard": 4
+   },
+   "throws": "level root has no leader"
+  },
+  {
+   "name": "a stored layout with a window sidebar as the leader is refused",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.2,
       1
      ],
      "ys": [
@@ -2084,301 +3326,30 @@
        "r0": 0,
        "r1": 1,
        "fixed": true
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": null,
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "stored",
-     "returns": {
-      "state": {
-       "xs": [
-        0,
-        1
-       ],
-       "ys": [
-        0,
-        1
-       ],
-       "cards": [
-        {
-         "id": "left",
-         "c0": 0,
-         "c1": 1,
-         "r0": 0,
-         "r1": 1,
-         "fixed": true
-        }
-       ],
-       "paidBy": {}
       },
-      "leader": null,
-      "lastCard": 1
-     }
-    }
-   ]
-  },
-  {
-   "name": "a stored group record of another form is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
       {
        "id": "card-1",
-       "c0": 0,
-       "c1": 1,
+       "c0": 1,
+       "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "g",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {
-           "card-2": {
-            "side": "hi",
-            "to": "main"
-           }
-          }
-         }
-        }
-       }
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "card-1",
-    "lastCard": 2
-   },
-   "throws": "card card-1 stores the group {\"group\":{\"name\":\"g\",\"plane\":{\"xs\":[0,0.5,1],\"ys\":[0,1],\"cards\":[{\"id\":\"main\",\"c0\":0,\"c1\":1,\"r0\":0,\"r1\":1,\"fixed\":false,\"data\":{\"tabs\":[{\"id\":\"t1\",\"plugin\":\"alpha\",\"title\":\"t1\"}],\"activeId\":\"t1\"}},{\"id\":\"card-2\",\"c0\":1,\"c1\":2,\"r0\":0,\"r1\":1,\"fixed\":false,\"data\":{\"tabs\":[{\"id\":\"t2\",\"plugin\":\"alpha\",\"title\":\"t2\"}],\"activeId\":\"t2\"}}],\"paidBy\":{\"card-2\":{\"side\":\"hi\",\"to\":\"main\"}}}}}, which is not {name, leader, plane}"
-  },
-  {
-   "name": "a stored group of one card is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "g",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           }
-          ],
-          "paidBy": {}
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
+    "groups": [],
+    "leader": "left",
     "lastCard": 1
    },
-   "throws": "group card-1 holds fewer than two cards"
+   "throws": "level root names the window sidebar left as its leader"
   },
   {
-   "name": "a stored window sidebar in a child plane is refused",
+   "name": "a stored layout with a group that does not cover one rectangle is refused",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "g",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "left",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false
-           },
-           {
-            "id": "main",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           }
-          ],
-          "paidBy": {}
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
-    "lastCard": 1
-   },
-   "throws": "group card-1 holds the window sidebar left"
-  },
-  {
-   "name": "a stored id in two places of the tree is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -2391,739 +3362,59 @@
      ],
      "ys": [
       0,
+      0.5,
       1
      ],
      "cards": [
       {
-       "id": "main",
+       "id": "card-1",
        "c0": 0,
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
+       "fixed": false
       },
       {
-       "id": "card-1",
+       "id": "card-2",
        "c0": 1,
        "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "g",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {}
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main",
-    "lastCard": 2
-   },
-   "throws": "card main is stored twice"
-  },
-  {
-   "name": "a stored group name of another form is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {
-           "card-2": {
-            "side": "hi",
-            "to": "main"
-           }
-          }
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
-    "lastCard": 2
-   },
-   "throws": "group card-1 stores the name \"\", which is not 1 to 40 characters"
-  },
-  {
-   "name": "a stored child plane that the layout library refuses is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "g",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {}
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
-    "lastCard": 2
-   },
-   "throws": "group card-1: soksak: xs needs at least two lines"
-  },
-  {
-   "name": "a stored child plane without its leader is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "g",
-         "leader": null,
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {
-           "card-2": {
-            "side": "hi",
-            "to": "main"
-           }
-          }
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
-    "lastCard": 2
-   },
-   "throws": "plane group card-1 has no leader"
-  },
-  {
-   "name": "a stored lastCard below an issued card number is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "그룹 1",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {
-           "card-2": {
-            "side": "hi",
-            "to": "main"
-           }
-          }
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
-    "lastCard": 1
-   },
-   "throws": "layout stores lastCard 1, which is not the largest issued card number"
-  },
-  {
-   "name": "a stored layout without lastCard is refused",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "main",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t1",
-          "plugin": "alpha",
-          "title": "t1"
-         }
-        ],
-        "activeId": "t1"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "main"
-   },
-   "throws": "layout stores lastCard undefined, which is not the largest issued card number"
-  },
-  {
-   "name": "a stored group reads back as it was written",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 1000,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      1
-     ],
-     "ys": [
-      0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "card-1",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "그룹 1",
-         "leader": "main",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "main",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t1",
-               "plugin": "alpha",
-               "title": "t1"
-              }
-             ],
-             "activeId": "t1"
-            }
-           },
-           {
-            "id": "card-2",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t2",
-               "plugin": "alpha",
-               "title": "t2"
-              }
-             ],
-             "activeId": "t2"
-            }
-           }
-          ],
-          "paidBy": {
-           "card-2": {
-            "side": "hi",
-            "to": "main"
-           }
-          }
-         }
-        }
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "card-1",
-    "lastCard": 2
-   },
-   "steps": [
-    {
-     "call": "stored",
-     "returns": {
-      "state": {
-       "xs": [
-        0,
-        1
-       ],
-       "ys": [
-        0,
-        1
-       ],
-       "cards": [
-        {
-         "id": "card-1",
-         "c0": 0,
-         "c1": 1,
-         "r0": 0,
-         "r1": 1,
-         "fixed": false,
-         "data": {
-          "group": {
-           "name": "그룹 1",
-           "leader": "main",
-           "plane": {
-            "xs": [
-             0,
-             0.5,
-             1
-            ],
-            "ys": [
-             0,
-             1
-            ],
-            "cards": [
-             {
-              "id": "main",
-              "c0": 0,
-              "c1": 1,
-              "r0": 0,
-              "r1": 1,
-              "fixed": false,
-              "data": {
-               "tabs": [
-                {
-                 "id": "t1",
-                 "plugin": "alpha",
-                 "title": "t1"
-                }
-               ],
-               "activeId": "t1"
-              }
-             },
-             {
-              "id": "card-2",
-              "c0": 1,
-              "c1": 2,
-              "r0": 0,
-              "r1": 1,
-              "fixed": false,
-              "data": {
-               "tabs": [
-                {
-                 "id": "t2",
-                 "plugin": "alpha",
-                 "title": "t2"
-                }
-               ],
-               "activeId": "t2"
-              }
-             }
-            ],
-            "paidBy": {
-             "card-2": {
-              "side": "hi",
-              "to": "main"
-             }
-            }
-           }
-          }
-         }
-        }
-       ],
-       "paidBy": {}
+       "fixed": false
       },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
       "leader": "card-1",
-      "lastCard": 2
+      "members": [
+       "card-1",
+       "card-3"
+      ]
      }
-    },
-    {
-     "call": "create",
-     "args": [
-      "card-2",
-      "bottom",
-      {
-       "tabs": [
-        {
-         "id": "t3",
-         "plugin": "alpha",
-         "title": "t3"
-        }
-       ],
-       "activeId": "t3"
-      }
-     ],
-     "returns": [
-      "card-3",
-      "card-4"
-     ]
-    }
-   ]
+    ],
+    "leader": "card-4",
+    "lastCard": 4
+   },
+   "throws": "group card-4 does not cover one rectangle of the grid"
   },
   {
-   "name": "a split with cardSplit even balances the plane of the split into fair shares",
+   "name": "a stored layout with a lastCard below an issued card number is refused",
    "options": {
     "gap": 24,
     "minSize": 96,
-    "head": 40,
+    "head": 32,
     "width": 1000,
     "height": 600
    },
@@ -3131,125 +3422,12 @@
     "state": {
      "xs": [
       0,
-      0.75,
+      0.5,
       1
      ],
      "ys": [
       0,
-      1
-     ],
-     "cards": [
-      {
-       "id": "a",
-       "c0": 0,
-       "c1": 1,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t-a",
-          "plugin": "alpha",
-          "title": "t-a"
-         }
-        ],
-        "activeId": "t-a"
-       }
-      },
-      {
-       "id": "b",
-       "c0": 1,
-       "c1": 2,
-       "r0": 0,
-       "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t-b",
-          "plugin": "alpha",
-          "title": "t-b"
-         }
-        ],
-        "activeId": "t-b"
-       }
-      }
-     ],
-     "paidBy": {}
-    },
-    "leader": "a",
-    "lastCard": 1
-   },
-   "steps": [
-    {
-     "call": "split",
-     "args": [
-      "b",
-      "right",
-      {
-       "x": 1
-      },
-      true
-     ],
-     "returns": "card-2"
-    },
-    {
-     "call": "rect",
-     "args": [
-      "a"
-     ],
-     "returns": {
-      "x": 0,
-      "y": 0,
-      "w": 317.3333333333333,
-      "h": 600
-     }
-    },
-    {
-     "call": "rect",
-     "args": [
-      "b"
-     ],
-     "returns": {
-      "x": 341.3333333333333,
-      "y": 0,
-      "w": 317.3333333333333,
-      "h": 600
-     }
-    },
-    {
-     "call": "rect",
-     "args": [
-      "card-2"
-     ],
-     "returns": {
-      "x": 682.6666666666666,
-      "y": 0,
-      "w": 317.3333333333333,
-      "h": 600
-     }
-    }
-   ]
-  },
-  {
-   "name": "a split with cardSplit even that would draw a card below its smallest size is refused and changes nothing",
-   "options": {
-    "gap": 24,
-    "minSize": 96,
-    "head": 40,
-    "width": 600,
-    "height": 600
-   },
-   "layout": {
-    "state": {
-     "xs": [
-      0,
-      0.42,
-      1
-     ],
-     "ys": [
-      0,
+      0.5,
       1
      ],
      "cards": [
@@ -3259,123 +3437,42 @@
        "c1": 1,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "group": {
-         "name": "그룹 1",
-         "leader": "a",
-         "plane": {
-          "xs": [
-           0,
-           0.5,
-           1
-          ],
-          "ys": [
-           0,
-           1
-          ],
-          "cards": [
-           {
-            "id": "a",
-            "c0": 0,
-            "c1": 1,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t-a",
-               "plugin": "alpha",
-               "title": "t-a"
-              }
-             ],
-             "activeId": "t-a"
-            }
-           },
-           {
-            "id": "b",
-            "c0": 1,
-            "c1": 2,
-            "r0": 0,
-            "r1": 1,
-            "fixed": false,
-            "data": {
-             "tabs": [
-              {
-               "id": "t-b",
-               "plugin": "alpha",
-               "title": "t-b"
-              }
-             ],
-             "activeId": "t-b"
-            }
-           }
-          ],
-          "paidBy": {}
-         }
-        }
-       }
+       "fixed": false
       },
       {
-       "id": "c",
+       "id": "card-2",
        "c0": 1,
        "c1": 2,
        "r0": 0,
        "r1": 1,
-       "fixed": false,
-       "data": {
-        "tabs": [
-         {
-          "id": "t-c",
-          "plugin": "alpha",
-          "title": "t-c"
-         }
-        ],
-        "activeId": "t-c"
-       }
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
       }
      ],
      "paidBy": {}
     },
-    "leader": "c",
-    "lastCard": 1
+    "groups": [
+     {
+      "card": "card-4",
+      "name": "그룹 1",
+      "leader": "card-1",
+      "members": [
+       "card-1",
+       "card-2"
+      ]
+     }
+    ],
+    "leader": "card-4",
+    "lastCard": 3
    },
-   "steps": [
-    {
-     "call": "split",
-     "args": [
-      "c",
-      "right",
-      {
-       "x": 1
-      },
-      true
-     ],
-     "throws": "card c cannot split toward right: cardSplit even would draw card card-1 of plane root at 184x600, below its minimum 240x160"
-    },
-    {
-     "call": "planeCards",
-     "args": [
-      null
-     ],
-     "returns": [
-      "card-1",
-      "c"
-     ]
-    },
-    {
-     "call": "split",
-     "args": [
-      "c",
-      "right",
-      {
-       "x": 1
-      }
-     ],
-     "returns": "card-2"
-    }
-   ]
+   "throws": "layout stores lastCard 3, which is not the largest issued card number"
   }
  ]
 }
