@@ -60,7 +60,9 @@ bottom}})` 는 각 카드에 그 카드와 네 선 각각 사이에 있는 프�
 더한 것이며, 카드는 둘레의 프레임에서, 프레임은 다음 프레임에서, 카드나 프레임은 선 건너
 이웃에서 갭 하나만큼 떨어진다. 프레임은 통로의 갭을 차지하고, 판이 통로와 프레임을 담을 수
 없으면 그와 함께 줄어든다. 항목이 없는 카드는 프레임이 없고, 프레임은 상태의 일부가 아니며,
-`setFrames` 는 카드가 아닌 id와 0부터의 정수가 아닌 수에 대해 throw한다. px 크기는 그
+`setFrames` 는 카드가 아닌 id에 대해 `soksak: frames name "<id>", which is no card`,
+0보다 작은 수에 대해 `soksak: the frames of "<id>" count below zero`, 정수가 아닌 수에
+대해 `soksak: the frames of "<id>" count no whole number` 를 throw한다. px 크기는 그
 슬롯에서 가장 많은 프레임을 가진 카드의 그려지는 크기이며, 더 적은 카드는 모자란 프레임마다
 갭 하나만큼 넓게 그려진다.
 

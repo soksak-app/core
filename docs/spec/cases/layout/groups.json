@@ -3280,6 +3280,111 @@
    ]
   },
   {
+   "name": "a drop resolves on the frame of a group card, so a point in the gap between the frame and its cards is on that group card",
+   "options": {
+    "gap": 24,
+    "minSize": 96,
+    "head": 32,
+    "width": 1000,
+    "height": 600
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.5,
+      1
+     ],
+     "ys": [
+      0,
+      0.5,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 1,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 1,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [
+     {
+      "card": "card-6",
+      "name": "그룹 2",
+      "leader": "card-5",
+      "members": [
+       {
+        "card": "card-5",
+        "name": "그룹 1",
+        "leader": "card-1",
+        "members": [
+         "card-1",
+         "card-2"
+        ]
+       },
+       "card-3",
+       "card-4"
+      ]
+     }
+    ],
+    "leader": "card-6",
+    "lastCard": 6
+   },
+   "steps": [
+    {
+     "call": "drop",
+     "args": {
+      "x": 500,
+      "y": 270
+     },
+     "returns": {
+      "card": "card-5",
+      "zone": "bottom"
+     }
+    },
+    {
+     "call": "drop",
+     "args": {
+      "x": 12,
+      "y": 400
+     },
+     "returns": {
+      "card": "card-6",
+      "zone": "left"
+     }
+    }
+   ]
+  },
+  {
    "name": "a group card nested at the side of its group is drawn below the header of its group, which spans the whole group",
    "options": {
     "gap": 24,
@@ -6370,6 +6475,145 @@
         "c1": 9,
         "r0": 3,
         "r1": 5,
+        "fixed": false
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "a balance in a space without groups refuses a grid that is not a slicing arrangement and changes nothing",
+   "options": {
+    "gap": 12,
+    "minSize": 96,
+    "head": 32,
+    "width": 1200,
+    "height": 900
+   },
+   "layout": {
+    "state": {
+     "xs": [
+      0,
+      0.3333333333333333,
+      0.6666666666666666,
+      1
+     ],
+     "ys": [
+      0,
+      0.3333333333333333,
+      0.6666666666666666,
+      1
+     ],
+     "cards": [
+      {
+       "id": "card-1",
+       "c0": 0,
+       "c1": 2,
+       "r0": 0,
+       "r1": 1,
+       "fixed": false
+      },
+      {
+       "id": "card-2",
+       "c0": 2,
+       "c1": 3,
+       "r0": 0,
+       "r1": 2,
+       "fixed": false
+      },
+      {
+       "id": "card-3",
+       "c0": 1,
+       "c1": 3,
+       "r0": 2,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-4",
+       "c0": 0,
+       "c1": 1,
+       "r0": 1,
+       "r1": 3,
+       "fixed": false
+      },
+      {
+       "id": "card-5",
+       "c0": 1,
+       "c1": 2,
+       "r0": 1,
+       "r1": 2,
+       "fixed": false
+      }
+     ],
+     "paidBy": {}
+    },
+    "groups": [],
+    "leader": "card-1",
+    "lastCard": 5
+   },
+   "steps": [
+    {
+     "call": "balance",
+     "args": {},
+     "throws": "the layout cannot balance: the grid is not a slicing arrangement"
+    },
+    {
+     "call": "grid",
+     "args": {},
+     "returns": {
+      "xs": [
+       0,
+       0.3333333333333333,
+       0.6666666666666666,
+       1
+      ],
+      "ys": [
+       0,
+       0.3333333333333333,
+       0.6666666666666666,
+       1
+      ],
+      "cards": [
+       {
+        "id": "card-1",
+        "c0": 0,
+        "c1": 2,
+        "r0": 0,
+        "r1": 1,
+        "fixed": false
+       },
+       {
+        "id": "card-2",
+        "c0": 2,
+        "c1": 3,
+        "r0": 0,
+        "r1": 2,
+        "fixed": false
+       },
+       {
+        "id": "card-3",
+        "c0": 1,
+        "c1": 3,
+        "r0": 2,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-4",
+        "c0": 0,
+        "c1": 1,
+        "r0": 1,
+        "r1": 3,
+        "fixed": false
+       },
+       {
+        "id": "card-5",
+        "c0": 1,
+        "c1": 2,
+        "r0": 1,
+        "r1": 2,
         "fixed": false
        }
       ]

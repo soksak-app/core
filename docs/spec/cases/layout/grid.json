@@ -1921,11 +1921,23 @@
   {"call":"setFrames","args":[{"a":{"right":1}}]},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":300,"h":600},"b":{"x":348,"y":0,"w":652,"h":600}}}
  ]},
- {"name":"frames that name no card or count below zero are refused and change nothing","state":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1}]},"steps":[
+ {"name":"frames that name no card, count below zero or count no whole number are refused and change nothing","state":{"xs":[0,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1}]},"steps":[
   {"call":"resize","args":[1000,600]},
   {"call":"setFrames","args":[{"z":{"left":1}}],"throws":"soksak: frames name \"z\", which is no card"},
   {"call":"setFrames","args":[{"a":{"right":-1}}],"throws":"soksak: the frames of \"a\" count below zero"},
+  {"call":"setFrames","args":[{"a":{"right":1.5}}],"throws":"soksak: the frames of \"a\" count no whole number"},
   {"call":"rects","returns":{"a":{"x":0,"y":0,"w":488,"h":600},"b":{"x":512,"y":0,"w":488,"h":600}}}
+ ]},
+ {"name":"shareLines keeps every line index and gives each slot its corridor, its extra and an equal share of the free length","options":{"width":1000,"height":600,"gap":10},"state":{"xs":[0,0.2,0.5,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1},{"id":"b","c0":1,"c1":2,"r0":0,"r1":1},{"id":"c","c0":2,"c1":3,"r0":0,"r1":1}]},"steps":[
+  {"call":"shareLines","args":["x"]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":326.6666666666667,"h":600},"b":{"x":336.6666666666667,"y":0,"w":326.6666666666667,"h":600},"c":{"x":673.3333333333334,"y":0,"w":326.6666666666667,"h":600}}},
+  {"call":"shareLines","args":["x",[0,30,0]]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":316.6666666666667,"h":600},"b":{"x":326.6666666666667,"y":0,"w":346.6666666666667,"h":600},"c":{"x":683.3333333333334,"y":0,"w":316.6666666666667,"h":600}}},
+  {"call":"shareLines","args":["z"],"throws":"unknown axis z"},
+  {"call":"shareLines","args":["x",[0,1]],"throws":"shareLines takes one extra for each of the 3 slots of x, found 2"},
+  {"call":"setSize","args":["b","x",200],"returns":true},
+  {"call":"shareLines","args":["x"]},
+  {"call":"rects","returns":{"a":{"x":0,"y":0,"w":390,"h":600},"b":{"x":400,"y":0,"w":200,"h":600},"c":{"x":610,"y":0,"w":390,"h":600}}}
  ]}
 ]
 }

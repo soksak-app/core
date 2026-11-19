@@ -984,3 +984,15 @@ test("shareLines keeps every line index and gives each slot its corridor, its ex
   assert.throws(() => grid.shareLines("z"), { message: "unknown axis z" });
   assert.throws(() => grid.shareLines("x", [0, 1]), { message: "shareLines takes one extra for each of the 3 slots of x, found 2" });
 });
+
+// A count below zero is refused as below zero before its fraction is judged, as the Go port judges it (R5 of docs/layout.md).
+test("setFrames refuses a count below zero as below zero, a fraction included, and keeps the frames it had", () => {
+  const grid = new Soksak({ xs: [0, 0.5, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 }] });
+  grid.resize(1000, 600);
+  grid.setFrames({ a: { right: 1 } });
+  const before = grid.rect("a");
+  assert.throws(() => grid.setFrames({ a: { right: -1.5 } }), { message: 'soksak: the frames of "a" count below zero' });
+  assert.throws(() => grid.setFrames({ a: { right: -Infinity } }), { message: 'soksak: the frames of "a" count below zero' });
+  assert.throws(() => grid.setFrames({ a: { right: Number.NaN } }), { message: 'soksak: the frames of "a" count no whole number' });
+  assert.deepEqual(grid.rect("a"), before);
+});
