@@ -535,28 +535,12 @@ const OUTSIDE: &[(&str, &str)] = &[
         "the sok client reads exposure.list of a window, which needs a page",
     ),
     (
-        "sok-commands-query-party",
-        "the sok client reads exposure.list of a window, which needs a page",
-    ),
-    (
         "sok-declared-rejects",
         "the sok client reads exposure.list of a window, which needs a page",
     ),
     (
-        "sok-describe-parties",
-        "the sok client reads the parties of a window, which the page reports",
-    ),
-    (
         "sok-describe-summary-and-full",
         "the sok client reads the statuses of the tabs of a window, which the page reports",
-    ),
-    (
-        "sok-party-get-and-card-get",
-        "the sok client reads the parties of a window, which the page reports",
-    ),
-    (
-        "sok-status-parties",
-        "the sok client reads the core.parties status of a window, which the page reports",
     ),
     (
         "sok-status-value",

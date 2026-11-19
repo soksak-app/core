@@ -587,7 +587,7 @@ func TestAnOversizedRowIsAPageAndPagesFollowAChangingWindow(t *testing.T) {
 	if err := json.Unmarshal([]byte(run.results[0]), &first); err != nil {
 		t.Fatal(err)
 	}
-	if len(run.results[0]) > 40000 || len(first.Rows) != 1 || first.Total != 5 || first.Next != "core status core.big" {
+	if len(run.results[0]) > 40000 || len(first.Rows) != 1 || first.Total != 4 || first.Next != "core status core.big" {
 		t.Fatalf("the first page has %d bytes, %d rows, total %d and next %v; want at most 40000 bytes and the one row core.big", len(run.results[0]), len(first.Rows), first.Total, first.Next)
 	}
 	row := first.Rows[0]
@@ -602,13 +602,13 @@ func TestAnOversizedRowIsAPageAndPagesFollowAChangingWindow(t *testing.T) {
 	if err := json.Unmarshal([]byte(run.results[2]), &compact); err != nil {
 		t.Fatal(err)
 	}
-	if len(compact.Rows) != 5 || compact.Next != nil {
-		t.Fatalf("the compact page has %d rows and next %v, want 5 rows and no next", len(compact.Rows), compact.Next)
+	if len(compact.Rows) != 4 || compact.Next != nil {
+		t.Fatalf("the compact page has %d rows and next %v, want 4 rows and no next", len(compact.Rows), compact.Next)
 	}
 	if text := compact.Rows[0]["value"].(string); len([]rune(text)) != 200 || compact.Rows[0]["cut"] != true {
 		t.Fatalf("the compact value has %d characters and cut %v, want 200 and true", len([]rune(text)), compact.Rows[0]["cut"])
 	}
-	many := compact.Rows[4]
+	many := compact.Rows[3]
 	if items := many["items"].([]any); len(items) != 20 || many["cut"] != true || many["itemsTotal"] != float64(25) {
 		t.Fatalf("the compact element has %d items, cut %v and itemsTotal %v, want 20, true and 25", len(items), many["cut"], many["itemsTotal"])
 	}
