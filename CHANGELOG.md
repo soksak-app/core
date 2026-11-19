@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F956 (window verification of the text size scope): on the debug builds of mygo, Wails and Tauri a press on the stage around the plane made the frame the scope, and three Command = presses kept it with the frame factors 1.1, 1.25 and 1.5; the feature link of the check of the test inventory names the current stage bound of `drawWork`.
 - F972 (bundle guard across checkouts): the bundle guard of a native build resolves a relative executable path of a running process against the working directory of that process, so a process of another checkout that runs the same relative bundle path no longer blocks the build. Verification: the bundle preparation test failed on the unchanged guard and passes.
 - F937-4 (card background of the views): the contract states that the theme of the views is the window theme, the same for every view, and holds `--card`, the card background, which a plugin paints as the background of its page; a group card changes no token, so `setTheme` carries no tokens of single surfaces. Verification: the theme tests of both workbenches pass on the workbenches, which already sent `--card`.
 - F945 (window sidebar without a set): `core.sidebars` reports a fixed window sidebar that shows no set and draws only its status line, with the set and the layout `null`, no sections and its rectangle, in both workbenches. Verification: the sidebar tests of both workbenches failed on the unchanged code and pass.

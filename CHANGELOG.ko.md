@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F956 (text size scope의 창 검증): mygo, Wails, Tauri의 debug build에서 plane 둘레 stage의 누름이 frame을 scope로 만들었고, Command = 세 번이 frame 배율 1.1, 1.25, 1.5로 그것을 유지했다. test inventory check의 feature link는 `drawWork`의 현재 stage 경계를 가리킨다.
 - F972 (checkout 사이의 bundle guard): native build의 bundle guard는 실행 중인 process의 상대 실행 파일 경로를 그 process의 작업 디렉터리 기준으로 풀므로, 같은 상대 bundle 경로를 실행하는 다른 checkout의 process가 더는 build를 막지 않는다. 검증: bundle preparation test가 바뀌지 않은 guard에서 실패했고 통과한다.
 - F937-4 (view의 card 배경): 계약은 view의 테마가 모든 view에서 같은 창 테마이고, plugin이 페이지 배경으로 칠하는 card 배경 `--card`를 담는다고 적는다. group card는 토큰을 바꾸지 않으므로 `setTheme`은 surface 하나하나의 토큰을 담지 않는다. 검증: 이미 `--card`를 보내던 두 workbench에서 두 workbench의 테마 test가 통과한다.
 - F945 (세트 없는 창 사이드바): 두 workbench에서 `core.sidebars`는 세트를 보이지 않고 상태 줄만 그리는 고정 창 사이드바를 세트와 layout `null`, 빈 섹션, 그 사각형으로 보고한다. 검증: 두 workbench의 sidebar test가 바뀌지 않은 code에서 실패했고 통과한다.
