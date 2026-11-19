@@ -193,22 +193,22 @@ var hostCommands = map[string]hostEntry{
 		Params: map[string]any{"type": "object", "properties": map[string]any{"on": map[string]any{"type": "boolean"}}}},
 	"host.window.resize": {Description: "Resizes the content area.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
-			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"}}}},
+			"width": map[string]any{"type": "number"}, "height": map[string]any{"type": "number"}}, "required": []any{"width", "height"}}},
 	"host.window.move": {Description: "Moves the window frame origin to a point in screen coordinates.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
-			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}}},
+			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}, "required": []any{"x", "y"}}},
 	"host.window.raise": {Description: "Orders the window in front of every window of its level, also of other applications, without activating the application.", Params: emptyObject, Result: nullSchema},
 	"host.window.lower": {Description: "Orders the window behind every window of its level, also of other applications, without changing the active application.", Params: emptyObject, Result: nullSchema},
 	"host.menu.select": {Description: "Performs the application menu item with the title in the submenu with the menu title.", Result: nullSchema,
 		Params: map[string]any{"type": "object", "properties": map[string]any{
-			"menu": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}}}},
+			"menu": map[string]any{"type": "string"}, "title": map[string]any{"type": "string"}}, "required": []any{"menu", "title"}}},
 	"host.dock.select": {Description: "Performs the Dock menu item with the title.", Result: nullSchema,
-		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}}},
+		Params: map[string]any{"type": "object", "properties": map[string]any{"title": map[string]any{"type": "string"}}, "required": []any{"title"}}},
 	"host.window.reload":    {Description: "Starts the workbench of the window again.", Params: emptyObject, Result: nullSchema},
 	"host.window.presented": {Description: "Resolves after the main page and the shown modal have presented their current geometry and every visible image region has presented its exact current raster, with the display time of that frame.", Params: emptyObject, Result: presentedSchema},
 	"host.hit": {Description: "Returns the owner and native hit-view class and frame of a point in window coordinates.",
 		Params: map[string]any{"type": "object", "properties": map[string]any{
-			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}},
+			"x": map[string]any{"type": "number"}, "y": map[string]any{"type": "number"}}, "required": []any{"x", "y"}},
 		Result: map[string]any{"type": "object", "properties": map[string]any{
 			"kind":       map[string]any{"type": "string", "enum": []string{"workbench", "document", "native"}},
 			"surface":    map[string]any{"type": "string"},
@@ -922,6 +922,8 @@ func (b hostBackend) HostStatus(window, name string) (any, error) {
 	return s.windowState()
 }
 
+// HostCommand runs a host command whose params the endpoint checked against its params schema (CommandParamsRefusal), so a member
+// of required is present with its declared type.
 func (b hostBackend) HostCommand(window, name string, params json.RawMessage, reply *ReplyScope) (any, error) {
 	s, err := b.window(window)
 	if err != nil {
@@ -957,7 +959,7 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, rpcError(codeInvalidParams, "%v", err)
 		}
-		if p.Width == nil || p.Height == nil || *p.Width < 1 || *p.Height < 1 {
+		if *p.Width < 1 || *p.Height < 1 {
 			return nil, rpcError(codeInvalidParams, "width and height must be positive numbers")
 		}
 		s.window.SetSize(*p.Width, *p.Height)
@@ -967,9 +969,6 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, rpcError(codeInvalidParams, "%v", err)
-		}
-		if p.X == nil || p.Y == nil {
-			return nil, rpcError(codeInvalidParams, "x and y are required")
 		}
 		return nil, s.useWindow(func(window platform.Window) error { return system.MoveWindow(window, *p.X, *p.Y) })
 	case "host.window.raise":
@@ -983,9 +982,6 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, rpcError(codeInvalidParams, "%v", err)
 		}
-		if p.Menu == nil || p.Title == nil {
-			return nil, rpcError(codeInvalidParams, "menu and title are required")
-		}
 		// A quit that the menu item requests follows the response of this request.
 		return nil, WithResponseOwner(reply, func() error {
 			return s.useWindow(func(window platform.Window) error { return system.MenuSelect(window, *p.Menu, *p.Title) })
@@ -996,9 +992,6 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, rpcError(codeInvalidParams, "%v", err)
-		}
-		if p.Title == nil {
-			return nil, rpcError(codeInvalidParams, "title is required")
 		}
 		// A quit that the Dock item requests follows the response of this request.
 		return nil, WithResponseOwner(reply, func() error {
@@ -1020,9 +1013,6 @@ func (b hostBackend) HostCommand(window, name string, params json.RawMessage, re
 		}
 		if err := json.Unmarshal(params, &p); err != nil {
 			return nil, rpcError(codeInvalidParams, "%v", err)
-		}
-		if p.X == nil || p.Y == nil {
-			return nil, rpcError(codeInvalidParams, "x and y are required")
 		}
 		return s.hit(*p.X, *p.Y)
 	case "host.quit":

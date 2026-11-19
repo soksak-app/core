@@ -25,6 +25,12 @@
           "root": {
             "direction": "row",
             "size": 1,
+            "frame": {
+              "x": 0,
+              "y": 40,
+              "width": 1200,
+              "height": 760
+            },
             "children": [
               {
                 "card": "card-1",
@@ -50,6 +56,12 @@
               {
                 "direction": "column",
                 "size": 0.5,
+                "frame": {
+                  "x": 604,
+                  "y": 40,
+                  "width": 596,
+                  "height": 760
+                },
                 "children": [
                   {
                     "card": "card-2",
@@ -717,6 +729,12 @@
           "root": {
             "direction": "row",
             "size": 1,
+            "frame": {
+              "x": 0,
+              "y": 40,
+              "width": 1200,
+              "height": 760
+            },
             "children": [
               {
                 "card": "card-1",
@@ -742,6 +760,12 @@
               {
                 "direction": "column",
                 "size": 0.5,
+                "frame": {
+                  "x": 604,
+                  "y": 40,
+                  "width": 596,
+                  "height": 760
+                },
                 "children": [
                   {
                     "card": "card-2",

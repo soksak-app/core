@@ -283,6 +283,23 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F967",
+    implementation: [
+      { file: "packages/plugin-api/index.js", symbol: "function parameterRefusal(name, schema, params) {" },
+      { file: "packages/host/go/src/command_params.go", symbol: "func CommandParamsRefusal(name string, schema any, raw json.RawMessage) string {" },
+      { file: "packages/host/rust/src/command_params.rs", symbol: "pub fn command_params_refusal(" },
+      { file: "packages/workbench-mygo/src/registry.go", symbol: "host.CommandParamsRefusal(name, r.declared.params[name], fields[\"params\"])" },
+    ],
+    tests: [
+      { file: "packages/plugin-api/test/command-params.test.mjs", id: "the registry of a document refuses the parameters of each case before the command runs, with the text of the case" },
+      { file: "packages/host/go/tests/command_params_test.go", id: "TestTheHostRefusesTheParamsOfEachCase" },
+      { file: "packages/host/rust/tests/command_params_test.rs", id: "the_host_refuses_the_params_of_each_case" },
+      { file: "packages/workbench-mygo/tests/requests_test.go", id: "TestARequestIsRefusedAsThePageRefusesIt" },
+    ],
+    expected: "Every registry refuses an unknown member and a missing required member of a command with the same text before the command runs.",
+    levels: ["unit"],
+  },
+  {
     id: "F968",
     implementation: [
       { file: "packages/workbench-mygo/src/layout/head.go", symbol: "widest = math.Max(widest, w)" },

@@ -237,6 +237,10 @@ test("a refused core.layout.open fails with its error and leaves the layout", { 
   }
   await refuses(run("core.layout.open", { card: "a", side: "middle", plugin: SESSION }), "invalid params for core.layout.open");
   assert.deepEqual(layout(), before);
+  // The registry names an unknown member and a missing member of the declaration (docs/spec/exposure.md#command-parameters).
+  await refuses(run("core.layout.open", { card: "a", plugin: SESSION, zone: "left" }), "command core.layout.open: unknown parameter zone");
+  await refuses(run("core.layout.move", { card: "a" }), "command core.layout.move: parameter tab is required");
+  assert.deepEqual(layout(), before);
   // A card narrower than two cards of the minimum size cannot split across.
   arrange([0, 0.97, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
     { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
@@ -273,6 +277,54 @@ test("core.layout.select applied twice makes the tab active in its focused card 
   assert.deepEqual(cardNode(layout().root, "b").tabs.map(({ active }) => active), [false, true]);
   await refuses(run("core.layout.select", { tab: "tab-ooooo1" }), "tab tab-ooooo1 is in space spc-bbbbbb, which is not active");
   await refuses(run("core.layout.select", { tab: "tab-zzzzzz" }), `tab tab-zzzzzz is not in the layout of window ${WINDOW}`);
+});
+
+// contract: layout.move.into-a-card-once
+test("core.layout.move applied twice moves a tab into a card once, active in its focused card, with its identifier", { timeout: 5000 }, async () => {
+  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION, { name: "s" })] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  assert.deepEqual(await twice("core.layout.move", { tab: "tab-aaaaa2", card: "b" }), { card: "b", tab: "tab-aaaaa2" });
+  const { root, focused } = layout();
+  assert.equal(focused, "b");
+  assert.deepEqual(cardNode(root, "a").tabs.map(({ tab }) => tab), ["tab-aaaaa1"]);
+  assert.deepEqual(cardNode(root, "b").tabs.map(({ tab, active, params }) => ({ tab, active, params })),
+    [{ tab: "tab-aaaaa3", active: false, params: null }, { tab: "tab-aaaaa2", active: true, params: { name: "s" } }]);
+  // A tab that its card already holds is selected and moves nowhere.
+  assert.deepEqual(await twice("core.layout.move", { tab: "tab-aaaaa3", card: "b" }), { card: "b", tab: "tab-aaaaa3" });
+  assert.deepEqual(cardNode(layout().root, "b").tabs.map(({ tab, active }) => [tab, active]), [["tab-aaaaa3", true], ["tab-aaaaa2", false]]);
+});
+
+// contract: layout.move.beside-a-card-once
+test("core.layout.move with a side applied twice puts the tab once into the neighbour toward the side, and the only tab moves its card", { timeout: 5000 }, async () => {
+  single([view("tab-aaaaa1", PLAIN), view("tab-aaaaa2", SESSION)]);
+  const moved = await twice("core.layout.move", { tab: "tab-aaaaa2", card: "main", side: "right" });
+  assert.equal(moved.tab, "tab-aaaaa2");
+  assert.notEqual(moved.card, "main");
+  assert.deepEqual(layout().root.children.map(({ card, tabs }) => [card, tabs.map(({ tab }) => tab)]),
+    [["main", ["tab-aaaaa1"]], [moved.card, ["tab-aaaaa2"]]]);
+  assert.equal(layout().focused, moved.card);
+  // The only tab of a card moves the card: its identifier stays, and the card stands toward the side.
+  const below = await twice("core.layout.move", { tab: "tab-aaaaa1", card: moved.card, side: "bottom" });
+  assert.deepEqual(below, { card: "main", tab: "tab-aaaaa1" });
+  const { root } = layout();
+  assert.equal(root.direction, "column");
+  assert.deepEqual(root.children.map(({ card }) => card), [moved.card, "main"]);
+});
+
+// contract: layout.move.refusal-changes-nothing
+test("a refused core.layout.move fails with its error and leaves the layout", { timeout: 5000 }, async () => {
+  arrange([0, 0.5, 1], [0, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, tabs: [view("tab-aaaaa1", PLAIN)] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] }], "a");
+  const before = layout();
+  for (const [params, text] of [
+    [{ tab: "tab-zzzzzz", card: "b" }, `tab tab-zzzzzz is not in the layout of window ${WINDOW}`],
+    [{ tab: "tab-ooooo1", card: "b" }, "tab tab-ooooo1 is in space spc-bbbbbb, which is not active"],
+    [{ tab: "tab-aaaaa1", card: "nothing" }, `card nothing is not in the layout of window ${WINDOW}`],
+    [{ tab: "tab-aaaaa1", card: "a", side: "right" }, "tab tab-aaaaa1 cannot move to the right of a"],
+  ]) {
+    await refuses(run("core.layout.move", params), text);
+    assert.deepEqual(layout(), before, text);
+  }
 });
 
 // contract: layout.close.repeated-close-answers-closed
@@ -389,6 +441,27 @@ test("the lines and cards of each arrangement of tree.json without a window side
       assert.equal(leaf.tabs.length, 1, name);
     }
   }
+});
+
+// contract: layout.tree.splits-carry-frames
+test("each split of the description carries the frame in window points that holds the frames of its children", { timeout: 5000 }, () => {
+  arrange([0, 0.5, 1], [0, 0.5, 1], [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 2, tabs: [view("tab-aaaaa1", PLAIN)] },
+    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1, tabs: [view("tab-aaaaa2", PLAIN)] },
+    { id: "c", c0: 1, c1: 2, r0: 1, r1: 2, tabs: [view("tab-aaaaa3", PLAIN)] }], "a");
+  const check = (node, where) => {
+    if (node.card) return;
+    assert.deepEqual(Object.keys(node), ["direction", "size", "frame", "children"], `${where}: the split has no frame`);
+    const frames = node.children.map((child) => child.frame);
+    const left = Math.min(...frames.map(({ x }) => x));
+    const top = Math.min(...frames.map(({ y }) => y));
+    assert.deepEqual(node.frame, { x: left, y: top, width: Math.max(...frames.map(({ x, width }) => x + width)) - left,
+      height: Math.max(...frames.map(({ y, height }) => y + height)) - top }, where);
+    node.children.forEach((child, i) => check(child, `${where}/${i}`));
+  };
+  const { root } = layout();
+  assert.equal(root.direction, "row");
+  assert.equal(root.children[1].direction, "column");
+  check(root, "root");
 });
 
 // contract: layout.surface-window.answers-the-space

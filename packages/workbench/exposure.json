@@ -2061,7 +2061,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["patch"]
         },
         "result": {
           "type": "null"
@@ -2076,7 +2077,8 @@
             "key": {
               "type": "string"
             }
-          }
+          },
+          "required": ["key"]
         },
         "result": {
           "type": "null"
@@ -2091,7 +2093,8 @@
             "on": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["on"]
         },
         "result": {
           "type": "null"
@@ -2169,7 +2172,8 @@
                 ]
               }
             }
-          }
+          },
+          "required": ["parts"]
         },
         "result": {
           "type": "object",
@@ -2273,7 +2277,8 @@
             "path": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "object",
@@ -2331,7 +2336,8 @@
             "path": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "null"
@@ -2357,7 +2363,8 @@
             "path": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "null"
@@ -2372,7 +2379,8 @@
             "with": {
               "type": "string"
             }
-          }
+          },
+          "required": ["with"]
         },
         "result": {
           "type": "null"
@@ -2398,7 +2406,8 @@
             "on": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["on"]
         },
         "result": {
           "type": "null"
@@ -2427,7 +2436,8 @@
             "selected": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["row", "selected"]
         },
         "result": {
           "type": "null"
@@ -2442,7 +2452,8 @@
             "row": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["row"]
         },
         "result": {
           "type": "null"
@@ -2533,7 +2544,8 @@
             "color": {
               "type": "string"
             }
-          }
+          },
+          "required": ["root"]
         },
         "result": {
           "type": "object"
@@ -2548,7 +2560,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2563,7 +2576,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "object",
@@ -2586,7 +2600,8 @@
             "title": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id", "title"]
         },
         "result": {
           "type": "null"
@@ -2604,7 +2619,8 @@
             "delta": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["id", "delta"]
         },
         "result": {
           "type": "null"
@@ -2622,7 +2638,8 @@
             "pinned": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["id", "pinned"]
         },
         "result": {
           "type": "null"
@@ -2651,7 +2668,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "required": ["parent", "name"]
         },
         "result": {
           "type": "object",
@@ -2693,7 +2711,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2711,7 +2730,8 @@
             "title": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id", "title"]
         },
         "result": {
           "type": "null"
@@ -2726,7 +2746,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "object",
@@ -2755,7 +2776,8 @@
             "size": {
               "type": "number"
             }
-          }
+          },
+          "required": ["card", "axis", "size"]
         },
         "result": {
           "type": "null"
@@ -2779,7 +2801,8 @@
             "position": {
               "type": "number"
             }
-          }
+          },
+          "required": ["axis", "line", "position"]
         },
         "result": {
           "type": "object",
@@ -2805,7 +2828,8 @@
             "line": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["axis", "line"]
         },
         "result": {
           "type": "object",
@@ -2843,7 +2867,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["key", "value"]
         },
         "result": {
           "type": "null"
@@ -2870,7 +2895,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "null"
@@ -2913,7 +2939,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["place", "set"]
         },
         "result": {
           "type": "null"
@@ -2952,7 +2979,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -2988,7 +3016,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["id", "action"]
         },
         "result": {
           "type": "null"
@@ -2999,7 +3028,8 @@
         "description": "Removes a sidebar set and every link to it in the scope in one change.",
         "params": {
           "type": "object",
-          "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } }
+          "properties": { "id": { "type": "string" }, "scope": { "enum": ["common", "project"] } },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -3018,7 +3048,8 @@
                 "sidebars"
               ]
             }
-          }
+          },
+          "required": ["section"]
         },
         "result": {
           "type": "null"
@@ -3036,7 +3067,8 @@
                 "project"
               ]
             }
-          }
+          },
+          "required": ["scope"]
         },
         "result": {
           "type": "null"
@@ -3054,7 +3086,8 @@
             "dy": {
               "type": "number"
             }
-          }
+          },
+          "required": ["dx", "dy"]
         },
         "result": {
           "type": "null"
@@ -3069,7 +3102,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3084,7 +3118,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3099,7 +3134,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3114,7 +3150,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3129,7 +3166,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["plugin"]
         },
         "result": {
           "type": "null"
@@ -3204,7 +3242,8 @@
             "sidecar": {
               "type": "string"
             }
-          }
+          },
+          "required": ["sidecar"]
         },
         "result": {
           "type": "null"
@@ -3219,7 +3258,8 @@
             "index": {
               "type": "string"
             }
-          }
+          },
+          "required": ["index"]
         },
         "result": {
           "type": "null"
@@ -3263,7 +3303,8 @@
             "query": {
               "type": "string"
             }
-          }
+          },
+          "required": ["query"]
         },
         "result": {
           "type": "null"
@@ -3322,7 +3363,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3337,7 +3379,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3360,7 +3403,8 @@
                 "group"
               ]
             }
-          }
+          },
+          "required": ["card", "menu"]
         },
         "result": {
           "type": "null"
@@ -3387,7 +3431,8 @@
             "set": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card", "side", "set"]
         },
         "result": {
           "type": "null"
@@ -3411,7 +3456,8 @@
                 "right"
               ]
             }
-          }
+          },
+          "required": ["card", "side"]
         },
         "result": {
           "type": "null"
@@ -3438,7 +3484,8 @@
             "size": {
               "type": "number"
             }
-          }
+          },
+          "required": ["card", "side", "size"]
         },
         "result": {
           "type": "null"
@@ -3456,7 +3503,8 @@
             "section": {
               "type": "string"
             }
-          }
+          },
+          "required": ["sidebar", "section"]
         },
         "result": {
           "type": "null"
@@ -3477,7 +3525,8 @@
             "height": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["sidebar", "section", "height"]
         },
         "result": {
           "type": "null"
@@ -3495,7 +3544,8 @@
             "section": {
               "type": "string"
             }
-          }
+          },
+          "required": ["sidebar", "section"]
         },
         "result": {
           "type": "null"
@@ -3510,7 +3560,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3525,7 +3576,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3540,7 +3592,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "null"
@@ -3561,7 +3614,8 @@
             "y": {
               "type": "number"
             }
-          }
+          },
+          "required": ["surface", "x", "y"]
         },
         "result": {
           "type": "null"
@@ -3576,7 +3630,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "object",
@@ -3599,7 +3654,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["path"]
         },
         "result": {
           "type": "object",
@@ -3628,7 +3684,8 @@
             "params": {
               "type": "object"
             }
-          }
+          },
+          "required": ["card", "plugin"]
         },
         "result": {
           "type": "object",
@@ -3659,7 +3716,8 @@
             "plugin": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card", "side", "plugin"]
         },
         "result": {
           "type": "object",
@@ -3699,7 +3757,8 @@
             "request": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card", "side", "plugin"]
         },
         "result": {
           "type": "object",
@@ -3725,7 +3784,8 @@
             "group": {
               "type": "string"
             }
-          }
+          },
+          "required": ["group"]
         },
         "result": {
           "type": "object",
@@ -3748,7 +3808,8 @@
             "name": {
               "type": "string"
             }
-          }
+          },
+          "required": ["group", "name"]
         },
         "result": {
           "type": "object",
@@ -3771,7 +3832,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "object",
@@ -3797,7 +3859,8 @@
             "group": {
               "type": "string"
             }
-          }
+          },
+          "required": ["group"]
         },
         "result": {
           "type": "null"
@@ -3824,7 +3887,8 @@
                 "centre"
               ]
             }
-          }
+          },
+          "required": ["card", "target", "side"]
         },
         "result": {
           "type": "object",
@@ -3844,7 +3908,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "object"
@@ -3859,7 +3924,8 @@
             "card": {
               "type": "string"
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "object",
@@ -3896,7 +3962,8 @@
                 "bottom"
               ]
             }
-          }
+          },
+          "required": ["card"]
         },
         "result": {
           "type": "object",
@@ -3919,7 +3986,43 @@
             "tab": {
               "type": "string"
             }
+          },
+          "required": ["tab"]
+        },
+        "result": {
+          "type": "object",
+          "properties": {
+            "card": {
+              "type": "string"
+            },
+            "tab": {
+              "type": "string"
+            }
           }
+        }
+      },
+      {
+        "name": "core.layout.move",
+        "description": "Moves an existing tab, with its surface, into card, or with side into the neighbour of card toward side: a target that already holds the tab selects it, else the tab joins card as a drop on its centre does or card splits toward side into a new card with the tab, and the only tab of a card moves its card. tab is a tab identifier or current and card a card identifier or current. The tab never closes; the result names its card and the tab, selected and its card focused, and the same operation applied again answers the same.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "tab": {
+              "type": "string"
+            },
+            "card": {
+              "type": "string"
+            },
+            "side": {
+              "enum": [
+                "left",
+                "right",
+                "top",
+                "bottom"
+              ]
+            }
+          },
+          "required": ["tab", "card"]
         },
         "result": {
           "type": "object",
@@ -3942,7 +4045,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "object",
@@ -3962,7 +4066,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "null"
@@ -3977,7 +4082,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "object",
@@ -4009,7 +4115,8 @@
                 "bottom"
               ]
             }
-          }
+          },
+          "required": ["tab", "card", "zone"]
         },
         "result": {
           "type": "null"
@@ -4024,7 +4131,8 @@
             "tab": {
               "type": "string"
             }
-          }
+          },
+          "required": ["tab"]
         },
         "result": {
           "type": "null"
@@ -4042,7 +4150,8 @@
             "keep": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["tab", "keep"]
         },
         "result": {
           "type": "null"
@@ -4063,7 +4172,8 @@
             "y": {
               "type": "number"
             }
-          }
+          },
+          "required": ["tab", "x", "y"]
         },
         "result": {
           "type": "null"
@@ -4078,7 +4188,8 @@
             "index": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["index"]
         },
         "result": {
           "type": "null"
@@ -4118,7 +4229,8 @@
                 "plugins"
               ]
             }
-          }
+          },
+          "required": ["page"]
         },
         "result": {
           "type": "null"
@@ -4133,7 +4245,8 @@
             "query": {
               "type": "string"
             }
-          }
+          },
+          "required": ["query"]
         },
         "result": {
           "type": "null"
@@ -4148,7 +4261,8 @@
             "query": {
               "type": "string"
             }
-          }
+          },
+          "required": ["query"]
         },
         "result": {
           "type": "null"
@@ -4179,7 +4293,8 @@
                 "open"
               ]
             }
-          }
+          },
+          "required": ["order"]
         },
         "result": {
           "type": "null"
@@ -4194,7 +4309,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -4212,7 +4328,8 @@
             "pinned": {
               "type": "boolean"
             }
-          }
+          },
+          "required": ["id", "pinned"]
         },
         "result": {
           "type": "null"
@@ -4227,7 +4344,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["id"]
         },
         "result": {
           "type": "null"
@@ -4267,7 +4385,8 @@
                 "open"
               ]
             }
-          }
+          },
+          "required": ["mode"]
         },
         "result": {
           "type": "null"
@@ -4299,7 +4418,8 @@
             "value": {
               "type": "string"
             }
-          }
+          },
+          "required": ["field", "value"]
         },
         "result": {
           "type": "null"
@@ -4343,7 +4463,8 @@
             "id": {
               "type": "string"
             }
-          }
+          },
+          "required": ["kind", "id"]
         },
         "result": {
           "type": "null"
@@ -4358,7 +4479,8 @@
             "value": {
               "type": "string"
             }
-          }
+          },
+          "required": ["value"]
         },
         "result": {
           "type": "null"
@@ -4398,7 +4520,8 @@
             "index": {
               "type": "integer"
             }
-          }
+          },
+          "required": ["name"]
         },
         "result": {
           "type": "null"
@@ -4416,7 +4539,8 @@
             "y": {
               "type": "number"
             }
-          }
+          },
+          "required": ["x", "y"]
         },
         "result": {
           "type": "boolean"

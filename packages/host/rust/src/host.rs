@@ -35,6 +35,7 @@ pub mod buffer_bounds;
 pub mod buttons;
 pub mod clipboard;
 pub mod command_line;
+pub mod command_params;
 pub mod composition;
 pub mod crash_report;
 pub mod debug;
