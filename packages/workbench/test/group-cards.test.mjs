@@ -208,3 +208,18 @@ test("core.grid reports the drawn rectangle of each card and group card, and the
   assert.equal(cards.get("card-4").fullscreen, true);
   await run("core.card.fullscreen", { card: "card-4" });
 });
+
+test("the layout of the window snapshot gives each card and group card the frame that the plane draws", { timeout: 5000 }, async () => {
+  arrange();
+  await run("core.card.fullscreen", { card: "card-4" });
+  const grid = plane.currentGrid();
+  const shown = plane.currentTree().fullscreen("card-4", { x: 0, y: 0, w: grid.width, h: grid.height });
+  const { root, groups } = plane.layoutDescription();
+  const frame = ({ x, y, width, height }) => ({ x, y, w: width, h: height });
+  const leaves = (node) => ("children" in node ? node.children.flatMap(leaves) : [node]);
+  const frames = new Map(leaves(root).map((leaf) => [leaf.card, frame(leaf.frame)]));
+  for (const id of ["card-1", "card-2"]) near(frames.get(id), shown.get(id), `the snapshot frame of ${id}`);
+  near(frames.get("card-3"), { x: 0, y: 0, w: 0, h: 0 }, "the snapshot frame of card-3 outside the fullscreen group card");
+  near(frame(groups[0].frame), shown.get("card-4"), "the snapshot frame of card-4");
+  await run("core.card.fullscreen", { card: "card-4" });
+});
