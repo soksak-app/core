@@ -1,0 +1,345 @@
+// The commands, statuses and queries of group cards in the mygo workbench (docs/spec/groups.md): core.group.*, core.card.move, the card
+// commands on a group card, core.layout, core.grid, the window description and core.card.get.
+package workbench_test
+
+import (
+	"encoding/json"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// groupedShell is a layout shell whose card main is wrapped into the group card-2 with the new card card-3 on its right.
+func groupedShell(t *testing.T) *tabShell {
+	t.Helper()
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// jsonOf is value as a reader of its JSON receives it.
+func jsonOf(t testing.TB, value any) any {
+	t.Helper()
+	text, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read any
+	if err := json.Unmarshal(text, &read); err != nil {
+		t.Fatal(err)
+	}
+	return read
+}
+
+// read is the value of the status name as JSON.
+func (f *tabShell) read(name string) map[string]any {
+	f.t.Helper()
+	value, err := f.shell.Registry().Read(name)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return jsonOf(f.t, value).(map[string]any)
+}
+
+// cardGet runs core.card.get on card and returns its state, or its error.
+func (f *tabShell) cardGet(card string) (map[string]any, error) {
+	f.t.Helper()
+	var (
+		value    any
+		failure  error
+		answered bool
+	)
+	params, err := json.Marshal(map[string]string{"card": card})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	f.shell.Registry().RunLater("core.card.get", params, func(result any, err error) { value, failure, answered = result, err, true })
+	f.until(func() bool { return answered })
+	if failure != nil {
+		return nil, failure
+	}
+	return jsonOf(f.t, value).(map[string]any), nil
+}
+
+// gridCards are the cards of core.grid by id.
+func (f *tabShell) gridCards() map[string]map[string]any {
+	f.t.Helper()
+	cards := map[string]map[string]any{}
+	for _, card := range f.read("core.grid")["cards"].([]any) {
+		entry := card.(map[string]any)
+		cards[entry["id"].(string)] = entry
+	}
+	return cards
+}
+
+func TestAGroupCreateWrapsTheCardAndFocusesTheNewCard(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	first, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answer map[string]string
+	if err := json.Unmarshal([]byte(first), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer["group"] != "card-2" || answer["card"] != "card-3" || answer["tab"] == "" {
+		t.Fatalf("core.group.create answered %s", first)
+	}
+	if focused := f.layout().focusedCard(); focused != "card-3" {
+		t.Fatalf("the focus is on %q, not on the new card card-3", focused)
+	}
+	again, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`)
+	if err != nil || again != first {
+		t.Fatalf("the repeated core.group.create answered %s, %v, not %s", again, err, first)
+	}
+	layout := f.read("core.layout")
+	if layout["leader"] != "card-2" || layout["lastCard"] != float64(3) {
+		t.Fatalf("core.layout holds the leader %v and lastCard %v", layout["leader"], layout["lastCard"])
+	}
+	cards := layout["state"].(map[string]any)["cards"].([]any)
+	group := cards[0].(map[string]any)["data"].(map[string]any)["group"].(map[string]any)
+	if group["name"] != "그룹 1" || group["level"] != float64(1) || group["leader"] != "main" {
+		t.Fatalf("core.layout holds the group record %v", group)
+	}
+	if ids := len(group["plane"].(map[string]any)["cards"].([]any)); ids != 2 {
+		t.Fatalf("the child plane holds %d cards", ids)
+	}
+}
+
+func TestTheGridListsTheCardsOfTheChildPlanesWithTheirPlaneAndTheLeaders(t *testing.T) {
+	f := groupedShell(t)
+	cards := f.gridCards()
+	group, main, born := cards["card-2"], cards["main"], cards["card-3"]
+	if group == nil || main == nil || born == nil {
+		t.Fatalf("core.grid lists the cards %v", cards)
+	}
+	want := map[string]any{"name": "그룹 1", "level": float64(1), "leader": "main"}
+	if !reflect.DeepEqual(group["group"], want) || group["leader"] != true || len(group["tabs"].([]any)) != 0 {
+		t.Fatalf("core.grid lists the group card %v", group)
+	}
+	if main["plane"] != "card-2" || main["leader"] != true || born["plane"] != "card-2" || born["leader"] != nil {
+		t.Fatalf("core.grid lists main %v and card-3 %v", main, born)
+	}
+	if main["x"].(float64) <= group["x"].(float64) || main["y"].(float64) <= group["y"].(float64) {
+		t.Fatalf("main at %v,%v stands outside the body of its group at %v,%v", main["x"], main["y"], group["x"], group["y"])
+	}
+}
+
+func TestTheDescriptionHoldsAGroupCardWithTheTreeOfItsChildPlane(t *testing.T) {
+	f := groupedShell(t)
+	var described map[string]any
+	if err := json.Unmarshal([]byte(f.described()), &described); err != nil {
+		t.Fatal(err)
+	}
+	root := described["root"].(map[string]any)
+	group, ok := root["group"].(map[string]any)
+	if root["card"] != "card-2" || !ok || root["leader"] != true || root["tabs"] != nil {
+		t.Fatalf("the description holds the root %v", root)
+	}
+	inner := group["root"].(map[string]any)
+	children := inner["children"].([]any)
+	if group["name"] != "그룹 1" || group["level"] != float64(1) || inner["direction"] != "row" || len(children) != 2 ||
+		children[0].(map[string]any)["card"] != "main" || children[0].(map[string]any)["leader"] != true {
+		t.Fatalf("the description holds the group %v", group)
+	}
+}
+
+func TestADissolveAnswersDissolvedAgainAndKeepsTheCards(t *testing.T) {
+	f := groupedShell(t)
+	for range 2 {
+		if answer, err := f.apply("core.group.dissolve", `{"group": "card-2"}`); err != nil || answer != `{"dissolved":true}` {
+			t.Fatalf("core.group.dissolve answered %s, %v", answer, err)
+		}
+	}
+	cards := f.gridCards()
+	if cards["card-2"] != nil || cards["main"] == nil || cards["card-3"] == nil || cards["main"]["plane"] != nil {
+		t.Fatalf("core.grid lists %v after the dissolve", cards)
+	}
+	if _, err := f.apply("core.group.dissolve", `{"group": "main"}`); err == nil || err.Error() != "card main is not a group" {
+		t.Fatalf("a dissolve of a content card fails with %v", err)
+	}
+}
+
+func TestARenameAndALeaderAnswerTheSameAgain(t *testing.T) {
+	f := groupedShell(t)
+	for range 2 {
+		if answer, err := f.apply("core.group.rename", `{"group": "card-2", "name": "  작업  "}`); err != nil || answer != `{"group":"card-2","name":"작업"}` {
+			t.Fatalf("core.group.rename answered %s, %v", answer, err)
+		}
+		if answer, err := f.apply("core.group.leader", `{"card": "card-3"}`); err != nil || answer != `{"card":"card-3","plane":"card-2"}` {
+			t.Fatalf("core.group.leader answered %s, %v", answer, err)
+		}
+	}
+	if answer, err := f.apply("core.group.leader", `{"card": "card-2"}`); err != nil || answer != `{"card":"card-2","plane":null}` {
+		t.Fatalf("core.group.leader of the root plane answered %s, %v", answer, err)
+	}
+	group := f.gridCards()["card-2"]["group"].(map[string]any)
+	if group["name"] != "작업" || group["leader"] != "card-3" {
+		t.Fatalf("core.grid holds the group record %v", group)
+	}
+	if _, err := f.apply("core.group.rename", `{"group": "card-2", "name": " "}`); err == nil || err.Error() != "group name must be 1 to 40 characters:  " {
+		t.Fatalf("an empty name fails with %v", err)
+	}
+}
+
+func TestACardMoveOutOfAGroupReplacesTheGroupOfOneCard(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.5, 1}, []float64{0, 1},
+		gridCard("main", 0, 1, 0, 1, tab("t1", "notes")), gridCard("side", 1, 2, 0, 1, tab("t2", "plain"))))
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "bottom", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if answer, err := f.apply("core.card.move", `{"card": "card-3", "target": "side", "side": "bottom"}`); err != nil || answer != `{"card":"card-3"}` {
+			t.Fatalf("core.card.move answered %s, %v", answer, err)
+		}
+	}
+	cards := f.gridCards()
+	if cards["card-2"] != nil || cards["main"]["plane"] != nil || cards["card-3"]["plane"] != nil {
+		t.Fatalf("core.grid lists %v after the move", cards)
+	}
+	if f.layout().focusedCard() != "card-3" {
+		t.Fatalf("the focus is on %s after the move", f.layout().focusedCard())
+	}
+	if _, err := f.apply("core.card.move", `{"card": "main", "target": "main", "side": "left"}`); err == nil || err.Error() != "card main cannot move into itself" {
+		t.Fatalf("a move into itself fails with %v", err)
+	}
+}
+
+func TestTheCardCommandsOfAGroupCardActOnItsChildPlane(t *testing.T) {
+	f := groupedShell(t)
+	if _, err := f.apply("core.card.fullscreen", `{"card": "card-2"}`); err == nil || err.Error() != "card card-2 is a group; fullscreen shows a content card" {
+		t.Fatalf("a fullscreen of a group card fails with %v", err)
+	}
+	if _, err := f.apply("core.card.focus", `{"card": "card-2"}`); err != nil {
+		t.Fatal(err)
+	}
+	if focused := f.layout().focusedCard(); focused != "main" {
+		t.Fatalf("a focus of the group card focuses %s, not main", focused)
+	}
+	if _, err := f.apply("core.card.add-tab", `{"card": "card-2", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	cards := f.gridCards()
+	added := cards["card-4"]
+	if added == nil || added["plane"] != "card-2" || added["x"].(float64) <= cards["card-3"]["x"].(float64) {
+		t.Fatalf("core.card.add-tab on the group card made %v", added)
+	}
+	if answer, err := f.apply("core.card.split", `{"card": "card-2", "side": "right", "plugin": "plain"}`); err != nil || !strings.Contains(answer, `"card":"card-5"`) {
+		t.Fatalf("core.card.split of the group card answered %s, %v", answer, err)
+	}
+	if f.gridCards()["card-5"]["plane"] != nil {
+		t.Fatal("the split of the group card put the new card into its child plane")
+	}
+	if answer, err := f.apply("core.card.close", `{"card": "card-2"}`); err != nil || answer != `{"closed":true}` {
+		t.Fatalf("core.card.close of the group card answered %s, %v", answer, err)
+	}
+	cards = f.gridCards()
+	delete(cards, "left")
+	delete(cards, "right")
+	if len(cards) != 1 || cards["card-5"] == nil {
+		t.Fatalf("core.grid lists %v after the close of the group card", cards)
+	}
+}
+
+func TestACardGetReadsAContentCardWithItsGroupPathAndAGroupCardWithItsPlane(t *testing.T) {
+	f := groupedShell(t)
+	if _, err := f.apply("core.group.rename", `{"group": "card-2", "name": "작업"}`); err != nil {
+		t.Fatal(err)
+	}
+	state, err := f.cardGet("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"card": "main", "activeTab": "t1", "tabs": []any{map[string]any{"tab": "t1", "plugin": "notes", "status": map[string]any{}}},
+		"groups": []any{map[string]any{"card": "card-2", "name": "작업"}}}
+	if !reflect.DeepEqual(state, want) {
+		t.Fatalf("core.card.get main answered %v, want %v", state, want)
+	}
+	group, err := f.cardGet("card-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := group["group"].(map[string]any)
+	if group["card"] != "card-2" || !reflect.DeepEqual(group["groups"], []any{}) || record["name"] != "작업" || record["level"] != float64(1) ||
+		record["leader"] != "main" || len(record["plane"].(map[string]any)["cards"].([]any)) != 2 || group["tabs"] != nil {
+		t.Fatalf("core.card.get card-2 answered %v", group)
+	}
+	if _, err := f.cardGet("card-9"); err == nil || err.Error() != "card card-9 is not in the layout of window main" {
+		t.Fatalf("core.card.get of no card fails with %v", err)
+	}
+}
+
+func TestACardGetOfAWindowSidebarIsRefused(t *testing.T) {
+	f := layoutShell(t, gridSpace("spc-aaaaaa", []float64{0, 0.2, 1}, []float64{0, 1},
+		map[string]any{"id": "left", "c0": 0, "c1": 1, "r0": 0, "r1": 1, "fixed": true}, gridCard("main", 1, 2, 0, 1, tab("t1", "notes"))))
+	if _, err := f.cardGet("left"); err == nil || err.Error() != "card left is a window sidebar" {
+		t.Fatalf("core.card.get of a window sidebar fails with %v", err)
+	}
+}
+
+// A tab of a plugin that declares a status with summary true carries the value of that status in the state of its card, as the surface
+// answers it in the window snapshot (docs/spec/exposure.md#entry-fields).
+func TestACardGetCarriesTheSummaryStatusesOfEachTab(t *testing.T) {
+	declared := strings.Replace(installedDocument, `{"name": "textprobe.screen", "description": "the screen",`,
+		`{"name": "textprobe.screen", "description": "the screen", "summary": true,`, 1)
+	if declared == installedDocument {
+		t.Fatal("the test document declares no textprobe.screen")
+	}
+	r := newViewRelayOn(t, &surfaceHost{storedHost: storedHost{installed: declared}})
+	surface := r.surface()
+	r.call(surface, "runtime.native.on", map[string]any{"name": "exposure-request"})
+	r.call(surface, "runtime.native.call", map[string]any{"name": "registered", "payload": map[string]any{"kind": "status", "name": "textprobe.screen"}})
+	var card string
+	grid, err := r.f.shell.Registry().Read("core.grid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range asJSON(t, grid).(map[string]any)["cards"].([]any) {
+		for _, each := range entry.(map[string]any)["tabs"].([]any) {
+			if each.(map[string]any)["id"] == surface {
+				card = entry.(map[string]any)["id"].(string)
+			}
+		}
+	}
+	var (
+		value    any
+		failure  error
+		answered bool
+	)
+	r.f.shell.Registry().RunLater("core.card.get", json.RawMessage(`{"card": "`+card+`"}`), func(result any, err error) {
+		value, failure, answered = result, err, true
+	})
+	var pushed map[string]any
+	r.f.until(func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for _, each := range r.pushed {
+			if data, ok := each["data"].(map[string]any); ok && data["method"] == "exposure.snapshot" {
+				pushed = data
+			}
+		}
+		return pushed != nil || answered
+	})
+	if answered {
+		t.Fatalf("core.card.get answered %v, %v before the window snapshot reached the surface", value, failure)
+	}
+	r.call(surface, "runtime.native.call", map[string]any{"name": "exposureReply", "payload": map[string]any{"id": pushed["id"], "result": map[string]any{
+		"status": []any{map[string]any{"name": "textprobe.screen", "description": "the screen", "schema": map[string]any{"type": "object", "properties": map[string]any{}},
+			"summary": true, "value": map[string]any{"rows": 3}}},
+		"commands": []any{}, "element": []any{}}}})
+	r.f.until(func() bool { return answered })
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	var status any
+	for _, each := range asJSON(t, value).(map[string]any)["tabs"].([]any) {
+		if each.(map[string]any)["tab"] == surface {
+			status = each.(map[string]any)["status"]
+		}
+	}
+	if want := map[string]any{"textprobe.screen": map[string]any{"rows": float64(3)}}; !reflect.DeepEqual(status, want) {
+		t.Fatalf("the tab %s of card %s carries the status %v, want %v", surface, card, status, want)
+	}
+}

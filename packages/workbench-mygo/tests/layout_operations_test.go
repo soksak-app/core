@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	workbench "github.com/soksak-app/core/packages/workbench-mygo/src"
+	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
 // layoutPlugins are the plugins of the layout cases: notes takes the tab params path and line and saves, and plain takes no params.
@@ -44,7 +45,25 @@ func gridCard(id string, c0, c1, r0, r1 int, tabs ...map[string]any) map[string]
 
 // gridSpace is a stored space with the lines xs and ys and cards.
 func gridSpace(id string, xs, ys []float64, cards ...map[string]any) map[string]any {
-	return map[string]any{"id": id, "title": id, "layout": map[string]any{"state": map[string]any{"xs": xs, "ys": ys, "paidBy": map[string]any{}, "cards": cards}}}
+	return map[string]any{"id": id, "title": id, "layout": storedRoot(map[string]any{"xs": xs, "ys": ys, "paidBy": map[string]any{}, "cards": cards})}
+}
+
+// storedRoot is the stored layout of a root plane state without group cards (docs/spec/groups.md#storage): its leader is its first card
+// that is not a window sidebar, and lastCard the largest number of a card id card-<n>, at least 1.
+func storedRoot(state map[string]any) map[string]any {
+	var leader any
+	last := 1
+	for _, card := range state["cards"].([]map[string]any) {
+		id := card["id"].(string)
+		if leader == nil && !layout.IsWindowSide(id) {
+			leader = id
+		}
+		var n int
+		if _, err := fmt.Sscanf(id, "card-%d", &n); err == nil {
+			last = max(last, n)
+		}
+	}
+	return map[string]any{"state": state, "leader": leader, "lastCard": last}
 }
 
 // gridProject is the stored project prj-a whose first space is active.
