@@ -22,7 +22,7 @@ const isObject = (value) => value !== null && typeof value === "object" && !Arra
 const sizeText = (w, h) => `${Math.round(w)}x${Math.round(h)}`;
 
 /** The identifier of a member: a content card id, or the id of a group node. */
-const memberId = (member) => (typeof member === "string" ? member : member.card);
+export const memberId = (member) => (typeof member === "string" ? member : member.card);
 
 /** n of a card id card-<n>, or null. */
 export function cardNumber(id) {

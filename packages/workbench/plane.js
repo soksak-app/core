@@ -22,7 +22,7 @@ import { SIDEBAR_SIDES, deviceGridSize, presentSidebars, effectiveSidebar, resol
 import { arrangeWindowSidebars, SIDE_NAMES, FOLD_ICONS, keepWindowSidebarWidths, railSidebars, restoreWindowSidebars, sizeKey, standingLink, windowOrientation, windowSidebar, windowSidebarCards } from "./window-sidebars.js";
 import { environment, pluginUnits } from "./environment.js";
 import { checkStoredLayout, recordStoredOrigins } from "./stored-layout.js";
-import { cardNumber, readGroupTree } from "./group-tree.js";
+import { cardNumber, memberId, readGroupTree } from "./group-tree.js";
 import { checkTabParams, storedParamsProblem } from "./tab-params.js";
 import { checkOpenPath, chooseOpener } from "./file-open.js";
 import { layoutTree, neighbourToward, sameJson } from "./layout-tree.js";
@@ -146,6 +146,8 @@ export function nameWindow(name) {
 
 /* The one move of the focus ring: the keyboard follows it (keyboard.js). */
 function focusOn(id) {
+  // A group card takes no focus ring: the first content card inside it takes it (docs/spec/groups.md#focus).
+  if (id !== null && tree?.isGroup(id)) id = tree.focusable(id);
   focusedId = id;
   keyboardOwed();
 }
@@ -1783,6 +1785,7 @@ export function toggleCardFullscreen(id) {
 }
 
 export function focusCard(id) {
+  if (tree?.isGroup(id)) id = tree.focusable(id);
   paneCard(id);
   if (view.fullscreenCard !== id) restoreFullscreen();
   focusOn(id);
@@ -1946,13 +1949,35 @@ export function openCardTabs(id) {
 }
 
 export function addTabTo(id, kind, params) {
+  if (tree?.isGroup(id)) return addToGroup(id, kind, params);
   paneCard(id);
   layoutChangeable(id);
   knownPlugin(kind);
   return addTab(id, kind, checkTabParams(kind, plugin(kind).params, params));
 }
 
+/**
+ * Adds a content card with a tab of kind with params inside the group card id at the right edge of its rectangle and returns the tab
+ * (docs/spec/groups.md#card-commands-on-a-group-card).
+ */
+function addToGroup(id, kind, params) {
+  layoutChangeable(id);
+  knownPlugin(kind);
+  const wanted = checkTabParams(kind, plugin(kind).params, params);
+  tree.probe(() => tree.addCard(id, undefined, splitsEven()));
+  restoreFullscreen();
+  const t = newTab(kind, wanted, sourceTabOf(id), "new tab");
+  focusOn(tree.addCard(id, { tabs: [t], activeId: t.id }, splitsEven()));
+  settle();
+  return t.id;
+}
+
+/** The tab that a new tab beside the card id inherits: the active tab of the card, or of the content card that a focus of a group card gives. */
+// default: a card without an active tab has no tab to inherit.
+const sourceTabOf = (id) => activeTab(grid.card(tree.focusable(id)))?.id ?? null;
+
 export function splitCard(id, side, kind) {
+  if (tree?.isGroup(id)) return splitGroup(id, side, kind);
   paneCard(id);
   layoutChangeable(id);
   knownPlugin(kind);
@@ -1962,7 +1987,22 @@ export function splitCard(id, side, kind) {
   return made;
 }
 
+/** Puts a new content card with a tab of kind beside the rectangle of the group card id into the level that holds it. */
+function splitGroup(id, side, kind) {
+  layoutChangeable(id);
+  knownPlugin(kind);
+  if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  tree.probe(() => tree.split(id, side, undefined, splitsEven()));
+  restoreFullscreen();
+  const t = newTab(kind, null, sourceTabOf(id), "split");
+  const born = tree.split(id, side, { tabs: [t], activeId: t.id }, splitsEven());
+  focusOn(born);
+  settle();
+  return { card: born, tab: t.id };
+}
+
 export function closeCard(id) {
+  if (tree?.isGroup(id)) return closeGroup(id);
   paneCard(id);
   layoutChangeable(id);
   if (!tree.canClose(id)) throw new Error(`card ${id} cannot close`);
@@ -2136,7 +2176,7 @@ const contentCards = () => grid.cards.filter((card) => !isPlace(card.id));
 function inactiveSpaceOf(found) {
   const project = allProjects().find((entry) => entry.spaces.some((space) => space.id === heldSpace));
   // default: a window that shows no space has no other space, and a project without such a space has none.
-  return project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards))?.id ?? null;
+  return project?.spaces.find((entry) => entry.id !== heldSpace && found(entry.layout.state.cards, entry.layout))?.id ?? null;
 }
 
 /**
@@ -2369,6 +2409,148 @@ export function railState() {
 
 export { settle, tabsOf, activeTab, plane };
 export const currentGrid = () => grid;
+
+/** The group tree of the shown space, or null while the plane holds no layout. */
+export const currentTree = () => tree;
+
+/**
+ * Closes the group card id with every card inside it after each modified tab of those cards is saved or discarded in turn
+ * (docs/spec/groups.md#card-commands-on-a-group-card).
+ */
+function closeGroup(id) {
+  layoutChangeable(id);
+  if (!tree.canClose(id)) throw new Error(`card ${id} cannot close`);
+  const inside = tree.contents(tree.node(id));
+  const unsaved = inside.flatMap((card) => tabsOf(grid.card(card)).filter((t) => tabModified(t.id)).map((t) => ({ card, t })))[0];
+  if (unsaved) {
+    askBeforeClose(unsaved.card, unsaved.t, () => closeCard(id));
+    return { closed: false };
+  }
+  restoreFullscreen();
+  recordClosedTabs(inside.flatMap((card) => tabsOf(grid.card(card)).map((t) => t.id)));
+  tree.close(id);
+  // default: when only place cards remain, there is no card to focus (null).
+  if (!grid.card(focusedId)) focusOn(grid.cards.find((c) => !isPlace(c.id))?.id ?? null);
+  settle();
+  return { closed: true };
+}
+
+/** The identifiers of the group cards that this window dissolved since its workbench started (docs/spec/groups.md#idempotency). */
+const dissolvedGroups = new Set();
+
+/**
+ * A card of any level of the shown space named by id, a content card, a group card or a window sidebar, or current for the focused card;
+ * a card of another space or of no space is refused with the texts of docs/spec/cli.md#acting-on-a-layout.
+ */
+function treeCard(id) {
+  if (id === "current") return layoutCard("current").id;
+  if (typeof id === "string" && tree?.find(id)) return id;
+  const inGroups = (nodes) => nodes.some((node) => node.card === id || inGroups(node.members.filter((member) => typeof member !== "string")));
+  // default: a stored layout read by the check of its space holds groups; a space that never opened holds the list it was stored with.
+  const space = inactiveSpaceOf((cards, layout) => cards.some((entry) => entry.id === id) || inGroups(layout.groups ?? []));
+  if (space !== null) throw new Error(`card ${id} is in space ${space}, which is not active`);
+  throw new Error(`card ${id} is not in the layout of window ${nameOfWindow()}`);
+}
+
+/**
+ * Groups the card id, a content card or a group card, with a new content card toward side that holds a tab of kind with params and
+ * returns {group, card, tab}; the focus moves to the new card (docs/spec/groups.md#commands).
+ */
+export function createGroup(id, side, kind, params) {
+  if (!SPLIT_SIDES.includes(side)) throw new Error(`unknown side ${side}; use left, right, top or bottom`);
+  const card = treeCard(id);
+  if (isPlace(card)) throw new Error(`card ${card} is a window sidebar; a group holds content cards and group cards`);
+  layoutChangeable(card);
+  const parent = tree.parentOf(card);
+  // The same group of the same card with the same tab toward the same side changes nothing (docs/spec/groups.md#idempotency).
+  if (parent && parent.members.length === 2 && hasPlugin(kind)) {
+    const other = parent.members.map(memberId).find((member) => member !== card);
+    const wanted = checkTabParams(kind, plugin(kind).params, params);
+    // default: a tab stored without params has the params null.
+    const found = !tree.isGroup(other) && tree.neighbour(card, side) === other
+      ? tabsOf(grid.card(other)).find((t) => t.plugin === kind && sameJson(t.params ?? null, wanted)) : undefined;
+    if (found) return { group: parent.card, card: other, tab: found.id };
+  }
+  tree.probe(() => tree.create(card, side, undefined, splitsEven()));
+  knownPlugin(kind);
+  const wanted = checkTabParams(kind, plugin(kind).params, params);
+  const t = newTab(kind, wanted, sourceTabOf(card), "split");
+  const made = tree.create(card, side, { tabs: [t], activeId: t.id }, splitsEven());
+  focusOn(made.card);
+  settle();
+  return { group: made.group, card: made.card, tab: t.id };
+}
+
+/** Replaces the group card id with its members in the level that holds it; a group that this window dissolved answers again. */
+export function dissolveGroup(id) {
+  if (dissolvedGroups.has(id)) return { dissolved: true };
+  const card = treeCard(id);
+  tree.requireGroup(card);
+  layoutChangeable(card);
+  tree.dissolve(card);
+  dissolvedGroups.add(card);
+  settle();
+  return { dissolved: true };
+}
+
+/**
+ * Opens the close menu of the group card id from the close button of its header, or closes it when it is open. A group whose header
+ * holds no close button is refused.
+ */
+export function openGroupMenu(id) {
+  const card = treeCard(id);
+  tree.requireGroup(card);
+  const anchor = plane.querySelector(`[data-group-card="${CSS.escape(card)}"] [data-do="group-menu"]`);
+  if (!anchor) throw new Error(`group ${card} has no close button`);
+  if (picker?.anchor === anchor) { closePicker("toggle"); return null; }
+  openLayer(anchor, "그룹 메뉴", [{ key: "close", name: "그룹 닫기" }, { key: "dissolve", name: "그룹 풀기" }],
+    (key) => run(key === "close" ? "core.card.close" : "core.group.dissolve", key === "close" ? { card } : { group: card }));
+  return null;
+}
+
+/** Renames the group card id to name with the white space at both ends removed. */
+export function renameGroup(id, name) {
+  const card = treeCard(id);
+  if (typeof name !== "string") throw new Error(`group name must be a string, not ${JSON.stringify(name)}`);
+  const named = tree.rename(card, name);
+  settle();
+  return { group: card, name: named };
+}
+
+/** Makes the card id, a content card or a group card, the leader of its level. */
+export function leadLevel(id) {
+  const card = treeCard(id);
+  const group = tree.setLeader(card);
+  settle();
+  return { card, group };
+}
+
+/** Moves the card id, a content card or a group card, beside target on side, or into the group target with side centre. */
+export function moveCard(id, target, side) {
+  const card = treeCard(id);
+  const to = treeCard(target);
+  layoutChangeable(card);
+  tree.move(card, to, side);
+  settle();
+  return { card };
+}
+
+/**
+ * The state of the card id of any level (docs/spec/groups.md#status-and-queries): a content card with its active tab, its tabs with their
+ * summary statuses, read from summary, the statuses of each surface that its plugin declares with summary true, and its group path; a
+ * group card with its group path and its node.
+ */
+export function cardState(id, summary) {
+  const card = treeCard(id);
+  if (isPlace(card)) throw new Error(`card ${card} is a window sidebar`);
+  const groups = tree.path(card);
+  if (tree.isGroup(card)) return { card, groups, group: tree.groupRecord(card) };
+  const data = grid.card(card);
+  // default: a tab whose surface declares no summary status has the status {}.
+  const tabs = tabsOf(data).map((t) => ({ tab: t.id, plugin: t.plugin, status: summary.get(t.id) ?? {} }));
+  // default: a card without an active tab reports null.
+  return { card, activeTab: activeTab(data)?.id ?? null, tabs, groups };
+}
 /** The text size scale of a card. It is 1 when there is no value. */
 // default: as the comment above says, a card with no text size scale is 1.
 

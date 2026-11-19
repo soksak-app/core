@@ -24,6 +24,7 @@ import {
   focused, fresh, fullscreenCard, moveTab, presentedCardRect, toggleCardFullscreen, onPicker, onSurfaceState, openCardMenu, openCardTabs, openCardTools, openSpaceApps, openSurfaceMenu, openTabMenu, onSurfaceContextMenu, pickItem, pickerState, plane, railState, selectTab,
   cardSidebars, resizeSidebar, settle, settleModifiedTabs, settleModifiedTabsToClose, splitCard, surfaceState, tabsOf,
   openInLayout, selectInLayout, closeInLayout, layoutDescription, surfaceSpace,
+  cardState, createGroup, currentTree, dissolveGroup, leadLevel, moveCard, openGroupMenu, renameGroup,
 } from "./plane.js";
 import {
   applyTheme, controlValue, defaults, link, onSaved, overridden, reset, saving, scopedValue, set, setDebug, settingProject, THEMES, value,
@@ -185,6 +186,7 @@ function preferred() {
 function gridState() {
   const grid = currentGrid();
   if (!grid) return null;
+  const tree = currentTree();
   const rects = grid.rects();
   const fullscreen = fullscreenCard();
   let pane = 0;
@@ -207,14 +209,28 @@ function gridState() {
       active: tabs.length ? activeTab(card).id : null,
       acts: cardActs(card.id),
       sidebars: cardSidebars(card, presentedCardRect(card.id)),
+      ...levelMembers(tree, card.id),
     };
   }).filter(Boolean);
+  // The group cards follow the cards of the grid in workbench order, each with its drawn rectangle and no tabs (docs/spec/groups.md#status-and-queries).
+  const groups = tree.nodes().map((node) => {
+    const { x, y, w, h } = tree.rect(node.card);
+    const parent = tree.parentOf(node.card);
+    return { id: node.card, x, y, w, h, parent: parent ? parent.card : null, leader: tree.leaderOf(parent) === node.card,
+      group: { name: node.name, level: tree.level(node.card) + 1, leader: node.leader } };
+  });
   const lines = (axis) => grid.lines(axis).map((_, k) => grid.boundaryPos(axis, k));
   return {
     fullscreen,
     width: grid.width, height: grid.height, gap: grid.gap, plane: planeOrigin(),
-    lines: { x: lines("x"), y: lines("y") }, cards,
+    lines: { x: lines("x"), y: lines("y") }, cards: [...cards, ...groups],
   };
+}
+
+/** The members of a card of core.grid for its level: parent, the group card that holds it, absent in the root level, and leader true on the leader. */
+function levelMembers(tree, id) {
+  const parent = tree.parentOf(id);
+  return { ...(parent ? { parent: parent.card } : {}), ...(tree.leaderOf(parent) === id ? { leader: true } : {}) };
 }
 
 /* The memory saver of the page (memory-saver.js), given at installCoreExposure. */
@@ -352,7 +368,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     const project = projects.active();
     return project && !projects.inLibrary() ? withOpen(project) : null;
   });
-  status("core.layout", () => (currentGrid() ? capture() : null));
+  // The stored form of the layout with the level of each group node (docs/spec/groups.md#status-and-queries).
+  status("core.layout", () => (currentGrid() ? { ...capture(), groups: currentTree().tree() } : null));
   status("core.grid", gridState);
   status("core.sidebars", sidebarsState);
   onSectionsChange(coreChanged);
@@ -601,6 +618,24 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
   });
   registry.command("core.card.split", ({ card, side, plugin }) => splitCard(card, side, plugin));
   registry.command("core.card.close", ({ card }) => closeCard(card));
+  // The group commands and the card query of any level (docs/spec/groups.md#commands).
+  registry.command("core.group.create", ({ card, side, plugin: kind, params }) => createGroup(card, side, kind, params));
+  registry.command("core.group.dissolve", ({ group }) => dissolveGroup(group));
+  registry.command("core.group.rename", ({ group, name }) => renameGroup(group, name));
+  registry.command("core.group.leader", ({ card }) => leadLevel(card));
+  registry.command("core.group.menu", ({ group }) => openGroupMenu(group));
+  registry.command("core.card.move", ({ card, target, side }) => moveCard(card, target, side));
+  registry.command("core.card.get", async ({ card }) => {
+    // The card is checked before the window is read, so a refused card reads nothing.
+    cardState(card, new Map());
+    const reply = await registry.handle({ id: null, method: "exposure.snapshot", params: {} });
+    if (reply.error) throw new Error(`core.card.get ${card}: exposure.snapshot: ${reply.error.message}`);
+    // The statuses that each surface declares with summary true are the status of its tab (docs/spec/exposure.md#entry-fields).
+    // default: a status whose read failed has no value, which is written as null.
+    const summary = new Map(reply.result.groups.filter((group) => group.owner === "surface")
+      .map((group) => [group.surface, Object.fromEntries(group.status.filter((entry) => entry.summary === true).map((entry) => [entry.name, entry.value ?? null]))]));
+    return cardState(card, summary);
+  });
   // The layout operations of an agent (docs/spec/cli.md#acting-on-a-layout). Each decides and changes the layout in the turn that runs it.
   registry.command("core.layout.open", (params) => openInLayout(params));
   registry.command("core.layout.select", (params) => selectInLayout(params));
