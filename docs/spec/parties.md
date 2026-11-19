@@ -28,9 +28,9 @@ All commands are idempotent: the same request in the same state gives the same r
 
 | Command | Input | Reply | Notes |
 | --- | --- | --- | --- |
-| `core.party.create` | `{cards, color?, leader?, leaderColor?, take?}` | `{party, taken, changed}` | Creates a party from `cards`. When `cards` is exactly the card set of an existing party, it returns that party with `changed: []`. |
+| `core.party.create` | `{cards, color?, leader?, leaderColor?, take?}` | `{party, taken, changed}` | Creates a party from `cards`. A card of another party is refused unless `take` is true. When `cards` is exactly the card set of an existing party, it returns that party with `changed: []`. |
 | `core.party.update` | `{party, color?, leader?, leaderColor?}` | `{party, changed}` | `leader: null` removes the leader. `leaderColor: null` makes the leader color follow `party-leader`. |
-| `core.party.add` | `{party, card, take?}` | `{party, taken, changed}` | Adds a card that touches the party. A card of another party is refused unless `take` is true. |
+| `core.party.add` | `{party, card, take?}` | `{party, taken, changed}` | Adds a card that touches the party. A card already in the party changes nothing and returns `changed: []`. A card of another party is refused unless `take` is true. |
 | `core.party.remove` | `{party, card}` | `{party, changed}` | Removes the card and applies the split rule of the change rules to the rest. |
 | `core.party.delete` | `{party}` | `{party, changed}` | Deletes the party and keeps its cards in the layout. |
 | `core.party.get` | `{party}` | the party query of [queries](#queries) | Reads one party. |
@@ -38,9 +38,9 @@ All commands are idempotent: the same request in the same state gives the same r
 
 `taken` lists `{card, from}` for each card that changed party, where `from` is the former party identifier or `null`. A card that is already in the target party is not listed. `changed` lists `{party, removed, leader, deleted}` for each party that changed, including a party that `create` or `add` made: `removed` lists the cards that left that party, `leader` is its leader after the change or `null`, and `deleted` is true when the party no longer exists.
 
-In the reply of a delete, party is {id}, the object of the deleted party with its identifier only.
+`core.party.delete` replies with `party` as `{id}`, the identifier of the deleted party only.
 
-Refusals and their texts. The texts other than `card <id> belongs to party <party>` are proposed; their wording is an open decision ([open decisions](#open-decisions)).
+Refusals and their texts. The wording of each text is decided in [open decisions](#open-decisions).
 
 | Condition | Text |
 | --- | --- |
@@ -48,10 +48,11 @@ Refusals and their texts. The texts other than `card <id> belongs to party <part
 | A card is a window sidebar | `card <id> is a window sidebar` |
 | A card is listed twice | `card <id> is listed more than once` |
 | Fewer than 2 cards | `a party needs at least 2 cards` |
-| The cards do not form one connected group | `cards are not touching: <ids>` |
+| The cards of `create`, or the card of `add` or `take`, do not form one connected group with the party | `cards are not touching: <ids>` |
 | A card belongs to another party and `take` is not true | `card <id> belongs to party <party>` |
+| A card of `remove` is not in the party | `card <id> is not in party <party>` |
 | `leader` is not in the party | `leader <id> is not in the party` |
-| A color is not `#rrggbb` | `color must be #rrggbb` |
+| A `color` is not `#rrggbb`, or a `leaderColor` is neither `#rrggbb` nor `null` | `color must be #rrggbb`, or `leaderColor must be #rrggbb or null` |
 | A party identifier is unknown | `unknown party <id>` |
 
 The checks run in the order of the table. The first failing check gives the error, so one request has one error.
@@ -60,7 +61,7 @@ The checks run in the order of the table. The first failing check gives the erro
 
 `take: true` moves a card from its former party into the target party in one command.
 
-- Touching is judged against the target party after the move. A card that does not touch the target is refused, and nothing changes.
+- Touching is judged against the target party after the move. A card that does not touch the target is refused with the touching refusal of the table, and nothing changes.
 - The former party loses the card. When the card was its leader, the former party has no leader and keeps its color.
 - When the remaining cards of the former party do not form one group, the split rule of the change rules applies.
 - When the former party keeps fewer than 2 cards, it is deleted.

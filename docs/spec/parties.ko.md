@@ -28,9 +28,9 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 | 명령 | 입력 | 응답 | 비고 |
 | --- | --- | --- | --- |
-| `core.party.create` | `{cards, color?, leader?, leaderColor?, take?}` | `{party, taken, changed}` | `cards`가 기존 party의 카드 집합과 정확히 같으면 그 party를 `changed: []`와 함께 돌려준다. |
+| `core.party.create` | `{cards, color?, leader?, leaderColor?, take?}` | `{party, taken, changed}` | `take`가 true가 아니면 다른 party에 속한 카드는 거부한다. `cards`가 기존 party의 카드 집합과 정확히 같으면 그 party를 `changed: []`와 함께 돌려준다. |
 | `core.party.update` | `{party, color?, leader?, leaderColor?}` | `{party, changed}` | `leader: null`은 leader를 없앤다. `leaderColor: null`은 leader 색을 `party-leader`를 따르게 한다. |
-| `core.party.add` | `{party, card, take?}` | `{party, taken, changed}` | party에 닿는 카드를 더한다. 다른 party에 속한 카드는 `take`가 true가 아니면 거부한다. |
+| `core.party.add` | `{party, card, take?}` | `{party, taken, changed}` | party에 닿는 카드를 더한다. party에 이미 있는 카드는 아무것도 바꾸지 않고 `changed: []`를 돌려준다. 다른 party에 속한 카드는 `take`가 true가 아니면 거부한다. |
 | `core.party.remove` | `{party, card}` | `{party, changed}` | 카드를 빼고, 남은 카드에 변경 규칙의 분할 규칙을 적용한다. |
 | `core.party.delete` | `{party}` | `{party, changed}` | party를 지우고 그 카드들은 배치에 그대로 둔다. |
 | `core.party.get` | `{party}` | [조회](#조회)의 party 조회 | party 하나를 읽는다. |
@@ -38,9 +38,9 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 `taken`은 party가 바뀐 카드마다 `{card, from}`을 담으며, `from`은 이전 party 식별자 또는 `null`이다. 목표 party에 이미 있는 카드는 나오지 않는다. `changed`는 바뀐 party마다 `{party, removed, leader, deleted}`를 담으며, `create`나 `add`가 만든 party도 포함한다. `removed`는 그 party를 떠난 카드들, `leader`는 바뀐 뒤의 leader 또는 `null`, `deleted`는 party가 더는 없으면 true다.
 
-삭제의 응답에서 `party`는 `{id}`이며, 삭제된 party의 식별자만 담은 객체다.
+`core.party.delete`는 `party`를 `{id}`로 돌려준다. 삭제된 party의 식별자만 담는다.
 
-거부와 그 문구. `card <id> belongs to party <party>` 외 문구는 제안이며, 문구의 표현은 [열린 결정](#열린-결정)에 있다.
+거부와 그 문구. 각 문구의 표현은 [열린 결정](#열린-결정)에서 정한다.
 
 | 조건 | 문구 |
 | --- | --- |
@@ -48,10 +48,11 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 | 카드가 창 사이드바다 | `card <id> is a window sidebar` |
 | 카드가 한 명령에 두 번 나온다 | `card <id> is listed more than once` |
 | 카드가 2개 미만이다 | `a party needs at least 2 cards` |
-| 카드들이 하나의 연결된 묶음을 이루지 않는다 | `cards are not touching: <ids>` |
+| `create`의 카드들, 또는 `add`나 `take`의 카드가 party와 하나의 연결된 묶음을 이루지 않는다 | `cards are not touching: <ids>` |
 | 카드가 다른 party에 속하고 `take`가 true가 아니다 | `card <id> belongs to party <party>` |
+| `remove`의 카드가 party에 없다 | `card <id> is not in party <party>` |
 | `leader`가 party에 없다 | `leader <id> is not in the party` |
-| 색이 `#rrggbb`가 아니다 | `color must be #rrggbb` |
+| `color`가 `#rrggbb`가 아니거나, `leaderColor`가 `#rrggbb`도 `null`도 아니다 | `color must be #rrggbb`, 또는 `leaderColor must be #rrggbb or null` |
 | party 식별자가 알 수 없다 | `unknown party <id>` |
 
 검사는 표의 순서로 실행된다. 첫 실패가 오류가 되므로 한 요청은 한 오류만 낸다.
@@ -60,7 +61,7 @@ party는 서로 닿은 둘 이상의 내용 카드를 하나의 외곽선으로 
 
 `take: true`는 한 명령으로 카드를 이전 party에서 목표 party로 옮긴다.
 
-- 닿음은 옮긴 뒤의 목표 party에 대해 판단한다. 목표에 닿지 않는 카드는 거부하며 아무것도 바뀌지 않는다.
+- 닿음은 옮긴 뒤의 목표 party에 대해 판단한다. 목표에 닿지 않는 카드는 위 표의 닿음 거부 문구로 거부하며 아무것도 바뀌지 않는다.
 - 이전 party는 그 카드를 잃는다. 그 카드가 leader였으면 이전 party는 leader가 없고 색은 그대로 둔다.
 - 이전 party의 남은 카드들이 하나의 묶음을 이루지 않으면 변경 규칙의 분할 규칙을 적용한다.
 - 이전 party에 카드가 2개 미만 남으면 그 party를 지운다.
