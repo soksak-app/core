@@ -141,7 +141,7 @@ func (s *Shell) dragTabTo(drag *tabDrag, x, y float32) {
 	if len(data.TabList()) == 1 {
 		options.CentreOnly = &drag.card
 	}
-	// The drop resolves from the root level inward, so a point inside a group card finds a card inside it.
+	// The drop resolves on the innermost box under the point, a content card before the group card that holds it.
 	drag.hit, drag.preview = s.planes.DropAt(float64(x)-origin.X, float64(y)-origin.Y, options, ""), nil
 	if drag.hit != nil && !isPlace(drag.hit.ID) {
 		drag.preview = s.dropRect(drag.card, drag.hit)

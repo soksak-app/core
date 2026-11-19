@@ -1432,9 +1432,10 @@ func (t *GroupTree) CanGroup(id string) bool {
 	}) == nil
 }
 
-// DropAt resolves a drop at x, y from the root level inward (docs/spec/groups.md#moving-and-dropping): a point on the header of a group
-// card is its centre, a point in the outer edge fraction of its rectangle is that side, and every other point of it goes on to its
-// members; a point of no group card is the zone of the grid. A drop on the card without, or inside it, is no zone.
+// DropAt resolves a drop at x, y on the innermost box that holds the point (docs/spec/groups.md#moving-and-dropping): a content card
+// whose drawn rectangle holds it gives the zone of the grid; else the innermost group card whose frame holds it gives its own zones, the
+// centre on its header and in its middle and a side in the outer edge fraction of its frame; a point of no box is no zone. A drop on
+// the card without, or inside it, is no zone.
 func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *ZoneHit {
 	edge := 0.25
 	if options.Edge != nil && *options.Edge >= 0 && *options.Edge <= 0.5 {
@@ -1443,50 +1444,46 @@ func (t *GroupTree) DropAt(x, y float64, options ZoneOptions, without string) *Z
 	excluded := func(id string) bool {
 		return without != "" && (id == without || slices.Contains(t.Groups(id), without))
 	}
-	level := t.roots
-	for {
-		var hit *node
-		for _, n := range level {
-			if !n.group {
-				continue
-			}
-			r, _ := t.Rect(n.card) // silent: n is a group card of the tree.
-			if x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H {
-				hit = n
-				break
-			}
+	holds := func(r Rect) bool { return x >= r.X && x <= r.X+r.W && y >= r.Y && y <= r.Y+r.H }
+	var hit string
+	var frame Rect
+	for _, id := range t.Cards() {
+		r, _ := t.Rect(id) // silent: id is a card of the tree.
+		if !holds(r) {
+			continue
 		}
-		if hit == nil {
-			zone := t.grid.ZoneAt(x, y, options)
-			if zone == nil || excluded(zone.ID) {
+		if !t.IsGroup(id) {
+			if excluded(id) {
 				return nil
 			}
-			return zone
+			return t.grid.ZoneAt(x, y, options)
 		}
-		if excluded(hit.card) {
-			return nil
+		if hit == "" || r.W*r.H < frame.W*frame.H {
+			hit, frame = id, r
 		}
-		head, _ := t.HeadRect(hit.card) // silent: hit is a group card.
-		if y <= head.Y+head.H {
-			return &ZoneHit{ID: hit.card, Zone: "centre"}
-		}
-		r, _ := t.Rect(hit.card) // silent: hit is a group card of the tree.
-		px, py := (x-r.X)/r.W, (y-r.Y)/r.H
-		if !(px > edge && px < 1-edge && py > edge && py < 1-edge) {
-			nearest := math.Min(math.Min(px, 1-px), math.Min(py, 1-py))
-			zone := "bottom"
-			switch nearest {
-			case px:
-				zone = "left"
-			case 1 - px:
-				zone = "right"
-			case py:
-				zone = "top"
-			}
-			return &ZoneHit{ID: hit.card, Zone: zone}
-		}
-		level = hit.members
 	}
+	if hit == "" || excluded(hit) {
+		return nil
+	}
+	head, _ := t.HeadRect(hit) // silent: hit is a group card.
+	if y <= head.Y+head.H {
+		return &ZoneHit{ID: hit, Zone: "centre"}
+	}
+	px, py := (x-frame.X)/frame.W, (y-frame.Y)/frame.H
+	if px > edge && px < 1-edge && py > edge && py < 1-edge {
+		return &ZoneHit{ID: hit, Zone: "centre"}
+	}
+	nearest := math.Min(math.Min(px, 1-px), math.Min(py, 1-py))
+	zone := "bottom"
+	switch nearest {
+	case px:
+		zone = "left"
+	case 1 - px:
+		zone = "right"
+	case py:
+		zone = "top"
+	}
+	return &ZoneHit{ID: hit, Zone: zone}
 }
 
 // Fullscreen is the rectangle of each card inside the group card id while it is shown across rect, laid out as if the group card were
