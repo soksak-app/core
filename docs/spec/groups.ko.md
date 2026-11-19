@@ -92,7 +92,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 | Command | 조건 | 문구 |
 | --- | --- | --- |
 | `core.group.create` | `card`가 window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
-| `core.group.create` | layout이 최소가 아닌 다른 이유로 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>` |
+| `core.group.create` | layout이 어떤 최소에서도 `card`의 `side` 쪽 split을 거부 | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, `top`, `bottom` 쪽이면 `<w>x0` |
 | `core.group.create` | content card가 최소보다 작게 그려짐 | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`. `<c>`는 workbench order로 그런 첫 card, `<m>`은 `minSize` |
 | `core.group.create` | `request`가 1에서 128자의 문자열이 아님 | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin`이나 `params`가 거부됨 | 그 plugin이나 parameter에 대한 `core.card.split`의 문구([layout에 대한 동작](cli.ko.md#레이아웃에-동작하기)) |
@@ -107,7 +107,7 @@ grid의 모든 operation은 각 group card를 사각형 하나로 유지한다. 
 | 모든 operation | 결과가 group card를 사각형 하나가 아니게 남김 | `card <id> cannot <operation>: group <g> would not cover one rectangle`. `<g>`는 workbench order로 그런 첫 group card |
 | 모든 operation | content card가 최소보다 작게 그려짐 | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
 
-`<operation>`은 layout 거부 문구의 operation 문구다. 곧 `split toward <side>`, `close`, `move to <side> of <target>`이다. 카드의 절반이 `minSize` 아래로 떨어져 layout library가 거부한 split은 trial 사본에서 그 한계 없이 다시 실행되므로, 거부 문구는 split이 최소 아래로 그릴 content card와 그것이 받을 크기를 `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`로 두 workbench에서 같게 밝힌다. 그냥 `card <id> cannot split toward <side>`인 거부는 library가 어떤 최소에서도 거부하는 split에만 남는다.
+`<operation>`은 layout 거부 문구의 operation 문구다. 곧 `split toward <side>`, `close`, `move to <side> of <target>`이다. 카드의 절반이 `minSize` 아래로 떨어져 layout library가 거부한 split은 trial 사본에서 그 한계 없이 다시 실행되므로, 거부 문구는 split이 최소 아래로 그릴 content card와 그것이 받을 크기를 `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`로 두 workbench에서 같게 밝힌다. library가 어떤 최소에서도 거부하는 split, 곧 split이 더하는 corridor보다 좁게 그려진 card의 split은 `side` 축에서 절반에 남는 범위가 없는 card를 `card <id> cannot split toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`(`left`, `right` 쪽)과 `<w>x0`(`top`, `bottom` 쪽)으로 밝힌다.
 
 ### Idempotency
 

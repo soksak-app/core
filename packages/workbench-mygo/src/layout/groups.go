@@ -964,7 +964,7 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 		group, born = t.issue(), t.issue()
 		if ok, err := t.splitCard(id, side, born, data, true); err != nil || !ok {
 			if err == nil {
-				err = fmt.Errorf("card %s cannot hold a group toward %s", id, side)
+				err = fmt.Errorf("card %s cannot hold a group toward %s: %s", id, side, t.noRoomText(id, side))
 			}
 			return err
 		}
@@ -990,6 +990,20 @@ func (t *GroupTree) CreateGroup(id string, side Side, data json.RawMessage, even
 		return "", "", err
 	}
 	return group, born, nil
+}
+
+// noRoomText is the text of a split of the card id toward side that the layout library refuses at any minimum: the card is drawn
+// narrower than the corridor that the split adds, so its halves would have no extent on the axis of side.
+func (t *GroupTree) noRoomText(id string, side Side) string {
+	rect, _ := t.Rect(id) // silent: the operation found the card before it split it.
+	w, h := rect.W, rect.H
+	if axisOf(side) == "x" {
+		w = 0
+	} else {
+		h = 0
+	}
+	minimum := t.grid.MinSize()
+	return fmt.Sprintf("card %s would be %s, below its minimum %s", id, sizeText(w, h), sizeText(minimum, minimum))
 }
 
 // requireGroup refuses an id that is no group card.
@@ -1065,7 +1079,7 @@ func (t *GroupTree) Split(id string, side Side, data json.RawMessage, even bool)
 		born = t.issue()
 		if ok, err := t.splitCard(id, side, born, data, false); err != nil || !ok {
 			if err == nil {
-				err = fmt.Errorf("card %s cannot split toward %s", id, side)
+				err = fmt.Errorf("card %s cannot split toward %s: %s", id, side, t.noRoomText(id, side))
 			}
 			return err
 		}

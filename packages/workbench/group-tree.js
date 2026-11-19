@@ -531,6 +531,16 @@ export class GroupTree {
     return null;
   }
 
+  /**
+   * The text of a split of the card id toward side that the layout library refuses at any minimum: the card is drawn narrower than the
+   * corridor that the split adds, so its halves would have no extent on the axis of side.
+   */
+  noRoomText(id, side) {
+    const { w, h } = this.rect(id);
+    const axis = side === "left" || side === "right" ? "x" : "y";
+    return this.minimumText({ id, rect: { w: axis === "x" ? 0 : w, h: axis === "y" ? 0 : h } });
+  }
+
   /** The text of a content card drawn below its minimum. */
   minimumText(card) {
     const { minSize } = this.options;
@@ -907,7 +917,7 @@ export class GroupTree {
     return this.attempt(id, `hold a group toward ${side}`, () => {
       const group = this.issue();
       const born = this.issue();
-      if (!this.splitCard(id, side, born, data, true)) throw new Error(`card ${id} cannot hold a group toward ${side}`);
+      if (!this.splitCard(id, side, born, data, true)) throw new Error(`card ${id} cannot hold a group toward ${side}: ${this.noRoomText(id, side)}`);
       const parent = this.parentOf(id);
       const node = { card: group, name: this.nextGroupName(), leader: id, members: [found.node ?? id, born] };
       this.replaceMember(parent, id, node);
@@ -930,7 +940,7 @@ export class GroupTree {
     const before = this.drawnCards();
     return this.attempt(id, `split toward ${side}`, () => {
       const born = this.issue();
-      if (!this.splitCard(id, side, born, data, false)) throw refusal();
+      if (!this.splitCard(id, side, born, data, false)) throw new Error(`card ${id} cannot split toward ${side}: ${this.noRoomText(id, side)}`);
       this.attach(found.parent, born);
       this.leaderEntered(found.parent, born);
       this.levelSplit(id, side, born);

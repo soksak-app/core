@@ -92,7 +92,7 @@ The refusals, in the order in which each command checks them:
 | Command | Condition | Text |
 | --- | --- | --- |
 | `core.group.create` | `card` is a window sidebar | `card <id> is a window sidebar; a group holds content cards and group cards` |
-| `core.group.create` | the layout refuses the split of `card` toward `side` for a cause other than its minimum | `card <id> cannot hold a group toward <side>` |
+| `core.group.create` | the layout refuses the split of `card` toward `side` at any minimum | `card <id> cannot hold a group toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>`, or `<w>x0` toward `top` or `bottom` |
 | `core.group.create` | a content card would be drawn below its minimum | `card <id> cannot hold a group toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`, with `<c>` the first such card in workbench order and `<m>` `minSize` |
 | `core.group.create` | `request` is no string of 1 to 128 characters | `core.group.create: request must be a string of 1 to 128 characters` |
 | `core.group.create` | `plugin` or `params` is refused | the text of `core.card.split` for that plugin or those parameters ([acting on a layout](cli.md#acting-on-a-layout)) |
@@ -107,7 +107,7 @@ The refusals, in the order in which each command checks them:
 | every operation | the result leaves a group card without one rectangle | `card <id> cannot <operation>: group <g> would not cover one rectangle`, with `<g>` the first such group card in workbench order |
 | every operation | a content card would be drawn below its minimum | `card <id> cannot <operation>: card <c> would be <w>x<h>, below its minimum <m>x<m>` |
 
-`<operation>` is the text of the operation in the refusals of the layout: `split toward <side>`, `close`, `move to <side> of <target>`. A split that the layout library refuses because a half of the card would fall below `minSize` is made again on the trial copy without that bound, so the refusal names the content card that the split would draw below its minimum and the size it would get, `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`, in both workbenches; the plain refusal `card <id> cannot split toward <side>` remains only for a split that the library refuses at any minimum.
+`<operation>` is the text of the operation in the refusals of the layout: `split toward <side>`, `close`, `move to <side> of <target>`. A split that the layout library refuses because a half of the card would fall below `minSize` is made again on the trial copy without that bound, so the refusal names the content card that the split would draw below its minimum and the size it would get, `card <id> cannot split toward <side>: card <c> would be <w>x<h>, below its minimum <m>x<m>`, in both workbenches. A split that the library refuses at any minimum, of a card drawn narrower than the corridor that the split adds, names the card with no extent left for its halves on the axis of `side`: `card <id> cannot split toward <side>: card <id> would be 0x<h>, below its minimum <m>x<m>` toward `left` or `right` and `<w>x0` toward `top` or `bottom`.
 
 ### Idempotency
 
