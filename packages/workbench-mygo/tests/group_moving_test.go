@@ -149,3 +149,64 @@ func TestAGroupCardIsDraggedByItsHeader(t *testing.T) {
 		t.Fatalf("the group card stands at %v, not right of card-4 at %v", cards["card-2"]["x"], cards["card-4"]["x"])
 	}
 }
+
+// outsideShell is a layout shell whose card main, with the tabs t1 and t2, is in the group card card-2 beside card-3, and the root
+// plane holds card-4 right of the group card.
+func outsideShell(t *testing.T) *tabShell {
+	t.Helper()
+	f := layoutShell(t, oneCard(tab("t1", "notes"), tab("t2", "notes")))
+	if _, err := f.apply("core.group.create", `{"card": "main", "side": "right", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.apply("core.card.split", `{"card": "card-2", "side": "right", "plugin": "plain"}`); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+// dropOnRightOf drags tab to the right zone of card and releases it there.
+func (f *tabShell) dropOnRightOf(t *testing.T, tab, card string) *dragRead {
+	t.Helper()
+	box := f.box("core.card", card)
+	x, y := box.X+box.W-4, box.Y+box.H/2
+	drag := dragTab(t, f.shellFixture, tab, x, y)
+	f.tester.Release(x, y)
+	f.settle()
+	return drag
+}
+
+// A tab of a card inside a group dropped on the right zone of a card of the root plane goes into a new card right of that card in the
+// root plane, and the card that it left keeps its other tab in the group.
+func TestATabOutOfAGroupSplitsACardOfTheRootPlane(t *testing.T) {
+	f := outsideShell(t)
+	// The narrow head of main shows its active tab only, so t2 is shown first.
+	f.shellFixture.run("core.tab.select", map[string]string{"tab": "t2"})
+	drag := f.dropOnRightOf(t, "t2", "card-4")
+	if drag == nil || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
+		t.Fatalf("the drag over the right of card-4 is %+v", drag)
+	}
+	cards := f.gridCards()
+	born := cards["card-5"]
+	if born == nil || born["plane"] != nil || !f.holdsTab("card-5", "t2") || born["x"].(float64) <= cards["card-4"]["x"].(float64) {
+		t.Fatalf("after the drop the new card is %v", born)
+	}
+	if !f.holdsTab("main", "t1") || f.holdsTab("main", "t2") || cards["main"]["plane"] != "card-2" {
+		t.Fatalf("after the drop main is %v", cards["main"])
+	}
+}
+
+// The only tab of a card inside a group dropped on the right zone of a card of the root plane moves its card there, and the group card
+// that keeps one card is replaced by that card.
+func TestTheOnlyTabOutOfAGroupMovesItsCardAndDissolvesTheGroup(t *testing.T) {
+	f := outsideShell(t)
+	only := f.gridCards()["card-3"]["tabs"].([]any)[0].(map[string]any)["id"].(string)
+	drag := f.dropOnRightOf(t, only, "card-4")
+	if drag == nil || drag.Target == nil || drag.Target.Card != "card-4" || drag.Target.Zone != "right" || drag.Preview == nil {
+		t.Fatalf("the drag over the right of card-4 is %+v", drag)
+	}
+	cards := f.gridCards()
+	if _, kept := cards["card-2"]; kept || cards["main"]["plane"] != nil || cards["card-3"]["plane"] != nil ||
+		cards["card-3"]["x"].(float64) <= cards["card-4"]["x"].(float64) {
+		t.Fatalf("after the drop the grid holds %v", cards)
+	}
+}
