@@ -1225,3 +1225,52 @@ func TestAMenuWiderThanItsLeastWidthWidensByItsThinClassicBar(t *testing.T) {
 		t.Fatalf("an item is %+v back under the overlay style, %+v before", again, overlay)
 	}
 }
+
+// Every menu of the card head asks its question, the text of PICKER_ASK of packages/workbench/plane.js, so no menu opens with an empty
+// first row.
+func TestEveryCardMenuAsksItsQuestion(t *testing.T) {
+	f := layoutShell(t, oneCard(tab("t1", "notes")))
+	f.tester.SetSize(1600, 900)
+	f.settle()
+	for menu, want := range map[string]string{"add": "새 탭에 무엇을 띄울까", "split-x": "새 위치에 무엇을 띄울까", "split-y": "새 위치에 무엇을 띄울까",
+		"group": "새 위치에 무엇을 띄울까"} {
+		if _, err := f.apply("core.card.menu", `{"card": "main", "menu": "`+menu+`"}`); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.read("core.picker")["title"]; got != want {
+			t.Errorf("the menu %s asks %q, not %q", menu, got, want)
+		}
+		if _, err := f.apply("core.picker.close", `{}`); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A layer without a question draws no head, so its first item stands one outer padding inside the border, above the end of the top
+// padding of a head: a tab without a title opens its menu with the title of the tab, which is empty.
+func TestALayerWithoutAQuestionDrawsNoHead(t *testing.T) {
+	declared, err := workbench.Declared()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pad, _ := declared.Metric("picker-outer-pad")
+	headTop, _ := declared.Metric("picker-head-pad-top")
+	// The layer at y stands the anchor gap below it.
+	gap, _ := declared.Metric("picker-anchor-gap")
+	untitled := tab("tab-aaaaaa", "notes")
+	untitled["title"] = ""
+	f := newTabShell(t, &storedHost{projects: []map[string]any{storedProject(untitled)}})
+	f.open(t)
+	f.run(t, "core.tab.menu", `{"tab":"tab-aaaaaa","x":10,"y":10}`)
+	f.settle()
+	if got := f.read("core.picker")["title"]; got != "" {
+		t.Fatalf("the menu of the tab without a title asks %q", got)
+	}
+	keep, ok := exposedNode(f.tester.ElementTree(), "core.tab.menu-keep", "keep")
+	if !ok {
+		t.Fatal("no item of the menu")
+	}
+	if top, head := keep.Bounds.Y-10-float32(gap), float32(pad+headTop); top >= head {
+		t.Fatalf("the first item stands %v below the top of the layer, below the top padding %v of a head", top, head)
+	}
+}

@@ -283,6 +283,20 @@ lane("push range", "js-ts", ["scripts/push-range.mjs"], ["scripts/test/push-rang
 const PORTABLE_REQUIREMENT_PLATFORMS = { darwin: { status: "required" }, linux: { status: "required" }, win32: { status: "required" } };
 const FEATURE_LINKS = [
   {
+    id: "F964",
+    implementation: [
+      { file: "packages/workbench-mygo/src/picker.go", symbol: "var pickerAsk = map[string]string{" },
+      { file: "packages/workbench/picker-layer.js", symbol: "export function fillPicker(el, ask, groups, mark)" },
+    ],
+    tests: [
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestEveryCardMenuAsksItsQuestion" },
+      { file: "packages/workbench-mygo/tests/picker_test.go", id: "TestALayerWithoutAQuestionDrawsNoHead" },
+      { file: "packages/workbench/test/picker-layer.test.mjs", id: "a picker without a question draws no head" },
+    ],
+    expected: "Every menu of a card head asks its question, and a layer without a question draws no head in both workbenches.",
+    levels: ["unit"],
+  },
+  {
     id: "F937-9",
     implementation: [
       { file: "packages/workbench-mygo/src/cards.go", symbol: "func (s *Shell) describeLevel(key string) (*LayoutNode, error)" },

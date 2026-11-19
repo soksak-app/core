@@ -16,10 +16,13 @@ import { MODAL_DISMISS } from "./card.js";
 export function fillPicker(el, ask, groups, mark) {
   const document = el.ownerDocument;
   el.textContent = "";
-  const head = document.createElement("div");
-  head.className = "picker__head";
-  head.textContent = ask;
-  el.appendChild(head);
+  // A layer without a question, such as the menu of a tab without a title, draws no head, so it opens with no empty first row.
+  if (ask) {
+    const head = document.createElement("div");
+    head.className = "picker__head";
+    head.textContent = ask;
+    el.appendChild(head);
+  }
   const keys = [];
   for (const { heading, items } of groups) {
     if (heading) {

@@ -16,7 +16,8 @@ import (
 // them. It is native UI, drawn over the window (docs/spec/hosts.md#native-views).
 
 // pickerAsk are the questions of the add menu by its tool.
-var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까"}
+var pickerAsk = map[string]string{"add": "새 탭에 무엇을 띄울까", "x": "새 위치에 무엇을 띄울까", "y": "새 위치에 무엇을 띄울까",
+	"group": "새 위치에 무엇을 띄울까"}
 
 // The view box of the map of a group heading (fillPicker of packages/workbench/picker-layer.js).
 const pickerMapWidth, pickerMapHeight = 16, 10
@@ -695,9 +696,12 @@ func (s *Shell) drawPicker(c *ui.Context, width, height float32) {
 		panel.Margin(metrics.anchorGap, 0, 0, 0).KeepAll().MinWidth(metrics.minW).MaxWidth(maxW).MaxHeight(maxH).Column().Padding(metrics.outerPad).LineHeight(float32(lineHeight)).
 			Background(s.palette.Card).Border(s.palette.BorderWidth, s.palette.Edge).Radius(s.radiusMiddle()).Label(layer.title).
 			Shadow(0, metrics.shadowY, metrics.shadowBlur, 0, ui.RGBA(0, 0, 0, metrics.shadowAlpha)).Children(func() {
-			ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
-				ui.Text(c, layer.title).FontSize(s.textCaption()).LetterSpacing(s.textCaption() * s.sectionTracking()).TextColor(s.palette.Muted)
-			})
+			// A layer without a question, such as the menu of a tab without a title, draws no head, so it opens with no empty first row.
+			if layer.title != "" {
+				ui.Box(c).Padding(metrics.headTop, metrics.headX, metrics.headBottom, metrics.headX).Children(func() {
+					ui.Text(c, layer.title).FontSize(s.textCaption()).LetterSpacing(s.textCaption() * s.sectionTracking()).TextColor(s.palette.Muted)
+				})
+			}
 			ui.Scroll(c).Grow(1).Column().ThinScrollbars(true).Children(func() {
 				heading := ""
 				for index, item := range layer.items {

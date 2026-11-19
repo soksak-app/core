@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F964 (menu의 빈 head): mygo에서 card header의 group 버튼이 질문을 묻고, 두 workbench에서 질문이 없는 menu는 head를 그리지 않으므로 어떤 menu도 빈 첫 줄로 열리지 않는다. 검증: 두 workbench의 picker test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-9 (description의 group card): 두 workbench에서 window description의 `layout`은 각 group card를 그 member의 tree와 함께 tree의 node `{card, size, frame, leader, group: {name, level, leader, root}}`로 담고, `groups`는 모든 group card를 member 식별자와 함께 한 번씩 나열한다(`docs/spec/exposure.md#window-snapshot`). agent skill은 `layout.groups`를 말하고 각 단계 전에 `layout`을 다시 읽으라고 한다. 검증: 두 workbench의 description test와 skill test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F953 (좁은 header의 leader mark): 두 workbench에서 leader는 tool에 너무 좁은 header에서 leader mark를 지닌다: 다른 tool은 tool menu로 옮겨 가고, mark는 menu button 앞에 서며, header fit이 그것을 세고, tool menu는 그것을 담지 않는다(`docs/spec/groups.md#headers`). page는 `core.grid`의 leader tool을 `leader`로 보고한다. 검증: `TestTheLeaderMarkStaysInANarrowHeader`와 좁은 leader head의 page test가 바뀌지 않은 code에서 실패했고 통과한다.
 - F937-10 (layout마다의 head 답): mygo workbench와 page workbench의 group tree가 head의 split, group, close button의 답을 한 layout에 대해 지니고 layout이 바뀐 뒤에만 시험 operation을 실행하므로, pointer 이동처럼 layout이 바뀌지 않는 그리기는 head를 위해 layout을 계산하지 않는다. 검증: `TestTheHeaderAnswersOfAGroupTreeHoldUntilTheLayoutChanges`와 `the head answers of a group tree hold until the layout changes`가 두 번째 그리기의 시험 operation 12개로 실패했고 통과한다.
