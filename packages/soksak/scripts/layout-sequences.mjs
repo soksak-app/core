@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { Soksak } from "../dist/index.js";
+import { Soksak, checkState } from "../dist/index.js";
 
 export const W = 1600;
 export const H = 1200;
 const sides = ["left", "right", "top", "bottom"];
-export const ordinaryOperations = ["split", "close", "tidy", "moveBoundary", "mergeCoincident"];
+export const ordinaryOperations = ["split", "close", "moveBoundary"];
 export const fixedOperations = ["splitToward", "close", "move", "insertAt", "moveTo", "moveBoundary"];
 export const allOperations = [...new Set([...ordinaryOperations, ...fixedOperations, "setSize", "setFixed", "resize"])];
 export const operationWeights = {
-  ordinary: { split: 50, close: 20, tidy: 5, moveBoundary: 25 },
+  ordinary: { split: 50, close: 25, moveBoundary: 25 },
   fixed: { splitToward: 30, close: 20, move: 25, insertAt: 5, moveTo: 8, moveBoundary: 12 },
-  constrained: { split: 24, splitToward: 10, insertAt: 10, close: 12, move: 8, moveTo: 8, moveBoundary: 10, mergeCoincident: 5, setSize: 7, setFixed: 3, resize: 3 },
+  constrained: { split: 24, splitToward: 10, insertAt: 10, close: 12, move: 8, moveTo: 8, moveBoundary: 15, setSize: 7, setFixed: 3, resize: 3 },
 };
 
 /** One seeded generator serves all profiles; values are always below one. */
@@ -27,16 +27,7 @@ export function random(seed) {
 export function createProfile(profile, seed = 0) {
   const next = random(seed);
   if (profile === "ordinary") return new Soksak(undefined, { width: W, height: H });
-  if (profile === "fixed") return new Soksak({
-    xs: [0, 0.18, 0.36, 0.8, 1], ys: [0, 0.5, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-      { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-      { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
-      { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
-      { id: "right", c0: 3, c1: 4, r0: 0, r1: 2, width: 200, fixed: true },
-    ],
-  }, { width: W, height: H });
+  if (profile === "fixed") return new Soksak({ root: { cut: "x", kids: [{ share: 0.18, node: { card: "left", fixed: true, width: 180 } }, { share: 0.18, node: { card: "rail", fixed: true, width: 190 } }, { share: 0.44000000000000006, node: { cut: "y", kids: [{ share: 0.5, node: { card: "upper" } }, { share: 0.5, node: { card: "lower" } }] } }, { share: 0.19999999999999996, node: { card: "right", fixed: true, width: 200 } }] } }, { width: W, height: H });
   if (profile === "constrained") return new Soksak(undefined, {
     width: 200 + Math.floor(next() * 1600), height: 150 + Math.floor(next() * 1000),
     gap: Math.floor(next() * 40), minSize: Math.floor(next() * 120),
@@ -110,7 +101,9 @@ export function assertInvariants(grid, profile = "constrained") {
       if (ratios.length) require(Math.max(...ratios) - Math.min(...ratios) < 0.001, "fixed-size-ratio", axis);
     }
   }
-  require(grid.isSlicing(), "slicing", "arrangement is not slicing");
+  let refused = null;
+  try { checkState(grid.toJSON()); } catch (error) { refused = error.message; }
+  require(refused === null, "canonical", `the state is refused: ${refused}`);
   if (profile === "fixed") {
     const open = cards.filter((c) => !c.fixed);
     if (open.length > 1) require(open.some((c) => grid.canClose(c.id)), "closable-card", "no open card can close");
@@ -145,7 +138,6 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
     case "split": args = [id(), axis, { id: born }]; break;
     case "splitToward": args = [id(), pick(sides), { id: born, data: { n: step } }]; break;
     case "close": args = [id()]; break;
-    case "tidy": args = []; break;
     case "move": args = [id(), id(), pick(sides)]; break;
     case "insertAt": args = [axis, profile === "constrained" ? Math.floor(next() * (grid.lines(axis).length + 1)) : pick(grid.standings(axis)), { id: born, size: profile === "fixed" ? 40 + Math.floor(next() * 120) : Math.floor(next() * 400) }]; break;
     case "moveTo": args = profile === "fixed" ? ["rail", "x", pick(grid.standings("x"))] : [id(), axis, line()]; break;
@@ -155,7 +147,6 @@ export function generateOperation(grid, next, step, { profile = "ordinary", meth
       args = divider ? [divider.axis, divider.line, grid.boundaryPos(divider.axis, divider.line) + (next() - 0.5) * 0.4 * (divider.axis === "x" ? grid.width : grid.height)] : [axis, 0, 0];
       break;
     }
-    case "mergeCoincident": args = [axis, line()]; break;
     case "setSize": args = [id(), axis, next() < 0.3 ? null : Math.floor(next() * 400)]; break;
     case "setFixed": args = [id(), next() < 0.5]; break;
     case "resize": args = [Math.floor(next() * 1700), Math.floor(next() * 1000)]; break;
@@ -177,9 +168,7 @@ export function runSequence(grid, { seed = 0, steps = 0, profile = "ordinary", m
   }
   sequence: for (let step = 0; step < (operations?.length ?? steps); step++) {
     const selected = operations?.[step] ?? generateOperation(grid, next, step, { profile, methods });
-    // Ordinary drags retain their original follow-up merge, audited separately.
-    const calls = !operations && !methods && profile === "ordinary" && selected.method === "moveBoundary"
-      ? [selected, { method: "mergeCoincident", args: selected.args.slice(0, 2) }] : [selected];
+    const calls = [selected];
     for (const call of calls) {
       const operation = structuredClone({ method: call.method, args: call.args });
       const before = JSON.stringify({ state: grid.toJSON(), width: grid.width, height: grid.height });

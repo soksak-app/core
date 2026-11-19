@@ -1,25 +1,28 @@
 /**
- * A soksak over shared grid lines.
+ * A soksak over a slicing tree.
  *
- * `xs` and `ys` hold every coordinate, normalised 0..1 over the slots that
- * share the remaining space. A slot with a px size is drawn at that size
- * whatever its span, so a line's px position is not its value times the plane
- * size. A card is a span of indices into them, so two cards that meet reference
- * the same index and their shared boundary is one value. Moving a line moves
- * every card that references it; a card spanning across it is unaffected.
+ * The state is the canonical slicing tree of the plane (`tree.ts`,
+ * packages/soksak/docs/layout.md#the-model). After every change the grid
+ * derives from it `xs` and `ys`, every coordinate at which the rectangle of a
+ * node starts or ends, normalised 0..1 over the slots that share the remaining
+ * space, and each card as a span of indices into them. A slot with a px size is
+ * drawn at that size whatever its span, so a line's px position is not its value
+ * times the plane size. Two cards that meet reference the same index, so their
+ * shared boundary is one value.
  *
- * Splitting replaces one card with two, so the arrangement stays a slicing
- * floorplan and every card can be closed.
- *
- * This module holds the state and the operations. `geometry.ts` computes the
- * coordinates.
+ * The operations of the structure (split, close, insert, move, arrange and the
+ * cut operations) change the tree. The operations of a line (a boundary drag and
+ * the settle of a slot to a px width) move the derived lines, and `commit`
+ * writes the shares that the moved lines give back into the cuts of the tree,
+ * whose structure stays. `geometry.ts` computes the coordinates.
  */
 import { AXES, SIDES, SPAN, axisOf, fixedSize, isAhead, other, spanOf } from './card.js';
-import { cardInset, corridorOf, corridorWhenWide, crossing, declaredFor, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, interiorLines, isVirtual, linePositions, rectIn, rectOf, rules, sharePerSpan, slotSizes, slotWidths, zoneAt, } from './geometry.js';
-import { fillFor, isSlicing, ORDER } from './slicing.js';
-import { balanceRegions, sliceTree } from './balance.js';
-import { evenCuts, insertCard, withdrawMember } from './cuts.js';
-const EPS = 1e-9;
+import { cardInset, corridorOf, corridorWhenWide, crossing, declaredFor, dividers, frameOf, linesRead, halfCorridor, heldSizes, holdsSizes, inset, linePositions, rectIn, rectOf, rules, sharePerSpan, slotSizes, slotWidths, zoneAt, } from './geometry.js';
+import { DIRECTIONS, ORDER } from './slicing.js';
+import { evenCuts, insertNode, withdrawNode } from './cuts.js';
+import { EPS, cardsOf, checkState, cloneNode, isBox, isCard, isCut } from './tree.js';
+export { checkState } from './tree.js';
+const ENDS = { x: ['x0', 'x1'], y: ['y0', 'y1'] };
 /**
  * Slots to try when settling a change, nearest the boundary first: `from`,
  * then `back`, then outward from each.
@@ -32,52 +35,29 @@ const order = (from, count, back = from - 1) => {
     return out.filter((i) => i >= 0 && i < count);
 };
 /**
- * Rejects a state that cannot describe a plane and reports which field is wrong.
- *
- * Without this check a stale layout read from storage reaches the geometry,
- * where an index outside the line array or a non-numeric coordinate produces a
- * NaN rect. In the DOM that becomes `left: NaNpx`, which the CSSOM discards, so
- * the view stops at its last valid layout and reports nothing.
+ * The lines of coordinates: coordinates within EPS of the line before are that
+ * line (R1), because two cuts laid alike, such as two rows of equal shares,
+ * reach one coordinate through different sums.
  */
-export function checkState(state) {
-    const bad = (why) => {
-        throw new TypeError(`soksak: ${why}`);
-    };
-    for (const axis of ['xs', 'ys']) {
-        const a = state === null || state === void 0 ? void 0 : state[axis];
-        if (!Array.isArray(a) || a.length < 2)
-            bad(`${axis} needs at least two lines`);
-        for (const [i, v] of a.entries()) {
-            if (!Number.isFinite(v))
-                bad(`${axis}[${i}] is ${String(v)}`);
-            if (i > 0 && v < a[i - 1])
-                bad(`${axis}[${i}] is before ${axis}[${i - 1}]`);
-        }
+function linesOf(values) {
+    const out = [];
+    for (const v of values.sort((a, b) => a - b))
+        if (!out.length || v - out[out.length - 1] >= EPS)
+            out.push(v);
+    return out;
+}
+/** The index of the line of v in the ascending lines: the last line at or below v within EPS, by bisection. */
+function lineOf(lines, v) {
+    let lo = 0;
+    let hi = lines.length;
+    while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (lines[mid] > v + EPS)
+            hi = mid;
+        else
+            lo = mid + 1;
     }
-    if (!Array.isArray(state.cards) || state.cards.length === 0)
-        bad('cards is empty');
-    const seen = new Set();
-    for (const c of state.cards) {
-        if (typeof (c === null || c === void 0 ? void 0 : c.id) !== 'string' || !c.id)
-            bad('a card has no id');
-        if (seen.has(c.id))
-            bad(`two cards are called ${c.id}`);
-        seen.add(c.id);
-        for (const [lo, hi, axis] of [
-            ['c0', 'c1', 'xs'],
-            ['r0', 'r1', 'ys'],
-        ]) {
-            const a = state[axis];
-            const from = c[lo];
-            const to = c[hi];
-            if (!Number.isInteger(from) || !Number.isInteger(to))
-                bad(`${c.id}.${lo}/${hi} is not an index`);
-            if (from < 0 || to > a.length - 1)
-                bad(`${c.id}.${lo}/${hi} is outside ${axis}`);
-            if (to <= from)
-                bad(`${c.id}.${hi} is not past ${c.id}.${lo}`);
-        }
-    }
+    return lo - 1;
 }
 // Every caller passes a range in order: boundaryRange collapses an inverted one
 // before returning, the line array is non-decreasing, and cutAt answers null
@@ -89,6 +69,14 @@ function checkFillSides(sides) {
         if (!ORDER.v.includes(side))
             throw new Error(`unknown fill side ${String(side)}`);
     }
+}
+/** Writes a px size on an axis of a card or a card node, or removes it with null. */
+function sizeOn(card, axis, px) {
+    const key = axis === 'x' ? 'width' : 'height';
+    if (px === null)
+        delete card[key];
+    else
+        card[key] = px;
 }
 export class Soksak {
     /** Gap between two cards, in px. Clamped to 0; a negative value overlaps cards. */
@@ -124,7 +112,6 @@ export class Soksak {
         if (value !== 'v' && value !== 'h')
             return;
         this.order = value;
-        this.sliceMemo.clear();
         this.splitMemo.clear();
     }
     /** Smallest grab area of a boundary, in px. */
@@ -154,21 +141,34 @@ export class Soksak {
             return;
         this.snapMode = mode;
     }
-    /** With no state, starts as one card filling the plane. */
     constructor(state, options = {}) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
-        this.seq = 0;
-        this.sliceMemo = new Map();
-        this.splitMemo = new Map();
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        /** The state: the slicing tree of the plane, and the card that each card took its space from. */
+        this.root = { card: 'card', fixed: false };
         /**
-         * Which side of a card's slot gave up the span it occupies, by card id.
-         *
-         * `split` and `insertAt` take the span from one neighbour. A close returns it
-         * by removing the line on that side, so the two operations are inverses.
-         * Without this the space goes to whichever neighbour the fill selects, and
-         * repeating split and close reduces one card to `minSize`.
+         * Which card each card took its space from, by id. `split` and `insertAt`
+         * record it, and a close gives the space back to that card when it stands
+         * beside it in the same cut, so the two operations are inverses; `''` names
+         * a card that took a share of every kid of the root.
          */
         this.paidBy = new Map();
+        // Derived from the tree by `derive` after every change.
+        this.xs = [0, 1];
+        this.ys = [0, 1];
+        this.list = [];
+        this.byId = new Map();
+        this.leaves = new Map();
+        this.boxes = new Map();
+        this.at = new Map();
+        this.spots = new Map();
+        this.up = new Map();
+        /** The px that the host draws inside the top of each box by id, which `setHeads` set. */
+        this.heads = new Map();
+        /** The nodes that the last operation visited, and how deep the public operations that run now are nested. */
+        this.visited = 0;
+        this.depth = 0;
+        this.seq = 0;
+        this.splitMemo = new Map();
         /** True while canSplit runs a trial split and restores the state. */
         this.probing = false;
         this.g = 24;
@@ -199,22 +199,232 @@ export class Soksak {
         this.resize((_g = options.width) !== null && _g !== void 0 ? _g : 0, (_h = options.height) !== null && _h !== void 0 ? _h : 0);
         if (state) {
             checkState(state);
-            this.xs = [...state.xs];
-            this.ys = [...state.ys];
-            // default: `fixed` is optional on CardInit; an unmarked card is not fixed.
-            this.list = state.cards.map((c) => { var _a; return ({ ...c, fixed: (_a = c.fixed) !== null && _a !== void 0 ? _a : false }); });
-            // default: `paidBy` is optional in SoksakState; a state without it records no payer.
-            this.paidBy = new Map(Object.entries((_j = state.paidBy) !== null && _j !== void 0 ? _j : {}));
+            this.load(state);
         }
         else {
-            this.xs = [0, 1];
-            this.ys = [0, 1];
-            this.list = [{ id: 'card', c0: 0, c1: 1, r0: 0, r1: 1, fixed: false }];
+            this.derive();
         }
         this.agreeSizes();
+        this.commit();
     }
     static from(state, options) {
         return new Soksak(state, options);
+    }
+    // ---- the tree ----------------------------------------------------------
+    /** Takes the tree and the payers of a state as copies and derives the lines and the cells. */
+    load(state) {
+        var _a;
+        this.root = cloneNode(state.root);
+        // default: `paidBy` is optional in SoksakState; a state without it records no payer.
+        this.paidBy = new Map(Object.entries((_a = state.paidBy) !== null && _a !== void 0 ? _a : {}));
+        this.derive();
+    }
+    /**
+     * Lays the tree into the unit plane and derives the lines and the cells from
+     * it: coordinates within EPS are one line (R1), and the cards are listed in
+     * the order of the tree. Each node keeps the lines its rectangle starts and
+     * ends at and the node that holds it, so no operation searches the tree.
+     */
+    derive() {
+        const spots = new Map();
+        const up = new Map();
+        const leaves = [];
+        const boxes = new Map();
+        const place = (node, e) => {
+            this.visited++;
+            spots.set(node, e);
+            if (isCut(node)) {
+                const [lo, hi] = ENDS[node.cut];
+                const total = e[hi] - e[lo];
+                let at = e[lo];
+                node.kids.forEach((kid, i) => {
+                    up.set(kid.node, { node, at: i });
+                    const end = i === node.kids.length - 1 ? e[hi] : at + kid.share * total;
+                    place(kid.node, { ...e, [lo]: at, [hi]: end });
+                    at = end;
+                });
+            }
+            else if (isBox(node)) {
+                boxes.set(node.box, node);
+                up.set(node.inner, { node, at: -1 });
+                place(node.inner, e);
+            }
+            else {
+                leaves.push(node);
+            }
+        };
+        place(this.root, { x0: 0, x1: 1, y0: 0, y1: 1 });
+        const xv = [];
+        const yv = [];
+        for (const leaf of leaves) {
+            const e = spots.get(leaf);
+            xv.push(e.x0, e.x1);
+            yv.push(e.y0, e.y1);
+        }
+        this.xs = linesOf(xv);
+        this.ys = linesOf(yv);
+        this.at = new Map();
+        for (const [node, e] of spots) {
+            this.at.set(node, [lineOf(this.xs, e.x0), lineOf(this.xs, e.x1), lineOf(this.ys, e.y0), lineOf(this.ys, e.y1)]);
+        }
+        this.spots = spots;
+        this.up = up;
+        this.boxes = boxes;
+        this.leaves = new Map();
+        this.byId = new Map();
+        this.list = leaves.map((leaf) => {
+            var _a;
+            const [c0, c1, r0, r1] = this.at.get(leaf);
+            // default: `fixed` is optional on a card node; an unmarked card is not fixed.
+            const card = { id: leaf.card, c0, c1, r0, r1, fixed: (_a = leaf.fixed) !== null && _a !== void 0 ? _a : false };
+            if (leaf.data !== undefined)
+                card.data = leaf.data;
+            if (leaf.width !== undefined)
+                card.width = leaf.width;
+            if (leaf.height !== undefined)
+                card.height = leaf.height;
+            this.leaves.set(leaf.card, leaf);
+            this.byId.set(leaf.card, card);
+            return card;
+        });
+    }
+    /**
+     * Writes what the operations of the lines changed back into the tree: the
+     * attributes of every card, and the share of every kid of a cut from the
+     * coordinates of the lines its rectangle starts and ends at. The structure of
+     * the tree stays; then the lines are derived again.
+     */
+    commit() {
+        var _a, _b;
+        for (const card of this.list) {
+            const leaf = this.leaves.get(card.id);
+            leaf.fixed = card.fixed;
+            if (card.data !== undefined)
+                leaf.data = card.data;
+            else
+                delete leaf.data;
+            sizeOn(leaf, 'x', (_a = card.width) !== null && _a !== void 0 ? _a : null);
+            sizeOn(leaf, 'y', (_b = card.height) !== null && _b !== void 0 ? _b : null);
+        }
+        const push = (node) => {
+            this.visited++;
+            if (isCut(node)) {
+                const a = this.arr(node.cut);
+                const [lo, hi] = this.on(node, node.cut);
+                const total = a[hi] - a[lo];
+                const spans = node.kids.map((kid) => {
+                    const [from, to] = this.on(kid.node, node.cut);
+                    return a[to] - a[from];
+                });
+                // A share is positive. The settle of a slot to a px width can leave a kid no span when the px sizes of the axis take
+                // more room than the plane has; the cut then keeps the shares it has, so the kid keeps a span.
+                if (total > 0 && spans.every((span) => span > EPS * total)) {
+                    node.kids.forEach((kid, i) => {
+                        kid.share = spans[i] / total;
+                    });
+                }
+                for (const kid of node.kids)
+                    push(kid.node);
+            }
+            else if (isBox(node)) {
+                push(node.inner);
+            }
+        };
+        push(this.root);
+        this.derive();
+    }
+    /** The lines on an axis at which the rectangle of a node starts and ends, as the last derive laid it. */
+    on(node, axis) {
+        const [c0, c1, r0, r1] = this.at.get(node);
+        return axis === 'x' ? [c0, c1] : [r0, r1];
+    }
+    /** Puts `next` where `node` stands: in its cut, inside its box, or as the root. A cut along the axis of its cut gives that cut its kids. */
+    put(node, next) {
+        const holding = this.up.get(node);
+        if (!holding) {
+            this.root = next;
+            return;
+        }
+        const { node: holder, at } = holding;
+        if (isBox(holder)) {
+            holder.inner = next;
+        }
+        else if (isCut(next) && next.cut === holder.cut) {
+            const share = holder.kids[at].share;
+            holder.kids.splice(at, 1, ...next.kids.map((kid) => ({ share: share * kid.share, node: kid.node })));
+        }
+        else {
+            holder.kids[at].node = next;
+        }
+    }
+    /**
+     * Takes the kid `i` out of the cut `holder` and gives its share to the kid
+     * `to`, or to every other kid in proportion to its share when `to` is -1. A cut
+     * left with one kid is replaced by that kid.
+     */
+    drop(holder, i, to) {
+        const gone = holder.kids[i].share;
+        if (to >= 0)
+            holder.kids[to].share += gone;
+        else
+            holder.kids.forEach((kid, k) => {
+                if (k !== i)
+                    kid.share /= 1 - gone;
+            });
+        holder.kids.splice(i, 1);
+        if (holder.kids.length === 1)
+            this.put(holder, holder.kids[0].node);
+    }
+    /** The node that leaves with the card of `leaf`: the card, or the box around it that holds nothing else. */
+    departing(leaf) {
+        let node = leaf;
+        for (let holding = this.up.get(node); holding && holding.at < 0; holding = this.up.get(node))
+            node = holding.node;
+        return node;
+    }
+    /** Whether an id names a card or a box of the tree. */
+    taken(id) {
+        return this.byId.has(id) || this.boxes.has(id);
+    }
+    /**
+     * Runs a public operation and counts the nodes that it visits in `visits`;
+     * an operation that another runs adds to the count of the outer one.
+     */
+    run(body) {
+        if (this.depth === 0)
+            this.visited = 0;
+        this.depth++;
+        try {
+            return body();
+        }
+        finally {
+            this.depth--;
+        }
+    }
+    /**
+     * The number of nodes of the tree that the last operation visited
+     * (packages/soksak/docs/layout.md#cuts). Every operation is linear in the
+     * nodes that it touches, so a test bounds this count on a large tree.
+     */
+    get visits() {
+        return this.visited;
+    }
+    /**
+     * Sets the px that the host draws inside the top of each box by id, above its
+     * inner node, which the drawn sizes and the minimum of the cut operations
+     * count. The heads are no part of the state. Throws for an id that is no box
+     * and for a head that is no finite number from zero, and then changes nothing.
+     */
+    setHeads(heads) {
+        const next = new Map();
+        for (const [id, px] of Object.entries(heads)) {
+            if (!this.boxes.has(id))
+                throw new Error(`soksak: heads name ${JSON.stringify(id)}, which is no box`);
+            if (!Number.isFinite(px) || px < 0)
+                throw new Error(`soksak: the head of ${JSON.stringify(id)} is ${String(px)}`);
+            next.set(id, px);
+        }
+        this.heads = next;
     }
     // ---- the plane ---------------------------------------------------------
     resize(width, height) {
@@ -254,6 +464,7 @@ export class Soksak {
         if (!card)
             return false;
         card.data = data;
+        this.leaves.get(id).data = data;
         return true;
     }
     /**
@@ -289,10 +500,10 @@ export class Soksak {
         if (!card)
             return false;
         card.fixed = fixed;
-        // splitMemo and sliceMemo were computed with the previous `fixed` value.
-        // A fixed card never fills for a closing neighbour, so both results change.
+        this.leaves.get(id).fixed = fixed;
+        // splitMemo was computed with the previous `fixed` value. A fixed card never
+        // fills for a closing neighbour, so the results change.
         this.splitMemo.clear();
-        this.sliceMemo.clear();
         return true;
     }
     /**
@@ -332,7 +543,7 @@ export class Soksak {
     }
     /** The card itself, for the operations that change it. */
     find(id) {
-        return this.list.find((c) => c.id === id);
+        return this.byId.get(id);
     }
     /** Grid line coordinates, normalised 0..1. A copy — the arrangement owns them. */
     lines(axis) {
@@ -340,13 +551,9 @@ export class Soksak {
             return [];
         return [...(axis === 'x' ? this.xs : this.ys)];
     }
+    /** The state: a copy of the slicing tree and of the payers. */
     toJSON() {
-        return {
-            xs: [...this.xs],
-            ys: [...this.ys],
-            cards: this.list.map((c) => ({ ...c })),
-            paidBy: Object.fromEntries(this.paidBy),
-        };
+        return { root: cloneNode(this.root), paidBy: Object.fromEntries(this.paidBy) };
     }
     /**
      * Replace the arrangement while keeping this grid's plane and options.
@@ -355,17 +562,15 @@ export class Soksak {
      * for a host that owns the canonical state and keeps one DOM view alive.
      */
     replace(state) {
-        var _a;
         checkState(state);
-        this.xs = [...state.xs];
-        this.ys = [...state.ys];
-        // default: `fixed` is optional on CardInit; an unmarked card is not fixed.
-        this.list = state.cards.map((c) => { var _a; return ({ ...c, fixed: (_a = c.fixed) !== null && _a !== void 0 ? _a : false }); });
-        // default: `paidBy` is optional in SoksakState; a state without it records no payer.
-        this.paidBy = new Map(Object.entries((_a = state.paidBy) !== null && _a !== void 0 ? _a : {}));
-        this.sliceMemo.clear();
+        this.reload(state);
+    }
+    /** Puts a state into the grid that `checkState` accepted or that `toJSON` of this grid returned. */
+    reload(state) {
+        this.load(state);
         this.splitMemo.clear();
         this.agreeSizes();
+        this.commit();
     }
     get plane() {
         return {
@@ -412,23 +617,6 @@ export class Soksak {
     /** How many lines a card spans across — how much finer its neighbours are. */
     crossings(card) {
         return Math.max(0, card.c1 - card.c0 - 1) + Math.max(0, card.r1 - card.r0 - 1);
-    }
-    /** True when no card reads this line — it survives only as a snap target. */
-    isVirtual(axis, line) {
-        if (this.noAxis(axis))
-            return false;
-        return isVirtual(this.plane, axis, line);
-    }
-    virtualCount() {
-        let n = 0;
-        for (const axis of AXES)
-            for (const k of interiorLines(this.plane, axis))
-                if (this.isVirtual(axis, k))
-                    n++;
-        return n;
-    }
-    isSlicing(list = this.list) {
-        return isSlicing(list, this.sliceMemo);
     }
     // ---- boundaries --------------------------------------------------------
     /** Set the px size every card in a slot declares. */
@@ -679,14 +867,6 @@ export class Soksak {
         const along = linePositions(this.plane, axis);
         return line >= 0 && line < along.length ? along[line] : 0;
     }
-    /** The nearest line on that side that at least one card references. */
-    realNeighbour(axis, line, step) {
-        const last = this.arr(axis).length - 1;
-        let at = line + step;
-        while (at > 0 && at < last && this.isVirtual(axis, at))
-            at += step;
-        return at;
-    }
     /**
      * Whether `line` is an interior line index.
      *
@@ -700,8 +880,7 @@ export class Soksak {
     /**
      * The px range a boundary may move within while every card keeps `minSize`.
      *
-     * The range extends to the nearest line a card references; unreferenced lines
-     * do not limit it. When the cards on both sides need more than the plane
+     * The range extends to the neighbouring lines, each the edge of a card. When the cards on both sides need more than the plane
      * holds, `lo` and `hi` are equal rather than inverted.
      *
      * The range always contains the position the boundary stands at, so a drag
@@ -732,8 +911,8 @@ export class Soksak {
         const [lo, hi] = SPAN[axis];
         // The neighbouring lines are hard limits. Past one of them the line array is
         // out of order and a card is drawn wider than one spanning more slots.
-        const first = along[this.realNeighbour(axis, line, -1)];
-        const last = along[this.realNeighbour(axis, line, 1)];
+        const first = along[line - 1];
+        const last = along[line + 1];
         let min = first;
         let max = last;
         const plane = this.plane;
@@ -774,6 +953,10 @@ export class Soksak {
     moveBoundary(axis, line, px, allowSnap = true) {
         if (this.noAxis(axis))
             return 0;
+        return this.run(() => this.moveLine(axis, line, px, allowSnap));
+    }
+    /** `moveBoundary` of an axis that is one. */
+    moveLine(axis, line, px, allowSnap) {
         if (!this.hasBoundary(axis, line) || !Number.isFinite(px))
             return this.boundaryPos(axis, line);
         const [min, max] = this.boundaryRange(axis, line);
@@ -786,8 +969,6 @@ export class Soksak {
                 }
             }
         }
-        // Remove the unreferenced lines the move has passed.
-        line = this.forgetLinesPassed(axis, line, target);
         const holder = this.holderAt(axis, line);
         if (holder) {
             // Measure from the edge that does not move. Both positions are read before
@@ -846,29 +1027,10 @@ export class Soksak {
                 }
             }
         }
+        // The position is read before the commit: a line that reached another joins it there, and its index then names another line.
+        const at = this.boundaryPos(axis, line);
         this.changed();
-        return this.boundaryPos(axis, line);
-    }
-    /**
-     * Removes the unreferenced lines the move passes and returns the new index of
-     * the moved line.
-     *
-     * Leaving a passed line in place would put the array out of order.
-     */
-    forgetLinesPassed(axis, line, target) {
-        const a = this.arr(axis);
-        // No card references these lines, so it does not matter which neighbour absorbs them.
-        const drop = (k) => this.removeLine(axis, k, 'lo');
-        // `target` is in px and the line array is normalised, so compare in px.
-        const at = (k) => linePositions(this.plane, axis)[k];
-        while (line - 1 >= 1 && this.isVirtual(axis, line - 1) && target < at(line - 1)) {
-            drop(line - 1);
-            line--;
-        }
-        while (line + 1 <= a.length - 2 && this.isVirtual(axis, line + 1) && target > at(line + 1)) {
-            drop(line + 1);
-        }
-        return line;
+        return at;
     }
     /** px per unit of normalised span across the sharing slots. */
     sharedExtent(axis) {
@@ -892,23 +1054,21 @@ export class Soksak {
         // clamped to the range as it then stood walked the boundary further out on
         // every pass: past the range this call reported and below `minSize`.
         const [low, high] = this.boundaryRange(axis, line);
-        let at = this.boundaryPos(axis, line);
-        for (let pass = 0; pass < 8; pass++) {
-            const middle = clamp(this.middleOf(axis, line), low, high);
-            if (Math.abs(middle - at) < 0.01)
-                break;
-            at = this.moveBoundary(axis, line, middle, false);
-            // The move drops the unreferenced lines it passed, which lowers the number
-            // of the line it moved. The next pass measures the same boundary, so it is
-            // given the number that line has now.
-            while (line > 1 && this.boundaryPos(axis, line) !== at)
-                line--;
-        }
-        return at;
+        return this.run(() => {
+            let at = this.boundaryPos(axis, line);
+            // A move onto another line joins the two lines, as the derived lines of the tree hold one coordinate once, so the boundary can end.
+            for (let pass = 0; pass < 8 && this.hasBoundary(axis, line); pass++) {
+                const middle = clamp(this.middleOf(axis, line), low, high);
+                if (Math.abs(middle - at) < 0.01)
+                    break;
+                at = this.moveLine(axis, line, middle, false);
+            }
+            return at;
+        });
     }
     /**
-     * Replaces the arrangement with an equal grid of the cards in their current
-     * order, and removes every split and merge (packages/soksak/docs/layout.md#even-arrangement).
+     * Replaces the arrangement with an equal grid of the cards in reading order,
+     * and removes every split and merge (packages/soksak/docs/layout.md#even-arrangement).
      * The grid has `rows * columns` equal to the card count `n` or `n + 1`; one
      * empty card is added when `n + 1` is chosen. Among the grids whose cells are at
      * least `minSize` on both axes, the one whose cell is closest to square is taken,
@@ -918,199 +1078,142 @@ export class Soksak {
     arrange(mode) {
         if (mode !== 'even')
             throw new Error(`unknown arrangement "${String(mode)}"`);
-        const n = this.list.length;
-        if (n === 0)
-            return false;
-        // The drawn size of a card along an axis with `count` cells: a card at the border
-        // insets by half a gap on one side only, so the line spacing carries that inset.
-        const cellSize = (count, size) => count === 1 ? size - this.gap : (size - (count - 1) * this.gap) / count;
-        let best = null;
-        for (let rows = 1; rows <= n + 1; rows++) {
-            const columns = Math.ceil(n / rows);
-            const empty = rows * columns - n;
-            if (empty > 1)
-                continue;
-            const cellW = cellSize(columns, this.w);
-            const cellH = cellSize(rows, this.h);
-            if (cellW < this.min || cellH < this.min)
-                continue;
-            const skew = Math.abs(Math.log(cellW / cellH));
-            const better = !best ||
-                skew < best.skew - 1e-9 ||
-                (Math.abs(skew - best.skew) <= 1e-9 && empty < best.empty);
-            if (better)
-                best = { rows, columns, empty, skew };
-        }
-        if (!best)
-            return false;
-        const { rows, columns, empty } = best;
-        // Lines of one axis: the border lines are at the plane edges, and every inner line
-        // is at the next cell start plus the gap that the border insets take.
-        const lines = (count, size) => {
-            if (count === 1)
-                return [0, size];
-            const d = cellSize(count, size);
-            const out = [0, d + this.gap / 2];
-            for (let i = 2; i < count; i++)
-                out.push(out[i - 1] + d + this.gap);
-            out.push(size);
-            return out;
-        };
-        const xs = lines(columns, this.w).map((value) => value / this.w);
-        const ys = lines(rows, this.h).map((value) => value / this.h);
-        const cards = this.list.map((card, k) => {
-            const { width: _width, height: _height, ...rest } = card;
-            return { ...rest, c0: k % columns, c1: (k % columns) + 1, r0: Math.floor(k / columns), r1: Math.floor(k / columns) + 1 };
-        });
-        for (let k = 0; k < empty; k++) {
-            const at = n + k;
-            cards.push({
-                id: this.nextId(),
-                c0: at % columns,
-                c1: (at % columns) + 1,
-                r0: Math.floor(at / columns),
-                r1: Math.floor(at / columns) + 1,
-                fixed: false,
+        return this.run(() => {
+            const n = this.list.length;
+            if (n === 0)
+                return false;
+            // The drawn size of a card along an axis with `count` cells: a card at the border
+            // insets by half a gap on one side only, so the line spacing carries that inset.
+            const cellSize = (count, size) => count === 1 ? size - this.gap : (size - (count - 1) * this.gap) / count;
+            let best = null;
+            for (let rows = 1; rows <= n + 1; rows++) {
+                const columns = Math.ceil(n / rows);
+                const empty = rows * columns - n;
+                if (empty > 1)
+                    continue;
+                const cellW = cellSize(columns, this.w);
+                const cellH = cellSize(rows, this.h);
+                if (cellW < this.min || cellH < this.min)
+                    continue;
+                const skew = Math.abs(Math.log(cellW / cellH));
+                const better = !best ||
+                    skew < best.skew - 1e-9 ||
+                    (Math.abs(skew - best.skew) <= 1e-9 && empty < best.empty);
+                if (better)
+                    best = { rows, columns, empty, skew };
+            }
+            if (!best)
+                return false;
+            const { rows, columns, empty } = best;
+            // Lines of one axis: the border lines are at the plane edges, and every inner line
+            // is at the next cell start plus the gap that the border insets take.
+            const lines = (count, size) => {
+                if (count === 1)
+                    return [0, 1];
+                const d = cellSize(count, size);
+                const out = [0, d + this.gap / 2];
+                for (let i = 2; i < count; i++)
+                    out.push(out[i - 1] + d + this.gap);
+                out.push(size);
+                return out.map((value) => value / size);
+            };
+            const xs = lines(columns, this.w);
+            const ys = lines(rows, this.h);
+            const cutOf = (axis, at, kids) => kids.length === 1 ? kids[0] : { cut: axis, kids: kids.map((node, i) => ({ share: at[i + 1] - at[i], node })) };
+            // The cards fill the grid in reading order: by the line their rectangle starts at, the top first, then the left.
+            const reading = [...this.list].sort((p, q) => p.r0 - q.r0 || p.c0 - q.c0);
+            const cards = reading.map((card) => {
+                const leaf = cloneNode(this.leaves.get(card.id));
+                delete leaf.width;
+                delete leaf.height;
+                return leaf;
             });
-        }
-        this.replace({
-            xs,
-            ys,
-            cards,
-            paidBy: Object.fromEntries(this.paidBy),
+            for (let k = 0; k < empty; k++)
+                cards.push({ card: this.nextId(), fixed: false });
+            // Every line crosses the plane, and the tree takes the cut along x outside.
+            const columnNodes = [];
+            for (let c = 0; c < columns; c++) {
+                const column = [];
+                for (let r = 0; r < rows; r++)
+                    column.push(cards[r * columns + c]);
+                columnNodes.push(cutOf('y', ys, column));
+            }
+            this.reload({ root: cutOf('x', xs, columnNodes), paidBy: Object.fromEntries(this.paidBy) });
+            return true;
         });
-        return true;
     }
     /**
-     * ADD (packages/soksak/docs/layout.md#cuts): adds `card`, a new card `{id, data?}` or what `withdraw` returned, beside `target`
-     * toward `side` and returns its id. `target` is a member id or the ids that neighbouring children of one cut hold. Throws its
-     * refusal, a result below a minimum included, and changes nothing.
+     * ADD (packages/soksak/docs/layout.md#add-and-remove): adds `node`, a new card
+     * `{card, data?}` or what `withdraw` returned, beside `target` toward `side`
+     * and returns its id. `target` is an id or the ids that neighbouring kids of
+     * one cut hold. Throws its refusal, a result below a minimum included, and
+     * changes nothing.
      */
-    insert(boxes, target, side, card) {
-        this.byCuts((cells, drawn) => insertCard(cells, boxes, drawn, target, side, card, this.g), true);
-        return card.id;
+    insert(target, side, node) {
+        return this.run(() => {
+            this.byCuts((input) => insertNode(input, target, side, node, this.g));
+            return isBox(node) ? node.box : node.card;
+        });
     }
     /**
-     * REMOVE (packages/soksak/docs/layout.md#cuts): takes the member `id`, a card or a box, out of its cut; the other children take
-     * its space in proportion to their sizes. Returns what left, which `insert` takes. Throws its refusal and changes nothing.
+     * REMOVE (packages/soksak/docs/layout.md#add-and-remove): takes the node `id`,
+     * a card or a box, out of its cut; the other kids take its space in proportion
+     * to their sizes. Returns the node that left, which `insert` takes. Throws its
+     * refusal and changes nothing.
      */
-    withdraw(boxes, id) {
-        const prefer = this.fillOrder === 'v' ? ['x', 'y'] : ['y', 'x'];
-        let left = null;
-        this.byCuts((cells, drawn) => {
-            const out = withdrawMember(cells, boxes, drawn, id, prefer);
-            left = out.left;
-            return out.plan;
-        }, true);
-        return left;
+    withdraw(id) {
+        return this.run(() => {
+            let left = null;
+            this.byCuts((input) => {
+                const out = withdrawNode(input, id, this.list);
+                left = out.left;
+                return out.plan;
+            });
+            return left;
+        });
     }
-    /** Gives every child of every cut an equal share (packages/soksak/docs/layout.md#cuts). Throws for an arrangement that is not slicing. */
-    even(boxes) {
-        this.byCuts((cells, drawn) => evenCuts(cells, boxes, drawn), true);
+    /** Gives every kid of every cut an equal share (packages/soksak/docs/layout.md#cuts). */
+    even() {
+        this.run(() => this.byCuts((input) => evenCuts(input)));
     }
     /**
-     * Installs the plan that `make` makes of the arrangement and its drawn rectangles with the paidBy records of the grid. The plan
-     * lays its cuts, the grid draws them, and the plan corrects its spans by what was drawn until the largest error is below a
-     * thousandth of a px; a corridor does not change with a span, so this takes one correction, and one more for each nested cut that
-     * moved. With `judged`, a result that draws a changed node below its minimum throws its text. A throw puts the arrangement back.
+     * Installs the tree of the plan that `make` makes of the stored tree and its
+     * drawn rectangles, with the paidBy records of the grid. The plan lays its
+     * cuts, the grid draws them, and the plan corrects its spans by what was drawn
+     * until the largest error is below a thousandth of a px; a corridor does not
+     * change with a span, so this takes one correction, and one more for each
+     * nested cut that moved. A result that draws a changed node below its minimum
+     * throws its text. A throw puts the arrangement back.
      */
-    byCuts(make, judged) {
+    byCuts(make) {
         const kept = this.toJSON();
-        const cells = { xs: kept.xs, ys: kept.ys, cards: this.list.map((card) => ({ ...card })) };
+        const input = {
+            root: this.root,
+            extent: (node) => this.spots.get(node),
+            card: (id) => this.byId.get(id),
+            taken: (id) => this.taken(id),
+            drawn: this.rects(),
+            heads: this.heads,
+            visit: () => {
+                this.visited++;
+            },
+        };
         try {
-            const plan = make(cells, this.rects());
+            const plan = make(input);
             const rate = (axis) => sharePerSpan(this.plane, axis);
             for (let pass = 0;; pass++) {
-                this.replace({ ...plan.layout(), paidBy: kept.paidBy });
+                this.reload({ root: plan.layout(), paidBy: kept.paidBy });
                 if (plan.correct(this.rects(), rate) < 1e-3 || pass === 7)
                     break;
             }
-            const below = judged ? plan.minimum(this.rects(), this.min) : null;
+            const below = plan.minimum(this.rects(), this.min);
             if (below)
                 throw new Error(below);
         }
         catch (error) {
-            this.replace(kept);
+            this.restore(kept);
             throw error;
         }
-    }
-    /**
-     * Gives every card a fair share of the plane and keeps the arrangement.
-     *
-     * The cuts of the arrangement stay as they are; each gives its sides space in
-     * proportion to the cards they hold along its axis, counted on the row that
-     * holds the most (`balance.ts`). A card with a px size keeps the size it is
-     * drawn at. Rows that shared a line are given a line each where their shares
-     * differ. The lines are then moved to their places the way a drag moves them,
-     * so no card is taken below `minSize`; on a plane too small for the fair
-     * sizes a line stops where its range ends. Returns false when the
-     * arrangement is not slicing, which leaves it unchanged.
-     */
-    balance() {
-        const tree = sliceTree(this.list);
-        if (!tree)
-            return false;
-        const rects = this.rects();
-        const drawn = (card, axis) => {
-            const rect = rects.get(card.id);
-            return axis === 'x' ? rect.w : rect.h;
-        };
-        const regions = balanceRegions(tree, { x0: 0, x1: this.w, y0: 0, y1: this.h, left: true, right: true, top: true, bottom: true }, this.gap, drawn);
-        // Each axis gets the lines the regions end at, in order. A line two rows
-        // shared at different shares becomes two lines.
-        const linesOf = (from, to, size) => {
-            const at = [...regions.values()].flatMap((r) => [r[from], r[to]]).sort((a, b) => a - b);
-            const out = [];
-            for (const value of at)
-                if (!out.length || value - out[out.length - 1] > 0.01)
-                    out.push(value);
-            out[0] = 0;
-            out[out.length - 1] = size;
-            return out;
-        };
-        const xs = linesOf('x0', 'x1', this.w);
-        const ys = linesOf('y0', 'y1', this.h);
-        const index = (lines, value) => {
-            let best = 0;
-            for (let i = 1; i < lines.length; i++) {
-                if (Math.abs(lines[i] - value) < Math.abs(lines[best] - value))
-                    best = i;
-            }
-            return best;
-        };
-        const cards = this.list.map((card) => {
-            const r = regions.get(card.id);
-            return { ...card, c0: index(xs, r.x0), c1: index(xs, r.x1), r0: index(ys, r.y0), r1: index(ys, r.y1) };
-        });
-        this.replace({
-            xs: xs.map((value) => value / this.w),
-            ys: ys.map((value) => value / this.h),
-            cards,
-            paidBy: Object.fromEntries(this.paidBy),
-        });
-        // The normalised lines above are where the lines stand only when no slot
-        // holds a px size. Each line is moved to its place, and every pass measures
-        // again, because a move beside a px size changes how the rest is shared.
-        for (let pass = 0; pass < 8; pass++) {
-            let moved = false;
-            for (const [axis, lines] of [['x', xs], ['y', ys]]) {
-                for (let line = 1; line < lines.length - 1; line++) {
-                    if (!this.hasBoundary(axis, line))
-                        continue;
-                    if (Math.abs(this.boundaryPos(axis, line) - lines[line]) < 0.01)
-                        continue;
-                    const [low, high] = this.boundaryRange(axis, line);
-                    const target = clamp(lines[line], low, high);
-                    if (Math.abs(this.boundaryPos(axis, line) - target) < 0.01)
-                        continue;
-                    this.moveBoundary(axis, line, target, false);
-                    moved = true;
-                }
-            }
-            if (!moved)
-                break;
-        }
-        return true;
     }
     /**
      * Where the two cards meeting at a boundary come out the same size.
@@ -1154,155 +1257,6 @@ export class Soksak {
             insEnd = inset(near, axis, line + 1, 'hi', seen);
         }
         return (start + end) / 2 + (insStart - insEnd) / 2;
-    }
-    /**
-     * Keeps every line index of `axis` and gives every slot that no card with a
-     * size in px holds its corridor, `extra[slot]` px and an equal share of the
-     * free length: the extent less the corridors, the held sizes and the extras.
-     * A slot that a card with a size in px holds keeps its span. A plane too
-     * small for its corridors shares nothing. Throws for an unknown axis, an
-     * extra list of another length than the slots, and an axis whose shared
-     * slots take no length.
-     */
-    shareLines(axis, extra = []) {
-        if (this.noAxis(axis))
-            throw new Error(`unknown axis ${String(axis)}`);
-        const plane = this.plane;
-        const a = this.arr(axis);
-        const count = a.length - 1;
-        // default: no extra list gives no slot an extra.
-        const extras = extra.length === 0 ? new Array(count).fill(0) : extra;
-        if (extras.length !== count) {
-            throw new Error(`shareLines takes one extra for each of the ${count} slots of ${axis}, found ${extras.length}`);
-        }
-        const read = linesRead(plane, axis);
-        const held = heldSizes(plane, axis);
-        const want = new Array(count).fill(0);
-        let free = this.size(axis);
-        let shared = 0;
-        let sharedSpan = 0;
-        for (let i = 0; i < count; i++) {
-            want[i] = corridorOf(plane, axis, i, read);
-            free -= want[i];
-            if (held[i] !== null) {
-                free -= held[i];
-                continue;
-            }
-            want[i] += extras[i];
-            free -= extras[i];
-            shared++;
-            sharedSpan += a[i + 1] - a[i];
-        }
-        if (shared === 0)
-            return;
-        free = Math.max(0, free);
-        let total = 0;
-        for (let i = 0; i < count; i++) {
-            if (held[i] !== null)
-                continue;
-            want[i] += free / shared;
-            total += want[i];
-        }
-        if (total <= 0)
-            throw new Error(`the ${axis} axis of the plane has no length`);
-        const next = new Array(count + 1).fill(0);
-        for (let i = 0; i < count; i++) {
-            const span = held[i] !== null ? a[i + 1] - a[i] : (sharedSpan * want[i]) / total;
-            next[i + 1] = next[i] + span;
-        }
-        next[count] = 1;
-        const state = this.toJSON();
-        this.replace(axis === 'x' ? { ...state, xs: next } : { ...state, ys: next });
-    }
-    /**
-     * Merges a line onto a neighbour at the same coordinate.
-     *
-     * Returns false when a card spans both lines, which would leave it zero size.
-     */
-    mergeCoincident(axis, line) {
-        if (this.noAxis(axis))
-            return false;
-        if (this.snap === 'off')
-            return false;
-        const a = this.arr(axis);
-        const [lo, hi] = SPAN[axis];
-        const found = [line - 1, line + 1].find((i) => i >= 0 && i < a.length && Math.abs(a[i] - a[line]) < EPS);
-        if (found === undefined)
-            return false;
-        // Index 0 and the last index hold exactly 0 and 1. When one of the pair is a
-        // border it is the one kept: removing it promoted a coordinate one rounding
-        // short of the edge and the plane measured 0.9999999999999999 wide.
-        const border = (i) => i === 0 || i === a.length - 1;
-        const [keep, drop] = border(line) ? [line, found] : [found, line];
-        const at = (card, k) => (card[k] === drop ? keep : card[k]);
-        if (this.list.some((c) => at(c, lo) === at(c, hi)))
-            return false;
-        for (const card of this.list) {
-            card[lo] = at(card, lo);
-            card[hi] = at(card, hi);
-        }
-        // Every card now references `keep`, so it does not matter which neighbour
-        // absorbs the removed line.
-        this.removeLine(axis, drop, 'lo');
-        this.changed();
-        return true;
-    }
-    /**
-     * Moves a line toward `px` as `moveBoundary` does, and past each line of the
-     * axis that it reaches where no card lies between the two, by exchanging
-     * their places; a line that stops on another line merges onto it, so no two
-     * lines stand at one coordinate. A host that keeps regions of cards that a
-     * line may not cross uses it to place a line it made.
-     */
-    moveLinePast(axis, line, px) {
-        if (this.noAxis(axis))
-            return;
-        const [lo, hi] = SPAN[axis];
-        for (;;) {
-            const at = this.moveBoundary(axis, line, px, false);
-            const a = this.arr(axis);
-            const next = px < at ? line - 1 : line + 1;
-            if (Math.abs(at - px) < EPS || next <= 0 || next >= a.length - 1 || Math.abs(a[next] - a[line]) >= EPS) {
-                // A line that the bounds of the cards stop on another line merges onto it.
-                for (const k of [line - 1, line + 1]) {
-                    if (k > 0 && k < a.length - 1 && Math.abs(a[k] - a[line]) < EPS) {
-                        this.mergeCoincident(axis, line);
-                        break;
-                    }
-                }
-                return;
-            }
-            if (this.list.some((c) => c[lo] === Math.min(line, next) && c[hi] === Math.max(line, next))) {
-                this.mergeCoincident(axis, line);
-                return;
-            }
-            for (const c of this.list) {
-                for (const k of [lo, hi]) {
-                    if (c[k] === line)
-                        c[k] = next;
-                    else if (c[k] === next)
-                        c[k] = line;
-                }
-            }
-            this.changed();
-            line = next;
-        }
-    }
-    /** Removes lines no card references. Returns how many were removed. */
-    tidy() {
-        let dropped = 0;
-        for (const axis of AXES) {
-            for (let k = this.arr(axis).length - 2; k >= 1; k--) {
-                if (!this.isVirtual(axis, k))
-                    continue;
-                // No card references the line, so it does not matter which neighbour absorbs it.
-                this.removeLine(axis, k, 'lo');
-                dropped++;
-            }
-        }
-        if (dropped)
-            this.changed();
-        return dropped;
     }
     // ---- splitting ---------------------------------------------------------
     /**
@@ -1427,7 +1381,8 @@ export class Soksak {
      * Cut one card in two.
      *
      * The original keeps its id and the near half; the new card takes the far
-     * half. Cards spanning the new line have their span widened rather than cut.
+     * half. In the tree the card becomes two kids of its cut when the cut is
+     * along the axis, and otherwise a new cut of the two in its place.
      *
      * The new card has no `data` unless `init.data` is given. A px size on the
      * other axis is copied, because both halves stay in that slot. A px size on
@@ -1439,12 +1394,32 @@ export class Soksak {
      * Returns the new card's id, or null when the halves do not fit.
      */
     split(id, axis, init = {}) {
-        var _a;
         if (this.noAxis(axis))
             return null;
-        // An id already in use would give two cards the same key. `rects` and the
+        return this.run(() => this.splitAt(id, axis, init, false));
+    }
+    /**
+     * Cut a card and put the new one on a named side. The ids are not swapped:
+     * toward `left` and `top` the new card takes the near part.
+     */
+    splitToward(id, side, init = {}) {
+        // axisOf returns 'y' for any value that is not left or right, so a misspelled
+        // side would split downward instead of failing.
+        if (!SIDES.includes(side))
+            return null;
+        return this.run(() => this.splitAt(id, axisOf(side), init, isAhead(side)));
+    }
+    /**
+     * Cuts the card `id` along `axis` at the position of `cutAt`: the card keeps
+     * its part of the extent before the cut and the new card takes the part after
+     * it, or with `first` the new card takes the part before it. The new card is
+     * recorded as paid by the card.
+     */
+    splitAt(id, axis, init, first) {
+        var _a;
+        // An id already in use would give two nodes the same key. `rects` and the
         // view are both keyed by id, so one card would have no rect and no element.
-        if (init.id !== undefined && this.find(init.id))
+        if (init.id !== undefined && this.taken(init.id))
             return null;
         const card = this.find(id);
         const cut = card && this.cutAt(card, axis, init.newLine === true);
@@ -1455,535 +1430,399 @@ export class Soksak {
         const undo = this.toJSON();
         const a = this.arr(axis);
         const [lo, hi] = SPAN[axis];
-        // Read before the cut, because the new line makes the card span two slots.
-        const whole = fixedSize(card, axis);
         const from = a[card[lo]];
         const to = a[card[hi]];
-        let line = cut.line;
-        if (line < 0) {
-            // The new line is placed strictly inside the card's span.
-            line = card[lo] + 1;
-            while (line < card[hi] && a[line] <= cut.value + EPS)
-                line++;
-            // The scan above accepts a line EPS past the cut, so the cut can sit a
-            // rounding below the line before it. checkState compares the array
-            // strictly, and a state read back from this grid would be rejected.
-            const value = Math.min(Math.max(cut.value, a[line - 1]), a[line]);
-            // The line is inside a card rather than at a boundary, so every span at or
-            // past this index shifts by one, including a card that ends here.
-            a.splice(line, 0, value);
-            for (const other of this.list) {
-                if (other[lo] >= line)
-                    other[lo]++;
-                if (other[hi] >= line)
-                    other[hi]++;
-            }
-        }
-        const fresh = {
-            // default: `id` is optional; the plane issues one.
-            id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),
-            c0: card.c0,
-            c1: card.c1,
-            r0: card.r0,
-            r1: card.r1,
-            fixed: false,
-            data: init.data,
-        };
+        const at = cut.line >= 0 ? a[cut.line] : cut.value;
+        const f = to - from > EPS ? (at - from) / (to - from) : 0.5;
+        const leaf = this.leaves.get(id);
+        // default: `id` is optional; the plane issues one.
+        const fresh = { card: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(), fixed: false };
+        if (init.data !== undefined)
+            fresh.data = init.data;
         // A px size on the other axis is copied, because both halves stay in that slot.
-        const across = other(axis);
-        const alongside = fixedSize(card, across);
-        if (alongside !== null) {
-            if (across === 'x')
-                fresh.width = alongside;
-            else
-                fresh.height = alongside;
-        }
+        const alongside = fixedSize(card, other(axis));
+        if (alongside !== null)
+            sizeOn(fresh, other(axis), alongside);
         // A px size on the cut axis is divided in the proportion of the cut.
+        const whole = fixedSize(card, axis);
         if (whole !== null) {
-            const f = to - from > EPS ? (a[line] - from) / (to - from) : 0.5;
-            if (axis === 'x') {
-                card.width = whole * f;
-                fresh.width = whole * (1 - f);
-            }
-            else {
-                card.height = whole * f;
-                fresh.height = whole * (1 - f);
-            }
+            sizeOn(leaf, axis, whole * (first ? 1 - f : f));
+            sizeOn(fresh, axis, whole * (first ? f : 1 - f));
+            sizeOn(card, axis, whole * (first ? 1 - f : f));
         }
-        fresh[lo] = line;
-        card[hi] = line;
-        this.list.push(fresh);
-        // The far half is the new card, so the slot the space came from is the
-        // payer's last, which is not its first whenever it spans several.
-        this.paidBy.set(fresh.id, { side: 'lo', to: card.id, at: line - card[lo] - 1 });
+        const kids = first
+            ? [{ share: f, node: fresh }, { share: 1 - f, node: leaf }]
+            : [{ share: f, node: leaf }, { share: 1 - f, node: fresh }];
+        this.put(leaf, { cut: axis, kids });
+        this.paidBy.set(fresh.card, id);
+        this.derive();
         this.changed();
         if (!this.stillFits(axis, was, empty)) {
             this.restore(undo);
             return null;
         }
-        return fresh.id;
-    }
-    /**
-     * Cut a card and put the new one on a named side.
-     *
-     * `split` gives the far half to the new card, so `left` and `top` swap the two
-     * spans afterwards. The ids are not swapped.
-     */
-    splitToward(id, side, init = {}) {
-        // axisOf returns 'y' for any value that is not left or right, so a misspelled
-        // side would split downward instead of failing.
-        if (!SIDES.includes(side))
-            return null;
-        if (init.id !== undefined && this.find(init.id))
-            return null;
-        const axis = axisOf(side);
-        const card = this.find(id);
-        if (!card)
-            return null;
-        if (!isAhead(side))
-            return this.split(id, axis, init);
-        const born = this.split(id, axis, init);
-        if (born === null)
-            return null;
-        const fresh = this.find(born);
-        const [lo, hi] = SPAN[axis];
-        const near = [card[lo], card[hi]];
-        card[lo] = fresh[lo];
-        card[hi] = fresh[hi];
-        fresh[lo] = near[0];
-        fresh[hi] = near[1];
-        this.paidBy.set(fresh.id, { side: 'hi', to: card.id }); // the halves were swapped
-        this.changed();
-        return born;
+        return fresh.card;
     }
     nextId() {
         let id;
         do {
             id = `card-${++this.seq}`;
-        } while (this.find(id));
+        } while (this.taken(id));
         return id;
     }
     // ---- closing and moving ------------------------------------------------
     /**
-     * The neighbours that would expand over a card if it closed, as frozen copies.
-     *
-     * Returns null when no row of neighbours matches a side. `close` then removes
-     * the card's slots instead. `sides` names the sides to try in their order, the
-     * sides of `fillOrder` by default.
+     * The neighbours that would expand over a card if it closed, as frozen copies:
+     * the cards of the kid of its cut beside it toward the first of `sides` that
+     * names a kid without a fixed card, or null. `sides` names the sides to try
+     * in their order, the sides of `fillOrder` by default.
      */
     fill(id, sides = this.fillSides) {
-        const found = this.fillOf(id, sides);
-        return found && { ...found, cards: found.cards.map((c) => Object.freeze({ ...c })) };
-    }
-    /** The same result holding the stored cards, so `close` can modify them. */
-    fillOf(id, sides = this.fillSides) {
         checkFillSides(sides);
-        const card = this.find(id);
-        return card ? fillFor(this.list, card, sides, this.sliceMemo) : null;
+        const found = this.fillAlong(id, sides);
+        return found && { side: found.side, grow: found.grow, cards: found.cards.map((c) => Object.freeze({ ...c })) };
     }
     /**
-     * The axis whose slots hold no other card, or null.
-     *
-     * On that axis the card's slots can be removed when it closes, with no
-     * neighbour expanding over it. Returns null when another card lies entirely
-     * inside the range, because removing the slots would leave it spanning nothing.
+     * The neighbour that takes the space of the card `id` when it closes: the kid
+     * of the cut of the card beside it toward the first of `sides` that holds no
+     * fixed card, or null. A close gives the space to a kid of the card's own
+     * cut, so it never crosses the structure of another cut.
      */
-    soleSlots(card) {
-        for (const axis of AXES) {
-            const [lo, hi] = SPAN[axis];
-            // Removing the slots shrinks every card that reaches into them, and leaves
-            // a card lying entirely inside the range with no span.
-            const trapped = this.list.some((other) => other !== card && other[lo] >= card[lo] && other[hi] <= card[hi]);
-            if (!trapped)
-                return axis;
+    fillAlong(id, sides) {
+        const card = this.removable(id);
+        if (!card)
+            return null;
+        const holding = this.up.get(this.departing(this.leaves.get(id)));
+        if (!holding || holding.at < 0)
+            return null;
+        const holder = holding.node;
+        const i = holding.at;
+        for (const side of sides) {
+            const dir = DIRECTIONS[side];
+            const axis = side === 'left' || side === 'right' ? 'x' : 'y';
+            const j = i + (side === 'above' || side === 'left' ? -1 : 1);
+            if (holder.cut !== axis || j < 0 || j >= holder.kids.length || this.holdsFixed(holder.kids[j].node))
+                continue;
+            const row = cardsOf(holder.kids[j].node)
+                .map((leaf) => this.find(leaf.card))
+                .filter((c) => dir.touches(c, card));
+            return { side, grow: dir.grow, cards: row, cut: holder, to: j };
         }
         return null;
+    }
+    /**
+     * The index of the kid of `holder` that holds the card `id`, or -1 when no
+     * kid holds it. The walk goes up from the card, so it visits the depth of
+     * the card and no other node.
+     */
+    kidHolding(holder, id) {
+        let node = this.leaves.get(id);
+        while (node) {
+            this.visited++;
+            const holding = this.up.get(node);
+            if (!holding)
+                return -1;
+            if (holding.node === holder)
+                return holding.at;
+            node = holding.node;
+        }
+        return -1;
+    }
+    /** Whether a fixed card stands inside a node. */
+    holdsFixed(node) {
+        return cardsOf(node).some((leaf) => leaf.fixed);
     }
     removable(id) {
         const card = this.find(id);
         if (!card || card.fixed)
             return null;
-        if (this.list.filter((c) => !c.fixed).length <= 1)
-            return null;
-        return card;
+        let free = 0;
+        for (const c of this.list)
+            if (!c.fixed && ++free > 1)
+                return card;
+        return null;
     }
+    /** Whether `close` would remove the card. */
     canClose(id) {
-        const card = this.removable(id);
-        return !!card && (!!this.fillOf(id) || this.soleSlots(card) !== null);
+        return this.closing(id, this.fillSides) !== null;
     }
     /**
-     * Remove a card.
-     *
-     * A row of neighbours expands over the space when one matches the side.
-     * Otherwise the card's slots are removed. Returns false when neither applies,
-     * when the card is `fixed`, or when it is the last card. `sides` names the
-     * sides whose row of neighbours may expand, tried in their order, the sides
-     * of `fillOrder` by default; an empty list only removes the slots. A host that
-     * keeps its own regions of cards passes one side at a time, because the fill
-     * order does not know which neighbours keep such a region one rectangle.
+     * The cut that holds the node leaving with the card `id`, the kid that takes
+     * its space, -1 for every other kid in proportion to its share, and whether
+     * that kid grows over the space as a neighbour. The kid of its cut that holds
+     * the card it took its space from takes it when that kid holds no fixed card;
+     * the kids between the two shift by the span. Otherwise a kid of the root
+     * cut that took its space gives it back to every kid in proportion when it
+     * took a share of every kid (paidBy `''`), else to the kid after it, or before
+     * it at the end of the plane. Otherwise the neighbour of the first of `sides`
+     * that fills it takes it, else every other kid in proportion. It
+     * is null when the card cannot close: it is fixed or the last card, or no kid
+     * of its cut without a fixed card can take the space.
      */
-    close(id, sides = this.fillSides) {
-        var _a, _b;
-        // The sides are checked before the card, so a card that cannot close refuses another side as fill does.
-        checkFillSides(sides);
-        const card = this.removable(id);
-        if (!card)
-            return false;
-        // Return the span by removing the line on the side it came from. Only valid
-        // when no other card is in these slots.
+    closing(id, sides) {
+        var _a;
+        if (!this.removable(id))
+            return null;
+        const holding = this.up.get(this.departing(this.leaves.get(id)));
+        if (!holding || holding.at < 0)
+            return null;
+        const holder = holding.node;
+        const i = holding.at;
         const paid = this.paidBy.get(id);
         if (paid) {
-            for (const axis of AXES) {
-                const [lo, hi] = SPAN[axis];
-                if (card[hi] - card[lo] !== 1)
-                    continue;
-                const alone = this.list.every((c) => c === card || c[hi] <= card[lo] || c[lo] >= card[hi]);
-                if (!alone)
-                    continue;
-                // The line comes off the side the span came from, which is not the side
-                // the width came from whenever the nearest slot could not give it.
-                // A span every slot gave a share of comes back through either line, so
-                // at the plane's border the interior one is taken. Without this a card
-                // that went in at the border returns nothing: its `lo` line is the
-                // border and the path below refuses it.
-                const from = paid.span === 'lo' || paid.span === 'hi'
-                    ? paid.span
-                    : card[lo] === 0
-                        ? 'hi'
-                        : card[hi] === this.arr(axis).length - 1
-                            ? 'lo'
-                            : paid.side;
-                const gone = from === 'lo' ? card[lo] : card[hi];
-                if (gone <= 0 || gone >= this.arr(axis).length - 1)
-                    continue;
-                const held = slotWidths(this.plane, axis);
-                const mine = card[lo];
-                // The span the slot holds, read before the line is removed. The take that
-                // scaled every slot is undone with it.
-                const took = this.arr(axis)[card[hi]] - this.arr(axis)[card[lo]];
-                this.list.splice(this.list.indexOf(card), 1);
-                this.removeLine(axis, gone, from);
-                this.paidBy.delete(id);
-                const merged = from === 'lo' ? mine - 1 : mine;
-                // Every slot gave a share of the span, so no single side returns it. The
-                // scale that took it is inverted, before the widths are settled: naming a
-                // slot rewrites the sharing spans from the widths.
-                if (paid.span === 'all' && took < 1 - EPS) {
-                    const b = this.arr(axis);
-                    const spans = [];
-                    for (let i = 0; i < b.length - 1; i++)
-                        spans.push(b[i + 1] - b[i]);
-                    spans[merged] = Math.max(0, spans[merged] - took);
-                    let at = b[0];
-                    for (let i = 0; i < spans.length; i++) {
-                        at += spans[i] / (1 - took);
-                        b[i + 1] = at;
-                    }
-                    b[b.length - 1] = 1;
-                }
-                // The card's slot is removed. The slot it merges into keeps its width and
-                // the slot that gave the width up regains it. When the sharing slots gave
-                // it, they divide it again.
-                const back = this.find(paid.to);
-                const want = held.filter((_, i) => i !== mine);
-                // The slot that gave the width, which is not the payer's first when it
-                // spans several. `back` is read after the line is removed, and the card
-                // does not contain that line, so its indices are the ones to count from.
-                //
-                // Nothing maintains the offset. A cut inside the payer's span, and a
-                // close or a travel that shortens it, both move the slot it counts to,
-                // and an offset that no longer lands inside the payer names a slot the
-                // payer never gave anything from. The width then goes to the slot beside
-                // the boundary instead, which is where a close with no record puts it.
-                // default: `at` is absent on a record saved before it existed; its slot is the payer's first.
-                const paidAt = back ? back[lo] + ((_a = paid.at) !== null && _a !== void 0 ? _a : 0) : merged;
-                const first = back && paidAt >= back[lo] && paidAt < back[hi] ? paidAt : merged;
-                this.settleOn(axis, want, paid.to === '' ? [] : order(first, want.length));
-                this.changed();
-                return true;
-            }
+            const j = this.kidHolding(holder, paid);
+            const kid = (_a = holder.kids[j]) === null || _a === void 0 ? void 0 : _a.node;
+            if (kid && !this.holdsFixed(kid))
+                return { cut: holder, i, to: j, grows: isCard(kid) && Math.abs(j - i) === 1 };
         }
-        const filling = this.fillOf(id, sides);
-        if (filling) {
-            const axis = filling.grow === 'c0' || filling.grow === 'c1' ? 'x' : 'y';
-            // A line's position does not depend on which cards reference it. Closing
-            // the card leaves its line unreferenced, and R5 gives an unreferenced line
-            // no gap, which changes the drawn width of the cards beside it but not the
-            // line's position. Record the positions first and restore the lines that
-            // moved only because they became unreferenced.
-            const stood = this.arr(axis).map((_, k) => this.boundaryPos(axis, k));
-            const [lo, hi] = SPAN[axis];
-            const from = card[lo];
-            const to = card[hi];
-            const want = slotWidths(this.plane, axis);
-            // The card's slots go to the neighbour that expanded over them, and the
-            // width those slots held goes back to the slot it came from, as it does
-            // where the line can be removed. Every other slot keeps its width.
-            //
-            // Without the handback the width goes to whichever neighbour the fill
-            // selected, so a split and the close after it are not inverses and
-            // repeating the pair walks the card the split cut down to `minSize`. A
-            // payer that is itself one of the growers takes the width back with the
-            // slots, so nothing is named there.
-            const back = paid && this.find(paid.to);
-            // default: `at` is absent on a record saved before it existed; its slot is the payer's first.
-            const paidAt = back ? back[lo] + ((_b = paid.at) !== null && _b !== void 0 ? _b : 0) : -1;
-            const gives = !!back &&
-                !filling.cards.includes(back) &&
-                paidAt >= back[lo] &&
-                paidAt < back[hi] &&
-                (paidAt < from || paidAt >= to);
-            if (gives)
-                for (let i = from; i < to; i++)
-                    want[i] = 0;
-            for (const neighbour of filling.cards)
-                neighbour[filling.grow] = card[filling.grow];
-            this.list.splice(this.list.indexOf(card), 1);
-            this.settleOn(axis, want, gives ? order(paidAt, want.length, paidAt - 1) : order(from, want.length, to - 1));
-            this.standAgain(axis, stood);
-            this.changed();
-            return true;
+        if (paid !== undefined && holder === this.root) {
+            if (paid === '')
+                return { cut: holder, i, to: -1, grows: false };
+            return { cut: holder, i, to: i + 1 < holder.kids.length ? i + 1 : i - 1, grows: false };
         }
-        const axis = this.soleSlots(card);
-        if (axis === null)
+        const found = this.fillAlong(id, sides);
+        if (found)
+            return { cut: holder, i, to: found.to, grows: true };
+        if (holder.kids.some((kid, k) => k !== i && !this.holdsFixed(kid.node)))
+            return { cut: holder, i, to: -1, grows: false };
+        return null;
+    }
+    /**
+     * Remove a card. Its space goes to a kid of its own cut: the card it took its
+     * space from when that card stands beside it, else the neighbour that the
+     * first of `sides` names, else every other kid in proportion to its share.
+     * Returns false when the card is `fixed`, when it is the last card, or when no
+     * kid of its cut without a fixed card can take the space. `sides` names the
+     * sides whose neighbour may expand, tried in their order, the sides of
+     * `fillOrder` by default; an empty list gives the space to every kid in
+     * proportion. A host that keeps its own regions of cards passes one side at a
+     * time.
+     */
+    close(id, sides = this.fillSides) {
+        // The sides are checked before the card, so a card that cannot close refuses another side as fill does.
+        checkFillSides(sides);
+        return this.run(() => this.closeAlong(id, sides));
+    }
+    closeAlong(id, sides) {
+        var _a;
+        const found = this.closing(id, sides);
+        if (!found)
             return false;
-        const [lo, hi] = SPAN[axis];
-        const from = card[lo];
-        const count = card[hi] - from;
-        const held = slotWidths(this.plane, axis);
-        this.list.splice(this.list.indexOf(card), 1);
-        for (let i = 0; i < count; i++)
-            this.dropSlot(axis, from);
-        // The slots are removed and the neighbour that absorbed them takes the space.
-        const kept = held.filter((_, i) => i < from || i >= from + count);
-        this.settleOn(axis, kept, order(Math.min(from, kept.length - 1), kept.length));
+        const { cut: holder, i, to, grows } = found;
+        const axis = holder.cut;
+        const before = {
+            lines: [...this.arr(axis)],
+            widths: slotWidths(this.plane, axis),
+            held: heldSizes(this.plane, axis).some((size) => size !== null),
+        };
+        const leaving = to >= 0 ? this.leavingSlots(holder, i) : null;
+        let payer = (_a = this.paidBy.get(id)) !== null && _a !== void 0 ? _a : '';
+        if (to >= 0) {
+            const kid = holder.kids[to].node;
+            // A neighbour that grows over the space takes no px size on the axis, as a
+            // card spanning more than one slot carries none (R5).
+            if (grows && 'card' in kid)
+                sizeOn(kid, axis, null);
+            if (payer === '')
+                payer = cardsOf(kid)[0].card;
+        }
+        this.drop(holder, i, to);
+        this.paidBy.delete(id);
+        this.derive();
+        this.settle(axis, before, payer, leaving);
         this.changed();
         return true;
     }
     /**
-     * Restores unreferenced lines to their previous px positions.
-     *
-     * The coordinate that produces a given px position has no closed form, because
-     * a slot's size depends on every other slot. It is found by iteration: each
-     * pass moves the coordinate by the error divided by the slope, and the error
-     * falls fast enough that a few passes reach it exactly.
+     * The slots of the lines of kid `i` of `holder`, which leave with it, when
+     * `holder` spans the plane across its axis and kid `to` takes the span: every
+     * line of the range of such a cut is a line of its kids, so each other slot of
+     * the axis stands after the drop at its index less the slots that left.
+     * Null for a cut that does not span the plane, whose lines share their places
+     * with the lines of other cuts.
      */
-    standAgain(axis, stood) {
-        const a = this.arr(axis);
-        for (let k = 1; k < a.length - 1; k++) {
-            const want = stood[k];
-            if (want === undefined || !this.isVirtual(axis, k))
-                continue;
-            for (let pass = 0; pass < 8; pass++) {
-                const at = this.boundaryPos(axis, k);
-                const off = want - at;
-                if (Math.abs(off) < 1e-9)
-                    break;
-                const span = a[k + 1] - a[k - 1];
-                const room = this.boundaryPos(axis, k + 1) - this.boundaryPos(axis, k - 1);
-                if (span < EPS || room < EPS)
-                    break;
-                const next = a[k] + (off * span) / room;
-                if (!(next > a[k - 1] && next < a[k + 1]))
-                    break; // no room to stand there
-                a[k] = next;
-            }
-        }
+    leavingSlots(holder, i) {
+        const axis = holder.cut;
+        const [o0, o1] = axis === 'x' ? ['y0', 'y1'] : ['x0', 'x1'];
+        const whole = this.spots.get(holder);
+        const lines = this.at.get(holder.kids[i].node);
+        if (!whole || !lines || whole[o0] > EPS || whole[o1] < 1 - EPS)
+            return null;
+        const [from, to] = axis === 'x' ? [lines[0], lines[1]] : [lines[2], lines[3]];
+        return { at: from, count: to - from };
     }
     /**
-     * Whether a card spanning the whole plane can be placed on this boundary.
-     *
-     * True when no card spans across the line. `without` excludes one card by id.
+     * Draws again every slot of `axis` that stood between the same two lines
+     * before a change at the width it had, where the axis had or has a card with
+     * a px size: the slots that the change made share what is left, the slots of
+     * the card `payer` first absorbing the difference. On an axis that had and has
+     * no px size the coordinates are already the drawn sizes and nothing moves.
+     * `leaving` names the slots that left with a kid of a cut that spans the plane
+     * (`leavingSlots`); every other slot then pairs with the slot of its index.
      */
-    canInsertAt(axis, line, without) {
+    settle(axis, before, payer, leaving = null) {
+        if (!before.held && !heldSizes(this.plane, axis).some((size) => size !== null))
+            return;
+        const a = this.arr(axis);
+        const want = new Array(a.length - 1).fill(null);
+        if (leaving) {
+            if (want.length !== before.widths.length - leaving.count) {
+                throw new Error(`soksak: a close left ${want.length} slots on ${axis}, not ${before.widths.length} less ${leaving.count}`);
+            }
+            for (let i = 0; i < want.length; i++)
+                want[i] = before.widths[i < leaving.at ? i : i + leaving.count];
+        }
+        // Both line lists ascend, so one walk pairs the slots that stand between the same two lines; the inner walk passes the
+        // lines that stand at one place.
+        const was = before.lines;
+        let k = 0;
+        for (let i = 0; i < want.length && !leaving; i++) {
+            while (k < was.length && was[k] < a[i] - EPS)
+                k++;
+            for (let j = k; j + 1 < was.length && was[j] <= a[i] + EPS; j++) {
+                if (Math.abs(was[j] - a[i]) < EPS && Math.abs(was[j + 1] - a[i + 1]) < EPS) {
+                    want[i] = before.widths[j];
+                    break;
+                }
+            }
+        }
+        const card = this.find(payer);
+        const [lo, hi] = SPAN[axis];
+        const tried = card ? order(card[lo], want.length, card[hi] - 1) : [];
+        const seen = new Set(tried);
+        for (let i = 0; i < want.length; i++)
+            if (want[i] === null && !seen.has(i))
+                tried.push(i);
+        this.settleOn(axis, want, tried);
+    }
+    /**
+     * Whether a card spanning the whole plane can be placed on this boundary:
+     * the line is an edge of the plane or a seam of the root cut along `axis`.
+     * No card crosses such a line, and a line that no card crosses but that two
+     * cuts share by chance is no seam, so nothing stands there.
+     */
+    canInsertAt(axis, line) {
         if (this.noAxis(axis))
             return false;
         const a = this.arr(axis);
         if (!Number.isInteger(line) || line < 0 || line > a.length - 1)
             return false;
-        return this.cardsCrossing(axis, line).every((c) => c.id === without);
+        return this.standing(axis, line) !== null;
     }
     /**
-     * Inserts a card at a boundary, spanning the whole plane on the other axis.
+     * Where a card spanning the whole plane on the other axis goes in at `line`:
+     * the index among the kids of the root, which is a cut along `axis` or becomes
+     * one, or null when `line` is no edge of the plane and no seam of the root. A
+     * line that no card crosses but that two cuts of the root share by chance is
+     * no seam of the root, so nothing goes in there.
+     */
+    standing(axis, line) {
+        const last = this.arr(axis).length - 1;
+        const root = this.root;
+        if (!isCut(root) || root.cut !== axis)
+            return line === 0 ? 0 : line === last ? 1 : null;
+        const at = root.kids.findIndex((kid) => this.on(kid.node, axis)[0] === line);
+        if (at >= 0)
+            return at;
+        return line === last ? root.kids.length : null;
+    }
+    /**
+     * Inserts a card at a boundary, spanning the whole plane on the other axis,
+     * as a kid of the root cut along `axis`.
      *
-     * Unlike `splitToward`, the new card is not cut from one card. Cards past the
-     * boundary shift by one index.
+     * `size` is required, in px, and must be smaller than the plane. The new kid
+     * takes its span from the kid after it, else from the kid before it, else
+     * from every kid in proportion, and every other slot is drawn at the width it
+     * had.
      *
-     * `size` is required, in px, and must be smaller than the plane. It is
-     * converted to a span in proportion to the plane.
-     *
-     * Returns the new card's id, or null when a card spans the boundary, the size
-     * is invalid, or the result would leave a card with no area.
+     * Returns the new card's id, or null when a card spans the boundary, the line
+     * is no seam of the root, the size is invalid, or the result would leave a
+     * card with no area.
      */
     insertAt(axis, line, init) {
-        var _a;
         if (this.noAxis(axis))
             return null;
-        if ((init === null || init === void 0 ? void 0 : init.id) !== undefined && this.find(init.id))
+        if (!init || typeof init !== 'object')
             return null;
-        const plane = this.size(axis);
-        // A size equal to the plane leaves the existing cards none, and `openSlot`
-        // would write the new line before the plane's start. Rejected here rather
-        // than detected afterwards by measuring the result.
-        if (!Number.isFinite(init === null || init === void 0 ? void 0 : init.size) || init.size < 0 || init.size >= plane)
+        if (init.id !== undefined && this.taken(init.id))
+            return null;
+        const extent = this.size(axis);
+        if (!Number.isFinite(init.size) || init.size < 0 || init.size >= extent)
             return null;
         if (!this.canInsertAt(axis, line))
             return null;
-        const was = this.extents(axis);
-        const empty = this.flat();
-        const undo = this.toJSON();
-        const [lo, hi] = SPAN[axis];
-        const across = other(axis);
-        const [alo, ahi] = SPAN[across];
-        const held = slotWidths(this.plane, axis);
-        const gave = this.openSlot(axis, line, init.size / plane);
-        const fresh = {
-            // default: `id` is optional; the plane issues one.
-            id: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(),
-            c0: 0, c1: 1, r0: 0, r1: 1,
-            fixed: false,
-            data: init.data,
-        };
-        fresh[lo] = line;
-        fresh[hi] = line + 1;
-        fresh[alo] = 0;
-        fresh[ahi] = this.arr(across).length - 1;
-        if (axis === 'x')
-            fresh.width = init.size;
-        else
-            fresh.height = init.size;
-        this.list.push(fresh);
-        // The slot next to the new one gives up the space, so a close at the same
-        // boundary returns it directly. Every other slot keeps its width.
-        const want = new Array(this.arr(axis).length - 1).fill(0);
-        for (let i = 0; i < held.length; i++)
-            want[i >= line ? i + 1 : i] = held[i];
-        want[line] = init.size;
-        const pays = this.settleOn(axis, want, order(line + 1, want.length, line - 1));
-        // Record which slot gave up the space, not only the side: the nearest slot
-        // may not have had room, and close returns the space to the recorded slot.
-        // The card covering that slot, not the one starting at it: a card spanning
-        // several slots can pay from any of them, and a lookup by start records
-        // nothing at all for it.
-        const payer = pays >= 0 ? this.list.find((c) => c[lo] <= pays && c[hi] > pays && c !== fresh) : undefined;
-        // An empty `to` records that no single slot could give the width and the
-        // sharing slots divided it. No card can carry it: checkState refuses an
-        // empty id.
-        if (payer || pays < 0) {
-            this.paidBy.set(fresh.id, {
-                side: pays > line ? 'hi' : 'lo',
-                to: payer ? payer.id : '',
-                span: gave,
-                at: payer ? pays - payer[lo] : undefined,
-            });
-        }
-        this.changed();
-        if (!this.stillFits(axis, was, empty)) {
-            this.restore(undo);
+        const at = this.standing(axis, line);
+        if (at === null)
             return null;
-        }
-        return fresh.id;
-    }
-    /** Whether a card occupies one slot on one axis and spans the whole other axis. */
-    spansPlane(card, axis) {
-        const [lo, hi] = SPAN[axis];
-        const across = other(axis);
-        const [alo, ahi] = SPAN[across];
-        return (card[hi] - card[lo] === 1 &&
-            card[alo] === 0 &&
-            card[ahi] === this.arr(across).length - 1);
-    }
-    /**
-     * Insert a slot at a boundary with the given span. Returns the side the span
-     * came from, or 'all' when every slot gave a share of it.
-     *
-     * Every other slot is scaled by `1 - span`. A card ending at the boundary
-     * keeps its index and a card starting there shifts by one.
-     */
-    openSlot(axis, line, span) {
-        const a = this.arr(axis);
-        // The new slot takes its span from the slot next to the boundary, so a close
-        // that merges it back restores the previous spans. Which of the two slots is
-        // used depends on which has room.
-        const after = line < a.length - 1 ? a[line + 1] - a[line] : 0;
-        const before = line > 0 ? a[line] - a[line - 1] : 0;
-        let gave;
-        if (after >= span) {
-            a.splice(line + 1, 0, a[line] + span);
-            gave = 'hi';
-        }
-        else if (before >= span) {
-            const at = a[line];
-            a[line] = at - span;
-            a.splice(line + 1, 0, at);
-            gave = 'lo';
-        }
-        else {
-            // Neither neighbour has enough room alone, so take the span from the whole plane.
-            const keep = 1 - span;
-            const at = a[line] * keep + span;
-            for (let k = 0; k < a.length; k++)
-                a[k] = k <= line ? a[k] * keep : a[k] * keep + span;
-            a.splice(line + 1, 0, at);
-            a[a.length - 1] = 1;
-            gave = 'all';
-        }
-        this.openIndex(axis, line);
-        return gave;
-    }
-    /**
-     * Open a slot at a boundary and shift the spans that referenced it.
-     *
-     * A card that starts on the line moves past the new slot; a card that ends on
-     * it keeps its index. `removeLine(axis, line, 'hi')` is the inverse.
-     */
-    openIndex(axis, line) {
-        const [lo, hi] = SPAN[axis];
-        for (const card of this.list) {
-            if (card[lo] >= line)
-                card[lo]++;
-            if (card[hi] > line)
-                card[hi]++;
-        }
+        return this.run(() => {
+            var _a;
+            const was = this.extents(axis);
+            const empty = this.flat();
+            const undo = this.toJSON();
+            const [lo, hi] = SPAN[axis];
+            const held = slotWidths(this.plane, axis);
+            // default: `id` is optional; the plane issues one.
+            const fresh = { card: (_a = init.id) !== null && _a !== void 0 ? _a : this.nextId(), fixed: false };
+            if (init.data !== undefined)
+                fresh.data = init.data;
+            sizeOn(fresh, axis, init.size);
+            if (!isCut(this.root) || this.root.cut !== axis)
+                this.root = { cut: axis, kids: [{ share: 1, node: this.root }] };
+            const spanned = init.size / extent;
+            const placed = this.toJSON();
+            // Every slot keeps the width it had, the card takes the slot at the boundary and one slot pays the span.
+            const wanted = () => {
+                const want = new Array(this.arr(axis).length - 1).fill(0);
+                held.forEach((w, i) => {
+                    if (i < line)
+                        want[i] = w;
+                    else if (i + 1 < want.length)
+                        want[i + 1] = w;
+                });
+                want[line] = init.size;
+                return want;
+            };
+            // The kid after the boundary pays the span, else the kid before it; the shares then record which kid paid, so a close
+            // gives the span back to it. When neither can, every kid pays in proportion to its share.
+            let pays = -1;
+            for (const [slot, from] of [[line + 1, at], [line - 1, at - 1]]) {
+                const kids = this.root.kids;
+                if (from < 0 || from >= kids.length || kids[from].share <= spanned)
+                    continue;
+                kids[from].share -= spanned;
+                kids.splice(at, 0, { share: spanned, node: fresh });
+                this.derive();
+                const want = wanted();
+                if (slot >= 0 && slot < want.length && this.settleOn(axis, want, [slot]) === slot) {
+                    pays = slot;
+                    break;
+                }
+                this.restore(placed);
+            }
+            if (pays < 0) {
+                const kids = this.root.kids;
+                for (const kid of kids)
+                    kid.share *= 1 - spanned;
+                kids.splice(at, 0, { share: spanned, node: fresh });
+                this.derive();
+                this.settleOn(axis, wanted(), []);
+            }
+            const payer = pays >= 0 ? this.list.find((c) => c[lo] <= pays && c[hi] > pays && c.id !== fresh.card) : undefined;
+            this.paidBy.set(fresh.card, payer ? payer.id : '');
+            this.changed();
+            if (!this.stillFits(axis, was, empty)) {
+                this.restore(undo);
+                return null;
+            }
+            return fresh.card;
+        });
     }
     /**
-     * Remove one line and shift the spans that referenced it.
-     *
-     * `into` selects which neighbouring slot absorbs the removed one, which decides
-     * whether a card ending on the line follows it or extends past it.
-     */
-    removeLine(axis, gone, into) {
-        const a = this.arr(axis);
-        const [lo, hi] = SPAN[axis];
-        a.splice(gone, 1);
-        for (const card of this.list) {
-            if (card[lo] >= gone)
-                card[lo]--;
-            if (into === 'lo' ? card[hi] > gone : card[hi] >= gone)
-                card[hi]--;
-        }
-    }
-    /**
-     * Remove one slot by removing a line beside it.
-     *
-     * Removes the far line, or the near one for the last slot, so the plane's two
-     * borders are never removed.
-     */
-    dropSlot(axis, slot) {
-        // `close` reaches here only for a card that does not span every slot on the
-        // axis, so the array holds an interior line.
-        const a = this.arr(axis);
-        // Remove the interior line: the far one, or the near one for the last slot,
-        // so the plane's two borders are never removed. The slot on the other side
-        // of that line absorbs the removed one.
-        const last = slot + 1 >= a.length - 1;
-        this.removeLine(axis, last ? slot : slot + 1, last ? 'lo' : 'hi');
-    }
-    /**
-     * Move a plane-spanning card to another boundary.
-     *
-     * The card's slot is removed and a slot of the same span is inserted at the
-     * target. No other card's spans change and no line on the other axis moves.
+     * Moves a card that spans the whole plane, a kid of the root cut along `axis`,
+     * to another boundary of the root: its kid moves to that place with its share,
+     * the kids it passes shift by its span and every other line keeps its
+     * coordinate. `fixed` blocks the layout, not a direct call from the host, so a
+     * fixed card may be moved.
      *
      * `line` is an index in the current arrangement.
      */
@@ -1991,85 +1830,49 @@ export class Soksak {
         if (this.noAxis(axis))
             return false;
         const card = this.find(id);
-        // `fixed` blocks the layout, not a direct call from the host. This operation
-        // changes no other card's spans, so a fixed card may be moved.
-        if (!card || !this.spansPlane(card, axis))
+        const root = this.root;
+        if (!card || !isCut(root) || root.cut !== axis)
+            return false;
+        const from = root.kids.findIndex((kid) => kid.node === this.leaves.get(id));
+        if (from < 0)
             return false;
         const [lo, hi] = SPAN[axis];
-        const from = card[lo];
-        if (line === from || line === card[hi])
-            return true; // already there
-        const before = this.toJSON();
-        const empty = this.flat();
-        const a = this.arr(axis);
-        const was = [...a];
-        const span = was[from + 1] - was[from];
-        this.list.splice(this.list.indexOf(card), 1);
-        // The same slot is reinserted rather than given to one neighbour and taken
-        // from another. The indices move first, because canInsertAt reads only those.
-        // The card is out of the list, so the slot after it absorbs the line.
-        this.removeLine(axis, from + 1, 'hi');
-        // The target index shifts down by one when it was past the removed slot.
-        const target = line > from + 1 ? line - 1 : line;
-        if (!this.canInsertAt(axis, target)) {
-            this.restore(before);
+        if (line === card[lo] || line === card[hi])
+            return true;
+        if (!this.canInsertAt(axis, line))
             return false;
-        }
-        a.splice(target, 0, 0);
-        this.openIndex(axis, target);
-        // Each coordinate is written from its previous value. The lines the slot
-        // passes shift by its span once and the rest keep their exact value.
-        // Shifting the whole tail out and back added a rounding error to every line.
-        if (target <= from) {
-            for (let k = 0; k <= target; k++)
-                a[k] = was[k];
-            for (let k = target + 1; k <= from + 1; k++)
-                a[k] = was[k - 1] + span;
-            for (let k = from + 2; k < a.length; k++)
-                a[k] = was[k];
-        }
-        else {
-            for (let k = 0; k <= from; k++)
-                a[k] = was[k];
-            for (let k = from + 1; k < target; k++)
-                a[k] = was[k + 1] - span;
-            a[target] = was[line] - span;
-            for (let k = target + 1; k < a.length; k++)
-                a[k] = was[k];
-        }
-        const across = other(axis);
-        const [alo, ahi] = SPAN[across];
-        card[lo] = target;
-        card[hi] = target + 1;
-        card[alo] = 0;
-        card[ahi] = this.arr(across).length - 1;
-        this.list.push(card);
-        this.changed();
-        // The slot leaves one boundary and arrives at another, so the neighbours that
-        // give and take the span are different. Reject the move when the result
-        // leaves a card with no area.
-        if (!this.hasArea(empty)) {
-            this.restore(before);
+        let at = this.standing(axis, line);
+        if (at === null)
             return false;
-        }
-        return true;
+        return this.run(() => {
+            const before = this.toJSON();
+            const empty = this.flat();
+            const [kid] = root.kids.splice(from, 1);
+            if (at > from)
+                at = at - 1;
+            root.kids.splice(at, 0, kid);
+            this.derive();
+            this.changed();
+            if (!this.hasArea(empty)) {
+                this.restore(before);
+                return false;
+            }
+            return true;
+        });
     }
     /**
-     * Every boundary a plane-spanning card could stand on.
-     *
-     * `without` excludes one card by id, so a card already placed can query the
-     * other boundaries without blocking itself.
+     * Every boundary a plane-spanning card could stand on: the two edges of the
+     * plane and the seams of the root cut along `axis`, in order. A card that
+     * stands on one of them blocks none of them.
      */
-    standings(axis, without) {
-        // No guard on the axis: every index is put to `canInsertAt`, which refuses an
-        // axis that is not one, so an axis that is not one returns nothing here.
-        // Includes the plane's two borders, which `insertAt` accepts.
-        const out = [];
-        for (let k = 0; k < this.arr(axis).length; k++) {
-            if (this.canInsertAt(axis, k, without))
-                out.push(k);
-        }
-        return out;
+    standings(axis) {
+        if (this.noAxis(axis))
+            return [];
+        const last = this.arr(axis).length - 1;
+        const root = this.root;
+        if (!isCut(root) || root.cut !== axis)
+            return [0, last];
+        return [...root.kids.map((kid) => this.on(kid.node, axis)[0]), last];
     }
     /**
      * Moves a card to one side of another. This is the drag-and-drop operation.
@@ -2085,46 +1888,47 @@ export class Soksak {
      * `close` takes them.
      */
     move(id, targetId, side, sides = this.fillSides) {
-        // `splitToward` below rejects an invalid side and the close before it is
-        // rolled back, so no check of `side` is needed here. The close sides are
-        // checked before the cards, as `close` checks them.
+        // The close sides are checked before the cards, as `close` checks them.
         checkFillSides(sides);
-        const card = this.find(id);
-        const target = this.find(targetId);
-        if (!card || !target || card === target || card.fixed)
+        if (!SIDES.includes(side))
             return false;
-        const carried = { data: card.data, width: card.width, height: card.height };
-        const before = this.toJSON();
-        if (!this.close(id, sides))
-            return false;
-        const landed = this.splitToward(targetId, side, { id, data: carried.data });
-        if (landed === null) {
-            this.restore(before);
-            return false;
-        }
-        const moved = this.find(landed);
-        // The px size is the card's. Which of the two applies depends on the axis it lands on.
-        if (axisOf(side) === 'x') {
-            if (carried.width !== undefined)
-                moved.width = carried.width;
-            if (carried.height !== undefined && spanOf(moved, 'y') === 1)
-                moved.height = carried.height;
-        }
-        else {
-            if (carried.height !== undefined)
-                moved.height = carried.height;
-            if (carried.width !== undefined && spanOf(moved, 'x') === 1)
-                moved.width = carried.width;
-        }
-        this.changed();
-        return true;
+        return this.run(() => {
+            const card = this.find(id);
+            const target = this.find(targetId);
+            if (!card || !target || card === target || card.fixed)
+                return false;
+            // The payload and the px sizes are carried as values: the close removes the card they belong to.
+            const carried = { data: card.data, width: card.width, height: card.height };
+            const before = this.toJSON();
+            if (!this.closeAlong(id, sides))
+                return false;
+            const landed = this.splitAt(targetId, axisOf(side), { id, data: carried.data }, isAhead(side));
+            if (landed === null) {
+                this.restore(before);
+                return false;
+            }
+            const moved = this.find(landed);
+            // The px size is the card's. Which of the two applies depends on the axis it lands on.
+            if (axisOf(side) === 'x') {
+                if (carried.width !== undefined)
+                    moved.width = carried.width;
+                if (carried.height !== undefined && spanOf(moved, 'y') === 1)
+                    moved.height = carried.height;
+            }
+            else {
+                if (carried.height !== undefined)
+                    moved.height = carried.height;
+                if (carried.width !== undefined && spanOf(moved, 'x') === 1)
+                    moved.width = carried.width;
+            }
+            this.changed();
+            return true;
+        });
     }
     /** Whether `move` would succeed, without performing it. */
     canMove(id, targetId, side) {
         // Performs the move, records the result and restores the state, as canSplit
-        // does, and caches it alongside. Building a second Soksak copied the whole
-        // arrangement and every option per call, and a host queries four sides on
-        // every pointer move.
+        // does, and caches it alongside: a host queries four sides on every pointer move.
         const key = `move:${id}:${targetId}:${side}`;
         const known = this.splitMemo.get(key);
         if (known !== undefined)
@@ -2141,7 +1945,8 @@ export class Soksak {
         return ok;
     }
     /**
-     * Runs after every operation that changes the arrangement.
+     * Runs after every operation that changes the arrangement: the sizes agree,
+     * and the tree takes the lines and the attributes of the cards.
      *
      * A px size describes one slot, so a card that comes to span two loses it. The
      * value is removed rather than kept for a later split to reapply.
@@ -2151,7 +1956,7 @@ export class Soksak {
         if (!this.probing)
             this.splitMemo.clear();
         this.agreeSizes();
-        this.sliceMemo.clear();
+        this.commit();
     }
     /**
      * Writes the largest declared px size to every card in a slot, and removes the
@@ -2192,15 +1997,7 @@ export class Soksak {
     }
     /** Restores the arrangement to a state returned earlier by `toJSON`. */
     restore(state) {
-        var _a;
-        this.xs = [...state.xs];
-        this.ys = [...state.ys];
-        // default: `fixed` is optional on CardInit; an unmarked card is not fixed.
-        this.list = state.cards.map((c) => { var _a; return ({ ...c, fixed: (_a = c.fixed) !== null && _a !== void 0 ? _a : false }); });
-        // default: `paidBy` is optional in SoksakState; a state without it records no payer.
-        this.paidBy = new Map(Object.entries((_a = state.paidBy) !== null && _a !== void 0 ? _a : {}));
-        this.agreeSizes();
-        this.sliceMemo.clear();
+        this.load(state);
         if (!this.probing)
             this.splitMemo.clear();
     }

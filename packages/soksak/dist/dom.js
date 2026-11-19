@@ -168,7 +168,7 @@ export class SoksakView {
             move: (axis, line, px) => grid.moveBoundary(axis, line, px),
             step: (axis, line, px) => grid.moveBoundary(axis, line, px),
             center: (axis, line) => grid.centerBoundary(axis, line),
-            end: (axis, line) => grid.mergeCoincident(axis, line),
+            end: () => false,
         };
         // default: `drawn` is optional and documented as the grid's own arrangement: a fullscreen card covers the plane.
         this.drawn = (_c = options.drawn) !== null && _c !== void 0 ? _c : {

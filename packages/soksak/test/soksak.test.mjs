@@ -100,14 +100,7 @@ test("splitting is refused when it would take another card below the size it has
   // cut would take it under. `minSize` binds the operation: what the halves of
   // the cut can hold is not the only question.
   const grid = Soksak.from(
-    {
-      xs: [0, 0.5, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "card", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "card-1", c0: 1, c1: 2, r0: 0, r1: 1, width: 271 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.5, node: { card: "card" } }, { share: 0.5, node: { card: "card-1", width: 271 } }] } },
     { width: 158, height: 158, gap: 18, minSize: 58 },
   );
   const before = grid.rect("card").w;
@@ -197,7 +190,7 @@ test("a split carries the payload the host gives the new card", () => {
 
 test("a split without a payload leaves data undefined rather than copying", () => {
   const grid = new Soksak(
-    { xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1, data: { live: "surface-1" } }] },
+    { root: { card: "a", data: { live: "surface-1" } } },
     { width: W, height: H },
   );
   const id = grid.split("a", "x");
@@ -229,13 +222,11 @@ test("an axis the caller made up is refused, not thrown on", () => {
   const results = {
     lines: () => grid.lines(z),
     cardsCrossing: () => grid.cardsCrossing(z, 1),
-    isVirtual: () => grid.isVirtual(z, 1),
     boundaryPos: () => grid.boundaryPos(z, 1),
     boundaryRange: () => grid.boundaryRange(z, 1),
     hasBoundary: () => grid.hasBoundary(z, 1),
     moveBoundary: () => grid.moveBoundary(z, 1, 10),
     centerBoundary: () => grid.centerBoundary(z, 1),
-    mergeCoincident: () => grid.mergeCoincident(z, 1),
     canSplit: () => grid.canSplit("card", z),
     split: () => grid.split("card", z),
     setSize: () => grid.setSize("card", z, 10),
@@ -264,29 +255,23 @@ test("a state that cannot describe a plane is refused, and names the fault", () 
   // A layout read back from storage otherwise reaches the geometry, where a bad
   // index becomes a NaN rect and the view freezes with nothing to report.
   const cases = [
-    [{ xs: [], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }] }, /xs needs at least two/],
-    [{ xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 5, r0: 0, r1: 1 }] }, /outside xs/],
-    [{ xs: [0, 1], ys: [0, 1], cards: [{ id: "a", c0: -1, c1: 1, r0: 0, r1: 1 }] }, /outside xs/],
-    [{ xs: [0, 0.5, 1], ys: [0, 1], cards: [{ id: "a", c0: 2, c1: 1, r0: 0, r1: 1 }] }, /not past/],
-    [{ xs: [0, NaN, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }] }, /xs\[1\] is NaN/],
-    [{ xs: [0, 0.8, 0.3, 1], ys: [0, 1], cards: [{ id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }] }, /before/],
-    [{ xs: [0, 1], ys: [0, 1], cards: [] }, /cards is empty/],
+    [{ xs: [0, 1], ys: [0, 1], cards: [] }, /which is the earlier form/],
+    [{ root: { foo: 1 } }, /is not a card, a box or a cut/],
+    [{ root: { cut: "x", kids: [{ share: 1, node: { card: "a" } }] } }, /has fewer than two kids/],
     [
-      { xs: [0, 0.5, 1], ys: [0, 1], cards: [
-        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "a", c0: 1, c1: 2, r0: 0, r1: 1 },
-      ] },
-      /two cards are called a/,
+      { root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.4, node: { card: "b" } }] } },
+      /shares sum to 0\.9/,
+    ],
+    [
+      { root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "a" } }] } },
+      /card a is stored twice/,
     ],
   ];
   for (const [state, why] of cases) {
     assert.throws(() => new Soksak(state, { width: 800, height: 600 }), why, JSON.stringify(state));
   }
 
-  const good = { xs: [0, 0.5, 1], ys: [0, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-  ] };
+  const good = { root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } };
   assert.doesNotThrow(() => new Soksak(good, { width: 800, height: 600 }));
 });
 
@@ -326,38 +311,6 @@ test("a card drawn with no area returns centre, not a side", () => {
   // Dividing by a zero width gives NaN, and every comparison then falls to the
   // last branch, so every point on the card read as one side.
   assert.deepEqual(grid.zoneAt(r.x, r.y + r.h / 2), { id, zone: "centre" });
-});
-
-test("a card standing inside a gap refuses no operation elsewhere", () => {
-  // R5: a card whose own two lines stand at one place has no width to draw and
-  // sits inside the one gap that keeps its neighbours apart. Judging it by area
-  // refused every split, travel and insert anywhere else on the plane.
-  const state = {
-    xs: [0, 0.6, 0.6, 1],
-    ys: [0, 1],
-    cards: [
-      { id: "left", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "thin", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "right", c0: 2, c1: 3, r0: 0, r1: 1 },
-    ],
-  };
-  const options = { width: 900, height: 400, gap: 20, minSize: 96 };
-  const grid = new Soksak(state, options);
-  assert.equal(grid.rect("thin").w, 0, "the card stands inside the gap");
-  assert.equal(grid.rect("left").w, 530);
-
-  // 400 tall against a 96 minimum: both halves have the room.
-  assert.equal(grid.canSplit("left", "y"), true);
-  assert.equal(grid.split("left", "y", { id: "below" }), "below");
-  assert.equal(grid.rect("left").h, 190);
-  assert.equal(grid.rect("below").h, 190);
-  assert.equal(grid.rect("thin").w, 0, "and it still stands there");
-
-  const travel = new Soksak(state, options);
-  assert.equal(travel.moveTo("right", "x", 0), true, "a card that reaches across still travels");
-
-  const arrive = new Soksak(state, options);
-  assert.equal(arrive.insertAt("x", 0, { id: "rail", size: 120 }), "rail");
 });
 
 test("no change leaves a card with no area, whatever minSize allows", () => {

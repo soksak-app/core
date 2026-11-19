@@ -349,7 +349,7 @@ function divide(plane: Plane, axis: Axis): { size: number[]; each: number } {
     // inside such a run and every card covering one of its slots covers all of
     // them. A stop that took part of a run let a cut no card reads decide how
     // much room the stop released, so the same arrangement was drawn one way
-    // with the cut and another way without it, and `tidy` moved cards.
+    // with the cut and another way without it, and dropping that line moved cards.
     const runFrom = new Array<number>(count);
     const runTo = new Array<number>(count);
     for (let i = 0; i < count; ) {

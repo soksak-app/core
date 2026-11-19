@@ -50,9 +50,9 @@ test("everything the API hands back is a copy the host may keep", () => {
   assert.notDeepEqual(grid.lines("x"), xs, "lines() hands back a copy");
 
   const state = grid.toJSON();
-  state.xs[1] = 0.99;
-  state.cards.length = 0;
-  assert.equal(grid.cards.length > 0, true, "toJSON hands back a copy");
+  state.root.kids[0].share = 0.99;
+  state.root.kids.length = 0;
+  assert.equal(grid.cards.length, 4, "toJSON hands back a copy");
   assert.notEqual(grid.lines("x")[1], 0.99);
 });
 
@@ -155,15 +155,12 @@ test("a zero gap is still grabbable", () => {
 });
 
 test("checkState applies the same rules as the constructor", () => {
-  const good = { xs: [0, 0.5, 1], ys: [0, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-    { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-  ] };
+  const good = { root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } };
   assert.doesNotThrow(() => checkState(good));
 
-  const bad = { ...good, cards: [{ id: "a", c0: 0, c1: 9, r0: 0, r1: 1 }] };
-  assert.throws(() => checkState(bad), /outside xs/);
-  assert.throws(() => new Soksak(bad, { width: W, height: H }), /outside xs/);
+  const bad = { root: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.4, node: { card: "b" } }] } };
+  assert.throws(() => checkState(bad), /not canonical: its shares sum to 0\.9/);
+  assert.throws(() => new Soksak(bad, { width: W, height: H }), /not canonical: its shares sum to 0\.9/);
 });
 
 test("outline returns a value for nothing, and for rects that do not meet", () => {
@@ -188,27 +185,12 @@ test("the arguments each method reads are the ones it is given", () => {
   const grid = three();
   grid.split("upper", "x", { id: "beside" });
 
-  // isSlicing reads the list it is handed, not always its own.
-  assert.equal(grid.isSlicing(), true);
-  assert.equal(
-    grid.isSlicing([
-      { id: "a", c0: 0, c1: 2, r0: 0, r1: 1 },
-      { id: "b", c0: 2, c1: 3, r0: 0, r1: 2 },
-      { id: "c", c0: 1, c1: 3, r0: 2, r1: 3 },
-      { id: "d", c0: 0, c1: 1, r0: 1, r1: 3 },
-    ]),
-    false,
-    "a pinwheel handed in is answered for",
-  );
-
-  // standings honours `without`. `lower` spans the line the split just made,
-  // so it blocks that boundary until it is the card being ignored.
+  // standings names the seams of the root and the edges of the plane. `lower`
+  // spans the line the split just made, which is no seam of the root.
   const crossed = grid.cardsCrossing("x", 2).map((c) => c.id);
   assert.deepEqual(crossed, ["lower"], "lower spans the new line");
-  const all = grid.standings("x");
-  const without = grid.standings("x", "lower");
-  assert.ok(!all.includes(2), "so nothing may stand there");
-  assert.ok(without.includes(2), "unless lower is the one being ignored");
+  assert.ok(!grid.standings("x").includes(2), "so nothing may stand there");
+  assert.equal(grid.canInsertAt("x", 2), false);
 
   // canInsertAt checks the index, not only what crosses.
   for (const line of [-1, 1.5, NaN, 99]) {
@@ -219,28 +201,6 @@ test("the arguments each method reads are the ones it is given", () => {
   assert.equal(grid.insertAt("x", 1, { size: grid.width }), null, "the whole plane");
   assert.equal(grid.insertAt("x", 1, { size: grid.width + 1 }), null, "more than it");
 
-  // mergeCoincident needs two lines at one coordinate, and refuses even then
-  // while a card stands in the slot between them: folding would leave it with
-  // no span at all.
-  const lines = grid.lines("x").length;
-  assert.equal(grid.mergeCoincident("x", 1), false, "these lines do not coincide");
-  assert.equal(grid.lines("x").length, lines, "and nothing was folded");
-
-  const thin = new Soksak(
-    { xs: [0, 0.4, 0.4, 1], ys: [0, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "thin", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "b", c0: 2, c1: 3, r0: 0, r1: 1 },
-    ] },
-    { width: 1200, height: 600, gap: 24, minSize: 0 },
-  );
-  assert.equal(thin.lines("x")[1], thin.lines("x")[2], "two lines at one coordinate");
-  assert.equal(thin.rect("thin").w, 0, "with a card between them");
-  for (const line of [1, 2]) {
-    assert.equal(thin.mergeCoincident("x", line), false, `folding at ${line} would lose thin`);
-  }
-  assert.equal(thin.lines("x").length, 4, "so both lines are still there");
-  assert.ok(thin.card("thin"), "and the card is still there");
 });
 
 test("zoneAt returns nothing for a point that is not one", () => {
@@ -271,20 +231,6 @@ test("outline's radius follows pad, and it reports its corners", () => {
     [40, 40, 40, 40],
     "and a named radius wins",
   );
-});
-
-test("checkState names every shape a state cannot have", () => {
-  const base = { xs: [0, 0.5, 1], ys: [0, 1] };
-  for (const [cards, why] of [
-    [[{ c0: 0, c1: 1, r0: 0, r1: 1 }], /no id/],
-    [[{ id: "", c0: 0, c1: 1, r0: 0, r1: 1 }], /no id/],
-    [[{ id: 7, c0: 0, c1: 1, r0: 0, r1: 1 }], /no id/],
-    [[{ id: "a", c0: 1, c1: 1, r0: 0, r1: 1 }], /not past/],
-    [[{ id: "a", c0: 0, c1: 1, r0: 1, r1: 1 }], /not past/],
-    [[{ id: "a", c0: 0.5, c1: 1, r0: 0, r1: 1 }], /not an index/],
-  ]) {
-    assert.throws(() => checkState({ ...base, cards }), why, JSON.stringify(cards));
-  }
 });
 
 test("the options take every value that is one", () => {
@@ -349,20 +295,6 @@ test("centring the plane's border changes nothing, and centring a boundary halve
   assert.equal(wide.rect("card").w, wide.rect("card-1").w, "and the two are equal");
 });
 
-test("tidy drops every line no card reads, including the first", () => {
-  const grid = new Soksak(undefined, { width: 1200, height: 600, gap: 24, minSize: 0 });
-  grid.split("card", "y");                       // two rows
-  const spare = grid.split("card", "x");         // a line only the top row breaks on
-  assert.ok(grid.close(spare), "closing it leaves the line behind");
-  const virtual = grid.lines("x").findIndex((_, k) => grid.isVirtual("x", k));
-  assert.equal(virtual, 1, "the line left over is the first interior one");
-  assert.equal(grid.virtualCount(), 1);
-
-  assert.equal(grid.tidy(), 1, "tidy takes it");
-  assert.equal(grid.virtualCount(), 0, "and none is left");
-  assert.equal(grid.lines("x").length, 2, "the array is one shorter");
-});
-
 test("a card cannot be inserted at the size of the plane or more", () => {
   // Without the check `openSlot` writes a line before the plane starts and the
   // array comes back out of order and past 1. It takes a plane that has been
@@ -424,14 +356,7 @@ test("replace updates the canonical arrangement without replacing the grid", () 
   const next = grid.split("card", "x", { id: "lower", data: { program: "lower" } });
   assert.equal(next, "lower");
 
-  grid.replace({
-    xs: [0, 0.25, 1],
-    ys: [0, 1],
-    cards: [
-      { id: "upper", c0: 0, c1: 1, r0: 0, r1: 1, data: { program: "upper" } },
-      { id: "lower", c0: 1, c1: 2, r0: 0, r1: 1, data: { program: "lower" } },
-    ],
-  });
+  grid.replace({ root: { cut: "x", kids: [{ share: 0.25, node: { card: "upper", data: { program: "upper" } } }, { share: 0.75, node: { card: "lower", data: { program: "lower" } } }] } });
 
   assert.equal(grid.card("card"), undefined);
   assert.equal(grid.card("upper").data.program, "upper");

@@ -69,10 +69,7 @@ test("a refused move changes nothing", () => {
 
   // the last open card cannot leave: nothing would fill its space
   const alone = new Soksak(
-    { xs: [0, 0.3, 1], ys: [0, 1], cards: [
-      { id: "side", c0: 0, c1: 1, r0: 0, r1: 1, fixed: true },
-      { id: "only", c0: 1, c1: 2, r0: 0, r1: 1 },
-    ] },
+    { root: { cut: "x", kids: [{ share: 0.3, node: { card: "side", fixed: true } }, { share: 0.7, node: { card: "only" } }] } },
     { width: W, height: H },
   );
   assert.equal(alone.move("only", "side", "right"), false);

@@ -23,25 +23,15 @@
  * recursively with heads and corridors as fixed costs.
  */
 import { axisOf } from './card.js';
+import { cardsOf as storedCards, cloneNode, isBox, isCut } from './tree.js';
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const ENDS = { x: ['x0', 'x1'], y: ['y0', 'y1'] };
-const bare = (card) => {
-    const { c0: _c0, c1: _c1, r0: _r0, r1: _r1, ...rest } = card;
-    return rest;
-};
-const extentOf = (cells, card) => ({
-    x0: cells.xs[card.c0], x1: cells.xs[card.c1], y0: cells.ys[card.r0], y1: cells.ys[card.r1],
-});
+const NONE = { x0: 0, x1: 0, y0: 0, y1: 0 };
 const union = (extents) => ({
     x0: Math.min(...extents.map((e) => e.x0)),
     x1: Math.max(...extents.map((e) => e.x1)),
     y0: Math.min(...extents.map((e) => e.y0)),
     y1: Math.max(...extents.map((e) => e.y1)),
-});
-/** The drawn extent per axis of a set of drawn rectangles. */
-const sizeOf = (rects) => ({
-    x: Math.max(...rects.map((r) => r.x + r.w)) - Math.min(...rects.map((r) => r.x)),
-    y: Math.max(...rects.map((r) => r.y + r.h)) - Math.min(...rects.map((r) => r.y)),
 });
 /** Whether a card keeps its span on an axis: fixed, or drawn at a px size there (R2). */
 function holds(card, spans, axis) {
@@ -52,147 +42,162 @@ function holds(card, spans, axis) {
 }
 function cut(axis, kids, dirty) {
     const old = union(kids.map((k) => k.old));
-    const along = kids.reduce((a, k) => a + k.size[axis], 0);
-    const other = axis === 'x' ? 'y' : 'x';
-    const size = { [axis]: along, [other]: Math.max(...kids.map((k) => k.size[other])) };
     return {
-        kind: 'cut', axis, kids, old, rect: old, size, above: kids[0].above, placedAbove: 0, weight: null, dirty, laid: false,
+        kind: 'cut', axis, kids, old, rect: old, above: kids[0].above, placedAbove: 0, weight: null, dirty, shares: null, laid: false,
         adjust: kids.map(() => 0),
     };
 }
-/** The tree of a set of children, the cut of `prefer[0]` taken first where the lines allow both. */
-function build(nodes, prefer) {
-    if (nodes.length === 1)
-        return nodes[0];
-    for (const axis of prefer) {
-        const [lo, hi] = ENDS[axis];
-        const end = Math.max(...nodes.map((n) => n.old[hi]));
-        const at = [...new Set(nodes.map((n) => n.old[hi]))]
-            .filter((v) => v < end && nodes.every((n) => n.old[hi] <= v || n.old[lo] >= v))
-            .sort((a, b) => a - b);
-        if (!at.length)
-            continue;
-        const bounds = [Math.min(...nodes.map((n) => n.old[lo])), ...at, end];
-        const kids = [];
-        for (let i = 0; i + 1 < bounds.length; i++) {
-            kids.push(build(nodes.filter((n) => n.old[lo] >= bounds[i] && n.old[hi] <= bounds[i + 1]), prefer));
-        }
-        return cut(axis, kids, false);
-    }
-    throw new Error('the grid is not a slicing arrangement');
+function cardLeaf(card, old, spans) {
+    return {
+        kind: 'leaf', id: card.card, card, box: null, head: 0, inner: null,
+        held: { x: holds(card, spans, 'x'), y: holds(card, spans, 'y') }, old, rect: old, above: 0, placedAbove: 0, weight: null,
+    };
 }
-/** Sets the px of the heads above each node where it stands: the children of a cut along x share it, a cut along y gives it to its first child. */
+function boxLeaf(box, head, inner, old) {
+    return {
+        kind: 'leaf', id: box.box, card: null, box, head, inner, held: { x: false, y: false }, old, rect: old, above: 0, placedAbove: 0,
+        weight: null,
+    };
+}
+/** Sets the px of the heads above each node where it stands: the kids of a cut along x share it, a cut along y gives it to its first kid. */
 function assignAbove(node, above) {
     node.above = above;
     if (node.kind === 'leaf') {
         if (node.inner)
-            assignAbove(node.inner, above + node.box.head);
+            assignAbove(node.inner, above + node.head);
         return;
     }
     node.kids.forEach((kid, i) => assignAbove(kid, node.axis === 'x' || i === 0 ? above : 0));
 }
-function cardLeaf(card, old, spans, rect) {
-    return {
-        kind: 'leaf', id: card.id, card, box: null, inner: null, held: { x: holds(card, spans, 'x'), y: holds(card, spans, 'y') },
-        old, rect: old, size: sizeOf([rect]), above: 0, placedAbove: 0, weight: null,
-    };
-}
-function boxLeaf(box, inner, old, rects) {
-    return {
-        kind: 'leaf', id: box.id, card: null, box, inner, held: { x: false, y: false }, old, rect: old, size: sizeOf(rects), above: 0,
-        placedAbove: 0, weight: null,
-    };
-}
-/** The card ids inside a box, through the boxes that it holds. */
-function contentsOf(box) {
-    return box.members.flatMap((member) => (typeof member === 'string' ? [member] : contentsOf(member)));
-}
-/** The leaves of the members of one box or of the plane, read from the cells and their drawn rectangles. */
-function leaves(members, cells, byId, drawn, prefer) {
-    return members.map((member) => {
-        if (typeof member === 'string') {
-            const card = byId.get(member);
-            if (!card)
-                throw new Error(`card ${member} is not a member of the layout`);
-            return cardLeaf(bare(card), extentOf(cells, card), { x: card.c1 - card.c0, y: card.r1 - card.r0 }, drawn.get(member));
+/** The tree of an operation with an index of its nodes: the leaf of each id, and the cut and the box leaf that hold each node. */
+class Tree {
+    constructor(root, input) {
+        this.input = input;
+        this.byId = new Map();
+        this.parent = new Map();
+        this.owner = new Map();
+        this.root = root;
+        this.enter(root, null, null);
+    }
+    /** Adds `node` and the nodes below it to the index, held by the cut `parent` inside the box leaf `owner`. */
+    enter(node, parent, owner) {
+        this.input.visit();
+        if (parent)
+            this.parent.set(node, parent);
+        else
+            this.parent.delete(node);
+        if (owner)
+            this.owner.set(node, owner);
+        else
+            this.owner.delete(node);
+        if (node.kind === 'leaf') {
+            this.byId.set(node.id, node);
+            if (node.inner)
+                this.enter(node.inner, null, node);
+            return;
         }
-        const inside = contentsOf(member).map((id) => byId.get(id));
-        if (!inside.length || inside.some((card) => !card))
-            throw new Error(`card ${member.id} is not a member of the layout`);
-        const cards = inside;
-        const inner = build(leaves(member.members, cells, byId, drawn, prefer), prefer);
-        return boxLeaf(member, inner, union(cards.map((card) => extentOf(cells, card))), cards.map((card) => drawn.get(card.id)));
-    });
-}
-/** The tree of the plane: the cards that no box holds and the boxes, each box with the tree of its members. */
-function planeTree(cells, boxes, drawn, prefer) {
-    const byId = new Map(cells.cards.map((card) => [card.id, card]));
-    const boxed = new Set(boxes.flatMap(contentsOf));
-    const members = [...cells.cards.filter((card) => !boxed.has(card.id)).map((card) => card.id), ...boxes];
-    const root = build(leaves(members, cells, byId, drawn, prefer), prefer);
-    assignAbove(root, 0);
-    return root;
-}
-function find(root, id, owner = null, holder = null) {
-    if (root.kind === 'leaf') {
-        if (root.id === id)
-            return { node: root, cut: holder, owner };
-        return root.inner ? find(root.inner, id, root, null) : null;
+        for (const kid of node.kids)
+            this.enter(kid, node, owner);
     }
-    for (const kid of root.kids) {
-        const hit = find(kid, id, owner, root);
-        if (hit)
-            return hit;
+    /** Puts `next` where `node` stood: in its cut, inside its box leaf, or as the root. */
+    replace(node, next) {
+        const holder = this.parent.get(node);
+        const owner = this.owner.get(node);
+        if (holder)
+            holder.kids[holder.kids.indexOf(node)] = next;
+        else if (owner)
+            owner.inner = next;
+        else
+            this.root = next;
+        this.enter(next, holder !== null && holder !== void 0 ? holder : null, owner !== null && owner !== void 0 ? owner : null);
     }
-    return null;
+}
+/** The tree of an operation read from the stored tree, with each leaf where it stands and each box with its head. */
+function treeOf(input) {
+    const convert = (node) => {
+        var _a;
+        input.visit();
+        const old = input.extent(node);
+        if (isCut(node)) {
+            const out = cut(node.cut, node.kids.map((kid) => convert(kid.node)), false);
+            out.old = old;
+            out.rect = old;
+            return out;
+        }
+        if (isBox(node))
+            return boxLeaf(node, (_a = input.heads.get(node.box)) !== null && _a !== void 0 ? _a : 0, convert(node.inner), old);
+        const card = input.card(node.card);
+        return cardLeaf(node, old, { x: card.c1 - card.c0, y: card.r1 - card.r0 });
+    };
+    const tree = new Tree(convert(input.root), input);
+    assignAbove(tree.root, 0);
+    return tree;
 }
 /** The ids of the leaves of a node in its own tree, without the members inside its boxes. */
 function members(node) {
     return node.kind === 'leaf' ? [node.id] : node.kids.flatMap(members);
 }
-/** The cut that holds `node` in the tree rooted at `root`, or null. */
-function parent(root, node) {
-    if (root.kind === 'leaf')
-        return null;
-    for (const kid of root.kids) {
-        if (kid === node)
-            return root;
-        const hit = parent(kid, node);
-        if (hit)
-            return hit;
-    }
-    return null;
+/** The drawn extent of every node of the tree in px, from the drawn rectangles of its cards, computed once for an operation. */
+function drawnOf(root, drawn, input) {
+    const out = new Map();
+    const visit = (node) => {
+        input.visit();
+        let at;
+        if (node.kind === 'cut')
+            at = union(node.kids.map(visit));
+        else if (node.inner)
+            at = visit(node.inner);
+        else {
+            const r = drawn.get(node.id);
+            at = { x0: r.x, x1: r.x + r.w, y0: r.y, y1: r.y + r.h };
+        }
+        out.set(node, at);
+        return at;
+    };
+    visit(root);
+    return out;
 }
-/** The size of a node among the children of a cut along `axis`: its drawn extent, less on y the heads above it. */
-const sizeAlong = (node, axis) => node.size[axis] - (axis === 'y' ? node.above : 0);
+const extentOn = (e, axis) => (axis === 'x' ? e.x1 - e.x0 : e.y1 - e.y0);
+/** The size of a node among the kids of a cut along `axis`: its drawn extent, less on y the heads above it. */
+const sizeAlong = (node, axis, sizes) => { var _a; return extentOn((_a = sizes.get(node)) !== null && _a !== void 0 ? _a : NONE, axis) - (axis === 'y' ? node.above : 0); };
 const isHeld = (node, axis) => node.kind === 'leaf' && node.held[axis];
-const weightOf = (node, axis) => { var _a; return (_a = node.weight) !== null && _a !== void 0 ? _a : sizeAlong(node, axis); };
-/** Lays a node into its rectangle, and the children of a cut that changed or whose rectangle moved on its axis by their weights. */
-function place(node, rect, above) {
+const weightOf = (node, axis, sizes) => { var _a; return (_a = node.weight) !== null && _a !== void 0 ? _a : sizeAlong(node, axis, sizes); };
+/**
+ * Lays a node into its rectangle: the kids of a cut that changed or whose rectangle moved on its axis by their weights, and the kids of
+ * a cut that arrives with its node by the shares it keeps.
+ */
+function place(node, rect, above, sizes, input) {
+    input.visit();
     node.rect = rect;
     node.placedAbove = above;
     if (node.kind === 'leaf') {
         if (node.inner)
-            place(node.inner, rect, above + node.box.head);
+            place(node.inner, rect, above + node.head, sizes, input);
         return;
     }
     const axis = node.axis;
     const [lo, hi] = ENDS[axis];
-    const kept = !node.dirty && rect[lo] === node.old[lo] && rect[hi] === node.old[hi] && above === node.above;
-    node.laid = !kept;
+    const kept = !node.dirty && !node.shares && rect[lo] === node.old[lo] && rect[hi] === node.old[hi] && above === node.above;
+    node.laid = !kept && !node.shares;
     const spans = node.kids.map((kid) => kid.old[hi] - kid.old[lo]);
-    if (!kept) {
+    if (node.shares) {
+        const shares = node.shares;
+        node.kids.forEach((_, i) => {
+            spans[i] = (rect[hi] - rect[lo]) * shares[i];
+        });
+    }
+    else if (!kept) {
         let free = rect[hi] - rect[lo];
         node.kids.forEach((kid, i) => {
             if (isHeld(kid, axis))
                 free -= spans[i];
         });
         const sharing = node.kids.filter((kid) => !isHeld(kid, axis));
-        const total = sharing.reduce((a, kid) => a + weightOf(kid, axis), 0);
+        const total = sharing.reduce((a, kid) => a + weightOf(kid, axis, sizes), 0);
         node.kids.forEach((kid, i) => {
             if (isHeld(kid, axis))
                 return;
-            const share = total > 0 ? weightOf(kid, axis) / total : 1 / sharing.length;
+            const share = total > 0 ? weightOf(kid, axis, sizes) / total : 1 / sharing.length;
             spans[i] = Math.max(0, Math.max(0, free) * share + node.adjust[i]);
         });
     }
@@ -201,52 +206,42 @@ function place(node, rect, above) {
         const last = i === node.kids.length - 1;
         const from = kept ? kid.old[lo] : at;
         const end = kept ? kid.old[hi] : last ? rect[hi] : at + spans[i];
-        place(kid, { ...rect, [lo]: from, [hi]: end }, axis === 'x' || i === 0 ? above : 0);
+        place(kid, { ...rect, [lo]: from, [hi]: end }, axis === 'x' || i === 0 ? above : 0, sizes, input);
         at = end;
     });
 }
-/** The cards of a node with the coordinates that `place` gave them, or that they had. */
-function cardsOf(node, laid) {
-    if (node.kind === 'cut')
-        return node.kids.flatMap((kid) => cardsOf(kid, laid));
-    if (node.inner)
-        return cardsOf(node.inner, laid);
-    return [{ card: node.card, at: laid ? node.rect : node.old }];
-}
-/** The distance under which two coordinates of the laid tree are one line, as the grid compares its lines. */
-const EPS = 1e-9;
 /**
- * The lines of coordinates: coordinates within EPS of the line before are that line, because two cuts laid alike, such as two rows of
- * equal shares, reach one coordinate through different sums.
+ * The stored node of a laid node: a cut takes the shares of the rectangles that its kids were laid at, a kid cut along the axis of its
+ * cut gives that cut its kids, and a cut of one kid is that kid, so the tree stays canonical.
  */
-function linesOf(values) {
-    const out = [];
-    for (const v of [...values].sort((a, b) => a - b))
-        if (!out.length || v - out[out.length - 1] >= EPS)
-            out.push(v);
-    return out;
-}
-/** The index of the line of v. */
-const lineOf = (lines, v) => lines.filter((line) => line <= v + EPS).length - 1;
-/** The cells of the laid tree: coordinates within EPS are one line, and the cards keep the order of `order` with the new ones after. */
-function cellsOf(root, order) {
-    const laid = cardsOf(root, true);
-    const xs = linesOf(laid.flatMap((c) => [c.at.x0, c.at.x1]));
-    const ys = linesOf(laid.flatMap((c) => [c.at.y0, c.at.y1]));
-    const rank = (id) => {
-        const at = order.indexOf(id);
-        return at < 0 ? order.length : at;
-    };
-    laid.sort((a, b) => rank(a.card.id) - rank(b.card.id));
-    const cards = laid.map(({ card, at }) => ({
-        ...card, c0: lineOf(xs, at.x0), c1: lineOf(xs, at.x1), r0: lineOf(ys, at.y0), r1: lineOf(ys, at.y1),
-    }));
-    return { xs, ys, cards };
+function storedOf(node) {
+    if (node.kind === 'leaf') {
+        if (node.inner) {
+            const box = node.box;
+            return { box: box.box, ...(box.data !== undefined ? { data: box.data } : {}), inner: storedOf(node.inner) };
+        }
+        return cloneNode(node.card);
+    }
+    const [lo, hi] = ENDS[node.axis];
+    const total = node.rect[hi] - node.rect[lo];
+    const kids = [];
+    for (const kid of node.kids) {
+        const share = total > 0 ? (kid.rect[hi] - kid.rect[lo]) / total : 1 / node.kids.length;
+        const stored = storedOf(kid);
+        if (isCut(stored) && stored.cut === node.axis)
+            for (const k of stored.kids)
+                kids.push({ share: share * k.share, node: k.node });
+        else
+            kids.push({ share, node: stored });
+    }
+    return kids.length === 1 ? kids[0].node : { cut: node.axis, kids };
 }
 /** Moves each span that the last layout laid by the difference between its drawn size and the size its weight asks for. */
-function correct(root, drawn, rate) {
+function correct(root, drawn, rate, sizes, input) {
+    const now = drawnOf(root, drawn, input);
     let worst = 0;
     const visit = (node) => {
+        input.visit();
         if (node.kind === 'leaf') {
             if (node.inner)
                 visit(node.inner);
@@ -259,16 +254,13 @@ function correct(root, drawn, rate) {
         const each = rate(axis);
         if (!(each > 0))
             return;
-        const sharing = node.kids.map((kid, i) => i).filter((i) => !isHeld(node.kids[i], axis));
-        const sizes = node.kids.map((kid) => {
-            const rects = cardsOf(kid, true).map((c) => drawn.get(c.card.id));
-            return sizeOf(rects)[axis] - (axis === 'y' ? kid.placedAbove : 0);
-        });
-        const total = sharing.reduce((a, i) => a + weightOf(node.kids[i], axis), 0);
-        const room = sharing.reduce((a, i) => a + sizes[i], 0);
+        const sharing = node.kids.map((_, i) => i).filter((i) => !isHeld(node.kids[i], axis));
+        const drawnSizes = node.kids.map((kid) => extentOn(now.get(kid), axis) - (axis === 'y' ? kid.placedAbove : 0));
+        const total = sharing.reduce((a, i) => a + weightOf(node.kids[i], axis, sizes), 0);
+        const room = sharing.reduce((a, i) => a + drawnSizes[i], 0);
         for (const i of sharing) {
-            const want = total > 0 ? (room * weightOf(node.kids[i], axis)) / total : room / sharing.length;
-            const error = sizes[i] - want;
+            const want = total > 0 ? (room * weightOf(node.kids[i], axis, sizes)) / total : room / sharing.length;
+            const error = drawnSizes[i] - want;
             worst = Math.max(worst, Math.abs(error));
             node.adjust[i] -= error / each;
         }
@@ -276,71 +268,27 @@ function correct(root, drawn, rate) {
     visit(root);
     return worst;
 }
-/** The node of what arrives: a new card, or a card or a box that left, with the tree of its members at the place it left. */
-function arrivingNode(card) {
-    if (!('cards' in card)) {
-        const fresh = { id: card.id, fixed: false, ...(card.data !== undefined ? { data: card.data } : {}) };
-        const none = { x0: 0, x1: 0, y0: 0, y1: 0 };
-        return cardLeaf(fresh, none, { x: 1, y: 1 }, { x: 0, y: 0, w: 0, h: 0 });
+/** The node of what arrives: a new card, or a card or a box that left, whose cuts keep their shares where it lands. */
+function arriving(node) {
+    if (isCut(node)) {
+        const kids = node.kids.map((kid) => arriving(kid.node));
+        const out = cut(node.cut, kids, true);
+        out.shares = node.kids.map((kid) => kid.share);
+        return out;
     }
-    if (!card.box) {
-        const [only] = card.cards;
-        const leaf = cardLeaf(only.card, { x0: only.x0, x1: only.x1, y0: only.y0, y1: only.y1 }, { x: 1, y: 1 }, only.rect);
-        leaf.above = card.above;
-        return leaf;
-    }
-    const xs = [...new Set(card.cards.flatMap((c) => [c.x0, c.x1]))].sort((a, b) => a - b);
-    const ys = [...new Set(card.cards.flatMap((c) => [c.y0, c.y1]))].sort((a, b) => a - b);
-    const cells = {
-        xs, ys,
-        cards: card.cards.map((c) => ({ ...c.card, c0: xs.indexOf(c.x0), c1: xs.indexOf(c.x1), r0: ys.indexOf(c.y0), r1: ys.indexOf(c.y1) })),
-    };
-    const byId = new Map(cells.cards.map((c) => [c.id, c]));
-    const drawn = new Map(card.cards.map((c) => [c.card.id, c.rect]));
-    const prefer = ['x', 'y'];
-    const inner = build(leaves(card.box.members, cells, byId, drawn, prefer), prefer);
-    const leaf = boxLeaf(card.box, inner, union(card.cards.map(({ x0, x1, y0, y1 }) => ({ x0, x1, y0, y1 }))), card.cards.map((c) => c.rect));
-    assignAbove(leaf, card.above);
-    // The members of the box are laid again in its new rectangle by the sizes they had.
-    const mark = (node) => {
-        if (node.kind === 'leaf')
-            return;
-        node.dirty = true;
-        node.kids.forEach(mark);
-    };
-    mark(inner);
-    return leaf;
-}
-/** The ids that a state and its boxes hold: every card and every box. */
-function ids(cells, boxes) {
-    const out = new Set(cells.cards.map((card) => card.id));
-    const walk = (box) => {
-        out.add(box.id);
-        box.members.forEach((m) => {
-            if (typeof m !== 'string')
-                walk(m);
-        });
-    };
-    boxes.forEach(walk);
-    return out;
-}
-/** Puts `next` where the found node stood: in its cut, or as the root of the tree of a box or of the plane. */
-function replaceNode(tree, found, next) {
-    if (found.cut)
-        found.cut.kids[found.cut.kids.indexOf(found.node)] = next;
-    else if (found.owner)
-        found.owner.inner = next;
-    else
-        tree.root = next;
+    if (isBox(node))
+        return boxLeaf(node, 0, arriving(node.inner), NONE);
+    return cardLeaf(cloneNode(node), NONE, { x: 1, y: 1 });
 }
 /**
- * The target of an insert: the node of one member, or the neighbouring children of one cut that hold exactly the members of the list,
- * which become a cut of their own inside it.
+ * The target of an insert: the node of one id, or the neighbouring kids of one cut that hold exactly the ids of the list, which become a
+ * cut of their own inside it.
  */
-function targetNode(tree, target) {
+function targetNode(tree, target, sizes) {
+    var _a;
     const list = typeof target === 'string' ? [target] : [...target];
     const hits = list.map((id) => {
-        const hit = find(tree.root, id);
+        const hit = tree.byId.get(id);
         if (!hit)
             throw new Error(`card ${id} is not a member of the layout`);
         return hit;
@@ -348,68 +296,72 @@ function targetNode(tree, target) {
     if (list.length === 1)
         return hits[0];
     const refused = () => new Error(`cards ${list.join(', ')} are not neighbours of one cut`);
-    const owner = hits[0].owner;
-    const root = owner ? owner.inner : tree.root;
-    let holder = null;
-    for (let at = hits[0].node; at; at = parent(root, at)) {
-        const node = at;
-        if (node.kind === 'cut' && list.every((id) => members(node).includes(id))) {
-            holder = node;
+    const wanted = new Set(list);
+    // The cut that holds every listed node is the lowest cut above the first whose leaves count all of them.
+    let level = null;
+    for (let at = tree.parent.get(hits[0]); at; at = tree.parent.get(at)) {
+        if (members(at).filter((id) => wanted.has(id)).length === wanted.size) {
+            level = at;
             break;
         }
     }
-    if (!holder)
+    if (!level)
         throw refused();
-    const level = holder;
-    const touched = level.kids.map((kid, i) => (members(kid).some((id) => list.includes(id)) ? i : -1)).filter((i) => i >= 0);
+    const holder = level;
+    const touched = holder.kids.map((kid, i) => (members(kid).some((id) => wanted.has(id)) ? i : -1)).filter((i) => i >= 0);
     const first = touched[0];
     const last = touched[touched.length - 1];
-    const span = level.kids.slice(first, last + 1);
+    const span = holder.kids.slice(first, last + 1);
     const held = span.flatMap(members);
-    if (held.length !== list.length || !held.every((id) => list.includes(id)))
+    if (held.length !== wanted.size || !held.every((id) => wanted.has(id)))
         throw refused();
-    if (first === 0 && last === level.kids.length - 1)
-        return { node: level, cut: parent(root, level), owner };
-    const sub = cut(level.axis, span, false);
-    sub.weight = span.reduce((a, k) => a + weightOf(k, level.axis), 0);
-    level.kids.splice(first, span.length, sub);
-    level.adjust = level.kids.map(() => 0);
-    return { node: sub, cut: level, owner };
+    if (first === 0 && last === holder.kids.length - 1)
+        return holder;
+    const sub = cut(holder.axis, span, false);
+    sub.weight = span.reduce((a, k) => a + weightOf(k, holder.axis, sizes), 0);
+    sizes.set(sub, union(span.map((k) => sizes.get(k))));
+    holder.kids.splice(first, span.length, sub);
+    holder.adjust = holder.kids.map(() => 0);
+    tree.enter(sub, holder, (_a = tree.owner.get(holder)) !== null && _a !== void 0 ? _a : null);
+    return sub;
 }
-/** The difference in px under which the sizes of the children of a cut are equal, so the cut is even. */
+/** The difference in px under which the sizes of the kids of a cut are equal, so the cut is even. */
 const EVEN = 0.5;
-/** Whether the children of a cut that keep no span on its axis have one size. */
-function isEven(into) {
-    const sizes = into.kids.filter((kid) => !isHeld(kid, into.axis)).map((kid) => weightOf(kid, into.axis));
-    return sizes.every((size) => Math.abs(size - sizes[0]) < EVEN);
+/** Whether the kids of a cut that keep no span on its axis have one size. */
+function isEven(into, sizes) {
+    const all = into.kids.filter((kid) => !isHeld(kid, into.axis)).map((kid) => weightOf(kid, into.axis, sizes));
+    return all.every((size) => Math.abs(size - all[0]) < EVEN);
 }
 /**
- * Adds the node `arriving` beside the found node toward `side`. Along the cut of the target, an even cut gives it 1/(k+1) and keeps
- * every ratio; a cut that is not even takes half of the target less the new corridor, `gap`, the child toward `side` when the target
- * is the cut itself, and keeps every other size. Across the cut, the target is wrapped in a new cut of two halves.
+ * Adds the node `arriving` beside `node` toward `side`. Along the cut of the target, an even cut gives it 1/(k+1) and keeps every ratio;
+ * a cut that is not even takes half of the target less the new corridor, `gap`, the kid toward `side` when the target is the cut itself,
+ * and keeps every other size. Across the cut, the target is wrapped in a new cut of two halves.
  */
-function addBeside(tree, found, side, arriving, gap) {
+function addBeside(tree, node, side, coming, gap, sizes) {
+    var _a;
     const axis = axisOf(side);
     const after = side === 'right' || side === 'bottom';
-    const { node, cut: holder } = found;
+    const holder = (_a = tree.parent.get(node)) !== null && _a !== void 0 ? _a : null;
     const insertInto = (into, at, payer) => {
+        var _a;
         const sharing = into.kids.filter((kid) => !isHeld(kid, axis));
-        const even = isEven(into);
+        const even = isEven(into, sizes);
         sharing.forEach((kid) => {
-            kid.weight = weightOf(kid, axis);
+            kid.weight = weightOf(kid, axis, sizes);
         });
         if (even || isHeld(payer, axis)) {
             const total = sharing.reduce((a, kid) => a + kid.weight, 0);
-            arriving.weight = sharing.length ? total / sharing.length : 1;
+            coming.weight = sharing.length ? total / sharing.length : 1;
         }
         else {
-            // The new corridor comes out of the target too, so every other child keeps its drawn size.
+            // The new corridor comes out of the target too, so every other kid keeps its drawn size.
             payer.weight = Math.max(0, payer.weight - gap) / 2;
-            arriving.weight = payer.weight;
+            coming.weight = payer.weight;
         }
-        into.kids.splice(at, 0, arriving);
+        into.kids.splice(at, 0, coming);
         into.adjust = into.kids.map(() => 0);
         into.dirty = true;
+        tree.enter(coming, into, (_a = tree.owner.get(into)) !== null && _a !== void 0 ? _a : null);
     };
     if (node.kind === 'cut' && node.axis === axis) {
         insertInto(node, after ? node.kids.length : 0, after ? node.kids[node.kids.length - 1] : node.kids[0]);
@@ -419,47 +371,51 @@ function addBeside(tree, found, side, arriving, gap) {
         insertInto(holder, holder.kids.indexOf(node) + (after ? 1 : 0), node);
         return;
     }
-    const weight = holder ? weightOf(node, holder.axis) : null;
-    node.weight = 1;
-    arriving.weight = 1;
-    const next = cut(axis, after ? [node, arriving] : [arriving, node], true);
+    const weight = holder ? weightOf(node, holder.axis, sizes) : null;
+    const next = cut(axis, after ? [node, coming] : [coming, node], true);
     next.old = node.old;
     next.rect = node.old;
-    next.size = node.size;
     next.above = node.above;
     next.weight = weight;
-    replaceNode(tree, found, next);
+    sizes.set(next, sizes.get(node));
+    node.weight = 1;
+    coming.weight = 1;
+    tree.replace(node, next);
 }
 /**
  * The size that a node needs on an axis, in the px of the grid rectangles: a card its minimum and on y the heads drawn inside its
- * rectangle; a box the need of its members; a cut along the axis the needs of its children and the corridors between them; a cut across
- * it the largest need of its children. A child that keeps its span needs the size it is drawn at.
+ * rectangle; a box the need of its inner node; a cut along the axis the needs of its kids and the corridors between them; a cut across
+ * it the largest need of its kids. A kid that keeps its span needs the size it is drawn at.
  */
-function need(node, axis, drawn, min) {
-    const extent = (n) => sizeOf(cardsOf(n, true).map((c) => drawn.get(c.card.id)))[axis];
+function need(node, axis, now, min) {
+    const extent = (n) => extentOn(now.get(n), axis);
     if (node.kind === 'leaf') {
         if (node.inner)
-            return need(node.inner, axis, drawn, min);
+            return need(node.inner, axis, now, min);
         if (node.held[axis])
             return extent(node);
         return min + (axis === 'y' ? node.placedAbove : 0);
     }
-    const kids = node.kids.map((kid) => need(kid, axis, drawn, min));
+    const kids = node.kids.map((kid) => need(kid, axis, now, min));
     if (node.axis !== axis)
         return Math.max(...kids);
     const corridors = extent(node) - node.kids.reduce((a, kid) => a + extent(kid), 0);
     return kids.reduce((a, n) => a + n, 0) + corridors;
 }
 /** The text of the outermost node whose rectangle the plan changed and that is drawn below its minimum, or null. */
-function belowMinimum(root, drawn, min) {
+function belowMinimum(root, drawn, min, input) {
+    const now = drawnOf(root, drawn, input);
     const text = (n) => String(Math.round(n));
     const visit = (node) => {
-        const moved = ['x0', 'x1', 'y0', 'y1'].some((key) => Math.abs(node.rect[key] - node.old[key]) > EPS);
-        if (moved || (node.kind === 'cut' && node.laid)) {
-            const has = sizeOf(cardsOf(node, true).map((c) => drawn.get(c.card.id)));
-            const needs = { x: need(node, 'x', drawn, min), y: need(node, 'y', drawn, min) };
-            if (node.kind === 'leaf' && (has.x < needs.x - EVEN || has.y < needs.y - EVEN)) {
-                return `card ${node.id} would be ${text(has.x)}x${text(has.y)}, below its minimum ${text(needs.x)}x${text(needs.y)}`;
+        input.visit();
+        const moved = ['x0', 'x1', 'y0', 'y1'].some((key) => Math.abs(node.rect[key] - node.old[key]) > 1e-9);
+        if (node.kind === 'leaf' && moved) {
+            const has = now.get(node);
+            const w = has.x1 - has.x0;
+            const h = has.y1 - has.y0;
+            const needs = { x: need(node, 'x', now, min), y: need(node, 'y', now, min) };
+            if (w < needs.x - EVEN || h < needs.y - EVEN) {
+                return `card ${node.id} would be ${text(w)}x${text(h)}, below its minimum ${text(needs.x)}x${text(needs.y)}`;
             }
         }
         if (node.kind === 'leaf')
@@ -473,66 +429,65 @@ function belowMinimum(root, drawn, min) {
     };
     return visit(root);
 }
-/** The tree for an operation toward `axis`: the cut across that axis is the outer one where the lines allow both. */
-const across = (axis) => (axis === 'x' ? ['y', 'x'] : ['x', 'y']);
-const planOf = (tree, order) => ({
-    layout: () => {
-        place(tree.root, tree.root.old, 0);
-        return cellsOf(tree.root, order);
-    },
-    correct: (drawn, rate) => correct(tree.root, drawn, rate),
-    minimum: (drawn, min) => belowMinimum(tree.root, drawn, min),
-});
-/** ADD: the plan of adding `card` beside `target` toward `side`. */
-export function insertCard(cells, boxes, drawn, target, side, card, gap) {
+function planOf(tree, sizes, input) {
+    return {
+        layout: () => {
+            place(tree.root, tree.root.old, 0, sizes, input);
+            return storedOf(tree.root);
+        },
+        correct: (drawn, rate) => correct(tree.root, drawn, rate, sizes, input),
+        minimum: (drawn, min) => belowMinimum(tree.root, drawn, min, input),
+    };
+}
+/** The tree of an operation and the drawn size of each of its nodes before it. */
+function start(input) {
+    const tree = treeOf(input);
+    return { tree, sizes: drawnOf(tree.root, input.drawn, input) };
+}
+/** ADD: the plan of adding `node`, a new card or what `withdraw` returned, beside `target` toward `side`. */
+export function insertNode(input, target, side, node, gap) {
     if (!SIDES.includes(side))
         throw new Error(`unknown side ${String(side)}; use left, right, top or bottom`);
-    const taken = ids(cells, boxes);
-    const arriving = 'cards' in card ? [card.id, ...card.cards.map((c) => c.card.id)] : [card.id];
-    const member = arriving.find((id) => taken.has(id));
-    if (member !== undefined)
+    const ids = [isBox(node) ? node.box : isCut(node) ? null : node.card, ...storedCards(node).map((c) => c.card)];
+    const member = ids.find((id) => id !== null && input.taken(id));
+    if (member !== undefined && member !== null)
         throw new Error(`card ${member} is a member of the layout`);
-    const tree = { root: planeTree(cells, boxes, drawn, across(axisOf(side))) };
-    addBeside(tree, targetNode(tree, target), side, arrivingNode(card), gap);
-    return planOf(tree, cells.cards.map((c) => c.id));
+    const { tree, sizes } = start(input);
+    addBeside(tree, targetNode(tree, target, sizes), side, arriving(node), gap, sizes);
+    return planOf(tree, sizes, input);
 }
-/** REMOVE: the plan of taking the member `id` out of its cut, and what left. `prefer` is the outer cut first. */
-export function withdrawMember(cells, boxes, drawn, id, prefer) {
+/** REMOVE: the plan of taking the card or the box `id` out of its cut, and the stored node that left. */
+export function withdrawNode(input, id, cards) {
     var _a;
-    const tree = { root: planeTree(cells, boxes, drawn, prefer) };
-    const found = find(tree.root, id);
-    if (!found)
+    var _b;
+    const { tree, sizes } = start(input);
+    const node = tree.byId.get(id);
+    if (!node)
         throw new Error(`card ${id} is not a member of the layout`);
-    const { node, cut: holder } = found;
-    if (node.kind === 'leaf' && ((_a = node.card) === null || _a === void 0 ? void 0 : _a.fixed))
+    if ((_a = node.card) === null || _a === void 0 ? void 0 : _a.fixed)
         throw new Error(`card ${id} is fixed and does not leave`);
-    const standing = cardsOf(node, false);
-    const gone = new Set(standing.map((c) => c.card.id));
-    if (!holder || cells.cards.every((card) => card.fixed || gone.has(card.id)))
+    const holder = tree.parent.get(node);
+    const gone = new Set(node.box ? storedCards(node.box).map((c) => c.card) : [id]);
+    if (!holder || cards.every((card) => card.fixed || gone.has(card.id)))
         throw new Error(`card ${id} is the last card of the layout`);
     const axis = holder.axis;
     const rest = holder.kids.filter((kid) => kid !== node);
     if (rest.every((kid) => isHeld(kid, axis)))
         throw new Error(`card ${id} leaves no card of its cut that takes its space`);
-    const left = {
-        id,
-        box: node.kind === 'leaf' ? node.box : null,
-        above: node.above,
-        cards: standing.map(({ card, at }) => ({ card, ...at, rect: drawn.get(card.id) })),
-    };
+    const left = cloneNode((_b = node.box) !== null && _b !== void 0 ? _b : node.card);
     rest.forEach((kid) => {
         if (!isHeld(kid, axis))
-            kid.weight = weightOf(kid, axis);
+            kid.weight = weightOf(kid, axis, sizes);
     });
-    // A cut left with one child lays it across its whole rectangle.
+    // A cut left with one kid lays it across its whole rectangle, and storedOf gives the cut of one kid as that kid.
     holder.kids = rest;
     holder.adjust = rest.map(() => 0);
     holder.dirty = true;
-    return { plan: planOf(tree, cells.cards.filter((c) => !gone.has(c.id)).map((c) => c.id)), left };
+    return { plan: planOf(tree, sizes, input), left };
 }
-/** Even: the plan of giving every child of every cut an equal share. */
-export function evenCuts(cells, boxes, drawn) {
-    const tree = { root: planeTree(cells, boxes, drawn, ['x', 'y']) };
+/** Even: the plan of giving every kid of every cut an equal share. */
+export function evenCuts(input) {
+    const { tree, sizes } = start(input);
     const mark = (node) => {
         if (node.kind === 'leaf') {
             if (node.inner)
@@ -546,5 +501,5 @@ export function evenCuts(cells, boxes, drawn) {
         });
     };
     mark(tree.root);
-    return planOf(tree, cells.cards.map((c) => c.id));
+    return planOf(tree, sizes, input);
 }

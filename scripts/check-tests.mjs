@@ -728,7 +728,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/core-exposure.js", symbol: "registry.command(\"core.boundary.center\"" },
       { file: "packages/plugin-api/log-batch.js", symbol: "const admits = (level, event) => {" },
       { file: "packages/workbench/group-tree.js", symbol: "share(arrange)" },
-      { file: "packages/soksak/src/soksak.ts", symbol: "shareLines(axis: Axis, extra: readonly number[] = []): void" },
       { file: "packages/soksak/src/soksak.ts", symbol: "setFrames(frames: Readonly<Record<string, Partial<Frames>>>): void" },
       { file: "packages/workbench/group-tree.js", symbol: "reframe()" },
       { file: "packages/workbench/group-tree.js", symbol: "frameRect(node, path)" },
@@ -759,7 +758,6 @@ const FEATURE_LINKS = [
       { file: "packages/workbench/test/layout-change-keys.test.mjs", id: "an arrow key, Enter and a double click on a divider are each one workbench.layout.change of their command" },
       { file: "packages/workbench/test/page-log.test.mjs", id: "eventAdmits judges an event as the writers do: the events that pass every gate are admitted under a closed policy" },
       { file: "packages/workbench/test/group-commands.test.mjs", id: "core.layout.balance in a space with groups gives every child of every cut an equal share, a group card as one child" },
-      { file: "packages/soksak/test/lines.test.mjs", id: "shareLines keeps every line index and gives each slot its corridor, its extra and an equal share of the free length" },
       { file: "packages/plugin-api/test/log-batch-gated.test.mjs", id: "admits answers as the writers judge an event, the events that pass every gate included, and counts nothing" },
       { file: "packages/workbench/test/group-divider.test.mjs", id: "a centring that would draw the card below the header below its minimum leaves the line" },
       { file: "packages/workbench/test/stored-groups.test.mjs", id: "the stored check refuses a layout without groups and a group that is not one rectangle" },
@@ -2705,9 +2703,8 @@ const FEATURE_LINKS = [
     tests: [
       { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "varied layout cases cover the declared input classes and operation outcomes", covers: ["normal", "failure", "recovery"] },
       { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "transformed sequences reject a refused operation that changes state", covers: ["failure"] },
-      { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "explicit permutation selection bounds transformed sequence work" },
       { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "layout option changes affect geometry and refusal decisions" },
-      { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "varied layout checks reject ID, array-order and size implementation mutants" },
+      { file: "packages/soksak/test/layout-role-cases.test.mjs", id: "varied layout checks reject ID and size implementation mutants" },
     ],
     expected: "A deterministic bounded corpus varies topology, card count, dimensions, options and traces while preserving per-transition role independence, refused state and recovery assertions, and the independent slicing oracle.",
     levels: ["unit"],
@@ -2745,13 +2742,12 @@ const FEATURE_LINKS = [
     id: "F655-3",
     implementation: [{ file: "packages/soksak/scripts/layout-equivalence.mjs", symbol: "export function assertRoleIndependence" }],
     tests: [
-      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison sends renamed and permuted inputs to the public layout API" },
+      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison sends renamed inputs to the public layout API" },
       { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison rejects an injected identifier-dependent operation choice" },
-      { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison rejects geometry chosen from the first input card" },
       { file: "packages/soksak/test/layout-equivalence.test.mjs", id: "role comparison renames payer references before following a restored close" },
-      { file: "packages/soksak/test/rules.test.mjs", id: "R2 — identifiers and card order do not determine layout behavior" },
+      { file: "packages/soksak/test/rules.test.mjs", id: "R2 — identifiers do not determine layout behavior" },
     ],
-    expected: "Public layout operations preserve geometry and outcomes under identifier renaming and input-card permutations; comparison normalizes identifiers and catches injected identifier or array-position dependence.",
+    expected: "Public layout operations preserve geometry and outcomes under identifier renaming; comparison normalizes identifiers and catches injected identifier dependence.",
     levels: ["unit"],
   },
   {
@@ -11098,11 +11094,11 @@ const FEATURE_LINKS = [
   {
     id: "F80",
     implementation: [
-      { file: "packages/soksak/src/balance.ts", symbol: "export function sliceTree" },
+      { file: "packages/soksak/src/cuts.ts", symbol: "export function evenCuts" },
       { file: "packages/workbench/core-exposure.js", symbol: "core.layout.balance" },
     ],
     tests: [
-      { file: "packages/soksak/test/balance.test.mjs", id: "three cards over four give a third and a quarter each, and the rows halve the height" },
+      { file: "packages/soksak/test/even.test.mjs", id: "three cards over four give a third and a quarter each, and the rows halve the height" },
       { file: "e2e/balance.test.mjs", id: "the auto-arrange button gives three over four cards a fair share" },
     ],
     expected: "The card auto-arrange button gives every card a fair share and keeps the arrangement.",

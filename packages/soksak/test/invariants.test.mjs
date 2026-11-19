@@ -1,28 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertInvariants } from "../scripts/layout-sequences.mjs";
 import { outline } from "../dist/index.js";
 import { assertTiling, fuzz, three } from "./helpers.mjs";
-
-test("splitting always leaves a slicing arrangement", { timeout: 30000 }, () => {
-  // Replacing one card with two can only build a slicing floorplan, and a
-  // pinwheel — the shape that strands a card — is the canonical non-slicing one.
-  for (let seed = 0; seed < 40; seed++) {
-    const grid = three();
-    for (let i = 0; i < 60; i++) {
-      const open = grid.cards.filter((p) => !p.fixed);
-      const card = open[Math.floor((i * 7 + seed) % open.length)];
-      grid.split(card.id, (i + seed) % 2 ? "x" : "y");
-      assertInvariants(grid, "ordinary");
-    }
-    assert.ok(grid.isSlicing(), `seed ${seed}`);
-    const open = grid.cards.filter((p) => !p.fixed);
-    for (const card of open) {
-      assert.equal(grid.canClose(card.id), true, `seed ${seed}: ${card.id} is stuck`);
-    }
-  }
-});
 
 test("every invariant holds after split, close, drag and merge", { timeout: 30000 }, () => {
   for (let seed = 0; seed < 60; seed++) {

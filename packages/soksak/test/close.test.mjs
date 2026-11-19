@@ -31,18 +31,6 @@ test("several neighbours tile the side together", () => {
   assertTiling(grid, "after a group fill");
 });
 
-test("closing leaves a slicing arrangement", () => {
-  const grid = three();
-  fuzz(grid, 7, 200);
-  assert.ok(grid.isSlicing());
-  const open = grid.cards.filter((p) => !p.fixed);
-  if (open.length > 1) {
-    for (const card of open) {
-      assert.equal(grid.canClose(card.id), true, `${card.id} is stuck`);
-    }
-  }
-});
-
 test("cards can be closed down to the last one", () => {
   for (let seed = 0; seed < 20; seed++) {
     const grid = three();
@@ -104,7 +92,7 @@ test("a fixed card does not fill", () => {
   assert.ok(grid.fill("sidebar"), "and they take it the moment that is lifted");
 });
 
-test("fillOrder picks the axis when both sides could take the space", () => {
+test("fillOrder does not pick a neighbour across the cut", () => {
   const build = (fillOrder) => {
     const grid = three({ fillOrder });
     grid.split("upper", "x");
@@ -113,12 +101,13 @@ test("fillOrder picks the axis when both sides could take the space", () => {
   };
   const vertical = build("v");
   const horizontal = build("h");
-  assert.equal(vertical.fill("upper").side, "below");
+  // upper is a kid of a cut along x, so lower below it is no kid of that cut and never takes its space.
+  assert.equal(vertical.fill("upper").side, "right");
   assert.equal(horizontal.fill("upper").side, "right");
 
   vertical.close("upper");
   horizontal.close("upper");
-  assert.notDeepEqual(vertical.toJSON().cards, horizontal.toJSON().cards);
+  assert.deepEqual(vertical.toJSON(), horizontal.toJSON());
   assertTiling(vertical, "vertical fill");
   assertTiling(horizontal, "horizontal fill");
 });
@@ -126,16 +115,7 @@ test("fillOrder picks the axis when both sides could take the space", () => {
 test("a card surrounded by fixed cards closes by removing its slots", () => {
   // rail on one side, a sidebar on the other — neither ever fills a gap
   const grid = new Soksak(
-    {
-      xs: [0, 0.2, 0.4, 0.7, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 180, fixed: true },
-        { id: "main", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "rail", c0: 2, c1: 3, r0: 0, r1: 1, width: 190, fixed: true },
-        { id: "boxed", c0: 3, c1: 4, r0: 0, r1: 1 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.2, node: { card: "left", fixed: true, width: 180 } }, { share: 0.2, node: { card: "main" } }, { share: 0.29999999999999993, node: { card: "rail", fixed: true, width: 190 } }, { share: 0.30000000000000004, node: { card: "boxed" } }] } },
     { width: W, height: H },
   );
   assert.equal(grid.fill("boxed"), null, "no neighbour can grow into it");
@@ -152,16 +132,7 @@ test("a card surrounded by fixed cards closes by removing its slots", () => {
 
 test("a card that cannot close can still be moved", () => {
   const grid = new Soksak(
-    {
-      xs: [0, 0.25, 0.5, 0.75, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "target", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "main", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "rail", c0: 2, c1: 3, r0: 0, r1: 1, width: 190, fixed: true },
-        { id: "boxed", c0: 3, c1: 4, r0: 0, r1: 1 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.25, node: { card: "target" } }, { share: 0.25, node: { card: "main" } }, { share: 0.25, node: { card: "rail", fixed: true, width: 190 } }, { share: 0.25, node: { card: "boxed" } }] } },
     { width: W, height: H },
   );
   assert.equal(grid.move("boxed", "target", "bottom"), true);
@@ -171,14 +142,7 @@ test("a card that cannot close can still be moved", () => {
 
 test("the last open card is not closed", () => {
   const grid = new Soksak(
-    {
-      xs: [0, 0.3, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 1, width: 180, fixed: true },
-        { id: "only", c0: 1, c1: 2, r0: 0, r1: 1 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.3, node: { card: "left", fixed: true, width: 180 } }, { share: 0.7, node: { card: "only" } }] } },
     { width: W, height: H },
   );
   assert.equal(grid.canClose("only"), false);
@@ -274,11 +238,7 @@ test("a rail at the plane's border returns the span every slot gave it", () => {
   // Closing must return it the same way; the border is not a line to remove, so
   // the far one is.
   const make = () => new Soksak(
-    { xs: [0, 1 / 3, 2 / 3, 1], ys: [0, 1], cards: [
-      { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-      { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-      { id: "c", c0: 2, c1: 3, r0: 0, r1: 1 },
-    ] },
+    { root: { cut: "x", kids: [{ share: 0.3333333333333333, node: { card: "a" } }, { share: 0.3333333333333333, node: { card: "b" } }, { share: 0.33333333333333337, node: { card: "c" } }] } },
     { width: 451, height: 600, gap: 11, minSize: 51 },
   );
   const grid = make();
@@ -289,24 +249,11 @@ test("a rail at the plane's border returns the span every slot gave it", () => {
   assert.equal(widths(grid), was);
 });
 
-test("a card that arrives beside a run of coincident lines does not pull the run apart", () => {
-  // Lines 2 and 3 stand at one place, so the slot between them has no width and
-  // R5 gives it no corridor. Settling the rail in must not hand that slot a
-  // corridor: a corridor is a size, a size is a span, and the run would come
-  // apart and take one gap out of the cards beside it for good.
+test("a card that arrives at the border of a nested cut and leaves gives every card its width back", () => {
+  // The rail takes its width from a, which stands in a cut inside the first kid of the root. The close gives the span
+  // back to that kid, a takes it, and b keeps the width it had inside the same cut.
   const grid = new Soksak(
-    {
-      xs: [0, 0.375, 0.75, 0.75, 0.875, 1],
-      ys: [0, 0.5, 1],
-      cards: [
-        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
-        { id: "c", c0: 3, c1: 4, r0: 0, r1: 1 },
-        { id: "d", c0: 4, c1: 5, r0: 0, r1: 1 },
-        { id: "e", c0: 0, c1: 2, r0: 1, r1: 2 },
-        { id: "f", c0: 2, c1: 5, r0: 1, r1: 2 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.75, node: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "b" } }] } }, { share: 0.5, node: { card: "e" } }] } }, { share: 0.25, node: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.5, node: { card: "c" } }, { share: 0.5, node: { card: "d" } }] } }, { share: 0.5, node: { card: "f" } }] } }] } },
     { width: 907, height: 1073, gap: 7, minSize: 77 },
   );
   const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
@@ -316,8 +263,6 @@ test("a card that arrives beside a run of coincident lines does not pull the run
   assert.equal(grid.close("rail"), true);
 
   assert.equal(widths(), was, "every card is back where it was");
-  const xs = grid.lines("x");
-  assert.equal(xs[2], xs[3], "and the two lines still stand at one place");
 });
 
 test("a slot standing at zero width takes the corridor it will hold once it is given one", () => {
@@ -343,18 +288,7 @@ test("a card at the far border returns its room to the slot it came from", () =>
   // so the other line comes off instead. Without that the whole path is skipped
   // and the fill hands the room to whichever neighbour it picks.
   const grid = Soksak.from(
-    {
-      xs: [0, 0.3, 0.6, 0.8, 1],
-      ys: [0, 0.5, 1],
-      cards: [
-        { id: "A", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "A2", c0: 0, c1: 1, r0: 1, r1: 2 },
-        { id: "B", c0: 1, c1: 2, r0: 0, r1: 2 },
-        { id: "C", c0: 2, c1: 3, r0: 0, r1: 2 },
-        { id: "rail", c0: 3, c1: 4, r0: 0, r1: 2, width: 150 },
-      ],
-      paidBy: { rail: { side: "hi", to: "A" } },   // as splitToward records it
-    },
+    { root: { cut: "x", kids: [{ share: 0.3, node: { cut: "y", kids: [{ share: 0.5, node: { card: "A" } }, { share: 0.5, node: { card: "A2" } }] } }, { share: 0.3, node: { card: "B" } }, { share: 0.20000000000000007, node: { card: "C" } }, { share: 0.19999999999999996, node: { card: "rail", width: 150 } }] }, paidBy: { rail: "A" } },
     { width: 1200, height: 800, gap: 20, minSize: 80 },
   );
   const width = (id) => grid.rect(id).w;
@@ -373,91 +307,57 @@ test("a card at the far border returns its room to the slot it came from", () =>
 });
 
 test("a card that arrives at a border takes its width from one slot, not a share from each", () => {
-  // `b` reaches over two slots and `a` over one. The rail's width has to come
-  // out of the sharing slots, and it must come out of one of them: a settle met
-  // by scaling them all leaves no slot holding the room, and the close cannot
-  // give it back.
+  // The rail arrives at the far border beside `b`, and `a` is not beside it. The
+  // rail's width has to come out of the sharing slots, and it must come out of
+  // one of them: a settle met by scaling them all leaves no slot holding the room,
+  // and the close cannot give it back.
   const grid = Soksak.from(
-    {
-      xs: [0, 0.25, 0.75, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "b", c0: 1, c1: 3, r0: 0, r1: 1 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.25, node: { card: "a" } }, { share: 0.75, node: { card: "b" } }] } },
     { width: 600, height: 400, gap: 12, minSize: 60 },
   );
   const widths = () => grid.cards.map((c) => `${c.id}:${grid.rect(c.id).w.toFixed(6)}`).sort().join(" ");
   const was = widths();
   assert.equal(was, "a:144.000000 b:444.000000");
 
-  assert.equal(grid.insertAt("x", 3, { size: 180, id: "rail" }), "rail");
+  // The lines are 0, 1/4 and 1, so the far border is line 2.
+  assert.equal(grid.insertAt("x", 2, { size: 180, id: "rail" }), "rail");
   assert.equal(widths(), "a:144.000000 b:252.000000 rail:180.000000", "a is not beside it and does not pay");
   assert.equal(grid.close("rail"), true);
   assert.equal(widths(), was);
 });
 
-test("a card that leaves by giving up its slots does not redraw the slots that stay", () => {
-  // The rail's two neighbours are fixed, so no row of cards grows over it and it
-  // leaves the other way: its slot is removed. What it released belongs to the
-  // sharing slot beside it, and the sharing slot further out keeps the width it
-  // had — R5, read at a close.
+test("a card whose neighbours are all fixed gives its space to the other cards in proportion", () => {
+  // The rail's two neighbours are fixed, so no kid of its cut can fill the space.
+  // Every other kid of the cut takes a share of it in proportion to its share, and
+  // the fixed cards keep their declared sizes.
   const grid = new Soksak(
-    {
-      xs: [0, 0.2, 0.4, 0.6, 0.8, 1],
-      ys: [0, 1],
-      cards: [
-        { id: "one", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "two", c0: 1, c1: 2, r0: 0, r1: 1 },
-        { id: "left", c0: 2, c1: 3, r0: 0, r1: 1, width: 200, fixed: true },
-        { id: "rail", c0: 3, c1: 4, r0: 0, r1: 1, width: 190 },
-        { id: "right", c0: 4, c1: 5, r0: 0, r1: 1, width: 180, fixed: true },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.2, node: { card: "one" } }, { share: 0.2, node: { card: "two" } }, { share: 0.19999999999999996, node: { card: "left", fixed: true, width: 200 } }, { share: 0.20000000000000007, node: { card: "rail", width: 190 } }, { share: 0.19999999999999996, node: { card: "right", fixed: true, width: 180 } }] } },
     { width: 1600, height: 600, gap: 24 },
   );
   const one = grid.rect("one").w;
   const two = grid.rect("two").w;
   const rail = grid.rect("rail").w;
 
-  assert.equal(grid.close("rail"), true, "no neighbour can fill, so the slot goes");
-  assert.equal(grid.rect("one").w, one, "the sharing slot further out is not redrawn");
-  assert.equal(
-    grid.rect("two").w, two + rail + grid.gap,
-    "and the one beside the rail takes its width and the corridor it released",
-  );
+  assert.equal(grid.close("rail"), true, "no neighbour can fill, so every other kid takes a share");
+  assert.equal(grid.rect("one").w, one + (rail + grid.gap) / 2, "one takes half of the space and the corridor");
+  assert.equal(grid.rect("two").w, two + (rail + grid.gap) / 2, "two takes the other half");
   assert.equal(grid.rect("left").w, 200, "the declared sizes are untouched");
   assert.equal(grid.rect("right").w, 180);
   assertTiling(grid, "after the rail's slot went");
 });
 
-test("a close gives the width back to the slot beside it when the record has gone stale", () => {
-  // `paidBy` records which of the payer's slots gave the width, counted from the
-  // payer's first. Nothing maintains that count: the split below cuts a line out
-  // from under it, and the offset then names a slot the payer does not hold.
-  const grid = new Soksak(undefined, { width: 1586, height: 542, gap: 28, minSize: 19 });
-  grid.split("card", "y", { id: "n0" });
-  grid.split("n0", "x", { id: "n1" });
-  grid.insertAt("x", 2, { size: 281, id: "n2" });
-  grid.splitToward("card", "bottom", { id: "n6" });
-  grid.insertAt("x", 3, { size: 271, id: "n7" });   // records card's second slot
-  grid.setSize("n7", "x", null);
-  grid.move("n6", "n7", "left");
-  grid.split("card", "x", { id: "n8" });            // and card is one slot again
+test("a close gives the width to the neighbour beside it when no kid of its cut holds the payer", () => {
+  // `paidBy` records that n took its width from r, and r is a kid of the root, not of the cut that holds n. No kid of
+  // that cut can give the width back, so the neighbour that the fill order names takes it and p keeps its width.
+  const grid = Soksak.from(
+    { root: { cut: "y", kids: [{ share: 0.5, node: { cut: "x", kids: [{ share: 0.25, node: { card: "p" } }, { share: 0.25, node: { card: "n" } }, { share: 0.5, node: { card: "q" } }] } }, { share: 0.5, node: { card: "r" } }] }, paidBy: { n: "r" } },
+    { width: 1000, height: 600, gap: 20 },
+  );
+  const wide = (id) => grid.rect(id).w;
+  assert.deepEqual(["p", "n", "q", "r"].map(wide), [240, 230, 490, 1000]);
 
-  const at = (id) => Number(grid.rect(id).x.toFixed(2));
-  const wide = (id) => Number(grid.rect(id).w.toFixed(2));
-  assert.deepEqual(grid.toJSON().paidBy.n7, { side: "lo", to: "card", span: "lo", at: 1 });
-  assert.equal(grid.card("card").c1 - grid.card("card").c0, 1, "the payer has no second slot");
-  assert.deepEqual([at("n6"), wide("n6")], [1380.41, 81.79], "n6 stands beside n7");
-  assert.deepEqual([at("n1"), wide("n1")], [859.29, 184.12]);
-  assert.deepEqual([at("n2"), wide("n2")], [1071.41, 281]);
-
-  assert.equal(grid.close("n7"), true);
-  assert.deepEqual([at("n6"), wide("n6")], [1380.41, 205.59], "the slot beside it took the width");
-  assert.deepEqual([at("n1"), wide("n1")], [859.29, 184.12], "and no other card moved");
-  assert.deepEqual([at("n2"), wide("n2")], [1071.41, 281]);
+  assert.equal(grid.close("n"), true);
+  assert.deepEqual(["p", "q", "r"].map(wide), [240, 740, 1000], "q took the width of n and its corridor");
 });
 
 test("a split and the close after it are inverses when a neighbour grows over the slot", () => {
@@ -467,15 +367,7 @@ test("a split and the close after it are inverses when a neighbour grows over th
   // the width went to whichever neighbour that was: `top` lost half its height
   // to `bottom` on every split-and-close pair, until it was too short to cut.
   const grid = new Soksak(
-    {
-      xs: [0, 0.5, 1],
-      ys: [0, 0.5, 1],
-      cards: [
-        { id: "top", c0: 0, c1: 1, r0: 0, r1: 1 },
-        { id: "bottom", c0: 0, c1: 1, r0: 1, r1: 2 },
-        { id: "right", c0: 1, c1: 2, r0: 0, r1: 2 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "top" } }, { share: 0.5, node: { card: "bottom" } }] } }, { share: 0.5, node: { card: "right" } }] } },
     { width: 1000, height: 400, gap: 20, minSize: 40 },
   );
   const tall = (id) => Number(grid.rect(id).h.toFixed(2));
@@ -502,67 +394,26 @@ test("a split and the close after it are inverses when a neighbour grows over th
   }
 });
 
-test("a cut takes the far half, so its width comes back to the payer's last slot", () => {
-  // `split` gives the new card the far half, so the slot the width came from is
-  // the payer's last and not its first. `paidBy.at` counts slots from the
-  // payer's first, so a cut out of a payer spanning several has to record which
-  // one; without that the close gave the width to `under`, a slot the cut never
-  // touched, and `beside` — the card standing where the cut card was — kept the
-  // width it had.
-  const grid = new Soksak(
-    {
-      xs: [0, 0.2, 0.55, 1],
-      ys: [0, 1],
-      cards: [{ id: "wide", c0: 0, c1: 3, r0: 0, r1: 1 }],
-    },
-    { width: 1000, height: 400, gap: 20, minSize: 40 },
-  );
-  // The cut lands on the line nearest the middle, which leaves `wide` over two
-  // slots and `cut` over the third.
-  assert.equal(grid.split("wide", "x", { id: "cut" }), "cut");
-  assert.deepEqual([grid.card("wide").c0, grid.card("wide").c1], [0, 2]);
-  assert.equal(grid.split("wide", "y", { id: "under" }), "under");
-  assert.equal(grid.split("under", "x", { id: "beside" }), "beside");
-
-  const wide = (id) => Number(grid.rect(id).w.toFixed(2));
-  const at = (id) => Number(grid.rect(id).x.toFixed(2));
-  assert.deepEqual([at("under"), wide("under")], [0, 190]);
-  assert.deepEqual([at("beside"), wide("beside")], [210, 330]);
-  assert.equal(wide("cut"), 440);
-
-  assert.equal(grid.close("cut"), true);
-  assert.deepEqual(
-    [at("beside"), wide("beside")],
-    [210, 790],
-    "the slot the cut took the width from gets it back",
-  );
-  assert.deepEqual([at("under"), wide("under")], [0, 190], "and the slot beyond it does not move");
-  assert.equal(wide("wide"), 1000);
-  assertTiling(grid, "after the cut card closed");
-});
-
-test("a close and a move take the row of neighbours of the sides they name, in that order", () => {
-  // a has a row below it (c) and a row on its right (b); the default fill order takes the row below.
-  const quarters = () => new Soksak({ xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-    { id: "c", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "d", c0: 1, c1: 2, r0: 1, r1: 2 },
-  ] }, { width: W, height: H });
+test("a close and a move give the space to a kid of the card's own cut", () => {
+  // a and c are the kids of one cut along y, and b stands on the right of a across
+  // the cut along x, so b never takes the space of a.
+  const quarters = () => new Soksak({ root: { cut: "x", kids: [{ share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "c" } }] } }, { share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "b" } }, { share: 0.5, node: { card: "d" } }] } }] } }, { width: W, height: H });
   const grid = quarters();
   assert.deepEqual(grid.fillSides, ["below", "above", "right", "left"]);
   assert.equal(grid.fill("a").side, "below");
-  assert.equal(grid.fill("a", ["right", "below"]).side, "right");
+  assert.equal(grid.fill("a", ["right", "below"]).side, "below");
   assert.equal(grid.fill("a", ["left"]), null);
   assert.equal(grid.close("a", ["right", "below"]), true);
-  assert.deepEqual([grid.card("b").c0, grid.card("c").r0], [0, 1]);
+  assert.deepEqual([grid.card("b").c0, grid.card("c").r0], [1, 0]);
   assertTiling(grid, "after closing into the named side");
-  // No named side and slots that hold other cards: nothing closes.
+  // No named side: c, the other kid of the cut, takes the space in proportion.
   const kept = quarters();
-  assert.equal(kept.close("a", []), false);
-  assert.equal(kept.cards.length, 4);
-  // A move closes the card with the named sides first.
+  assert.equal(kept.close("a", []), true);
+  assert.equal(kept.cards.length, 3);
+  // A move closes the card the same way, then lands it beside the target.
   const moving = quarters();
   assert.equal(moving.move("a", "c", "right", ["right"]), true);
-  assert.deepEqual([moving.card("b").c0, moving.card("c").r0, moving.card("a").c0], [0, 1, moving.card("c").c1]);
+  assert.deepEqual([moving.card("b").c0, moving.card("c").r0, moving.card("a").c0], [2, 0, moving.card("c").c1]);
   assertTiling(moving, "after a move that closed into the named side");
   assert.throws(() => quarters().close("a", ["middle"]), { message: "unknown fill side middle" });
 });
@@ -570,10 +421,7 @@ test("a close and a move take the row of neighbours of the sides they name, in t
 // close and move check the sides at the boundary before they act, as fill does and as the Go port does: a fixed card, the last card, a
 // card with a paidBy record and a missing card refuse another side with its name rather than answering (layout.md, the API table).
 test("close and move refuse another side before they judge the card", () => {
-  const quarters = () => new Soksak({ xs: [0, 0.5, 1], ys: [0, 0.5, 1], cards: [
-    { id: "a", c0: 0, c1: 1, r0: 0, r1: 1 }, { id: "b", c0: 1, c1: 2, r0: 0, r1: 1 },
-    { id: "c", c0: 0, c1: 1, r0: 1, r1: 2 }, { id: "d", c0: 1, c1: 2, r0: 1, r1: 2 },
-  ] }, { width: W, height: H });
+  const quarters = () => new Soksak({ root: { cut: "x", kids: [{ share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "a" } }, { share: 0.5, node: { card: "c" } }] } }, { share: 0.5, node: { cut: "y", kids: [{ share: 0.5, node: { card: "b" } }, { share: 0.5, node: { card: "d" } }] } }] } }, { width: W, height: H });
   const fixed = quarters();
   fixed.setFixed("a", true);
   assert.throws(() => fixed.close("a", ["up"]), { message: "unknown fill side up" });
@@ -587,4 +435,17 @@ test("close and move refuse another side before they judge the card", () => {
   assert.throws(() => paid.close(born, ["up"]), { message: "unknown fill side up" });
   assert.throws(() => quarters().close("missing", ["up"]), { message: "unknown fill side up" });
   assert.throws(() => quarters().move("missing", "c", "right", ["up"]), { message: "unknown fill side up" });
+});
+
+test("a kid of the root whose payer no kid holds gives its space to the kid after it", () => {
+  // `paidBy` names a card that no longer stands in the plane, so no kid of the root can take the space back. The kid
+  // after the rail takes it, and the kid before it keeps its width.
+  const grid = Soksak.from(
+    { root: { cut: "x", kids: [{ share: 0.4, node: { card: "p" } }, { share: 0.2, node: { card: "rail" } }, { share: 0.4, node: { card: "q" } }] }, paidBy: { rail: "gone" } },
+    { width: 1000, height: 600, gap: 20 },
+  );
+  const wide = (id) => Number(grid.rect(id).w.toFixed(6));
+  assert.deepEqual(["p", "rail", "q"].map(wide), [390, 180, 390]);
+  assert.equal(grid.close("rail"), true);
+  assert.deepEqual(["p", "q"].map(wide), [390, 590], "q took the width of the rail and its corridor");
 });

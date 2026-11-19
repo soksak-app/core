@@ -11,16 +11,7 @@ import { assertTiling, H, W } from "./helpers.mjs";
  */
 const railed = () =>
   new Soksak(
-    {
-      xs: [0, 0.2, 0.35, 1],
-      ys: [0, 0.5, 1],
-      cards: [
-        { id: "left", c0: 0, c1: 1, r0: 0, r1: 2, width: 180, fixed: true },
-        { id: "rail", c0: 1, c1: 2, r0: 0, r1: 2, width: 190, fixed: true },
-        { id: "upper", c0: 2, c1: 3, r0: 0, r1: 1 },
-        { id: "lower", c0: 2, c1: 3, r0: 1, r1: 2 },
-      ],
-    },
+    { root: { cut: "x", kids: [{ share: 0.2, node: { card: "left", fixed: true, width: 180 } }, { share: 0.14999999999999997, node: { card: "rail", fixed: true, width: 190 } }, { share: 0.65, node: { cut: "y", kids: [{ share: 0.5, node: { card: "upper" } }, { share: 0.5, node: { card: "lower" } }] } }] } },
     { width: W, height: H },
   );
 
@@ -70,7 +61,7 @@ test("travelling between interior boundaries changes no other card's width", () 
   );
 
   const last = grid.lines("x").length - 1;
-  const interior = grid.standings("x", "rail").filter((l) => l > 0 && l < last);
+  const interior = grid.standings("x").filter((l) => l > 0 && l < last);
   assert.ok(interior.length > 1, "there is more than one boundary to travel between");
   for (const line of [...interior].reverse()) {
     assert.equal(grid.moveTo("rail", "x", line), true, `to ${line}`);
@@ -172,16 +163,7 @@ test("a travel that would leave a card with no area is refused", () => {
   // The slot leaves one boundary and arrives at another, so the pair that gives
   // the room and the pair that takes it are not the same. Found by fuzzing:
   // it happens about ten times in eighteen thousand states.
-  const state = {
-    xs: [0, 0.04997858047175793, 0.22326102321984956, 0.5145381395124059, 1],
-    ys: [0, 0.5, 0.5, 1],
-    cards: [
-      { id: "left", c0: 1, c1: 2, r0: 0, r1: 3, fixed: true, width: 804.2623836009122 },
-      { id: "middle", c0: 2, c1: 3, r0: 0, r1: 3, fixed: false, width: 233 },
-      { id: "right", c0: 3, c1: 4, r0: 0, r1: 3, fixed: false },
-      { id: "rail", c0: 0, c1: 1, r0: 0, r1: 3, fixed: false },
-    ],
-  };
+  const state = { root: { cut: "x", kids: [{ share: 0.04997858047175793, node: { card: "rail", fixed: false } }, { share: 0.17328244274809163, node: { card: "left", fixed: true, width: 804.2623836009122 } }, { share: 0.29127711629255637, node: { card: "middle", fixed: false, width: 233 } }, { share: 0.4854618604875941, node: { card: "right", fixed: false } }] } };
   const grid = new Soksak(state, { width: 1117, height: 340, gap: 7, minSize: 47 });
   const before = JSON.stringify(grid.toJSON());
   const rects = JSON.stringify([...grid.rects()]);

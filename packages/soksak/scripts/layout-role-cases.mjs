@@ -39,7 +39,7 @@ export function makeLayoutCase(seed) {
   };
   const initial = Soksak.from(grid.toJSON(), options);
   const state = initial.toJSON();
-  const target = state.cards[0].id;
+  const target = initial.cards[0].id;
   const operations = [
     { method: "setFixed", args: [target, true] },
     { method: "split", args: [target, "x", { id: "fixed-recovery" }] },
@@ -60,17 +60,5 @@ export function makeLayoutCase(seed) {
   assert.deepEqual([1, 6, 7, 9, 11, 12].map((step) => prefix.trace[step].result), [null, "fixed-recovery", true, null, "size-recovery", true], `seed ${seed}: refusal/recovery preconditions changed`);
   const generated = assertSequence(runSequence(initial, { seed, steps: 20, profile: "constrained" }));
   operations.push(...generated.trace.map(({ method, args }) => ({ method, args })));
-  const indices = state.cards.map((_, index) => index);
-  const orders = indices.map((_, offset) => [...indices.slice(offset), ...indices.slice(0, offset)]);
-  orders.push([...indices].reverse());
-  for (let sample = 0; sample < 2; sample++) {
-    const order = [...indices];
-    for (let index = order.length - 1; index > 0; index--) {
-      const other = Math.floor(next() * (index + 1));
-      [order[index], order[other]] = [order[other], order[index]];
-    }
-    orders.push(order);
-  }
-  const uniqueOrders = [...new Map(orders.map((order) => [order.join(","), order])).values()];
-  return { seed, topology, state, options, operations, orders: uniqueOrders };
+  return { seed, topology, state, options, operations };
 }
