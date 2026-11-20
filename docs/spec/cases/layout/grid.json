@@ -637,6 +637,14 @@
   {"call":"splitToward","args":["c","right"],"throws":"card c would be 40x188, below its minimum 96x96"},
   {"call":"rect","args":["s"],"returns":{"x":0,"y":0,"w":198,"h":400}}
  ]},
+ {"name":"a fixed card is a cost of its level and keeps its rectangle beside a remove and an add, while a px size beside it that shares is scaled","options":{"width":600,"height":400,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.25,"node":{"card":"s","fixed":true,"width":198}},{"share":0.25,"node":{"card":"p","width":300}},{"share":0.25,"node":{"card":"a"}},{"share":0.25,"node":{"card":"b"}}]}},"steps":[
+  {"call":"rect","args":["s"],"returns":{"x":0,"y":0,"w":198,"h":400}},
+  {"call":"rects","returns":{"s":{"x":0,"y":0,"w":198,"h":400},"p":{"x":222,"y":0,"w":234,"h":400},"a":{"x":480,"y":0,"w":48,"h":400},"b":{"x":552,"y":0,"w":48,"h":400}}},
+  {"call":"withdraw","args":["b"],"returns":{"card":"b","fixed":false}},
+  {"call":"rect","args":["s"],"returns":{"x":0,"y":0,"w":198,"h":400}},
+  {"call":"insert","args":["a","right",{"card":"n"}],"throws":"card a would be 48x400, below its minimum 96x96"},
+  {"call":"rect","args":["s"],"returns":{"x":0,"y":0,"w":198,"h":400}}
+ ]},
  {"name":"a state of the earlier form with lines and cells is refused","state":{"xs":[0,1],"ys":[0,1],"cards":[{"id":"a","c0":0,"c1":1,"r0":0,"r1":1}]},"throws":"soksak: the state holds xs, ys and cards, which is the earlier form; the state is {root}","steps":[]},
  {"name":"a state that records a payer is refused","state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a"}},{"share":0.5,"node":{"card":"b"}}]},"paidBy":{"b":"a"}},"throws":"soksak: the state holds paidBy, which the layout does not record; the state is {root}","steps":[]},
  {"name":"a node that is no card, box or cut is refused","state":{"root":{"id":"a"}},"throws":"soksak: the node {\"id\":\"a\"} is not a card, a box or a cut","steps":[]},
