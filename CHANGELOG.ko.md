@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-1 (tree에서의 불변식): `docs/spec/cases/layout/invariants.json`의 operation 40개 seed 32개에서 TypeScript와 Go layout library의 불변식 test가 저장된 tree에서 I1 0, I2 0, I7 0, I8 0, I10 0을 보고한다. line model은 I7 11번, I8 19번, I10 33번 실패했다. workbench의 불변식은 F966-1-1로 등록되었다.
 - F966-3-6-16 (최소가 없는 거부, Go): `minSize` 0에서 거부된 Go layout의 split은 0x0 최소 대신 TypeScript library처럼 `card <id> would be <w>x<h> and have no area`로 읽힌다.
 - F966-3-6-15 (합침이 그려진 px 크기를 유지한다, Go): Go layout의 withdraw가 cut을 그것을 담는 cut에 합칠 때, 다른 kid 가운데 fixed가 아니고 px 크기를 유지하는 각 card는 그려진 크기로 쓰이고 fixed card는 비용으로 남으므로, 합쳐지는 kid는 남은 것의 fraction을 받고 두 cut 밖의 card는 바뀌지 않는다.
 - F966-3-5 (명세의 크기 규칙): `docs/spec/groups.md`가 space의 모든 layout operation의 크기 규칙을 현재 contract로 기술한다. 비용과 fraction, 그려진 크기를 유지하는 canonical 병합을 가진 두 primitive REMOVE와 ADD, 거부, 조합 표, target 찾기, 불변식이며, 그 결정은 규칙의 선택을 그 이유와 review가 답한 반론과 함께 기술한다. group card의 drag는 더 이상 끌리는 card를 빼지 않는다. layout 크기 plan에 대한 모든 참조가 명세를 가리키고, plan 파일은 지워졌으며, 보류 조건인 기록된 선택이 충족되었으므로 F966-1이 재개된다.
