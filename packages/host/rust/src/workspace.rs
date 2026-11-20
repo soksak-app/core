@@ -223,7 +223,7 @@ fn read_projects_document(path: &Path) -> Result<Option<Map<String, Value>>, Str
         }
     }
     let found = value.as_object().map_or(Value::Null, |document| {
-        document.get("format").cloned().unwrap_or(Value::Null)
+        document.get("format").cloned().unwrap_or(Value::Null) // default: a format member that is absent is reported as null, as docs/spec/agent-roles.md#tab-role-state states.
     });
     Err(format!(
         "{}: projects: format must be {PROJECTS_FORMAT}, found {found}",
