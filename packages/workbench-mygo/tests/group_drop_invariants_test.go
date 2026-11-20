@@ -1,4 +1,4 @@
-// I3, I5, I6 and I9 of docs/spec/groups.md#invariants on the mygo workbench, over layouts that a seeded generator makes from three
+// I3, I4, I5, I6 and I9 of docs/spec/groups.md#invariants on the mygo workbench, over layouts that a seeded generator makes from three
 // cards in a row, the first two in a group card, as the page check packages/workbench/test/group-drop-invariants.test.mjs makes them.
 package workbench_test
 
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
 	"github.com/soksak-app/core/packages/workbench-mygo/src/layout"
 )
 
@@ -308,6 +309,36 @@ func vacates(t *testing.T, stored map[string]any, card string, target layout.Tar
 	return tree.Grid().Vacates(card, target, zone)
 }
 
+// dropTarget is a target of a drop in the form of the target of core.drag.
+type dropTarget struct {
+	Card  layout.Target `json:"card"`
+	Zone  string        `json:"zone"`
+	Index *int          `json:"index"`
+}
+
+// key is the target as text, in the form of targetKey.
+func (target dropTarget) key() string {
+	text, _ := json.Marshal(target) // silent: a target of strings and a number has a JSON form.
+	return string(text)
+}
+
+// moveCommand is the command that the release of the drag of source on target runs, with its params as JSON.
+func moveCommand(t *testing.T, source dropSource, target dropTarget) (string, string) {
+	t.Helper()
+	name, params := "core.tab.move", map[string]any{"tab": source.id, "card": target.Card, "zone": target.Zone}
+	if target.Index != nil {
+		params["index"] = *target.Index
+	}
+	if source.group {
+		name, params = "core.card.move", map[string]any{"card": source.id, "target": target.Card, "side": target.Zone}
+	}
+	text, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return name, string(text)
+}
+
 // dropAt drops source at x, y through the pointer and judges the drop: the preview of core.drag is the drawn rectangle of the card that
 // holds the tab, or of the group card, after the release (I3); the drop keeps every tab with its plugin and params (I5); a drop on the
 // vacated slot of a card that moves whole changes nothing (I6); and the command of the release, run again with the same identifiers,
@@ -332,18 +363,8 @@ func (f *tabShell) dropAt(t *testing.T, source dropSource, hit dropHit) []string
 	f.tester.Frame()
 	f.tester.Release(-100, -100)
 	f.settle()
-	name, params := "core.tab.move", map[string]any{"tab": source.id, "card": drag.Target.Card, "zone": drag.Target.Zone}
-	if drag.Target.Index != nil {
-		params["index"] = *drag.Target.Index
-	}
-	if source.group {
-		name, params = "core.card.move", map[string]any{"card": source.id, "target": drag.Target.Card, "side": drag.Target.Zone}
-	}
-	text, err := json.Marshal(params)
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	reply, err := f.apply(name, string(text))
+	name, text := moveCommand(t, source, dropTarget{Card: drag.Target.Card, Zone: drag.Target.Zone, Index: drag.Target.Index})
+	reply, err := f.apply(name, text)
 	if err != nil {
 		f.t.Fatalf("%s: %s %s failed with %v", where, name, text, err)
 	}
@@ -442,3 +463,414 @@ func TestDropsOverTheGeneratedLayoutOfSeed1HoldTheirInvariants(t *testing.T) { c
 func TestDropsOverTheGeneratedLayoutOfSeed2HoldTheirInvariants(t *testing.T) { checkDrops(t, 2) }
 
 func TestDropsOverTheGeneratedLayoutOfSeed3HoldTheirInvariants(t *testing.T) { checkDrops(t, 3) }
+
+// requiredTargets are the targets that I4 requires of the drag of source over the stored layout (docs/spec/groups.md#invariants):
+// every side of every node of the tree, a card by its id, a group card by the id of its box and a cut by its members, its window
+// sidebars left out, except a side along the axis of a cut (docs/spec/groups.md#target-search); the centre of every content card; and, for a tab, every index of the tab
+// strip of every content card, the moving tab left out. Each vacated slot is among them as a side of the moving node.
+func requiredTargets(stored map[string]any, source dropSource) []dropTarget {
+	targets := []dropTarget{}
+	seen := map[string]bool{}
+	add := func(target dropTarget) {
+		if key := target.key(); !seen[key] {
+			seen[key] = true
+			targets = append(targets, target)
+		}
+	}
+	var members func(n map[string]any) layout.Target
+	members = func(n map[string]any) layout.Target {
+		switch {
+		case n["card"] != nil:
+			if fixed, _ := n["fixed"].(bool); fixed {
+				return nil
+			}
+			return layout.Target{n["card"].(string)}
+		case n["box"] != nil:
+			return layout.Target{n["box"].(string)}
+		}
+		out := layout.Target{}
+		for _, kid := range n["kids"].([]any) {
+			out = append(out, members(kid.(map[string]any)["node"].(map[string]any))...)
+		}
+		return out
+	}
+	held := cardTabs(stored)
+	var visit func(n map[string]any)
+	visit = func(n map[string]any) {
+		if named := members(n); len(named) > 0 {
+			for _, side := range []string{"left", "right", "top", "bottom"} {
+				// A cut along the axis of side is the target of its kid toward side (packages/soksak/docs/layout.md), and the
+				// members of such a cut name the run of all its kids, which no line of a drag holds; its kids are visited.
+				along := n["cut"] == "x" && (side == "left" || side == "right") || n["cut"] == "y" && (side == "top" || side == "bottom")
+				if !along {
+					add(dropTarget{Card: named, Zone: side})
+				}
+			}
+		}
+		switch {
+		case n["card"] != nil:
+			if fixed, _ := n["fixed"].(bool); fixed {
+				return
+			}
+			card := n["card"].(string)
+			add(dropTarget{Card: layout.Target{card}, Zone: "centre"})
+			if !source.group {
+				count := len(held[card])
+				if slices.Contains(held[card], source.id) {
+					count--
+				}
+				for index := range count + 1 {
+					add(dropTarget{Card: layout.Target{card}, Zone: "strip", Index: &index})
+				}
+			}
+		case n["box"] != nil:
+			visit(n["inner"].(map[string]any))
+		default:
+			for _, kid := range n["kids"].([]any) {
+				visit(kid.(map[string]any)["node"].(map[string]any))
+			}
+		}
+	}
+	visit(stored["state"].(map[string]any)["root"].(map[string]any))
+	return targets
+}
+
+// probe is the drag of a source over the window: the targets that it selected by their keys.
+type probe struct {
+	t       *testing.T
+	f       *tabShell
+	reached map[string]dropTarget
+}
+
+// at moves the drag to x, y, from outside the window when fresh so that no anchor of an earlier point stays, and returns the target
+// that the drag shows there.
+func (p *probe) at(x, y float32, fresh bool) *dropTarget {
+	if x < 0 || y < 0 || x >= dropWidth || y >= dropHeight {
+		return nil
+	}
+	if fresh {
+		p.f.tester.Move(-100, -100)
+	}
+	p.f.tester.Move(x, y)
+	drag := status[*dragRead](p.t, p.f.shellFixture, "core.drag")
+	if drag == nil || drag.Target == nil {
+		return nil
+	}
+	target := dropTarget{Card: drag.Target.Card, Zone: drag.Target.Zone, Index: drag.Target.Index}
+	p.reached[target.key()] = target
+	return &target
+}
+
+// slide moves the drag from x, y along the line of its band to both ends of the window, with the direction ux, uy along the line, so
+// the anchor of the band where it entered selects the runs of its cut; it enters x, y again at the end.
+func (p *probe) slide(x, y, ux, uy float32) {
+	for _, way := range []float32{-1, 1} {
+		p.at(x, y, true)
+		for step := float32(dropPointStep); ; step += dropPointStep {
+			ax, ay := x+way*step*ux, y+way*step*uy
+			if ax < 0 || ay < 0 || ax >= dropWidth || ay >= dropHeight {
+				break
+			}
+			p.at(ax, ay, false)
+		}
+	}
+	p.at(x, y, true)
+}
+
+// reachedTargets are the targets that the drag of source selects over the drawn layout (docs/spec/groups.md#target-search). From the
+// middle of each side of each content card and group card, the drag moves inward a point at a time from 16 points outside the line,
+// so it enters every band of the side stack and of the boxes around the card, until it reaches the centre of the card or stays on one
+// target or on none for 12 points inside the line. From each band that it enters first, the drag moves along that line to both ends of
+// the window, which keeps the anchor of the band, so the anchor selects the runs of its cut. The drag enters the centre of each content
+// card, and the drag of a tab moves along the tab strip of each content card 4 points at a time.
+func (f *tabShell) reachedTargets(t *testing.T, source dropSource) map[string]dropTarget {
+	t.Helper()
+	p := &probe{t: t, f: f, reached: map[string]dropTarget{}}
+	strip := float32(-1)
+	for card, tabs := range cardTabs(f.storedLayout()) {
+		for _, id := range tabs {
+			if box := f.box("core.card.tab", id); box.W > 0 {
+				strip = box.Y + box.H/2 - f.box("core.card", card).Y
+			}
+		}
+	}
+	// The drawn rectangle of a group card is that of core.grid moved by the offset of the plane, which the rectangle of a content
+	// card in the window and in core.grid tells.
+	cards, rects := f.gridCards(), map[string]ui.Rect{}
+	for _, id := range f.contentCards() {
+		rects[id] = f.box("core.card", id)
+	}
+	first := f.contentCards()[0]
+	dx, dy := rects[first].X-float32(cards[first]["x"].(float64)), rects[first].Y-float32(cards[first]["y"].(float64))
+	for _, id := range f.groupCards() {
+		rects[id] = ui.Rect{X: float32(cards[id]["x"].(float64)) + dx, Y: float32(cards[id]["y"].(float64)) + dy,
+			W: float32(cards[id]["w"].(float64)), H: float32(cards[id]["h"].(float64))}
+	}
+	f.press(source)
+	slid := map[string]bool{}
+	for _, id := range append(f.contentCards(), f.groupCards()...) {
+		rect := rects[id]
+		// Each side: the middle of its line, the inward direction and the distance from the line to the centre.
+		for _, side := range []struct{ x, y, dx, dy, length float32 }{
+			{rect.X + rect.W/2, rect.Y, 0, 1, rect.H / 2},
+			{rect.X + rect.W/2, rect.Y + rect.H, 0, -1, rect.H / 2},
+			{rect.X, rect.Y + rect.H/2, 1, 0, rect.W / 2},
+			{rect.X + rect.W, rect.Y + rect.H/2, -1, 0, rect.W / 2},
+		} {
+			// The drag moves inward from a gap outside the line, so it enters each band of the side stack in turn, until it
+			// reaches the centre of the card or, inside the line, stays for 12 points on one target of that side or on no
+			// target, the edge share of the card or a node that the drag cannot enter. A tab strip or a group header between
+			// the line and the bands is passed.
+			name := [...]string{"top", "bottom", "left", "right"}[slices.Index([]float32{side.dy, -side.dy, side.dx, -side.dx}, 1)]
+			same, last := 0, "passed"
+		scan:
+			for d := float32(-16); d < side.length && same < 12; d++ {
+				x, y := side.x+side.dx*(d+0.5), side.y+side.dy*(d+0.5)
+				target := p.at(x, y, d == -16)
+				key := "" // no target: a point in no card, or a target that the drag cannot enter.
+				switch {
+				case target == nil:
+				case target.Zone == "centre":
+					break scan
+				case target.Zone != name:
+					key = "passed"
+				default:
+					key = target.key()
+					if !slid[key] {
+						slid[key] = true
+						p.slide(x, y, side.dy*side.dy, side.dx*side.dx)
+					}
+				}
+				if d >= 0 && key != "passed" && key == last {
+					same++
+				} else {
+					same, last = 0, key
+				}
+			}
+		}
+		if slices.Contains(f.groupCards(), id) {
+			continue
+		}
+		p.at(rect.X+rect.W/2, rect.Y+rect.H/2, true)
+		if !source.group && strip >= 0 {
+			p.at(rect.X+1, rect.Y+strip, true)
+			for x := rect.X + 1; x < rect.X+rect.W; x += 4 {
+				p.at(x, rect.Y+strip, false)
+			}
+		}
+	}
+	f.tester.Move(-100, -100)
+	f.tester.Release(-100, -100)
+	f.settle()
+	return p.reached
+}
+
+// checkReach judges I4 over the generated layout of seed (docs/spec/groups.md#invariants) for the source of kind: the source
+// of "group" is the first group card, of "alone" the first drawn tab that is the only tab of its card, and of "shared" the first drawn tab
+// that shares its card. Each required target is selected by the drag, or its result equals the result of a target that the drag
+// selects, the results compared as the stored layouts after the command of the release; a target whose command is refused has no
+// result and is not required.
+func checkReach(t *testing.T, seed uint32, kind string) {
+	made := generatedLayout(t, seed)
+	f := dropShell(t, made.stored)
+	failures, required := []string{}, 0
+	text, err := json.Marshal(made.stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := string(text)
+	sources := []dropSource{}
+	for _, source := range made.sources {
+		switch {
+		case !source.group && f.box("core.card.tab", source.id).W == 0:
+			// a tab of a strip too narrow for its tabs is not drawn and is no source of a pointer drag.
+		case kind == "group" && source.group && len(sources) == 0,
+			kind == "alone" && !source.group && source.alone && len(sources) == 0,
+			kind == "shared" && !source.group && !source.alone && len(sources) == 0:
+			sources = append(sources, source)
+		}
+	}
+	if len(sources) == 0 {
+		t.Fatalf("the generated layout of seed %d has no %s source", seed, kind)
+	}
+	for _, source := range sources {
+		reached := dropShell(t, made.stored).reachedTargets(t, source)
+		results := map[string]string{}
+		result := func(target dropTarget) string {
+			key := target.key()
+			if got, ok := results[key]; ok {
+				return got
+			}
+			name, text := moveCommand(t, source, target)
+			shell := dropShell(t, made.stored)
+			if _, err := shell.apply(name, text); err != nil {
+				results[key] = ""
+				return ""
+			}
+			stored, err := json.Marshal(shell.storedLayout())
+			if err != nil {
+				t.Fatal(err)
+			}
+			results[key] = string(stored)
+			return results[key]
+		}
+		keys := slices.Sorted(func(yield func(string) bool) {
+			for key := range reached {
+				if !yield(key) {
+					return
+				}
+			}
+		})
+		for _, target := range requiredTargets(made.stored, source) {
+			if _, ok := reached[target.key()]; ok {
+				required++
+				continue
+			}
+			want := result(target)
+			if want == "" {
+				continue
+			}
+			required++
+			// The reached targets of the same zone are compared first, because a merged band is mostly a node of the same side.
+			order := slices.Clone(keys)
+			slices.SortStableFunc(order, func(a, b string) int {
+				return boolRank(reached[a].Zone != target.Zone) - boolRank(reached[b].Zone != target.Zone)
+			})
+			if !slices.ContainsFunc(order, func(key string) bool { return result(reached[key]) == want }) {
+				failures = append(failures, fmt.Sprintf("I4 %s: no anchor and point select %s or a target of its result %s; the layout is %s, which differs at %s",
+					source.id, target.key(), outline(want), outline(current), difference(want, current)))
+			}
+		}
+	}
+	if required == 0 {
+		t.Fatal("no target was required")
+	}
+	if len(failures) > 0 {
+		t.Fatalf("%d failures over %d required targets (%d generated steps refused):\n%s", len(failures), required, made.refused,
+			strings.Join(failures, "\n"))
+	}
+}
+
+// outline is the tree of a stored layout as JSON in short form: a card by its id, a box by its id and inner node, and a cut by its axis
+// and its kids with their shares to two places.
+func outline(stored string) string {
+	if stored == "" {
+		return "refused"
+	}
+	var read map[string]any
+	if err := json.Unmarshal([]byte(stored), &read); err != nil {
+		return err.Error()
+	}
+	var short func(n map[string]any) string
+	short = func(n map[string]any) string {
+		switch {
+		case n["card"] != nil:
+			return n["card"].(string)
+		case n["box"] != nil:
+			return n["box"].(string) + "{" + short(n["inner"].(map[string]any)) + "}"
+		}
+		kids := []string{}
+		for _, kid := range n["kids"].([]any) {
+			entry := kid.(map[string]any)
+			kids = append(kids, fmt.Sprintf("%.2f %s", entry["share"], short(entry["node"].(map[string]any))))
+		}
+		return n["cut"].(string) + "(" + strings.Join(kids, ", ") + ")"
+	}
+	return short(read["state"].(map[string]any)["root"].(map[string]any))
+}
+
+// difference is the first path at which two stored layouts as JSON differ, with the two values there.
+func difference(a, b string) string {
+	var left, right any
+	if json.Unmarshal([]byte(a), &left) != nil || json.Unmarshal([]byte(b), &right) != nil {
+		return "a value that is no JSON"
+	}
+	var walk func(path string, x, y any) string
+	walk = func(path string, x, y any) string {
+		switch xv := x.(type) {
+		case map[string]any:
+			yv, ok := y.(map[string]any)
+			if !ok {
+				break
+			}
+			keys := slices.Sorted(func(yield func(string) bool) {
+				for key := range xv {
+					if !yield(key) {
+						return
+					}
+				}
+				for key := range yv {
+					if _, ok := xv[key]; !ok && !yield(key) {
+						return
+					}
+				}
+			})
+			for _, key := range keys {
+				if found := walk(path+"."+key, xv[key], yv[key]); found != "" {
+					return found
+				}
+			}
+			return ""
+		case []any:
+			yv, ok := y.([]any)
+			if !ok || len(xv) != len(yv) {
+				break
+			}
+			for i := range xv {
+				if found := walk(fmt.Sprintf("%s[%d]", path, i), xv[i], yv[i]); found != "" {
+					return found
+				}
+			}
+			return ""
+		}
+		if reflect.DeepEqual(x, y) {
+			return ""
+		}
+		return fmt.Sprintf("%s: %v and %v", path, x, y)
+	}
+	return walk("", left, right)
+}
+
+// boolRank is 1 for true and 0 for false.
+func boolRank(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func TestDropTargetsOfAGroupCardOverTheGeneratedLayoutOfSeed1AreReachable(t *testing.T) {
+	checkReach(t, 1, "group")
+}
+
+func TestDropTargetsOfAGroupCardOverTheGeneratedLayoutOfSeed2AreReachable(t *testing.T) {
+	checkReach(t, 2, "group")
+}
+
+func TestDropTargetsOfAGroupCardOverTheGeneratedLayoutOfSeed3AreReachable(t *testing.T) {
+	checkReach(t, 3, "group")
+}
+
+func TestDropTargetsOfTheOnlyTabOverTheGeneratedLayoutOfSeed1AreReachable(t *testing.T) {
+	checkReach(t, 1, "alone")
+}
+
+func TestDropTargetsOfTheOnlyTabOverTheGeneratedLayoutOfSeed2AreReachable(t *testing.T) {
+	checkReach(t, 2, "alone")
+}
+
+func TestDropTargetsOfTheOnlyTabOverTheGeneratedLayoutOfSeed3AreReachable(t *testing.T) {
+	checkReach(t, 3, "alone")
+}
+
+func TestDropTargetsOfASharedTabOverTheGeneratedLayoutOfSeed1AreReachable(t *testing.T) {
+	checkReach(t, 1, "shared")
+}
+
+func TestDropTargetsOfASharedTabOverTheGeneratedLayoutOfSeed2AreReachable(t *testing.T) {
+	checkReach(t, 2, "shared")
+}
+
+func TestDropTargetsOfASharedTabOverTheGeneratedLayoutOfSeed3AreReachable(t *testing.T) {
+	checkReach(t, 3, "shared")
+}

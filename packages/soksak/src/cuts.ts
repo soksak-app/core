@@ -354,8 +354,10 @@ export function withdrawNode(input: Input, id: string, cards: readonly { id: str
  * side toward it, `left` or `top`, named by its id or by the members of a cut. A move there is the inverse of the withdraw of `id`.
  */
 export function vacatesNode(input: Input, id: string, target: string | readonly string[], side: string): boolean {
-  const list = typeof target === 'string' ? [target] : [...target];
-  if (list.length === 1 && list[0] === id) return true;
+  const named = typeof target === 'string' ? [target] : [...target];
+  if (named.length === 1 && named[0] === id) return true;
+  // A target that lists id among the kids of a cut names the kids that remain after the withdraw of id.
+  const list = named.filter((member) => member !== id);
   const index = new Index(input.root, input);
   const node = index.byId.get(id);
   const holder = node && index.parent.get(node);

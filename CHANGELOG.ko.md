@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F966-1-1-4-1 (seed 도달 검사, Go): Go workbench의 seed 검사가 생성한 layout 셋에서 각 side의 모든 band에 들어가고 band의 anchor를 지키며 선을 따라 움직이는 drag 경로로 I4를 판정하고, 움직이는 card나 box를 cut의 kid로 나열한 target으로의 move는 이제 남는 kid를 가리키므로, 남는 kid가 움직이는 node 옆의 그쪽 kid인 target은 빈 slot이고 변화가 없다. 전에는 그런 move가 card를 다시 옮기고 그 group card의 leader를 바꿀 수 있었다.
 - F937-69 (group card 안 card의 rail, page): 오른쪽 창 sidebar를 override하는 card를 group card로 감싼 뒤에도 `core.rail`이 그 card의 group 하나와 outline 두 개의 path를 보인다는 것을 F937-67의 mygo test처럼 page test가 판정한다. 동작은 바뀌지 않았다.
 - F937-67 (group card 안의 focus된 card의 ring): 창 sidebar를 override하는 card의 rail이 group card 안에서도 card와 함께 남고, card의 focus ring 옆에 card를 두른 outline 하나와 sidebar를 두른 outline 하나를 그린다는 것을 mygo test가 판정한다. 동작은 바뀌지 않았다.
 - F1005: `AGENTS.md`와 `AGENTS.ko.md`는 36,043 bytes와 39,287 bytes에서 17,095 bytes와 17,954 bytes로 줄어 Codex가 읽는 32,768 bytes 한도 아래가 된다. 모든 규칙은 같은 의미를 유지한다. 절차는 `docs/operations/`와 `docs/spec/`의 소유 문서로 옮기고, 명세에는 대상 문서에 없던 규칙을 더했다. F239로 끝난 five-group 단계 규칙과 workspace version 줄을 지웠으며, F718-6이 명령 시간 제한을 없앴으므로 그 규칙도 지웠다.

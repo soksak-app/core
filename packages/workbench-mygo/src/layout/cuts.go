@@ -803,11 +803,13 @@ func (x *index) sharePlaces(holder *Node, sizes []float64) {
 
 // Vacates tells whether target and side name the vacated slot of the node id, a card or a box (docs/spec/groups.md#vacated-slot): the
 // node itself on any side or its centre, or the kid before it or after it in its cut toward it, named by its id or by the members of a
-// cut. A move there is the inverse of the withdraw of id, so it is no change.
+// cut. A target that lists id among the kids of a cut names the kids that remain after the withdraw of id. A move there is the inverse
+// of the withdraw of id, so it is no change.
 func (g *Grid) Vacates(id string, target Target, side Side) bool {
 	if len(target) == 1 && target[0] == id {
 		return true
 	}
+	target = slices.DeleteFunc(slices.Clone(target), func(member string) bool { return member == id })
 	x := newIndex(g)
 	n := x.byID[id]
 	if n == nil {
