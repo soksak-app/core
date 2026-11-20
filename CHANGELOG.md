@@ -5,6 +5,7 @@
 
 ## 2026-11-21
 
+- F1006-9.1: The reader of `projects.json` in the Rust host tests the object and its format in one `if let` chain, so `make check-rust-clippy` passes again; F914-8 is complete, since that check reports no warning in `packages/host/gpuikit`. Verification: `make check-rust-clippy` passes, and the workspace tests of the Rust host pass 22 of 22.
 - F915: The item is complete: the listings of the discovery have no time bound, and `scripts/test/test-discovery.test.mjs` passes 17 of 17.
 - F806: The case of the view operation contract ends its page with `pagehide` before it removes the window, so no step of the log writer runs after the case; the change came with F795, and this entry records its verification. Verification: without the step three runs fail with `ReferenceError: window is not defined`, and with it three runs pass.
 - F940: The tests of both workbench registries hold that `core.settings.set {key, value}`, `core.settings.set {bogus}` and `core.layout.balance {bogus}` are refused with `command <name>: unknown parameter <member>`. The check of F967 already refuses them, and no production code changes. Verification: both tests fail with the check skipped for those commands and pass with it.

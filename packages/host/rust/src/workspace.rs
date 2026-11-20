@@ -217,10 +217,10 @@ fn read_projects_document(path: &Path) -> Result<Option<Map<String, Value>>, Str
     let Some(value) = read_stored_value(path)? else {
         return Ok(None);
     };
-    if let Some(document) = value.as_object() {
-        if format_holds(document, PROJECTS_FORMAT) {
-            return Ok(Some(document.clone()));
-        }
+    if let Some(document) = value.as_object()
+        && format_holds(document, PROJECTS_FORMAT)
+    {
+        return Ok(Some(document.clone()));
     }
     let found = value.as_object().map_or(Value::Null, |document| {
         document.get("format").cloned().unwrap_or(Value::Null) // default: a format member that is absent is reported as null, as docs/spec/agent-roles.md#tab-role-state states.
