@@ -5,6 +5,7 @@ package host
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -66,6 +67,15 @@ func checkSurface(surface string) error {
 	return nil
 }
 
+// removeTemporary removes a temporary file of a failed write. A file that is already gone is not an error; any other failure is
+// returned to the caller.
+func removeTemporary(temporary string) error {
+	if err := os.Remove(temporary); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // WriteRoleFile writes the role file of a surface atomically and returns its path. The folder of the surface is created with
 // mode 0700. Leftover temporary files of earlier writes are removed before the write. The new content is written to a temporary
 // file of mode 0600 that is renamed over the role file, so a reader sees the earlier file or the new one whole.
@@ -97,36 +107,38 @@ func WriteRoleFile(configDirectory, surface, identifier, text string) (string, e
 	}
 	temporary := file.Name()
 	if err := writeRoleTemporary(file, temporary, identifier, text); err != nil {
-		_ = os.Remove(temporary)
-		return "", fmt.Errorf("%s: %w", path, err)
+		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary))
 	}
 	if err := os.Rename(temporary, path); err != nil {
-		_ = os.Remove(temporary)
-		return "", fmt.Errorf("%s: %w", path, err)
+		return "", errors.Join(fmt.Errorf("%s: %w", path, err), removeTemporary(temporary))
 	}
 	return path, nil
 }
 
-// writeRoleTemporary writes the content of a role to file, checks its mode, and closes it.
+// writeRoleTemporary writes the content of a role to file, checks its mode, and closes it. Every failure is returned, and a
+// file whose close fails is reported with the write error it follows.
 func writeRoleTemporary(file *os.File, temporary, identifier, text string) error {
-	if _, err := file.WriteString(RoleFileContent(identifier, text)); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	info, err := file.Stat()
+	info, err := writeRoleContent(file, identifier, text)
+	closeErr := file.Close()
 	if err != nil {
-		_ = file.Close()
-		return err
+		return errors.Join(err, closeErr)
 	}
-	if err := file.Close(); err != nil {
-		return err
+	if closeErr != nil {
+		return closeErr
 	}
 	if mode := info.Mode().Perm(); mode != 0o600 {
 		return fmt.Errorf("temporary file %s has mode %o, want 600", temporary, mode)
 	}
 	return nil
+}
+
+// writeRoleContent writes and syncs the content of a role to file and returns the file information that its mode is checked with.
+func writeRoleContent(file *os.File, identifier, text string) (os.FileInfo, error) {
+	if _, err := file.WriteString(RoleFileContent(identifier, text)); err != nil {
+		return nil, err
+	}
+	if err := file.Sync(); err != nil {
+		return nil, err
+	}
+	return file.Stat()
 }

@@ -125,8 +125,17 @@ pub fn write_role_file(
         Ok(())
     })();
     if let Err(e) = written {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(format!("{}: {e}", path.display()));
+        return Err(match std::fs::remove_file(&temporary) {
+            Ok(()) => format!("{}: {e}", path.display()),
+            Err(remove) if remove.kind() == std::io::ErrorKind::NotFound => {
+                format!("{}: {e}", path.display())
+            }
+            Err(remove) => format!(
+                "{}: {e}; removing {}: {remove}",
+                path.display(),
+                temporary.display()
+            ),
+        });
     }
     file.persist(&path)
         .map_err(|e| format!("{}: {}", path.display(), e.error))?;
