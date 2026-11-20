@@ -231,6 +231,7 @@ export function createRegistry({ call = null, report = null } = {}) {
     commanding++;
     try {
       const result = await run();
+      // default: a command that no watcher follows has no end callback.
       ended?.(result);
       emitEvent("debug", "workbench.command", { name, micros: micros(), ok: true });
       return result;

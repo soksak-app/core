@@ -741,8 +741,8 @@ export async function installCoreExposure({ library, renames, chrome, drawn, mem
     const reply = await registry.handle({ id: null, method: "exposure.snapshot", params: {} });
     if (reply.error) throw new Error(`core.card.get ${card}: exposure.snapshot: ${reply.error.message}`);
     // The statuses that each surface declares with summary true are the status of its tab (docs/spec/exposure.md#entry-fields).
-    // default: a status whose read failed has no value, which is written as null.
     const summary = new Map(reply.result.groups.filter((group) => group.owner === "surface")
+      // default: a status whose read failed has no value, which is written as null.
       .map((group) => [group.surface, Object.fromEntries(group.status.filter((entry) => entry.summary === true).map((entry) => [entry.name, entry.value ?? null]))]));
     return cardState(card, summary);
   });

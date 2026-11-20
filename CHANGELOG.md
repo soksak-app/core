@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.2: The eight defaults of the small workbench modules state their reasons.
 - F1016-10.1: The five defaults of the host and sok packages state their reasons.
 - F1016-12: The hook file reader of sok reads the type and the command of an entry once, with its stated reason, so the event source check of the kit 0.0.16 passes; no result changes.
 - F1016-1 to F1016-9: The node tests of main pass again in nine of ten files: the roles format default states its reason, a doc comment no longer reads as a reason marker, seven comments are English, the common platform module and the run step name no bundle, the event class tables and the shipped catalog of the window check follow the catalog, the group header check orders no window, the linked sidebar checker fixture gives the stored tree, and the break inventory test names `dist/tree.js`. F1016-10, 93 defaults without a reason, waits.

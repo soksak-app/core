@@ -67,6 +67,7 @@ export function effectiveTextScope(pressed, focused) {
  * plane, whose own element is the target of a press outside the plane.
  */
 export function pressesFrame(target) {
+  // default: a press target that is no element, such as the document, has neither closest nor matches and lies in no bar.
   return Boolean(target.closest?.(".chrome-bar, .tabs--space, .tabs--project")) || Boolean(target.matches?.(".stage"));
 }
 

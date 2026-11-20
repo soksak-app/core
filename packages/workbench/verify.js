@@ -106,6 +106,7 @@ export function verify(controls = null) {
     const [loSide, hiSide] = axis === "x" ? ["left", "right"] : ["top", "bottom"];
     for (let k = 1; k < grid.lines(axis).length - 1; k++) {
       const edges = new Map();
+      // default: the first edge of a key starts its list.
       const edge = (key, at) => edges.set(key, [...(edges.get(key) ?? []), at]);
       for (const c of cards) {
         const r = box.get(c.id);

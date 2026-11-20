@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-10.2: 작은 workbench module의 기본값 여덟 개가 이유를 적는다.
 - F1016-10.1: host와 sok package의 기본값 다섯 개가 이유를 적는다.
 - F1016-12: sok의 hook 파일 reader가 entry의 type과 command를 이유를 적고 한 번 읽으므로 kit 0.0.16의 event source 검사가 통과한다. 결과는 바뀌지 않는다.
 - F1016-1부터 F1016-9: main의 node test가 열 개 파일 중 아홉에서 다시 통과한다. roles format 기본값이 이유를 적고, doc comment가 더 이상 reason marker로 읽히지 않으며, comment 일곱 개가 영어이고, 공통 platform module과 실행 단계가 bundle을 이름 짓지 않으며, event class table과 window check의 배포 catalog가 catalog를 따르고, group header check가 window의 순서를 바꾸지 않으며, linked sidebar checker fixture가 저장된 tree를 주고, break inventory test가 `dist/tree.js`를 이름 짓는다. 이유 없는 기본값 93개인 F1016-10은 기다린다.

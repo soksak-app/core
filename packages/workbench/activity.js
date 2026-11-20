@@ -28,6 +28,7 @@ export function tabActivity(plugin, tab, statuses) {
     // default: a status that the surface has not registered gives no activity.
     if (value === undefined || value === null) return null;
     if (ACTIVITIES.includes(value)) return value;
+    // default: the first invalid value among the statuses is the error that the tab reports.
     error ??= `${plugin} exposes ${name} on tab ${tab}: activity value ${JSON.stringify(value)} is not one of ${ACTIVITIES.join(", ")}`;
     return null;
   });
@@ -166,6 +167,7 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
     for (const [tab, { plugin, watches }] of followed) {
       const { activity, error } = tabActivity(plugin, tab, [...watches].map(([name, { value }]) => ({ name, value })));
       if (activity !== null) tabs[tab] = activity;
+      // default: a tab without a recorded error has the error null.
       if (error !== (errors.get(tab) ?? null)) {
         if (error === null) errors.delete(tab);
         else errors.set(tab, error);
@@ -185,6 +187,7 @@ export function createActivity({ observe, statuses, projects, changed, failed, p
       // default: a project without a space with an activity publishes {}, which a project never published leaves unpublished.
       const spaces = next.spaces[id] ?? {};
       const text = JSON.stringify(spaces);
+      // default: a project never published counts as published {}, so its first empty publish is skipped.
       if (text === (published.get(id) ?? "{}")) continue;
       published.set(id, text);
       publish(id, spaces);
