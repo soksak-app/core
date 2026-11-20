@@ -587,8 +587,10 @@ int main(int argc, char **argv) { @autoreleasepool {
         sp_region_close(region6);
     }
 
-    // TEST 7: focus - focus event and hasFocus state
+    // TEST 7: focus - focus event and hasFocus state. The region reports its focus only while its window is key
+    // (docs/spec/native-surfaces.md#image-regions), so the window is made the virtual key window first.
     {
+        activateWindow(window, @"TEST 7");
         [collectedEvents removeAllObjects];
 
         void *region7 = sp_region_create(surface, "test7", testEvent, NULL);
@@ -612,6 +614,47 @@ int main(int argc, char **argv) { @autoreleasepool {
         check(foundFocusEvent, @"TEST 7: focus event has correct format");
 
         sp_region_close(region7);
+        // The later tests run in a window that is not key, as before this test.
+        sp_input_virtual_end("test ended");
+    }
+
+    // TEST 7b: the focus that a region reports follows the key status of its window (docs/spec/native-surfaces.md#image-regions):
+    // the first responder reports a loss when another window becomes key and the focus again when its window is key again.
+    {
+        NSWindow *other = [[NSWindow alloc] initWithContentRect:NSMakeRect(700, 100, 200, 200)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        [other setReleasedWhenClosed:NO];
+        [other orderBack:nil];
+        activateWindow(window, @"TEST 7b");
+        void *region7b = sp_region_create(surface, "test7b", testEvent, NULL);
+        sp_region_place(region7b, 10, 10, 10, 10, true);
+        sp_region_focus(region7b);
+        // A page receives focus only as an action of an input transaction, so a focus report outside one is listed as
+        // "outside" and is an error of the page (`packages/plugin-api/image-region.js` reports `image <name>: no handlers for event type focus`).
+        NSArray<NSString *> *(^focusReports)(void) = ^NSArray<NSString *> *{
+            NSMutableArray<NSString *> *reports = [NSMutableArray array];
+            for (NSString *event in collectedEvents) {
+                if ([event rangeOfString:@"\"type\":\"focus\""].location == NSNotFound) continue;
+                if ([event rangeOfString:@"\"type\":\"input\""].location == NSNotFound) {
+                    [reports addObject:@"outside"];
+                    continue;
+                }
+                [reports addObject:[event rangeOfString:@"\"focused\":true"].location != NSNotFound ? @"true" : @"false"];
+            }
+            return reports;
+        };
+        [collectedEvents removeAllObjects];
+        activateWindow(other, @"TEST 7b: another window");
+        check([focusReports() isEqual:@[@"false"]],
+            [NSString stringWithFormat:@"TEST 7b: the region reports the loss of the focus when its window resigns the key status (got %@)", focusReports()]);
+        [collectedEvents removeAllObjects];
+        activateWindow(window, @"TEST 7b: the window again");
+        check([focusReports() isEqual:@[@"true"]],
+            [NSString stringWithFormat:@"TEST 7b: the region reports the focus when its window becomes key again (got %@)", focusReports()]);
+        sp_region_close(region7b);
+        sp_input_virtual_end("test ended");
+        [other close];
+        [other release];
     }
 
     // TEST 8: the input client stores only marked text and reports committed transactions.
