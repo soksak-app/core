@@ -66,6 +66,8 @@ agent program 은 대화의 transcript 를 스스로 보존한다. `sok conversa
 
 sidecar 는 wheel 동작 `scroll {lines, col, row, shift}` 를 이 순서로 보낸다. program 이 mouse reporting 을 켰고 Shift 가 눌리지 않았으면 mouse report, alternate screen 이 활성이고 alternate scroll mode(DECSET 1007)가 설정되었으면 alternate scroll 의 cursor key, 그 밖에는 primary screen 의 viewport 이다. 각 plugin 의 page 는 사람의 wheel 을 이 동작으로 보내고, program scroll 도 같은 동작을 보낸다.
 
+mouse report 1000(누름과 뗌), 1002(button 을 누른 동안의 움직임도), 1003(모든 움직임도)은 한 mode 다. 하나를 설정하면 나머지를 대신하므로, 1000, 1002, 1003 을 차례로 설정한 program 은 1003 으로 보고받고, engine 의 mode 에는 그 하나만 남는다. wheel 의 mouse report 는 오래된 내용 쪽이면 button 64, 새 내용 쪽이면 65 를 한 줄에 한 번씩 pointer 의 칸에서 보내며, DECSET 1006 이 설정되었으면 SGR encoding, 아니면 기본 encoding 으로 보낸다. alternate scroll 의 cursor key 는 application cursor mode(DECSET 1)를 따르고, alternate scroll mode 는 session 이 시작할 때 설정되어 있다. `docs/spec/cases/terminal-read/wheel-routes.json` 은 route 의 case 를 담는다: program 의 출력, 그 뒤의 mode, 각 scroll 에 session 이 받는 정확한 text 다. 각 sidecar 는 이 파일을 자기 fixture 로 복사하고 각 case 를 실제 engine 과 wheel route 로 실행한다.
+
 ## Program scroll 의 그리기
 
 program 이 redraw 를 마쳤음을 알리는 터미널 이벤트는 없으므로, scroll 단계와 되돌리기 단계의 기다림은 이 규칙으로 끝난다. 이 규칙은 시간을 millisecond 가 아니라 창의 display frame 으로 세므로 모든 refresh rate 에서 성립한다.
