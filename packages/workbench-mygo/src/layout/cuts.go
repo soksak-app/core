@@ -239,6 +239,10 @@ func targetOf(x *index, target Target, axis Axis) (*Node, *run, error) {
 		if hit == nil {
 			return nil, nil, notMember(id)
 		}
+		// A run lists each of its kids once; a repeated id would make a run of fewer kids than the target names.
+		if slices.Contains(target[:i], id) {
+			return nil, nil, fmt.Errorf("card %s is named twice in the target", id)
+		}
 		hits[i] = hit
 	}
 	if len(target) == 1 {

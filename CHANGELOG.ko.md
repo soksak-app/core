@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1012 (반복된 target id): Go와 TypeScript layout library의 insert나 move가 한 card를 두 번 이름한 target을 `card <id> is named twice in the target`로 거부한다. 전에는 그 card를 kid 하나인 cut으로 감쌌고, 저장된 layout을 읽을 때 그것이 거부되었다.
 - F1011: pre-push hook이 돌리는 `make check-push`가 `make check-rust-format`과 `make check-go-format`을 돌리므로, format되지 않은 Rust나 Go source의 push는 main에 닿기 전에 거부된다. 검증: `scripts/test/workflows.test.mjs`의 push 검사 test의 Red와 format되지 않은 Rust와 Go 줄을 둔 commit에서 통과한 `make check-push`, 그 뒤 test의 Green, 그 commit에서 언어마다 실패한 `make check-push`, 되돌린 뒤 통과한 `make check-push`.
 - F937-10-1 (head token, mygo): group tree가 보관한 header answer의 layout token을 grid나 tree가 바뀐 뒤에만 다시 만들므로, pointer 이동처럼 layout 변경 없는 card head의 draw는 token을 서식화하지 않는다.
 - F1010 (등록, 보류): F966의 크기 규칙을 mygo, Wails, Tauri host에서 app 안으로 검사하는 일은 최종 검증 단계를 기다린다.

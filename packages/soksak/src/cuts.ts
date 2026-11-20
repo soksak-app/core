@@ -149,9 +149,11 @@ interface Run {
  */
 function targetOf(index: Index, target: string | readonly string[], axis: Axis): TreeNode | Run {
   const list = typeof target === 'string' ? [target] : [...target];
-  const hits = list.map((id) => {
+  const hits = list.map((id, i) => {
     const hit = index.byId.get(id);
     if (!hit) throw new Error(`card ${id} is not a member of the layout`);
+    // A run lists each of its kids once; a repeated id would make a run of fewer kids than the target names.
+    if (list.indexOf(id) < i) throw new Error(`card ${id} is named twice in the target`);
     return hit;
   });
   if (list.length === 1) return hits[0];

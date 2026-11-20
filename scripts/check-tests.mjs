@@ -652,6 +652,19 @@ const FEATURE_LINKS = [
     levels: ["unit"],
   },
   {
+    id: "F1012",
+    implementation: [
+      { file: "packages/soksak/src/cuts.ts", symbol: "function targetOf(index: Index, target: string | readonly string[], axis: Axis): TreeNode | Run {" },
+      { file: "packages/workbench-mygo/src/layout/cuts.go", symbol: "func targetOf(x *index, target Target, axis Axis) (*Node, *run, error) {" },
+    ],
+    tests: [
+      { file: "packages/soksak/test/layout-cases.test.mjs", id: "grid: ${kase.name}" },
+      { file: "packages/workbench-mygo/tests/layout/cases_test.go", id: "TestGridCases" },
+    ],
+    expected: "An insert or a move of the layout library in Go and TypeScript refuses a target that names a card twice and changes nothing.",
+    levels: ["unit"],
+  },
+  {
     id: "F974",
     implementation: [
       { file: "e2e/fixtures/raster-probe/probe/plugin.json", symbol: "\"id\": \"rasterprobe\"" },

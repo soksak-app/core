@@ -515,6 +515,11 @@
   {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.6698924731182796,"node":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.49277688603531294,"node":{"card":"a","fixed":false}},{"share":0.5072231139646871,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"e","fixed":false}}]}},{"share":0.3301075268817204,"node":{"card":"c","fixed":false}}]}},{"share":0.5,"node":{"card":"d","fixed":false}}]}}},
   {"call":"insert","args":[["a","c"],"bottom",{"card":"f"}],"throws":"cards a, c are not neighbours of one cut"}
  ]},
+ {"name":"an insert refuses a target that names a card twice and changes nothing","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":false}}]}},"steps":[
+  {"call":"insert","args":[["a","a"],"bottom",{"card":"d"}],"throws":"card a is named twice in the target"},
+  {"call":"insert","args":[["a","b","a"],"right",{"card":"d"}],"throws":"card a is named twice in the target"},
+  {"call":"toJSON","returns":{"root":{"cut":"y","kids":[{"share":0.5,"node":{"cut":"x","kids":[{"share":0.5,"node":{"card":"a","fixed":false}},{"share":0.5,"node":{"card":"b","fixed":false}}]}},{"share":0.5,"node":{"card":"c","fixed":false}}]}}}
+ ]},
  {"name":"an insert along a column of a box with a head gives the three members one height below the head (P2)","options":{"width":1240,"height":600,"gap":24,"minSize":96},"state":{"root":{"cut":"x","kids":[{"share":0.5,"node":{"box":"g","inner":{"cut":"y","kids":[{"share":0.5466666666666666,"node":{"card":"a"}},{"share":0.45333333333333337,"node":{"card":"b"}}]}}},{"share":0.5,"node":{"card":"c"}}]}},"steps":[
   {"call":"setHeads","args":[{"g":56}]},
   {"call":"insert","args":["b","bottom",{"card":"d"}],"returns":"d"},

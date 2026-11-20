@@ -475,7 +475,8 @@ box는 member의 비율을 유지한 채 놓인다. 마지막 카드와 `fixed` 
 
 `insert(target, side, node)`는 새 카드 `{card, data?}`나 `withdraw`가 돌려준 것인
 `node`를 `target` 옆 `side` 쪽에 더하고 그 id를 돌려준다. `target`은 id이거나 한
-cut의 이웃한 kid들이 가진 id들이다. target의 cut을 따라서는, fraction을 받는 kid k개의
+cut의 이웃한 kid들이 가진 id들이며 각 id는 한 번이다. id를 두 번 이름한 target은
+거부된다. target의 cut을 따라서는, fraction을 받는 kid k개의
 고른 cut은 node에 그 fraction의 1/(k+1)을 주고 다른 모든 fraction에 k/(k+1)을 곱하며,
 fraction이 다른 cut은 node에 target fraction의 절반을 주고 다른 모든 fraction을
 유지한다. px 크기를 유지하는 node는 자리를 내는 kid에서 새 corridor와 함께 크기를

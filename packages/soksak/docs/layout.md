@@ -538,7 +538,8 @@ refused.
 
 `insert(target, side, node)` adds `node`, a new card `{card, data?}` or what
 `withdraw` returned, beside `target` toward `side` and returns its id;
-`target` is an id or the ids that neighbouring kids of one cut hold. Along the
+`target` is an id or the ids that neighbouring kids of one cut hold, each id
+once; a target that names an id twice is refused. Along the
 cut of the target, an even cut of k kids that take a fraction gives the node
 1/(k+1) of their fractions and scales every other by k/(k+1), and a cut whose
 fractions differ gives the node half of the fraction of the target and keeps
