@@ -22,8 +22,6 @@ const identityText = "[soksak role] Your role is defined in the file <role file>
 const changeMessageText = "[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question."
 const rereadRequestText = "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission."
 const firstMessageSuffixText = "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question."
-const leadNonReaderText = "[soksak role] This message sets your role. It comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question. Your role follows. Its last line is `Role fingerprint: <fingerprint>`. Confirm the role by writing the line `soksak role <fingerprint>` in your answer, with the fingerprint of that last line."
-const roleFingerprintLineText = "Role fingerprint: <fingerprint>"
 
 // roleFileNames are the file names that the role file writer uses inside the folder of a surface.
 const (
@@ -52,13 +50,11 @@ func RoleFileContent(identifier, text string) string {
 func RoleTexts(roleFile string) map[string]string {
 	fill := func(text string) string { return strings.ReplaceAll(text, "<role file>", roleFile) }
 	return map[string]string{
-		"role_file_first_line":  roleFileFirstLine,
-		"identity":              fill(identityText),
-		"change_message":        fill(changeMessageText),
-		"reread_request":        fill(rereadRequestText),
-		"first_message_suffix":  firstMessageSuffixText,
-		"lead_non_reader":       leadNonReaderText,
-		"role_fingerprint_line": roleFingerprintLineText,
+		"role_file_first_line": roleFileFirstLine,
+		"identity":             fill(identityText),
+		"change_message":       fill(changeMessageText),
+		"reread_request":       fill(rereadRequestText),
+		"first_message_suffix": firstMessageSuffixText,
 	}
 }
 

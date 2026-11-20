@@ -15,8 +15,6 @@ const IDENTITY_TEXT: &str = "[soksak role] Your role is defined in the file <rol
 const CHANGE_MESSAGE_TEXT: &str = "[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question.";
 const REREAD_REQUEST_TEXT: &str = "[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.";
 const FIRST_MESSAGE_SUFFIX_TEXT: &str = "This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.";
-const LEAD_NON_READER_TEXT: &str = "[soksak role] This message sets your role. It comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question. Your role follows. Its last line is `Role fingerprint: <fingerprint>`. Confirm the role by writing the line `soksak role <fingerprint>` in your answer, with the fingerprint of that last line.";
-const ROLE_FINGERPRINT_LINE_TEXT: &str = "Role fingerprint: <fingerprint>";
 
 /// The file name of the role file inside the folder of a surface.
 const ROLE_FILE_NAME: &str = "role.md";
@@ -63,14 +61,6 @@ pub fn role_texts(role_file: &str) -> BTreeMap<String, String> {
         (
             "first_message_suffix".to_string(),
             FIRST_MESSAGE_SUFFIX_TEXT.to_string(),
-        ),
-        (
-            "lead_non_reader".to_string(),
-            LEAD_NON_READER_TEXT.to_string(),
-        ),
-        (
-            "role_fingerprint_line".to_string(),
-            ROLE_FINGERPRINT_LINE_TEXT.to_string(),
         ),
     ])
 }

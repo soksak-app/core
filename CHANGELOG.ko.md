@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-16: Go와 Rust host가 role case 파일에 더는 없는 paste form 문구 `lead_non_reader`와 `role_fingerprint_line`을 돌려주지 않으므로 host role 문구 test가 통과한다. 검증: main에서 `TestRoleTextsMatchPinnedTexts`와 `role_texts_match_pinned_texts`가 두 key가 더 있어 실패한 Red, Go host package와 Rust `role_file_test`, `roles_test`, `workspace_test`, `setup_test`의 Green.
 - F1006-5.3: 명령 `core.tab.role {tab, role}`와 `core.tab.role.confirm {fingerprint}`의 등록을 네 단위(page, mygo shell, Go host, Rust host)로 나누어 등록했다. 단위들은 F1006-5.2를 기다린다.
 - F1006-4: 파일을 읽을 수 없는 agent의 paste form을 `docs/spec/agent-roles.md`(en과 ko)와 case file `docs/spec/cases/agent-roles/fingerprint.json`에서 제거했다. 그 형식을 고르는 선언이 없고 실행되는 모든 CLI가 파일을 읽기 때문이다. 모든 agent CLI의 첫 message는 완료됐으며, 증거는 row에 있다.
 - F1006-6: agent skill, MCP instructions, `docs/spec/cli.md`가 agent CLI와 role을 가진 tab을 `core.layout.open`의 `program`, `args`, `role`로 여는 방법과 답변 줄 형식의 확인을 적는다. 적힌 문장은 코드가 주는 refusal만 이름을 쓰며, 코드가 구현하지 않은 계획된 role 명령은 빼었다.

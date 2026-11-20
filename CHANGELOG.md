@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1016-16: The Go and Rust hosts no longer return the paste-form texts `lead_non_reader` and `role_fingerprint_line`, which the role case file no longer holds, so the host role text tests pass. Verification: Red of `TestRoleTextsMatchPinnedTexts` and `role_texts_match_pinned_texts` on main with the two extra keys; Green of the Go host package and of the Rust `role_file_test`, `roles_test`, `workspace_test` and `setup_test`.
 - F1006-5.3: Registers the registration of the commands `core.tab.role {tab, role}` and `core.tab.role.confirm {fingerprint}` as four units (page, mygo shell, Go host, Rust host); the units wait for F1006-5.2.
 - F1006-4: The paste form for agents that cannot read files is removed from `docs/spec/agent-roles.md` (en and ko) and from the case file `docs/spec/cases/agent-roles/fingerprint.json`, because no declaration selects it and every launched CLI reads files. The first message of every agent CLI is done; its evidence is in the row.
 - F1006-6: The agent skill, the MCP instructions and `docs/spec/cli.md` state how an agent opens a tab with an agent CLI and a role through `core.layout.open` with `program`, `args` and `role`, and the line form of confirmation. The sentences name only the refusals that the code gives and omit the planned role commands that no code implements.
