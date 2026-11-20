@@ -6,12 +6,12 @@ This document defines how a tab of a terminal agent receives its role, and how s
 
 ## Decision
 
-- A tab that starts an agent CLI gives the CLI its stable identity as the first message of the session. The identity names the absolute path of the role file of the tab. The agent reads the role from that file; the role text is not pasted into the terminal when the agent can read files.
+- A tab that starts an agent CLI gives the CLI its stable identity as the first message of the session. The identity names the absolute path of the role file of the tab. The agent reads the role from that file; the role text is not pasted into the terminal.
 - A surface is the surface of one tab, so the role file of a surface belongs to one tab. The role file lies in the configuration directory of the application, never in a repository of the person. Keep a role definition short, because the agent reads the whole file at each change; soksak accepts a definition of any length. Its last line is the fingerprint of the role.
 - The fingerprint is deterministic: the same role name and definition always give the same fingerprint. The agent reads it from the last line of the file; it never computes it.
 - The agent confirms by one of two ways: the command `sok role confirm <fingerprint>`, or a line `soksak role <fingerprint>` in its answer. A role is `ready` only when soksak has received the current fingerprint. The line form serves every CLI; a CLI that puts a letter or digit before the line confirms with `sok role confirm` ([confirmation](#confirmation)).
 - An agent that does not confirm gets a reread request at each not-busy report until it confirms, with no limit; each request is written to the record `plugin.<plugin>.messages.delivered` with kind `role-reread`. No timer decides any step.
-- A role assignment or change rewrites the role file atomically and sends a change message that names the path of the file; an agent that cannot read files receives the paste form instead ([agents that cannot read files](#agents-that-cannot-read-files)). Operations of one surface are serialized in arrival order.
+- A role assignment or change rewrites the role file atomically and sends a change message that names the path of the file. Operations of one surface are serialized in arrival order.
 - An agent does not write its role into any persistent memory of its CLI.
 
 Reason: the measured facts listed in [measured facts](#measured-facts) show that an agent given a pointer to a role file reads the file, and reads it again after a change message (rows 8 to 10). A role held as text in a message or a launch can only be replaced by a later message; a file is the one place that holds the current role.
@@ -56,7 +56,7 @@ Claude Code reports a permission prompt as `blocked` through the program status 
 
 ## Launch
 
-Every agent CLI starts the same way: the program named by `program` with the arguments of `args`, and no argument from core. Its identity reaches it as the first message of the session ([first message](#first-message)); a CLI that cannot read files receives the paste form instead ([agents that cannot read files](#agents-that-cannot-read-files)). Codex is started with `--no-daemon` in `args`, as [cli](cli.md) states.
+Every agent CLI starts the same way: the program named by `program` with the arguments of `args`, and no argument from core. Its identity reaches it as the first message of the session ([first message](#first-message)). Codex is started with `--no-daemon` in `args`, as [cli](cli.md) states.
 
 The line form of confirmation applies to every CLI, and the command form applies to an agent with a shell ([confirmation](#confirmation)).
 
@@ -104,7 +104,7 @@ The stable identity is the text of the first message of a session. It is written
 
 ## Fingerprint reference cases
 
-The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the English texts of the role file first line, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line, and the [phrase test](#phrase-test) compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
+The algorithm is tested by the shared case file `docs/spec/cases/agent-roles/fingerprint.json`. Each case gives the identifier, the definition text and the expected fingerprint. The same file pins the English texts of the role file first line, the identity, the change message, the reread request and the first message suffix, and the [phrase test](#phrase-test) compares the host output with them after the placeholders are filled. The Go host and the Rust host each run every case and compare the fingerprint they compute. The cases include non-ASCII text and line breaks, so the UTF-8 encoding and the separator are both checked. The values are the same for both hosts.
 
 ## Role definitions
 
@@ -256,34 +256,20 @@ A change message is one line:
 
 `[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question.`
 
-- For an agent that reads files, it carries the path of the role file and no role text and no fingerprint. For an agent that cannot read files, it is the paste form, which carries the role text and the fingerprint ([agents that cannot read files](#agents-that-cannot-read-files)).
+- For an agent that reads files, it carries the path of the role file and no role text and no fingerprint.
 - It carries no report request. It is not a message of another agent and has no sender folder.
 - It is delivered through the hold, the guard and the delivery record of [messaging](messaging.md#injected-message); the destructive command guard is [persistent services](persistent-services.md#destructive-command-guard).
 - Its queue, sender, foreground rule and framing are stated in [role messages](messaging.md#role-messages).
 - A reread request is the text ``[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.``, with the path of the role file.
-- The texts of the role file first line, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line are pinned by the [phrase test](#phrase-test): the host output must equal the texts in `docs/spec/cases/agent-roles/fingerprint.json`, with the placeholders filled in, except the first line of the role file (see the [phrase test](#phrase-test)). The texts are English and use short imperative sentences that each name one action.
+- The texts of the role file first line, the identity, the change message, the reread request and the first message suffix are pinned by the [phrase test](#phrase-test): the host output must equal the texts in `docs/spec/cases/agent-roles/fingerprint.json`, with the placeholders filled in, except the first line of the role file (see the [phrase test](#phrase-test)). The texts are English and use short imperative sentences that each name one action.
 
 ## Phrase test
 
-The phrase test pins each English text that soksak gives an agent: the first line of the role file, the identity, the change message, the reread request, the first message suffix, the lead text of the paste form and the fingerprint line of the paste form. The host output of each text equals the text in `docs/spec/cases/agent-roles/fingerprint.json`, for the Go host and the Rust host, with the placeholders filled in for each text except the first line of the role file. The first line contains no fingerprint value: the words `<fingerprint>` in it name the place of the value on the last line, and no placeholder is filled in it. Its host output equals its text exactly. The first line names the last line, so the agent reads the file to its end. The test is Red on any text that differs, and each text names the exact command and the file path.
-
-## Agents that cannot read files
-
-The measured file-reading capability of the CLI selects this path; no failure does. A CLI declares that its agent cannot read files ([launch](#launch)). Such an agent receives the role in the paste form, which replaces the path in every message that names the role file:
-
-1. the lead text `lead_non_reader` of the phrase test, which states that the message sets the role and that the role ends with the fingerprint line;
-2. the definition text, exactly as stored in `roles.json`;
-3. the line `Role fingerprint: <fingerprint>`, where the fingerprint is computed by the same algorithm over the pasted definition.
-
-The lead text `lead_non_reader` is the pinned text of the phrase test:
-
-> [soksak role] This message sets your role. It comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question. Your role follows. Its last line is `Role fingerprint: <fingerprint>`. Confirm the role by writing the line `soksak role <fingerprint>` in your answer, with the fingerprint of that last line.
-
-The first message of such an agent is the paste form. Its change message and its reread requests have the paste form too. The agent confirms by the line form (b) of its answer. This proves that the text was delivered and that the agent answered with the fingerprint from the text; it does not prove that a file was read. The state, the requests, the held messages and the error display are the same as for an agent that reads files. Each line of the paste form is judged by the [guard](messaging.md#injected-message).
+The phrase test pins each English text that soksak gives an agent: the first line of the role file, the identity, the change message, the reread request and the first message suffix. The host output of each text equals the text in `docs/spec/cases/agent-roles/fingerprint.json`, for the Go host and the Rust host, with the placeholders filled in for each text except the first line of the role file. The first line contains no fingerprint value: the words `<fingerprint>` in it name the place of the value on the last line, and no placeholder is filled in it. Its host output equals its text exactly. The first line names the last line, so the agent reads the file to its end. The test is Red on any text that differs, and each text names the exact command and the file path.
 
 ## First message
 
-Every CLI that can read files receives the identity in its first message, which is the first injected message of its session; an agent that cannot read files receives the paste form instead ([agents that cannot read files](#agents-that-cannot-read-files)). The message is the identity text of [stable identity](#stable-identity), followed by this line: `This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.`
+Every CLI receives the identity in its first message, which is the first injected message of its session. The message is the identity text of [stable identity](#stable-identity), followed by this line: `This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.`
 
 The first message of a session precedes every agent message of its registration. The page injects it when the program reports its first state. A startup prompt that writes no record and gives no notice is not observable, so it can take the Enter the page sends, as measured in [evidence of the hold](messaging.md#evidence-of-the-hold). This limit is stated. A first message can also be lost to context compaction; the reread requests and the change messages restore the role then.
 
@@ -344,7 +330,6 @@ A CLI that the person starts by hand in a tab, as a second agent in the same she
 - The role file write: real files. A fault point in the host writer fails the write at step 1, step 2 and step 3, and each case asserts `role file <path>: write failed: <os error>` and states the stored record and the file afterwards.
 - Mode: the temporary file is created with mode 0600 and the directory with 0700; a changed mode before the rename makes the write fail with `role file <path>: mode <mode> is not 0600` without renaming.
 - Phrase test: the host output of each pinned text equals the text in `docs/spec/cases/agent-roles/fingerprint.json`, as described in the [phrase test](#phrase-test).
-- Paste form: a change to an agent that cannot read files, and its first message, contain the lead text, the definition text exactly and the fingerprint line, and the fingerprint is computed over the pasted definition.
 - Layout and fingerprint: the layout has the first line, the definition and the last line; a definition without a final line feed gets one in the layout and its fingerprint is computed over the stored text. The Go host and the Rust host compute the fingerprint of each case in `docs/spec/cases/agent-roles/fingerprint.json`, and the values are equal. The cases include non-ASCII text and line breaks.
 - Length: a long definition (5,000 characters) is written whole, and its fingerprint covers all of it.
 - Path: a configuration directory path with a quote or a control character is refused with `configuration directory <path> holds a quote or a control character`; a surface identifier with a path separator, a `..` segment or a control character is refused with `surface "<value>" holds a path part or a control character`, and nothing is written.
@@ -400,7 +385,7 @@ Answered and applied:
 - The change message is not a reread request; the first request after the change message is the first request of the generation.
 - An assignment of the same role writes no file and changes no state.
 - A line in the answer shows that the agent holds the fingerprint of the current file, not that it read the file.
-- The fingerprint reference file pins the texts of the role file, the identity, the change message, the reread request, the first message suffix and the paste-form texts.
+- The fingerprint reference file pins the texts of the role file, the identity, the change message, the reread request, the first message suffix.
 - A restart without a stored confirmation gives `pending`.
 - A running tab cannot lose its role.
 - The first message suffix is a pinned text.
@@ -416,7 +401,6 @@ Answered and applied:
 - A restart with the program running keeps the stored record; a resume clears it.
 - Tests name their owning packages.
 - The English and Korean texts state the same rules.
-- A change to an agent that cannot read files carries the paste form with the role text; its confirmation is the fingerprint of the pasted definition.
 - The start parameters `program`, `args` and `role` reach the sidecar `open` request, and every program takes its identity in its first message.
 - The status `core.tab.role` and the role command replies carry `fingerprint` and `generation`, so the page composes the reread request from them.
 - The line form is matched against the visible rows that `<plugin>.screen.read` reads after each change of the visible rows; a wrapped line or a line that scrolls off does not match.
@@ -424,7 +408,6 @@ Answered and applied:
 
 Answered without change:
 
-- The paste path for an agent that cannot read files is a delivery form selected by the CLI's measured capability, not a failure; it adds no path for an agent that can use the file path.
 
 - A confirmation line that the terminal wraps does not match, and the state stays `pending`; a reread request asks again. The spec already states this, so no rule is added.
 

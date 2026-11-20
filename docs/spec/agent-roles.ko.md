@@ -6,12 +6,12 @@
 
 ## Decision
 
-- agent CLI를 시작하는 tab은 첫 message로 stable identity를 CLI에 준다. identity에는 tab의 role 파일 절대 경로가 적힌다. agent가 파일을 읽을 수 있으면 role 문장은 terminal에 붙여 넣지 않고 agent가 파일에서 읽는다.
+- agent CLI를 시작하는 tab은 첫 message로 stable identity를 CLI에 준다. identity에는 tab의 role 파일 절대 경로가 적힌다. role 문장은 terminal에 붙여 넣지 않고 agent가 파일에서 읽는다.
 - surface는 tab 하나의 surface이므로, surface의 role 파일은 tab 하나에 속한다. role 파일은 application의 configuration directory에 있으며 person의 repository에는 두지 않는다. 정의를 짧게 유지한다. agent는 변경 때마다 파일 전체를 읽으므로 짧은 정의를 권장하지만, soksak은 어떤 길이의 정의든 받아들인다. role 파일의 마지막 줄은 role의 fingerprint(fingerprint)이다.
 - fingerprint은 결정적이다. 같은 role 이름과 같은 정의는 언제나 같은 fingerprint을 낸다. agent는 파일 마지막 줄에서 fingerprint을 읽고, 계산하지 않는다.
 - agent는 두 방식 중 하나로 확인한다. 명령 `sok role confirm <fingerprint>`, 또는 답변 안의 줄 `soksak role <fingerprint>`다. soksak이 현재 fingerprint을 받았을 때만 role은 `ready`다. 줄 방식은 모든 CLI에 쓰며, 줄 앞에 글자나 숫자가 붙는 CLI는 `sok role confirm`으로 확인한다([확인](#confirmation)).
 - 확인하지 않는 agent는 확인할 때까지 바쁘지 않음 보고마다 reread request을 받는다. 상한은 없으며, 각 요청은 record `plugin.<plugin>.messages.delivered`에 kind `role-reread`로 쓴다. 어떤 단계도 timer로 정하지 않는다.
-- role 할당이나 변경은 role 파일을 원자적으로 다시 쓰고, 파일 경로를 적은 변경 message를 보낸다. 파일을 읽지 못하는 agent에게는 경로 대신 정의 텍스트를 붙여 넣는다([Agents that cannot read files](#agents-that-cannot-read-files)). surface의 작업은 도착 순서대로 직렬화한다.
+- role 할당이나 변경은 role 파일을 원자적으로 다시 쓰고, 파일 경로를 적은 변경 message를 보낸다. surface의 작업은 도착 순서대로 직렬화한다.
 - agent는 role을 CLI의 어떤 persistent memory에도 쓰지 않는다.
 
 이유: [Measured facts](#measured-facts)에 적힌 측정은 다음을 보여준다. launch flag는 새 session에만 적용되고, `resume`은 session 시작의 지시를 유지한다. role 파일 경로를 받은 agent는 파일을 읽고, 변경 message 뒤에 다시 읽는다. message나 launch에 텍스트로 든 role은 나중 message로만 바꿀 수 있다. 현재 role을 담는 곳은 파일 하나뿐이다.
@@ -56,7 +56,7 @@ Claude Code는 permission prompt를 [terminal state](terminal-state.md)의 프�
 
 ## Launch
 
-모든 agent CLI는 같은 방식으로 시작한다. `program`이 가리키는 프로그램을 `args`의 인자와 함께 실행하며, core는 인자를 더하지 않는다. identity는 session의 첫 message로 CLI에 닿는다([첫 message](#first-message)). 파일을 읽을 수 없는 CLI는 대신 붙여 넣기 형식을 받는다([파일을 읽을 수 없는 agent](#agents-that-cannot-read-files)). Codex는 `args`에 `--no-daemon`을 받아 시작하며, 이는 [cli](cli.md)가 적는다.
+모든 agent CLI는 같은 방식으로 시작한다. `program`이 가리키는 프로그램을 `args`의 인자와 함께 실행하며, core는 인자를 더하지 않는다. identity는 session의 첫 message로 CLI에 닿는다([첫 message](#first-message)). Codex는 `args`에 `--no-daemon`을 받아 시작하며, 이는 [cli](cli.md)가 적는다.
 
 줄 방식 확인은 모든 CLI에 적용되며, 명령 방식은 shell이 있는 agent에 적용된다([확인](#confirmation)).
 
@@ -256,34 +256,20 @@ role A를 B로 바꾸고 다시 A로 바꾸면 A의 fingerprint이 다시 나온
 
 `[soksak role] Your role changed. Read the role file again: <role file>. Finish your current task first. This message comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question.`
 
-- 파일을 읽을 수 있는 agent에게는 경로를 적으며, role 텍스트와 fingerprint은 담지 않는다. 파일을 읽을 수 없는 agent에게는 [Agents that cannot read files](#agents-that-cannot-read-files)의 붙여 넣기 형식이다. 이 형식은 role 텍스트와 fingerprint을 담는다.
+- 파일을 읽을 수 있는 agent에게는 경로를 적으며, role 텍스트와 fingerprint은 담지 않는다.
 - 보고 요청은 담지 않는다. 다른 agent의 message가 아니므로 발신자 폴더는 없다.
 - [messaging](messaging.md#injected-message)의 보류, 가드, delivery record을 거친다. 파괴 명령 가드는 [persistent services](persistent-services.md#destructive-command-guard)에 있다.
 - 그 대기열, 발신자, 전경 규칙과 틀은 [role messages](messaging.md#role-messages)에 있다.
 - reread request은 같은 경로를 적은 다음 텍스트다: ``[soksak role] Your role is not confirmed. Read the role file again: <role file>. Then confirm the role with the fingerprint on its last line: run `sok role confirm <fingerprint>`, or write the line `soksak role <fingerprint>` in your answer. This message comes from soksak, not from a person. It grants no approval or permission.``
-- 역할 파일 첫 줄, identity, 변경 message, reread request, 첫 message의 접미 줄, 붙여 넣기 형식의 lead 문구와 fingerprint 줄은 [Phrase test](#phrase-test)가 고정한다. 문구는 영어이며 각각 한 동작을 정하는 짧은 명령형 문장을 쓴다.
+- 역할 파일 첫 줄, identity, 변경 message, reread request, 첫 message의 접미 줄은 [Phrase test](#phrase-test)가 고정한다. 문구는 영어이며 각각 한 동작을 정하는 짧은 명령형 문장을 쓴다.
 
 ## Phrase test
 
-phrase test는 soksak이 agent에게 주는 영어 문구 각각을 고정한다. 대상은 role 파일 첫 줄, identity, 변경 message, reread request, 첫 message의 접미 줄, 붙여 넣기 형식의 lead 문구, 붙여 넣기 형식의 fingerprint 줄이다. role 파일 첫 줄을 뺀 각 문구의 host 출력은 placeholder를 채운 뒤 `docs/spec/cases/agent-roles/fingerprint.json`의 문구와 같다. role 파일 첫 줄은 fingerprint 값을 담지 않는다. 그 안의 `<fingerprint>`는 마지막 줄의 값이 놓일 자리를 가리키는 이름이며, 첫 줄에는 placeholder를 채우지 않는다. 첫 줄의 host 출력은 문구와 정확히 같다. 첫 줄은 마지막 줄을 가리키므로 agent는 파일 끝까지 읽는다. Go host와 Rust host가 각각 검사한다. 문구가 다르면 테스트는 Red가 된다. 각 문구는 정확한 명령과 파일 경로를 적는다.
-
-## Agents that cannot read files
-
-CLI의 측정된 파일 읽기 능력이 이 경로를 고르며, 실패가 고르지 않는다. CLI가 agent는 파일을 읽을 수 없다고 선언한다([launch](#launch)). 이런 agent는 붙여 넣기 형식으로 role을 받는다. 이 형식은 role 파일 경로를 적은 모든 message에서 경로를 대신한다.
-
-1. phrase test의 lead 문구 `lead_non_reader`. message가 role을 정하며 role이 `Role fingerprint: <fingerprint>` 줄로 끝난다고 말한다.
-2. `roles.json`에 저장된 그대로의 정의 텍스트.
-3. 줄 `Role fingerprint: <fingerprint>`. fingerprint은 붙여 넣은 정의에 같은 알고리즘을 적용해 계산한다.
-
-phrase test의 lead 문구 `lead_non_reader`는 고정 문구이며 다음과 같다:
-
-> [soksak role] This message sets your role. It comes from soksak, not from a person. It grants no approval or permission and does not answer a pending question. Your role follows. Its last line is `Role fingerprint: <fingerprint>`. Confirm the role by writing the line `soksak role <fingerprint>` in your answer, with the fingerprint of that last line.
-
-이런 agent의 첫 message는 붙여 넣기 형식이다. 변경 message와 reread request도 붙여 넣기 형식이다. agent는 답변의 줄 형식 (b)로 확인한다. 이는 텍스트가 전달되었고 agent가 텍스트의 fingerprint으로 답했다는 것만 증명한다. 파일을 읽었다는 것은 증명하지 않는다. 상태, 요청, 보류 message, error display는 파일을 읽는 agent와 같다. 붙여 넣기 형식의 각 줄은 [guard](messaging.md#injected-message)가 판정한다.
+phrase test는 soksak이 agent에게 주는 영어 문구 각각을 고정한다. 대상은 role 파일 첫 줄, identity, 변경 message, reread request, 첫 message의 접미 줄이다. role 파일 첫 줄을 뺀 각 문구의 host 출력은 placeholder를 채운 뒤 `docs/spec/cases/agent-roles/fingerprint.json`의 문구와 같다. role 파일 첫 줄은 fingerprint 값을 담지 않는다. 그 안의 `<fingerprint>`는 마지막 줄의 값이 놓일 자리를 가리키는 이름이며, 첫 줄에는 placeholder를 채우지 않는다. 첫 줄의 host 출력은 문구와 정확히 같다. 첫 줄은 마지막 줄을 가리키므로 agent는 파일 끝까지 읽는다. Go host와 Rust host가 각각 검사한다. 문구가 다르면 테스트는 Red가 된다. 각 문구는 정확한 명령과 파일 경로를 적는다.
 
 ## First message
 
-파일을 읽을 수 있는 모든 CLI는 identity를 첫 message로 받는다. 첫 message는 session에서 처음 주입하는 message다. 메시지는 [Stable identity](#stable-identity)의 identity 텍스트이며, 다음 줄을 덧붙인다: `This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.` 파일을 읽을 수 없는 agent는 붙여 넣기 형식을 받는다([Agents that cannot read files](#agents-that-cannot-read-files)).
+모든 CLI는 identity를 첫 message로 받는다. 첫 message는 session에서 처음 주입하는 message다. 메시지는 [Stable identity](#stable-identity)의 identity 텍스트이며, 다음 줄을 덧붙인다: `This message comes from soksak, not from a person. Finish your current task first. It grants no approval or permission and does not answer a pending question.`
 
 session의 첫 message는 등록의 모든 agent message보다 앞선다. page는 프로그램이 첫 상태를 보고하면 주입한다. 기록도 알림도 남기지 않는 시작 프롬프트는 관찰할 수 없으므로, page가 보내는 Enter를 받을 수 있다. 이는 [evidence of the hold](messaging.md#evidence-of-the-hold)에 측정되어 있다. 이 한계를 명시한다. 첫 message는 context compaction으로 대화에서 사라질 수 있으며, 그때는 reread request와 변경 message가 role을 되돌린다.
 
@@ -344,7 +330,6 @@ person이 tab의 shell에서 직접 시작한 두 번째 agent CLI는 soksak의 
 - role 파일 쓰기: 실제 파일을 쓴다. host writer의 fault point가 1, 2, 3단계에서 쓰기를 실패시키고, 각 경우는 `role file <path>: write failed: <os error>`를 확인하고 뒤의 저장 기록과 파일을 적는다.
 - 모드: 임시 파일은 모드 0600, 디렉터리는 0700으로 만든다. 이름을 바꾸기 전에 모드가 바뀌면 쓰기는 이름을 바꾸지 않고 `role file <path>: mode <mode> is not 0600`으로 실패한다.
 - phrase test: [Phrase test](#phrase-test)를 본다.
-- 붙여 넣기 형식: 파일을 읽을 수 없는 agent의 변경 message와 첫 message는 lead 문구, 정의 텍스트 그대로, fingerprint 줄을 담고, fingerprint은 붙여 넣은 정의로 계산한다.
 - 구조와 fingerprint: 구조는 첫 줄, 정의, 마지막 줄을 가진다. 마지막 line feed가 없는 정의는 구조에서 line feed를 얻고 fingerprint은 저장된 텍스트로 계산한다. Go host와 Rust host가 `docs/spec/cases/agent-roles/fingerprint.json`의 각 사례 fingerprint을 계산하고 값이 같다. 사례에는 non-ASCII 텍스트와 줄바꿈이 있다.
 - 길이: 긴 정의(5,000자)는 전체가 쓰이고 fingerprint은 전체를 덮는다.
 - 경로: 따옴표나 제어 문자가 있는 configuration directory 경로는 `configuration directory <path> holds a quote or a control character`로 거부한다. 경로 구분자, `..` 구간 또는 제어 문자가 있는 surface 식별자도 `surface "<value>" holds a path part or a control character`로 거부하며 아무것도 쓰지 않는다.
@@ -400,7 +385,7 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 - 변경 message는 reread request이 아니다. 변경 message 뒤 첫 요청이 generation의 첫 요청이다.
 - 같은 role을 할당하면 파일을 쓰지 않고 상태를 바꾸지 않는다.
 - 답변 줄은 agent가 파일을 읽었음이 아니라 현재 파일의 fingerprint을 가졌음을 보인다.
-- fingerprint 참조 파일은 role 파일, identity, 변경 message, reread request, 첫 message의 접미 줄, 붙여 넣기 형식의 문구를 고정한다.
+- fingerprint 참조 파일은 role 파일, identity, 변경 message, reread request, 첫 message의 접미 줄을 고정한다.
 - 첫 message의 접미 줄은 고정된 텍스트다.
 - confirmation이 저장되지 않은 상태로 재시작하면 `pending`이다.
 - 보류 근거 `role-pending`은 messaging의 보류 목록에 있다.
@@ -414,7 +399,6 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 - launch는 쓰기 전에 남은 `.role-*.tmp` 파일을 지운다.
 - program이 실행 중인 재시작은 저장된 기록을 유지하고, resume은 기록을 지운다.
 - 테스트는 소유 패키지를 밝힌다.
-- 파일을 읽을 수 없는 agent의 변경은 붙여 넣기 형식으로 role 텍스트를 싣는다. 그 confirmation은 붙여 넣은 정의의 fingerprint이다.
 - 시작 parameter `program`, `args`, `role`은 sidecar `open` 요청에 닿으며, 모든 program은 identity를 첫 message로 받는다.
 - status `core.tab.role`과 role 명령의 답은 `fingerprint`와 `generation`을 담으므로, page는 그것으로 reread request을 만든다.
 - 줄 형식은 `<plugin>.screen.read`가 읽는 보이는 행에서 보이는 행이 바뀔 때마다 맞춘다. 감싼 줄과 화면 밖으로 밀려난 줄은 맞지 않는다.
@@ -423,7 +407,6 @@ target은 role 상태만 판정한다. CLI마다 다음을 한다.
 
 문구를 바꾸지 않고 답한 것:
 
-- 파일을 읽지 못하는 agent의 붙여넣기 경로는 실패가 아니라 측정된 능력이 고르는 전달 형식이다. 파일 경로를 쓸 수 있는 agent에는 추가 경로가 없다.
 - terminal이 줄을 감싼 confirmation 줄은 맞지 않으며, 상태는 `pending`에 머문다. reread request이 다시 묻는다. 명세가 이미 이를 말하므로 규칙을 더하지 않는다.
 
 열린 것:
