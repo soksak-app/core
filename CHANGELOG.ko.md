@@ -5,6 +5,7 @@
 
 ## 2026-11-20
 
+- F1000-1: agent skill과 MCP instructions는 agent가 `sok message send`로 일을 맡기고, prompt에서 주입된 보고를 기다리며, 결과를 위해 아무것도 polling하지 않고, submit command로 일을 맡기지 않음을 밝힌다.
 - F899-7.5-14: `docs/spec/endpoint.md`와 agent skill은 배포된 `v0.0.41` bundle처럼 모든 0.0.x release가 진단 메서드에 답하는 진단 빌드임을 밝힌다. F1000은 lead가 아는 것 없는 orchestration의 수동 acceptance를 기록한다.
 - F899-7.5-13: agent skill, usage text, command reference의 submit 안내는 submit command가 text를 paste로, Enter를 paste의 reply 뒤에 보낸다고 밝힌다. F899-7.5-5: 주입의 window check가 두 terminal plugin 모두 mygo, Wails, Tauri에서 통과한다.
 - F899-7.5-12: agent skill은 agent가 창을 관찰하는 방법을 밝힌다. 활성화 없는 still capture, 빈 view를 판단하기 전의 `host.window` `occluded`, 가려진 창을 위한 `diagnostics.window.draw-covered`, 그리고 이 method가 diagnostic build에만 있음.
